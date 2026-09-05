@@ -2,14 +2,12 @@
 
 # Tocyn
 
-<!-- Standard Shields.io MIT Badge -->
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-<!-- If shieldcn.dev exposes a specific endpoint for licence badges, replace the image URL accordingly: -->
-[![License: MIT](https://shieldcn.dev/api/badge?label=License&message=MIT&color=blue)](https://opensource.org/licenses/MIT)
-
-![Stars](https://shieldcn.dev/github/stars/nathcymru/Tocyn.svg)
-![Forks](https://shieldcn.dev/github/forks/nathcymru/Tocyn.svg)
-![Issues](https://shieldcn.dev/github/issues/nathcymru/Tocyn.svg)
+[![License: MIT](https://shieldcn.dev/github/license/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/blob/main/LICENSE)
+[![Stars](https://shieldcn.dev/github/stars/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/stargazers)
+[![Forks](https://shieldcn.dev/github/forks/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/network/members)
+[![Issues](https://shieldcn.dev/github/issues/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/issues)
+[![Last Commit](https://shieldcn.dev/github/last-commit/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/commits/main)
+[![Platform: Cloudflare](https://shieldcn.dev/badge/Platform-Cloudflare-F38020.svg?logo=cloudflare)](https://workers.cloudflare.com/)
 
 Tocyn (Welsh for 'ticket') is a multi-tenant helpdesk and support system built entirely on the Cloudflare serverless edge. 
 
