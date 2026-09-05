@@ -1,153 +1,46 @@
-# Luminatick: Open-Source AI-First Ticketing System
+![Tocyn Banner](tocyn_github_repo_header.webp)
 
-[![CI](https://github.com/05ng/luminatick/actions/workflows/ci.yml/badge.svg)](https://github.com/05ng/luminatick/actions/workflows/ci.yml) [![CodeQL](https://github.com/05ng/luminatick/actions/workflows/codeql.yml/badge.svg)](https://github.com/05ng/luminatick/actions/workflows/codeql.yml)
+# Tocyn
 
-Luminatick is a decentralized, single-tenant ticketing system built specifically for the Cloudflare ecosystem. It leverages modern edge computing and AI to provide an efficient support experience via email, web forms, and interactive chat.
+<!-- Standard Shields.io MIT Badge -->
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+<!-- If shieldcn.dev exposes a specific endpoint for licence badges, replace the image URL accordingly: -->
+[![License: MIT](https://shieldcn.dev/api/badge?label=License&message=MIT&color=blue)](https://opensource.org/licenses/MIT)
 
-## Inspiration
-Luminatick is deeply inspired by Zammad and Cloudflare's serverless ecosystem. After many years of using Zammad to support customers, this project was created to bring those proven helpdesk workflows to a modern, lightning-fast edge infrastructure.
+![Stars](https://shieldcn.dev/github/stars/nathcymru/Tocyn.svg)
+![Forks](https://shieldcn.dev/github/forks/nathcymru/Tocyn.svg)
+![Issues](https://shieldcn.dev/github/issues/nathcymru/Tocyn.svg)
 
-## Design Philosophy
-Luminatick was architected with four core principles in mind:
+Tocyn (Welsh for 'ticket') is a multi-tenant helpdesk and support system built entirely on the Cloudflare serverless edge. 
 
-1. **Zero-Cost Out of the Box:** The system is purposefully designed to run comfortably within the **Cloudflare Free Tier**. By leveraging efficient data storage patterns (like hybrid R2 offloading) and efficient API design, individuals and small teams can operate a fully-featured AI ticketing system without incurring monthly infrastructure costs.
-2. **High-Performance Real-time Presence:** Uses Cloudflare Durable Objects backed by SQLite to provide seamless, low-latency WebSocket communication for agent presence and ticket updates.
-3. **Frictionless Deployment:** The barrier to entry is kept to a minimum. Luminatick provides a streamlined deployment process requiring only a Cloudflare account. With built-in Wrangler commands, you can provision the entire infrastructure—database, object storage, vector search, AI models, and edge compute—in just a few minutes.
-4. **Privacy First:** Built with user privacy in mind from day one. The system requests minimal personal information from customers and features built-in GDPR-compliant automation, including scheduled tasks to automatically delete inactive users and purge old ticket data.
+Tocyn is a fork of [Luminatik](https://github.com/luminatik/luminatik). While the original project laid the groundwork for an edge-native service layer, Tocyn shifts the architecture to support multi-tenant helpdesk operations, integrating real-time communications and third-party channels. Both projects are released under the MIT licence.
 
-## Core Technologies
-- **Backend:** Cloudflare Workers (API), Real-time Presence (WebSockets via SQLite Durable Objects), Cloudflare Email Workers (Inbound).
-- **Frontend:** React + Vite + Tailwind CSS (Admin Dashboard, Customer Portal), Shadow DOM encapsulated React (Widget).
-- **Database/Storage:** Cloudflare D1 (SQLite for metadata), Cloudflare R2 (Hybrid Offloading for ticket payloads and attachments), Cloudflare Vectorize (RAG).
-- **AI & Background Processing:** Cloudflare Workers AI (Llama 3 / DeepSeek, BGE-large embeddings), Cloudflare Workflows (asynchronous vectorization).
-- **Email Outbound:** Resend API / Custom SMTP.
+## Architecture and Infrastructure
 
-## Architecture
-The project is structured as a monorepo:
-- `/apps/server`: The unified backend handling Dashboard, Widget, and Public REST APIs.
-- `/apps/dashboard`: Internal portal for agents and admins to manage tickets and configuration.
-- `/apps/portal`: Dedicated self-service Customer Portal with Passwordless Magic Link & OTP auth.
-- `/apps/widget`: A single-file JS plugin (`lumina-widget.js`) for host site integration.
-- `/packages/shared`: Shared TypeScript types and utilities.
+Tocyn strictly enforces a 100% Cloudflare infrastructure footprint. This deliberate vendor lock-in sacrifices provider portability in exchange for zero-maintenance global deployment, low-latency edge execution, and a unified security perimeter. 
 
-## Key Features & Workflows
-- **Omnichannel:** Support via email, web widget, and API.
-- **Unified Attachments:** Agents can now upload and send attachments directly from the Admin Dashboard, achieving full feature parity with the Customer Portal's secure R2 presigned URL upload flow.
-- **AI-Powered RAG & Asynchronous Processing:** Automatically vectorizes Knowledge Base articles and Agent-marked Q&A pairs. Employs Cloudflare Workflows for background text chunking and AI embedding generation to ensure zero-latency UI saves.
-- **Scalable Architecture (Hybrid Offloading):** Stores heavy text payloads (e.g., ticket replies) in R2 and only metadata in D1, completely circumventing D1's 10GB limit.
-- **Application-Layer Encryption:** Uses `APP_MASTER_KEY` to securely encrypt and store third-party integration tokens (e.g., Resend API Key, external APIs) directly in the D1 database, avoiding redeployments for new secrets.
-- **Cloudflare Usage & Costs Tracking:** Integrates with the Cloudflare GraphQL Analytics API to provide a comprehensive dashboard for tracking metrics across Workers, D1, R2, Vectorize, and AI services.
-- **Presence System:** Dual-mode architecture controlled via settings (`REALTIME_TRANSPORT`): Free-Tier HTTP polling with `document.visibilityState` optimization, or Paid-Tier WebSockets via Cloudflare Durable Objects for ultra low-latency updates.
-- **Security & Granular Permissions:** All agent/admin access requires MFA (TOTP). Admins can restrict agent access to specific settings modules via the Agent Permissions page. Public API access requires API Keys.
-- **Automation & GDPR Compliance:** Event-based webhooks and automated scheduled retention policies for deleting old tickets, attachments, and inactive users.
-- **Email Integration:** Flexible inbound options using Cloudflare Email Routing or a Forwarding/Redirection model from Shared Mailboxes (Office 365/Gmail), and outbound via third-party providers (Resend, SMTP). See [docs/email-setup.md](docs/email-setup.md) for detailed scenarios.
+- **Cloudflare Workers (Compute):** Handles HTTP routing, tenant authentication, and API logic. Strict edge CPU time and memory limits require that heavy or long-running tasks be deferred asynchronously.
+- **Cloudflare D1 (Relational Data):** SQLite at the edge. Tenant data isolation is enforced logically via application middleware rather than physical separation. D1's eventual consistency model for read replicas dictates that client-side state management is required to prevent stale UI renders immediately following write operations.
+- **Cloudflare R2 (Object Storage):** Stores ticket attachments, avatars, and media. Time-limited pre-signed URLs are generated by Workers to ensure secure, transient client access.
+- **Cloudflare Queues (Asynchronous Processing):** Decouples background tasks from the main request lifecycle. Used for webhook dispatching, SLA breach detection, and inbound message parsing. 
+- **Cloudflare Durable Objects (State & Real-Time):** Manages persistent WebSocket connections, live agent presence, and WebRTC signalling for video calls. Durable Objects provide a strictly consistent, single point of coordination to prevent race conditions during concurrent ticket updates.
 
-## Building and Running
+## Integrations and Channels
 
-### Local Development
+Beyond standard web forms and email ingestion, Tocyn is engineered to handle multiple synchronous and asynchronous support vectors:
 
-1. **Environment:** 
-   - Copy `apps/server/.dev.vars.example` to `apps/server/.dev.vars` and fill in the required keys, ensuring you generate an `APP_MASTER_KEY` (e.g., 32-byte hex string) for Application-Layer Encryption.
-   - (Optional) Copy `.env.example` to `.env` in the root for shared environment variables.
+- **Cloudflare Calls (WebRTC):** Direct video and audio communication embedded directly into the support interface. Durable Objects handle the session signalling, enabling live remote diagnostics without requiring users to install third-party clients.
+- **Signal Integration:** Bi-directional messaging integration allowing secure, end-to-end encrypted interactions with clients who prefer instant messaging over traditional email.
+- **Remote Support Orchestration:** Webhook and API endpoints designed to interface with third-party remote management and monitoring (RMM) tools, automatically mapping remote session IDs to specific support tickets.
 
-2. **Infrastructure (Local):**
-   ```bash
-   # Apply migrations to your local SQLite database (managed by Wrangler)
-   npm run db:migrate:local
-   ```
+## Licence
 
-3. **Database Seeding (Local):**
-   ```bash
-   # Initialize local tables and create initial Admin user
-   npm run db:seed:local
-   ```
+Tocyn is released under the [MIT Licence](./LICENSE).
 
-4. **Start Backend:**
-   ```bash
-   npm run dev:server
-   ```
-   *Launches the Cloudflare Worker locally (Default: http://localhost:8787).*
+This project relies on the foundational edge architecture developed by the Luminatik project. A copy of the original Luminatik licence and copyright notice is included in this repository to comply with MIT licence requirements and to formally acknowledge their initial engineering effort.
 
-5. **Start Dashboard:**
-   ```bash
-   npm run dev:dashboard
-   ```
-   *Launches the React admin portal (Default: http://localhost:5173). Log in using the Admin credentials from Step 3.*
+## Acknowledgements & Trademarks
 
-6. **Build Widget (Optional):**
-   ```bash
-   npm run build:widget
-   ```
-   *Generates the `lumina-widget.js` bundle for customer-facing integration.*
+Tocyn is built to integrate with Cloudflare's infrastructure, including Cloudflare Workers, D1, and Cloudflare Stream. 
 
-### Testing
-
-To run the automated tests locally:
-
-```bash
-# Run tests across all workspace applications
-npm run test
-
-# Run backend tests
-npm run test --workspace=apps/server
-
-# Run frontend tests
-npm run test --workspace=apps/dashboard
-```
-
-### Continuous Integration (CI)
-
-This repository uses GitHub Actions to maintain code quality and security for open-source contributors. On every push and pull request to the `main` branch, the CI pipeline automatically performs:
-- **Automated Testing & Type Checking:** Validates unit tests and TypeScript types across the monorepo.
-- **Build Verification:** Ensures all applications and packages build successfully.
-- **Security Scanning:** GitHub CodeQL automatically analyzes the codebase to detect potential security vulnerabilities and leaked secrets.
-
-### Production Deployment
-
-For a detailed guide, see [docs/deployment.md](docs/deployment.md).
-
-1. **Provision Infrastructure:**
-   ```bash
-   npm run setup:prod
-   ```
-
-2. **Configure Secrets:**
-   ```bash
-   npm run secrets:prod
-   ```
-
-3. **Deploy Applications:**
-   ```bash
-   npm run deploy
-   ```
-   *(Note: Mid-deployment, you will be prompted to enter your newly deployed backend URL so the frontends can be configured correctly.)*
-
-4. **Seed Production Database:**
-   ```bash
-   npm run seed:prod
-   ```
-
-5. **Post-Deployment Configuration:**
-   - Log into your newly deployed Admin Dashboard using the credentials generated in Step 4.
-   - Navigate to **Settings -> Channels -> Email** (or General Settings) and configure your **Outbound Email provider** (e.g., Resend API key).
-   - *Important:* The **Customer Portal** relies on Passwordless Magic Link & OTP authentication. Users will not be able to log in until outbound email is configured to send the OTPs.
-
-> **Critical Security Note:** It is highly recommended to configure **Cloudflare Turnstile** to protect the customer portal and other public-facing forms from bots and spam tickets. This is a critical security recommendation for public-facing forms.
-
-## Documentation
-- [Architecture Overview](docs/design-and-implementation-plan.md)
-- [Deployment Guide](docs/deployment.md)
-- [Email Setup Guide](docs/email-setup.md)
-- [Knowledge Base Setup Guide](docs/knowledge-base-setup.md)
-- [API Specification](docs/phase-1.4-api-spec.md)
-
-## Development Conventions
-- **Monorepo:** Use `npm` workspaces to manage dependencies across apps and packages.
-- **Type Safety:** Shared types in `/packages/shared` should be used by both frontend and backend.
-- **Widget Integrity:** Use Shadow DOM in the widget to prevent CSS conflicts with host websites.
-
-## Support
-For any inquiries or assistance, please reach out to us at [help@luminatick.org](mailto:help@luminatick.org).
-
-## License
-MIT
+"Cloudflare", the Cloudflare logo, and related product names are trademarks and/or registered trademarks of Cloudflare, Inc. in the United States and other jurisdictions. Tocyn is an independent open-source project and is not affiliated with, endorsed by, or sponsored by Cloudflare, Inc.
