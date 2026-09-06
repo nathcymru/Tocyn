@@ -3,9 +3,9 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { Env } from "../bindings";
 import { AppVariables, Article } from "../types";
 import { CustomerAuthService } from "../services/customer-auth.service";
-import { TicketService } from "../services/ticket.service";
+import { TenantTicketService } from "../services/tenant-ticket.service";
+import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { BroadcastService } from "../services/broadcast.service";
-import { StorageService } from "../services/storage.service";
 import { authMiddleware } from "../middleware/auth.middleware";
 import { roleGuard } from "../middleware/role.guard";
 import { rateLimiter } from "../middleware/rate-limiter";
@@ -16,12 +16,9 @@ const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
 // --- PUBLIC CONFIG ROUTE ---
 app.get('/config', async (c) => {
-  const result = await c.env.DB.prepare("SELECT value FROM config WHERE key = 'TICKET_PREFIX' LIMIT 1").first<{value: string}>();
-  const siteKeyResult = await c.env.DB.prepare("SELECT value FROM config WHERE key = 'TURNSTILE_SITE_KEY' LIMIT 1").first<{value: string}>();
-  return c.json({ 
-    TICKET_PREFIX: result?.value || '#',
-    TURNSTILE_SITE_KEY: siteKeyResult?.value || undefined
-  });
+  const authService = new CustomerAuthService(c.env);
+  const config = await authService.getConfig();
+  return c.json(config);
 });
 
 // --- AUTHENTICATION ROUTES ---
@@ -70,27 +67,30 @@ app.post('/auth/logout', authMiddleware, roleGuard(['customer']), async (c) => {
   return c.json({ success: true });
 });
 
-app.get('/auth/me', authMiddleware, roleGuard(['customer']), async (c) => {
-  const payload = c.get('jwtPayload');
-  const user = await c.env.DB.prepare('SELECT id, email, full_name, role, created_at, last_login_at FROM users WHERE id = ?').bind(payload.sub).first<any>();
+app.get('/auth/me', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+  const payload = c.get('jwtPayload') as any;
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const user = await deps.repositories.users.get(payload.sub);
   return c.json({ user });
 });
 
 // --- TICKET ROUTES ---
 
-app.get('/tickets', authMiddleware, roleGuard(['customer']), async (c) => {
+app.get('/tickets', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const payload = c.get('jwtPayload');
-  const ticketService = new TicketService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const ticketService = new TenantTicketService(deps);
   const page = parseInt(c.req.query('page') || '1');
   const limit = parseInt(c.req.query('limit') || '50');
   const tickets = await ticketService.findTickets({ page, limit, customerEmail: payload.email });
   return c.json(tickets);
 });
 
-app.post('/tickets', authMiddleware, roleGuard(['customer']), rateLimiter(3, 60000), async (c) => {
+app.post('/tickets', authMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(3, 60000), async (c) => {
   const payload = c.get('jwtPayload');
   const body = await c.req.json();
-  const ticketService = new TicketService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const ticketService = new TenantTicketService(deps);
   
   // Turnstile verification
   try {
@@ -110,16 +110,17 @@ app.post('/tickets', authMiddleware, roleGuard(['customer']), rateLimiter(3, 600
     customer_email: payload.email,
     source: 'portal',
     body: body.message,
-    sender_id: payload.sub,
+    sender_id: payload.sub, is_internal: false,
     sender_type: 'customer'
   });
   return c.json(result, 201);
 });
 
-app.get('/tickets/:id', authMiddleware, roleGuard(['customer']), async (c) => {
+app.get('/tickets/:id', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const payload = c.get('jwtPayload');
   const ticketId = c.req.param('id')!;
-  const ticketService = new TicketService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const ticketService = new TenantTicketService(deps);
   const ticket = await ticketService.findTicketById(ticketId);
   
   if (!ticket || ticket.customer_email !== payload.email) {
@@ -127,32 +128,27 @@ app.get('/tickets/:id', authMiddleware, roleGuard(['customer']), async (c) => {
   }
   
   // Exclude internal notes
-  const articles = await c.env.DB.prepare(
-    'SELECT * FROM articles WHERE ticket_id = ? AND is_internal = FALSE ORDER BY created_at ASC'
-  ).bind(ticketId).all<Article>();
+  const articlesList = await ticketService.getTicketArticles(ticketId);
+  const externalArticles = articlesList.filter(a => !a.is_internal);
+  await ticketService.hydrateArticles(externalArticles);
 
-  await ticketService.hydrateArticles(articles.results);
-
-  // Fetch attachments for these articles
-  const attachments = await c.env.DB.prepare(
-    `SELECT a.* FROM attachments a
-     JOIN articles art ON a.article_id = art.id
-     WHERE art.ticket_id = ? AND art.is_internal = FALSE`
-  ).bind(ticketId).all<any>();
-
-  const articlesWithAttachments = articles.results.map((article: any) => ({
-    ...article,
-    attachments: attachments.results.filter((att: any) => att.article_id === article.id).map((a: any) => ({ id: a.id, filename: a.file_name, size: a.file_size, contentType: a.content_type, storageKey: a.r2_key })),
+  const articlesWithAttachments = await Promise.all(externalArticles.map(async (article) => {
+    const atts = await ticketService.getArticleAttachments(article.id);
+    return {
+      ...article,
+      attachments: atts.map(a => ({ id: a.id, filename: a.file_name, size: a.file_size, contentType: a.content_type, storageKey: a.r2_key }))
+    };
   }));
   
   return c.json({ ticket, articles: articlesWithAttachments });
 });
 
-app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), rateLimiter(5, 60000), async (c) => {
+app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(5, 60000), async (c) => {
   const payload = c.get('jwtPayload');
   const ticketId = c.req.param('id')!;
   const body = await c.req.json();
-  const ticketService = new TicketService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const ticketService = new TenantTicketService(deps);
   
   const ticket = await ticketService.findTicketById(ticketId);
   if (!ticket || ticket.customer_email !== payload.email) {
@@ -163,7 +159,7 @@ app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), rateL
     ticket_id: ticketId,
     body: body.message,
     sender_type: 'customer',
-    sender_id: payload.sub
+    sender_id: payload.sub, is_internal: false
   });
 
   const attachments: any[] = [];
@@ -216,24 +212,16 @@ app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), rateL
 });
 
 // --- ATTACHMENT ROUTES ---
-app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), async (c) => {
+app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const attachmentId = c.req.param('id');
   const payload = c.get('jwtPayload');
   
-  const attachment = await c.env.DB.prepare(`
-    SELECT a.r2_key, a.file_name, a.content_type, t.customer_email 
-    FROM attachments a
-    JOIN articles art ON a.article_id = art.id
-    JOIN tickets t ON art.ticket_id = t.id
-    WHERE a.id = ?
-  `).bind(attachmentId).first<any>();
-
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const attachment = await deps.repositories.attachments.getAttachmentWithMeta(attachmentId!);
   if (!attachment || attachment.customer_email !== payload.email) {
     return c.json({ error: 'Not found or unauthorized' }, 404);
   }
-
-  const storage = new StorageService(c.env);
-  const response = await storage.getAttachment(attachment.r2_key);
+  const response = await deps.attachmentStorage.getAttachment(attachment.r2_key);
   if (!response) return c.json({ error: 'File not found in storage' }, 404);
   
   // Make response mutable to change headers
@@ -244,8 +232,9 @@ app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), as
 });
 
 
-app.post('/attachments/upload', authMiddleware, roleGuard(['customer']), async (c) => {
-  const payload = c.get('jwtPayload');
+app.post('/attachments/upload', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+  const payload = c.get('jwtPayload') as any;
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
   
   // Early payload size check via Content-Length (10MB + slight overhead for multipart boundaries)
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -281,8 +270,8 @@ app.post('/attachments/upload', authMiddleware, roleGuard(['customer']), async (
   const key = `customer-attachments/${payload.sub}/${crypto.randomUUID()}${extPart}`;
 
   try {
-    await c.env.ATTACHMENTS_BUCKET.put(key, file.stream(), {
-      httpMetadata: { contentType: file.type || 'application/octet-stream' },
+    await deps.attachmentStorage.putAttachment(key, file.stream(), {
+      httpMetadata: { contentType: file.type || 'application/octet-stream' }
     });
     return c.json({ key });
   } catch (error: any) {

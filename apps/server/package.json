@@ -12,18 +12,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@luminatick/shared": "*",
     "hono": "^4.0.0",
     "jose": "^6.2.2",
     "otpauth": "^9.5.0",
     "postal-mime": "^2.1.0",
-    "zod": "^3.0.0",
-    "@luminatick/shared": "*"
+    "zod": "^3.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240101.0",
     "@faker-js/faker": "^10.4.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.9.5",
     "better-sqlite3": "^12.9.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",

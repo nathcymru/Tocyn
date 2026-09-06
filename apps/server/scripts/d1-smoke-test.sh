@@ -1,0 +1,44 @@
+#!/bin/bash
+set -e
+
+TMP_DIR=$(mktemp -d)
+echo "Setting up local D1 test database in isolated temporary state ($TMP_DIR)..."
+
+npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --file=src/repositories/__tests__/fixtures/schema.sql > /dev/null
+
+echo "Populating data with identical IDs in two tenants..."
+npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-A', 'shared-id', 'a@test.com', 'customer');" > /dev/null
+npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-B', 'shared-id', 'b@test.com', 'customer');" > /dev/null
+
+echo "Populating distinct user in tenant B..."
+npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-B', 'unique-b-id', 'b2@test.com', 'customer');" > /dev/null
+
+echo "Attempting to create ticket for tenant-A assigned to tenant-B unique user (cross-tenant FK test)..."
+# Expect failure!
+if npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO tickets (tenant_id, id, subject, customer_id, customer_email, source) VALUES ('tenant-A', 'ticket-1', 'Test', 'unique-b-id', 'test@test.com', 'email');" 2>&1 | grep -q "FOREIGN KEY constraint failed"; then
+  echo "SUCCESS: Cross-tenant FK assignment was correctly rejected by D1."
+else
+  echo "FAIL: Cross-tenant FK assignment was NOT rejected."
+  exit 1
+fi
+
+echo "Running PRAGMA foreign_key_check..."
+CHK_FK=$(npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="PRAGMA foreign_key_check;" --json)
+if echo "$CHK_FK" | grep -q '"results": \[\]'; then
+  echo "SUCCESS: PRAGMA foreign_key_check valid (zero violations)."
+else
+  echo "FAIL: PRAGMA foreign_key_check failed."
+  exit 1
+fi
+
+echo "Running PRAGMA quick_check..."
+CHK_QC=$(npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="PRAGMA quick_check;" --json)
+if echo "$CHK_QC" | grep -q '"quick_check": "ok"'; then
+  echo "SUCCESS: PRAGMA quick_check valid."
+else
+  echo "FAIL: PRAGMA quick_check failed."
+  exit 1
+fi
+
+echo "D1 runtime integration tests passed!"
+rm -rf $TMP_DIR

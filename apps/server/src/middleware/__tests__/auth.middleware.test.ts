@@ -1,3 +1,4 @@
+import { tenantMiddleware } from '../tenant.middleware';
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { authMiddleware } from "../auth.middleware";
@@ -8,7 +9,10 @@ const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
 describe("authMiddleware", () => {
   const app = new Hono<{ Bindings: { JWT_SECRET: string } }>();
   app.use("*", authMiddleware);
+
+
   app.get("/protected", (c) => c.text("OK"));
+  app.get("/migrated", tenantMiddleware, (c) => c.text("MIGRATED_OK"));
 
   it("should return 200 for a valid JWT", async () => {
     const secret = new TextEncoder().encode(JWT_SECRET);
@@ -107,5 +111,62 @@ describe("authMiddleware", () => {
     );
 
     expect(res.status).toBe(401);
+  });
+});
+
+
+describe("Auth & Tenant Middleware Chain Integration", () => {
+  const app = new Hono<{ Bindings: { JWT_SECRET: string } }>();
+  app.use("*", authMiddleware);
+  app.get("/legacy", (c) => {
+    const scope = c.get('tenantScope');
+    return c.json({ ok: true, hasScope: !!scope });
+  });
+  app.get("/migrated", tenantMiddleware, (c) => {
+    const scope = c.get('tenantScope');
+    return c.json({ ok: true, tenantId: scope.tenantId });
+  });
+
+  const secret = new TextEncoder().encode(JWT_SECRET);
+
+  it("1. Legacy valid JWT succeeds on legacy route without generating scope", async () => {
+    const legacyToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("2h")
+      .sign(secret);
+
+    const res = await app.request("/legacy", { headers: { Authorization: `Bearer ${legacyToken}` } }, { JWT_SECRET });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true, hasScope: false });
+  });
+
+  it("2. Legacy valid JWT fails on migrated route (tenantMiddleware blocks it)", async () => {
+    const legacyToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("2h")
+      .sign(secret);
+
+    const res = await app.request("/migrated", { headers: { Authorization: `Bearer ${legacyToken}` } }, { JWT_SECRET });
+    expect(res.status).toBe(401);
+    expect(await res.text()).toContain('Missing verified tenant scope');
+  });
+
+  it("3. Tenant-aware JWT succeeds on migrated route with correct scope", async () => {
+    const migratedToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com", tenant_id: "tenant-A" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("2h")
+      .sign(secret);
+
+    // Mock repositories since tenantMiddleware builds deps
+
+
+    const res = await app.request('/migrated', { headers: { Authorization: `Bearer ${migratedToken}` } }, { JWT_SECRET, DB: { prepare: () => ({ bind: () => ({ all: () => ({ results: [] }), first: () => null }) }) } as any });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true, tenantId: "tenant-A" });
   });
 });

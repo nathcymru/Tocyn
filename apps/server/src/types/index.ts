@@ -1,4 +1,8 @@
+import { VerifiedTenantScope } from '../types/tenant';
+import { TenantRequestDeps } from '../middleware/tenant.middleware';
 export interface AppVariables {
+  tenantScope?: VerifiedTenantScope;
+  tenantDeps?: TenantRequestDeps;
   jwtPayload: JWTPayload;
   mfaPending?: boolean; // If MFA is required but not yet verified
 }

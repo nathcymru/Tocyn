@@ -4,6 +4,16 @@ import { EmailService } from './email/outbound.service';
 import { AuthService } from './auth/auth.service';
 
 export class CustomerAuthService {
+  async getConfig(): Promise<{ TICKET_PREFIX: string, TURNSTILE_SITE_KEY?: string }> {
+    const result = await this.env.DB.prepare("SELECT value FROM config WHERE key = 'TICKET_PREFIX' LIMIT 1").first<{value: string}>();
+    const siteKeyResult = await this.env.DB.prepare("SELECT value FROM config WHERE key = 'TURNSTILE_SITE_KEY' LIMIT 1").first<{value: string}>();
+    return {
+      TICKET_PREFIX: (result && result.value) ? result.value : '#',
+      TURNSTILE_SITE_KEY: (siteKeyResult && siteKeyResult.value) ? siteKeyResult.value : undefined
+    };
+  }
+
+
   private emailService: EmailService;
   private authService: AuthService;
 
@@ -90,9 +100,9 @@ export class CustomerAuthService {
       const array = new Uint32Array(1);
       crypto.getRandomValues(array);
       const otp = Math.floor(100000 + (array[0] % 900000)).toString();
-      
+
       const otpHash = await this.hashToken(otp);
-      
+
       // Update token in DB with OTP hash instead
       await this.env.DB.prepare(
         'UPDATE customer_auth_tokens SET token_hash = ? WHERE id = ?'
@@ -123,7 +133,7 @@ export class CustomerAuthService {
    */
   async verifyAuth(plainToken: string): Promise<{ token: string, user: User } | null> {
     const tokenHash = await this.hashToken(plainToken);
-    
+
     // Find valid token
     const tokenRecord = await this.env.DB.prepare(
       'SELECT * FROM customer_auth_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?'
