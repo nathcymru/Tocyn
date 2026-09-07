@@ -83,7 +83,7 @@ export class InboundEmailService {
           ? new TextEncoder().encode(attachment.content)
           : new Uint8Array(attachment.content);
 
-        const attachmentKey = `tickets/${ticket.id}/articles/${article.id}/${attachment.filename || 'unnamed'}`;
+        const attachmentKey = `tickets/${ticket.id}/articles/${article.id}/${crypto.randomUUID()}`;
         const putResult = await this.deps.attachmentStorage.putAttachment(
           attachmentKey,
           contentArray,

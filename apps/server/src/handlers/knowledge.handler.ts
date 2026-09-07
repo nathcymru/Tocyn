@@ -11,6 +11,13 @@ import { z } from 'zod';
 
 const knowledgeHandler = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
+knowledgeHandler.onError((error, c) => {
+  if (error.message === 'Maximum tag stripping depth exceeded: possible malicious input') {
+    return c.json({ error: 'Content exceeds supported markup depth' }, 422);
+  }
+  return c.json({ error: 'Unable to process knowledge request' }, 500);
+});
+
 knowledgeHandler.use('*', authMiddleware, mfaGuard, roleGuard(['agent', 'admin']), tenantMiddleware);
 
 // Article Endpoints

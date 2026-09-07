@@ -23,7 +23,9 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
       audience: 'widget'
     });
 
-    if (!payload.tenant_id) {
+    if (typeof payload.tenant_id !== 'string' || !payload.tenant_id.trim() ||
+        typeof payload.sub !== 'string' || !payload.sub.trim() ||
+        typeof payload.email !== 'string' || !payload.email.trim()) {
       return c.json({ error: "Unauthorized: Missing tenant context" }, 401);
     }
     

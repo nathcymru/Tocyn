@@ -2,6 +2,7 @@ import { SqlKnowledgeRepository } from './knowledge.repository';
 import { User, Ticket, Article, Attachment } from '../types';
 
 export interface UserRepository {
+  list(options: {role?: string; page: number; limit: number; staffOnly?: boolean}): Promise<any[]>;
   findByEmail(email: string): Promise<User | null>;
   get(id: string): Promise<User | null>;
   create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>): Promise<User>;
@@ -12,6 +13,8 @@ export interface UserRepository {
 }
 
 export interface TicketRepository {
+  list(options: {page?: number; limit?: number; filterId?: string; status?: string; priority?: string; assignedTo?: string; groupId?: string; ticketNo?: string; search?: string; customerEmail?: string}): Promise<{data:Ticket[]; total:number; meta:{total:number;page:number;limit:number;total_pages:number}}>;
+  dashboardStats(): Promise<any>;
   findBySubject(subject: string): Promise<Ticket | null>;
   get(id: string): Promise<Ticket | null>;
   create(data: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'ticket_no'>): Promise<Ticket>;

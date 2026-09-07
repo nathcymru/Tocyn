@@ -6,6 +6,13 @@ if (import.meta.env.VITE_API_URL) {
   BASE_URL = url.includes('/api/v1/customer') ? url : `${url}/api/v1/customer`;
 }
 
+// Persist the public routing key across SPA navigation and emailed verification links.
+export function getWidgetKey(): string {
+  const incoming = new URLSearchParams(window.location.search).get('key')?.trim();
+  if (incoming) sessionStorage.setItem('tocyn_widget_key', incoming);
+  return incoming || sessionStorage.getItem('tocyn_widget_key') || import.meta.env.VITE_WIDGET_KEY || '';
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -17,6 +24,8 @@ export class ApiError extends Error {
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
+  const widgetKey = getWidgetKey();
+  if (widgetKey) headers.set('X-Widget-Key', widgetKey);
   
   if (!(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');

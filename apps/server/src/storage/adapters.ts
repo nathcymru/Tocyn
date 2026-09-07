@@ -159,25 +159,36 @@ export class TenantArticleBodyHydrator {
   ) {}
 
   async hydrate(body: string | null, bodyR2Key: string | null, maxLength: number = 8192): Promise<string> {
-    if (body) return body;
+    if (body) return body.substring(0, maxLength);
     if (!bodyR2Key) return '';
 
     try {
-      let obj;
-      if (bodyR2Key.startsWith('tickets/')) {
-        if (this.legacyArticleStorage) {
-          obj = await this.legacyArticleStorage.getLegacyUnscopedAttachment(bodyR2Key);
-        } else {
-          return '[Legacy article body unavailable]';
-        }
-      } else {
-        obj = await this.attachmentStorage.getAttachment(bodyR2Key);
+      let obj = await this.attachmentStorage.getAttachment(bodyR2Key);
+      if (!obj && /^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/.test(bodyR2Key)) {
+        if (!this.legacyArticleStorage) return '[Legacy article body unavailable]';
+        obj = await this.legacyArticleStorage.getLegacyUnscopedAttachment(bodyR2Key);
       }
 
       if (obj) {
-        // Just reading a chunk to prevent OOM
-        const text = await obj.text();
-        return text.substring(0, maxLength);
+        // Limit bytes consumed, cancel the remaining stream, and never buffer the whole object.
+        const reader = obj.body.getReader();
+        const decoder = new TextDecoder();
+        let text = '';
+        let remaining = maxLength * 4;
+        try {
+          while (remaining > 0) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const part = value.subarray(0, remaining);
+            text += decoder.decode(part, { stream: true });
+            remaining -= part.byteLength;
+            if (text.length >= maxLength) break;
+          }
+          return (text + decoder.decode()).substring(0, maxLength);
+        } finally {
+          await reader.cancel();
+          reader.releaseLock();
+        }
       }
     } catch (e) {
       console.error('Failed to hydrate article body:', e);

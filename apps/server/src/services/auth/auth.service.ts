@@ -93,7 +93,7 @@ export class AuthService {
 
       const jwtPayload = payload as unknown as JWTPayload;
 
-      if (jwtPayload.mfa_verified === false) {
+      if (jwtPayload.mfa_verified !== true) {
         return null;
       }
 
@@ -105,10 +105,11 @@ export class AuthService {
 
       const resolver = new UserAuthResolver(this.env.DB);
       const resolved = await resolver.resolveUserById(tenantId, jwtPayload.sub);
-      if (!resolved) return null;
+      if (!resolved || resolved.role !== jwtPayload.role) return null;
       return {
         id: resolved.userId,
-        email: jwtPayload.email,
+        email: resolved.email,
+        full_name: resolved.fullName,
         role: resolved.role,
         tenant_id: resolved.tenantId,
       } as any;

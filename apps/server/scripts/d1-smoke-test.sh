@@ -2,9 +2,12 @@
 set -e
 
 TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 echo "Setting up local D1 test database in isolated temporary state ($TMP_DIR)..."
 
-npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --file=src/repositories/__tests__/fixtures/schema.sql > /dev/null
+for migration in migrations/*.sql; do
+  npx wrangler d1 execute luminatick-db --local --persist-to="$TMP_DIR" --file="$migration" > /dev/null
+done
 
 echo "Populating data with identical IDs in two tenants..."
 npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-A', 'shared-id', 'a@test.com', 'customer');" > /dev/null

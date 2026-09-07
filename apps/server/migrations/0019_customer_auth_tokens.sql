@@ -1,3 +1,4 @@
+-- Missing or ambiguous legacy user ownership produces NULL and aborts before dropping source data.
 -- Add tenant_id to customer_auth_tokens to enforce (tenant_id, user_id) composite isolation
 PRAGMA defer_foreign_keys = on;
 
@@ -15,8 +16,9 @@ CREATE TABLE new_customer_auth_tokens (
 );
 
 INSERT INTO new_customer_auth_tokens (tenant_id, id, user_id, token_hash, type, expires_at, created_at, used_at)
-SELECT 'default-tenant', id, user_id, token_hash, type, expires_at, created_at, used_at
-FROM customer_auth_tokens;
+SELECT (SELECT MIN(u.tenant_id) FROM users u WHERE u.id = t.user_id HAVING COUNT(*) = 1),
+       t.id, t.user_id, t.token_hash, t.type, t.expires_at, t.created_at, t.used_at
+FROM customer_auth_tokens t;
 
 DROP TABLE customer_auth_tokens;
 ALTER TABLE new_customer_auth_tokens RENAME TO customer_auth_tokens;

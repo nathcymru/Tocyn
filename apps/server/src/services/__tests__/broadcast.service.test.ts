@@ -1,3 +1,4 @@
+import { createVerifiedTenantScope } from '../../auth/scope';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BroadcastService } from '../broadcast.service';
 import { Env } from '../../bindings';
@@ -17,13 +18,13 @@ describe('BroadcastService', () => {
         get: vi.fn().mockReturnValue(mockDO),
       },
     } as any;
-    service = new BroadcastService(mockEnv);
+    service = new BroadcastService(mockEnv, createVerifiedTenantScope('tenant-A','agent',['agent'],1));
   });
 
   it('should broadcast message to Durable Object', async () => {
     await service.broadcast('test.event', { foo: 'bar' });
 
-    expect(mockEnv.NOTIFICATION_DO.idFromName).toHaveBeenCalledWith('global');
+    expect(mockEnv.NOTIFICATION_DO.idFromName).toHaveBeenCalledWith('tenant:tenant-A');
     expect(mockEnv.NOTIFICATION_DO.get).toHaveBeenCalled();
     expect(mockDO.fetch).toHaveBeenCalledWith('http://do/broadcast', expect.objectContaining({
       method: 'POST',

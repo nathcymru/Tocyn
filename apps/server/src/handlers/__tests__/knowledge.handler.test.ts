@@ -139,4 +139,11 @@ describe("Knowledge Handler Integration Tests", () => {
       expect(data.error).toBe("Article not found");
     });
   });
+  it('returns a controlled error when knowledge tag stripping rejects excessive depth', async () => {
+    vi.spyOn(TenantKnowledgeService.prototype, 'getAiSuggestion').mockRejectedValueOnce(new Error('Maximum tag stripping depth exceeded: possible malicious input'));
+    const response = await knowledgeHandler.request('/tickets/ticket/ai-suggest', {headers:{Authorization:`Bearer ${validToken}`}}, {DB:mockDB,JWT_SECRET} as any);
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({error:'Content exceeds supported markup depth'});
+  });
+
 });

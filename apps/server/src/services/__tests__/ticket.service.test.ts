@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+// Legacy query-shape tests isolate notifications; scoped delivery has dedicated tests.
+vi.mock('../broadcast.service', () => ({ BroadcastService: class {
+  notifyTicketCreated = vi.fn();
+  notifyTicketUpdated = vi.fn();
+} }));
 import { TicketService } from "../ticket.service";
 
 const mockDB = {

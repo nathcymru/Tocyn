@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { createVerifiedTenantScope } from '../../auth/scope';
 import { createRepositories } from '../index';
@@ -48,8 +48,9 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
   beforeEach(() => {
     sqlite = new Database(':memory:');
     sqlite.pragma('foreign_keys = ON');
-    const schema = readFileSync(join(__dirname, 'fixtures/schema.sql'), 'utf-8');
-    sqlite.exec(schema);
+    for (const name of readdirSync(join(__dirname, '../../../migrations')).filter(n => n.endsWith('.sql')).sort()) {
+      sqlite.transaction(() => sqlite.exec(readFileSync(join(__dirname, '../../../migrations', name), 'utf8')))();
+    }
     d1 = new D1Mock(sqlite);
     reposA = createRepositories(scopeA, d1);
     reposB = createRepositories(scopeB, d1);
@@ -175,6 +176,44 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     await expect(
       reposA.articles.create({ ticket_id: ticketA.id, body: 'A', sender_id: userB.id, sender_type: 'customer', is_internal: false })
     ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+  });
+
+  it('atomically redeems a challenge once and never across colliding user IDs', async () => {
+    sqlite.prepare("INSERT INTO users (tenant_id,id,email,role) VALUES (?,?,?,?)").run('tenant-A','same','a@auth.test','customer');
+    sqlite.prepare("INSERT INTO users (tenant_id,id,email,role) VALUES (?,?,?,?)").run('tenant-B','same','b@auth.test','customer');
+    const future = new Date(Date.now() + 60000).toISOString();
+    await reposA.users.storeCustomerAuthToken('same','challenge','hash','magic_link',future);
+    expect(await reposB.users.verifyAndConsumeCustomerAuthToken('hash',new Date().toISOString())).toBeNull();
+    const claims = await Promise.all(Array.from({length: 8}, () => reposA.users.verifyAndConsumeCustomerAuthToken('hash',new Date().toISOString())));
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    expect(claims.find(Boolean)?.tenant_id).toBe('tenant-A');
+    expect(await reposA.users.verifyAndConsumeCustomerAuthToken('hash',new Date().toISOString())).toBeNull();
+  });
+
+  it('rejects expired challenges and challenges for changed roles', async () => {
+    sqlite.prepare("INSERT INTO users (tenant_id,id,email,role) VALUES (?,?,?,?)").run('tenant-A','same','a@auth.test','customer');
+    await reposA.users.storeCustomerAuthToken('same','expired','expired-hash','magic_link','2000-01-01T00:00:00.000Z');
+    expect(await reposA.users.verifyAndConsumeCustomerAuthToken('expired-hash',new Date().toISOString())).toBeNull();
+    await reposA.users.storeCustomerAuthToken('same','changed','changed-hash','magic_link',new Date(Date.now()+60000).toISOString());
+    sqlite.exec("UPDATE users SET role='admin' WHERE tenant_id='tenant-A' AND id='same'");
+    expect(await reposA.users.verifyAndConsumeCustomerAuthToken('changed-hash',new Date().toISOString())).toBeNull();
+  });
+
+  it('returns real dashboard aggregates and staff lists without crossing tenant boundaries', async () => {
+    sqlite.exec("INSERT INTO users(tenant_id,id,email,role,password_hash) VALUES ('tenant-A','agent','a@staff.test','agent','private'),('tenant-B','agent','b@staff.test','admin','private')");
+    await reposA.tickets.create({subject:'A open',customer_email:'a@test.com',source:'web',status:'open',priority:'high'});
+    await reposA.tickets.create({subject:'A closed',customer_email:'a@test.com',source:'web',status:'closed',priority:'normal'});
+    await reposB.tickets.create({subject:'B open',customer_email:'b@test.com',source:'web',status:'open',priority:'high'});
+    const stats = await reposA.tickets.dashboardStats();
+    expect(stats.totalUsers).toBe(1);
+    expect(stats.ticketsByStatus).toEqual([{status:'closed',count:1},{status:'open',count:1}]);
+    const staff = await reposA.users.list({page:1,limit:20,staffOnly:true});
+    expect(staff.map(u=>u.email)).toEqual(['a@staff.test']);
+    expect(staff[0]).not.toHaveProperty('password_hash');
+    const filtered = await reposA.tickets.list({status:'open',priority:'high'});
+    expect(filtered.data.map(t=>t.subject)).toEqual(['A open']);
+    expect(filtered.meta.total).toBe(1);
+    expect((await reposA.tickets.list({search:'B open'})).data).toEqual([]);
   });
 
 });

@@ -74,44 +74,7 @@ FROM ticket_fields;
 DROP TABLE ticket_fields;
 ALTER TABLE new_ticket_fields RENAME TO ticket_fields;
 
-----------------------------------------------------------------------
--- 4. groups: PK (tenant_id, id), UNIQUE(tenant_id, name)
-----------------------------------------------------------------------
-CREATE TABLE new_groups (
-    tenant_id TEXT NOT NULL,
-    id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (tenant_id, id),
-    UNIQUE (tenant_id, name)
-);
-
-INSERT INTO new_groups (tenant_id, id, name, description, created_at)
-SELECT 'default-tenant', id, name, description, created_at
-FROM groups;
-
-DROP TABLE groups;
-ALTER TABLE new_groups RENAME TO groups;
-
-----------------------------------------------------------------------
--- 5. user_groups: add tenant_id, composite FKs to users and groups
-----------------------------------------------------------------------
-CREATE TABLE new_user_groups (
-    tenant_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    group_id TEXT NOT NULL,
-    PRIMARY KEY (tenant_id, user_id, group_id),
-    FOREIGN KEY (tenant_id, user_id) REFERENCES users(tenant_id, id),
-    FOREIGN KEY (tenant_id, group_id) REFERENCES groups(tenant_id, id)
-);
-
-INSERT INTO new_user_groups (tenant_id, user_id, group_id)
-SELECT 'default-tenant', user_id, group_id
-FROM user_groups;
-
-DROP TABLE user_groups;
-ALTER TABLE new_user_groups RENAME TO user_groups;
+-- groups/user_groups were rebuilt together with their referenced core tables in 0014.
 
 ----------------------------------------------------------------------
 -- Indexes

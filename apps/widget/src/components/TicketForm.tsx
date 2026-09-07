@@ -1,3 +1,4 @@
+import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
 
 interface Props {
@@ -18,12 +19,10 @@ const TicketForm: React.FC<Props> = ({ config }) => {
     setStatus('submitting');
 
     try {
-      const response = await fetch('/api/v1/widget/tickets', {
+      const response = await fetch(`${BASE_URL}/tickets`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Lumina-Source': 'widget'
-        },
+        headers: widgetHeaders(),
+        credentials: 'include',
         body: JSON.stringify({
           ...formData,
           // Extra metadata could be added here (e.g., current URL)
@@ -35,7 +34,7 @@ const TicketForm: React.FC<Props> = ({ config }) => {
       });
 
       if (!response.ok) throw new Error('Failed to submit');
-      
+
       setStatus('success');
       setFormData({ name: '', email: '', subject: '', message: '' });
     } catch (err) {

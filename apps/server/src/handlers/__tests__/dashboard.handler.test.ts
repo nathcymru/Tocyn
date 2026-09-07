@@ -69,7 +69,7 @@ describe("Dashboard Handler Integration Tests", () => {
   describe("GET /tickets", () => {
     it("should list tickets with default pagination", async () => {
       mockDB.all.mockResolvedValueOnce({ results: [{ id: "t-1", subject: "Ticket 1" }] });
-      firstQueue.push({ count: 1 });
+      firstQueue.push({ total: 1 });
 
       const res = await dashboard.request(
         "/tickets",
@@ -104,7 +104,7 @@ describe("Dashboard Handler Integration Tests", () => {
       expect(mockDB.bind).toHaveBeenCalledWith("default-tenant", "test@example.com", 10, 10);
     });
 
-    it("should apply status filter (no-op in basic scoped list)", async () => {
+    it("should apply status filter ", async () => {
       mockDB.all.mockResolvedValueOnce({ results: [] });
       firstQueue.push({ count: 0 });
 
@@ -119,7 +119,7 @@ describe("Dashboard Handler Integration Tests", () => {
       expect(res.status).toBe(200);
     });
 
-    it("should apply assigned_to filter (no-op in basic scoped list)", async () => {
+    it("should apply assigned_to filter ", async () => {
       mockDB.all.mockResolvedValueOnce({ results: [] });
       firstQueue.push({ count: 0 });
 

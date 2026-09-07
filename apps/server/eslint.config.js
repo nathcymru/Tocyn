@@ -93,21 +93,17 @@ export default tseslint.config(
       "src/services/auth/auth.service.ts",
       "src/services/auth/apiKey.service.ts",
       "src/services/automation.service.ts",
-      "src/services/cloudflare.service.ts",
-      "src/services/customer-auth.service.ts",
-      "src/services/email/outbound.service.ts",
       "src/services/knowledge.service.ts",
       "src/services/ticket.service.ts",
       "src/services/storage.service.ts",
-      "src/utils/turnstile.ts",
-      "src/workflows/vectorize.workflow.ts"
+      "src/auth/automation-composition.ts"
     ],
     rules: {
       "no-restricted-syntax": "off"
     }
   },
   {
-    files: ["src/auth/scope.ts", "src/middleware/auth.middleware.ts", "src/middleware/widget-auth.middleware.ts", "src/auth/api-key-composition.ts", "src/handlers/customer.handler.ts"],
+    files: ["src/auth/automation-composition.ts", "src/workflows/vectorize.workflow.ts", "src/auth/scope.ts", "src/middleware/auth.middleware.ts", "src/middleware/widget-auth.middleware.ts", "src/auth/api-key-composition.ts", "src/handlers/customer.handler.ts"],
     rules: {
       "no-restricted-imports": "off"
     }

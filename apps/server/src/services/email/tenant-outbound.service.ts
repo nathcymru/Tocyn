@@ -14,34 +14,10 @@ export class TenantOutboundEmailService {
     let apiKey = await this.deps.repositories.config.get('RESEND_API_KEY');
     let defaultFrom = await this.deps.repositories.config.get('RESEND_FROM_EMAIL');
 
-    const envObj = (this.deps as any).env;
-    if (!apiKey && envObj?.RESEND_API_KEY) {
-      apiKey = envObj.RESEND_API_KEY;
-    }
-    if (!defaultFrom && envObj?.RESEND_FROM_EMAIL) {
-      defaultFrom = envObj.RESEND_FROM_EMAIL;
-    }
-
-    if (!apiKey) {
-      throw new Error('Resend API Key not configured for this tenant.');
-    }
-
-    if (apiKey && this.masterKey && apiKey !== envObj?.RESEND_API_KEY) {
-      try {
-        const decrypted = await decryptString(apiKey, this.masterKey);
-        apiKey = decrypted;
-      } catch (error) {
-        if (envObj?.RESEND_API_KEY) {
-          apiKey = envObj.RESEND_API_KEY;
-        }
-      }
-    }
-
-    if (!apiKey) {
-      throw new Error('Resend API Key not configured for this tenant.');
-    }
-
-    return { apiKey, defaultFrom: defaultFrom || 'support@luminatick.com' };
+    if (!apiKey || !defaultFrom) throw new Error('Email credentials not configured for this tenant');
+    if (!this.masterKey) throw new Error('APP_MASTER_KEY is required for tenant email credentials');
+    apiKey = await decryptString(apiKey, this.masterKey);
+    return { apiKey, defaultFrom };
   }
 
   async send(options: SendEmailOptions): Promise<{ id: string }> {
@@ -50,7 +26,7 @@ export class TenantOutboundEmailService {
 
     // Sender ownership check
     const allChannels = (await this.deps.repositories.channels.listSupportEmails()) || [];
-    if (allChannels.length > 0) {
+    {
       const owned = allChannels.some(c => c.email_address.toLowerCase() === fromAddress.toLowerCase());
       if (!owned && fromAddress.toLowerCase() !== creds.defaultFrom.toLowerCase()) {
         throw new Error(`Unauthorized: The from address ${fromAddress} does not belong to the active tenant.`);

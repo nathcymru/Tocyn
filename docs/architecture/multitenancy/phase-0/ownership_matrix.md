@@ -1,25 +1,29 @@
-# Ownership and Schema Matrix
+# Ownership and schema matrix
 
-| Table Name | Ownership | Primary Key | Foreign Keys | Unique Constraints | Notes |
-|---|---|---|---|---|---|
-| `users` | Tenant | `(tenant_id, id)` | | `UNIQUE(tenant_id, email)` | Canonical tenant entity |
-| `tickets` | Tenant | `(tenant_id, id)` | `(tenant_id, customer_id) -> users`, `(tenant_id, assigned_to) -> users`, `(tenant_id, group_id) -> groups` | | Core tenant entity |
-| `articles` | Tenant | `(tenant_id, id)` | `(tenant_id, ticket_id) -> tickets`, `(tenant_id, sender_id) -> users` | | Child of tickets |
-| `attachments` | Tenant | `(tenant_id, id)` | `(tenant_id, article_id) -> articles` | | Child of articles |
-| `groups` | Tenant | `(tenant_id, id)` | | `UNIQUE(tenant_id, name)` | Tenant entity |
-| `user_groups` | Tenant | `(tenant_id, user_id, group_id)` | `(tenant_id, user_id) -> users`, `(tenant_id, group_id) -> groups` | | Association table |
-| `customer_auth_tokens` | Tenant | `(tenant_id, id)` | `(tenant_id, user_id) -> users` | `UNIQUE(tenant_id, token_hash)` | |
-| `knowledge_categories` | Tenant | `(tenant_id, id)` | `(tenant_id, parent_id) -> knowledge_categories` | | Self-referencing |
-| `knowledge_docs` | Tenant | `(tenant_id, id)` | `(tenant_id, category_id) -> knowledge_categories` | | |
-| `support_emails` | Tenant | `(tenant_id, id)` | `(tenant_id, group_id) -> groups` | `UNIQUE(tenant_id, email_address)` | |
-| `ticket_fields` | Tenant | `(tenant_id, id)` | | `UNIQUE(tenant_id, name)` | |
-| `ticket_filters` | Tenant | `(tenant_id, id)` | | | |
-| `ticket_sequence` | Tenant | `(tenant_id, id)` | | | Auto-increment strategy needs adapting for composite PK. |
-| `automation_rules` | Tenant | `(tenant_id, id)` | | | |
-| `api_keys` | Tenant | `(tenant_id, id)` | | `UNIQUE(tenant_id, key_hash)` | Keys are tenant-scoped |
-| `config` / `settings` | Tenant | `(tenant_id, key)` | | | Re-scoped to per-tenant configuration |
+This matrix describes the unreleased Phase 1 migration chain through `0019`.
+Production migration and cutover remain tracked separately in #42.
 
-**Schema Rules:**
-- All tenant tables must include `tenant_id TEXT NOT NULL`.
-- Foreign keys must include `tenant_id` to ensure associations do not cross boundaries.
-- No global tables exist in the current architecture; the entire database is partitioned by `tenant_id`.
+| Table | Ownership and key | Constraints / routing |
+|---|---|---|
+| `users` | Tenant, `(tenant_id, id)` | Tenant email uniqueness plus globally unique `lower(trim(email))` for login routing |
+| `tickets` | Tenant, `(tenant_id, id)` | Composite customer, assignee and group foreign keys |
+| `articles` | Tenant, `(tenant_id, id)` | Composite ticket and sender foreign keys |
+| `attachments` | Tenant, `(tenant_id, id)` | Composite article foreign key |
+| `groups` | Tenant, `(tenant_id, id)` | Tenant name uniqueness |
+| `user_groups` | Tenant, `(tenant_id, user_id, group_id)` | Composite user and group foreign keys |
+| `customer_auth_tokens` | Tenant, globally unique challenge `id` | Mandatory tenant ownership, composite user FK; token hash is indexed, not unique |
+| `knowledge_categories` | Tenant, `(tenant_id, id)` | Composite parent FK |
+| `knowledge_docs` | Tenant, `(tenant_id, id)` | Composite category FK |
+| `support_emails` | Tenant, `(tenant_id, id)` | Globally unique normalized address; historical group references are retained without an FK |
+| `ticket_fields` | Tenant, `(tenant_id, id)` | Tenant field-name uniqueness |
+| `ticket_filters` | Tenant, `(tenant_id, id)` | Tenant name uniqueness; no user ownership column |
+| `automation_rules` | Tenant, `(tenant_id, id)` | Scheduled composition enumerates active tenants |
+| `api_keys` | Tenant, `(tenant_id, id)` | Globally unique key hash for pre-scope routing; explicit permissions |
+| `tenant_config` | Tenant, `(tenant_id, key)` | Globally unique public widget key where configured |
+| `ticket_sequence` | Historical global sequence | Retained migration artifact; not tenant data authority |
+| `config`, `settings` | Historical global tables | Retained for migration provenance; active tenant config uses `tenant_config` |
+
+`0014` explicitly backfills historical single-tenant records into `default-tenant`.
+This is a migration decision, never a runtime tenant fallback. `0019` resolves historical
+challenge ownership from user rows and aborts on missing or ambiguous ownership.
+The local D1 integration suite loads the real migration chain, including legacy sample data.

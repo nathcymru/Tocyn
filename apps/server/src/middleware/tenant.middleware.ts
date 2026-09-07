@@ -46,3 +46,10 @@ import { InboundTenantResolver } from '../auth/inbound-resolver';
 export function createInboundResolver(env: any): InboundTenantResolver {
   return new InboundTenantResolver(env.DB);
 }
+
+import { UserAuthResolver } from '../auth/user-auth-resolver';
+import { WidgetTenantResolver } from '../auth/widget-tenant-resolver';
+export function createCustomerAuthResolvers(env: any) {
+  if (!env.DB) throw new Error('Authentication database unavailable');
+  return { widget: new WidgetTenantResolver(env.DB), identity: new UserAuthResolver(env.DB) };
+}

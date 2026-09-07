@@ -57,6 +57,7 @@ CREATE TABLE articles (
     snippet TEXT,
     raw_email_id TEXT,
     qa_type TEXT,
+    chunk_count INTEGER DEFAULT 0,
     is_internal BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (tenant_id, id),

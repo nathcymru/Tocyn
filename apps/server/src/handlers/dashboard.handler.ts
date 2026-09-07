@@ -1,3 +1,5 @@
+import { EmailService } from '../services/email/outbound.service';
+import { BroadcastService } from '../services/broadcast.service';
 import { Hono } from "hono";
 import { z } from "zod";
 import { Env } from "../bindings";
@@ -95,23 +97,7 @@ dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard(
  */
 dashboard.get("/stats", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  const db = d.scope; // We'll use repos for counting
-
-  // Use scoped repositories for counting
-  const tickets = await d.repositories.tickets.findCustomerTickets('', 1, 1);
-  const users = await d.repositories.users.findByEmail('__count_stub__'); // We need a count method
-  const groups = await d.repositories.groups.list();
-
-  // For stats, we need aggregate queries. Let's use the scoped pattern via the repository.
-  // Since the current repos don't have aggregate stat methods, we'll add inline scoped queries.
-  // This is acceptable because dashboard.handler.ts is in the legacy allowlist during transition.
-  // TODO: Add dedicated stat methods to repositories in Batch 5.
-  return c.json({
-    ticketsByStatus: [],
-    ticketsByPriority: [],
-    totalUsers: 0,
-    totalGroups: groups.length,
-  });
+  return c.json(await d.repositories.tickets.dashboardStats());
 });
 
 /**
@@ -239,11 +225,16 @@ dashboard.post("/tickets", async (c) => {
       priority,
       status,
       source: "dashboard",
+      customer_id: customer?.id, group_id, assigned_to, custom_fields,
       body: articleBody,
       sender_id: customer?.id,
       sender_type: "customer",
     });
 
+    await new BroadcastService(c.env,d.scope).notifyTicketCreated(ticket);
+    try {
+      await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(ticket,article);
+    } catch { console.error('Initial ticket email delivery failed'); }
     return c.json(ticket, 201);
   } catch (error: any) {
     console.error("Dashboard Create Ticket Error:", error);
@@ -257,11 +248,12 @@ dashboard.post("/tickets", async (c) => {
  */
 dashboard.get("/tickets", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  const customerEmail = c.req.query("customer_email") || '';
-  const page = parseInt(c.req.query("page") || "1");
-  const limit = parseInt(c.req.query("limit") || "50");
-
-  const result = await d.repositories.tickets.findCustomerTickets(customerEmail, page, limit);
+  const result = await d.repositories.tickets.list({
+    customerEmail:c.req.query('customer_email'), filterId:c.req.query('filter_id'),
+    status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),
+    groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:c.req.query('search'),
+    page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50)
+  });
   return c.json(result);
 });
 
@@ -395,6 +387,13 @@ dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
 
   await d.repositories.tickets.touch(ticketId);
 
+  if (!article.is_internal) {
+    try {
+      const savedAttachments = await d.repositories.attachments.findByArticle(article.id);
+      await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(ticket,article,savedAttachments);
+    } catch { console.error('Ticket reply email delivery failed'); }
+  }
+  await new BroadcastService(c.env,d.scope).broadcast('article.created',{ticket_id:ticketId,article_id:article.id});
   return c.json({ ...article, attachments }, 201);
 });
 
@@ -479,10 +478,10 @@ dashboard.patch("/tickets/:id", async (c) => {
  */
 dashboard.get("/users", permissionGuard("users"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  // Use scoped user listing - we need a list method
-  // For now, use findByEmail as a stub - this needs a proper list method in Batch 5
-  // TODO: Add UserRepository.list(options) in Batch 5
-  return c.json({ users: [], page: 1, limit: 20 });
+  const page = Math.max(1, parseInt(c.req.query('page') || '1') || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '20') || 20));
+  const users = await d.repositories.users.list({page,limit,role:c.req.query('role')});
+  return c.json({users,page,limit});
 });
 
 /**
@@ -491,8 +490,7 @@ dashboard.get("/users", permissionGuard("users"), async (c) => {
  */
 dashboard.get("/users/agents", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  // TODO: Add UserRepository.findByRoles() in Batch 5
-  return c.json([]);
+  return c.json(await d.repositories.users.list({page:1,limit:100,staffOnly:true}));
 });
 
 /**
@@ -652,7 +650,9 @@ dashboard.get('/attachments/:id/download', async (c) => {
   const response = await d.attachmentStorage.getAttachment(attachment.r2_key);
   if (!response) return c.json({ error: 'File not found in storage' }, 404);
 
-  const newResponse = new Response(response.body, response);
+  const headers = new Headers();
+  response.writeHttpMetadata(headers);
+  const newResponse = new Response(response.body, {headers});
   const safeFileName = (attachment.file_name || 'attachment').replace(/^.*[\\/]/, '').replace(/[\r\n"]/g, '_');
   newResponse.headers.set('Content-Disposition', `attachment; filename="${safeFileName}"`);
   return newResponse;

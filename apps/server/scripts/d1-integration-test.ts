@@ -1,4 +1,4 @@
-import { Miniflare } from 'miniflare';
+import { Miniflare, Headers as MiniflareHeaders } from 'miniflare';
 import assert from 'node:assert';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
@@ -7,11 +7,15 @@ import { TenantAttachmentStorage } from '../src/storage/adapters';
 import { TenantTicketService } from '../src/services/tenant-ticket.service';
 import { tenantMiddleware } from '../src/middleware/tenant.middleware';
 import { Hono } from 'hono';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { InMemoryEmailTransport } from '../src/services/email/transport';
 
 async function run() {
+  // Miniflare serializes its own Headers implementation across the R2 binding bridge.
+  // Use that implementation for real handler calls in this Node-hosted harness.
+  const originalHeaders = globalThis.Headers;
+  Object.assign(globalThis, { Headers: MiniflareHeaders });
   const mf = new Miniflare({
     modules: true,
     script: 'export default { fetch() { return new Response("ok"); } }',
@@ -24,12 +28,24 @@ async function run() {
     const bucket = await mf.getR2Bucket('ATTACHMENTS_BUCKET');
     console.log("Setting up D1 test database via Miniflare bindings...");
 
-    // Load schema
-    const schema = readFileSync(join(process.cwd(), 'src/repositories/__tests__/fixtures/schema.sql'), 'utf-8');
-    const statements = schema.split(';').map(s => s.trim()).filter(s => s.length > 0);
-    for (const stmt of statements) {
-      await db.prepare(stmt).run();
+    // Exercise the deployable migration chain, not a hand-built final schema.
+    for (const migration of readdirSync(join(process.cwd(), 'migrations')).filter(n => n.endsWith('.sql')).sort()) {
+      const sql = readFileSync(join(process.cwd(), 'migrations', migration), 'utf8').replace(/--[^\n]*/g, '');
+      const statements = sql.split(';').map(s => s.trim()).filter(Boolean);
+      await db.batch(statements.map(stmt => db.prepare(stmt)));
+      if (migration.startsWith('0013_')) {
+        await db.batch([
+          db.prepare("INSERT INTO users(id,email,role) VALUES ('migration-user','migration@example.test','customer')"),
+          db.prepare("INSERT INTO tickets(id,subject,customer_id,customer_email,source) VALUES ('migration-ticket','Legacy ticket','migration-user','migration@example.test','email')"),
+          db.prepare("INSERT INTO articles(id,ticket_id,sender_id,sender_type,body) VALUES ('migration-article','migration-ticket','migration-user','customer','Preserved legacy text')"),
+          db.prepare("INSERT INTO customer_auth_tokens(id,user_id,token_hash,type,expires_at) VALUES ('migration-token','migration-user','migration-hash','magic_link','2099-01-01')")
+        ]);
+      }
     }
+
+    assert.strictEqual((await db.prepare("SELECT tenant_id FROM customer_auth_tokens WHERE id='migration-token'").first())?.tenant_id, 'default-tenant');
+    assert.strictEqual((await db.prepare("SELECT body FROM articles WHERE tenant_id='default-tenant' AND id='migration-article'").first())?.body, 'Preserved legacy text');
+    assert.strictEqual((await db.prepare('PRAGMA foreign_key_check').all()).results.length, 0);
 
     // 1. Composition Boundary Tests (Fail Closed)
     console.log("Testing Composition Boundary...");
@@ -293,6 +309,8 @@ async function run() {
     await depsB.repositories.config.set('RESEND_API_KEY', await encryptString('re_B123', 'test_key'));
 
     const { TenantOutboundEmailService } = require('../src/services/email/tenant-outbound.service');
+    await depsA.repositories.config.set('RESEND_FROM_EMAIL', 'support-a@domain.com');
+    await depsB.repositories.config.set('RESEND_FROM_EMAIL', 'support-b@domain.com');
     const outA = new TenantOutboundEmailService(depsA, 'test_key');
     const credsA = await outA.getResendCredentials();
     if (credsA.apiKey !== 're_A123') throw new Error("Expected A's key");
@@ -475,7 +493,7 @@ async function run() {
   const tokenWidgetA2 = await createToken('tenant-A', 'customer', userIdA2, 'c2@a.com', 'widget');
 
   const testEmailTransport = new InMemoryEmailTransport();
-  const envMock = { DB: db, JWT_SECRET: 'secret', ATTACHMENTS_BUCKET: bucket, emailTransport: testEmailTransport, AI: { run: async (model, options) => {
+  const envMock = { APP_MASTER_KEY: 'test-master-key-that-is-long-enough-for-aes', DB: db, JWT_SECRET: 'secret', ATTACHMENTS_BUCKET: bucket, emailTransport: testEmailTransport, AI: { run: async (model, options) => {
   if (model === '@cf/meta/llama-3-8b-instruct') {
     return { response: JSON.stringify(options.messages) };
   }
@@ -630,10 +648,10 @@ async function run() {
 
   // 13. legacy-R2 compatibility/default tenant & 14. normal-tenant rejection of legacy raw R2
   const { TenantArticleBodyHydrator } = await import('../src/storage/adapters');
-  const hydratorA = new TenantArticleBodyHydrator({} as any, undefined); // Normal tenant shouldn't even have it
+  const hydratorA = new TenantArticleBodyHydrator({ getAttachment: async () => null } as any, undefined); // Normal tenant shouldn't even have it
   // Wait, I need to pass mock if I want to test that it fails even if passed? No, if it's not passed, it fails.
-  // But wait, the app only passes it if tenant is default-tenant.: async () => ({ text: async () => 'legacy' }) } as any);
-  const hydratorDefault = new TenantArticleBodyHydrator({} as any, { getLegacyUnscopedAttachment: async () => ({ text: async () => 'legacy' }) } as any);
+  // But wait, the app only passes it if tenant is default-tenant.: async () => ({ body: new Response('legacy').body }) } as any);
+  const hydratorDefault = new TenantArticleBodyHydrator({ getAttachment: async () => null } as any, { getLegacyUnscopedAttachment: async () => ({ body: new Response('legacy').body }) } as any);
 
   const rejectedStr = await hydratorA.hydrate(null, 'tickets/123/articles/456/body.txt');
   if (rejectedStr !== '[Legacy article body unavailable]') throw new Error('Normal tenant did not reject legacy raw R2');
@@ -1003,6 +1021,22 @@ async function run() {
   if (checkTicketB === null) throw new Error("Retention A accidentally deleted Tenant B old ticket!");
   console.log("SUCCESS: Retention A deletes Tenant A qualifying ticket and leaves Tenant B ticket intact");
 
+  await worker.scheduled({} as any, envMock, {} as any);
+  assert.strictEqual(await reposApiKeyB.tickets.get(ticketBOld.id), null, 'Actual scheduled entrypoint must process tenant B');
+
+  const { VectorizeWorkflow } = await import('../src/workflows/vectorize.workflow');
+  const workflow = Object.create(VectorizeWorkflow.prototype) as any;
+  workflow.env = envMock;
+  const step = {do: async (_name: string, callback: () => Promise<void>) => callback()};
+  await assert.rejects(() => workflow.run({payload:{action:'create',documentId:'missing'}},step), /Scoped workflow identity/);
+  await reposApiKeyA.knowledge.createDocument({id:'workflow-shared',title:'A workflow',file_path:'workflow-a',tier:'answer'});
+  await reposApiKeyB.knowledge.createDocument({id:'workflow-shared',title:'B workflow',file_path:'workflow-b',tier:'answer'});
+  await depsA.attachmentStorage.putAttachment('workflow-a','A scoped content');
+  await reposApiKeyA.knowledge.updateDocument('workflow-shared',{status:'published'});
+  await workflow.run({payload:{tenantId:'tenant-A',action:'create',documentId:'workflow-shared'}},step);
+  assert.strictEqual((await reposApiKeyB.knowledge.getDocument('workflow-shared'))?.status,'pending');
+  console.log('SUCCESS: Scoped workflow rejects missing authority and preserves the other tenant document');
+
   // 10. Dashboard A stats do not count B records
   const statsReqA = new Request('http://localhost/api/groups', {
     headers: { 'Authorization': `Bearer ${tokenAgentA}` }
@@ -1225,6 +1259,7 @@ async function run() {
 
   // 18. End-to-End Customer Auth & Token Consumption Flow (unmocked issuance-to-consumption via EmailTransport)
   testEmailTransport.clear();
+  await reposApiKeyA.config.set('PORTAL_URL', 'https://portal.example.test');
 
   const e2eRequestReq = new Request('http://localhost/api/v1/customer/auth/request', {
     method: 'POST',
@@ -1232,7 +1267,7 @@ async function run() {
     body: JSON.stringify({
       email: 'e2e-customer@example.com',
       type: 'magic_link',
-      baseUrl: 'http://localhost:5173',
+      baseUrl: 'https://untrusted.example.test',
       widgetKey: 'pk_widget_tenant_A'
     })
   });
@@ -1248,6 +1283,9 @@ async function run() {
   }
 
   const sentEmail = testEmailTransport.sentEmails[0];
+  assert.ok(sentEmail.options.html.includes('https://portal.example.test/verify?'));
+  assert.ok(sentEmail.options.html.includes('key=pk_widget_tenant_A'));
+  assert.ok(!sentEmail.options.html.includes('untrusted.example.test'));
   const tokenMatch = sentEmail.options.html.match(/token=([a-f0-9]+)/);
   if (!tokenMatch) {
     throw new Error("Failed to capture plain token from sent email transport HTML!");
@@ -1292,6 +1330,23 @@ async function run() {
     throw new Error(`GET /api/v1/customer/auth/me returned invalid user payload: ${JSON.stringify(e2eMeJson)}`);
   }
   console.log("SUCCESS: 18. Connected customer /auth/verify to protected endpoint token consumption flow verified via EmailTransport");
+  const customerId = verifyResult.user.id;
+  const privateTicket = await reposApiKeyA.tickets.create({subject:'Attachment ownership',customer_email:verifyResult.user.email,source:'web',status:'open',priority:'normal'});
+  const privateArticle = await reposApiKeyA.articles.create({ticket_id:privateTicket.id,sender_type:'agent',is_internal:true});
+  const privateAttachment = await reposApiKeyA.attachments.create({article_id:privateArticle.id,file_name:'internal.txt',file_size:1,content_type:'text/plain',r2_key:'internal-only'});
+  await depsA.attachmentStorage.putAttachment('internal-only','private');
+  const deniedDownload = await worker.fetch(new Request(`http://localhost/api/v1/customer/attachments/${privateAttachment.id}/download`,{headers:{Authorization:`Bearer ${returnedCustomerToken}`}}),envMock,{});
+  assert.strictEqual(deniedDownload.status,404,'Internal-note attachments must not be downloadable by the ticket customer');
+
+  await db.prepare('UPDATE articles SET is_internal=0 WHERE tenant_id=? AND id=?').bind('tenant-A',privateArticle.id).run();
+  const publicDownload = await worker.fetch(new Request(`http://localhost/api/v1/customer/attachments/${privateAttachment.id}/download`,{headers:{Authorization:`Bearer ${returnedCustomerToken}`}}),envMock,{});
+  assert.strictEqual(publicDownload.status,200,'Public attachment positive control');
+  assert.strictEqual(await publicDownload.text(),'private');
+  await reposApiKeyA.users.storeCustomerAuthToken(customerId, 'atomic-d1-challenge', 'atomic-d1-hash', 'magic_link', new Date(Date.now()+60000).toISOString());
+  const redemptions = await Promise.all(Array.from({length:8}, () => reposApiKeyA.users.verifyAndConsumeCustomerAuthToken('atomic-d1-hash',new Date().toISOString())));
+  assert.strictEqual(redemptions.filter(Boolean).length, 1, 'D1 must redeem only once under concurrent requests');
+  for (const forbidden of ['password_hash','mfa_secret','secret']) assert.ok(!(forbidden in verifyResult.user));
+
 
   // 19. Middleware Authoritative D1 User/Role Revalidation (User Deletion & Demotion)
   const revalUserId = 'user-reval-1';
@@ -1491,6 +1546,7 @@ async function run() {
 
   } finally {
     await mf.dispose();
+    globalThis.Headers = originalHeaders;
   }
 }
 

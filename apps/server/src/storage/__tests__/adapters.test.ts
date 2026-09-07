@@ -49,3 +49,23 @@ describe('Tenant Storage Adapters', () => {
     expect(mockIndex.deleteByIds).toHaveBeenCalledWith([expectedId]);
   });
 });
+
+describe('Article body hydration', () => {
+  it('prefers scoped objects even for legacy-shaped logical keys and cancels bounded reads', async () => {
+    const { TenantArticleBodyHydrator } = await import('../adapters');
+    const cancel = vi.fn();
+    const stream = new ReadableStream({ pull(controller) { controller.enqueue(new TextEncoder().encode('scoped-content')); }, cancel });
+    const legacy = { getLegacyUnscopedAttachment: vi.fn() };
+    const scoped = { getAttachment: vi.fn().mockResolvedValue({body: stream}) };
+    const result = await new TenantArticleBodyHydrator(scoped as any, legacy as any).hydrate(null, 'tickets/1/articles/2/body.txt', 6);
+    expect(result).toBe('scoped');
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(legacy.getLegacyUnscopedAttachment).not.toHaveBeenCalled();
+  });
+
+  it('does not request raw legacy storage for a normal tenant', async () => {
+    const { TenantArticleBodyHydrator } = await import('../adapters');
+    const scoped = {getAttachment: vi.fn().mockResolvedValue(null)};
+    expect(await new TenantArticleBodyHydrator(scoped as any).hydrate(null,'tickets/1/articles/2/body.txt')).toBe('[Legacy article body unavailable]');
+  });
+});

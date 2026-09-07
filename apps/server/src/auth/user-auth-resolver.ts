@@ -5,6 +5,8 @@ export interface UserAuthResolution {
   userId: string;
   role: string;
   passwordHash: string | null;
+  email?: string;
+  fullName?: string;
   mfaEnabled: boolean;
 }
 
@@ -42,11 +44,13 @@ export class UserAuthResolver {
     if (!tenantId || !userId) return null;
 
     const user = await this.db
-      .prepare("SELECT tenant_id, id, role, password_hash, mfa_enabled FROM users WHERE tenant_id = ? AND id = ?")
+      .prepare("SELECT tenant_id, id, role, password_hash, mfa_enabled, email, full_name FROM users WHERE tenant_id = ? AND id = ?")
       .bind(tenantId, userId)
       .first<{
         tenant_id: string;
         id: string;
+        email: string;
+        full_name: string;
         role: string;
         password_hash: string | null;
         mfa_enabled: number | boolean;
@@ -57,6 +61,8 @@ export class UserAuthResolver {
     return {
       tenantId: user.tenant_id,
       userId: user.id,
+      email: user.email,
+      fullName: user.full_name,
       role: user.role,
       passwordHash: user.password_hash,
       mfaEnabled: !!user.mfa_enabled,

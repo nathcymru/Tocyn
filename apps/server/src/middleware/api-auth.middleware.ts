@@ -15,6 +15,7 @@ export const apiAuthMiddleware = async (c: Context<{ Bindings: Env; Variables: A
     return c.json({ error: "Missing API Key" }, 401);
   }
 
+  if (!c.env.DB) return c.json({ error: 'Authentication unavailable' }, 503);
   const resolver = new ApiAuthResolver(c.env.DB);
   const result = await resolveApiKeyRequestDeps(resolver, apiKey, c.env);
 

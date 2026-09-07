@@ -1,35 +1,23 @@
 import { Env } from '../bindings';
 import { User } from '../types';
 import { EmailService } from './email/outbound.service';
-import { AuthService } from './auth/auth.service';
 import { EmailTransport } from './email/transport';
-import { WidgetTenantResolver } from '../auth/widget-tenant-resolver';
 import { UserAuthResolver } from '../auth/user-auth-resolver';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import * as jose from 'jose';
 
 export class CustomerAuthService {
   private emailService?: EmailService;
-  private authService: AuthService;
 
   constructor(
     private env: Env,
     private deps?: TenantRequestDeps,
-    private transport?: EmailTransport
+    private transport?: EmailTransport,
+    private identityResolver?: Pick<UserAuthResolver, 'resolveCredentialsByEmail'>
   ) {
-    this.authService = new AuthService(env);
     if (deps) {
       this.emailService = new EmailService(env, deps, transport);
     }
-  }
-
-  async resolveTenantFromWidgetKey(widgetKey: string): Promise<string | null> {
-    if (!widgetKey || typeof widgetKey !== 'string' || !widgetKey.trim() || !this.env.DB) {
-      return null;
-    }
-    const resolver = new WidgetTenantResolver(this.env.DB);
-    const resolution = await resolver.resolveTenantByKey(widgetKey.trim());
-    return resolution?.tenantId ?? null;
   }
 
   async getConfig(): Promise<{ TICKET_PREFIX: string, TURNSTILE_SITE_KEY?: string }> {
@@ -61,8 +49,8 @@ export class CustomerAuthService {
     const lowerEmail = email.toLowerCase().trim();
 
     // 1. Authoritative identity resolution & tenant boundary check
-    const userResolver = new UserAuthResolver(this.env.DB);
-    const existingUser = await userResolver.resolveCredentialsByEmail(lowerEmail);
+    if (!this.identityResolver) throw new Error('Identity resolver required');
+    const existingUser = await this.identityResolver.resolveCredentialsByEmail(lowerEmail);
 
     let userId: string;
 
@@ -97,13 +85,21 @@ export class CustomerAuthService {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
     // 3. Store Token securely via repository
-    await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, tokenHash, type, expiresAt);
+    if (type === 'magic_link') await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, tokenHash, type, expiresAt);
 
     // 4. Send Email via Tenant EmailService
     const emailSvc = this.emailService || new EmailService(this.env, this.deps, this.transport);
 
     if (type === 'magic_link') {
-      const url = `${baseUrl || 'http://localhost:5173'}/auth/verify?token=${plainToken}`;
+      const portalBase = await this.deps.repositories.config.get('PORTAL_URL') || this.env.PORTAL_URL;
+      if (!portalBase) throw new Error('Portal URL not configured');
+      const urlObj = new URL('/verify', portalBase);
+      if (urlObj.protocol !== 'https:' && !(urlObj.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(urlObj.hostname))) throw new Error('Invalid portal URL');
+      urlObj.searchParams.set('token', plainToken);
+      const widgetKey = await this.deps.repositories.config.get('widget.public_key');
+      if (!widgetKey) throw new Error('Widget key not configured');
+      urlObj.searchParams.set('key', widgetKey);
+      const url = urlObj.toString();
       await emailSvc.send({
         to: [lowerEmail],
         subject: 'Your Login Link',
@@ -161,6 +157,6 @@ export class CustomerAuthService {
       .setExpirationTime('7d')
       .sign(secretKey);
 
-    return { token: jwt, user };
+    return { token: jwt, user: { id: user.id, email: user.email, full_name: user.full_name, role: user.role, tenant_id: user.tenant_id } as User };
   }
 }

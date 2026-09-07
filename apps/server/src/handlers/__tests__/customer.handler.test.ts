@@ -1,3 +1,6 @@
+vi.mock('../../auth/widget-tenant-resolver', () => ({WidgetTenantResolver: class {
+  resolveTenantByKey = vi.fn().mockResolvedValue({tenantId:'default-tenant'});
+}}));
 import { encryptString } from "../../utils/crypto";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import customer from "../customer.handler";

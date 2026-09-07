@@ -4,7 +4,7 @@ import { Env } from "../bindings";
 import { AppVariables, Article } from "../types";
 import { CustomerAuthService } from "../services/customer-auth.service";
 import { TenantTicketService } from "../services/tenant-ticket.service";
-import { tenantMiddleware, TenantRequestDeps, createTenantRequestDeps } from "../middleware/tenant.middleware";
+import { tenantMiddleware, TenantRequestDeps, createTenantRequestDeps, createCustomerAuthResolvers } from "../middleware/tenant.middleware";
 import { createVerifiedTenantScope } from "../auth/scope";
 import { BroadcastService } from "../services/broadcast.service";
 import { widgetAuthMiddleware } from "../middleware/widget-auth.middleware";
@@ -17,21 +17,16 @@ const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
 // --- PUBLIC CONFIG ROUTE ---
 app.get('/config', async (c) => {
-  const widgetKey = c.req.header('X-Widget-Key') || c.req.query('key');
-  let deps: TenantRequestDeps | undefined;
-
-  if (widgetKey && typeof widgetKey === 'string' && widgetKey.trim()) {
-    const baseAuthService = new CustomerAuthService(c.env);
-    const tenantId = await baseAuthService.resolveTenantFromWidgetKey(widgetKey.trim());
-    if (tenantId) {
-      const scope = createVerifiedTenantScope(tenantId, 'system', ['widget'], 1);
-      deps = createTenantRequestDeps(scope, c.env);
-    }
+  if (c.req.header('X-Tenant-ID') || c.req.query('tenant_id') || c.req.query('tenantId')) {
+    return c.json({ error: 'Invalid tenant context' }, 400);
   }
-
-  const authService = new CustomerAuthService(c.env, deps);
-  const config = await authService.getConfig();
-  return c.json(config);
+  const widgetKey = c.req.header('X-Widget-Key') || c.req.query('key');
+  if (!widgetKey?.trim()) return c.json({ error: 'Widget key required' }, 400);
+  const tenantId = (await createCustomerAuthResolvers(c.env).widget.resolveTenantByKey(widgetKey.trim()))?.tenantId;
+  if (!tenantId) return c.json({ error: 'Widget configuration not found' }, 404);
+  const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
+  const deps = createTenantRequestDeps(scope, c.env);
+  return c.json(await new CustomerAuthService(c.env, deps).getConfig());
 });
 
 // --- AUTHENTICATION ROUTES ---
@@ -49,13 +44,13 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Widget key required' }, 400);
   }
 
-  const baseAuthService = new CustomerAuthService(c.env);
-  const tenantId = await baseAuthService.resolveTenantFromWidgetKey(widgetKey.trim());
+  const resolvers = createCustomerAuthResolvers(c.env);
+  const tenantId = (await resolvers.widget.resolveTenantByKey(widgetKey.trim()))?.tenantId;
   if (!tenantId) {
     return c.json({ error: 'Widget configuration not found' }, 404);
   }
 
-  const scope = createVerifiedTenantScope(tenantId, 'system', ['widget'], 1);
+  const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
   const deps = createTenantRequestDeps(scope, c.env);
 
   // Turnstile verification bound to resolved tenant
@@ -71,7 +66,7 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
   }
 
-  const authService = new CustomerAuthService(c.env, deps, (c.env as any).emailTransport);
+  const authService = new CustomerAuthService(c.env, deps, (c.env as any).emailTransport, resolvers.identity);
 
   try {
     await authService.requestAuth(body.email, body.type, body.baseUrl);
@@ -92,16 +87,17 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Widget key required' }, 400);
   }
 
-  const baseAuthService = new CustomerAuthService(c.env);
-  const tenantId = await baseAuthService.resolveTenantFromWidgetKey(widgetKey.trim());
+  const resolvers = createCustomerAuthResolvers(c.env);
+  const tenantId = (await resolvers.widget.resolveTenantByKey(widgetKey.trim()))?.tenantId;
   if (!tenantId) {
     return c.json({ error: 'Widget configuration not found' }, 404);
   }
 
-  const scope = createVerifiedTenantScope(tenantId, 'system', ['widget'], 1);
+  const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
   const deps = createTenantRequestDeps(scope, c.env);
 
   const authService = new CustomerAuthService(c.env, deps);
+  if (typeof body.token !== 'string' || !body.token || body.token.length > 512) return c.json({ error: 'Invalid token' }, 400);
   const result = await authService.verifyAuth(body.token);
   if (!result) return c.json({ error: 'Invalid token' }, 401);
 
@@ -125,7 +121,7 @@ app.get('/auth/me', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddlew
   const payload = c.get('jwtPayload') as any;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const user = await deps.repositories.users.get(payload.sub);
-  return c.json({ user });
+  return c.json({ user: user ? { id: user.id, email: user.email, full_name: user.full_name, role: user.role, tenant_id: user.tenant_id } : null });
 });
 
 // --- TICKET ROUTES ---
@@ -254,7 +250,7 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
   await ticketService.updateTicketTimestamp(ticketId);
 
   // Broadcast the update
-  const broadcastService = new BroadcastService(c.env);
+  const broadcastService = new BroadcastService(c.env, deps.scope);
   await broadcastService.broadcast("article.created", {
     ticketId,
     articleId: article.id,
@@ -272,7 +268,7 @@ app.get('/attachments/:id/download', widgetAuthMiddleware, roleGuard(['customer'
 
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const attachment = await deps.repositories.attachments.getAttachmentWithMeta(attachmentId!);
-  if (!attachment || attachment.customer_email !== payload.email) {
+  if (!attachment || attachment.is_internal || attachment.customer_email !== payload.email) {
     return c.json({ error: 'Not found or unauthorized' }, 404);
   }
   const r2Object = await deps.attachmentStorage.getAttachment(attachment.r2_key);

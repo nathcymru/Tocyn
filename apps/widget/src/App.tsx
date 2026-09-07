@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import TicketForm from './components/TicketForm';
 import AiChat from './components/AiChat';
-import { BASE_URL } from './api';
+import { BASE_URL, widgetHeaders } from './api';
 
 const App: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,20 +10,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Fetch widget configuration from the backend
-    fetch(`${BASE_URL}/config`)
-      .then(res => res.json())
+    fetch(`${BASE_URL}/config`, { headers: widgetHeaders() })
+      .then(res => { if (!res.ok) throw new Error('Widget configuration unavailable'); return res.json(); })
       .then(data => setConfig(data))
-      .catch(() => {
-        // Fallback config if not found
-        setConfig({
-          primaryColor: '#3b82f6',
-          title: 'How can we help?',
-          features: {
-            aiChat: true,
-            ticketForm: true,
-          }
-        });
-      });
+      .catch(() => setConfig(null));
   }, []);
 
   const toggleWidget = () => setIsOpen(!isOpen);
@@ -66,7 +56,7 @@ const App: React.FC = () => {
             {activeTab === 'chat' && <AiChat config={config} />}
             {activeTab === 'ticket' && <TicketForm config={config} />}
           </div>
-          
+
           <div className="p-2 text-center text-[10px] text-gray-400 border-t border-gray-100">
             Powered by Luminatick
           </div>

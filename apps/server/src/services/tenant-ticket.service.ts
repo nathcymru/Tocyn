@@ -1,3 +1,4 @@
+import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { Ticket, Article, Attachment } from '../types';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 
@@ -17,8 +18,13 @@ export class TenantTicketService {
       subject: data.subject,
       customer_email: data.customer_email,
       source: data.source,
-      status: 'open',
-      priority: 'normal'
+      status: data.status ?? 'open',
+      priority: data.priority ?? 'normal',
+      assigned_to: data.assigned_to,
+      group_id: data.group_id,
+      customer_id: data.customer_id,
+      source_email: data.source_email,
+      custom_fields: data.custom_fields
     });
 
     const article = await this.deps.repositories.articles.create({
@@ -37,32 +43,10 @@ export class TenantTicketService {
   }
 
   async hydrateArticles(articles: Article[]): Promise<Article[]> {
-    await Promise.all(
-      articles.map(async (article) => {
-        if (!article.body && article.body_r2_key) {
-          try {
-            // body_r2_key is assumed to be fully migrated to tenant scope if created through new boundary
-            let obj;
-            // Legacy keys do not have the tenant- scope prefix in them yet.
-            // In the new system, we expect the tenant scope to be implicitly managed.
-            const legacyPattern = /^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/;
-            if (legacyPattern.test(article.body_r2_key)) {
-              if (this.deps.legacyArticleStorage) {
-                obj = await this.deps.legacyArticleStorage.getLegacyUnscopedAttachment(article.body_r2_key);
-              } else {
-                throw new Error("Legacy article body hydration is not permitted for this tenant.");
-              }
-            } else {
-              obj = await this.deps.attachmentStorage.getAttachment(article.body_r2_key);
-            }
-            article.body = obj ? await obj.text() : '';
-          } catch (err) {
-            console.error('Failed to fetch article body from R2', err);
-            article.body = '';
-          }
-        }
-      })
-    );
+    const hydrator = new TenantArticleBodyHydrator(this.deps.attachmentStorage, this.deps.legacyArticleStorage);
+    await Promise.all(articles.map(async article => {
+      if (!article.body && article.body_r2_key) article.body = await hydrator.hydrate(null, article.body_r2_key, 1024 * 1024);
+    }));
     return articles;
   }
 

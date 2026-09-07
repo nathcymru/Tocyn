@@ -1,3 +1,5 @@
+import { encryptString } from '../../../utils/crypto';
+let encryptedTestKey = '';
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EmailService } from "../outbound.service";
 import { Ticket, Article } from "../../types";
@@ -11,10 +13,10 @@ const createMockDB = (mockGroupEmail: string | null = null, mockDefaultEmail: st
       const createExec = (boundKey?: string) => ({
         first: vi.fn().mockImplementation(async () => {
           if (query.includes('tenant_config')) {
-            if (boundKey === 'RESEND_API_KEY') return { value: 'test-key' };
+            if (boundKey === 'RESEND_API_KEY') return { value: encryptedTestKey };
             if (boundKey === 'RESEND_FROM_EMAIL') return { value: 'support@test.com' };
             if (boundKey === 'TICKET_PREFIX') return { value: '#' };
-            return { value: 'test-key' };
+            return { value: encryptedTestKey };
           }
           if (query.includes('group_id = ?') && mockGroupEmail) {
             return { email_address: mockGroupEmail };
@@ -49,7 +51,8 @@ const mockEnv = {
 };
 
 describe("EmailService Outbound Subject Padding", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    encryptedTestKey = await encryptString("test-key", mockEnv.APP_MASTER_KEY);
     vi.clearAllMocks();
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -124,7 +127,8 @@ describe("EmailService Outbound Subject Padding", () => {
 });
 
 describe("EmailService Outbound Group Email Resolution", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    encryptedTestKey = await encryptString("test-key", mockEnv.APP_MASTER_KEY);
     vi.clearAllMocks();
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -180,7 +184,7 @@ describe("EmailService Outbound Group Email Resolution", () => {
     );
   });
 
-  it("should fallback to source_email if no default email exists either", async () => {
+  it("rejects an unowned source email even when no channels exist", async () => {
     const mockDB = createMockDB(null, null);
     const envWithDb = { ...mockEnv, DB: mockDB };
     const service = new EmailService(envWithDb as any, createTenantRequestDeps(createVerifiedTenantScope("default-tenant", "system", [], 1), envWithDb) as any);
@@ -194,14 +198,8 @@ describe("EmailService Outbound Group Email Resolution", () => {
     };
     const article: Partial<Article> = { body: "Yes." };
 
-    await service.sendTicketReply(ticket as Ticket, article as Article);
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      "https://api.resend.com/emails",
-      expect.objectContaining({
-        body: expect.stringContaining('"from":"source@test.com"')
-      })
-    );
+    await expect(service.sendTicketReply(ticket as Ticket, article as Article)).rejects.toThrow('does not belong');
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("should fallback to RESEND_FROM_EMAIL if source_email is missing and no DB emails", async () => {
