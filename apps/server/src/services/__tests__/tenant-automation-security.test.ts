@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LegacyArticleBodyStorage, TenantAttachmentStorage } from '../../storage/adapters';
 import { TenantAutomationService } from '../tenant-automation.service';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -36,4 +37,25 @@ describe('tenant automation safety', () => {
     expect((await service.runRetention()).deleted_tickets).toBe(1);
     expect(deps.vectorStorage.deleteByIds).toHaveBeenCalledWith(['qa_article_0']);
   });
+  it.each([true, false])('deletes only the selected body namespace (legacy=%s)', async (legacy) => {
+    const scope = { tenantId: legacy ? 'default-tenant' : 'tenant-A' } as any;
+    const bodyKey = 'tickets/ticket/articles/article/body.txt';
+    const scopedKey = `${scope.tenantId}/${bodyKey}`;
+    const objects = new Set([bodyKey, scopedKey]);
+    const bucket = { delete: vi.fn(async (key: string) => { objects.delete(key); }) } as any;
+    const deps: any = {
+      attachmentStorage: new TenantAttachmentStorage(scope, bucket),
+      legacyArticleStorage: legacy ? new LegacyArticleBodyStorage(scope, bucket) : undefined,
+      repositories: {
+        automations: { getActiveRules: async () => [{ action_config: '{"days_to_keep":30}' }] },
+        tickets: { findTicketsForRetention: async () => [{ id: 'ticket' }], delete: vi.fn() },
+        articles: { listByTicket: async () => [{ id: 'article', body_r2_key: bodyKey }], delete: vi.fn() },
+        attachments: { findByArticle: async () => [], delete: vi.fn() },
+      }
+    };
+    expect((await new TenantAutomationService(deps).runRetention()).deleted_tickets).toBe(1);
+    expect(objects).toEqual(new Set([legacy ? scopedKey : bodyKey]));
+    expect(bucket.delete).toHaveBeenCalledTimes(1);
+  });
+
 });

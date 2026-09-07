@@ -191,9 +191,10 @@ export class TenantAutomationService {
                 await this.deps.attachmentStorage.deleteAttachment(attachment.r2_key);
               }
               if (article.body_r2_key) {
-                await this.deps.attachmentStorage.deleteAttachment(article.body_r2_key);
                 if (this.deps.legacyArticleStorage && /^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/.test(article.body_r2_key)) {
                   await this.deps.legacyArticleStorage.deleteLegacyArticleBody(article.body_r2_key);
+                } else {
+                  await this.deps.attachmentStorage.deleteAttachment(article.body_r2_key);
                 }
               }
               if (article.qa_type) {
