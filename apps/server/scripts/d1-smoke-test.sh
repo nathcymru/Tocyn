@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -18,16 +18,19 @@ npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="I
 
 echo "Attempting to create ticket for tenant-A assigned to tenant-B unique user (cross-tenant FK test)..."
 # Expect failure!
-if npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO tickets (tenant_id, id, subject, customer_id, customer_email, source) VALUES ('tenant-A', 'ticket-1', 'Test', 'unique-b-id', 'test@test.com', 'email');" 2>&1 | grep -q "FOREIGN KEY constraint failed"; then
+if FK_OUTPUT=$(npx wrangler d1 execute luminatick-db --local --persist-to="$TMP_DIR" --command="INSERT INTO tickets (tenant_id, id, subject, customer_id, customer_email, source) VALUES ('tenant-A', 'ticket-1', 'Test', 'unique-b-id', 'test@test.com', 'email');" 2>&1); then
+  echo "FAIL: Cross-tenant FK assignment was NOT rejected."
+  exit 1
+elif grep -q "FOREIGN KEY constraint failed" <<< "$FK_OUTPUT"; then
   echo "SUCCESS: Cross-tenant FK assignment was correctly rejected by D1."
 else
-  echo "FAIL: Cross-tenant FK assignment was NOT rejected."
+  echo "FAIL: D1 command failed for a reason other than the expected FK constraint."
   exit 1
 fi
 
 echo "Running PRAGMA foreign_key_check..."
 CHK_FK=$(npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="PRAGMA foreign_key_check;" --json)
-if echo "$CHK_FK" | grep -q '"results": \[\]'; then
+if grep -q '"results": \[\]' <<< "$CHK_FK"; then
   echo "SUCCESS: PRAGMA foreign_key_check valid (zero violations)."
 else
   echo "FAIL: PRAGMA foreign_key_check failed."
@@ -36,7 +39,7 @@ fi
 
 echo "Running PRAGMA quick_check..."
 CHK_QC=$(npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="PRAGMA quick_check;" --json)
-if echo "$CHK_QC" | grep -q '"quick_check": "ok"'; then
+if grep -q '"quick_check": "ok"' <<< "$CHK_QC"; then
   echo "SUCCESS: PRAGMA quick_check valid."
 else
   echo "FAIL: PRAGMA quick_check failed."

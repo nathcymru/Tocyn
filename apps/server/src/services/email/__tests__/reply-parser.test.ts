@@ -63,7 +63,7 @@ Old history that should be removed.`;
 
   it('should strip HTML tags and produce safe output on deeply nested HTML input', () => {
     // Note: the reply-parser uses <[^>]*>? which is greedy enough to converge in one pass.
-    // The post-loop branch (throws on residual tags) is therefore not reachable for this regex.
+    // The post-loop fallback (strips residual angle brackets) is therefore not reachable for this regex.
     // The important safety property is that the output contains no < or > chars.
     const deeplyNestedHtml = '<p>'.repeat(15) + 'Reply HTML text' + '</p>'.repeat(15);
     const result = ReplyParser.parseEmailReply('', deeplyNestedHtml);

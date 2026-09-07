@@ -101,7 +101,7 @@ const createWidgetTicketSchema = z.object({
   email: z.string().email("Invalid email address"),
   message: z.string().min(1, "Message is required"),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.never().optional(), // Context metadata has no supported persistence contract.
 });
 
 // Ticket Submission endpoint

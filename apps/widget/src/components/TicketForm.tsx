@@ -24,14 +24,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
         method: 'POST',
         headers: widgetHeaders(),
         credentials: 'include',
-        body: JSON.stringify({
-          ...formData,
-          // Extra metadata could be added here (e.g., current URL)
-          metadata: {
-            url: window.location.href,
-            userAgent: navigator.userAgent
-          }
-        }),
+        body: JSON.stringify(formData),
       });
 
       if (!response.ok) throw new Error('Failed to submit');

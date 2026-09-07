@@ -1227,6 +1227,18 @@ async function run() {
   // GET -> masked "••••••••"
   await db.prepare("INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-A', 'adminA', 'adminA@tenant-a.com', 'admin')").run();
   const tokenAdminA = await createToken('tenant-A', 'admin', 'adminA', 'adminA@tenant-a.com');
+  const routedChannel = await worker.fetch(new Request('http://localhost/api/channels/emails', {
+    method:'POST', headers:{Authorization:`Bearer ${tokenAdminA}`,'Content-Type':'application/json'},
+    body:JSON.stringify({email_address:'group-routing@example.test',group_id:groupA.id})
+  }),envWithMasterKey,{});
+  assert.strictEqual(routedChannel.status,201);
+  assert.strictEqual((await routedChannel.json()).group_id,groupA.id);
+  const wrongGroupChannel = await worker.fetch(new Request('http://localhost/api/channels/emails', {
+    method:'POST', headers:{Authorization:`Bearer ${tokenAdminA}`,'Content-Type':'application/json'},
+    body:JSON.stringify({email_address:'wrong-group@example.test',group_id:groupB.id})
+  }),envWithMasterKey,{});
+  assert.strictEqual(wrongGroupChannel.status,400);
+  assert.strictEqual(await db.prepare("SELECT id FROM support_emails WHERE email_address='wrong-group@example.test'").first(),null);
   const settingsGetRes = await worker.fetch(new Request('http://localhost/api/settings', { headers: { 'Authorization': `Bearer ${tokenAdminA}` } }), envWithMasterKey, {});
   if (settingsGetRes.status !== 200) {
     const errText = await settingsGetRes.text();
@@ -1365,6 +1377,12 @@ async function run() {
   assert.strictEqual(liveWidgetTicket.status,201,'Actual issued customer JWT must authenticate widget ticket submission');
   const submittedWidgetTicket = await liveWidgetTicket.json();
   assert.deepStrictEqual(JSON.parse(submittedWidgetTicket.custom_fields),{product:'Test'});
+  const unsupportedMetadata = await worker.fetch(new Request('http://localhost/api/v1/widget/tickets', {
+    method:'POST',headers:{Authorization:`Bearer ${returnedCustomerToken}`,'Content-Type':'application/json','CF-Connecting-IP':'192.0.2.55'},
+    body:JSON.stringify({subject:'Unsupported metadata',message:'Help',email:verifyResult.user.email,metadata:{url:'https://example.test'}})
+  }),envMock,{});
+  assert.strictEqual(unsupportedMetadata.status,400);
+  assert.strictEqual(await db.prepare("SELECT id FROM tickets WHERE subject='Unsupported metadata'").first(),null);
   const customerId = verifyResult.user.id;
   const privateTicket = await reposApiKeyA.tickets.create({subject:'Attachment ownership',customer_email:verifyResult.user.email,source:'web',status:'open',priority:'normal'});
   const privateArticle = await reposApiKeyA.articles.create({ticket_id:privateTicket.id,sender_type:'agent',is_internal:true});

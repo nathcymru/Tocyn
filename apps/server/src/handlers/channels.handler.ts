@@ -15,6 +15,7 @@ channels.use("*", authMiddleware, tenantMiddleware, mfaGuard, roleGuard(["admin"
 const createEmailSchema = z.object({
   email_address: z.string().email("Invalid email address"),
   name: z.string().optional(),
+  group_id: z.string().uuid().nullable().optional(),
 
   is_default: z.boolean().default(false),
 });
@@ -33,15 +34,18 @@ channels.post("/emails", async (c) => {
     return c.json({ error: result.error.errors[0].message }, 400);
   }
 
-  const { email_address, name, is_default } = result.data;
+  const { email_address, name, group_id, is_default } = result.data;
+  if (group_id && !await deps.repositories.groups.get(group_id)) {
+    return c.json({ error: "Group not found in this tenant" }, 400);
+  }
   const id = crypto.randomUUID();
 
   try {
     const email = await deps.repositories.channels.createSupportEmail({
       id,
       email_address,
-            name,
-
+      name,
+      group_id: group_id || undefined,
       is_default
     });
     return c.json(email, 201);
