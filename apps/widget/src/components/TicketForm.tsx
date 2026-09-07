@@ -3,12 +3,13 @@ import React, { useState } from 'react';
 
 interface Props {
   config: any;
+  userEmail: string;
 }
 
-const TicketForm: React.FC<Props> = ({ config }) => {
+const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
+    email: userEmail,
     subject: '',
     message: ''
   });
@@ -36,7 +37,7 @@ const TicketForm: React.FC<Props> = ({ config }) => {
       if (!response.ok) throw new Error('Failed to submit');
 
       setStatus('success');
-      setFormData({ name: '', email: '', subject: '', message: '' });
+      setFormData({ name: '', email: userEmail, subject: '', message: '' });
     } catch (err) {
       console.error(err);
       setStatus('error');
@@ -84,7 +85,7 @@ const TicketForm: React.FC<Props> = ({ config }) => {
           className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
           placeholder="john@example.com"
           value={formData.email}
-          onChange={e => setFormData({ ...formData, email: e.target.value })}
+          readOnly
         />
       </div>
       <div>

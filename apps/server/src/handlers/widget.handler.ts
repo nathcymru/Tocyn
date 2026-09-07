@@ -49,6 +49,16 @@ widget.get('/config', widgetTenantMiddleware, async (c) => {
     }
   }
 
+  const portalBase = await d.repositories.config.get('PORTAL_URL') || c.env.PORTAL_URL;
+  if (portalBase) {
+    try {
+      const portal = new URL('/login', portalBase);
+      if (portal.protocol === 'https:' || (portal.protocol === 'http:' && portal.hostname === 'localhost')) {
+        portal.searchParams.set('key', c.req.query('key') || c.req.header('X-Widget-Key') || '');
+        config.portalUrl = portal.toString();
+      }
+    } catch { /* Invalid portal configuration never becomes a public link. */ }
+  }
   return c.json(config);
 });
 
@@ -97,8 +107,6 @@ const createWidgetTicketSchema = z.object({
 widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, async (c) => {
   const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  // TODO: Batch 4 will fully migrate ticket workflows, for now we must inject the scoped service if possible.
-  // Wait, let's leave ticketService alone as much as we can unless it's strictly required, but since we have tenantDeps now:
   const ticketService = new TenantTicketService(deps);
 
   const result = createWidgetTicketSchema.safeParse(body);
@@ -106,6 +114,9 @@ widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, async (c) 
     return c.json({ error: "Validation failed", details: result.error.flatten().fieldErrors }, 400);
   }
   const validData = result.data;
+  if (validData.email.trim().toLowerCase() !== c.get('user').email.trim().toLowerCase()) {
+    return c.json({ error: "Email must match the authenticated customer" }, 400);
+  }
 
   try {
     const { ticket } = await ticketService.createTicketWithArticle({

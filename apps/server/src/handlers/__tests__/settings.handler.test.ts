@@ -126,6 +126,18 @@ describe("Settings Handler Integration Tests", () => {
   });
 
   describe("PUT /api/settings", () => {
+    it("rejects unknown suffixed keys before writing any setting", async () => {
+      const token = await generateAdminToken();
+      for (const key of ['UNEXPECTED_KEY', 'UNEXPECTED_URL']) {
+        const res = await settings.request('/', {
+          method: 'PUT', headers: {Authorization: `Bearer ${token}`, 'Content-Type':'application/json'},
+          body: JSON.stringify({APP_NAME:'Must not persist', [key]:'value'})
+        }, {DB:mockDB as any, JWT_SECRET, APP_MASTER_KEY});
+        expect(res.status).toBe(400);
+        expect(mockDB.run).not.toHaveBeenCalled();
+      }
+    });
+
     it("should update settings and encrypt sensitive values", async () => {
       mockDB.run.mockResolvedValue({ success: true });
       const token = await generateAdminToken();

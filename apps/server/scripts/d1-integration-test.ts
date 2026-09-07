@@ -606,7 +606,7 @@ async function run() {
   const overrideReq = new Request('http://localhost/api/v1/widget/tickets', {
     method: 'POST',
     headers: { 'Cookie': `lumina_customer_token=${tokenWidgetA1}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subject: 'Override', message: 'msg', email: 'c2@a.com', tenant_id: 'tenant-B' }) // Try to inject A2's email and B's tenant
+    body: JSON.stringify({ subject: 'Override', message: 'msg', email: 'c1@a.com', tenant_id: 'tenant-B' }) // Tenant fields cannot override authenticated scope
   });
   const overrideRes = await worker.fetch(overrideReq, envMock, {});
   const overrideData = await overrideRes.json();
@@ -618,7 +618,13 @@ async function run() {
   const dbArticle = await db.prepare("SELECT * FROM articles WHERE ticket_id = ?").bind(overrideData.id).first();
   if (dbArticle.sender_id !== userIdA1) throw new Error('Malicious customer_id override succeeded in DB article. Found: ' + dbArticle.sender_id);
 
-  console.log('SUCCESS: Widget tenant and email override safely ignored and ticket created securely');
+  const rejectedEmail = await worker.fetch(new Request('http://localhost/api/v1/widget/tickets', {
+    method:'POST', headers:{Authorization:`Bearer ${tokenWidgetA1}`,'Content-Type':'application/json','CF-Connecting-IP':'192.0.2.50'},
+    body:JSON.stringify({subject:'Rejected email override',message:'msg',email:'c2@a.com'})
+  }),envMock,{});
+  assert.strictEqual(rejectedEmail.status,400);
+  assert.strictEqual(await db.prepare("SELECT id FROM tickets WHERE subject='Rejected email override'").first(),null);
+  console.log('SUCCESS: Widget tenant override cannot change scope; mismatched email is rejected before writes');
 
   // Wrong aud
   const tokenWrongAud = await createToken('tenant-A', 'customer', 'cust1', 'c1@a.com', 'app');
@@ -771,6 +777,23 @@ async function run() {
     throw new Error("Write occurred despite 403 permission rejection!");
   }
   console.log("SUCCESS: Insufficient API-key permission rejected with 403 and zero writes");
+
+  const contractKey = await reposApiKeyA.apiKeys.create('Contract checks', ['tickets:read','tickets:write']);
+  const noBodyRes = await worker.fetch(new Request('http://localhost/api/v1/tickets', {
+    method:'POST', headers:{'X-API-Key':contractKey.apiKey,'Content-Type':'application/json'},
+    body:JSON.stringify({subject:'No initial article',customer_email:'contract@example.test'})
+  }),envMock,{});
+  assert.strictEqual(noBodyRes.status,201);
+  const noBodyTicket = await noBodyRes.json();
+  assert.strictEqual((await reposApiKeyA.articles.listByTicket(noBodyTicket.id)).length,0);
+  await reposApiKeyA.articles.create({ticket_id:noBodyTicket.id,body:'Private note',sender_type:'agent',is_internal:true});
+  await reposApiKeyA.articles.create({ticket_id:noBodyTicket.id,body:'Public reply',sender_type:'agent',is_internal:false});
+  const externalView = await worker.fetch(new Request(`http://localhost/api/v1/tickets/${noBodyTicket.id}`, {
+    headers:{'X-API-Key':contractKey.apiKey}
+  }),envMock,{});
+  assert.strictEqual(externalView.status,200);
+  const externalTicket = await externalView.json();
+  assert.deepStrictEqual(externalTicket.articles.map(a=>a.body),['Public reply']);
 
   // Empty permissions test (permissions = '')
   const keyEmptyPerm = await reposApiKeyA.apiKeys.create("Empty Perm Key A", []);
@@ -1330,6 +1353,16 @@ async function run() {
     throw new Error(`GET /api/v1/customer/auth/me returned invalid user payload: ${JSON.stringify(e2eMeJson)}`);
   }
   console.log("SUCCESS: 18. Connected customer /auth/verify to protected endpoint token consumption flow verified via EmailTransport");
+  const liveWidgetChat = await worker.fetch(new Request('http://localhost/api/v1/widget/chat', {
+    method:'POST',headers:{Authorization:`Bearer ${returnedCustomerToken}`,'X-Widget-Key':'pk_widget_tenant_A','Content-Type':'application/json','CF-Connecting-IP':'192.0.2.51'},
+    body:JSON.stringify({message:'Support'})
+  }),envMock,{});
+  assert.strictEqual(liveWidgetChat.status,200,'Actual issued customer JWT must authenticate widget chat');
+  const liveWidgetTicket = await worker.fetch(new Request('http://localhost/api/v1/widget/tickets', {
+    method:'POST',headers:{Authorization:`Bearer ${returnedCustomerToken}`,'X-Widget-Key':'pk_widget_tenant_A','Content-Type':'application/json','CF-Connecting-IP':'192.0.2.51'},
+    body:JSON.stringify({subject:'Authenticated widget',message:'Help',email:verifyResult.user.email})
+  }),envMock,{});
+  assert.strictEqual(liveWidgetTicket.status,201,'Actual issued customer JWT must authenticate widget ticket submission');
   const customerId = verifyResult.user.id;
   const privateTicket = await reposApiKeyA.tickets.create({subject:'Attachment ownership',customer_email:verifyResult.user.email,source:'web',status:'open',priority:'normal'});
   const privateArticle = await reposApiKeyA.articles.create({ticket_id:privateTicket.id,sender_type:'agent',is_internal:true});

@@ -55,7 +55,7 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
   const validData = result.data;
 
   try {
-    const { ticket, article } = await ticketService.createTicketWithArticle({
+    const ticketData = {
       subject: validData.subject,
       customer_email: validData.customer_email,
       priority: validData.priority,
@@ -63,10 +63,13 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
       group_id: validData.group_id,
       custom_fields: validData.custom_fields,
       status: validData.status,
-      source: 'api',
-      body: validData.body || '',
+      source: 'api' as const,
+      body: validData.body,
       sender_type: 'customer',
-    });
+    };
+    const ticket = validData.body?.trim()
+      ? (await ticketService.createTicketWithArticle(ticketData)).ticket
+      : await deps.repositories.tickets.create(ticketData);
 
     return c.json(ticket, 201);
   } catch (error) {
@@ -94,7 +97,7 @@ v1.get("/tickets/:id", async (c) => {
     return c.json({ error: "Ticket not found" }, 404);
   }
 
-  const articles = await deps.repositories.articles.listByTicket(id);
+  const articles = (await deps.repositories.articles.listByTicket(id)).filter(article => !article.is_internal);
 
   return c.json({
     ...ticket,

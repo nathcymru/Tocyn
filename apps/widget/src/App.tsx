@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import TicketForm from './components/TicketForm';
 import AiChat from './components/AiChat';
-import { BASE_URL, widgetHeaders } from './api';
+import { BASE_URL, widgetHeaders, getWidgetSession } from './api';
 
 const App: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'ticket'>('chat');
   const [config, setConfig] = useState<any>(null);
+  const [session, setSession] = useState<{email: string} | null>(null);
+
+  useEffect(() => {
+    const refresh = () => { getWidgetSession().then(setSession).catch(() => setSession(null)); };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
 
   useEffect(() => {
     // Fetch widget configuration from the backend
@@ -53,8 +61,9 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto bg-white p-4">
-            {activeTab === 'chat' && <AiChat config={config} />}
-            {activeTab === 'ticket' && <TicketForm config={config} />}
+            {!session && <p>Sign in through the support portal to use chat or submit a ticket. {config.portalUrl && <a className="text-blue-600 underline" href={config.portalUrl} target="_blank" rel="noopener noreferrer">Open support portal</a>}</p>}
+            {session && activeTab === 'chat' && <AiChat config={config} />}
+            {session && activeTab === 'ticket' && <TicketForm config={config} userEmail={session.email} />}
           </div>
 
           <div className="p-2 text-center text-[10px] text-gray-400 border-t border-gray-100">

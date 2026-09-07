@@ -14,6 +14,11 @@ and #42 owns migration/cutover planning. The v0.1.0 milestone remains open.
 - Portal routing keys survive navigation and emailed verification links. Embed scripts
   supply `data-widget-key`; fixed portal installations may set `VITE_WIDGET_KEY`.
   Configure trusted `PORTAL_URL` in scoped configuration or the Worker environment.
+  Widget chat/ticket submission requires an authenticated customer session. The client checks
+  `/customer/auth/me` first and displays a portal sign-in link otherwise. Same-origin portal
+  tokens or session cookies are supported. Cross-origin host integrations must supply a
+  customer-specific, short-lived widget JWT at runtime through `data-widget-token`; never
+  publish a shared token in static embed markup. A public widget key alone is not authentication.
 - Configuration services receive scoped dependencies and narrow identity resolvers.
   Tenant email credentials require the configured master key and successful decryption.
 - Restored dashboard lists, filters, aggregates and outbound reply dispatch through

@@ -22,6 +22,11 @@ settings.route("/filters", filters);
 const ALLOWED_SETTINGS_KEYS = new Set([
   "APP_NAME",
   "PUBLIC_URL",
+  "PORTAL_URL",
+  "TICKET_PREFIX",
+  "RESEND_FROM_EMAIL",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_API_TOKEN",
   "OPENAI_SECRET",
   "TURNSTILE_SITE_KEY",
   "TURNSTILE_SECRET_KEY",
@@ -125,12 +130,17 @@ settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
   const updates = result.data;
   const d = c.get('tenantDeps') as TenantRequestDeps;
 
+  // Validate every key before any writes, including mixed valid/invalid payloads.
+  for (const key of Object.keys(updates)) {
+    if (!ALLOWED_SETTINGS_KEYS.has(key)) return c.json({ error: `Setting key '${key}' is not permitted` }, 400);
+  }
+
   for (let [key, value] of Object.entries(updates)) {
     if (key === 'agent_settings_permissions') {
       return c.json({ error: "Cannot modify agent permissions via this endpoint" }, 403);
     }
 
-    if (!ALLOWED_SETTINGS_KEYS.has(key) && !key.endsWith('_KEY') && !key.endsWith('_URL')) {
+    if (!ALLOWED_SETTINGS_KEYS.has(key)) {
       return c.json({ error: `Setting key '${key}' is not permitted` }, 400);
     }
 
