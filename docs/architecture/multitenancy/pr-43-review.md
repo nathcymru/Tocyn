@@ -36,7 +36,6 @@ do not reinterpret missing credentials as permission to use another tenant's con
 Legacy global service implementations retained for historical tests are not production entrypoints.
 Their remaining lint exemptions are not evidence of complete repository-wide boundary enforcement.
 
-Original application-security remediation, distributed limits, existing WebSocket session
-revocation, retryable cross-store cleanup and production rehearsals remain tracked under #13,
-#19 and #42 as applicable. R16/R17 are security-register identifiers under #13, not issue #16/#17.
+Remaining private security-register findings and operational prerequisites continue under #13,
+#19 and #42 as applicable. Detailed unpatched findings remain private. R16/R17 are security-register identifiers under #13, not issue #16/#17.
 Repository-wide Actions SHA enforcement remains deferred. No production execution is included.
