@@ -10,7 +10,7 @@ This policy does not assert that multi-tenant isolation or a full security audit
 
 Please use [GitHub private vulnerability reporting](https://github.com/nathcymru/Tocyn/security/advisories/new). Do not put vulnerabilities, exploit details, credentials or customer information in public issues or discussions.
 
-If GitHub's reporting form is unavailable, use the contact form on the [public project page](https://nathcymru.github.io/Tocyn/) to request a secure reporting channel. Send only a non-sensitive contact request through that form, which is operated through a third-party form service.
+If GitHub's reporting form is unavailable, you may try the contact form on the [public project page](https://nathcymru.github.io/Tocyn/) to request a secure reporting channel. This is a best-effort fallback whose availability has not yet been verified. Send only a non-sensitive contact request through this third-party form service. Alternatively, open a public issue titled "Request for security contact channel" containing only a request to establish private contact: do not include vulnerability details, affected systems, credentials or personal contact information.
 
 Include the affected commit or version, impact, reproduction steps using synthetic data, and a minimal proof of concept. Test only systems you own or have permission to test.
 

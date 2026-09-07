@@ -12,6 +12,8 @@ Five active repository rulesets protect the default branch and release tags:
 - Required CI: Tocyn / lint, Tocyn / typecheck, Tocyn / build, Tocyn / test, Analyze (javascript-typescript), Analyze (actions), all bound to GitHub Actions app 15368; no bypass.
 - Release tag integrity: block update/deletion of v* tags, no bypass.
 
+The required CodeQL checks are supplied by GitHub's active default setup, observed on PR #23, not the inherited `.github/workflows/codeql.yml` advanced workflow. Keep default setup enabled unless its replacement is deliberately configured and the gate names are updated.
+
 The previous all-branch signature block no longer applies to the foundation branch. Passing CI and the final verified merge remain required. The role-based review exception applies to all repository administrators; use it only for documented solo-maintainer cases.
 
 ## Still to verify or configure
