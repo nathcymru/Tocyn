@@ -25,7 +25,14 @@ describe("Ticket Detail Fixes Verification", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockDB.all.mockResolvedValue({ results: [] });
-    mockDB.first.mockResolvedValue({});
+    mockDB.first.mockImplementation(async () => {
+      const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+      const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+        return { tenant_id: "default-tenant", id: "agent-1", role: "agent", password_hash: null, mfa_enabled: 1 };
+      }
+      return {};
+    });
     mockDB.run.mockResolvedValue({ success: true });
 
     const mockUser = {
@@ -40,7 +47,14 @@ describe("Ticket Detail Fixes Verification", () => {
 
   it("should return articles in ASC order", async () => {
     const mockTicket = { id: "t-1", subject: "Ticket 1" };
-    mockDB.first.mockResolvedValueOnce(mockTicket); // Ticket
+    mockDB.first.mockImplementation(async () => {
+      const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+      const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+        return { tenant_id: "default-tenant", id: "agent-1", role: "agent", password_hash: null, mfa_enabled: 1 };
+      }
+      return mockTicket;
+    });
     mockDB.all.mockResolvedValueOnce({ results: [] }); // Articles
     mockDB.all.mockResolvedValueOnce({ results: [] }); // Attachments
 

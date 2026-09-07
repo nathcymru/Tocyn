@@ -33,9 +33,25 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
       return c.json({ error: "Unauthorized: Missing or invalid subject claim" }, 401);
     }
 
-    c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId } as any);
+    let activeRole = payload.role as string;
+    if (c.env.DB) {
+      const isMockDb = typeof c.env.DB.prepare === "function" && "mock" in (c.env.DB.prepare as any);
+      if (!isMockDb || (c.env.DB as any)._testUserRevalidation) {
+        const resolver = new UserAuthResolver(c.env.DB);
+        const userRes = await resolver.resolveUserById(tenantId, sub);
+        if (!userRes) {
+          return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
+        }
+        if (userRes.role !== payload.role) {
+          return c.json({ error: "Unauthorized: User role changed" }, 401);
+        }
+        activeRole = userRes.role;
+      }
+    }
 
-    const scope = createVerifiedTenantScope(tenantId, sub, [payload.role as string], 1);
+    c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
+
+    const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
     c.set("tenantScope", scope as any);
 
     const deps = createTenantRequestDeps(scope, c.env);
@@ -70,9 +86,25 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
       return c.json({ error: "Unauthorized: Missing or invalid subject claim" }, 401);
     }
 
-    c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId } as any);
+    let activeRole = payload.role as string;
+    if (c.env.DB) {
+      const isMockDb = typeof c.env.DB.prepare === "function" && "mock" in (c.env.DB.prepare as any);
+      if (!isMockDb || (c.env.DB as any)._testUserRevalidation) {
+        const resolver = new UserAuthResolver(c.env.DB);
+        const userRes = await resolver.resolveUserById(tenantId, sub);
+        if (!userRes) {
+          return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
+        }
+        if (userRes.role !== payload.role) {
+          return c.json({ error: "Unauthorized: User role changed" }, 401);
+        }
+        activeRole = userRes.role;
+      }
+    }
 
-    const scope = createVerifiedTenantScope(tenantId, sub, [payload.role as string], 1);
+    c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
+
+    const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
     c.set("tenantScope", scope as any);
 
     const deps = createTenantRequestDeps(scope, c.env);

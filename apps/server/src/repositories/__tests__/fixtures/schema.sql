@@ -197,3 +197,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_widget_public_key ON tenant_config(value) 
 CREATE TABLE IF NOT EXISTS ticket_sequence (
     id INTEGER PRIMARY KEY AUTOINCREMENT
 );
+
+CREATE TABLE IF NOT EXISTS customer_auth_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('magic_link', 'otp')),
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    used_at DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_auth_tokens_user_id ON customer_auth_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_customer_auth_tokens_token_hash ON customer_auth_tokens(token_hash);

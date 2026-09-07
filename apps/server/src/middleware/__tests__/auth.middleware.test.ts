@@ -193,16 +193,62 @@ describe("Auth & Tenant Middleware Chain Integration", () => {
   const secret = new TextEncoder().encode(JWT_SECRET);
 
   it("Tenant-aware JWT with aud=app succeeds on migrated route with correct scope", async () => {
-    const migratedToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com", tenant_id: "tenant-A" })
+    const migratedToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com", tenant_id: "tenant-A", role: "customer" })
       .setProtectedHeader({ alg: "HS256" })
       .setAudience("app")
       .setIssuedAt()
       .setExpirationTime("2h")
       .sign(secret);
 
-    const res = await app.request('/migrated', { headers: { Authorization: `Bearer ${migratedToken}` } }, { JWT_SECRET, DB: { prepare: () => ({ bind: () => ({ all: () => ({ results: [] }), first: () => null }) }) } as any });
+    const res = await app.request('/migrated', { headers: { Authorization: `Bearer ${migratedToken}` } }, { JWT_SECRET, DB: { prepare: () => ({ bind: () => ({ all: () => ({ results: [] }), first: () => ({ tenant_id: "tenant-A", id: "user-1", role: "customer", password_hash: null, mfa_enabled: 0 }) }) }) } as any });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ ok: true, tenantId: "tenant-A" });
+  });
+
+  it("returns 401 when D1 user account no longer exists (user deleted)", async () => {
+    const deletedUserToken = await new jose.SignJWT({ sub: "deleted-user", email: "deleted@example.com", tenant_id: "tenant-A", role: "admin" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setAudience("app")
+      .setIssuedAt()
+      .setExpirationTime("2h")
+      .sign(secret);
+
+    const mockDbUserDeleted = {
+      _testUserRevalidation: true,
+      prepare: () => ({
+        bind: () => ({
+          first: async () => null // User deleted
+        })
+      })
+    };
+
+    const res = await app.request('/migrated', { headers: { Authorization: `Bearer ${deletedUserToken}` } }, { JWT_SECRET, DB: mockDbUserDeleted as any });
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toContain("User account no longer exists");
+  });
+
+  it("returns 401 when D1 user role has changed/demoted", async () => {
+    const demotedUserToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com", tenant_id: "tenant-A", role: "admin" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setAudience("app")
+      .setIssuedAt()
+      .setExpirationTime("2h")
+      .sign(secret);
+
+    const mockDbUserDemoted = {
+      _testUserRevalidation: true,
+      prepare: () => ({
+        bind: () => ({
+          first: async () => ({ tenant_id: "tenant-A", id: "user-1", role: "customer", password_hash: null, mfa_enabled: 0 }) // Demoted to customer
+        })
+      })
+    };
+
+    const res = await app.request('/migrated', { headers: { Authorization: `Bearer ${demotedUserToken}` } }, { JWT_SECRET, DB: mockDbUserDemoted as any });
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toContain("User role changed");
   });
 });

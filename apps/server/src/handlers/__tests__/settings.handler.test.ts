@@ -37,6 +37,14 @@ describe("Settings Handler Integration Tests", () => {
     vi.clearAllMocks();
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
+    mockDB.first.mockImplementation(async () => {
+      const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+      const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+        return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
+      }
+      return null;
+    });
   });
 
   describe("GET /api/settings", () => {
@@ -49,6 +57,11 @@ describe("Settings Handler Integration Tests", () => {
       };
 
       mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
+        }
         const calls = vi.mocked(mockDB.bind).mock.calls;
         const lastKey = calls.length > 0 ? calls[calls.length - 1][1] : undefined;
         if (lastKey && configMap[lastKey]) {

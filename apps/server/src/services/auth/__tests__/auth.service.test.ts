@@ -7,6 +7,7 @@ describe('AuthService', () => {
   let authService: AuthService;
   const mockUser: User = {
     id: 'user-123',
+    tenant_id: 'default-tenant',
     email: 'test@example.com',
     full_name: 'Test User',
     role: 'admin',

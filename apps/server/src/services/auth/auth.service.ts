@@ -91,7 +91,8 @@ export class AuthService {
         return null;
       }
 
-      const tenantId = (jwtPayload as any).tenant_id || "default-tenant";
+      const tenantId = (jwtPayload as any).tenant_id;
+      if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) return null;
       if (!jwtPayload.sub) return null;
 
       if (this.env?.DB) {

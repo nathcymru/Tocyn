@@ -38,23 +38,23 @@ export class CustomerAuthService {
    * Request Magic Link / OTP for a customer.
    * If the customer doesn't exist, creates a shadow user.
    */
-  async requestAuth(email: string, type: 'magic_link' | 'otp' = 'magic_link', baseUrl?: string): Promise<void> {
+  async requestAuth(email: string, type: 'magic_link' | 'otp' = 'magic_link', baseUrl?: string, tenantId: string = 'default-tenant'): Promise<void> {
     const lowerEmail = email.toLowerCase().trim();
 
     // 1. Find or create user
     let user = await this.env.DB.prepare(
-      'SELECT * FROM users WHERE email = ?'
+      'SELECT * FROM users WHERE lower(trim(email)) = ?'
     ).bind(lowerEmail).first<User>();
 
     if (!user) {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       await this.env.DB.prepare(
-        'INSERT INTO users (id, email, full_name, role, mfa_enabled, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(id, lowerEmail, lowerEmail.split('@')[0], 'customer', 0, now).run();
+        'INSERT INTO users (id, tenant_id, email, full_name, role, mfa_enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(id, tenantId, lowerEmail, lowerEmail.split('@')[0], 'customer', 0, now).run();
 
       user = await this.env.DB.prepare(
-        'SELECT * FROM users WHERE email = ?'
+        'SELECT * FROM users WHERE lower(trim(email)) = ?'
       ).bind(lowerEmail).first<User>();
     }
 
@@ -167,16 +167,17 @@ export class CustomerAuthService {
     // Generate JWT
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(this.env.JWT_SECRET);
+    const userTenantId = user.tenant_id || 'default-tenant';
     const payload = {
       sub: user.id,
       email: user.email,
       role: 'customer',
-      tenant_id: user.tenant_id,
-      aud: 'app',
-      iat: Math.floor(Date.now() / 1000),
+      tenant_id: userTenantId,
     };
     const jwt = await new jose.SignJWT(payload)
       .setProtectedHeader({ alg })
+      .setAudience('widget')
+      .setIssuedAt()
       .setExpirationTime('7d')
       .sign(secretKey);
 
