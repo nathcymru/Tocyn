@@ -1,0 +1,8 @@
+# Ownership is a review route; enforcement is configured in repository rules.
+* @nathcymru
+/.github/ @nathcymru
+/apps/server/src/middleware/ @nathcymru
+/apps/server/src/services/auth/ @nathcymru
+/apps/server/migrations/ @nathcymru
+/SECURITY.md @nathcymru
+/LICENSE @nathcymru

@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a reproducible non-security defect
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, use SECURITY.md. Do not include credentials or personal data."
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Include the Tocyn commit or release tested.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic data and include relevant environment details.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitised logs or screenshots

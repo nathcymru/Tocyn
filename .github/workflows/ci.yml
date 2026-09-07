@@ -2,41 +2,46 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Build & Test
+  validate:
+    name: Tocyn / ${{ matrix.check }}
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: lint
+            command: npm run lint --workspace=apps/portal
+          - check: typecheck
+            command: npm run typecheck --workspace=apps/server
+          - check: build
+            command: npm run build --workspace=apps/dashboard && npm run build --workspace=apps/portal && npm run build --workspace=apps/widget
+          - check: test
+            command: npm run test --workspace=apps/server -- --run && npm exec --workspace=apps/portal -- vitest run src/__tests__/VerifyPage.test.tsx
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '>=22.12.0 <23'
+          cache: npm
+      - name: Install locked dependencies
         run: npm ci
-
-      - name: Type Check (Server)
-        run: npm run typecheck --workspace=apps/server
-
-      - name: Build Dashboard
-        run: npm run build --workspace=apps/dashboard
-
-      - name: Build Portal
-        run: npm run build --workspace=apps/portal
-
-      - name: Build Widget
-        run: npm run build --workspace=apps/widget
-
-      - name: Run Tests
-        run: npm run test --workspaces --if-present
+      - name: Validate
+        run: ${{ matrix.command }}

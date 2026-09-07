@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import type { User } from '../types';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { Loader2, Ticket, CheckCircle } from 'lucide-react';
@@ -17,26 +18,47 @@ export function VerifyPage() {
   const tokenParam = searchParams.get('token');
   const initialEmail = location.state?.email || '';
 
+  const verification = useRef<{
+    token: string;
+    request: Promise<{ user: User; token: string }>;
+  } | null>(null);
+
   useEffect(() => {
-    // If we have a magic link token in the URL, verify it immediately
-    if (tokenParam) {
-      verifyToken(tokenParam);
+    if (!tokenParam) return;
+    let active = true;
+    // Reuse the request during StrictMode effect replay: tokens are single-use.
+    if (verification.current?.token !== tokenParam) {
+      verification.current = {
+        token: tokenParam,
+        request: portalApi.post<{ user: User; token: string }>('/auth/verify', { token: tokenParam }),
+      };
     }
-  }, [tokenParam]);
+    verification.current.request
+      .then(response => {
+        if (!active) return;
+        if (response.token) localStorage.setItem('lumina_customer_token', response.token);
+        login(response.user);
+        navigate('/tickets', { replace: true });
+      })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof Error ? err.message : 'Invalid or expired login code.');
+      });
+    return () => { active = false; };
+  }, [tokenParam, login, navigate]);
 
   const verifyToken = async (tokenToVerify: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await portalApi.post<{ user: any, token: string }>('/auth/verify', { token: tokenToVerify });
+      const response = await portalApi.post<{ user: User, token: string }>('/auth/verify', { token: tokenToVerify });
       if (response.token) {
         localStorage.setItem('lumina_customer_token', response.token);
       }
       login(response.user);
       navigate('/tickets', { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Invalid or expired login code.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid or expired login code.');
       setLoading(false);
     }
   };
@@ -48,7 +70,7 @@ export function VerifyPage() {
   };
 
   // If we're verifying a magic link from URL, show a loading state
-  if (tokenParam) {
+  if (tokenParam && !error) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">

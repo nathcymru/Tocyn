@@ -1,42 +1,25 @@
-# Security Policy
+# Security policy
 
-[![Security Policy](https://shieldcn.dev/badge/Security-Policy-blue.svg?logo=github)](https://github.com/nathcymru/Tocyn/security/policy)
+## Supported development versions
 
-## Supported Versions
+Tocyn is pre-release software. Security reports are accepted for the current `main` branch and the latest Tocyn pre-release once published. There is no released 1.x support line. Older snapshots are not separately maintained; fixes normally target current development.
 
-Tocyn is currently in active development. Security updates are provided for the latest major version. Legacy branches or commits preceding the fork from Luminatik are not supported under this policy.
+This policy does not assert that multi-tenant isolation or a full security audit is complete.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x.x   | :white_check_mark: |
-| < 1.0.0 | :x:                |
+## Report privately
 
-## Reporting a Vulnerability
+Please use [GitHub private vulnerability reporting](https://github.com/nathcymru/Tocyn/security/advisories/new). Do not put vulnerabilities, exploit details, credentials or customer information in public issues or discussions.
 
-We take the security of Tocyn and its multi-tenant architecture seriously. If you discover a security vulnerability, please do not disclose it publicly on the issue tracker or in discussions.
+If GitHub's reporting form is unavailable, you may try the contact form on the [public project page](https://nathcymru.github.io/Tocyn/) to request a secure reporting channel. This is a best-effort fallback whose availability has not yet been verified. Send only a non-sensitive contact request through this third-party form service. Alternatively, open a public issue titled "Request for security contact channel" containing only a request to establish private contact: do not include vulnerability details, affected systems, credentials or personal contact information.
 
-### How to Report
+Include the affected commit or version, impact, reproduction steps using synthetic data, and a minimal proof of concept. Test only systems you own or have permission to test.
 
-Please report all security vulnerabilities using GitHub's Private Vulnerability Reporting feature:
+We aim to acknowledge reports within 48 hours, subject to maintainer availability; this is a response target, not a service-level guarantee. We will coordinate triage, remediation, disclosure and credit with the reporter.
 
-1. Go to the [Security tab](https://github.com/nathcymru/Tocyn/security) of this repository.
-2. Click on **Advisories** in the left sidebar.
-3. Click the **Report a vulnerability** button.
-4. Provide a detailed description of the vulnerability, including:
-   - A summary of the issue.
-   - Steps to reproduce the vulnerability.
-   - The potential impact on tenant isolation, edge routing, or data integrity (D1/R2).
-   - Any proof-of-concept code.
+## Scope
 
-### What to Expect
+Reports may concern authentication, authorisation, tenant boundaries, database access, object storage, attachment handling, real-time events, email, API keys, AI retrieval, dependencies, build tooling or deployment configuration.
 
-- **Acknowledgement:** We aim to acknowledge receipt of your vulnerability report within 48 hours.
-- **Triage:** We will verify the vulnerability and determine its severity based on our Cloudflare edge architecture. 
-- **Resolution:** If the vulnerability is accepted, we will develop a patch, publish a GitHub Security Advisory, and credit you for the discovery.
+Assess Node.js-related findings against the component and runtime affected; they are not categorically excluded. Potential cross-tenant disclosure receives urgent investigation. Severity depends on demonstrated impact.
 
-## Scope and Infrastructure
-
-Tocyn is built exclusively on the Cloudflare serverless edge. When evaluating vulnerabilities, please consider the following architectural constraints:
-- **Tenant Isolation:** Tenant data in Cloudflare D1 is separated logically via application middleware. Vulnerabilities allowing cross-tenant data leakage are treated as critical.
-- **Execution Environment:** Cloudflare Workers do not use a traditional Node.js runtime. Vulnerabilities dependent on standard Node.js APIs are generally out of scope unless they specifically bypass the Cloudflare V8 isolate constraints.
-- **Transient Access:** Exploits targeting our presigned URL generation for Cloudflare R2 object storage are in scope.
+FidesLang metadata does not replace access controls. Disabling optional end-user privacy tooling must never disable tenant isolation or security controls.
