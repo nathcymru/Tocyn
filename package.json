@@ -24,8 +24,8 @@
     "packages/*"
   ],
   "devDependencies": {
-    "tsx": "^4.19.1",
+    "tsx": "^4.23.13",
     "typescript": "^5.0.0",
-    "wrangler": "^4.83.0"
+    "wrangler": "^4.129.0"
   }
 }
