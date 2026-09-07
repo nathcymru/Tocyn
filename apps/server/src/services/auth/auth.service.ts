@@ -17,11 +17,13 @@ export class AuthService {
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(secret);
 
+    const tenantId = (user as any).tenant_id || "default-tenant";
+
     const payload: JWTPayload & { tenant_id?: string } = {
       sub: user.id,
       email: user.email,
       role: user.role as any,
-      tenant_id: (user as any).tenant_id || "default-tenant",
+      tenant_id: tenantId,
       mfa_verified: mfaVerified,
       iat: Math.floor(Date.now() / 1000),
       exp: 0,
@@ -45,6 +47,8 @@ export class AuthService {
     secret: string,
     expiresIn: string = "15m"
   ): Promise<string> {
+    const tenantId = (user as any).tenant_id || "default-tenant";
+
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(secret);
 
@@ -52,7 +56,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role as any,
-      tenant_id: (user as any).tenant_id || "default-tenant",
+      tenant_id: tenantId,
       mfa_verified: false,
       iat: Math.floor(Date.now() / 1000),
       exp: 0,

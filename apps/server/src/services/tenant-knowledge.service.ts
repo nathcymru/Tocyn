@@ -14,6 +14,11 @@ export function stripTags(str: string): string {
     current = current.replace(/<[a-zA-Z\/][^>]*>/g, '');
     iterations++;
   } while (current !== previous && iterations < 10);
+
+  if (current !== previous) {
+    current = current.replace(/[<>]/g, '');
+  }
+
   return current;
 }
 

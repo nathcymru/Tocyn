@@ -401,13 +401,14 @@ describe('KnowledgeService', () => {
       expect(stripTags('<<p>p>nested text</p></p>')).toBe('nested text');
     });
 
-    it('should respect the max 10 iteration safety threshold without infinite looping', async () => {
+    it('should respect the max 10 iteration safety threshold and strip residual brackets when limit is reached', async () => {
       const { stripTags } = await import('../tenant-knowledge.service');
-      // Create a string with 15 nested opening/closing tags
-      const deeplyNested = '<'.repeat(15) + 'a' + '>'.repeat(15) + 'deep' + '</a'.repeat(15) + '>';
-      // Calling stripTags should complete safely without hanging
+      // Create a string with 15 nested tags
+      const deeplyNested = '<p>'.repeat(15) + 'deep text' + '</p>'.repeat(15);
       const result = stripTags(deeplyNested);
-      expect(typeof result).toBe('string');
+      expect(result).toBe('deep text');
+      expect(result).not.toContain('<');
+      expect(result).not.toContain('>');
     });
   });
 });

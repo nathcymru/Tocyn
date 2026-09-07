@@ -316,8 +316,8 @@ async function run() {
 
     const jose = require('jose');
     const secret = new TextEncoder().encode('super_secret_test_key_for_jwt');
-    const tokenA = await new jose.SignJWT({ sub: 'userA', role: 'admin', tenant_id: 'tenant-A' }).setProtectedHeader({ alg: 'HS256' }).sign(secret);
-    const tokenB = await new jose.SignJWT({ sub: 'userB', role: 'admin', tenant_id: 'tenant-B' }).setProtectedHeader({ alg: 'HS256' }).sign(secret);
+    const tokenA = await new jose.SignJWT({ sub: 'userA', role: 'admin', tenant_id: 'tenant-A' }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').sign(secret);
+    const tokenB = await new jose.SignJWT({ sub: 'userB', role: 'admin', tenant_id: 'tenant-B' }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').sign(secret);
 
     apiApp.use('*', async (c, next) => {
       c.env = { DB: db, ATTACHMENTS_BUCKET: bucket, APP_MASTER_KEY: 'test_key', JWT_SECRET: 'super_secret_test_key_for_jwt' };
@@ -846,6 +846,14 @@ async function run() {
   }
   console.log("SUCCESS: Admin A cannot list/get/delete Tenant B keys");
 
+  // Colliding logical ID deletion isolation
+  await reposApiKeyA.apiKeys.delete(sharedKeyId);
+  const sharedKeyBStillExists = await reposApiKeyB.apiKeys.get(sharedKeyId);
+  if (!sharedKeyBStillExists) {
+    throw new Error("Admin A deleting key with colliding ID deleted Tenant B's API key!");
+  }
+  console.log("SUCCESS: Colliding logical ID key deletion by Tenant A leaves Tenant B key intact");
+
   // 7. ticket_fields A/B isolation
   const fieldA = await reposApiKeyA.ticketFields.create({ name: 'custom_attr', label: 'Attr A', field_type: 'text', is_active: true });
   const fieldB = await reposApiKeyB.ticketFields.create({ name: 'custom_attr', label: 'Attr B', field_type: 'text', is_active: true });
@@ -1019,7 +1027,22 @@ async function run() {
   if (res4e.status !== 401) throw new Error("Widget chat route accepted app token!");
   console.log("SUCCESS: 4. All 5 exact route-level audience cross-assertions verified (401 on all invalid audience route entries)");
 
-  // 5. Missing-tenant JWT rejection on tenantMiddleware
+  // 5. Missing-tenant, missing-aud, and missing-sub JWT rejection on authMiddleware
+  const missingAudToken = await new jose.SignJWT({ sub: 'user-1', tenant_id: 'tenant-A', role: 'customer' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('1h')
+    .sign(new TextEncoder().encode('secret'));
+  const missingAudRes = await worker.fetch(new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingAudToken}` } }), envMock, {});
+  if (missingAudRes.status !== 401) throw new Error("Missing aud JWT was not rejected by authMiddleware!");
+
+  const missingSubToken = await new jose.SignJWT({ tenant_id: 'tenant-A', role: 'customer' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setAudience('app')
+    .setExpirationTime('1h')
+    .sign(new TextEncoder().encode('secret'));
+  const missingSubRes = await worker.fetch(new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingSubToken}` } }), envMock, {});
+  if (missingSubRes.status !== 401) throw new Error("Missing sub JWT was not rejected by authMiddleware!");
+
   const missingTenantToken = await new jose.SignJWT({ sub: 'user-1', role: 'customer' })
     .setProtectedHeader({ alg: 'HS256' })
     .setAudience('app')
@@ -1027,8 +1050,8 @@ async function run() {
     .sign(new TextEncoder().encode('secret'));
   const missingTenantReq = new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingTenantToken}` } });
   const missingTenantRes = await worker.fetch(missingTenantReq, envMock, {});
-  if (missingTenantRes.status !== 401) throw new Error("Missing tenant JWT was not rejected by tenantMiddleware!");
-  console.log("SUCCESS: 5. Missing-tenant JWT rejected by tenantMiddleware");
+  if (missingTenantRes.status !== 401) throw new Error("Missing tenant JWT was not rejected by authMiddleware!");
+  console.log("SUCCESS: 5. Missing/invalid claim (aud, sub, tenant_id) JWTs rejected by authMiddleware");
 
   // 6. Local user ID A/B isolation
   await db.prepare("INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-A', 'local-user-same-id', 'userA@unique-a.com', 'customer')").run();

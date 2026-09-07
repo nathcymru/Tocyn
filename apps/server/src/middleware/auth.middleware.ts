@@ -18,24 +18,28 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
   if (!token) return c.json({ error: "Unauthorized: Missing or invalid token format" }, 401);
 
   try {
-    const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET));
-
-    if (payload.aud !== undefined && payload.aud !== "app") {
-      return c.json({ error: "Unauthorized: Invalid token audience for app route" }, 401);
-    }
+    const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET), {
+      audience: "app",
+    });
 
     const tenantId = (payload as any).tenant_id;
     const sub = (payload.sub || (payload as any).id) as string;
 
+    if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
+      return c.json({ error: "Unauthorized: Missing or invalid tenant context" }, 401);
+    }
+
+    if (!sub || typeof sub !== "string" || !sub.trim()) {
+      return c.json({ error: "Unauthorized: Missing or invalid subject claim" }, 401);
+    }
+
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId } as any);
 
-    if (tenantId) {
-      const scope = createVerifiedTenantScope(tenantId, sub, [payload.role as string], 1);
-      c.set("tenantScope", scope as any);
+    const scope = createVerifiedTenantScope(tenantId, sub, [payload.role as string], 1);
+    c.set("tenantScope", scope as any);
 
-      const deps = createTenantRequestDeps(scope, c.env);
-      c.set("tenantDeps", deps as any);
-    }
+    const deps = createTenantRequestDeps(scope, c.env);
+    c.set("tenantDeps", deps as any);
 
     await next();
   } catch (error) {
@@ -55,9 +59,18 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
       audience: "mfa-challenge",
     });
 
-    const tenantId = (payload as any).tenant_id || "default-tenant";
+    const tenantId = (payload as any).tenant_id;
     const sub = payload.sub as string;
-    c.set("jwtPayload", { ...payload, tenant_id: tenantId } as any);
+
+    if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
+      return c.json({ error: "Unauthorized: Missing or invalid tenant context" }, 401);
+    }
+
+    if (!sub || typeof sub !== "string" || !sub.trim()) {
+      return c.json({ error: "Unauthorized: Missing or invalid subject claim" }, 401);
+    }
+
+    c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId } as any);
 
     const scope = createVerifiedTenantScope(tenantId, sub, [payload.role as string], 1);
     c.set("tenantScope", scope as any);

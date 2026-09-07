@@ -14,15 +14,17 @@ describe("authMiddleware", () => {
   app.get("/protected", (c) => c.text("OK"));
   app.get("/migrated", tenantMiddleware, (c) => c.text("MIGRATED_OK"));
 
-  it("should return 200 for a valid JWT", async () => {
+  it("should return 200 for a valid JWT with aud=app and valid tenant_id and sub", async () => {
     const secret = new TextEncoder().encode(JWT_SECRET);
     const token = await new jose.SignJWT({
       sub: "user-1",
+      tenant_id: "tenant-A",
       email: "test@example.com",
       role: "admin",
       mfa_verified: true,
     })
       .setProtectedHeader({ alg: "HS256" })
+      .setAudience("app")
       .setIssuedAt()
       .setExpirationTime("2h")
       .sign(secret);
@@ -43,15 +45,77 @@ describe("authMiddleware", () => {
     expect(await res.text()).toBe("OK");
   });
 
+  it("should return 401 if aud is missing or not app", async () => {
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    const tokenWithoutAud = await new jose.SignJWT({
+      sub: "user-1",
+      tenant_id: "tenant-A",
+      role: "admin",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("2h")
+      .sign(secret);
+
+    const res = await app.request(
+      "/protected",
+      { headers: { Authorization: `Bearer ${tokenWithoutAud}` } },
+      { JWT_SECRET }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("should return 401 if tenant_id is missing or empty", async () => {
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    const tokenWithoutTenant = await new jose.SignJWT({
+      sub: "user-1",
+      role: "admin",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setAudience("app")
+      .setIssuedAt()
+      .setExpirationTime("2h")
+      .sign(secret);
+
+    const res = await app.request(
+      "/protected",
+      { headers: { Authorization: `Bearer ${tokenWithoutTenant}` } },
+      { JWT_SECRET }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("should return 401 if sub is missing or empty", async () => {
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    const tokenWithoutSub = await new jose.SignJWT({
+      tenant_id: "tenant-A",
+      role: "admin",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setAudience("app")
+      .setIssuedAt()
+      .setExpirationTime("2h")
+      .sign(secret);
+
+    const res = await app.request(
+      "/protected",
+      { headers: { Authorization: `Bearer ${tokenWithoutSub}` } },
+      { JWT_SECRET }
+    );
+    expect(res.status).toBe(401);
+  });
+
   it("should return 401 for an expired token", async () => {
     const secret = new TextEncoder().encode(JWT_SECRET);
     const token = await new jose.SignJWT({
       sub: "user-1",
+      tenant_id: "tenant-A",
       email: "test@example.com",
       role: "admin",
       mfa_verified: true,
     })
       .setProtectedHeader({ alg: "HS256" })
+      .setAudience("app")
       .setIssuedAt(Math.floor(Date.now() / 1000) - 3600) // 1 hour ago
       .setExpirationTime(Math.floor(Date.now() / 1000) - 1800) // 30 mins ago
       .sign(secret);
@@ -75,11 +139,13 @@ describe("authMiddleware", () => {
     const secret = new TextEncoder().encode(JWT_SECRET);
     const token = await new jose.SignJWT({
       sub: "user-1",
+      tenant_id: "tenant-A",
       email: "test@example.com",
       role: "admin",
       mfa_verified: true,
     })
       .setProtectedHeader({ alg: "HS256" })
+      .setAudience("app")
       .setIssuedAt()
       .setExpirationTime("2h")
       .sign(secret);
@@ -118,10 +184,6 @@ describe("authMiddleware", () => {
 describe("Auth & Tenant Middleware Chain Integration", () => {
   const app = new Hono<{ Bindings: { JWT_SECRET: string } }>();
   app.use("*", authMiddleware);
-  app.get("/legacy", (c) => {
-    const scope = c.get('tenantScope');
-    return c.json({ ok: true, hasScope: !!scope });
-  });
   app.get("/migrated", tenantMiddleware, (c) => {
     const scope = c.get('tenantScope');
     return c.json({ ok: true, tenantId: scope.tenantId });
@@ -129,40 +191,13 @@ describe("Auth & Tenant Middleware Chain Integration", () => {
 
   const secret = new TextEncoder().encode(JWT_SECRET);
 
-  it("1. Legacy valid JWT succeeds on legacy route without generating scope", async () => {
-    const legacyToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com" })
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime("2h")
-      .sign(secret);
-
-    const res = await app.request("/legacy", { headers: { Authorization: `Bearer ${legacyToken}` } }, { JWT_SECRET });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual({ ok: true, hasScope: false });
-  });
-
-  it("2. Legacy valid JWT fails on migrated route (tenantMiddleware blocks it)", async () => {
-    const legacyToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com" })
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime("2h")
-      .sign(secret);
-
-    const res = await app.request("/migrated", { headers: { Authorization: `Bearer ${legacyToken}` } }, { JWT_SECRET });
-    expect(res.status).toBe(401);
-    expect(await res.text()).toContain('Missing verified tenant scope');
-  });
-
-  it("3. Tenant-aware JWT succeeds on migrated route with correct scope", async () => {
+  it("Tenant-aware JWT with aud=app succeeds on migrated route with correct scope", async () => {
     const migratedToken = await new jose.SignJWT({ sub: "user-1", email: "test@example.com", tenant_id: "tenant-A" })
       .setProtectedHeader({ alg: "HS256" })
+      .setAudience("app")
       .setIssuedAt()
       .setExpirationTime("2h")
       .sign(secret);
-
-    // Mock repositories since tenantMiddleware builds deps
-
 
     const res = await app.request('/migrated', { headers: { Authorization: `Bearer ${migratedToken}` } }, { JWT_SECRET, DB: { prepare: () => ({ bind: () => ({ all: () => ({ results: [] }), first: () => null }) }) } as any });
     expect(res.status).toBe(200);
