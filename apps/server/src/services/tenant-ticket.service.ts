@@ -44,9 +44,16 @@ export class TenantTicketService {
 
   async hydrateArticles(articles: Article[]): Promise<Article[]> {
     const hydrator = new TenantArticleBodyHydrator(this.deps.attachmentStorage, this.deps.legacyArticleStorage);
-    await Promise.all(articles.map(async article => {
-      if (!article.body && article.body_r2_key) article.body = await hydrator.hydrate(null, article.body_r2_key, 1024 * 1024);
-    }));
+    // Bound both each R2 body and the aggregate work for one listing; read sequentially.
+    let remainingCharacters = 1024 * 1024;
+    for (const article of articles) {
+      if (!article.body && article.body_r2_key) {
+        article.body = remainingCharacters > 0
+          ? await hydrator.hydrate(null, article.body_r2_key, Math.min(64 * 1024, remainingCharacters))
+          : '';
+        remainingCharacters -= article.body.length;
+      }
+    }
     return articles;
   }
 

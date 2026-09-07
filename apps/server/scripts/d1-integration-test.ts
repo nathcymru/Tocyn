@@ -1360,9 +1360,11 @@ async function run() {
   assert.strictEqual(liveWidgetChat.status,200,'Actual issued customer JWT must authenticate widget chat');
   const liveWidgetTicket = await worker.fetch(new Request('http://localhost/api/v1/widget/tickets', {
     method:'POST',headers:{Authorization:`Bearer ${returnedCustomerToken}`,'X-Widget-Key':'pk_widget_tenant_A','Content-Type':'application/json','CF-Connecting-IP':'192.0.2.51'},
-    body:JSON.stringify({subject:'Authenticated widget',message:'Help',email:verifyResult.user.email})
+    body:JSON.stringify({subject:'Authenticated widget',message:'Help',email:verifyResult.user.email,custom_fields:{product:'Test'}})
   }),envMock,{});
   assert.strictEqual(liveWidgetTicket.status,201,'Actual issued customer JWT must authenticate widget ticket submission');
+  const submittedWidgetTicket = await liveWidgetTicket.json();
+  assert.deepStrictEqual(JSON.parse(submittedWidgetTicket.custom_fields),{product:'Test'});
   const customerId = verifyResult.user.id;
   const privateTicket = await reposApiKeyA.tickets.create({subject:'Attachment ownership',customer_email:verifyResult.user.email,source:'web',status:'open',priority:'normal'});
   const privateArticle = await reposApiKeyA.articles.create({ticket_id:privateTicket.id,sender_type:'agent',is_internal:true});
@@ -1379,6 +1381,10 @@ async function run() {
   const redemptions = await Promise.all(Array.from({length:8}, () => reposApiKeyA.users.verifyAndConsumeCustomerAuthToken('atomic-d1-hash',new Date().toISOString())));
   assert.strictEqual(redemptions.filter(Boolean).length, 1, 'D1 must redeem only once under concurrent requests');
   for (const forbidden of ['password_hash','mfa_secret','secret']) assert.ok(!(forbidden in verifyResult.user));
+  await db.prepare('UPDATE users SET email=? WHERE tenant_id=? AND id=?').bind('changed-customer@example.test','tenant-A',customerId).run();
+  const staleEmailRequest = await worker.fetch(new Request('http://localhost/api/v1/customer/auth/me', {headers:{Authorization:`Bearer ${returnedCustomerToken}`}}),envMock,{});
+  assert.strictEqual(staleEmailRequest.status,401,'A stale email claim must not retain customer authority');
+
 
 
   // 19. Middleware Authoritative D1 User/Role Revalidation (User Deletion & Demotion)

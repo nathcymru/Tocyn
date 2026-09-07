@@ -123,6 +123,7 @@ widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, async (c) 
       subject: validData.subject,
       customer_email: c.get('user').email,
       source: 'widget',
+      custom_fields: validData.custom_fields,
       body: validData.message,
       sender_type: 'customer',
       sender_id: c.get('user').id

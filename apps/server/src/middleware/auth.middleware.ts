@@ -115,6 +115,7 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
 };
 
 export const loginAuthResolverMiddleware = async (c: Context, next: Next) => {
+  if (!c.env.DB) return c.json({ error: "Authentication unavailable" }, 503);
   const body = await c.req.json().catch(() => ({}));
   let authUser: UserAuthResolution | null = null;
 

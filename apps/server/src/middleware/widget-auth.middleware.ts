@@ -42,6 +42,9 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
     if (!userRes) {
       return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
     }
+    if (typeof userRes.email !== 'string' || !userRes.email || userRes.email !== payload.email) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
     if (userRes.role !== 'customer') {
       return c.json({ error: "Unauthorized: Invalid widget role" }, 403);
     }
@@ -60,7 +63,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
     
     c.set('user', {
       id: payload.sub,
-      email: payload.email,
+      email: userRes.email,
       role: 'customer',
       tenant_id: payload.tenant_id
     });

@@ -28,7 +28,7 @@ export class HttpResendTransport implements EmailTransport {
         headers: options.headers,
         attachments: options.attachments?.map((a) => ({
           filename: a.filename,
-          content: arrayBufferToBase64(a.content.buffer),
+          content: arrayBufferToBase64(new Uint8Array(a.content).buffer),
           contentType: a.contentType,
         })),
       }),
