@@ -38,8 +38,6 @@ revert.js
 .gemini/
 .env.production
 
-.env.production
-
 # Derived agent navigation, never deployed or committed
 .agent-context/
 graphify-out/

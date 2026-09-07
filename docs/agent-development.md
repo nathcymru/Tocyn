@@ -32,7 +32,9 @@ an agent should use `rg` and report the failure rather than assume the index exi
 - Import/re-export edges resolved with TypeScript and nearby tsconfig options, including
   reverse imports for a directly affected file. External/unresolved imports remain labelled.
 - An ignored `.agent-context/index.json` cache, refreshed when source, tracked configuration,
-  compiler version or indexer changes. Stage new files before indexing them.
+  compiler version or indexer changes. Nanosecond modification/change times and file sizes
+  detect changes before reading source contents; unchanged queries reuse the parsed graph.
+  Stage new files before indexing them.
 - Eight results by default, a maximum of twenty, bounded symbols/edges and a 16,000-character
   output ceiling. Use a narrower query or lower limit to get smaller results.
 

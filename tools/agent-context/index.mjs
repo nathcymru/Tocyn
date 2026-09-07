@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 export const root = realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'));
 const output = path.join(root, '.agent-context/index.json');
 const hash = text => createHash('sha256').update(text).digest('hex');
-const version = 1;
+const version = 2;
 
 export function extract(file, content) {
   const extension = path.extname(file).toLowerCase();
@@ -37,9 +37,9 @@ function inventory() {
     if (!/\.(?:[cm]?[jt]sx?)$/.test(file) || /(?:^|\/)(?:node_modules|dist|build|coverage|vendor|\.wrangler)(?:\/|$)/.test(file)) continue;
     const absolute = path.join(root, file);
     let stat;
-    try { stat = lstatSync(absolute); } catch { continue; } // Deleted worktree files.
+    try { stat = lstatSync(absolute, { bigint: true }); } catch { continue; } // Deleted worktree files.
     if (!stat.isFile() || stat.size > 1024 * 1024 || realpathSync(absolute) !== absolute) continue;
-    files.push({ file, content: readFileSync(absolute, 'utf8') });
+    files.push({ file, absolute, stamp: [stat.size, stat.mtimeNs, stat.ctimeNs].map(String) });
   }
   return files;
 }
@@ -63,11 +63,16 @@ export function resolveEdges(nodes, optionsFor = () => ({})) {
 
 export function build() {
   const files = inventory();
-  const fingerprint = hash(JSON.stringify(files.map(f => [f.file, hash(f.content)])) + readFileSync(fileURLToPath(import.meta.url), 'utf8') + ts.version + configurationFingerprint());
+  const configuration = configurationInventory();
+  // Stat tracked inputs first; read source bytes only on a cache miss. ctime catches
+  // ordinary changes that preserve mtime. This is freshness detection, not a trust boundary.
+  const signature = hash(JSON.stringify([...files, ...configuration].map(f => [f.file, f.stamp])) + readFileSync(fileURLToPath(import.meta.url), 'utf8') + ts.version);
   try {
     const cached = JSON.parse(readFileSync(output, 'utf8'));
-    if (cached.version === version && cached.fingerprint === fingerprint) return cached;
+    if (cached.version === version && cached.signature === signature) return cached;
   } catch { /* Missing or invalid derived data: rebuild. */ }
+  const sources = files.map(f => ({ file: f.file, content: readFileSync(f.absolute, 'utf8') }));
+  const fingerprint = hash(JSON.stringify(sources.map(f => [f.file, hash(f.content)])) + configuration.map(f => f.file + readFileSync(f.absolute, 'utf8')).join('\n') + ts.version + readFileSync(fileURLToPath(import.meta.url), 'utf8'));
   const configs = new Map();
   const optionsFor = file => {
     const config = ts.findConfigFile(path.dirname(path.join(root, file)), ts.sys.fileExists);
@@ -78,15 +83,22 @@ export function build() {
     }
     return configs.get(config);
   };
-  const nodes = resolveEdges(files.map(f => extract(f.file, f.content)), optionsFor);
-  const index = { version, fingerprint, typescript: ts.version, nodes };
+  const nodes = resolveEdges(sources.map(f => extract(f.file, f.content)), optionsFor);
+  const index = { version, signature, fingerprint, typescript: ts.version, nodes };
   mkdirSync(path.dirname(output), { recursive: true });
   writeFileSync(output, JSON.stringify(index));
   return index;
 }
-function configurationFingerprint() {
-  const configs = execFileSync('git', ['ls-files', '-z', '--', '*tsconfig*.json', '*package.json'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean).sort();
-  return configs.map(f => { try { const p=path.join(root,f); return realpathSync(p) === p ? f + readFileSync(p,'utf8') : ''; } catch { return ''; } }).join('\n');
+function configurationInventory() {
+  const configs = execFileSync('git', ['ls-files', '-z', '--', '*tsconfig*.json', '*package.json', 'package-lock.json'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean).sort();
+  return configs.flatMap(file => {
+    try {
+      const absolute = path.join(root, file);
+      const stat = lstatSync(absolute, { bigint: true });
+      return stat.isFile() && realpathSync(absolute) === absolute
+        ? [{ file, absolute, stamp: [stat.size, stat.mtimeNs, stat.ctimeNs].map(String) }] : [];
+    } catch { return []; }
+  });
 }
 export function select(index, command, term, limit = 8) {
   if (!term || term.length > 200) throw new Error('Supply a file path or symbol query (1–200 characters).');

@@ -65,3 +65,22 @@ for (const extension of ['tsx', 'jsx']) {
   assert.ok(node.symbols.some(s=>s.name==='afterJSX' && s.line===3));
  });
 }
+
+test('an unchanged cached build does not reread tracked source contents', async () => {
+ const {createRequire, syncBuiltinESMExports}=await import('node:module');
+ const require=createRequire(import.meta.url);
+ const fs=require('node:fs');
+ const {root}=await import('./index.mjs');
+ build();
+ const original=fs.readFileSync;
+ let sourceReads=0;
+ try {
+  fs.readFileSync=function(file,...args) {
+   if(typeof file==='string' && file.startsWith(root+'/apps/') && /\.[cm]?[jt]sx?$/.test(file)) sourceReads++;
+   return original.call(this,file,...args);
+  };
+  syncBuiltinESMExports();
+  build();
+  assert.equal(sourceReads,0,'Cache hits should stat source files without reading their contents');
+ } finally { fs.readFileSync=original;syncBuiltinESMExports(); }
+});
