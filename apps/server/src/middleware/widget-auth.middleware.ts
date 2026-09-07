@@ -31,18 +31,17 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
       return c.json({ error: "Unauthorized: Invalid widget role" }, 403);
     }
 
-    if (c.env.DB) {
-      const isMockDb = typeof c.env.DB.prepare === "function" && "mock" in (c.env.DB.prepare as any);
-      if (!isMockDb || (c.env.DB as any)._testUserRevalidation) {
-        const resolver = new UserAuthResolver(c.env.DB);
-        const userRes = await resolver.resolveUserById(payload.tenant_id as string, payload.sub as string);
-        if (!userRes) {
-          return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
-        }
-        if (userRes.role !== 'customer') {
-          return c.json({ error: "Unauthorized: Invalid widget role" }, 403);
-        }
-      }
+    if (!c.env.DB) {
+      return c.json({ error: "Unauthorized: Database unavailable" }, 401);
+    }
+
+    const resolver = new UserAuthResolver(c.env.DB);
+    const userRes = await resolver.resolveUserById(payload.tenant_id as string, payload.sub as string);
+    if (!userRes) {
+      return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
+    }
+    if (userRes.role !== 'customer') {
+      return c.json({ error: "Unauthorized: Invalid widget role" }, 403);
     }
 
     const scope = createVerifiedTenantScope(

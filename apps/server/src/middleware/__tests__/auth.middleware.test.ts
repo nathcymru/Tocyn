@@ -14,6 +14,15 @@ describe("authMiddleware", () => {
   app.get("/protected", (c) => c.text("OK"));
   app.get("/migrated", tenantMiddleware, (c) => c.text("MIGRATED_OK"));
 
+  const mockDB = {
+    prepare: () => ({
+      bind: () => ({
+        first: async () => ({ tenant_id: "tenant-A", id: "user-1", role: "admin", password_hash: null, mfa_enabled: 0 }),
+        all: async () => ({ results: [] })
+      })
+    })
+  };
+
   it("should return 200 for a valid JWT with aud=app and valid tenant_id and sub", async () => {
     const secret = new TextEncoder().encode(JWT_SECRET);
     const token = await new jose.SignJWT({
@@ -38,6 +47,7 @@ describe("authMiddleware", () => {
       },
       {
         JWT_SECRET,
+        DB: mockDB as any,
       }
     );
 
@@ -60,7 +70,7 @@ describe("authMiddleware", () => {
     const res = await app.request(
       "/protected",
       { headers: { Authorization: `Bearer ${tokenWithoutAud}` } },
-      { JWT_SECRET }
+      { JWT_SECRET, DB: mockDB as any }
     );
     expect(res.status).toBe(401);
   });
@@ -80,7 +90,7 @@ describe("authMiddleware", () => {
     const res = await app.request(
       "/protected",
       { headers: { Authorization: `Bearer ${tokenWithoutTenant}` } },
-      { JWT_SECRET }
+      { JWT_SECRET, DB: mockDB as any }
     );
     expect(res.status).toBe(401);
   });
@@ -101,7 +111,7 @@ describe("authMiddleware", () => {
     const res = await app.request(
       "/protected",
       { headers: { Authorization: `Bearer ${tokenWithIdOnly}` } },
-      { JWT_SECRET }
+      { JWT_SECRET, DB: mockDB as any }
     );
     expect(res.status).toBe(401);
   });
@@ -130,6 +140,7 @@ describe("authMiddleware", () => {
       },
       {
         JWT_SECRET,
+        DB: mockDB as any,
       }
     );
 
@@ -162,6 +173,7 @@ describe("authMiddleware", () => {
       },
       {
         JWT_SECRET,
+        DB: mockDB as any,
       }
     );
 
@@ -174,6 +186,7 @@ describe("authMiddleware", () => {
       {},
       {
         JWT_SECRET,
+        DB: mockDB as any,
       }
     );
 
@@ -215,7 +228,6 @@ describe("Auth & Tenant Middleware Chain Integration", () => {
       .sign(secret);
 
     const mockDbUserDeleted = {
-      _testUserRevalidation: true,
       prepare: () => ({
         bind: () => ({
           first: async () => null // User deleted
@@ -238,7 +250,6 @@ describe("Auth & Tenant Middleware Chain Integration", () => {
       .sign(secret);
 
     const mockDbUserDemoted = {
-      _testUserRevalidation: true,
       prepare: () => ({
         bind: () => ({
           first: async () => ({ tenant_id: "tenant-A", id: "user-1", role: "customer", password_hash: null, mfa_enabled: 0 }) // Demoted to customer

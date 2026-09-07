@@ -34,20 +34,19 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
     }
 
     let activeRole = payload.role as string;
-    if (c.env.DB) {
-      const isMockDb = typeof c.env.DB.prepare === "function" && "mock" in (c.env.DB.prepare as any);
-      if (!isMockDb || (c.env.DB as any)._testUserRevalidation) {
-        const resolver = new UserAuthResolver(c.env.DB);
-        const userRes = await resolver.resolveUserById(tenantId, sub);
-        if (!userRes) {
-          return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
-        }
-        if (userRes.role !== payload.role) {
-          return c.json({ error: "Unauthorized: User role changed" }, 401);
-        }
-        activeRole = userRes.role;
-      }
+    if (!c.env.DB) {
+      return c.json({ error: "Unauthorized: Database unavailable" }, 401);
     }
+
+    const resolver = new UserAuthResolver(c.env.DB);
+    const userRes = await resolver.resolveUserById(tenantId, sub);
+    if (!userRes) {
+      return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
+    }
+    if (userRes.role !== payload.role) {
+      return c.json({ error: "Unauthorized: User role changed" }, 401);
+    }
+    activeRole = userRes.role;
 
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
 
@@ -87,20 +86,19 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
     }
 
     let activeRole = payload.role as string;
-    if (c.env.DB) {
-      const isMockDb = typeof c.env.DB.prepare === "function" && "mock" in (c.env.DB.prepare as any);
-      if (!isMockDb || (c.env.DB as any)._testUserRevalidation) {
-        const resolver = new UserAuthResolver(c.env.DB);
-        const userRes = await resolver.resolveUserById(tenantId, sub);
-        if (!userRes) {
-          return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
-        }
-        if (userRes.role !== payload.role) {
-          return c.json({ error: "Unauthorized: User role changed" }, 401);
-        }
-        activeRole = userRes.role;
-      }
+    if (!c.env.DB) {
+      return c.json({ error: "Unauthorized: Database unavailable" }, 401);
     }
+
+    const resolver = new UserAuthResolver(c.env.DB);
+    const userRes = await resolver.resolveUserById(tenantId, sub);
+    if (!userRes) {
+      return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
+    }
+    if (userRes.role !== payload.role) {
+      return c.json({ error: "Unauthorized: User role changed" }, 401);
+    }
+    activeRole = userRes.role;
 
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
 

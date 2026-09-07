@@ -4,10 +4,21 @@ import { EmailService } from './email/outbound.service';
 import { AuthService } from './auth/auth.service';
 import * as jose from 'jose';
 
+import { WidgetTenantResolver } from '../auth/widget-tenant-resolver';
+
 export class CustomerAuthService {
+  async resolveTenantFromWidgetKey(widgetKey: string): Promise<string | null> {
+    if (!widgetKey || typeof widgetKey !== 'string' || !widgetKey.trim() || !this.env.DB) {
+      return null;
+    }
+    const resolver = new WidgetTenantResolver(this.env.DB);
+    const resolution = await resolver.resolveTenantByKey(widgetKey.trim());
+    return resolution?.tenantId ?? null;
+  }
+
   async getConfig(): Promise<{ TICKET_PREFIX: string, TURNSTILE_SITE_KEY?: string }> {
-    const result = await this.env.DB.prepare("SELECT value FROM config WHERE key = 'TICKET_PREFIX' LIMIT 1").first<{value: string}>();
-    const siteKeyResult = await this.env.DB.prepare("SELECT value FROM config WHERE key = 'TURNSTILE_SITE_KEY' LIMIT 1").first<{value: string}>();
+    const result = await this.env.DB.prepare("SELECT value FROM tenant_config WHERE key = 'TICKET_PREFIX' LIMIT 1").first<{value: string}>();
+    const siteKeyResult = await this.env.DB.prepare("SELECT value FROM tenant_config WHERE key = 'TURNSTILE_SITE_KEY' LIMIT 1").first<{value: string}>();
     return {
       TICKET_PREFIX: (result && result.value) ? result.value : '#',
       TURNSTILE_SITE_KEY: (siteKeyResult && siteKeyResult.value) ? siteKeyResult.value : undefined
@@ -38,7 +49,10 @@ export class CustomerAuthService {
    * Request Magic Link / OTP for a customer.
    * If the customer doesn't exist, creates a shadow user.
    */
-  async requestAuth(email: string, type: 'magic_link' | 'otp' = 'magic_link', baseUrl?: string, tenantId: string = 'default-tenant'): Promise<void> {
+  async requestAuth(email: string, type: 'magic_link' | 'otp' = 'magic_link', baseUrl?: string, tenantId?: string): Promise<void> {
+    if (!tenantId || typeof tenantId !== 'string' || !tenantId.trim()) {
+      throw new Error('Missing tenant context for customer auth request');
+    }
     const lowerEmail = email.toLowerCase().trim();
 
     // 1. Find or create user
@@ -167,7 +181,10 @@ export class CustomerAuthService {
     // Generate JWT
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(this.env.JWT_SECRET);
-    const userTenantId = user.tenant_id || 'default-tenant';
+    const userTenantId = user.tenant_id;
+    if (!userTenantId || typeof userTenantId !== 'string' || !userTenantId.trim()) {
+      return null;
+    }
     const payload = {
       sub: user.id,
       email: user.email,

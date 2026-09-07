@@ -33,12 +33,32 @@ async function generateToken(role: "admin" | "agent" | "customer") {
 describe("Permissions Handler Integration Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDB.prepare.mockReturnThis();
+    mockDB.bind.mockReturnThis();
+    mockDB.first.mockImplementation(async () => {
+      const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+      const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+        const bindCalls = vi.mocked(mockDB.bind).mock.calls;
+        const sub = bindCalls.length > 0 ? bindCalls[bindCalls.length - 1][1] : "user-admin";
+        const role = typeof sub === "string" && sub.startsWith("user-") ? sub.substring(5) : "admin";
+        return { tenant_id: "default-tenant", id: sub, role };
+      }
+      return null;
+    });
   });
 
   describe("GET /", () => {
     it("should return the current permissions mapping for an admin", async () => {
       const mockPermissions = { can_edit_settings: true, can_delete_tickets: false };
-      mockDB.first.mockResolvedValueOnce({ value: JSON.stringify(mockPermissions) });
+      mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { tenant_id: "default-tenant", id: "user-admin", role: "admin" };
+        }
+        return { value: JSON.stringify(mockPermissions) };
+      });
 
       const token = await generateToken("admin");
 
@@ -61,7 +81,14 @@ describe("Permissions Handler Integration Tests", () => {
 
     it("should return the current permissions mapping for an agent", async () => {
       const mockPermissions = { can_edit_settings: false };
-      mockDB.first.mockResolvedValueOnce({ value: JSON.stringify(mockPermissions) });
+      mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { tenant_id: "default-tenant", id: "user-agent", role: "agent" };
+        }
+        return { value: JSON.stringify(mockPermissions) };
+      });
 
       const token = await generateToken("agent");
 
@@ -82,7 +109,14 @@ describe("Permissions Handler Integration Tests", () => {
     });
 
     it("should return an empty object if no permissions are found", async () => {
-      mockDB.first.mockResolvedValueOnce(null);
+      mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { tenant_id: "default-tenant", id: "user-admin", role: "admin" };
+        }
+        return null;
+      });
 
       const token = await generateToken("admin");
 

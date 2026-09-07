@@ -93,6 +93,11 @@ describe("Settings Handler Integration Tests", () => {
 
     it("should return 500 if APP_MASTER_KEY is missing but sensitive values exist", async () => {
       mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
+        }
         const calls = vi.mocked(mockDB.bind).mock.calls;
         const lastKey = calls.length > 0 ? calls[calls.length - 1][1] : undefined;
         if (lastKey === "RESEND_API_KEY") {
@@ -145,13 +150,15 @@ describe("Settings Handler Integration Tests", () => {
 
       expect(res.status).toBe(200);
 
-      // Check that DB.prepare was called twice (once for each key)
-      expect(mockDB.prepare).toHaveBeenCalledTimes(2);
+      // Check that tenant_config prepare was called twice (once for each key)
+      const configPrepCalls = vi.mocked(mockDB.prepare).mock.calls.filter(c => typeof c[0] === "string" && c[0].includes("tenant_config"));
+      expect(configPrepCalls.length).toBe(2);
 
       // Check that DB.bind was called with default-tenant, key, and encrypted value
-      expect(mockDB.bind).toHaveBeenNthCalledWith(1, "default-tenant", "APP_NAME", "New Luminatick");
+      const configBindCalls = vi.mocked(mockDB.bind).mock.calls.filter(c => c[1] === "APP_NAME" || c[1] === "RESEND_API_KEY");
+      expect(configBindCalls[0]).toEqual(["default-tenant", "APP_NAME", "New Luminatick"]);
 
-      const resendBindCall = vi.mocked(mockDB.bind).mock.calls[1];
+      const resendBindCall = configBindCalls[1];
       expect(resendBindCall[0]).toBe("default-tenant");
       expect(resendBindCall[1]).toBe("RESEND_API_KEY");
       expect(resendBindCall[2]).not.toBe("new-super-secret-key"); // Should be encrypted
@@ -185,8 +192,9 @@ describe("Settings Handler Integration Tests", () => {
 
       expect(res.status).toBe(200);
 
-      // Check that DB.prepare was called only once (for APP_NAME)
-      expect(mockDB.prepare).toHaveBeenCalledTimes(1);
+      // Check that tenant_config prepare was called only once (for APP_NAME)
+      const configPrepCalls = vi.mocked(mockDB.prepare).mock.calls.filter(c => typeof c[0] === "string" && c[0].includes("tenant_config"));
+      expect(configPrepCalls.length).toBe(1);
       expect(mockDB.bind).toHaveBeenCalledWith("default-tenant", "APP_NAME", "Updated Name");
       expect(mockDB.run).toHaveBeenCalledTimes(1);
     });

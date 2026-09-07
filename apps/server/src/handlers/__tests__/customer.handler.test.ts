@@ -103,7 +103,7 @@ const mockDB = {
     };
   }),
   bind: vi.fn().mockReturnThis(),
-  first: vi.fn().mockResolvedValue({ id: "user-1", email: "test@example.com", full_name: "Test User", role: "customer" }),
+  first: vi.fn().mockResolvedValue({ id: "user-1", tenant_id: "default-tenant", email: "test@example.com", full_name: "Test User", role: "customer" }),
   all: vi.fn(),
   run: vi.fn(),
 };
@@ -154,7 +154,7 @@ describe("Customer Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.success).toBe(true);
-      expect(mockRequestAuth).toHaveBeenCalledWith("test@example.com", "magic_link", "http://localhost:5173");
+      expect(mockRequestAuth).toHaveBeenCalledWith("test@example.com", "magic_link", "http://localhost:5173", "default-tenant");
     });
   });
 
@@ -222,7 +222,7 @@ describe("Customer Handler Integration Tests", () => {
   describe("GET /auth/me", () => {
     it("should return the current user", async () => {
       const token = await generateCustomerToken();
-      mockDB.first.mockResolvedValueOnce({ id: "user-1", email: "test@example.com" });
+      mockDB.first.mockResolvedValueOnce({ id: "user-1", tenant_id: "default-tenant", email: "test@example.com", role: "customer" });
 
       const res = await customer.request(
         "/auth/me",
@@ -285,6 +285,11 @@ describe("Customer Handler Integration Tests", () => {
 
       // Mock DB to return the secret key
       mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", full_name: "Test User", role: "customer" };
+        }
         return { value: encryptedSecret };
       });
 
@@ -316,6 +321,11 @@ describe("Customer Handler Integration Tests", () => {
       const encryptedSecret = await encryptString("my-turnstile-secret", masterKey);
 
       mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", full_name: "Test User", role: "customer" };
+        }
         return { value: encryptedSecret };
       });
 
@@ -342,6 +352,11 @@ describe("Customer Handler Integration Tests", () => {
       const encryptedSecret = await encryptString("my-turnstile-secret", masterKey);
 
       mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", full_name: "Test User", role: "customer" };
+        }
         return { value: encryptedSecret };
       });
 
@@ -367,7 +382,15 @@ describe("Customer Handler Integration Tests", () => {
       const masterKey = "12345678901234567890123456789012";
 
       // DB returns undefined (not configured)
-      mockDB.first.mockImplementation(async () => { return undefined; }); vi.mocked(verifyTurnstileToken).mockResolvedValueOnce(true);
+      mockDB.first.mockImplementation(async () => {
+        const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+        const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+          return { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", full_name: "Test User", role: "customer" };
+        }
+        return undefined;
+      });
+      vi.mocked(verifyTurnstileToken).mockResolvedValueOnce(true);
 
       const res = await customer.request(
         "/tickets",

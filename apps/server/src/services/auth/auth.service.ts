@@ -18,7 +18,10 @@ export class AuthService {
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(secret);
 
-    const tenantId = (user as any).tenant_id || "default-tenant";
+    const tenantId = (user as any).tenant_id;
+    if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
+      throw new Error("Missing tenant context for token generation");
+    }
 
     const payload: JWTPayload & { tenant_id?: string } = {
       sub: user.id,
@@ -48,7 +51,10 @@ export class AuthService {
     secret: string,
     expiresIn: string = "15m"
   ): Promise<string> {
-    const tenantId = (user as any).tenant_id || "default-tenant";
+    const tenantId = (user as any).tenant_id;
+    if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
+      throw new Error("Missing tenant context for MFA challenge token generation");
+    }
 
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(secret);
@@ -95,23 +101,16 @@ export class AuthService {
       if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) return null;
       if (!jwtPayload.sub) return null;
 
-      if (this.env?.DB) {
-        const resolver = new UserAuthResolver(this.env.DB);
-        const resolved = await resolver.resolveUserById(tenantId, jwtPayload.sub);
-        if (!resolved) return null;
-        return {
-          id: resolved.userId,
-          email: jwtPayload.email,
-          role: resolved.role,
-          tenant_id: resolved.tenantId,
-        } as any;
-      }
+      if (!this.env?.DB) return null;
 
+      const resolver = new UserAuthResolver(this.env.DB);
+      const resolved = await resolver.resolveUserById(tenantId, jwtPayload.sub);
+      if (!resolved) return null;
       return {
-        id: jwtPayload.sub,
+        id: resolved.userId,
         email: jwtPayload.email,
-        role: jwtPayload.role,
-        tenant_id: tenantId,
+        role: resolved.role,
+        tenant_id: resolved.tenantId,
       } as any;
     } catch (err) {
       console.error("Token verification failed:", err);

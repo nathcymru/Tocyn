@@ -31,12 +31,30 @@ const request = (path: string, init?: RequestInit, env?: any) => {
   return dashboard.request(path, init, { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket, ...env });
 };
 
+let firstQueue: any[] = [];
+
 describe("Dashboard Handler Integration Tests", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    firstQueue = [];
     mockDB.all.mockResolvedValue({ results: [] });
-    mockDB.first.mockResolvedValue({ value: JSON.stringify({ api_keys: true }) });
     mockDB.run.mockResolvedValue({ success: true });
+    mockDB.prepare.mockReturnThis();
+    mockDB.bind.mockReturnThis();
+    mockDB.first.mockImplementation(async () => {
+      const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+      const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+        const bindCalls = vi.mocked(mockDB.bind).mock.calls;
+        const sub = bindCalls.length > 0 ? bindCalls[bindCalls.length - 1][1] : "agent-1";
+        if (sub === "c-1") return { tenant_id: "default-tenant", id: "c-1", email: "customer@example.com", role: "customer" };
+        return { tenant_id: "default-tenant", id: sub, email: "agent@example.com", role: "agent" };
+      }
+      if (firstQueue.length > 0) {
+        return firstQueue.shift();
+      }
+      return { value: JSON.stringify({ api_keys: true }) };
+    });
 
     const mockUser = {
       id: "agent-1",
@@ -51,7 +69,7 @@ describe("Dashboard Handler Integration Tests", () => {
   describe("GET /tickets", () => {
     it("should list tickets with default pagination", async () => {
       mockDB.all.mockResolvedValueOnce({ results: [{ id: "t-1", subject: "Ticket 1" }] });
-      mockDB.first.mockResolvedValueOnce({ count: 1 });
+      firstQueue.push({ count: 1 });
 
       const res = await dashboard.request(
         "/tickets",
@@ -69,7 +87,7 @@ describe("Dashboard Handler Integration Tests", () => {
 
     it("should list customer tickets", async () => {
       mockDB.all.mockResolvedValueOnce({ results: [] });
-      mockDB.first.mockResolvedValueOnce({ count: 0 });
+      firstQueue.push({ count: 0 });
 
       const res = await dashboard.request(
         "/tickets?customer_email=test@example.com&page=2&limit=10",
@@ -88,7 +106,7 @@ describe("Dashboard Handler Integration Tests", () => {
 
     it("should apply status filter (no-op in basic scoped list)", async () => {
       mockDB.all.mockResolvedValueOnce({ results: [] });
-      mockDB.first.mockResolvedValueOnce({ count: 0 });
+      firstQueue.push({ count: 0 });
 
       const res = await dashboard.request(
         "/tickets?status=open",
@@ -103,7 +121,7 @@ describe("Dashboard Handler Integration Tests", () => {
 
     it("should apply assigned_to filter (no-op in basic scoped list)", async () => {
       mockDB.all.mockResolvedValueOnce({ results: [] });
-      mockDB.first.mockResolvedValueOnce({ count: 0 });
+      firstQueue.push({ count: 0 });
 
       const res = await dashboard.request(
         "/tickets?assigned_to=agent-1",
@@ -131,13 +149,8 @@ describe("Dashboard Handler Integration Tests", () => {
       const mockAttachments = [
         { id: "att-1", article_id: "art-1", file_name: "test.txt" }
       ];
-      const mockCustomer = { id: "c-1", email: "customer@example.com", role: "customer" };
-      const mockAssignee = { id: "agent-1", email: "agent@example.com", role: "agent" };
 
-      mockDB.first
-        .mockResolvedValueOnce(mockTicket)      // Ticket
-        .mockResolvedValueOnce(mockCustomer)    // Customer
-        .mockResolvedValueOnce(mockAssignee);   // Assignee
+      firstQueue.push(mockTicket);
 
       mockDB.all
         .mockResolvedValueOnce({ results: mockArticles })    // Articles
@@ -161,7 +174,7 @@ describe("Dashboard Handler Integration Tests", () => {
     });
 
     it("should return 404 for non-existent ticket", async () => {
-      mockDB.first.mockResolvedValueOnce(null);
+      firstQueue.push(null);
 
       const res = await dashboard.request(
         "/tickets/non-existent",
@@ -391,13 +404,8 @@ describe("Dashboard Handler Integration Tests", () => {
       const mockTicket = { id: "t-1", group_id: "g-1", customer_id: "c-1" };
       const mockArticle = { id: "art-1", ticket_id: "t-1", body: "Here is the requested file." };
       const mockAttachment = { id: "att-1", file_name: "invoice.pdf", file_size: 1024, content_type: "application/pdf", r2_key: "agent-attachments/agent-1/uuid.pdf" };
-      mockDB.first
-        .mockReset()
-        .mockResolvedValueOnce(mockTicket) // Handler: Verify ticket exists
-        .mockResolvedValueOnce({ 1: 1 })   // Handler: Group check
-        .mockResolvedValueOnce(mockTicket) // ticketService: findTicketById
-        .mockResolvedValueOnce(mockArticle) // ticketService: createArticle
-        .mockResolvedValueOnce(mockAttachment); // ticketService: addAttachment
+
+      firstQueue.push(mockTicket, { 1: 1 }, mockTicket, mockArticle, mockAttachment);
 
       const res = await dashboard.request(
         "/tickets/t-1/articles",

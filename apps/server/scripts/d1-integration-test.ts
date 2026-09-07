@@ -1179,45 +1179,68 @@ async function run() {
   }
 
   // 18. End-to-End Customer Auth & Token Consumption Flow (unmocked issuance-to-consumption)
-  const { CustomerAuthService } = await import('../src/services/customer-auth.service');
-  const custAuthSvc = new CustomerAuthService(envMock as any);
-  await custAuthSvc.requestAuth('e2e-customer@example.com', 'magic_link', 'http://localhost:5173', 'tenant-A');
+  let capturedToken: string | null = null;
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    const msg = args.join(' ');
+    const match = msg.match(/token=([a-f0-9]+)/);
+    if (match) {
+      capturedToken = match[1];
+    }
+    originalWarn(...args);
+  };
 
-  // Extract created plain token and token_hash from DB
-  const rawTokenRecord = await db.prepare("SELECT * FROM customer_auth_tokens ORDER BY expires_at DESC LIMIT 1").first<{ id: string, user_id: string, token_hash: string }>();
-  if (!rawTokenRecord) throw new Error("CustomerAuthService failed to record auth token in DB!");
+  const e2eRequestReq = new Request('http://localhost/api/v1/customer/auth/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'e2e-customer@example.com',
+      type: 'magic_link',
+      baseUrl: 'http://localhost:5173',
+      tenant_id: 'tenant-A'
+    })
+  });
+  const e2eRequestRes = await worker.fetch(e2eRequestReq, envMock, {});
+  console.warn = originalWarn;
 
-  // Call /api/v1/customer/auth/verify handler via worker.fetch
+  if (e2eRequestRes.status !== 200) {
+    const errText = await e2eRequestRes.text();
+    throw new Error(`POST /api/v1/customer/auth/request failed with ${e2eRequestRes.status}: ${errText}`);
+  }
+  if (!capturedToken) {
+    throw new Error("Failed to capture plain token from requestAuth flow!");
+  }
+
+  // Call /api/v1/customer/auth/verify with captured plain token
   const e2eVerifyReq = new Request('http://localhost/api/v1/customer/auth/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: 'mock-plain-token' }) // Will be verified against DB or verifyAuth
+    body: JSON.stringify({ token: capturedToken })
   });
+  const e2eVerifyRes = await worker.fetch(e2eVerifyReq, envMock, {});
+  if (e2eVerifyRes.status !== 200) {
+    const errText = await e2eVerifyRes.text();
+    throw new Error(`POST /api/v1/customer/auth/verify failed with ${e2eVerifyRes.status}: ${errText}`);
+  }
 
-  // Execute real verifyAuth method
-  const verifyRes = await custAuthSvc.verifyAuth('non-existent-token');
-  if (verifyRes !== null) throw new Error("verifyAuth did not return null for invalid token!");
+  const verifyResult = await e2eVerifyRes.json();
+  const returnedCustomerToken = verifyResult.token;
+  if (!returnedCustomerToken) {
+    throw new Error("POST /api/v1/customer/auth/verify response missing JWT token!");
+  }
 
-  // Verify real user token verification flow
-  const e2eUser = await db.prepare("SELECT * FROM users WHERE email = 'e2e-customer@example.com'").first<{ id: string, tenant_id: string, email: string }>();
-  if (!e2eUser) throw new Error("Shadow customer user was not created!");
-
-  // Issue real customer token via CustomerAuthService format
-  const e2eCustomerToken = await new SignJWT({ sub: e2eUser.id, email: e2eUser.email, role: 'customer', tenant_id: e2eUser.tenant_id })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setAudience('widget')
-    .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(new TextEncoder().encode('secret'));
-
-  // Test GET /api/v1/customer/auth/me using real returned token
+  // Test GET /api/v1/customer/auth/me using real returned token from /verify
   const e2eMeReq = new Request('http://localhost/api/v1/customer/auth/me', {
-    headers: { 'Authorization': `Bearer ${e2eCustomerToken}` }
+    headers: { 'Authorization': `Bearer ${returnedCustomerToken}` }
   });
   const e2eMeRes = await worker.fetch(e2eMeReq, envMock, {});
   if (e2eMeRes.status !== 200) {
     const errText = await e2eMeRes.text();
     throw new Error(`Connected customer token consumption on /auth/me failed with ${e2eMeRes.status}: ${errText}`);
+  }
+  const e2eMeJson = await e2eMeRes.json();
+  if (e2eMeJson.user?.email !== 'e2e-customer@example.com' || e2eMeJson.user?.tenant_id !== 'tenant-A') {
+    throw new Error(`GET /api/v1/customer/auth/me returned invalid user payload: ${JSON.stringify(e2eMeJson)}`);
   }
   console.log("SUCCESS: 18. Connected customer /auth/verify to protected endpoint token consumption flow verified");
 

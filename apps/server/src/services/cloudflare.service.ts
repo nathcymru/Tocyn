@@ -11,7 +11,7 @@ export class CloudflareService {
 
     if (!accountId || !apiToken) {
       const { results } = await this.env.DB.prepare(
-        "SELECT key, value FROM config WHERE key IN ('CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN')"
+        "SELECT key, value FROM tenant_config WHERE key IN ('CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN')"
       ).all<{ key: string, value: string }>();
 
       const dbConfig = results.reduce((acc, row) => {

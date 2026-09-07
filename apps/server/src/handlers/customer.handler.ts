@@ -41,7 +41,22 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
 
   const authService = new CustomerAuthService(c.env);
 
-  await authService.requestAuth(body.email, body.type, body.baseUrl);
+  let tenantId = body.tenant_id || body.tenantId || c.req.header('X-Tenant-ID');
+  if (!tenantId) {
+    const widgetKey = body.widgetKey || c.req.header('X-Widget-Key') || c.req.query('key');
+    if (widgetKey && typeof widgetKey === 'string' && widgetKey.trim()) {
+      const resolved = await authService.resolveTenantFromWidgetKey(widgetKey.trim());
+      if (resolved) {
+        tenantId = resolved;
+      }
+    }
+  }
+
+  if (!tenantId) {
+    return c.json({ error: 'Tenant context required' }, 400);
+  }
+
+  await authService.requestAuth(body.email, body.type, body.baseUrl, tenantId);
   return c.json({ success: true });
 });
 

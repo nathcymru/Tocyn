@@ -13,7 +13,7 @@ export class EmailService {
 
     if (!apiKey || !defaultFrom) {
       const { results } = await this.env.DB.prepare(
-        "SELECT key, value FROM config WHERE key IN ('RESEND_API_KEY', 'RESEND_FROM_EMAIL')"
+        "SELECT key, value FROM tenant_config WHERE key IN ('RESEND_API_KEY', 'RESEND_FROM_EMAIL')"
       ).all<{ key: string, value: string }>();
 
       const dbConfig = results.reduce((acc, row) => {
@@ -80,7 +80,7 @@ export class EmailService {
     attachments: Attachment[] = [],
     replyToEmailId?: string
   ): Promise<void> {
-    const configResult = await this.env.DB.prepare("SELECT value FROM config WHERE key = 'TICKET_PREFIX' LIMIT 1").first<{value: string}>();
+    const configResult = await this.env.DB.prepare("SELECT value FROM tenant_config WHERE key = 'TICKET_PREFIX' LIMIT 1").first<{value: string}>();
     const prefix = configResult?.value || '#';
 
     const ticketNoStr = ticket.ticket_no

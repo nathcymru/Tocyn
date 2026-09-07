@@ -10,7 +10,7 @@ import { decryptString } from "./crypto";
  * @returns true if valid or if Turnstile is disabled, false if invalid
  */
 export async function verifyTurnstileToken(env: Env, token?: string, ip?: string): Promise<boolean> {
-  const secretKeyResult = await env.DB.prepare("SELECT value FROM config WHERE key = 'TURNSTILE_SECRET_KEY' LIMIT 1").first<{value: string}>();
+  const secretKeyResult = await env.DB.prepare("SELECT value FROM tenant_config WHERE key = 'TURNSTILE_SECRET_KEY' LIMIT 1").first<{value: string}>();
 
   if (!secretKeyResult?.value) {
     // Turnstile is disabled

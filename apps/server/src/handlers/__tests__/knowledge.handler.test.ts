@@ -26,7 +26,7 @@ import { authService } from "../../services/auth/auth.service";
 const mockDB = {
   prepare: vi.fn().mockReturnThis(),
   bind: vi.fn().mockReturnThis(),
-  first: vi.fn().mockResolvedValue({ id: "agent-1", role: "admin", mfa_enabled: true }),
+  first: vi.fn().mockResolvedValue({ tenant_id: "default-tenant", id: "agent-1", role: "admin", mfa_enabled: true }),
 };
 
 const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
@@ -39,6 +39,7 @@ describe("Knowledge Handler Integration Tests", () => {
 
     const mockUser = {
       id: "agent-1",
+      tenant_id: "default-tenant",
       email: "agent@example.com",
       role: "admin" as const,
       mfa_enabled: true,
