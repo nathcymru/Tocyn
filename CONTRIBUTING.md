@@ -40,9 +40,10 @@ npm run build --workspace=apps/dashboard
 npm run build --workspace=apps/portal
 npm run build --workspace=apps/widget
 npm run test --workspace=apps/server -- --run
+npm exec --workspace=apps/portal -- vitest run src/__tests__/VerifyPage.test.tsx
 ```
 
-Portal linting is the current lint coverage, not a claim of repository-wide linting. CI explicitly runs the server tests; extending frontend test coverage is tracked separately. Report pre-existing failures instead of suppressing them.
+Portal linting is the current lint coverage, not a claim of repository-wide linting. CI explicitly runs the server tests and portal verification-flow regression tests; extending the remaining frontend test coverage is tracked separately. Report pre-existing failures instead of suppressing them.
 
 ## Pull requests
 

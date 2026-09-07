@@ -18,7 +18,7 @@ The previous all-branch signature block no longer applies to the foundation bran
 
 ## Still to verify or configure
 
-- Enable CI for this fork and demonstrate the exact required checks on a PR. Do not bypass failed checks.
+- CI is enabled. Run 34107937505 passed all four application checks on commit c64433ffb3cc31ed110b778cb6afc6fb0d1c052a: lint, typecheck, builds and 220 tests (217 server plus three portal verification-flow tests). Keep checking the exact PR head before merging; do not bypass failed checks.
 - Verify Actions read-only default token, external-contributor workflow approvals and allowed-action policy. Pin remaining actions before enabling repository-wide SHA enforcement.
 - Keep active CodeQL default setup; reconcile the inherited advanced workflow before enabling it to avoid duplicate configurations.
 - Verify dependency graph, Dependabot alerts/security updates, secret scanning, push protection and private vulnerability reporting.
@@ -30,7 +30,7 @@ The previous all-branch signature block no longer applies to the foundation bran
 
 ## Community publication
 
-Issues #12–#22 exist. Native milestones v0.1.0, v0.2.0 and v0.3.0 remain to be created and assigned; title prefixes record intent only.
+Issues #12–#22 exist. As observed on 7 September 2026, v0.1.0 (Multi-Tenant Architecture Foundation) is assigned to the v0.1.0 issues, and v0.2.0 (Headless UI Extraction) is assigned to #17. The FidesLang objectives remain recorded in those issues. Email migration issue #18 has no milestone assigned; associate it with the intended v0.3.0 milestone when available.
 
 Prepared Wiki pages and Discussion posts are in docs/community-drafts. Inspect existing Wiki/Discussions before publishing. Prefer reviewed documentation in docs as the authoritative source and maintainer-only Wiki edits. Categories: Announcements, Q&A, Ideas, Show and tell. Pin Welcome and roadmap posts.
 
