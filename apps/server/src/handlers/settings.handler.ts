@@ -90,14 +90,12 @@ settings.get("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const settingsObj: Record<string, string> = {};
 
-  let hasSensitive = false;
-  let hasKey = !!c.env.APP_MASTER_KEY;
+  const hasKey = !!c.env.APP_MASTER_KEY;
 
   for (const key of ALLOWED_SETTINGS_KEYS) {
     const val = await d.repositories.config.get(key);
     if (val !== null) {
       if (isSensitiveKey(key) && val) {
-        hasSensitive = true;
         if (!hasKey) {
           return c.json({ error: "APP_MASTER_KEY is missing. Cannot verify settings." }, 500);
         }

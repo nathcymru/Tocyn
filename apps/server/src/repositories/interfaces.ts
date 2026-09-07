@@ -60,6 +60,7 @@ export interface ConfigRepository {
 }
 
 export interface ApiKeyRepository {
+  recordUsage(id: string): Promise<void>;
   list(): Promise<any[]>;
   create(name: string, permissions?: string[]): Promise<{ apiKey: string; id: string; name: string; prefix: string; permissions: string[] }>;
   get(id: string): Promise<any | null>;

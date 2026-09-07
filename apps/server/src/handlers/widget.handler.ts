@@ -31,8 +31,9 @@ widget.get('/config', widgetTenantMiddleware, async (c) => {
   };
 
   const widgetKeys = ['widget.primaryColor', 'widget.title', 'widget.welcomeMessage', 'widget.features.aiChat', 'widget.features.ticketForm'];
-  for (const k of widgetKeys) {
-    const val = await d.repositories.config.get(k);
+  const widgetValues = await Promise.all(widgetKeys.map(k => d.repositories.config.get(k)));
+  for (const [index, k] of widgetKeys.entries()) {
+    const val = widgetValues[index];
     if (val !== null) {
       const key = k.replace('widget.', '');
       if (key.includes('.')) {

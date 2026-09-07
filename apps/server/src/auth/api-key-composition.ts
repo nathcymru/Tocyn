@@ -28,6 +28,9 @@ export async function resolveApiKeyRequestDeps(
   );
 
   const deps = createTenantRequestDeps(scope, env);
+  // Usage metadata is not authentication authority. Record it only after scoped composition.
+  try { await deps.repositories.apiKeys.recordUsage(resolution.apiKeyId); }
+  catch { /* Best-effort telemetry must not reject an already validated key. */ }
 
   return { deps, resolution };
 }

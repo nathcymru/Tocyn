@@ -505,6 +505,11 @@ export class SqlApiKeyRepository implements ApiKeyRepository {
   private static readonly PREFIX = 'lt_';
   constructor(private scope: VerifiedTenantScope, private db: D1Database) {}
 
+  async recordUsage(id: string): Promise<void> {
+    await this.db.prepare('UPDATE api_keys SET last_used_at = ? WHERE tenant_id = ? AND id = ?')
+      .bind(new Date().toISOString(), this.scope.tenantId, id).run();
+  }
+
   async list(): Promise<any[]> {
     const { results } = await this.db.prepare(
       "SELECT id, name, prefix, is_active, created_at, last_used_at FROM api_keys WHERE tenant_id = ? ORDER BY created_at DESC"

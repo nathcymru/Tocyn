@@ -32,11 +32,6 @@ export class ApiAuthResolver {
       return null;
     }
 
-    // Update last_used_at (best-effort, non-blocking)
-    await this.db.prepare(
-      "UPDATE api_keys SET last_used_at = ? WHERE tenant_id = ? AND id = ?"
-    ).bind(new Date().toISOString(), result.tenant_id, result.id).run();
-
     const permissions = (result.permissions ?? '')
       .split(',')
       .map(p => p.trim())

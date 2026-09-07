@@ -32,6 +32,17 @@ describe('PR 43 review regressions', () => {
     expect(result[0].body?.length).toBe(65536);
     expect(storage.getAttachment.mock.calls.length).toBeLessThan(20);
   });
+  it('keeps authentication valid when scoped usage telemetry fails', async () => {
+    const usageBindings: unknown[][] = [];
+    const DB = {prepare:(sql:string)=>({bind:(...args:unknown[])=>({
+      first:async()=>({tenant_id:'tenant-A',id:'key-A',name:'Integration',permissions:'tickets:read'}),
+      run:async()=>{ if(sql.startsWith('UPDATE api_keys')) { usageBindings.push(args); throw new Error('Simulated telemetry write failure'); } }
+    })})};
+    const app = new Hono(); app.use('*',apiAuthMiddleware); app.get('/',c=>c.text('allowed'));
+    const response = await app.request('/',{headers:{'X-API-Key':'lt_test'}},{DB} as any);
+    expect(response.status).toBe(200);
+    expect(usageBindings[0].slice(1)).toEqual(['tenant-A','key-A']);
+  });
   it('preserves validated ticket fields', async () => {
     const create = vi.fn().mockResolvedValue({id:'ticket'});
     const service = new TenantTicketService({repositories:{tickets:{create},articles:{create:vi.fn()}}} as any);
