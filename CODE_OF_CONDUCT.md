@@ -60,7 +60,9 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-Contact From on Landing Page.
+the [contact form on the public project page](https://nathcymru.github.io/Tocyn/).
+Please identify the message as a community conduct report. This is a private
+contact form, not a public issue; it uses a third-party form service.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
