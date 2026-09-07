@@ -17,6 +17,7 @@ test('impact follows incoming imports, query output is bounded', () => {
 test('real repository graph resolves customer auth dependencies and ignores deployment outputs', () => {
  const index=build();
  const handler=index.nodes.find(n=>n.file==='apps/server/src/handlers/customer.handler.ts');
+ assert.ok(handler, 'Expected the tracked customer handler to be indexed');
  assert.ok(handler.dependencies.includes('apps/server/src/services/customer-auth.service.ts'));
  assert.ok(index.nodes.every(n=>!n.file.startsWith('tools/') && !n.file.includes('/dist/')));
  assert.equal(build().fingerprint,index.fingerprint);

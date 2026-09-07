@@ -11,11 +11,9 @@ on:
       - '**/package.json'
       - 'package-lock.json'
       - '**/tsconfig*.json'
+  # Validate the current index inputs after every merged change.
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/copilot-setup-steps.yml'
-      - 'tools/agent-context/**'
 permissions:
   contents: read
 jobs:
