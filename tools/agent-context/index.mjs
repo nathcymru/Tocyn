@@ -6,13 +6,16 @@ import { readFileSync, writeFileSync, mkdirSync, lstatSync, realpathSync } from 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+// Normalize a symlinked checkout root once; still exclude symlinks inside the checkout.
+export const root = realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'));
 const output = path.join(root, '.agent-context/index.json');
 const hash = text => createHash('sha256').update(text).digest('hex');
 const version = 1;
 
 export function extract(file, content) {
-  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+  const extension = path.extname(file).toLowerCase();
+  const kind = extension === '.tsx' ? ts.ScriptKind.TSX : extension === '.jsx' ? ts.ScriptKind.JSX : ['.js', '.mjs', '.cjs'].includes(extension) ? ts.ScriptKind.JS : ts.ScriptKind.TS;
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, kind);
   const symbols = [], imports = [];
   function visit(node) {
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) imports.push(node.moduleSpecifier.text);

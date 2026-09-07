@@ -35,15 +35,32 @@ test('CLI refreshes changed sources and excludes untracked files and symlinks', 
   fs.copyFileSync(path.join(root,'tools/agent-context/index.mjs'),path.join(temporary,'tools/agent-context/index.mjs'));
   fs.symlinkSync(path.join(root,'node_modules'),path.join(temporary,'node_modules'),'dir');
   fs.writeFileSync(path.join(temporary,'apps/demo/a.ts'),'export const Original = 1;');
+  fs.writeFileSync(path.join(temporary,'apps/demo/tsconfig.json'),'{}');
   fs.writeFileSync(path.join(temporary,'apps/demo/untracked.ts'),'export const Untracked = 1;');
   fs.symlinkSync(path.join(temporary,'apps/demo/untracked.ts'),path.join(temporary,'apps/demo/link.ts'));
   execFileSync('git',['init','-q'],{cwd:temporary});
-  execFileSync('git',['add','apps/demo/a.ts','apps/demo/link.ts'],{cwd:temporary});
+  execFileSync('git',['add','apps/demo/a.ts','apps/demo/link.ts','apps/demo/tsconfig.json'],{cwd:temporary});
   const query=term=>JSON.parse(execFileSync(process.execPath,['tools/agent-context/index.mjs','query',term],{cwd:temporary,encoding:'utf8'}));
   const before=query('Original');assert.equal(before.total,1);
+  const alias=path.join(temporary,'checkout-alias');
+  fs.symlinkSync(temporary,alias,'dir');
+  const throughAlias=JSON.parse(execFileSync(process.execPath,['--preserve-symlinks-main',path.join(alias,'tools/agent-context/index.mjs'),'query','Original'],{cwd:alias,encoding:'utf8'}));
+  assert.equal(throughAlias.total,1);
+  assert.equal(throughAlias.fingerprint,before.fingerprint);
+  fs.writeFileSync(path.join(temporary,'apps/demo/tsconfig.json'),'{"compilerOptions":{"allowJs":true}}');
+  assert.notEqual(query('Original').fingerprint,before.fingerprint);
   assert.equal(query('Untracked').total,0);
   fs.writeFileSync(path.join(temporary,'apps/demo/a.ts'),'export const Changed = 2;');
   const after=query('Changed');assert.equal(after.total,1);assert.notEqual(after.fingerprint,before.fingerprint);
   assert.equal(query('Original').total,0);
  } finally { fs.rmSync(temporary,{recursive:true,force:true}); }
 });
+
+for (const extension of ['tsx', 'jsx']) {
+ test(`indexes ${extension} components and declarations after JSX`, () => {
+  const node=extract(`component.${extension}`, "import React from 'react';\nexport const View = () => <div>{[1,2].map(x => <span>{x}</span>)}</div>;\nexport function afterJSX() { return 1; }");
+  assert.deepEqual(node.imports,['react']);
+  assert.ok(node.symbols.some(s=>s.name==='View' && s.line===2));
+  assert.ok(node.symbols.some(s=>s.name==='afterJSX' && s.line===3));
+ });
+}
