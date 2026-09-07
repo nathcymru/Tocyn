@@ -33,7 +33,7 @@ jobs:
             command: npm run test --workspace=apps/server -- --run && npm exec --workspace=apps/portal -- vitest run src/__tests__/VerifyPage.test.tsx src/__tests__/client.test.ts && npm exec --workspace=apps/widget -- vitest run src/__tests__/api.test.ts && cd apps/server && bash ./scripts/d1-smoke-test.sh && npx tsx scripts/d1-integration-test.ts
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Node.js
