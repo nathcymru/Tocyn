@@ -21,8 +21,8 @@ export function widgetHeaders(): Headers {
 }
 
 export async function getWidgetSession(): Promise<{ email: string } | null> {
-  const response = await fetch(`${BASE_URL.replace(/\/widget$/, '/customer')}/auth/me`, {
-    headers: widgetHeaders(), credentials: 'include'
+  const response = await fetch(`${BASE_URL}/session`, {
+    headers: widgetHeaders(), credentials: 'omit'
   });
   if (!response.ok) return null;
   const data = await response.json();

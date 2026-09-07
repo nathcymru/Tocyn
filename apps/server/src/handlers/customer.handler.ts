@@ -1,3 +1,6 @@
+import { z } from 'zod';
+import { validateAttachmentReferences } from '../services/attachment-references';
+import { requestBounds } from '../middleware/request-bounds';
 import { Hono } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { Env } from "../bindings";
@@ -14,6 +17,8 @@ import { decryptString } from "../utils/crypto";
 import { verifyTurnstileToken } from "../utils/turnstile";
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+
+app.use('*', async (c, next) => requestBounds(c.req.path.endsWith('/attachments/upload') ? 10 * 1024 * 1024 + 50000 : 64 * 1024)(c, next));
 
 // --- PUBLIC CONFIG ROUTE ---
 app.get('/config', async (c) => {
@@ -33,6 +38,9 @@ app.get('/config', async (c) => {
 
 app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
   const body = await c.req.json();
+
+  const parsedAuth = z.object({ email: z.string().trim().email().max(254), type: z.enum(['magic_link', 'otp']).default('magic_link') }).safeParse(body);
+  if (!parsedAuth.success) return c.json({ error: 'Invalid authentication request' }, 400);
 
   // Reject caller-supplied tenant IDs in body or header immediately
   if (body.tenant_id || body.tenantId || c.req.header('X-Tenant-ID')) {
@@ -69,8 +77,8 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
   const authService = new CustomerAuthService(c.env, deps, (c.env as any).emailTransport, resolvers.identity);
 
   try {
-    await authService.requestAuth(body.email, body.type, body.baseUrl);
-    return c.json({ success: true });
+    const result = await authService.requestAuth(parsedAuth.data.email, parsedAuth.data.type);
+    return c.json({ success: true, ...result });
   } catch (err: any) {
     if (err.message === 'Invalid tenant context') {
       return c.json({ error: 'Invalid tenant context' }, 400);
@@ -98,7 +106,8 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
 
   const authService = new CustomerAuthService(c.env, deps);
   if (typeof body.token !== 'string' || !body.token || body.token.length > 512) return c.json({ error: 'Invalid token' }, 400);
-  const result = await authService.verifyAuth(body.token);
+  if (body.challengeId !== undefined && typeof body.challengeId !== 'string') return c.json({ error: 'Invalid challenge' }, 400);
+  const result = await authService.verifyAuth(body.token, body.challengeId);
   if (!result) return c.json({ error: 'Invalid token' }, 401);
 
   setCookie(c, 'lumina_customer_token', result.token, {
@@ -205,6 +214,10 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
     return c.json({ error: 'Not found' }, 404);
   }
 
+  let verifiedAttachments;
+  try { verifiedAttachments = await validateAttachmentReferences(deps, `customer-attachments/${payload.sub}/`, body.attachments); }
+  catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
+
   const article = await ticketService.createArticle({
     ticket_id: ticketId,
     body: body.message,
@@ -213,10 +226,10 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
   });
 
   const attachments: any[] = [];
-  if (Array.isArray(body.attachments)) {
+  if (Array.isArray(verifiedAttachments)) {
     const expectedPrefix = `customer-attachments/${payload.sub}/`;
-    for (const att of body.attachments) {
-      const r2Key = att.storageKey || att.key;
+    for (const att of verifiedAttachments) {
+      const r2Key = att.storageKey;
       if (!r2Key || typeof r2Key !== 'string' || !r2Key.startsWith(expectedPrefix)) {
         return c.json({ error: 'Unauthorized attachment access' }, 403);
       }

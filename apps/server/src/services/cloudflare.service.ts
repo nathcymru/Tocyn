@@ -120,14 +120,14 @@ export class CloudflareService {
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      console.error('GraphQL Analytics Error:', text);
+      await response.body?.cancel();
+      console.error('GraphQL Analytics request failed');
       throw new Error(`Failed to fetch usage stats: ${response.statusText}`);
     }
 
     const json: any = await response.json();
     if (json.errors) {
-      console.error('GraphQL Analytics Errors:', json.errors);
+      console.error('GraphQL Analytics returned errors');
       throw new Error('GraphQL query returned errors');
     }
 

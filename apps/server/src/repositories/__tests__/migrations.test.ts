@@ -40,6 +40,17 @@ describe('Real Phase 1 migration chain', () => {
     } finally { db.close(); }
   });
 
+  it('invalidates legacy unbound OTPs while preserving magic links through security migrations', () => {
+    const db = legacy();
+    try {
+      db.exec("INSERT INTO customer_auth_tokens(id,user_id,token_hash,type,expires_at) VALUES ('old-otp','old-user','otp-hash','otp','2099-01-01')");
+      apply(db,14,21);
+      expect(db.prepare("SELECT used_at FROM customer_auth_tokens WHERE id='old-otp'").get()).toEqual({used_at:expect.any(String)});
+      expect(db.prepare("SELECT used_at, attempts FROM customer_auth_tokens WHERE id='old-token'").get()).toEqual({used_at:null,attempts:0});
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('rolls back 0019 when historical token ownership becomes ambiguous', () => {
     const db = legacy();
     try {

@@ -21,7 +21,7 @@ export class StatelessAiService {
       const rawVector = Array.isArray(result.data[0]) ? result.data[0] : result.data;
       return Array.from(rawVector);
     } catch (error) {
-      console.error('AI Embedding error:', error);
+      console.error('AI Embedding error:');
       throw new Error('Failed to generate embeddings');
     }
   }
@@ -73,7 +73,7 @@ Please provide a suggested response:`;
 
       return result.response;
     } catch (error) {
-      console.error('AI Suggestion error:', error);
+      console.error('AI Suggestion error:');
       return "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
     }
   }
@@ -107,7 +107,7 @@ IMPORTANT RULES:
 
       return result.response || "I'm sorry, I couldn't generate a response.";
     } catch (error) {
-      console.error('AI Response error:', error);
+      console.error('AI Response error:');
       return "I'm having trouble connecting to my brain. Please try again later.";
     }
   }

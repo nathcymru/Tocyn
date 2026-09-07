@@ -1,3 +1,4 @@
+import { tenantRateLimit } from '../middleware/tenant-rate-limit';
 import { Hono } from 'hono';
 import { Env } from '../bindings';
 import { AiService } from '../services/ai.service';
@@ -9,12 +10,17 @@ import { TenantTicketService } from '../services/tenant-ticket.service';
 import { rateLimiter } from '../middleware/rate-limiter';
 import { AppVariables } from '../types';
 import { z } from 'zod';
+import { requestBounds } from '../middleware/request-bounds';
 
 const widget = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+widget.use('*', requestBounds(64 * 1024));
 
 
 
 import { widgetTenantMiddleware } from '../middleware/widget-auth.middleware';
+
+// Embeds authenticate explicitly with a customer bearer token, without ambient cookies.
+widget.get('/session', widgetAuthMiddleware, (c) => c.json({ user: { email: c.get('jwtPayload')!.email } }));
 
 // Fetch widget configuration
 widget.get('/config', widgetTenantMiddleware, async (c) => {
@@ -64,18 +70,18 @@ widget.get('/config', widgetTenantMiddleware, async (c) => {
 });
 
 const chatSchema = z.object({
-  message: z.string().min(1, 'Message is required'),
+  message: z.string().min(1, 'Message is required').max(8000),
   history: z.array(
     z.object({
       role: z.enum(['user', 'assistant']),
-      content: z.string().min(1)
+      content: z.string().min(1).max(8000)
     })
-  ).optional().default([]),
+  ).max(20).optional().default([]),
   category_id: z.string().optional(),
 });
 
 // AI Chat endpoint
-widget.post('/chat', rateLimiter(5, 60000), widgetAuthMiddleware, async (c) => {
+widget.post('/chat', rateLimiter(5, 60000), widgetAuthMiddleware, tenantRateLimit('widget-chat', 5, 60000), async (c) => {
   const body = await c.req.json();
   const result = chatSchema.safeParse(body);
   if (!result.success) {
@@ -97,15 +103,15 @@ widget.post('/chat', rateLimiter(5, 60000), widgetAuthMiddleware, async (c) => {
 });
 
 const createWidgetTicketSchema = z.object({
-  subject: z.string().min(1, "Subject is required"),
+  subject: z.string().min(1, "Subject is required").max(300),
   email: z.string().email("Invalid email address"),
-  message: z.string().min(1, "Message is required"),
+  message: z.string().min(1, "Message is required").max(16000),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
   metadata: z.never().optional(), // Context metadata has no supported persistence contract.
 });
 
 // Ticket Submission endpoint
-widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, async (c) => {
+widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, tenantRateLimit('widget-ticket', 3, 300000), async (c) => {
   const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const ticketService = new TenantTicketService(deps);

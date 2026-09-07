@@ -35,8 +35,9 @@ export class HttpResendTransport implements EmailTransport {
     });
 
     if (!res.ok) {
-      const error = await res.text();
-      throw new Error(`Failed to send email: ${error}`);
+      // Provider bodies can echo message content or credentials. Never propagate them.
+      await res.body?.cancel();
+      throw new Error(`Email provider rejected delivery (${res.status})`);
     }
 
     return (await res.json()) as { id: string };

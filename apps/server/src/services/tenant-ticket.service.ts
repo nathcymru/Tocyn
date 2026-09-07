@@ -66,18 +66,9 @@ export class TenantTicketService {
   }
 
   async addAttachment(data: Omit<Attachment, 'id' | 'created_at'>): Promise<Attachment> {
-    try {
-      return await this.deps.repositories.attachments.create(data);
-    } catch (error) {
-      console.error("D1 attachment metadata insert failed. Attempting compensating R2 delete...", error);
-      try {
-        await this.deps.attachmentStorage.deleteAttachment(data.r2_key);
-        console.error(`Successfully cleaned up orphaned R2 object: ${data.r2_key}`);
-      } catch (cleanupError) {
-        console.error(`CRITICAL: Failed to clean up orphaned R2 object: ${data.r2_key}`, cleanupError);
-      }
-      throw error;
-    }
+    // The upload predates this operation. A metadata failure must not delete a
+    // caller's existing object (which may already be referenced by another article).
+    return this.deps.repositories.attachments.create(data);
   }
 
   async updateTicketTimestamp(id: string): Promise<void> {

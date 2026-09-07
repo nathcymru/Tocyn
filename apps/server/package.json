@@ -8,15 +8,17 @@
     "migration:create": "wrangler d1 migrations create luminatick-db",
     "migration:apply": "wrangler d1 migrations apply luminatick-db --local",
     "seed": "npx tsx src/scripts/seed.ts --file seed.sql && npx wrangler d1 execute luminatick-db --local --file=seed.sql && node -e \"const fs=require('fs'); if(fs.existsSync('seed.sql')) fs.unlinkSync('seed.sql')\"",
-    "test": "vitest",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@luminatick/shared": "*",
-    "hono": "^4.0.0",
+    "hono": "^4.13.7",
     "jose": "^6.2.2",
     "otpauth": "^9.5.0",
     "postal-mime": "^2.1.0",
+    "re2js": "^2.8.6",
     "zod": "^3.0.0"
   },
   "devDependencies": {
@@ -25,7 +27,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.5",
     "better-sqlite3": "^12.9.0",
-    "tsx": "^4.19.1",
+    "tsx": "^4.23.13",
     "typescript": "^5.6.2",
     "vitest": "^4.1.4"
   }

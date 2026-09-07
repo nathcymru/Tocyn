@@ -33,16 +33,17 @@ function uint8ArrayToBase64(arr) {
 }
 
 (async () => {
-  const newPassword = process.argv[2] || "Admin123!";
+  const newPassword = process.argv[2] || crypto.randomBytes(24).toString('base64url');
   const email = process.argv[3] || "admin@luminatick.local"; 
   
   const hashedPassword = await hashPassword(newPassword);
   
-  const sql = `UPDATE users SET password_hash = '${hashedPassword}' WHERE email = '${email}';`;
+  const sql = `UPDATE users SET password_hash = '${hashedPassword}' WHERE lower(trim(email)) = '${email.trim().toLowerCase().replace(/'/g, "''")}' AND role = 'admin';`;
   
   console.log("\n--- Luminatick Local Admin Password Reset ---");
   console.log(`Email: ${email}`);
   console.log(`New Password: ${newPassword}`);
   console.log("\nRun the following command from the apps/server directory to update the local D1 database:\n");
-  console.log(`npx wrangler d1 execute luminatick-db --local --command "${sql}"\n`);
+  const shellQuote = value => "'" + value.replace(/'/g, "'\\''") + "'";
+  console.log(`npx wrangler d1 execute luminatick-db --local --command ${shellQuote(sql)}\n`);
 })();

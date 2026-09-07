@@ -1,4 +1,4 @@
-import { Miniflare, Headers as MiniflareHeaders } from 'miniflare';
+import { Miniflare, convertV4MiniflareOptions, Headers as MiniflareHeaders } from 'miniflare';
 import assert from 'node:assert';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
@@ -16,12 +16,13 @@ async function run() {
   // Use that implementation for real handler calls in this Node-hosted harness.
   const originalHeaders = globalThis.Headers;
   Object.assign(globalThis, { Headers: MiniflareHeaders });
-  const mf = new Miniflare({
+  const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
+    name: 'integration',
     modules: true,
     script: 'export default { fetch() { return new Response("ok"); } }',
     d1Databases: { DB: '597c6389-7387-4bc6-95aa-6e65fad55097' },
     r2Buckets: ['ATTACHMENTS_BUCKET'],
-  });
+  }] }));
 
   try {
     const db = await mf.getD1Database('DB');
@@ -140,7 +141,7 @@ async function run() {
     assert.strictEqual(testDirect, null, "A escaped its R2 sandbox!");
     console.log("SUCCESS: R2 sandboxing prevents path traversal.");
 
-    console.log("Testing D1 failure R2 rollback policy...");
+    console.log("Testing failed metadata writes preserve existing uploads...");
     // Mock the repo failing
     let r2DeleteCalled = false;
     const originalDelete = storageA.deleteAttachment.bind(storageA);
@@ -162,10 +163,11 @@ async function run() {
     } catch (err) {
       // Expected to fail due to invalid article_id (FK constraint)
     }
-    assert.ok(r2DeleteCalled, "Compensating R2 delete was not called after D1 failure");
+    assert.strictEqual(r2DeleteCalled, false, "Metadata failure deleted an upload it did not create");
     const checkDeleted = await storageA.getAttachment('orphan-test');
-    assert.strictEqual(checkDeleted, null, "R2 object was not actually deleted");
-    console.log("SUCCESS: Compensating R2 delete works via TenantTicketService.");
+    assert.ok(checkDeleted, "Existing upload must remain available after metadata failure");
+    await checkDeleted.body?.cancel();
+    console.log("SUCCESS: Metadata-only failures preserve existing uploads; inbound upload compensation is covered separately.");
 
     // PRAGMAs
     const fkCheck = await db.prepare("PRAGMA foreign_key_check").all();
@@ -337,8 +339,8 @@ async function run() {
     const secret = new TextEncoder().encode('super_secret_test_key_for_jwt');
     await db.prepare("INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-A', 'userA', 'userA@domain.com', 'admin')").run();
     await db.prepare("INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-B', 'userB', 'userB@domain.com', 'admin')").run();
-    const tokenA = await new jose.SignJWT({ sub: 'userA', role: 'admin', tenant_id: 'tenant-A' }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').sign(secret);
-    const tokenB = await new jose.SignJWT({ sub: 'userB', role: 'admin', tenant_id: 'tenant-B' }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').sign(secret);
+    const tokenA = await new jose.SignJWT({ sub: 'userA', role: 'admin', tenant_id: 'tenant-A', mfa_verified: true }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').sign(secret);
+    const tokenB = await new jose.SignJWT({ sub: 'userB', role: 'admin', tenant_id: 'tenant-B', mfa_verified: true }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').sign(secret);
 
     apiApp.use('*', async (c, next) => {
       c.env = { DB: db, ATTACHMENTS_BUCKET: bucket, APP_MASTER_KEY: 'test_key', JWT_SECRET: 'super_secret_test_key_for_jwt' };
@@ -474,7 +476,7 @@ async function run() {
   const secret = new TextEncoder().encode('secret');
 
   const createToken = async (tenantId, role, sub, email, aud = 'app') => {
-    return await new SignJWT({ aud, sub, email, role, tenant_id: tenantId })
+    return await new SignJWT({ aud, sub, email, role, tenant_id: tenantId, mfa_verified: aud === 'app' })
       .setProtectedHeader({ alg: 'HS256' })
       .sign(secret);
   };
@@ -557,13 +559,19 @@ async function run() {
 
   // Widget Widget API A/B Isolation
   // Use fakeIndex to seed distinct documents for A and B
-  await storageA.upsert('docA_pub_widget', [1,2,3], { tier: 'answer', status: 'published', type: 'document', text: 'A pub widget content' });
-  await storageB.upsert('docB_pub_widget', [1,2,3], { tier: 'answer', status: 'published', type: 'document', text: 'B pub widget content' });
+  for (const [tenant, id] of [['tenant-A', 'docA_pub_widget'], ['tenant-B', 'docB_pub_widget']]) {
+    await db.prepare("INSERT INTO knowledge_docs (tenant_id, id, title, file_path, tier, status) VALUES (?, ?, 'Public answer', 'synthetic-path', 'answer', 'published')").bind(tenant, id).run();
+  }
+  await storageA.upsert('docA_pub_widget', [1,2,3], { tier: 'answer', status: 'published', type: 'document', source_id: 'docA_pub_widget', text: 'A pub widget content' });
+  await storageB.upsert('docB_pub_widget', [1,2,3], { tier: 'answer', status: 'published', type: 'document', source_id: 'docB_pub_widget', text: 'B pub widget content' });
+
+  await bucket.put('tenant-A/synthetic-path', 'A pub widget content');
+  await bucket.put('tenant-B/synthetic-path', 'B pub widget content');
 
   // Widget A1 searches
   const searchA1 = new Request('http://localhost/api/v1/widget/chat', {
     method: 'POST',
-    headers: { 'Cookie': `lumina_customer_token=${tokenWidgetA1}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${tokenWidgetA1}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: 'Title' })
   });
   const searchARes = await worker.fetch(searchA1, envMock, {});
@@ -577,7 +585,7 @@ async function run() {
   await db.prepare("INSERT INTO users (id, tenant_id, email, full_name, role) VALUES (?, ?, ?, ?, ?)").bind(userIdB1, 'tenant-B', 'c1@b.com', 'B1', 'customer').run();
   const searchBReq = new Request('http://localhost/api/v1/widget/chat', {
     method: 'POST',
-    headers: { 'Cookie': `lumina_customer_token=${await createToken('tenant-B', 'customer', userIdB1, 'c1@b.com', 'widget')}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${await createToken('tenant-B', 'customer', userIdB1, 'c1@b.com', 'widget')}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: 'Title' })
   });
   const searchBRes = await worker.fetch(searchBReq, envMock, {});
@@ -590,12 +598,26 @@ async function run() {
   // Customer A1 vs A2 private ticket authorization
   const tReq = new Request('http://localhost/api/v1/widget/tickets', {
     method: 'POST',
-    headers: { 'Cookie': `lumina_customer_token=${tokenWidgetA1}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${tokenWidgetA1}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ subject: 'Help', message: 'A1 issue', email: 'c1@a.com' })
   });
   const tRes = await worker.fetch(tReq, envMock, {});
   if (!tRes.ok) throw new Error('Failed to create ticket ' + await tRes.text());
   const tA1 = await tRes.json();
+  const ownUploadKey = `customer-attachments/${userIdA1}/reference-check.txt`;
+  await bucket.put(`tenant-A/${ownUploadKey}`, 'safe', { httpMetadata: { contentType: 'text/plain' } });
+  const beforeRejectedReply = await db.prepare("SELECT COUNT(*) AS n FROM articles WHERE tenant_id='tenant-A' AND ticket_id=?").bind(tA1.id).first();
+  const rejectedReply = await worker.fetch(new Request(`http://localhost/api/v1/customer/tickets/${tA1.id}/messages`, {
+    method: 'POST', headers: { Authorization: `Bearer ${tokenWidgetA1}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'Must not be written', attachments: [
+      { storageKey: ownUploadKey, filename: 'safe.txt' },
+      { storageKey: 'customer-attachments/other-user/foreign.txt', filename: 'foreign.txt' },
+    ] }),
+  }), envMock, {});
+  assert.strictEqual(rejectedReply.status, 400);
+  assert.deepStrictEqual(await db.prepare("SELECT COUNT(*) AS n FROM articles WHERE tenant_id='tenant-A' AND ticket_id=?").bind(tA1.id).first(), beforeRejectedReply);
+  assert.ok(await bucket.get(`tenant-A/${ownUploadKey}`), 'Rejected references must preserve existing uploads');
+
 
   // A2 tries to read A1's ticket
   // NOTE: There is no GET /tickets/:id endpoint in widget.handler.ts in Batch 3.
@@ -605,7 +627,7 @@ async function run() {
   // Widget request tenant override
   const overrideReq = new Request('http://localhost/api/v1/widget/tickets', {
     method: 'POST',
-    headers: { 'Cookie': `lumina_customer_token=${tokenWidgetA1}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${tokenWidgetA1}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ subject: 'Override', message: 'msg', email: 'c1@a.com', tenant_id: 'tenant-B' }) // Tenant fields cannot override authenticated scope
   });
   const overrideRes = await worker.fetch(overrideReq, envMock, {});
@@ -629,7 +651,7 @@ async function run() {
   // Wrong aud
   const tokenWrongAud = await createToken('tenant-A', 'customer', 'cust1', 'c1@a.com', 'app');
   const audReq = new Request('http://localhost/api/v1/widget/tickets', {
-    headers: { 'Cookie': `lumina_customer_token=${tokenWrongAud}` }
+    headers: { 'Authorization': `Bearer ${tokenWrongAud}` }
   });
   const audRes = await worker.fetch(audReq, envMock, {});
   if (audRes.status !== 401) throw new Error('Wrong aud allowed: ' + audRes.status);
@@ -637,7 +659,7 @@ async function run() {
   // Wrong role
   const tokenWrongRole = await createToken('tenant-A', 'agent', 'cust1', 'c1@a.com', 'widget');
   const roleReq = new Request('http://localhost/api/v1/widget/tickets', {
-    headers: { 'Cookie': `lumina_customer_token=${tokenWrongRole}` }
+    headers: { 'Authorization': `Bearer ${tokenWrongRole}` }
   });
   const roleRes = await worker.fetch(roleReq, envMock, {});
   if (roleRes.status !== 401 && roleRes.status !== 403) throw new Error('Wrong role allowed: ' + roleRes.status);
@@ -646,7 +668,7 @@ async function run() {
   // 12. widget JWT without tenant_id
   const badJwt = await new SignJWT({ aud: 'widget', sub: 'user', role: 'customer' }).setProtectedHeader({ alg: 'HS256' }).sign(secret);
   const badJwtReq = new Request('http://localhost/api/v1/widget/tickets', {
-    headers: { 'Cookie': `lumina_customer_token=${badJwt}` }
+    headers: { 'Authorization': `Bearer ${badJwt}` }
   });
   const badJwtRes = await worker.fetch(badJwtReq, envMock, {});
   if (badJwtRes.status !== 401) throw new Error('Widget Auth allowed JWT without tenant_id ' + badJwtRes.status);
@@ -677,7 +699,7 @@ async function run() {
 
   // Create an auth token for user in Tenant A
   const tokenId = crypto.randomUUID();
-  const plainToken = 'test_token_123';
+  const plainToken = 'a'.repeat(64);
   const encoder = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(plainToken));
   const tokenHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -981,7 +1003,7 @@ async function run() {
     name: "Retention Rule A",
     event_type: "scheduled.retention",
     action_type: "retention",
-    action_config: JSON.stringify({ days_to_keep: 0, delete_attachments: true }),
+    action_config: JSON.stringify({ days_to_keep: 365, delete_attachments: true }),
     is_active: true
   });
 
@@ -1104,7 +1126,7 @@ async function run() {
   console.log("SUCCESS: 3. App JWT tenant_id, sub, and aud: 'app' issuance verified");
 
   // 4. Exact 5 Route-Level Audience Cross-Assertions
-  const mfaChallengeTokenForRoutes = await authSvc.generateMfaChallengeToken({ id: 'user-1', email: 'test@example.com', role: 'admin', tenant_id: 'tenant-A' }, 'secret');
+  const mfaChallengeTokenForRoutes = await authSvc.generateMfaChallengeToken({ id: 'user-1', email: 'test@example.com', role: 'admin', tenant_id: 'tenant-A', mfa_verified: true }, 'secret');
   const appTokenForRoutes = issuedAppToken;
 
   // Case 4a: mfa-challenge -> /mfa/setup -> 401
@@ -1177,7 +1199,7 @@ async function run() {
   }
 
   // Prove active MFA secret cannot be replaced/destroyed by new setup call
-  const tokenUserA = await authSvc.generateToken({ id: 'local-user-same-id', email: 'userA@unique-a.com', role: 'admin', tenant_id: 'tenant-A' }, 'secret', true);
+  const tokenUserA = await authSvc.generateToken({ id: 'local-user-same-id', email: 'userA@unique-a.com', role: 'admin', tenant_id: 'tenant-A', mfa_verified: true }, 'secret', true);
   const setupMfaRes = await worker.fetch(new Request('http://localhost/api/auth/mfa/setup', { method: 'POST', headers: { 'Authorization': `Bearer ${tokenUserA}` } }), envMock, {});
   if (setupMfaRes.status !== 400) {
     const text = await setupMfaRes.text();
@@ -1365,6 +1387,29 @@ async function run() {
     throw new Error(`GET /api/v1/customer/auth/me returned invalid user payload: ${JSON.stringify(e2eMeJson)}`);
   }
   console.log("SUCCESS: 18. Connected customer /auth/verify to protected endpoint token consumption flow verified via EmailTransport");
+  // OTP must traverse the same real HTTP issuance/verification boundary as magic links.
+  testEmailTransport.clear();
+  const otpRequest = await worker.fetch(new Request('http://localhost/api/v1/customer/auth/request', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Widget-Key': 'pk_widget_tenant_A' },
+    body: JSON.stringify({ email: 'e2e-customer@example.com', type: 'otp' })
+  }), envMock, {});
+  assert.strictEqual(otpRequest.status, 200);
+  const { challengeId } = await otpRequest.json();
+  assert.match(challengeId, /^[0-9a-f-]{36}$/);
+  const otpCode = testEmailTransport.sentEmails[0].options.text.match(/code is: (\d{6})/)[1];
+  const redeemOtp = (challenge: string) => worker.fetch(new Request('http://localhost/api/v1/customer/auth/verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Widget-Key': 'pk_widget_tenant_A' },
+    body: JSON.stringify({ token: otpCode, challengeId: challenge })
+  }), envMock, {});
+  assert.strictEqual((await redeemOtp(crypto.randomUUID())).status, 401);
+  const otpResponse = await redeemOtp(challengeId);
+  assert.strictEqual(otpResponse.status, 200);
+  const otpSession = await otpResponse.json();
+  assert.strictEqual((await worker.fetch(new Request('http://localhost/api/v1/customer/auth/me', {
+    headers: { Authorization: `Bearer ${otpSession.token}` }
+  }), envMock, {})).status, 200);
+  assert.strictEqual((await redeemOtp(challengeId)).status, 401);
+  console.log('SUCCESS: OTP challenge-bound HTTP issuance, login and replay rejection');
   const liveWidgetChat = await worker.fetch(new Request('http://localhost/api/v1/widget/chat', {
     method:'POST',headers:{Authorization:`Bearer ${returnedCustomerToken}`,'X-Widget-Key':'pk_widget_tenant_A','Content-Type':'application/json','CF-Connecting-IP':'192.0.2.51'},
     body:JSON.stringify({message:'Support'})

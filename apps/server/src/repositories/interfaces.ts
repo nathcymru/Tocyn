@@ -9,7 +9,7 @@ export interface UserRepository {
   update(id: string, data: Partial<User>): Promise<void>;
   delete(id: string): Promise<void>;
   storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string): Promise<void>;
-  verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string): Promise<User | null>;
+  verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string): Promise<User | null>;
 }
 
 export interface TicketRepository {
@@ -102,6 +102,7 @@ export interface FilterRepository {
 }
 
 export interface Repositories {
+  requestLimits: { consume(bucket: string, limit: number, windowMs: number, now?: number): Promise<boolean> };
   knowledge: SqlKnowledgeRepository;
   users: UserRepository;
   tickets: TicketRepository;

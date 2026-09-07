@@ -1,3 +1,4 @@
+import { validateAttachmentReferences } from '../services/attachment-references';
 import { EmailService } from '../services/email/outbound.service';
 import { BroadcastService } from '../services/broadcast.service';
 import { Hono } from "hono";
@@ -337,6 +338,10 @@ dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
 
   const ticketService = new TenantTicketService(d);
 
+  let verifiedAttachments;
+  try { verifiedAttachments = await validateAttachmentReferences(d, `agent-attachments/${agent.sub}/`, bodyAttachments); }
+  catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
+
   const article = await d.repositories.articles.create({
     ticket_id: ticketId,
     sender_id: agent.sub,
@@ -346,9 +351,9 @@ dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
   });
 
   const attachments: any[] = [];
-  if (Array.isArray(bodyAttachments)) {
-    for (const att of bodyAttachments) {
-      const storageKey = att.storageKey || att.key;
+  if (Array.isArray(verifiedAttachments)) {
+    for (const att of verifiedAttachments) {
+      const storageKey = att.storageKey;
 
       if (!storageKey || typeof storageKey !== 'string' || !storageKey.startsWith(`agent-attachments/${agent.sub}/`)) {
         return c.json({ error: "Invalid attachment storage key or unauthorized access" }, 403);

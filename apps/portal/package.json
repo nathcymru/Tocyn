@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.5.0",
@@ -16,7 +17,7 @@
     "lucide-react": "^0.363.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.3",
+    "react-router-dom": "7.18.3",
     "tailwind-merge": "^2.6.1",
     "zustand": "^4.5.7"
   },

@@ -41,3 +41,7 @@ revert.js
 # Derived agent navigation, never deployed or committed
 .agent-context/
 graphify-out/
+
+# Reproducible compiler output and editor merge backups
+*.tsbuildinfo
+*.orig

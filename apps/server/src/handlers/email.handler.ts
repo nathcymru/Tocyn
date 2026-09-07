@@ -78,7 +78,7 @@ export class EmailHandler {
         raw: message.raw,
       });
     } catch (error) {
-      console.error('Error handling inbound email:', error);
+      console.error('Inbound email processing failed');
       // We don't want to rethrow to avoid infinite retries if the email is "bad"
       // In a real system, we'd log this to a dead-letter queue or database.
     }

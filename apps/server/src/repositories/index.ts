@@ -62,12 +62,27 @@ export class SqlUserRepository implements UserRepository {
   }
 
   async storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string): Promise<void> {
-    await this.db.prepare(
+    const insert = this.db.prepare(
       'INSERT INTO customer_auth_tokens (tenant_id, id, user_id, token_hash, type, expires_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(this.scope.tenantId, tokenId, userId, tokenHash, type, expiresAt).run();
+    ).bind(this.scope.tenantId, tokenId, userId, tokenHash, type, expiresAt);
+    if (type === 'otp') {
+      await this.db.batch([
+        this.db.prepare("UPDATE customer_auth_tokens SET used_at = ? WHERE tenant_id = ? AND user_id = ? AND type = 'otp' AND used_at IS NULL")
+          .bind(new Date().toISOString(), this.scope.tenantId, userId),
+        insert,
+      ]);
+    } else await insert.run();
   }
 
-  async verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string): Promise<User | null> {
+  async verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string): Promise<User | null> {
+    if (challengeId) {
+      // Claim one of five attempts atomically before comparing the code.
+      const attempt = await this.db.prepare(`UPDATE customer_auth_tokens SET attempts = attempts + 1
+        WHERE tenant_id = ? AND id = ? AND type = 'otp' AND used_at IS NULL
+          AND expires_at > ? AND attempts < 5 RETURNING id`)
+        .bind(this.scope.tenantId, challengeId, now).first();
+      if (!attempt) return null;
+    }
     // A single conditional write claims the token. Concurrent redemption can return
     // a row to only one caller; the current customer role is checked in that write.
     const claimed = await this.db.prepare(`
@@ -77,10 +92,11 @@ export class SqlUserRepository implements UserRepository {
         JOIN users u ON u.tenant_id = t.tenant_id AND u.id = t.user_id
         WHERE t.tenant_id = ? AND t.token_hash = ? AND t.used_at IS NULL
           AND t.expires_at > ? AND u.role = 'customer'
+          AND ((? IS NULL AND t.type = 'magic_link') OR (t.type = 'otp' AND t.id = ?))
         ORDER BY t.id LIMIT 1
       ) AND used_at IS NULL AND expires_at > ?
       RETURNING user_id
-    `).bind(now, this.scope.tenantId, this.scope.tenantId, tokenHash, now, now)
+    `).bind(now, this.scope.tenantId, this.scope.tenantId, tokenHash, now, challengeId || null, challengeId || null, now)
       .first<{ user_id: string }>();
     if (!claimed) return null;
     const user = await this.get(claimed.user_id);
@@ -788,8 +804,24 @@ export class SqlFilterRepository implements FilterRepository {
   }
 }
 
+export class SqlRequestLimitRepository {
+  constructor(private scope: VerifiedTenantScope, private db: D1Database) {}
+  async consume(bucket: string, limit: number, windowMs: number, now = Date.now()): Promise<boolean> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(windowMs) || windowMs < 1) return false;
+    const window = Math.floor(now / windowMs) * windowMs;
+    const result = await this.db.prepare(`INSERT INTO tenant_request_limits (tenant_id, bucket, window_start, count)
+      VALUES (?, ?, ?, 1) ON CONFLICT (tenant_id, bucket) DO UPDATE SET
+      count = CASE WHEN window_start = excluded.window_start THEN count + 1 ELSE 1 END,
+      window_start = excluded.window_start
+      WHERE window_start <> excluded.window_start OR count < ? RETURNING count`)
+      .bind(this.scope.tenantId, bucket, window, limit).first();
+    return Boolean(result);
+  }
+}
+
 export function createRepositories(scope: VerifiedTenantScope, db: D1Database): Repositories {
   return {
+    requestLimits: new SqlRequestLimitRepository(scope, db),
     knowledge: new SqlKnowledgeRepository(scope, db),
     users: new SqlUserRepository(scope, db),
     tickets: new SqlTicketRepository(scope, db),

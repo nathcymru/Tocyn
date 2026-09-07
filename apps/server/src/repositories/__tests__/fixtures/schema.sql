@@ -208,6 +208,7 @@ CREATE TABLE IF NOT EXISTS customer_auth_tokens (
     expires_at DATETIME NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     used_at DATETIME,
+    attempts INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
 );
 

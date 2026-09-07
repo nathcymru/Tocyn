@@ -311,6 +311,30 @@ export class WidgetKnowledgeReader {
     let matches = vectorResults.matches || [];
     matches = matches.filter((r: any) => (r.score as number) >= 0.60);
 
-    return matches.map((r: any) => ({ content: stripTags(r.metadata?.text as string).trim() }));
+    const results: { content: string }[] = [];
+    for (const match of matches) {
+      const metadata = match.metadata;
+      if (!metadata || typeof metadata.source_id !== 'string') continue;
+      let currentText = '';
+      // Vector metadata is eventually consistent. Current D1 visibility is authoritative.
+      if (metadata.type === 'document') {
+        const doc = await this.deps.repositories.knowledge.getDocument(metadata.source_id);
+        if (!doc || doc.status !== 'published' || doc.tier !== 'answer' || (categoryId && doc.category_id !== categoryId)) continue;
+        currentText = await new TenantArticleBodyHydrator(this.deps.attachmentStorage).hydrate(null, doc.file_path, 16000);
+      } else if (metadata.type === 'qa') {
+        const article = await this.deps.repositories.articles.get(metadata.source_id);
+        if (!article || article.is_internal || article.qa_type !== 'answer' || categoryId) continue;
+        currentText = await new TenantArticleBodyHydrator(this.deps.attachmentStorage, this.deps.legacyArticleStorage).hydrate(article.body || null, article.body_r2_key || null, 16000);
+      } else {
+        continue;
+      }
+      try {
+        const content = stripTags(currentText.slice(0, 16000)).trim();
+        if (content) results.push({ content });
+      } catch {
+        // Reject a malformed result without sending it to AI or failing other answers.
+      }
+    }
+    return results;
   }
 }

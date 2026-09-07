@@ -9,7 +9,8 @@ vi.mock("jose", async (importOriginal) => {
         sub: "agent-1",
         email: "agent@example.com",
         role: "admin",
-        tenant_id: "default-tenant"
+        tenant_id: "default-tenant",
+        mfa_verified: true
       }
     })
   };

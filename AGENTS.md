@@ -1,8 +1,9 @@
 # Working on Tocyn
 
 Scope changes to this repository. Read the task and relevant source before editing.
-Tocyn is an MIT, early-development helpdesk fork. Multi-tenancy is a target;
-customer ownership checks and groups are not tenant isolation.
+Tocyn is an MIT, early-development helpdesk fork. Phase 1 application-enforced
+tenant isolation is implemented; production migration and runtime clearance remain
+separate release gates. Customer ownership checks and groups alone are not tenant isolation.
 
 ## Find the smallest useful context
 
