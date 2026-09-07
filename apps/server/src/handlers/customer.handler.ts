@@ -6,7 +6,7 @@ import { CustomerAuthService } from "../services/customer-auth.service";
 import { TenantTicketService } from "../services/tenant-ticket.service";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { BroadcastService } from "../services/broadcast.service";
-import { authMiddleware } from "../middleware/auth.middleware";
+import { widgetAuthMiddleware } from "../middleware/widget-auth.middleware";
 import { roleGuard } from "../middleware/role.guard";
 import { rateLimiter } from "../middleware/rate-limiter";
 import { decryptString } from "../utils/crypto";
@@ -62,12 +62,12 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
   return c.json(result);
 });
 
-app.post('/auth/logout', authMiddleware, roleGuard(['customer']), async (c) => {
+app.post('/auth/logout', widgetAuthMiddleware, roleGuard(['customer']), async (c) => {
   deleteCookie(c, 'lumina_customer_token', { path: '/' });
   return c.json({ success: true });
 });
 
-app.get('/auth/me', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+app.get('/auth/me', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const payload = c.get('jwtPayload') as any;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const user = await deps.repositories.users.get(payload.sub);
@@ -76,7 +76,7 @@ app.get('/auth/me', authMiddleware, roleGuard(['customer']), tenantMiddleware, a
 
 // --- TICKET ROUTES ---
 
-app.get('/tickets', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+app.get('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const payload = c.get('jwtPayload');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const ticketService = new TenantTicketService(deps);
@@ -86,7 +86,7 @@ app.get('/tickets', authMiddleware, roleGuard(['customer']), tenantMiddleware, a
   return c.json(tickets);
 });
 
-app.post('/tickets', authMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(3, 60000), async (c) => {
+app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(3, 60000), async (c) => {
   const payload = c.get('jwtPayload');
   const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
@@ -116,7 +116,7 @@ app.post('/tickets', authMiddleware, roleGuard(['customer']), tenantMiddleware, 
   return c.json(result, 201);
 });
 
-app.get('/tickets/:id', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const payload = c.get('jwtPayload');
   const ticketId = c.req.param('id')!;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
@@ -143,7 +143,7 @@ app.get('/tickets/:id', authMiddleware, roleGuard(['customer']), tenantMiddlewar
   return c.json({ ticket, articles: articlesWithAttachments });
 });
 
-app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(5, 60000), async (c) => {
+app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(5, 60000), async (c) => {
   const payload = c.get('jwtPayload');
   const ticketId = c.req.param('id')!;
   const body = await c.req.json();
@@ -212,7 +212,7 @@ app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), tenan
 });
 
 // --- ATTACHMENT ROUTES ---
-app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+app.get('/attachments/:id/download', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const attachmentId = c.req.param('id');
   const payload = c.get('jwtPayload');
 
@@ -236,7 +236,7 @@ app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), te
 });
 
 
-app.post('/attachments/upload', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+app.post('/attachments/upload', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const payload = c.get('jwtPayload') as any;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
 

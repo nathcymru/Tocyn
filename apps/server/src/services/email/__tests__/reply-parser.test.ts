@@ -60,4 +60,12 @@ Old history that should be removed.`;
     expect(ReplyParser.stripHistory('')).toBe('');
     expect(ReplyParser.stripHistory(undefined, undefined)).toBe('');
   });
+
+  it('should strip HTML tags and apply safety threshold fallback on deeply nested HTML input', () => {
+    const deeplyNestedHtml = '<p>'.repeat(15) + 'Reply HTML text' + '</p>'.repeat(15);
+    const result = ReplyParser.parseEmailReply('', deeplyNestedHtml);
+    expect(result).toBe('Reply HTML text');
+    expect(result).not.toContain('<');
+    expect(result).not.toContain('>');
+  });
 });

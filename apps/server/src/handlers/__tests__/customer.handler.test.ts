@@ -117,7 +117,7 @@ async function generateCustomerToken(overrides = {}) {
     ...overrides
   })
     .setProtectedHeader({ alg: "HS256" })
-    .setAudience("app")
+    .setAudience("widget")
     .setIssuedAt()
     .setExpirationTime("1h")
     .sign(secretKey);

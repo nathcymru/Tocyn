@@ -69,4 +69,37 @@ describe('AuthService', () => {
       expect(payload.mfa_verified).toBe(true);
     });
   });
+
+  describe('verifyToken', () => {
+    it('should revalidate user against D1 when DB is present and return null if deleted', async () => {
+      const mockDb = {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => null // User deleted from D1
+          })
+        })
+      };
+      const serviceWithDb = new AuthService({ JWT_SECRET: secret, DB: mockDb as any } as any);
+      const token = await serviceWithDb.generateToken(mockUser, secret, true, '1h');
+
+      const verifiedUser = await serviceWithDb.verifyToken(token);
+      expect(verifiedUser).toBeNull();
+    });
+
+    it('should return user from D1 when user exists', async () => {
+      const mockDb = {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => mockUser
+          })
+        })
+      };
+      const serviceWithDb = new AuthService({ JWT_SECRET: secret, DB: mockDb as any } as any);
+      const token = await serviceWithDb.generateToken(mockUser, secret, true, '1h');
+
+      const verifiedUser = await serviceWithDb.verifyToken(token);
+      expect(verifiedUser).toBeDefined();
+      expect(verifiedUser?.id).toBe(mockUser.id);
+    });
+  });
 });

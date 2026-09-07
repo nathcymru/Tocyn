@@ -37,4 +37,29 @@ export class UserAuthResolver {
       mfaEnabled: !!user.mfa_enabled,
     };
   }
+
+  async resolveUserById(tenantId: string, userId: string): Promise<UserAuthResolution | null> {
+    if (!tenantId || !userId) return null;
+
+    const user = await this.db
+      .prepare("SELECT tenant_id, id, role, password_hash, mfa_enabled FROM users WHERE tenant_id = ? AND id = ?")
+      .bind(tenantId, userId)
+      .first<{
+        tenant_id: string;
+        id: string;
+        role: string;
+        password_hash: string | null;
+        mfa_enabled: number | boolean;
+      }>();
+
+    if (!user) return null;
+
+    return {
+      tenantId: user.tenant_id,
+      userId: user.id,
+      role: user.role,
+      passwordHash: user.password_hash,
+      mfaEnabled: !!user.mfa_enabled,
+    };
+  }
 }

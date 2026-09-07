@@ -90,6 +90,7 @@ export default tseslint.config(
   },
   {
     files: [
+      "src/services/auth/auth.service.ts",
       "src/services/auth/apiKey.service.ts",
       "src/services/automation.service.ts",
       "src/services/cloudflare.service.ts",

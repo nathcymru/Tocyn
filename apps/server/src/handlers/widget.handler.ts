@@ -80,9 +80,7 @@ widget.post('/chat', rateLimiter(5, 60000), widgetAuthMiddleware, async (c) => {
   const contextResults = await reader.search(message, 3, category_id);
   const context = contextResults.map(r => r.content).join('\n\n');
 
-  // Need an AiService that takes env (or AiService extends Stateless)
-  const legacyAi = new AiService(c.env);
-  const response = await legacyAi.generateResponse(message, context, history || []);
+  const response = await aiService.generateResponse(message, context, history || []);
 
   return c.json({ response });
 });

@@ -126,7 +126,8 @@ export class TenantAttachmentStorage {
   }
 
   async putAttachment(objectId: string, value: any, options?: any) {
-    return this.r2Adapter.put(objectId, value, options);
+    const res = await this.r2Adapter.put(objectId, value, options);
+    return { key: objectId, res };
   }
 
   async deleteAttachment(objectId: string) {

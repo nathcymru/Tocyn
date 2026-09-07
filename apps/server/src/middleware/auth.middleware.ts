@@ -23,7 +23,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
     });
 
     const tenantId = (payload as any).tenant_id;
-    const sub = (payload.sub || (payload as any).id) as string;
+    const sub = payload.sub as string;
 
     if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
       return c.json({ error: "Unauthorized: Missing or invalid tenant context" }, 401);

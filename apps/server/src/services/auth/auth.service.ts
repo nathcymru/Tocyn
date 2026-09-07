@@ -1,6 +1,7 @@
 import * as jose from "jose";
 import { JWTPayload, User } from "../../types";
 import { Env } from "../../bindings";
+import { UserAuthResolver } from "../../auth/user-auth-resolver";
 
 export class AuthService {
   constructor(private env?: Env) {}
@@ -90,11 +91,26 @@ export class AuthService {
         return null;
       }
 
+      const tenantId = (jwtPayload as any).tenant_id || "default-tenant";
+      if (!jwtPayload.sub) return null;
+
+      if (this.env?.DB) {
+        const resolver = new UserAuthResolver(this.env.DB);
+        const resolved = await resolver.resolveUserById(tenantId, jwtPayload.sub);
+        if (!resolved) return null;
+        return {
+          id: resolved.userId,
+          email: jwtPayload.email,
+          role: resolved.role,
+          tenant_id: resolved.tenantId,
+        } as any;
+      }
+
       return {
         id: jwtPayload.sub,
         email: jwtPayload.email,
         role: jwtPayload.role,
-        tenant_id: (jwtPayload as any).tenant_id,
+        tenant_id: tenantId,
       } as any;
     } catch (err) {
       console.error("Token verification failed:", err);

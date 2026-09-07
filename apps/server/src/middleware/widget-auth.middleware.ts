@@ -6,7 +6,11 @@ import { createTenantRequestDeps } from './tenant.middleware';
 import { WidgetTenantResolver } from '../auth/widget-tenant-resolver';
 
 export const widgetAuthMiddleware = async (c: Context, next: Next) => {
-  const token = getCookie(c, "lumina_customer_token");
+  const authHeader = c.req.header("Authorization");
+  let token = getCookie(c, "lumina_customer_token");
+  if (!token && authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7);
+  }
 
   if (!token) {
     return c.json({ error: "Unauthorized" }, 401);
@@ -35,6 +39,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
 
     const deps = createTenantRequestDeps(scope, c.env);
     c.set('tenantDeps', deps);
+    c.set('jwtPayload', payload);
     
     c.set('user', {
       id: payload.sub,

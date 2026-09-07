@@ -2,6 +2,10 @@ export class ReplyParser {
   /**
    * Isolates the newest message in an email thread.
    */
+  static parseEmailReply(text?: string, html?: string): string {
+    return this.stripHistory(text, html);
+  }
+
   static stripHistory(text?: string, html?: string): string {
     if (!text && !html) return '';
 
@@ -57,6 +61,11 @@ export class ReplyParser {
       current = current.replace(/<[^>]*>?/gm, '');
       iterations++;
     } while (current !== previous && iterations < 10);
+
+    if (current !== previous) {
+      current = current.replace(/[<>]/g, '');
+    }
+
     return current.trim();
   }
 }

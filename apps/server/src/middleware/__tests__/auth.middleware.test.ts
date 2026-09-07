@@ -85,9 +85,10 @@ describe("authMiddleware", () => {
     expect(res.status).toBe(401);
   });
 
-  it("should return 401 if sub is missing or empty", async () => {
+  it("should return 401 if sub is missing or empty, even if legacy id claim is present", async () => {
     const secret = new TextEncoder().encode(JWT_SECRET);
-    const tokenWithoutSub = await new jose.SignJWT({
+    const tokenWithIdOnly = await new jose.SignJWT({
+      id: "user-1",
       tenant_id: "tenant-A",
       role: "admin",
     })
@@ -99,7 +100,7 @@ describe("authMiddleware", () => {
 
     const res = await app.request(
       "/protected",
-      { headers: { Authorization: `Bearer ${tokenWithoutSub}` } },
+      { headers: { Authorization: `Bearer ${tokenWithIdOnly}` } },
       { JWT_SECRET }
     );
     expect(res.status).toBe(401);
