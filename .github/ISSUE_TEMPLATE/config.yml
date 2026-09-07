@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/nathcymru/Tocyn/blob/main/SECURITY.md
+    about: Use the private reporting process, not a public issue.
+  - name: Questions and ideas
+    url: https://github.com/nathcymru/Tocyn/discussions
+    about: Ask for help or discuss an idea before implementation.
