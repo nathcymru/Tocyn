@@ -2,6 +2,19 @@ import { Env } from '../bindings';
 import { AiService } from './ai.service';
 import { VectorService } from './vector.service';
 
+function stripTags(str: string): string {
+  if (!str) return '';
+  let current = str;
+  let previous: string;
+  let iterations = 0;
+  do {
+    previous = current;
+    current = current.replace(/<[a-zA-Z\/][^>]*>/g, '');
+    iterations++;
+  } while (current !== previous && iterations < 10);
+  return current;
+}
+
 export class KnowledgeService {
   private aiService: AiService;
   private vectorService: VectorService;
@@ -441,22 +454,22 @@ export class KnowledgeService {
     // Use a stricter regex /<[a-zA-Z\/][^>]*>/g to avoid stripping legitimate text like "5 < 6".
     const validMessages = orderedMessages.filter(m => {
       if (!m.body) return false;
-      return m.body.substring(0, 8000).replace(/<[a-zA-Z\/][^>]*>/g, '').trim().length > 0;
+      return stripTags(m.body.substring(0, 8000)).trim().length > 0;
     });
 
     if (validMessages.length === 0) {
       return 'No text context found in recent messages to generate a suggestion.';
     }
 
-    const lastValidMessage = validMessages[validMessages.length - 1].body.substring(0, 8000).replace(/<[a-zA-Z\\/][^>]*>/g, '').trim();
+    const lastValidMessage = stripTags(validMessages[validMessages.length - 1].body.substring(0, 8000)).trim();
 
     console.log(`[AI Suggestion] User question (last valid message):`, lastValidMessage);
 
     // Construct multi-turn context
     const chatHistory = orderedMessages.map(m => {
-      const cleanBody = m.body.replace(/<[a-zA-Z\\/][^>]*>/g, '').trim();
+      const cleanBody = stripTags(m.body).trim();
       return `${m.sender_type === 'customer' ? 'User' : 'Agent'}: ${cleanBody}`;
-    }).join('\\n');
+    }).join('\n');
 
     // 2. Search Vectorize using the last valid message (most relevant for retrieval)
     const relevantChunks = await this.searchWithFallback(lastValidMessage, 3);
@@ -487,7 +500,7 @@ export class KnowledgeService {
     // Filter by threshold for answers to ensure quality
     vectorResults = vectorResults.filter(r => r.score >= 0.60);
 
-    return vectorResults.map(r => ({ content: r.metadata.text.replace(/<[a-zA-Z\/][^>]*>/g, '').trim() }));
+    return vectorResults.map(r => ({ content: stripTags(r.metadata.text).trim() }));
   }
 
   async searchWithFallback(query: string, limit: number = 3, categoryId?: string): Promise<{ content: string, tier: string, score: number }[]> {
@@ -521,7 +534,7 @@ export class KnowledgeService {
     console.log(`[Search] Filtered results (scores/tiers):`, vectorResults.map(v => ({ score: v.score, tier: v.metadata?.tier })));
 
     return vectorResults.map(r => ({
-      content: (r.metadata?.text || '').replace(/<[a-zA-Z\/][^>]*>/g, '').trim(),
+      content: stripTags(r.metadata?.text || '').trim(),
       tier: r.metadata?.tier || 'answer',
       score: r.score
     }));
