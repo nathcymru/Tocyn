@@ -1,9 +1,11 @@
-![Tocyn Banner](tocyn_github_repo_header.webp)
+![Tocyn Banner](https://raw.githubusercontent.com/nathcymru/Tocyn/main/tocyn_github_repo_header.webp)
 
 # Tocyn
 
-[![License: MIT](https://shieldcn.dev/github/license/nathcymru/Tocyn.svg)](LICENSE)
-[![CI](https://github.com/nathcymru/Tocyn/actions/workflows/ci.yml/badge.svg)](https://github.com/nathcymru/Tocyn/actions/workflows/ci.yml)
+[![License: MIT](https://shieldcn.dev/github/license/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/blob/main/LICENSE)
+[![Cloudflare Workers](https://shieldcn.dev/badge/Cloudflare-Workers-F38020.svg?logo=cloudflare)](https://github.com/nathcymru/Tocyn/wiki/Architecture-and-tenant-isolation)
+[![CI](https://shieldcn.dev/github/ci/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/actions/workflows/ci.yml)
+[![CodeQL enabled](https://shieldcn.dev/badge/CodeQL-enabled-2088FF.svg?logo=github)](https://github.com/nathcymru/Tocyn/security/code-scanning)
 
 Tocyn (Welsh for "ticket") is an open-source helpdesk being developed into a feature-rich, multi-tenant application on the Cloudflare serverless edge.
 
