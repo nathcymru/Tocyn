@@ -4,6 +4,19 @@ import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { KnowledgeDoc, KnowledgeCategory } from '../repositories/knowledge.repository';
 import crypto from 'node:crypto';
 
+export function stripTags(str: string): string {
+  if (!str) return '';
+  let current = str;
+  let previous: string;
+  let iterations = 0;
+  do {
+    previous = current;
+    current = current.replace(/<[a-zA-Z\/][^>]*>/g, '');
+    iterations++;
+  } while (current !== previous && iterations < 10);
+  return current;
+}
+
 export class TenantKnowledgeService {
   private hydrator: TenantArticleBodyHydrator;
 
@@ -214,17 +227,17 @@ export class TenantKnowledgeService {
 
     const validMessages = orderedMessages.filter((m: any) => {
       if (!m.body) return false;
-      return m.body.substring(0, 8000).replace(/<[a-zA-Z\/][^>]*>/g, '').trim().length > 0;
+      return stripTags(m.body.substring(0, 8000)).trim().length > 0;
     });
 
     if (validMessages.length === 0) {
       return 'No text context found in recent messages to generate a suggestion.';
     }
 
-    const lastValidMessage = validMessages[validMessages.length - 1].body.substring(0, 8000).replace(/<[a-zA-Z\/][^>]*>/g, '').trim();
+    const lastValidMessage = stripTags(validMessages[validMessages.length - 1].body.substring(0, 8000)).trim();
 
     const chatHistory = orderedMessages.map((m: any) => {
-      const cleanBody = m.body.replace(/<[a-zA-Z\/][^>]*>/g, '').trim();
+      const cleanBody = stripTags(m.body).trim();
       return `${m.sender_type === 'customer' ? 'User' : 'Agent'}: ${cleanBody}`;
     }).join('\n');
 
@@ -264,7 +277,7 @@ export class TenantKnowledgeService {
     matches = matches.slice(0, limit);
 
     return matches.map((r: any) => ({
-      content: (r.metadata?.text || '').replace(/<[a-zA-Z\/][^>]*>/g, '').trim(),
+      content: stripTags(r.metadata?.text || '').trim(),
       tier: (r.metadata?.tier as string) || 'answer',
       score: r.score as number
     }));
@@ -293,6 +306,6 @@ export class WidgetKnowledgeReader {
     let matches = vectorResults.matches || [];
     matches = matches.filter((r: any) => (r.score as number) >= 0.60);
 
-    return matches.map((r: any) => ({ content: (r.metadata?.text as string).replace(/<[a-zA-Z\/][^>]*>/g, '').trim() }));
+    return matches.map((r: any) => ({ content: stripTags(r.metadata?.text as string).trim() }));
   }
 }

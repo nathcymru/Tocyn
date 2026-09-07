@@ -23,7 +23,9 @@ function mount(entry: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  localStorage.clear();
+  if (typeof localStorage !== 'undefined' && localStorage?.clear) {
+    localStorage.clear();
+  }
   useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false });
 });
 afterEach(cleanup);

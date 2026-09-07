@@ -37,6 +37,7 @@ describe('ApiKeyService', () => {
       expect(result.keyHash).toBeDefined();
       expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO api_keys"));
       expect(mockDb.bind).toHaveBeenCalledWith(
+        "default-tenant", // tenant_id
         expect.any(String), // id
         name,
         result.keyHash,

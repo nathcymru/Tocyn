@@ -13,7 +13,7 @@ export class ApiKeyService {
     return results;
   }
 
-  public async createKey(name: string): Promise<ApiKeyCreatedResponse & { prefix: string; keyHash: string }> {
+  public async createKey(name: string, tenantId: string = "default-tenant"): Promise<ApiKeyCreatedResponse & { prefix: string; keyHash: string }> {
     const id = crypto.randomUUID();
     const prefix = this.generateRandomString(8);
     const secret = this.generateRandomString(32);
@@ -22,9 +22,9 @@ export class ApiKeyService {
     const now = new Date().toISOString();
 
     await this.env.DB.prepare(
-      "INSERT INTO api_keys (id, name, key_hash, prefix, permissions, is_active, created_at) VALUES (?, ?, ?, ?, 'tickets:read', 1, ?)"
+      "INSERT INTO api_keys (tenant_id, id, name, key_hash, prefix, permissions, is_active, created_at) VALUES (?, ?, ?, ?, ?, 'tickets:read', 1, ?)"
     )
-      .bind(id, name, keyHash, prefix, now)
+      .bind(tenantId, id, name, keyHash, prefix, now)
       .run();
 
     return { apiKey, id, name, prefix, keyHash };

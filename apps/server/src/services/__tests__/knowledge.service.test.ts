@@ -387,4 +387,27 @@ describe('KnowledgeService', () => {
       expect(mockVectorService.search).toHaveBeenCalledWith([0.1], 15, { category_id: 'cat-123' });
     });
   });
+
+  describe('stripTags multi-character HTML sanitization & safety threshold', () => {
+    it('should strip single-level HTML tags cleanly', async () => {
+      const { stripTags } = await import('../tenant-knowledge.service');
+      expect(stripTags('<p>Hello World</p>')).toBe('Hello World');
+      expect(stripTags('<div><span>Content</span></div>')).toBe('Content');
+    });
+
+    it('should iteratively strip nested HTML tags without leaving residual payload', async () => {
+      const { stripTags } = await import('../tenant-knowledge.service');
+      expect(stripTags('<<script>script>alert(1)</script>')).toBe('alert(1)');
+      expect(stripTags('<<p>p>nested text</p></p>')).toBe('nested text');
+    });
+
+    it('should respect the max 10 iteration safety threshold without infinite looping', async () => {
+      const { stripTags } = await import('../tenant-knowledge.service');
+      // Create a string with 15 nested opening/closing tags
+      const deeplyNested = '<'.repeat(15) + 'a' + '>'.repeat(15) + 'deep' + '</a'.repeat(15) + '>';
+      // Calling stripTags should complete safely without hanging
+      const result = stripTags(deeplyNested);
+      expect(typeof result).toBe('string');
+    });
+  });
 });

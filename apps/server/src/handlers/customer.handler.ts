@@ -221,14 +221,18 @@ app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), te
   if (!attachment || attachment.customer_email !== payload.email) {
     return c.json({ error: 'Not found or unauthorized' }, 404);
   }
-  const response = await deps.attachmentStorage.getAttachment(attachment.r2_key);
-  if (!response) return c.json({ error: 'File not found in storage' }, 404);
+  const r2Object = await deps.attachmentStorage.getAttachment(attachment.r2_key);
+  if (!r2Object) return c.json({ error: 'File not found in storage' }, 404);
 
-  // Make response mutable to change headers
-  const newResponse = new Response(response.body, response);
+  const headers = new Headers();
+  if (r2Object.writeHttpMetadata) {
+    r2Object.writeHttpMetadata(headers);
+  } else if (r2Object.httpMetadata?.contentType) {
+    headers.set('Content-Type', r2Object.httpMetadata.contentType);
+  }
   const safeFileName = (attachment.file_name || 'attachment').replace(/^.*[\\/]/, '').replace(/[\r\n"]/g, '_');
-  newResponse.headers.set('Content-Disposition', `attachment; filename="${safeFileName}"`);
-  return newResponse;
+  headers.set('Content-Disposition', `attachment; filename="${safeFileName}"`);
+  return new Response(r2Object.body, { headers });
 });
 
 

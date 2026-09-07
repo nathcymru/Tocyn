@@ -1,3 +1,5 @@
+import { D1Database } from '@cloudflare/workers-types';
+
 export interface WidgetTenantResolution {
   tenantId: string;
 }

@@ -102,14 +102,6 @@ CREATE TABLE IF NOT EXISTS support_emails (
     PRIMARY KEY (tenant_id, id)
 );
 
-CREATE TABLE IF NOT EXISTS tenant_config (
-    tenant_id TEXT NOT NULL,
-    key TEXT NOT NULL,
-    value TEXT,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (tenant_id, key)
-);
-
 
 CREATE TABLE IF NOT EXISTS knowledge_categories (
     tenant_id TEXT NOT NULL,

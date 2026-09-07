@@ -1,6 +1,9 @@
 # Data-Access Inventory
 
-This concise inventory lists all direct D1, R2, and Vectorize accesses currently bypassing a repository pattern.
+> [!NOTE]
+> **Historical Pre-Migration Baseline**: This document records the un-tenantized data-access inventory prior to Phase 1 tenantization.
+
+This concise inventory lists all direct D1, R2, and Vectorize accesses as documented at the start of Phase 0.
 
 | File Path | Resource / Table | Access Type | Tenant Classification |
 |---|---|---|---|

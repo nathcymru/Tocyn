@@ -116,10 +116,8 @@ export class TenantVectorStorage {
 
 export class TenantAttachmentStorage {
   private r2Adapter: TenantR2Adapter;
-  private rawBucket: R2Bucket;
 
   constructor(scope: VerifiedTenantScope, bucket: R2Bucket) {
-    this.rawBucket = bucket;
     this.r2Adapter = new TenantR2Adapter(scope, bucket);
   }
 
@@ -128,9 +126,6 @@ export class TenantAttachmentStorage {
   }
 
   async putAttachment(objectId: string, value: any, options?: any) {
-    // Cloudflare R2 bucket put accepts options like { httpMetadata: { contentType: ... } }
-    // but TenantR2Adapter put doesn't pass options in its current signature.
-    // We need to update TenantR2Adapter to accept options.
     return this.r2Adapter.put(objectId, value, options);
   }
 

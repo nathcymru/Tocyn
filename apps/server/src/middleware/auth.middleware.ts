@@ -20,7 +20,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
   try {
     const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET));
 
-    if (payload.aud === "widget" || payload.aud === "mfa-challenge") {
+    if (payload.aud !== undefined && payload.aud !== "app") {
       return c.json({ error: "Unauthorized: Invalid token audience for app route" }, 401);
     }
 

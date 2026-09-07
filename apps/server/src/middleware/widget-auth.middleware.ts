@@ -45,7 +45,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
 
     await next();
   } catch (err: any) {
-    return c.json({ error: "Unauthorized", details: err.message }, 401);
+    return c.json({ error: "Unauthorized" }, 401);
   }
 };
 
