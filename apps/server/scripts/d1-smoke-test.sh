@@ -10,11 +10,11 @@ for migration in migrations/*.sql; do
 done
 
 echo "Populating data with identical IDs in two tenants..."
-npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-A', 'shared-id', 'a@test.com', 'customer');" > /dev/null
-npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-B', 'shared-id', 'b@test.com', 'customer');" > /dev/null
+npx wrangler d1 execute luminatick-db --local --persist-to="$TMP_DIR" --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-A', 'shared-id', 'a@test.com', 'customer');" > /dev/null
+npx wrangler d1 execute luminatick-db --local --persist-to="$TMP_DIR" --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-B', 'shared-id', 'b@test.com', 'customer');" > /dev/null
 
 echo "Populating distinct user in tenant B..."
-npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-B', 'unique-b-id', 'b2@test.com', 'customer');" > /dev/null
+npx wrangler d1 execute luminatick-db --local --persist-to="$TMP_DIR" --command="INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-B', 'unique-b-id', 'b2@test.com', 'customer');" > /dev/null
 
 echo "Attempting to create ticket for tenant-A assigned to tenant-B unique user (cross-tenant FK test)..."
 # Expect failure!
@@ -29,7 +29,7 @@ else
 fi
 
 echo "Running PRAGMA foreign_key_check..."
-CHK_FK=$(npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="PRAGMA foreign_key_check;" --json)
+CHK_FK=$(npx wrangler d1 execute luminatick-db --local --persist-to="$TMP_DIR" --command="PRAGMA foreign_key_check;" --json)
 if grep -q '"results": \[\]' <<< "$CHK_FK"; then
   echo "SUCCESS: PRAGMA foreign_key_check valid (zero violations)."
 else
@@ -38,7 +38,7 @@ else
 fi
 
 echo "Running PRAGMA quick_check..."
-CHK_QC=$(npx wrangler d1 execute luminatick-db --local --persist-to=$TMP_DIR --command="PRAGMA quick_check;" --json)
+CHK_QC=$(npx wrangler d1 execute luminatick-db --local --persist-to="$TMP_DIR" --command="PRAGMA quick_check;" --json)
 if grep -q '"quick_check": "ok"' <<< "$CHK_QC"; then
   echo "SUCCESS: PRAGMA quick_check valid."
 else
@@ -47,4 +47,3 @@ else
 fi
 
 echo "D1 runtime integration tests passed!"
-rm -rf $TMP_DIR

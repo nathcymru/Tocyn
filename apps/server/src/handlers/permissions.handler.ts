@@ -17,11 +17,15 @@ const updatePermissionsSchema = z.record(z.boolean());
  * GET /api/permissions
  * Fetch current agent permissions mapping for the active tenant.
  */
-permissions.get("/", async (c) => {
+permissions.get("/", roleGuard(["admin", "agent"]), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const configValue = await d.repositories.config.get('agent_settings_permissions');
-  const perms = configValue ? JSON.parse(configValue) : {};
-  return c.json(perms);
+  try {
+    const parsed = updatePermissionsSchema.safeParse(configValue ? JSON.parse(configValue) : {});
+    return c.json(parsed.success ? parsed.data : {});
+  } catch {
+    return c.json({}); // Corrupt configuration never grants permissions.
+  }
 });
 
 /**

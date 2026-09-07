@@ -49,6 +49,26 @@ describe("Permissions Handler Integration Tests", () => {
   });
 
   describe("GET /", () => {
+    it("rejects customers before reading the permission map", async () => {
+      const token = await generateToken("customer");
+      const res = await permissions.request("/", { headers: { Authorization: `Bearer ${token}` } }, { DB: mockDB as any, JWT_SECRET });
+      expect(res.status).toBe(403);
+      expect(mockDB.prepare.mock.calls.some(([sql]) => String(sql).includes("tenant_config"))).toBe(false);
+    });
+
+    it.each(['not-json', 'null', '[]', '{"can_edit_settings":"true"}'])("returns an empty map for invalid stored policy %s", async (value) => {
+      mockDB.first.mockImplementation(async () => {
+        const sql = String(mockDB.prepare.mock.calls.at(-1)?.[0]);
+        return sql.includes("FROM users")
+          ? { tenant_id: "default-tenant", id: "user-admin", role: "admin" }
+          : { value };
+      });
+      const token = await generateToken("admin");
+      const res = await permissions.request("/", { headers: { Authorization: `Bearer ${token}` } }, { DB: mockDB as any, JWT_SECRET });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({});
+    });
+
     it("should return the current permissions mapping for an admin", async () => {
       const mockPermissions = { can_edit_settings: true, can_delete_tickets: false };
       mockDB.first.mockImplementation(async () => {
