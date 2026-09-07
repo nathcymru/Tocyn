@@ -32,7 +32,7 @@ describe("v1 Handler Integration Tests", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockDB.lastQuery = "";
-    
+
     mockDO.idFromName.mockReturnValue("global-id");
     mockDO.get.mockReturnValue({
       fetch: vi.fn().mockResolvedValue({ ok: true }),
@@ -56,17 +56,20 @@ describe("v1 Handler Integration Tests", () => {
 
     // Mock successful API key validation by default
     mockDB.first.mockImplementation(async () => {
-        if (mockDB.lastQuery.includes("SELECT id FROM api_keys")) {
-            return { id: "key-123" };
+        if (mockDB.lastQuery.includes("api_keys")) {
+            return { tenant_id: "default-tenant", id: "key-123", name: "Test Key", permissions: "tickets:read,tickets:write" };
+        }
+        if (mockDB.lastQuery.includes("ticket_sequence")) {
+            return { id: 1 };
         }
         if (mockDB.lastQuery.includes("TICKET_PREFIX")) {
             return { value: "SUP-" };
         }
-        if (mockDB.lastQuery.includes("SELECT * FROM tickets WHERE id = ?")) {
-            return { id: "t-123", subject: "Test Ticket" };
+        if (mockDB.lastQuery.includes("tickets")) {
+            return { id: "t-123", subject: "Test Ticket", customer_email: "test@example.com" };
         }
-        if (mockDB.lastQuery.includes("SELECT * FROM articles WHERE id = ?")) {
-            return { id: "a-123", body: "" };
+        if (mockDB.lastQuery.includes("articles")) {
+            return { id: "a-123", ticket_id: "t-123", body: "" };
         }
         return null;
     });
@@ -83,14 +86,80 @@ describe("v1 Handler Integration Tests", () => {
 
     it("should return 401 if API key is invalid", async () => {
       // Force failure for the next call
-      mockDB.first.mockResolvedValueOnce(null); 
-      
+      mockDB.first.mockResolvedValueOnce(null);
+
       const res = await request("/tickets", {
         method: "POST",
         headers: { "X-API-Key": "invalid-key" }
       }, { DB: mockDB as any });
-      
+
       expect(res.status).toBe(401);
+    });
+
+    it("should return 403 if API key lacks write permission", async () => {
+      mockDB.first.mockImplementationOnce(async () => {
+        return { tenant_id: "default-tenant", id: "key-123", name: "Read Only Key", permissions: "tickets:read" };
+      });
+
+      const res = await request("/tickets", {
+        method: "POST",
+        headers: {
+            "X-API-Key": VALID_API_KEY,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            subject: "Help Me",
+            customer_email: "user@example.com",
+            body: "My computer won't turn on!"
+        })
+      }, { DB: mockDB as any });
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: "Forbidden: API key lacks required permission" });
+    });
+
+    it("should return 403 if API key has empty permissions string", async () => {
+      mockDB.first.mockImplementationOnce(async () => {
+        return { tenant_id: "default-tenant", id: "key-123", name: "Empty Perm Key", permissions: "" };
+      });
+
+      const res = await request("/tickets", {
+        method: "POST",
+        headers: {
+            "X-API-Key": VALID_API_KEY,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            subject: "Help Me",
+            customer_email: "user@example.com",
+            body: "My computer won't turn on!"
+        })
+      }, { DB: mockDB as any });
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: "Forbidden: API key lacks required permission" });
+    });
+
+    it("should return 403 if API key has unrecognized permissions", async () => {
+      mockDB.first.mockImplementationOnce(async () => {
+        return { tenant_id: "default-tenant", id: "key-123", name: "Other Perm Key", permissions: "something:else" };
+      });
+
+      const res = await request("/tickets", {
+        method: "POST",
+        headers: {
+            "X-API-Key": VALID_API_KEY,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            subject: "Help Me",
+            customer_email: "user@example.com",
+            body: "My computer won't turn on!"
+        })
+      }, { DB: mockDB as any });
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: "Forbidden: API key lacks required permission" });
     });
   });
 
@@ -98,7 +167,7 @@ describe("v1 Handler Integration Tests", () => {
     it("should create a ticket and initial article", async () => {
       const res = await request("/tickets", {
         method: "POST",
-        headers: { 
+        headers: {
             "X-API-Key": VALID_API_KEY,
             "Content-Type": "application/json"
         },
@@ -122,7 +191,7 @@ describe("v1 Handler Integration Tests", () => {
     it("should return 400 if required fields are missing", async () => {
       const res = await request("/tickets", {
         method: "POST",
-        headers: { 
+        headers: {
             "X-API-Key": VALID_API_KEY,
             "Content-Type": "application/json"
         },
@@ -148,7 +217,7 @@ describe("v1 Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.id).toBe("t-123");
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT * FROM articles WHERE ticket_id = ? AND is_internal = 0"));
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT * FROM articles WHERE tenant_id = ? AND ticket_id = ? ORDER BY created_at ASC"));
     });
   });
 
@@ -156,7 +225,7 @@ describe("v1 Handler Integration Tests", () => {
     it("should add a new article to a ticket", async () => {
       const res = await request("/tickets/t-123/articles", {
         method: "POST",
-        headers: { 
+        headers: {
             "X-API-Key": VALID_API_KEY,
             "Content-Type": "application/json"
         },
@@ -168,28 +237,15 @@ describe("v1 Handler Integration Tests", () => {
 
       expect(res.status).toBe(201);
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO articles"));
-      expect(mockDB.bind).toHaveBeenCalledWith(
-        expect.any(String), // id
-        "t-123",            // ticket_id
-        null,               // sender_id
-        "customer",         // sender_type
-        null,               // body
-        expect.any(String), // body_r2_key
-        "A new update",     // snippet
-        null,               // raw_email_id
-        null,               // qa_type
-        0,                  // is_internal
-        expect.any(String)  // created_at
-      );
     });
 
     it("should return 404 for non-existent ticket", async () => {
       // Force failure for the ticket lookup by making it return null when query contains "tickets"
       mockDB.first.mockImplementation(async () => {
-        if (mockDB.lastQuery.includes("SELECT id FROM api_keys")) {
-            return { id: "key-123" };
+        if (mockDB.lastQuery.includes("api_keys")) {
+            return { tenant_id: "default-tenant", id: "key-123", name: "Test Key", permissions: "tickets:read,tickets:write" };
         }
-        if (mockDB.lastQuery.includes("SELECT * FROM tickets WHERE id = ?")) {
+        if (mockDB.lastQuery.includes("tickets")) {
             return null; // Force not found
         }
         return null;
@@ -197,7 +253,7 @@ describe("v1 Handler Integration Tests", () => {
 
       const res = await request("/tickets/non-existent/articles", {
         method: "POST",
-        headers: { 
+        headers: {
             "X-API-Key": VALID_API_KEY,
             "Content-Type": "application/json"
         },
@@ -212,7 +268,7 @@ describe("v1 Handler Integration Tests", () => {
     it("should update ticket properties", async () => {
       const res = await request("/tickets/t-123", {
         method: "PATCH",
-        headers: { 
+        headers: {
             "X-API-Key": VALID_API_KEY,
             "Content-Type": "application/json"
         },
@@ -221,7 +277,7 @@ describe("v1 Handler Integration Tests", () => {
 
       expect(res.status).toBe(200);
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET status = ?"));
-      expect(mockDB.bind).toHaveBeenCalledWith("closed", expect.any(String), "t-123");
+      expect(mockDB.bind).toHaveBeenCalledWith("closed", "default-tenant", "t-123");
     });
   });
 

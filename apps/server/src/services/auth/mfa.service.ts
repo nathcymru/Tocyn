@@ -81,7 +81,7 @@ export class MFAService {
     for (let i = 0; i < combinedString.length; i++) {
       combined[i] = combinedString.charCodeAt(i);
     }
-    
+
     const iv = combined.slice(0, 12);
     const encrypted = combined.slice(12);
 

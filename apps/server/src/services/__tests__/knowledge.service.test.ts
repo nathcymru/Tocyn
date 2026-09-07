@@ -13,7 +13,7 @@ describe('KnowledgeService', () => {
   let mockAiService: any;
   let mockVectorService: any;
 
-  beforeEach(() => {
+  beforeEach(() => { vi.clearAllMocks();
     mockEnv = {
       DB: {
         prepare: vi.fn().mockReturnValue({
@@ -44,7 +44,7 @@ describe('KnowledgeService', () => {
     it('should split text into chunks based on paragraph boundaries', () => {
       const text = 'Paragraph 1.\n\nParagraph 2.\n\nParagraph 3.';
       const chunks = (knowledgeService as any).chunkText(text, 25, 0);
-      
+
       expect(chunks).toHaveLength(3);
       expect(chunks[0]).toBe('Paragraph 1.');
       expect(chunks[1]).toBe('Paragraph 2.');
@@ -54,7 +54,7 @@ describe('KnowledgeService', () => {
     it('should split large paragraphs into sentences', () => {
       const longParagraph = 'This is sentence one. This is sentence two. This is sentence three.';
       const chunks = (knowledgeService as any).chunkText(longParagraph, 30, 0);
-      
+
       expect(chunks.length).toBeGreaterThan(1);
     });
   });
@@ -63,7 +63,7 @@ describe('KnowledgeService', () => {
     it('should prepend title to chunk text when title is provided', async () => {
       mockAiService.generateEmbeddings.mockResolvedValue([0.1, 0.2]);
       await knowledgeService.processAndStoreVectors('doc1', 'Content 1', 'document', null, 'My Title');
-      
+
       expect(mockAiService.generateEmbeddings).toHaveBeenCalledWith('Title: My Title\n\nContent 1');
       expect(mockVectorService.upsert).toHaveBeenCalledWith(
         'doc_doc1_0',
@@ -75,7 +75,7 @@ describe('KnowledgeService', () => {
     it('should not prepend title if not provided', async () => {
       mockAiService.generateEmbeddings.mockResolvedValue([0.1, 0.2]);
       await knowledgeService.processAndStoreVectors('doc1', 'Content 1', 'document');
-      
+
       expect(mockAiService.generateEmbeddings).toHaveBeenCalledWith('Content 1');
       expect(mockVectorService.upsert).toHaveBeenCalledWith(
         'doc_doc1_0',
@@ -86,7 +86,7 @@ describe('KnowledgeService', () => {
 
     it('should correctly include the tier in Vectorize metadata', async () => {
       mockAiService.generateEmbeddings.mockResolvedValue([0.1, 0.2]);
-      
+
       // Default tier (answer)
       await knowledgeService.processAndStoreVectors('doc1', 'Content 1', 'document');
       expect(mockVectorService.upsert).toHaveBeenCalledWith(
@@ -279,10 +279,10 @@ describe('KnowledgeService', () => {
         results: [{ body: 'How to reset?', sender_type: 'customer' }]
       });
       mockAiService.generateEmbeddings.mockResolvedValue([0.1]);
-      
+
       // Returns an SOP document directly now
       mockVectorService.search.mockResolvedValue([{ score: 0.8, metadata: { text: 'SOP: Ask user for email.', tier: 'sop' } }]);
-      
+
       mockAiService.generateSuggestion.mockResolvedValue('Suggested response: Please provide your email.');
 
       const result = await knowledgeService.getAiSuggestion('ticket-124');
@@ -301,7 +301,7 @@ describe('KnowledgeService', () => {
     it('should search vectorize with just the query if categoryId is not provided', async () => {
       mockAiService.generateEmbeddings.mockResolvedValue([0.1, 0.2]);
       mockVectorService.search.mockResolvedValue([
-        { score: 0.9, metadata: { text: 'Result 1' } }, 
+        { score: 0.9, metadata: { text: 'Result 1' } },
         { score: 0.8, metadata: { text: 'Result 2' } }
       ]);
 
@@ -344,7 +344,7 @@ describe('KnowledgeService', () => {
 
     it('should filter out results below their specific tier thresholds', async () => {
       mockAiService.generateEmbeddings.mockResolvedValue([0.1]);
-      
+
       mockVectorService.search.mockResolvedValue([
         { score: 0.54, metadata: { text: 'Answer Content (Low)', tier: 'answer' } }, // Below 0.55
         { score: 0.55, metadata: { text: 'SOP Content (High enough)', tier: 'sop' } }  // Above 0.50
@@ -361,7 +361,7 @@ describe('KnowledgeService', () => {
 
     it('should filter out unknown tiers entirely', async () => {
       mockAiService.generateEmbeddings.mockResolvedValue([0.1]);
-      
+
       mockVectorService.search.mockResolvedValue([
         { score: 0.99, metadata: { text: 'Unknown Tier Content', tier: 'invalid_tier' } },
         { score: 0.99, metadata: { text: 'Missing Tier Content' } } // Should default to 'answer' and pass
@@ -376,7 +376,7 @@ describe('KnowledgeService', () => {
 
     it('should pass categoryId to search if provided', async () => {
       mockAiService.generateEmbeddings.mockResolvedValue([0.1]);
-      
+
       mockVectorService.search.mockResolvedValue([
         { score: 0.7, metadata: { text: 'SOP Content', tier: 'sop' } }
       ]);
@@ -385,6 +385,28 @@ describe('KnowledgeService', () => {
 
       expect(mockVectorService.search).toHaveBeenCalledTimes(1);
       expect(mockVectorService.search).toHaveBeenCalledWith([0.1], 15, { category_id: 'cat-123' });
+    });
+  });
+
+  describe('stripTags multi-character HTML sanitization & safety threshold', () => {
+    it('should strip single-level HTML tags cleanly', async () => {
+      const { stripTags } = await import('../tenant-knowledge.service');
+      expect(stripTags('<p>Hello World</p>')).toBe('Hello World');
+      expect(stripTags('<div><span>Content</span></div>')).toBe('Content');
+    });
+
+    it('should iteratively strip nested HTML tags without leaving residual payload', async () => {
+      const { stripTags } = await import('../tenant-knowledge.service');
+      expect(stripTags('<<script>script>alert(1)</script>')).toBe('alert(1)');
+      expect(stripTags('<<p>p>nested text</p></p>')).toBe('nested text');
+    });
+
+    it('should respect the max 10 iteration safety threshold and throw an error when limit is reached', async () => {
+      const { stripTags } = await import('../tenant-knowledge.service');
+      // Build input requiring >10 passes: each layer of <x/> exposes the next after stripping
+      let deeplyNested = 'text';
+      for (let i = 0; i < 12; i++) { deeplyNested = '<' + deeplyNested + '/>'; }
+      expect(() => stripTags(deeplyNested)).toThrow("Maximum tag stripping depth exceeded: possible malicious input");
     });
   });
 });

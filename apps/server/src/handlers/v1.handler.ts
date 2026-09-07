@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { Env } from "../bindings";
-import { TicketService } from "../services/ticket.service";
 import { apiAuthMiddleware } from "../middleware/api-auth.middleware";
 import { rateLimiter } from "../middleware/rate-limiter";
-import { Ticket, Article, AppVariables } from "../types";
+import { AppVariables } from "../types";
+import { TenantRequestDeps } from "../middleware/tenant.middleware";
+import { TenantTicketService } from "../services/tenant-ticket.service";
 
 const createTicketSchema = z.object({
   subject: z.string().min(1, "Subject is required"),
@@ -29,6 +30,7 @@ const v1 = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
 /**
  * Apply API Authentication to all v1 routes.
+ * apiAuthMiddleware resolves the API key to TenantRequestDeps.
  */
 v1.use("*", apiAuthMiddleware);
 
@@ -37,8 +39,14 @@ v1.use("*", apiAuthMiddleware);
  * Create a new ticket via the external API.
  */
 v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
+  const resolution = c.get('apiKeyResolution');
+  if (resolution && !resolution.permissions.includes('tickets:write')) {
+    return c.json({ error: "Forbidden: API key lacks required permission" }, 403);
+  }
+
   const body = await c.req.json();
-  const ticketService = new TicketService(c.env, c.executionCtx);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const ticketService = new TenantTicketService(deps);
 
   const result = createTicketSchema.safeParse(body);
   if (!result.success) {
@@ -47,25 +55,21 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
   const validData = result.data;
 
   try {
-    const ticket = await ticketService.createTicket({
+    const ticketData = {
       subject: validData.subject,
       customer_email: validData.customer_email,
       priority: validData.priority,
+      assigned_to: validData.assigned_to,
+      group_id: validData.group_id,
+      custom_fields: validData.custom_fields,
       status: validData.status,
-      source: 'api',
-      group_id: validData.group_id || null,
-      assigned_to: validData.assigned_to || null,
-      custom_fields: validData.custom_fields
-    });
-
-    if (validData.body) {
-      await ticketService.createArticle({
-        ticket_id: ticket.id,
-        body: validData.body,
-        sender_type: 'customer',
-        is_internal: false
-      });
-    }
+      source: 'api' as const,
+      body: validData.body,
+      sender_type: 'customer',
+    };
+    const ticket = validData.body?.trim()
+      ? (await ticketService.createTicketWithArticle(ticketData)).ticket
+      : await deps.repositories.tickets.create(ticketData);
 
     return c.json(ticket, 201);
   } catch (error) {
@@ -79,22 +83,21 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
  * Retrieve ticket details and articles.
  */
 v1.get("/tickets/:id", async (c) => {
+  const resolution = c.get('apiKeyResolution');
+  if (resolution && !resolution.permissions.includes('tickets:read')) {
+    return c.json({ error: "Forbidden: API key lacks required permission" }, 403);
+  }
+
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
-  const ticketService = new TicketService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
 
-  const ticket = await ticketService.findTicketById(id);
+  const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
     return c.json({ error: "Ticket not found" }, 404);
   }
 
-  const { results: articles } = await c.env.DB.prepare(
-    "SELECT * FROM articles WHERE ticket_id = ? AND is_internal = 0 ORDER BY created_at ASC"
-  )
-    .bind(id)
-    .all<Article>();
-
-  await ticketService.hydrateArticles(articles);
+  const articles = (await deps.repositories.articles.listByTicket(id)).filter(article => !article.is_internal);
 
   return c.json({
     ...ticket,
@@ -107,29 +110,34 @@ v1.get("/tickets/:id", async (c) => {
  * Add a new article (comment/reply) to an existing ticket.
  */
 v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
+  const resolution = c.get('apiKeyResolution');
+  if (resolution && !resolution.permissions.includes('tickets:write')) {
+    return c.json({ error: "Forbidden: API key lacks required permission" }, 403);
+  }
+
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
   const body = await c.req.json();
-  const ticketService = new TicketService(c.env, c.executionCtx);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
 
   if (!body.body) {
     return c.json({ error: "Missing required field: body" }, 400);
   }
 
-  const ticket = await ticketService.findTicketById(id);
+  const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
     return c.json({ error: "Ticket not found" }, 404);
   }
 
   try {
-    const article = await ticketService.createArticle({
+    const article = await deps.repositories.articles.create({
       ticket_id: id,
       body: body.body,
       sender_type: body.sender_type || 'customer',
       is_internal: body.is_internal || false
     });
 
-    await ticketService.updateTicketTimestamp(id);
+    await deps.repositories.tickets.touch(id);
 
     return c.json(article, 201);
   } catch (error) {
@@ -143,12 +151,16 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
  * Update ticket properties (status, priority, etc.).
  */
 v1.patch("/tickets/:id", async (c) => {
+  const resolution = c.get('apiKeyResolution');
+  if (resolution && !resolution.permissions.includes('tickets:write')) {
+    return c.json({ error: "Forbidden: API key lacks required permission" }, 403);
+  }
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
   const body = await c.req.json();
-  const ticketService = new TicketService(c.env, c.executionCtx);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
 
-  const ticket = await ticketService.findTicketById(id);
+  const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
     return c.json({ error: "Ticket not found" }, 404);
   }
@@ -159,35 +171,25 @@ v1.patch("/tickets/:id", async (c) => {
   }
   const validData = result.data;
 
-  const allowedUpdates = ["status", "priority", "group_id", "assigned_to", "custom_fields"] as const;
-  const updates: string[] = [];
-  const params: any[] = [];
-
-  for (const key of allowedUpdates) {
-    if (validData[key] !== undefined) {
-      updates.push(`${key} = ?`);
-      if (key === "custom_fields") {
-        params.push(validData[key] ? JSON.stringify(validData[key]) : null);
+  const updateData: Record<string, any> = {};
+  for (const [key, value] of Object.entries(validData)) {
+    if (value !== undefined) {
+      if (key === 'custom_fields') {
+        updateData[key] = value ? JSON.stringify(value) : null;
       } else {
-        params.push(validData[key]);
+        updateData[key] = value;
       }
     }
   }
 
-  if (updates.length === 0) {
+  if (Object.keys(updateData).length === 0) {
     return c.json({ error: "No valid updates provided" }, 400);
   }
 
-  updates.push("updated_at = ?");
-  params.push(new Date().toISOString());
-  params.push(id);
-
   try {
-    await c.env.DB.prepare(`UPDATE tickets SET ${updates.join(", ")} WHERE id = ?`)
-      .bind(...params)
-      .run();
-
-    const updatedTicket = await ticketService.findTicketById(id);
+    await deps.repositories.tickets.update(id, updateData);
+    await deps.repositories.tickets.touch(id);
+    const updatedTicket = await deps.repositories.tickets.get(id);
     return c.json(updatedTicket);
   } catch (error) {
     console.error("API Update Ticket Error:", error);

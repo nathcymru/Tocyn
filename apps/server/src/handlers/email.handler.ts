@@ -1,4 +1,6 @@
 import { Env } from '../bindings';
+import { createInboundResolver } from '../middleware/tenant.middleware';
+import { resolveInboundRequestDeps } from '../auth/inbound-composition';
 import { InboundEmailService } from '../services/email/inbound.service';
 
 // Per-isolate memory cache to catch rapid bursts of emails
@@ -38,24 +40,34 @@ export class EmailHandler {
         }
       }
 
-      // 3. Database-level rate limiting (catch sustained spam over an hour)
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      const { results } = await this.env.DB.prepare(`
-        SELECT count(*) as count 
-        FROM articles 
-        WHERE sender_type = 'customer' 
-          AND sender_id = (SELECT id FROM users WHERE email = ? LIMIT 1)
-          AND created_at > ?
-      `).bind(senderEmail, oneHourAgo).all<{ count: number }>();
+            // 3. Resolve Tenant Identity
+      const resolver = createInboundResolver(this.env);
+      const deps = await resolveInboundRequestDeps(
+        resolver,
+        message.to,
+        this.env
+      );
 
-      const recentArticles = results[0]?.count as number || 0;
-      if (recentArticles > 20) {
-        console.warn(`[Security] Database rate limited email from ${senderEmail}. Recent articles: ${recentArticles}`);
-        message.setReject('Rate limited: Too many messages sent recently');
+      if (!deps) {
+        console.warn(`[Security] Rejected email to unknown recipient: ${message.to}`);
+        message.setReject('Unknown recipient');
         return;
       }
 
-      const inboundService = new InboundEmailService(this.env, ctx);
+      // 4. Database-level rate limiting (catch sustained spam over an hour)
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const user = await deps.repositories.users.findByEmail(senderEmail);
+
+      if (user) {
+        const recentArticles = await deps.repositories.articles.getRecentCustomerArticleCount(user.id, oneHourAgo);
+        if (recentArticles > 20) {
+          console.warn(`[Security] Database rate limited email from ${senderEmail}. Recent articles: ${recentArticles}`);
+          message.setReject('Rate limited: Too many messages sent recently');
+          return;
+        }
+      }
+
+      const inboundService = new InboundEmailService(deps, ctx);
       
       // Convert Cloudflare ForwardableEmailMessage to my service's interface
       // Note: Cloudflare message.raw is a stream.

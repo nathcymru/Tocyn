@@ -18,7 +18,7 @@ export class VectorService {
       if (!vector || vector.length === 0) {
         throw new Error('Vector is empty or undefined');
       }
-      
+
       await this.env.VECTOR_INDEX.upsert([
         {
           id,

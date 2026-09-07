@@ -1,24 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("jose", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    jwtVerify: vi.fn().mockResolvedValue({
+      payload: {
+        sub: "agent-1",
+        email: "agent@example.com",
+        role: "admin",
+        tenant_id: "default-tenant"
+      }
+    })
+  };
+});
+
+
+
+
 import knowledgeHandler from "../knowledge.handler";
 import { authService } from "../../services/auth/auth.service";
-import { KnowledgeService } from "../../services/knowledge.service";
+
 
 // Mock DB
 const mockDB = {
   prepare: vi.fn().mockReturnThis(),
   bind: vi.fn().mockReturnThis(),
-  first: vi.fn().mockResolvedValue({ id: "agent-1", role: "admin", mfa_enabled: true }),
+  first: vi.fn().mockResolvedValue({ tenant_id: "default-tenant", id: "agent-1", role: "admin", mfa_enabled: true }),
 };
 
 const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
 let validToken: string;
 
+import { TenantKnowledgeService } from "../../services/tenant-knowledge.service";
 describe("Knowledge Handler Integration Tests", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
     const mockUser = {
       id: "agent-1",
+      tenant_id: "default-tenant",
       email: "agent@example.com",
       role: "admin" as const,
       mfa_enabled: true,
@@ -44,7 +65,7 @@ describe("Knowledge Handler Integration Tests", () => {
 
   describe("Categories", () => {
     it("should get categories", async () => {
-      vi.spyOn(KnowledgeService.prototype, 'getCategories').mockResolvedValue([{ id: "cat-1", name: "General", created_at: "", updated_at: "" }] as any);
+      vi.spyOn(TenantKnowledgeService.prototype, 'getCategories').mockResolvedValue([{ id: "cat-1", name: "General", created_at: "", updated_at: "" }] as any);
       const res = await request("/categories");
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -52,7 +73,7 @@ describe("Knowledge Handler Integration Tests", () => {
     });
 
     it("should create a category with valid payload", async () => {
-      const mockCreate = vi.spyOn(KnowledgeService.prototype, 'createCategory').mockResolvedValue("new-cat-id");
+      const mockCreate = vi.spyOn(TenantKnowledgeService.prototype, 'createCategory').mockResolvedValue("new-cat-id");
       const res = await request("/categories", "POST", { name: "New Category" });
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -68,7 +89,7 @@ describe("Knowledge Handler Integration Tests", () => {
     });
 
     it("should delete a category", async () => {
-      const mockDelete = vi.spyOn(KnowledgeService.prototype, 'deleteCategory').mockResolvedValue(undefined);
+      const mockDelete = vi.spyOn(TenantKnowledgeService.prototype, 'deleteCategory').mockResolvedValue(undefined);
       const res = await request("/categories/cat-1", "DELETE");
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -79,7 +100,7 @@ describe("Knowledge Handler Integration Tests", () => {
 
   describe("Articles", () => {
     it("should create an article with valid payload", async () => {
-      const mockCreate = vi.spyOn(KnowledgeService.prototype, 'createArticle').mockResolvedValue("new-article-id");
+      const mockCreate = vi.spyOn(TenantKnowledgeService.prototype, 'createArticle').mockResolvedValue("new-article-id");
       const res = await request("/articles", "POST", { title: "Title", content: "Content" });
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -93,7 +114,7 @@ describe("Knowledge Handler Integration Tests", () => {
     });
 
     it("should update an article with valid payload", async () => {
-      const mockUpdate = vi.spyOn(KnowledgeService.prototype, 'updateArticle').mockResolvedValue(undefined);
+      const mockUpdate = vi.spyOn(TenantKnowledgeService.prototype, 'updateArticle').mockResolvedValue(undefined);
       const res = await request("/articles/art-1", "PUT", { title: "New Title", content: "New Content" });
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -102,7 +123,7 @@ describe("Knowledge Handler Integration Tests", () => {
     });
 
     it("should get article content", async () => {
-      const mockGetContent = vi.spyOn(KnowledgeService.prototype, 'getArticleContent').mockResolvedValue("Article content here");
+      const mockGetContent = vi.spyOn(TenantKnowledgeService.prototype, 'getArticleContent').mockResolvedValue("Article content here");
       const res = await request("/articles/art-1/content");
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -111,11 +132,18 @@ describe("Knowledge Handler Integration Tests", () => {
     });
 
     it("should handle article content not found", async () => {
-      const mockGetContent = vi.spyOn(KnowledgeService.prototype, 'getArticleContent').mockRejectedValue(new Error("Article not found"));
+      const mockGetContent = vi.spyOn(TenantKnowledgeService.prototype, 'getArticleContent').mockRejectedValue(new Error("Article not found"));
       const res = await request("/articles/art-1/content");
       expect(res.status).toBe(404);
       const data: any = await res.json();
       expect(data.error).toBe("Article not found");
     });
   });
+  it('returns a controlled error when knowledge tag stripping rejects excessive depth', async () => {
+    vi.spyOn(TenantKnowledgeService.prototype, 'getAiSuggestion').mockRejectedValueOnce(new Error('Maximum tag stripping depth exceeded: possible malicious input'));
+    const response = await knowledgeHandler.request('/tickets/ticket/ai-suggest', {headers:{Authorization:`Bearer ${validToken}`}}, {DB:mockDB,JWT_SECRET} as any);
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({error:'Content exceeds supported markup depth'});
+  });
+
 });

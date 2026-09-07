@@ -6,6 +6,28 @@ if (import.meta.env.VITE_API_URL) {
   BASE_URL = url.includes('/api/v1/customer') ? url : `${url}/api/v1/customer`;
 }
 
+// Keep the public routing key across navigation even when browser storage is blocked.
+let navigationWidgetKey = '';
+export function getWidgetKey(): string {
+  const incoming = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('key')?.trim();
+  if (incoming) {
+    navigationWidgetKey = incoming;
+    try { sessionStorage.setItem('tocyn_widget_key', incoming); } catch { /* Storage is optional. */ }
+    return incoming;
+  }
+  if (navigationWidgetKey) return navigationWidgetKey;
+  try {
+    const saved = sessionStorage.getItem('tocyn_widget_key');
+    if (saved) return (navigationWidgetKey = saved);
+  } catch { /* Fall back to explicit deployment configuration. */ }
+  return import.meta.env.VITE_WIDGET_KEY || '';
+}
+
+function getCustomerToken(): string | null {
+  try { return localStorage.getItem('lumina_customer_token'); }
+  catch { return null; } // Cookie authentication remains available.
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -17,12 +39,14 @@ export class ApiError extends Error {
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
+  const widgetKey = getWidgetKey();
+  if (widgetKey) headers.set('X-Widget-Key', widgetKey);
   
   if (!(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
-  const token = localStorage.getItem('lumina_customer_token');
+  const token = getCustomerToken();
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
@@ -73,7 +97,7 @@ export const portalApi = {
   delete: <T>(path: string, options?: RequestInit) => request<T>(path, { ...options, method: 'DELETE' }),
   download: async (path: string, filename: string) => {
     const headers = new Headers();
-    const token = localStorage.getItem('lumina_customer_token');
+    const token = getCustomerToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const res = await fetch(`${BASE_URL}${path}`, { headers });
     if (!res.ok) throw new Error('Failed to download');

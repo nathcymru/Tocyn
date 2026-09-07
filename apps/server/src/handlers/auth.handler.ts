@@ -2,79 +2,80 @@ import { Hono } from "hono";
 import { Env } from "../bindings";
 import { authService } from "../services/auth/auth.service";
 import { mfaService } from "../services/auth/mfa.service";
-import { User, JWTPayload, AppVariables } from "../types";
-import { authMiddleware } from "../middleware/auth.middleware";
+import { JWTPayload, AppVariables } from "../types";
+import { authMiddleware, mfaChallengeMiddleware, loginAuthResolverMiddleware } from "../middleware/auth.middleware";
 import { rateLimiter } from "../middleware/rate-limiter";
+import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
+import { UserAuthResolution } from "../auth/user-auth-resolver";
 
 const auth = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+
 
 /**
  * Stage 1: Login with credentials
  */
-auth.post("/login", rateLimiter(5, 60000), async (c) => {
-  const { email, password } = await c.req.json();
+auth.post("/login", rateLimiter(5, 60000), loginAuthResolverMiddleware, async (c) => {
+  const { email, password } = (c.get("loginBody" as any) || {}) as { email?: string; password?: string };
+  const authUser = c.get("resolvedUser" as any) as UserAuthResolution | null;
 
-  if (!email || !password) {
+  if (!email || !password || typeof email !== "string" || typeof password !== "string") {
     return c.json({ error: "Email and password are required" }, 400);
   }
 
-  // Fetch user from DB
-  const user = await c.env.DB.prepare(
-    "SELECT * FROM users WHERE email = ?"
-  )
-    .bind(email)
-    .first<User>();
-
-  if (!user || !user.password_hash) {
+  if (!authUser || !authUser.passwordHash) {
     return c.json({ error: "Invalid credentials" }, 401);
   }
 
-  const isValid = await authService.verifyPassword(password, user.password_hash);
+  const isValid = await authService.verifyPassword(password, authUser.passwordHash);
   if (!isValid) {
     return c.json({ error: "Invalid credentials" }, 401);
   }
 
-  const isAgentOrAdmin = user.role === 'admin' || user.role === 'agent';
-  const requiresMfa = user.mfa_enabled || isAgentOrAdmin;
+  const isAgentOrAdmin = authUser.role === "admin" || authUser.role === "agent";
+  const requiresMfa = authUser.mfaEnabled || isAgentOrAdmin;
 
-  // If MFA is required, return a short-lived pre-mfa token
+  const userPayload = {
+    id: authUser.userId,
+    email: email.toLowerCase().trim(),
+    role: authUser.role as any,
+    tenant_id: authUser.tenantId,
+  };
+
+  // If MFA is required, return a short-lived mfa-challenge token
   if (requiresMfa) {
-    const preMfaToken = await authService.generateToken(
-      user,
+    const preMfaToken = await authService.generateMfaChallengeToken(
+      userPayload,
       c.env.JWT_SECRET,
-      false, // mfa_verified = false
-      "15m" // Give extra time for setup
+      "15m"
     );
 
     return c.json({
       mfa_required: true,
       token: preMfaToken,
       user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role,
-        mfa_enabled: !!user.mfa_enabled,
+        id: authUser.userId,
+        email: email.toLowerCase().trim(),
+        role: authUser.role,
+        mfa_enabled: !!authUser.mfaEnabled,
       },
     });
   }
 
-  // If MFA is not required and not enabled, return a full token
+  // If MFA is not required, return a full app token
   const fullToken = await authService.generateToken(
-    user,
+    userPayload,
     c.env.JWT_SECRET,
-    true // mfa_verified = true
+    true
   );
 
   return c.json({
     mfa_required: false,
     token: fullToken,
     user: {
-      id: user.id,
-      email: user.email,
-      full_name: user.full_name,
-      role: user.role,
-      mfa_enabled: !!user.mfa_enabled,
+      id: authUser.userId,
+      email: email.toLowerCase().trim(),
+      role: authUser.role,
+      mfa_enabled: !!authUser.mfaEnabled,
     },
   });
 });
@@ -82,7 +83,7 @@ auth.post("/login", rateLimiter(5, 60000), async (c) => {
 /**
  * Stage 2: Verify MFA code
  */
-auth.post("/mfa/verify", authMiddleware, rateLimiter(10, 60000), async (c) => {
+auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
   const { code } = await c.req.json();
 
@@ -90,16 +91,13 @@ auth.post("/mfa/verify", authMiddleware, rateLimiter(10, 60000), async (c) => {
     return c.json({ error: "MFA code is required" }, 400);
   }
 
-  // Fetch user from DB
-  const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?")
-    .bind(payload.sub)
-    .first<User>();
+  const d = c.get("tenantDeps") as TenantRequestDeps;
+  const user = await d.repositories.users.get(payload.sub);
 
   if (!user || !user.mfa_secret || !user.mfa_enabled) {
     return c.json({ error: "MFA is not set up for this user" }, 400);
   }
 
-  // Decrypt the secret
   let decryptedSecret: string;
   try {
     decryptedSecret = await mfaService.decryptSecret(user.mfa_secret, c.env.MFA_ENCRYPTION_KEY);
@@ -112,11 +110,17 @@ auth.post("/mfa/verify", authMiddleware, rateLimiter(10, 60000), async (c) => {
     return c.json({ error: "Invalid MFA code" }, 401);
   }
 
-  // Generate a long-lived full token
+  const userPayload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    tenant_id: user.tenant_id || (payload as any).tenant_id,
+  };
+
   const fullToken = await authService.generateToken(
-    user,
+    userPayload,
     c.env.JWT_SECRET,
-    true // mfa_verified = true
+    true
   );
 
   return c.json({
@@ -134,13 +138,11 @@ auth.post("/mfa/verify", authMiddleware, rateLimiter(10, 60000), async (c) => {
 /**
  * Stage 3: Setup MFA
  */
-auth.post("/mfa/setup", authMiddleware, async (c) => {
+auth.post("/mfa/setup", authMiddleware, tenantMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
+  const d = c.get("tenantDeps") as TenantRequestDeps;
 
-  // Check if MFA is already enabled
-  const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?")
-    .bind(payload.sub)
-    .first<User>();
+  const user = await d.repositories.users.get(payload.sub);
 
   if (!user) {
     return c.json({ error: "User not found" }, 404);
@@ -154,12 +156,7 @@ auth.post("/mfa/setup", authMiddleware, async (c) => {
   const uri = mfaService.getProvisioningUri(user.email, secret);
   const encryptedSecret = await mfaService.encryptSecret(secret, c.env.MFA_ENCRYPTION_KEY);
 
-  // Store the secret temporarily (or permanently but not yet enabled)
-  await c.env.DB.prepare(
-    "UPDATE users SET mfa_secret = ? WHERE id = ?"
-  )
-    .bind(encryptedSecret, user.id)
-    .run();
+  await d.repositories.users.update(user.id, { mfa_secret: encryptedSecret });
 
   return c.json({
     provisioning_uri: uri,
@@ -169,7 +166,7 @@ auth.post("/mfa/setup", authMiddleware, async (c) => {
 /**
  * Stage 3: Confirm MFA
  */
-auth.post("/mfa/confirm", authMiddleware, async (c) => {
+auth.post("/mfa/confirm", authMiddleware, tenantMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
   const { code } = await c.req.json();
 
@@ -177,15 +174,13 @@ auth.post("/mfa/confirm", authMiddleware, async (c) => {
     return c.json({ error: "MFA code is required" }, 400);
   }
 
-  const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?")
-    .bind(payload.sub)
-    .first<User>();
+  const d = c.get("tenantDeps") as TenantRequestDeps;
+  const user = await d.repositories.users.get(payload.sub);
 
   if (!user || !user.mfa_secret) {
     return c.json({ error: "MFA setup has not been initiated" }, 400);
   }
 
-  // Decrypt the secret
   let decryptedSecret: string;
   try {
     decryptedSecret = await mfaService.decryptSecret(user.mfa_secret, c.env.MFA_ENCRYPTION_KEY);
@@ -198,16 +193,17 @@ auth.post("/mfa/confirm", authMiddleware, async (c) => {
     return c.json({ error: "Invalid MFA code" }, 401);
   }
 
-  // Finalize MFA enablement
-  await c.env.DB.prepare(
-    "UPDATE users SET mfa_enabled = TRUE WHERE id = ?"
-  )
-    .bind(user.id)
-    .run();
+  await d.repositories.users.update(user.id, { mfa_enabled: true });
 
-  // Generate a new full token
+  const userPayload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    tenant_id: user.tenant_id || (payload as any).tenant_id,
+  };
+
   const fullToken = await authService.generateToken(
-    user,
+    userPayload,
     c.env.JWT_SECRET,
     true
   );
@@ -227,26 +223,21 @@ auth.post("/mfa/confirm", authMiddleware, async (c) => {
 /**
  * Disable MFA
  */
-auth.post("/mfa/disable", authMiddleware, async (c) => {
+auth.post("/mfa/disable", authMiddleware, tenantMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
 
   if (payload.role === "admin" || payload.role === "agent") {
     return c.json({ error: "MFA is mandatory for agents and administrators and cannot be disabled." }, 403);
   }
 
-  const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?")
-    .bind(payload.sub)
-    .first<User>();
+  const d = c.get("tenantDeps") as TenantRequestDeps;
+  const user = await d.repositories.users.get(payload.sub);
 
   if (!user) {
     return c.json({ error: "User not found" }, 404);
   }
 
-  await c.env.DB.prepare(
-    "UPDATE users SET mfa_enabled = FALSE, mfa_secret = NULL WHERE id = ?"
-  )
-    .bind(user.id)
-    .run();
+  await d.repositories.users.update(user.id, { mfa_enabled: false, mfa_secret: null });
 
   return c.json({
     user: {
@@ -262,12 +253,11 @@ auth.post("/mfa/disable", authMiddleware, async (c) => {
 /**
  * Get current user (me)
  */
-auth.get("/me", authMiddleware, async (c) => {
+auth.get("/me", authMiddleware, tenantMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
+  const d = c.get("tenantDeps") as TenantRequestDeps;
 
-  const user = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?")
-    .bind(payload.sub)
-    .first<User>();
+  const user = await d.repositories.users.get(payload.sub);
 
   if (!user) {
     return c.json({ error: "User not found" }, 404);

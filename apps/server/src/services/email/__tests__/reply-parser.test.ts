@@ -8,7 +8,7 @@ describe('ReplyParser', () => {
 On Tue, Feb 20, 2024 at 10:00 AM John Doe <john@example.com> wrote:
 > This is the previous message.
 > Some more context.`;
-    
+
     const result = ReplyParser.stripHistory(text);
     expect(result).toBe('This is the new reply.');
   });
@@ -59,5 +59,16 @@ Old history that should be removed.`;
   it('should handle empty input', () => {
     expect(ReplyParser.stripHistory('')).toBe('');
     expect(ReplyParser.stripHistory(undefined, undefined)).toBe('');
+  });
+
+  it('should strip HTML tags and produce safe output on deeply nested HTML input', () => {
+    // Note: the reply-parser uses <[^>]*>? which is greedy enough to converge in one pass.
+    // The post-loop fallback (strips residual angle brackets) is therefore not reachable for this regex.
+    // The important safety property is that the output contains no < or > chars.
+    const deeplyNestedHtml = '<p>'.repeat(15) + 'Reply HTML text' + '</p>'.repeat(15);
+    const result = ReplyParser.parseEmailReply('', deeplyNestedHtml);
+    expect(result).toBe('Reply HTML text');
+    expect(result).not.toContain('<');
+    expect(result).not.toContain('>');
   });
 });

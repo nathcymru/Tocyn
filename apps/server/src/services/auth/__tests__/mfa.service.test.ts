@@ -34,7 +34,7 @@ describe('MFAService', () => {
   describe('verifyCode', () => {
     it('should verify a correct TOTP code', () => {
       const secret = mfaService.generateSecret();
-      
+
       // Generate a valid code for this moment using OTPAuth directly for testing
       const totp = new OTPAuth.TOTP({
         algorithm: 'SHA1',
@@ -56,7 +56,7 @@ describe('MFAService', () => {
 
     it('should verify codes with a window skew (if implementation supports it)', () => {
       const secret = mfaService.generateSecret();
-      
+
       const totp = new OTPAuth.TOTP({
         algorithm: 'SHA1',
         digits: 6,
@@ -77,7 +77,7 @@ describe('MFAService', () => {
     it('should encrypt and decrypt a secret correctly', async () => {
       const secret = 'JBSWY3DPEHPK3PXP';
       const key = 'test-encryption-key';
-      
+
       const encrypted = await mfaService.encryptSecret(secret, key);
       expect(encrypted).toBeDefined();
       expect(encrypted).not.toBe(secret);
@@ -90,9 +90,9 @@ describe('MFAService', () => {
       const secret = 'JBSWY3DPEHPK3PXP';
       const key = 'test-encryption-key';
       const wrongKey = 'wrong-key';
-      
+
       const encrypted = await mfaService.encryptSecret(secret, key);
-      
+
       await expect(mfaService.decryptSecret(encrypted, wrongKey)).rejects.toThrow();
     });
   });

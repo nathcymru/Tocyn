@@ -3,24 +3,37 @@ import { Env } from '../bindings';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { mfaGuard } from '../middleware/mfa.guard';
 import { roleGuard } from '../middleware/role.guard';
-import { KnowledgeService } from '../services/knowledge.service';
+import { TenantKnowledgeService } from '../services/tenant-knowledge.service';
+import { StatelessAiService } from '../services/ai.service';
+import { tenantMiddleware, TenantRequestDeps } from '../middleware/tenant.middleware';
 import { AppVariables } from '../types';
 import { z } from 'zod';
 
 const knowledgeHandler = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
-knowledgeHandler.use('*', authMiddleware, mfaGuard, roleGuard(['agent', 'admin']));
+knowledgeHandler.onError((error, c) => {
+  if (error.message === 'Maximum tag stripping depth exceeded: possible malicious input') {
+    return c.json({ error: 'Content exceeds supported markup depth' }, 422);
+  }
+  return c.json({ error: 'Unable to process knowledge request' }, 500);
+});
+
+knowledgeHandler.use('*', authMiddleware, mfaGuard, roleGuard(['agent', 'admin']), tenantMiddleware);
 
 // Article Endpoints
 knowledgeHandler.get('/articles', async (c) => {
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   const docs = await service.listDocuments();
   return c.json(docs);
 });
 
 knowledgeHandler.get('/articles/:id', async (c) => {
   const id = c.req.param('id');
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   const doc = await service.getDocument(id);
   if (!doc) {
     return c.json({ error: 'Document not found' }, 404);
@@ -30,7 +43,9 @@ knowledgeHandler.get('/articles/:id', async (c) => {
 
 knowledgeHandler.delete('/articles/:id', async (c) => {
   const id = c.req.param('id');
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   await service.deleteDocument(id);
   return c.json({ success: true });
 });
@@ -38,7 +53,9 @@ knowledgeHandler.delete('/articles/:id', async (c) => {
 // For backward compatibility or if used by other components
 knowledgeHandler.delete('/:id', async (c) => {
   const id = c.req.param('id');
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   await service.deleteDocument(id);
   return c.json({ success: true });
 });
@@ -46,14 +63,18 @@ knowledgeHandler.delete('/:id', async (c) => {
 knowledgeHandler.post('/articles/:id/qa', async (c) => {
   const id = c.req.param('id');
   const { type } = await c.req.json();
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   await service.markArticleAsQA(id, type);
   return c.json({ success: true });
 });
 
 knowledgeHandler.get('/articles/:id/content', async (c) => {
   const id = c.req.param('id');
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   try {
     const content = await service.getArticleContent(id);
     return c.json({ content });
@@ -72,7 +93,9 @@ knowledgeHandler.post('/', async (c) => {
     return c.json({ error: 'No file provided' }, 400);
   }
 
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   const content = new Uint8Array(await file.arrayBuffer());
   const docId = await service.uploadAndProcess(title, file.name, content, file.type);
 
@@ -82,7 +105,9 @@ knowledgeHandler.post('/', async (c) => {
 // AI Suggestions
 knowledgeHandler.get('/tickets/:id/ai-suggest', async (c) => {
   const id = c.req.param('id');
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   const suggestion = await service.getAiSuggestion(id);
   return c.json({ suggestion });
 });
@@ -102,7 +127,9 @@ const articleSchema = z.object({
 
 // Category endpoints
 knowledgeHandler.get('/categories', async (c) => {
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   const categories = await service.getCategories();
   return c.json(categories);
 });
@@ -113,16 +140,20 @@ knowledgeHandler.post('/categories', async (c) => {
   if (!result.success) {
     return c.json({ error: result.error.errors[0].message }, 400);
   }
-  
+
   const { name, parent_id } = result.data;
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   const id = await service.createCategory(name, parent_id || undefined);
   return c.json({ id });
 });
 
 knowledgeHandler.delete('/categories/:id', async (c) => {
   const id = c.req.param('id');
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   try {
     await service.deleteCategory(id);
     return c.json({ success: true });
@@ -143,7 +174,9 @@ knowledgeHandler.post('/articles', async (c) => {
   }
 
   const { title, content, category_id, tier } = result.data;
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   const id = await service.createArticle(title, content, category_id || null, tier);
   return c.json({ id });
 });
@@ -157,7 +190,9 @@ knowledgeHandler.put('/articles/:id', async (c) => {
   }
 
   const { title, content, category_id, tier } = result.data;
-  const service = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const service = new TenantKnowledgeService(deps, aiService);
   await service.updateArticle(id, title, content, category_id || null, tier);
   return c.json({ success: true });
 });

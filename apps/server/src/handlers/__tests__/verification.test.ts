@@ -25,21 +25,36 @@ describe("Ticket Detail Fixes Verification", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockDB.all.mockResolvedValue({ results: [] });
-    mockDB.first.mockResolvedValue({});
+    mockDB.first.mockImplementation(async () => {
+      const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+      const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+        return { tenant_id: "default-tenant", id: "agent-1", role: "agent", password_hash: null, mfa_enabled: 1 };
+      }
+      return {};
+    });
     mockDB.run.mockResolvedValue({ success: true });
-    
+
     const mockUser = {
       id: "agent-1",
       email: "agent@example.com",
       role: "agent" as const,
       mfa_enabled: true,
+      tenant_id: "default-tenant",
     };
     validToken = await authService.generateToken(mockUser as any, JWT_SECRET, true);
   });
 
   it("should return articles in ASC order", async () => {
     const mockTicket = { id: "t-1", subject: "Ticket 1" };
-    mockDB.first.mockResolvedValueOnce(mockTicket); // Ticket
+    mockDB.first.mockImplementation(async () => {
+      const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+      const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+        return { tenant_id: "default-tenant", id: "agent-1", role: "agent", password_hash: null, mfa_enabled: 1 };
+      }
+      return mockTicket;
+    });
     mockDB.all.mockResolvedValueOnce({ results: [] }); // Articles
     mockDB.all.mockResolvedValueOnce({ results: [] }); // Attachments
 
@@ -82,6 +97,6 @@ describe("Ticket Detail Fixes Verification", () => {
     expect(await res.json()).toEqual({ success: true });
 
     // Verify ticket update query includes all fields
-    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET priority = ?, assigned_to = ?, group_id = ? WHERE id = ?"));
-    expect(mockDB.bind).toHaveBeenCalledWith("urgent", validAgentUuid, validGroupUuid, "t-1");
+    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET priority = ?, assigned_to = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?"));
+    expect(mockDB.bind).toHaveBeenCalledWith("urgent", validAgentUuid, validGroupUuid, "default-tenant", "t-1");
   });});

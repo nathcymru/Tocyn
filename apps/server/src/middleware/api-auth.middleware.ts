@@ -1,10 +1,12 @@
 import { Context, Next } from "hono";
 import { Env } from "../bindings";
-import { ApiKeyService } from "../services/auth/apiKey.service";
+import { ApiAuthResolver } from "../auth/api-key-resolver";
+import { resolveApiKeyRequestDeps } from "../auth/api-key-composition";
 import { AppVariables } from "../types";
 
 /**
  * Middleware to authenticate requests using an API Key in the X-API-Key header.
+ * Resolves the key to a tenant-scoped integration principal with TenantRequestDeps.
  */
 export const apiAuthMiddleware = async (c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next) => {
   const apiKey = c.req.header("X-API-Key");
@@ -13,12 +15,17 @@ export const apiAuthMiddleware = async (c: Context<{ Bindings: Env; Variables: A
     return c.json({ error: "Missing API Key" }, 401);
   }
 
-  const apiKeyService = new ApiKeyService(c.env);
-  const isValid = await apiKeyService.validateKey(apiKey);
+  if (!c.env.DB) return c.json({ error: 'Authentication unavailable' }, 503);
+  const resolver = new ApiAuthResolver(c.env.DB);
+  const result = await resolveApiKeyRequestDeps(resolver, apiKey, c.env);
 
-  if (!isValid) {
+  if (!result) {
     return c.json({ error: "Invalid or inactive API Key" }, 401);
   }
+
+  c.set('tenantDeps', result.deps);
+  c.set('tenantScope', result.deps.scope);
+  c.set('apiKeyResolution', result.resolution);
 
   await next();
 };

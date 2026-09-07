@@ -1,3 +1,4 @@
+import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState, useRef, useEffect } from 'react';
 
 interface Message {
@@ -49,11 +50,10 @@ const AiChat: React.FC<Props> = ({ config }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/v1/widget/chat', {
+      const response = await fetch(`${BASE_URL}/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: widgetHeaders(),
+        credentials: 'include',
         body: JSON.stringify({ message: input, history }),
       });
 

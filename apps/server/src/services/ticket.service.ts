@@ -50,7 +50,7 @@ export class TicketService {
     const match = subject.match(/\[([a-zA-Z0-9_#-]+)\]/);
     if (match) {
       const value = match[1];
-      
+
       // Try extracting numeric ticket_no at the end of the string
       const numMatch = value.match(/(\d+)$/);
       if (numMatch) {
@@ -60,7 +60,7 @@ export class TicketService {
           .first<Ticket>();
         if (ticket) return ticket;
       }
-      
+
       // Fallback to exact ID match
       return await this.findTicketById(value);
     }
@@ -245,7 +245,7 @@ export class TicketService {
 
     const newId = crypto.randomUUID();
     const now = new Date().toISOString();
-    
+
     // Create shadow user
     await this.env.DB.prepare(
       `INSERT INTO users (id, email, full_name, role, created_at, last_active_at)
@@ -253,14 +253,14 @@ export class TicketService {
     )
       .bind(newId, normalizedEmail, normalizedEmail.split('@')[0], 'customer', now, now)
       .run();
-    
+
     return newId;
   }
 
   async createTicket(data: Partial<Ticket> & { subject: string; customer_email: string; source: string }): Promise<Ticket> {
     const id = data.id || crypto.randomUUID();
     const now = new Date().toISOString();
-    
+
     // Ensure customer user exists
     let customerId = data.customer_id;
     if (!customerId && data.customer_email) {
@@ -297,7 +297,7 @@ export class TicketService {
 
     const ticket = (await this.findTicketById(id))!;
     await this.dispatchAutomation('ticket.created', { ticket });
-    
+
     // Broadcast real-time notification
     if (this.ctx) {
       this.ctx.waitUntil(this.broadcastService.notifyTicketCreated(ticket));
@@ -324,7 +324,7 @@ export class TicketService {
       'INSERT INTO ticket_sequence DEFAULT VALUES RETURNING id'
     ).first<{ id: number }>();
     const ticket_no = sequenceResult?.id;
-    
+
     const ticketInsert = this.env.DB.prepare(
       `INSERT INTO tickets (id, ticket_no, subject, status, priority, customer_id, customer_email, assigned_to, group_id, custom_fields, source, source_email, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -350,7 +350,7 @@ export class TicketService {
 
     const bodyR2Key = `tickets/${ticketId}/articles/${articleId}/body.txt`;
     const snippet = data.body ? data.body.substring(0, 250) : null;
-    
+
     await this.env.ATTACHMENTS_BUCKET.put(bodyR2Key, data.body || '');
 
     const articleInsert = this.env.DB.prepare(
@@ -372,7 +372,7 @@ export class TicketService {
 
     const ticket = (await this.findTicketById(ticketId))!;
     const article = (await this.env.DB.prepare('SELECT * FROM articles WHERE id = ?').bind(articleId).first<Article>())!;
-    
+
     // Attach body to returned article
     article.body = data.body || '';
 
@@ -382,7 +382,7 @@ export class TicketService {
       await this.dispatchAutomation('article.created', { ticket, article });
       await this.broadcastService.notifyTicketCreated(ticket);
     })();
-    
+
     if (this.ctx) {
       this.ctx.waitUntil(dispatchPromise);
     } else {
@@ -395,10 +395,10 @@ export class TicketService {
   async createArticle(data: Partial<Article> & { ticket_id: string; body: string; sender_type: string }): Promise<Article> {
     const id = data.id || crypto.randomUUID();
     const now = new Date().toISOString();
-    
+
     let senderId = data.sender_id || null;
     const ticket = (await this.findTicketById(data.ticket_id))!;
-    
+
     // If it's a customer message and no sender_id is provided, use the ticket's customer_id
     if (data.sender_type === 'customer' && !senderId && ticket.customer_id) {
       senderId = ticket.customer_id;
@@ -429,7 +429,7 @@ export class TicketService {
       .run();
 
     const article = (await this.env.DB.prepare('SELECT * FROM articles WHERE id = ?').bind(id).first<Article>())!;
-    
+
     // Attach body to returned article
     article.body = data.body || '';
     await this.dispatchAutomation('article.created', { ticket, article });
@@ -507,7 +507,7 @@ export class TicketService {
     )
       .bind(ticketId)
       .first<Article>();
-      
+
     if (article) {
       await this.hydrateArticles([article]);
     }

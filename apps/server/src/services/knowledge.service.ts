@@ -2,6 +2,24 @@ import { Env } from '../bindings';
 import { AiService } from './ai.service';
 import { VectorService } from './vector.service';
 
+function stripTags(str: string): string {
+  if (!str) return '';
+  let current = str;
+  let previous: string;
+  let iterations = 0;
+  do {
+    previous = current;
+    current = current.replace(/<[a-zA-Z\/][^>]*>/g, '');
+    iterations++;
+  } while (current !== previous && iterations < 10);
+
+  if (current !== previous) {
+    throw new Error("Maximum tag stripping depth exceeded: possible malicious input");
+  }
+
+  return current;
+}
+
 export class KnowledgeService {
   private aiService: AiService;
   private vectorService: VectorService;
@@ -27,8 +45,8 @@ export class KnowledgeService {
       httpMetadata: { contentType },
     });
 
-    const isText = contentType.startsWith('text/') || 
-                  fileName.endsWith('.txt') || 
+    const isText = contentType.startsWith('text/') ||
+                  fileName.endsWith('.txt') ||
                   fileName.endsWith('.md') ||
                   fileName.endsWith('.csv');
 
@@ -66,7 +84,7 @@ export class KnowledgeService {
 
     // Sanitize title to prevent prompt injection and DoS
     const safeTitle = title ? title.replace(/[\r\n]+/g, ' ').substring(0, 200).trim() : '';
-    
+
     // QA types should default to 'sop' tier to prevent leaking ticket context/PII to the public widget
     const effectiveTier = tier ? tier : (type === 'qa' ? 'sop' : 'answer');
 
@@ -74,7 +92,7 @@ export class KnowledgeService {
       const chunk = chunks[i];
       const chunkText = safeTitle ? `Title: ${safeTitle}\n\n${chunk}` : chunk;
       const vectorId = type === 'qa' ? `qa_${sourceId}_${i}` : `doc_${sourceId}_${i}`;
-      
+
       const embedding = await this.aiService.generateEmbeddings(chunkText);
       const metadata: any = {
         source_id: sourceId,
@@ -94,7 +112,7 @@ export class KnowledgeService {
     const chunks: string[] = [];
     // Split on double newlines, or before Markdown headers and lists to keep structures intact
     const blocks = text.split(/\n\n+|(?=\n#{1,6} )|(?=\n[-*] )|(?=\n\d+\. )/);
-    
+
     let currentChunk = '';
 
     for (const block of blocks) {
@@ -106,7 +124,7 @@ export class KnowledgeService {
         currentChunk += separator + cleanBlock;
       } else {
         if (currentChunk) chunks.push(currentChunk);
-        
+
         // Start next chunk with the overlap from the previous one
         let overlapContext = '';
         if (currentChunk.length > 0 && overlap > 0) {
@@ -114,9 +132,9 @@ export class KnowledgeService {
           const match = tail.match(/[.!?]\s+(.*)$/);
           overlapContext = match && match[1] ? match[1] : tail;
         }
-        
+
         currentChunk = overlapContext;
-        
+
         // If a single block is larger than maxChunkSize, split it by sentences
         if (cleanBlock.length > maxChunkSize) {
           const sentences = cleanBlock.split(/(?<=[.!?])\s+/);
@@ -126,7 +144,7 @@ export class KnowledgeService {
               currentChunk += sentenceSep + sentence;
             } else {
               if (currentChunk) chunks.push(currentChunk);
-              
+
               if (currentChunk.length > 0 && overlap > 0) {
                 const tail = currentChunk.slice(-overlap);
                 const match = tail.match(/[.!?]\s+(.*)$/);
@@ -142,9 +160,9 @@ export class KnowledgeService {
         }
       }
     }
-    
+
     if (currentChunk) chunks.push(currentChunk);
-    
+
     // Deduplicate to avoid O(n^2) complexity from indexOf on large arrays
     return Array.from(new Set(chunks));
   }
@@ -285,7 +303,7 @@ export class KnowledgeService {
 
     if (doc) {
       await this.env.ATTACHMENTS_BUCKET.delete(doc.file_path);
-      
+
       // Delete all related vectors from Vectorize
       const vectorIdsToDelete = [];
       const chunkCount = doc.chunk_count || 100; // Fallback to 100 if undefined or 0 to be safe for old docs
@@ -306,8 +324,8 @@ export class KnowledgeService {
       .first<{ body: string | null, body_r2_key: string | null, chunk_count: number }>();
 
     if (!prevArticle) return;
-    
-    // Optimistic UI/Status: you might want to add a status to articles table, 
+
+    // Optimistic UI/Status: you might want to add a status to articles table,
     // but right now it directly updates DB. The workflow will overwrite.
 
     if (this.env.VECTORIZE_WORKFLOW) {
@@ -333,7 +351,7 @@ export class KnowledgeService {
             console.error('Failed to fetch article body from R2 for QA vectorization:', e);
           }
         }
-        
+
         const chunkCount = await this.processAndStoreVectors(articleId, bodyText, 'qa');
         await this.env.DB.prepare('UPDATE articles SET qa_type = ?, chunk_count = ? WHERE id = ?')
           .bind(type, chunkCount, articleId)
@@ -347,7 +365,7 @@ export class KnowledgeService {
     }
   }
 
-  
+
   async deleteDocumentVectors(id: string, chunkCount: number) {
     const vectorIdsToDelete = [];
     for (let i = 0; i < chunkCount; i++) {
@@ -378,7 +396,7 @@ export class KnowledgeService {
     for (let i = 0; i < doc.chunk_count; i++) {
       vectorIds.push(`doc_${id}_${i}`);
     }
-    
+
     const vectors = await this.vectorService.getByIds(vectorIds);
     if (vectors && vectors.length > 0) {
       const updatedVectors = vectors.map((v: any) => {
@@ -441,22 +459,22 @@ export class KnowledgeService {
     // Use a stricter regex /<[a-zA-Z\/][^>]*>/g to avoid stripping legitimate text like "5 < 6".
     const validMessages = orderedMessages.filter(m => {
       if (!m.body) return false;
-      return m.body.substring(0, 8000).replace(/<[a-zA-Z\/][^>]*>/g, '').trim().length > 0;
+      return stripTags(m.body.substring(0, 8000)).trim().length > 0;
     });
 
     if (validMessages.length === 0) {
       return 'No text context found in recent messages to generate a suggestion.';
     }
 
-    const lastValidMessage = validMessages[validMessages.length - 1].body.substring(0, 8000).replace(/<[a-zA-Z\\/][^>]*>/g, '').trim();
+    const lastValidMessage = stripTags(validMessages[validMessages.length - 1].body.substring(0, 8000)).trim();
 
     console.log(`[AI Suggestion] User question (last valid message):`, lastValidMessage);
 
     // Construct multi-turn context
     const chatHistory = orderedMessages.map(m => {
-      const cleanBody = m.body.replace(/<[a-zA-Z\\/][^>]*>/g, '').trim();
+      const cleanBody = stripTags(m.body).trim();
       return `${m.sender_type === 'customer' ? 'User' : 'Agent'}: ${cleanBody}`;
-    }).join('\\n');
+    }).join('\n');
 
     // 2. Search Vectorize using the last valid message (most relevant for retrieval)
     const relevantChunks = await this.searchWithFallback(lastValidMessage, 3);
@@ -464,7 +482,7 @@ export class KnowledgeService {
     console.log(`[AI Suggestion] Final context sent to AI:`, relevantChunks.map(c => ({ tier: c.tier, score: c.score, preview: c.content.substring(0, 50) + '...' })));
 
     const hasSOP = relevantChunks.some(c => c.tier === 'sop');
-    const systemInstruction = hasSOP ? 
+    const systemInstruction = hasSOP ?
       'IMPORTANT: The provided context contains Standard Operating Procedures (SOPs) meant for internal use only. DO NOT expose the raw SOP to the user. Instead, read the SOP and ask the user for the required information needed to fulfill it.' : undefined;
 
     // 3. Generate suggestion
@@ -478,32 +496,32 @@ export class KnowledgeService {
     // Rely solely on Dense Semantic Search (Vectorize) to preserve D1 read/write limits.
     // Cloudflare Vectorize offers generous free-tier limits, making it the most cost-effective retrieval engine.
     const embedding = await this.aiService.generateEmbeddings(query);
-    
+
     // Only return public 'answer' tier documents for generic search (used by customer widget)
     const filter: any = { tier: 'answer' };
     if (categoryId) filter.category_id = categoryId;
-    
+
     let vectorResults = await this.vectorService.search(embedding, limit, filter);
     // Filter by threshold for answers to ensure quality
     vectorResults = vectorResults.filter(r => r.score >= 0.60);
 
-    return vectorResults.map(r => ({ content: r.metadata.text.replace(/<[a-zA-Z\/][^>]*>/g, '').trim() }));
+    return vectorResults.map(r => ({ content: stripTags(r.metadata.text).trim() }));
   }
 
   async searchWithFallback(query: string, limit: number = 3, categoryId?: string): Promise<{ content: string, tier: string, score: number }[]> {
     console.log(`[Search] Query:`, query);
     const embedding = await this.aiService.generateEmbeddings(query);
-    
+
     // Search across ALL tiers for agents
     let filter: any = {};
     if (categoryId) filter.category_id = categoryId;
-    
+
     // Fetch a larger pool of vectors (limit * 5) to prevent top-K pushdown where lower-scoring answers push out valid SOPs
     let vectorResults = await this.vectorService.search(embedding, limit * 5, Object.keys(filter).length > 0 ? filter : undefined);
-    
+
     console.log(`[Search] Raw Vectorize results count:`, vectorResults.length);
     console.log(`[Search] all tiers raw matches:`, vectorResults.map(v => ({ id: v.metadata?.source_id, score: v.score, tier: v.metadata?.tier })));
-    
+
     // Apply tier-specific thresholds
     vectorResults = vectorResults.filter(r => {
       const tier = r.metadata?.tier || 'answer';
@@ -520,8 +538,8 @@ export class KnowledgeService {
     console.log(`[Search] Filtered results count:`, vectorResults.length);
     console.log(`[Search] Filtered results (scores/tiers):`, vectorResults.map(v => ({ score: v.score, tier: v.metadata?.tier })));
 
-    return vectorResults.map(r => ({ 
-      content: (r.metadata?.text || '').replace(/<[a-zA-Z\/][^>]*>/g, '').trim(),
+    return vectorResults.map(r => ({
+      content: stripTags(r.metadata?.text || '').trim(),
       tier: r.metadata?.tier || 'answer',
       score: r.score
     }));

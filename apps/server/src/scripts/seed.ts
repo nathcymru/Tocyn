@@ -11,7 +11,7 @@ async function seed() {
   const authService = new AuthService();
   const adminId = "00000000-0000-0000-0000-000000000001";
   const adminEmail = "admin@luminatick.local";
-  
+
   // Generate a secure random temporary password for the initial admin
   const adminPassword = crypto.randomUUID();
   const passwordHash = await authService.hashPassword(adminPassword);
@@ -49,7 +49,7 @@ async function seed() {
   );
 
   const sqlOutput = "-- Luminatick Seed Data\n" + sqlStatements.join("\n");
-  
+
   // Check for --file argument
   const fileArgIndex = process.argv.indexOf("--file");
   if (fileArgIndex !== -1 && process.argv[fileArgIndex + 1]) {
@@ -58,7 +58,7 @@ async function seed() {
   } else {
     console.log(sqlOutput);
   }
-  
+
   console.error("\n--- SEED SUCCESS ---");
   console.error(`Admin Email: ${adminEmail}`);
   console.error(`Admin Password: ${adminPassword}`);

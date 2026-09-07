@@ -13,7 +13,7 @@ export class AutomationService {
 
   async dispatch(eventType: string, payload: { ticket: Ticket; article?: Article }): Promise<void> {
     const rules = await this.getActiveRules(eventType);
-    
+
     for (const rule of rules) {
       if (this.evaluateConditions(rule.conditions, payload)) {
         await this.executeAction(rule, payload);
@@ -23,7 +23,7 @@ export class AutomationService {
 
   evaluateConditions(conditionsJson: string | undefined, payload: { ticket: Ticket; article?: Article }): boolean {
     if (!conditionsJson) return true;
-    
+
     try {
       const conditions: AutomationCondition[] = JSON.parse(conditionsJson);
       if (conditions.length === 0) return true;
@@ -50,7 +50,7 @@ export class AutomationService {
               const stringToTest = String(valueToTest);
               // Limit string length to test
               if (stringToTest.length > 1000) return false;
-              
+
               return regex.test(stringToTest);
             } catch (e) {
               console.error(`Invalid regex in automation rule: ${condition.value}`, e);
@@ -78,7 +78,7 @@ export class AutomationService {
     // Backward compatibility or direct fields
     if (payload.article && field in payload.article) return (payload.article as any)[field];
     if (field in payload.ticket) return (payload.ticket as any)[field];
-    
+
     return undefined;
   }
 
@@ -98,7 +98,7 @@ export class AutomationService {
   private async executeWebhook(configJson: string, payload: any): Promise<void> {
     try {
       const config: WebhookConfig = JSON.parse(configJson);
-      
+
       if (!config.url.startsWith('http')) {
         console.error('Invalid webhook URL protocol');
         return;
@@ -169,7 +169,7 @@ export class AutomationService {
           if (config.delete_attachments) {
             // Find all R2 keys for these tickets
             const attachments = await this.env.DB.prepare(`
-              SELECT r2_key FROM attachments 
+              SELECT r2_key FROM attachments
               WHERE article_id IN (
                 SELECT id FROM articles WHERE ticket_id IN (${placeholders})
               )
@@ -187,7 +187,7 @@ export class AutomationService {
 
           // 2.5 Delete QA vectors from Vectorize
           const qaArticles = await this.env.DB.prepare(`
-            SELECT id, chunk_count FROM articles 
+            SELECT id, chunk_count FROM articles
             WHERE ticket_id IN (${placeholders}) AND qa_type IS NOT NULL
           `).bind(...ticketIds).all<{id: string, chunk_count: number}>().then(res => res.results);
 
@@ -211,14 +211,14 @@ export class AutomationService {
           }
 
           // 3. Delete from DB with explicit cascades for safety
-          // D1 transactions are currently experimental and might have limitations, 
+          // D1 transactions are currently experimental and might have limitations,
           // but we can use multiple statements in one call for some level of atomicity.
 
           await this.env.DB.prepare(`DELETE FROM attachments WHERE article_id IN (SELECT id FROM articles WHERE ticket_id IN (${placeholders}))`).bind(...ticketIds).run();          await this.env.DB.prepare(`DELETE FROM articles WHERE ticket_id IN (${placeholders})`).bind(...ticketIds).run();
           const deleteRes = await this.env.DB.prepare(`DELETE FROM tickets WHERE id IN (${placeholders})`).bind(...ticketIds).run();
-          
+
           totalDeletedTickets += deleteRes.meta.changes || 0;
-          
+
           // If we deleted less than the batch size, we're likely done with this rule
           if (ticketsToDelete.length < batchSize) {
             hasMore = false;

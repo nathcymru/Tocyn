@@ -2,6 +2,10 @@ export class ReplyParser {
   /**
    * Isolates the newest message in an email thread.
    */
+  static parseEmailReply(text?: string, html?: string): string {
+    return this.stripHistory(text, html);
+  }
+
   static stripHistory(text?: string, html?: string): string {
     if (!text && !html) return '';
 
@@ -48,8 +52,21 @@ export class ReplyParser {
     }
 
     // Fallback for HTML if text is not available
-    // For now, a very basic HTML stripper or use the plain text equivalent
-    // Ideally, we'd use a DOM parser if available, but for now we'll return a basic strip
-    return html ? html.replace(/<[^>]*>?/gm, '').trim() : '';
+    if (!html) return '';
+    let current = html;
+    let previous: string;
+    let iterations = 0;
+    do {
+      previous = current;
+      current = current.replace(/<[^>]*>?/gm, '');
+      iterations++;
+    } while (current !== previous && iterations < 10);
+
+    if (current !== previous) {
+      // Fallback: strip residual angle-bracket chars when iteration limit reached
+      current = current.replace(/[<>]/g, '');
+    }
+
+    return current.trim();
   }
 }

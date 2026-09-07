@@ -8,15 +8,43 @@ import { AppVariables } from "../types";
 import { z } from "zod";
 import filters from "./filters.handler";
 import { CloudflareService } from "../services/cloudflare.service";
-import { encryptString, decryptString } from "../utils/crypto";
+import { encryptString } from "../utils/crypto";
+import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 
 const settings = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
-// Apply auth and MFA globally
-settings.use("*", authMiddleware, mfaGuard);
+// Apply auth, tenant composition, and MFA globally
+settings.use("*", authMiddleware, tenantMiddleware, mfaGuard);
 
 // Mount filters router
 settings.route("/filters", filters);
+
+const ALLOWED_SETTINGS_KEYS = new Set([
+  "APP_NAME",
+  "PUBLIC_URL",
+  "PORTAL_URL",
+  "TICKET_PREFIX",
+  "RESEND_FROM_EMAIL",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_API_TOKEN",
+  "OPENAI_SECRET",
+  "TURNSTILE_SITE_KEY",
+  "TURNSTILE_SECRET_KEY",
+  "SLACK_WEBHOOK_URL",
+  "RESEND_API_KEY",
+  "SUPPORT_EMAIL",
+  "COMPANY_NAME",
+  "SYSTEM_PROMPT",
+  "NOTIFICATION_EMAIL",
+  "agent_settings_permissions"
+]);
+
+const SENSITIVE_SETTINGS_KEYS = new Set([
+  "TURNSTILE_SECRET_KEY",
+  "RESEND_API_KEY",
+  "SLACK_WEBHOOK_URL",
+  "OPENAI_SECRET"
+]);
 
 const updateSettingsSchema = z.record(
   z.string()
@@ -31,10 +59,8 @@ const settingsPayloadSchema = z.record(z.unknown()).refine(data => Object.keys(d
   message: "Too many settings provided",
 });
 
-/**
- * Helper to determine if a setting key is sensitive
- */
 function isSensitiveKey(key: string): boolean {
+  if (SENSITIVE_SETTINGS_KEYS.has(key)) return true;
   if (key === 'TURNSTILE_SITE_KEY') return false;
   return key.endsWith('_TOKEN') || key.endsWith('_KEY') || key.endsWith('_SECRET') || key.includes('PASSWORD') || key.includes('_ACCESS_KEY_');
 }
@@ -45,7 +71,7 @@ function isSensitiveKey(key: string): boolean {
  */
 settings.get("/usage", roleGuard(["admin"]), async (c) => {
   try {
-    const cfService = new CloudflareService(c.env);
+    const cfService = new CloudflareService(c.env, c.get('tenantDeps') as TenantRequestDeps);
     const stats = await cfService.getUsageStats();
     return c.json(stats);
   } catch (err: any) {
@@ -58,28 +84,34 @@ settings.get("/usage", roleGuard(["admin"]), async (c) => {
 
 /**
  * GET /api/settings
- * Fetch all global settings as a key-value object
+ * Fetch all tenant settings as a key-value object
  */
 settings.get("/", roleGuard(["admin", "agent"]), permissionGuard("general"), async (c) => {
-  const { results } = await c.env.DB.prepare("SELECT key, value FROM config").all();
+  const d = c.get('tenantDeps') as TenantRequestDeps;
   const settingsObj: Record<string, string> = {};
-  
-  for (const row of results as { key: string; value: string }[]) {
-    if (isSensitiveKey(row.key) && row.value) {
-      if (!c.env.APP_MASTER_KEY) {
-        return c.json({ error: "APP_MASTER_KEY is missing. Cannot verify settings." }, 500);
+
+  const hasKey = !!c.env.APP_MASTER_KEY;
+
+  for (const key of ALLOWED_SETTINGS_KEYS) {
+    const val = await d.repositories.config.get(key);
+    if (val !== null) {
+      if (isSensitiveKey(key) && val) {
+        if (!hasKey) {
+          return c.json({ error: "APP_MASTER_KEY is missing. Cannot verify settings." }, 500);
+        }
+        settingsObj[key] = "••••••••";
+      } else {
+        settingsObj[key] = val;
       }
-      settingsObj[row.key] = "••••••••"; // Mask sensitive values
-    } else {
-      settingsObj[row.key] = row.value;
     }
   }
+
   return c.json(settingsObj);
 });
 
 /**
  * PUT /api/settings
- * Update multiple global settings
+ * Update multiple tenant settings
  */
 settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), async (c) => {
   const body = await c.req.json();
@@ -94,15 +126,22 @@ settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
   }
 
   const updates = result.data;
-  const statements = [];
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+
+  // Validate every key before any writes, including mixed valid/invalid payloads.
+  for (const key of Object.keys(updates)) {
+    if (!ALLOWED_SETTINGS_KEYS.has(key)) return c.json({ error: `Setting key '${key}' is not permitted` }, 400);
+  }
 
   for (let [key, value] of Object.entries(updates)) {
-    // Prevent modification of agent_settings_permissions via general settings endpoint
     if (key === 'agent_settings_permissions') {
       return c.json({ error: "Cannot modify agent permissions via this endpoint" }, 403);
     }
 
-    // Skip updating if the value is the mask placeholder
+    if (!ALLOWED_SETTINGS_KEYS.has(key)) {
+      return c.json({ error: `Setting key '${key}' is not permitted` }, 400);
+    }
+
     if (isSensitiveKey(key) && value === "••••••••") {
       continue;
     }
@@ -114,15 +153,7 @@ settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
       value = await encryptString(value, c.env.APP_MASTER_KEY);
     }
 
-    statements.push(
-      c.env.DB.prepare(
-        "INSERT INTO config (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP"
-      ).bind(key, value)
-    );
-  }
-
-  if (statements.length > 0) {
-    await c.env.DB.batch(statements);
+    await d.repositories.config.set(key, value);
   }
 
   return c.json({ success: true });

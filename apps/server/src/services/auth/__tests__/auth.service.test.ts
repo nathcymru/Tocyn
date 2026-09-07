@@ -7,6 +7,7 @@ describe('AuthService', () => {
   let authService: AuthService;
   const mockUser: User = {
     id: 'user-123',
+    tenant_id: 'default-tenant',
     email: 'test@example.com',
     full_name: 'Test User',
     role: 'admin',
@@ -23,7 +24,7 @@ describe('AuthService', () => {
     it('should correctly hash a password and verify it', async () => {
       const password = 'mySecurePassword123';
       const hash = await authService.hashPassword(password);
-      
+
       expect(hash).toBeDefined();
       expect(hash).toContain(':'); // Should have salt:iterations:hash format
       const parts = hash.split(':');
@@ -38,13 +39,18 @@ describe('AuthService', () => {
       const password = 'mySecurePassword123';
       const wrongPassword = 'wrongPassword';
       const hash = await authService.hashPassword(password);
-      
+
       const isValid = await authService.verifyPassword(wrongPassword, hash);
       expect(isValid).toBe(false);
     });
   });
 
   describe('generateToken', () => {
+    it('rejects omitted authentication state instead of minting an ambiguous app token', async () => {
+      // @ts-expect-error The state is mandatory, including for JavaScript callers at runtime.
+      await expect(authService.generateToken(mockUser, secret)).rejects.toThrow('Explicit MFA verification state required');
+    });
+
     it('should generate a valid JWT token', async () => {
       const token = await authService.generateToken(mockUser, secret, false, '1h');
       expect(token).toBeDefined();
@@ -62,11 +68,44 @@ describe('AuthService', () => {
 
     it('should set mfa_verified to true in the token when requested', async () => {
       const token = await authService.generateToken(mockUser, secret, true, '1h');
-      
+
       const secretKey = new TextEncoder().encode(secret);
       const { payload } = await jose.jwtVerify(token, secretKey);
 
       expect(payload.mfa_verified).toBe(true);
+    });
+  });
+
+  describe('verifyToken', () => {
+    it('should revalidate user against D1 when DB is present and return null if deleted', async () => {
+      const mockDb = {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => null // User deleted from D1
+          })
+        })
+      };
+      const serviceWithDb = new AuthService({ JWT_SECRET: secret, DB: mockDb as any } as any);
+      const token = await serviceWithDb.generateToken(mockUser, secret, true, '1h');
+
+      const verifiedUser = await serviceWithDb.verifyToken(token);
+      expect(verifiedUser).toBeNull();
+    });
+
+    it('should return user from D1 when user exists', async () => {
+      const mockDb = {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => mockUser
+          })
+        })
+      };
+      const serviceWithDb = new AuthService({ JWT_SECRET: secret, DB: mockDb as any } as any);
+      const token = await serviceWithDb.generateToken(mockUser, secret, true, '1h');
+
+      const verifiedUser = await serviceWithDb.verifyToken(token);
+      expect(verifiedUser).toBeDefined();
+      expect(verifiedUser?.id).toBe(mockUser.id);
     });
   });
 });

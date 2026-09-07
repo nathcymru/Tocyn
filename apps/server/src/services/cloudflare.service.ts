@@ -1,32 +1,27 @@
 import { Env } from '../bindings';
 import { UsageStats } from '@luminatick/shared';
 import { decryptString } from '../utils/crypto';
+import { TenantRequestDeps } from '../middleware/tenant.middleware';
 
 export class CloudflareService {
-  constructor(private env: Env) {}
+  constructor(private env: Env, private deps?: TenantRequestDeps) {}
 
   async getCredentials(): Promise<{ accountId: string, apiToken: string }> {
     let accountId = this.env.CLOUDFLARE_ACCOUNT_ID;
     let apiToken = this.env.CLOUDFLARE_API_TOKEN;
 
-    if (!accountId || !apiToken) {
-      const { results } = await this.env.DB.prepare(
-        "SELECT key, value FROM config WHERE key IN ('CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN')"
-      ).all<{ key: string, value: string }>();
+    if ((!accountId || !apiToken) && this.deps) {
+      const dbAccountId = await this.deps.repositories.config.get('CLOUDFLARE_ACCOUNT_ID');
+      const dbApiToken = await this.deps.repositories.config.get('CLOUDFLARE_API_TOKEN');
 
-      const dbConfig = results.reduce((acc, row) => {
-        acc[row.key] = row.value;
-        return acc;
-      }, {} as Record<string, string>);
+      accountId = accountId || dbAccountId || undefined;
 
-      accountId = accountId || dbConfig['CLOUDFLARE_ACCOUNT_ID'];
-      
-      if (!apiToken && dbConfig['CLOUDFLARE_API_TOKEN']) {
+      if (!apiToken && dbApiToken) {
         if (!this.env.APP_MASTER_KEY) {
           throw new Error('APP_MASTER_KEY is missing. Cannot decrypt CLOUDFLARE_API_TOKEN.');
         }
         try {
-          apiToken = await decryptString(dbConfig['CLOUDFLARE_API_TOKEN'], this.env.APP_MASTER_KEY);
+          apiToken = await decryptString(dbApiToken, this.env.APP_MASTER_KEY);
         } catch (error) {
           throw new Error('Failed to decrypt CLOUDFLARE_API_TOKEN. ' + (error instanceof Error ? error.message : String(error)));
         }
@@ -46,7 +41,7 @@ export class CloudflareService {
     const now = new Date();
     const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    
+
     const startOfMonthStr = startOfMonth.toISOString();
     const startOfDayStr = startOfDay.toISOString();
     const end = now.toISOString();
@@ -161,7 +156,8 @@ export class CloudflareService {
       return acc;
     }, { classAOperations: 0, classBOperations: 0 });
 
-    const aiGroups = account.aiInferenceAdaptiveGroups || [];    const aiSum = aiGroups.reduce((acc: any, g: any) => ({
+    const aiGroups = account.aiInferenceAdaptiveGroups || [];
+    const aiSum = aiGroups.reduce((acc: any, g: any) => ({
       neurons: acc.neurons + (g.sum?.totalNeurons || 0)
     }), { neurons: 0 });
 

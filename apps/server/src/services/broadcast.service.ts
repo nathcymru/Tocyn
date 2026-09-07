@@ -1,15 +1,17 @@
+import { VerifiedTenantScope } from '../types/tenant';
 import { Env } from '../bindings';
 
 export class BroadcastService {
-  constructor(private env: Env) {}
+  constructor(private env: Env, private scope?: VerifiedTenantScope) {}
 
   async broadcast(type: string, payload: any, retries = 2): Promise<void> {
     if (!this.env.NOTIFICATION_DO) {
       return;
     }
 
+    if (!this.scope?.tenantId) throw new Error('Verified tenant scope required for broadcasts');
     try {
-      const id = this.env.NOTIFICATION_DO.idFromName('global');
+      const id = this.env.NOTIFICATION_DO.idFromName(`tenant:${this.scope.tenantId}`);
       const obj = this.env.NOTIFICATION_DO.get(id);
 
       await obj.fetch('http://do/broadcast', {

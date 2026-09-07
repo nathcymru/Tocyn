@@ -16,15 +16,33 @@ const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
 let adminToken: string;
 let agentToken: string;
 
+let firstQueue: any[] = [];
+
 describe("Group Management Integration Tests", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    
+    firstQueue = [];
+
+    mockDB.prepare.mockReturnThis();
+    mockDB.bind.mockReturnThis();
+    mockDB.first.mockImplementation(async () => {
+      const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
+      const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
+        const bindCalls = vi.mocked(mockDB.bind).mock.calls;
+        const sub = bindCalls.length > 0 ? bindCalls[bindCalls.length - 1][1] : "admin-1";
+        const role = sub === "agent-1" ? "agent" : "admin";
+        return { tenant_id: "default-tenant", id: sub, role };
+      }
+      return firstQueue.shift() ?? null;
+    });
+
     const adminUser = {
       id: "admin-1",
       email: "admin@example.com",
       role: "admin" as const,
       mfa_enabled: true,
+      tenant_id: "default-tenant",
     };
     adminToken = await authService.generateToken(adminUser as any, JWT_SECRET, true);
 
@@ -33,6 +51,7 @@ describe("Group Management Integration Tests", () => {
       email: "agent@example.com",
       role: "agent" as const,
       mfa_enabled: true,
+      tenant_id: "default-tenant",
     };
     agentToken = await authService.generateToken(agentUser as any, JWT_SECRET, true);
   });
@@ -40,13 +59,13 @@ describe("Group Management Integration Tests", () => {
   describe("POST /groups", () => {
     it("should allow an admin to create a group", async () => {
       mockDB.run.mockResolvedValueOnce({ success: true });
-      mockDB.first.mockResolvedValueOnce({ id: "g-1", name: "Support", description: "Desc" });
+      firstQueue.push({ id: "g-1", name: "Support", description: "Desc" });
 
       const res = await dashboard.request(
         "/groups",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${adminToken}`,
             "Content-Type": "application/json"
           },
@@ -66,7 +85,7 @@ describe("Group Management Integration Tests", () => {
         "/groups",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${agentToken}`,
             "Content-Type": "application/json"
           },
@@ -82,9 +101,7 @@ describe("Group Management Integration Tests", () => {
 
   describe("DELETE /groups/:id", () => {
     it("should allow an admin to delete a group with no tickets", async () => {
-      mockDB.first
-        .mockResolvedValueOnce({ id: "g-1" }) // Group exists
-        .mockResolvedValueOnce({ count: 0 }); // No tickets
+      firstQueue.push({ id: "g-1" }, { count: 0 });
 
       mockDB.batch.mockResolvedValueOnce([{ success: true }, { success: true }]);
 
@@ -103,9 +120,7 @@ describe("Group Management Integration Tests", () => {
     });
 
     it("should return 400 if group has active tickets", async () => {
-      mockDB.first
-        .mockResolvedValueOnce({ id: "g-1" }) // Group exists
-        .mockResolvedValueOnce({ count: 5 }); // Has tickets
+      firstQueue.push({ id: "g-1" }, { count: 5 });
 
       const res = await dashboard.request(
         "/groups/g-1",
@@ -137,7 +152,7 @@ describe("Group Management Integration Tests", () => {
   describe("Group Members Management", () => {
     it("should allow viewing group members (Admin/Agent)", async () => {
       const mockMembers = [{ id: "u-1", email: "u1@test.com", full_name: "User 1", role: "agent" }];
-      mockDB.first.mockResolvedValueOnce({ id: "g-1" }); // Group exists
+      firstQueue.push({ id: "g-1" });
       mockDB.all.mockResolvedValueOnce({ results: mockMembers });
 
       const res = await dashboard.request(
@@ -153,16 +168,14 @@ describe("Group Management Integration Tests", () => {
     });
 
     it("should allow admin to add a member", async () => {
-      mockDB.first
-        .mockResolvedValueOnce({ id: "g-1" }) // Group exists
-        .mockResolvedValueOnce({ id: "u-2" }); // User exists
+      firstQueue.push({ id: "g-1" }, { id: "u-2" });
       mockDB.run.mockResolvedValueOnce({ success: true });
 
       const res = await dashboard.request(
         "/groups/g-1/members",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${adminToken}`,
             "Content-Type": "application/json"
           },
@@ -177,7 +190,8 @@ describe("Group Management Integration Tests", () => {
     });
 
     it("should allow admin to remove a member", async () => {
-      mockDB.first.mockResolvedValueOnce({ 1: 1 }); // Association exists
+      firstQueue.push({ 1: 1 });
+      mockDB.run.mockResolvedValueOnce({ success: true });
       mockDB.run.mockResolvedValueOnce({ success: true });
 
       const res = await dashboard.request(
@@ -191,7 +205,7 @@ describe("Group Management Integration Tests", () => {
 
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true });
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("DELETE FROM user_groups WHERE user_id = ? AND group_id = ?"));
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("DELETE FROM user_groups WHERE tenant_id = ? AND user_id = ? AND group_id = ?"));
     });
 
     it("should return 403 for non-admins adding members", async () => {
@@ -199,7 +213,7 @@ describe("Group Management Integration Tests", () => {
         "/groups/g-1/members",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${agentToken}`,
             "Content-Type": "application/json"
           },

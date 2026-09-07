@@ -4,7 +4,7 @@ import { cors } from 'hono/cors';
 import { Env } from './bindings';
 import { EmailHandler } from './handlers/email.handler';
 import { InboundEmailService } from './services/email/inbound.service';
-import { AutomationService } from './services/automation.service';
+import { runScheduledRetention } from './auth/automation-composition';
 import auth from './handlers/auth.handler';
 import dashboard from './handlers/dashboard.handler';
 import knowledge from './handlers/knowledge.handler';
@@ -35,7 +35,7 @@ app.get('/api/realtime', async (c) => {
   try {
     const authService = new AuthService(c.env);
     user = await authService.verifyToken(token); // Verify auth before passing to DO
-    if (!user) {
+    if (!user || !['agent', 'admin'].includes(user.role)) {
       return c.json({ error: 'Unauthorized' }, 401);
     }
   } catch (err) {
@@ -47,7 +47,7 @@ app.get('/api/realtime', async (c) => {
   newReq.headers.set('X-User-ID', user.id);
   newReq.headers.set('X-User-Name', user.full_name || user.email);
 
-  const id = c.env.NOTIFICATION_DO.idFromName('global');
+  const id = c.env.NOTIFICATION_DO.idFromName(`tenant:${user.tenant_id}`);
   const obj = c.env.NOTIFICATION_DO.get(id);
   return obj.fetch(newReq);
 });
@@ -62,7 +62,7 @@ app.use('/api/*', cors({
 
     if (!origin) return c.env.PORTAL_URL || 'http://localhost:5173';
 
-    // In a single-tenant environment using JWTs (no cookies), reflecting the 
+    // In a single-tenant environment using JWTs (no cookies), reflecting the
     // incoming origin allows users to bind any custom domain seamlessly.
     return origin;
   },
@@ -103,8 +103,7 @@ export default {
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    const automationService = new AutomationService(env);
-    const result = await automationService.runRetention();
+    const result = await runScheduledRetention(env);
     console.log(`Retention run complete: ${result.deleted_tickets} tickets deleted, ${result.deleted_attachments} attachments deleted.`);
   },
 };
