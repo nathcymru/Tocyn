@@ -16,8 +16,16 @@ const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
 // --- PUBLIC CONFIG ROUTE ---
 app.get('/config', async (c) => {
-  const authService = new CustomerAuthService(c.env);
-  const config = await authService.getConfig();
+  const widgetKey = c.req.header('X-Widget-Key') || c.req.query('key');
+  const baseAuthService = new CustomerAuthService(c.env);
+  let tenantId: string | undefined;
+  if (widgetKey && typeof widgetKey === 'string' && widgetKey.trim()) {
+    const resolved = await baseAuthService.resolveTenantFromWidgetKey(widgetKey.trim());
+    if (resolved) {
+      tenantId = resolved;
+    }
+  }
+  const config = await baseAuthService.getConfig(tenantId);
   return c.json(config);
 });
 
@@ -26,38 +34,46 @@ app.get('/config', async (c) => {
 app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
   const body = await c.req.json();
 
-  // Turnstile verification
+  // Reject caller-supplied tenant IDs in body or header immediately
+  if (body.tenant_id || body.tenantId || c.req.header('X-Tenant-ID')) {
+    return c.json({ error: 'Invalid tenant context' }, 400);
+  }
+
+  const widgetKey = body.widgetKey || c.req.header('X-Widget-Key') || c.req.query('key');
+  if (!widgetKey || typeof widgetKey !== 'string' || !widgetKey.trim()) {
+    return c.json({ error: 'Widget key required' }, 400);
+  }
+
+  const baseAuthService = new CustomerAuthService(c.env);
+  const tenantId = await baseAuthService.resolveTenantFromWidgetKey(widgetKey.trim());
+  if (!tenantId) {
+    return c.json({ error: 'Widget configuration not found' }, 404);
+  }
+
+  // Turnstile verification bound to resolved tenant
   try {
-    const isValid = await verifyTurnstileToken(c.env, body.turnstileToken, c.req.header('CF-Connecting-IP'));
+    const isValid = await verifyTurnstileToken(c.env, tenantId, body.turnstileToken, c.req.header('CF-Connecting-IP'));
     if (!isValid) {
       return c.json({ error: 'Turnstile validation failed or token missing' }, 400);
     }
   } catch (error: any) {
-    if (error.message.includes('APP_MASTER_KEY')) {
+    if (error.message?.includes('APP_MASTER_KEY')) {
       return c.json({ error: "Server misconfiguration: APP_MASTER_KEY is missing." }, 500);
     }
     return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
   }
 
-  const authService = new CustomerAuthService(c.env);
+  const authService = new CustomerAuthService(c.env, tenantId, (c.env as any).emailTransport);
 
-  let tenantId = body.tenant_id || body.tenantId || c.req.header('X-Tenant-ID');
-  if (!tenantId) {
-    const widgetKey = body.widgetKey || c.req.header('X-Widget-Key') || c.req.query('key');
-    if (widgetKey && typeof widgetKey === 'string' && widgetKey.trim()) {
-      const resolved = await authService.resolveTenantFromWidgetKey(widgetKey.trim());
-      if (resolved) {
-        tenantId = resolved;
-      }
+  try {
+    await authService.requestAuth(body.email, body.type, body.baseUrl);
+    return c.json({ success: true });
+  } catch (err: any) {
+    if (err.message === 'Invalid tenant context') {
+      return c.json({ error: 'Invalid tenant context' }, 400);
     }
+    throw err;
   }
-
-  if (!tenantId) {
-    return c.json({ error: 'Tenant context required' }, 400);
-  }
-
-  await authService.requestAuth(body.email, body.type, body.baseUrl, tenantId);
-  return c.json({ success: true });
 });
 
 app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {

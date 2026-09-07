@@ -27,7 +27,9 @@ vi.mock("../../services/customer-auth.service", () => {
     CustomerAuthService: vi.fn().mockImplementation(function() {
       return {
         requestAuth: mockRequestAuth,
-        verifyAuth: mockVerifyAuth
+        verifyAuth: mockVerifyAuth,
+        resolveTenantFromWidgetKey: vi.fn().mockResolvedValue("default-tenant"),
+        getConfig: vi.fn().mockResolvedValue({ TICKET_PREFIX: '#' })
       };
     })
   };
@@ -145,7 +147,7 @@ describe("Customer Handler Integration Tests", () => {
         "/auth/request",
         {
           method: "POST",
-          body: JSON.stringify({ tenant_id: "default-tenant", email: "test@example.com", type: "magic_link", baseUrl: "http://localhost:5173" }),
+          body: JSON.stringify({ widgetKey: "valid_widget_key", email: "test@example.com", type: "magic_link", baseUrl: "http://localhost:5173" }),
           headers: { "Content-Type": "application/json" },
         },
         { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any }
@@ -154,7 +156,7 @@ describe("Customer Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.success).toBe(true);
-      expect(mockRequestAuth).toHaveBeenCalledWith("test@example.com", "magic_link", "http://localhost:5173", "default-tenant");
+      expect(mockRequestAuth).toHaveBeenCalledWith("test@example.com", "magic_link", "http://localhost:5173");
     });
   });
 

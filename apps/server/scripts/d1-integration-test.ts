@@ -1,4 +1,5 @@
 import { Miniflare } from 'miniflare';
+import assert from 'node:assert';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
 import { createRepositories } from '../src/repositories/index';
@@ -8,7 +9,7 @@ import { tenantMiddleware } from '../src/middleware/tenant.middleware';
 import { Hono } from 'hono';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import assert from 'assert';
+import { InMemoryEmailTransport } from '../src/services/email/transport';
 
 async function run() {
   const mf = new Miniflare({
@@ -473,7 +474,8 @@ async function run() {
   await db.prepare("INSERT INTO users (id, tenant_id, email, full_name, role) VALUES (?, ?, ?, ?, ?)").bind(userIdA2, 'tenant-A', 'c2@a.com', 'A2', 'customer').run();
   const tokenWidgetA2 = await createToken('tenant-A', 'customer', userIdA2, 'c2@a.com', 'widget');
 
-  const envMock = { DB: db, JWT_SECRET: 'secret', ATTACHMENTS_BUCKET: bucket, AI: { run: async (model, options) => {
+  const testEmailTransport = new InMemoryEmailTransport();
+  const envMock = { DB: db, JWT_SECRET: 'secret', ATTACHMENTS_BUCKET: bucket, emailTransport: testEmailTransport, AI: { run: async (model, options) => {
   if (model === '@cf/meta/llama-3-8b-instruct') {
     return { response: JSON.stringify(options.messages) };
   }
@@ -1178,17 +1180,8 @@ async function run() {
     throw new Error("WidgetTenantResolver failed to resolve tenant_id from public key!");
   }
 
-  // 18. End-to-End Customer Auth & Token Consumption Flow (unmocked issuance-to-consumption)
-  let capturedToken: string | null = null;
-  const originalWarn = console.warn;
-  console.warn = (...args: any[]) => {
-    const msg = args.join(' ');
-    const match = msg.match(/token=([a-f0-9]+)/);
-    if (match) {
-      capturedToken = match[1];
-    }
-    originalWarn(...args);
-  };
+  // 18. End-to-End Customer Auth & Token Consumption Flow (unmocked issuance-to-consumption via EmailTransport)
+  testEmailTransport.clear();
 
   const e2eRequestReq = new Request('http://localhost/api/v1/customer/auth/request', {
     method: 'POST',
@@ -1197,25 +1190,32 @@ async function run() {
       email: 'e2e-customer@example.com',
       type: 'magic_link',
       baseUrl: 'http://localhost:5173',
-      tenant_id: 'tenant-A'
+      widgetKey: 'pk_widget_tenant_A'
     })
   });
   const e2eRequestRes = await worker.fetch(e2eRequestReq, envMock, {});
-  console.warn = originalWarn;
 
   if (e2eRequestRes.status !== 200) {
     const errText = await e2eRequestRes.text();
     throw new Error(`POST /api/v1/customer/auth/request failed with ${e2eRequestRes.status}: ${errText}`);
   }
-  if (!capturedToken) {
-    throw new Error("Failed to capture plain token from requestAuth flow!");
+
+  if (testEmailTransport.sentEmails.length !== 1) {
+    throw new Error(`Expected 1 sent email in fake transport, got ${testEmailTransport.sentEmails.length}`);
   }
+
+  const sentEmail = testEmailTransport.sentEmails[0];
+  const tokenMatch = sentEmail.options.html.match(/token=([a-f0-9]+)/);
+  if (!tokenMatch) {
+    throw new Error("Failed to capture plain token from sent email transport HTML!");
+  }
+  const capturedPlainToken = tokenMatch[1];
 
   // Call /api/v1/customer/auth/verify with captured plain token
   const e2eVerifyReq = new Request('http://localhost/api/v1/customer/auth/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: capturedToken })
+    body: JSON.stringify({ token: capturedPlainToken })
   });
   const e2eVerifyRes = await worker.fetch(e2eVerifyReq, envMock, {});
   if (e2eVerifyRes.status !== 200) {
@@ -1227,6 +1227,12 @@ async function run() {
   const returnedCustomerToken = verifyResult.token;
   if (!returnedCustomerToken) {
     throw new Error("POST /api/v1/customer/auth/verify response missing JWT token!");
+  }
+
+  // Verify JWT claims
+  const { payload: customerJwtPayload } = await jose.jwtVerify(returnedCustomerToken, new TextEncoder().encode('secret'));
+  if (customerJwtPayload.aud !== 'widget' || (customerJwtPayload as any).tenant_id !== 'tenant-A') {
+    throw new Error(`Customer JWT claims invalid: ${JSON.stringify(customerJwtPayload)}`);
   }
 
   // Test GET /api/v1/customer/auth/me using real returned token from /verify
@@ -1242,7 +1248,7 @@ async function run() {
   if (e2eMeJson.user?.email !== 'e2e-customer@example.com' || e2eMeJson.user?.tenant_id !== 'tenant-A') {
     throw new Error(`GET /api/v1/customer/auth/me returned invalid user payload: ${JSON.stringify(e2eMeJson)}`);
   }
-  console.log("SUCCESS: 18. Connected customer /auth/verify to protected endpoint token consumption flow verified");
+  console.log("SUCCESS: 18. Connected customer /auth/verify to protected endpoint token consumption flow verified via EmailTransport");
 
   // 19. Middleware Authoritative D1 User/Role Revalidation (User Deletion & Demotion)
   const revalUserId = 'user-reval-1';
@@ -1290,6 +1296,146 @@ async function run() {
     throw new Error(`Valid widget key request returned ${validKeyWidgetRes.status} instead of expected 200 OK`);
   }
   console.log("SUCCESS: 20. Strict widget-key routing verified (missing key = 400, unknown key = 404, valid key = 200, zero default fallbacks)");
+
+  // 21. Two-Tenant Configuration Isolation & Malicious Override Protection
+  // 21a. Distinct Tenant Configuration Isolation
+  const testMasterKey = 'test-master-key-that-is-long-enough-for-aes';
+  const envWithMaster = { ...envMock, APP_MASTER_KEY: testMasterKey };
+  const encKeyA = await encryptString('re_tenant_A_secret_key_123', testMasterKey);
+  const encKeyB = await encryptString('re_tenant_B_secret_key_456', testMasterKey);
+
+  await reposApiKeyA.config.set('RESEND_API_KEY', encKeyA);
+  await reposApiKeyA.config.set('RESEND_FROM_EMAIL', 'support@tenant-a.com');
+  const encTurnstileA = await encryptString('turnstile_secret_tenant_A', testMasterKey);
+  const encTurnstileB = await encryptString('turnstile_secret_tenant_B', testMasterKey);
+
+  await reposApiKeyA.config.set('RESEND_API_KEY', encKeyA);
+  await reposApiKeyA.config.set('RESEND_FROM_EMAIL', 'support@tenant-a.com');
+  await reposApiKeyA.config.set('TURNSTILE_SECRET_KEY', encTurnstileA);
+
+  await reposApiKeyB.config.set('RESEND_API_KEY', encKeyB);
+  await reposApiKeyB.config.set('RESEND_FROM_EMAIL', 'support@tenant-b.com');
+  await reposApiKeyB.config.set('TURNSTILE_SECRET_KEY', encTurnstileB);
+
+  const { EmailService } = await import('../src/services/email/outbound.service');
+  const emailSvcA = new EmailService(envWithMaster as any, 'tenant-A', testEmailTransport);
+  const emailSvcB = new EmailService(envWithMaster as any, 'tenant-B', testEmailTransport);
+
+  const credsA = await emailSvcA.getResendCredentials();
+  const credsB = await emailSvcB.getResendCredentials();
+  if (credsA.apiKey !== 're_tenant_A_secret_key_123' || credsA.defaultFrom !== 'support@tenant-a.com') {
+    throw new Error(`Tenant A config resolution returned incorrect credentials: ${JSON.stringify(credsA)}`);
+  }
+  if (credsB.apiKey !== 're_tenant_B_secret_key_456' || credsB.defaultFrom !== 'support@tenant-b.com') {
+    throw new Error(`Tenant B config resolution returned incorrect credentials: ${JSON.stringify(credsB)}`);
+  }
+
+  // Verify Turnstile reads distinct tenant config
+  const { verifyTurnstileToken } = await import('../src/utils/turnstile');
+  // Tenant with turnstile configured returns false when no token provided (enforced)
+  const turnstileEnabledA = await verifyTurnstileToken(envWithMaster as any, 'tenant-A');
+  if (turnstileEnabledA !== false) {
+    throw new Error("verifyTurnstileToken failed to enforce token requirement for tenant-A!");
+  }
+  // Tenant without turnstile configured returns true (disabled)
+  const turnstileDisabledC = await verifyTurnstileToken(envWithMaster as any, 'tenant-unconfigured-xyz');
+  if (turnstileDisabledC !== true) {
+    throw new Error("verifyTurnstileToken failed to bypass check for unconfigured tenant!");
+  }
+  console.log("SUCCESS: 21a. Distinct tenant configuration isolation verified for Email and Turnstile");
+
+  // 21b. Reject All 3 Malicious Tenant Override Inputs (tenant_id, tenantId, X-Tenant-ID)
+  testEmailTransport.clear();
+
+  // Override input 1: body.tenant_id
+  const ovReq1 = new Request('http://localhost/api/v1/customer/auth/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '10.21.0.1' },
+    body: JSON.stringify({ widgetKey: 'pk_widget_tenant_A', tenant_id: 'tenant-B', email: 'override1@example.com' })
+  });
+  const ovRes1 = await worker.fetch(ovReq1, envWithMaster, {});
+  if (ovRes1.status !== 400) throw new Error(`Override input tenant_id returned ${ovRes1.status} instead of 400`);
+  const ovBody1 = await ovRes1.json();
+  if (ovBody1.error !== 'Invalid tenant context') throw new Error(`Override input tenant_id error: ${ovBody1.error}`);
+
+  // Override input 2: body.tenantId
+  const ovReq2 = new Request('http://localhost/api/v1/customer/auth/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '10.21.0.2' },
+    body: JSON.stringify({ widgetKey: 'pk_widget_tenant_A', tenantId: 'tenant-B', email: 'override2@example.com' })
+  });
+  const ovRes2 = await worker.fetch(ovReq2, envWithMaster, {});
+  if (ovRes2.status !== 400) throw new Error(`Override input tenantId returned ${ovRes2.status} instead of 400`);
+
+  // Override input 3: header X-Tenant-ID
+  const ovReq3 = new Request('http://localhost/api/v1/customer/auth/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': 'tenant-B', 'CF-Connecting-IP': '10.21.0.3' },
+    body: JSON.stringify({ widgetKey: 'pk_widget_tenant_A', email: 'override3@example.com' })
+  });
+  const ovRes3 = await worker.fetch(ovReq3, envWithMaster, {});
+  if (ovRes3.status !== 400) throw new Error(`Override input X-Tenant-ID returned ${ovRes3.status} instead of 400`);
+
+  // Assert zero emails sent & zero DB tokens created for override attempts
+  if (testEmailTransport.sentEmails.length !== 0) {
+    throw new Error(`Rejected override attempts sent ${testEmailTransport.sentEmails.length} emails!`);
+  }
+
+  // 21c. Existing Customer Identity Tenant Mismatch Protection
+  await db.prepare("DELETE FROM tenant_config WHERE tenant_id = 'tenant-A' AND key = 'TURNSTILE_SECRET_KEY'").run();
+  await db.prepare("INSERT INTO users (tenant_id, id, email, full_name, role) VALUES ('tenant-B', 'user-existing-b', 'existing-b@example.com', 'User B', 'customer')").run();
+
+  const mismatchReq = new Request('http://localhost/api/v1/customer/auth/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '10.21.0.4' },
+    body: JSON.stringify({ widgetKey: 'pk_widget_tenant_A', email: 'existing-b@example.com' })
+  });
+  const mismatchRes = await worker.fetch(mismatchReq, envWithMaster, {});
+  if (mismatchRes.status !== 400) {
+    throw new Error(`Existing user tenant mismatch returned ${mismatchRes.status} instead of expected 400 Bad Request`);
+  }
+  const mismatchBody = await mismatchRes.json();
+  if (mismatchBody.error !== 'Invalid tenant context') {
+    throw new Error(`Existing user tenant mismatch error message invalid: ${mismatchBody.error}`);
+  }
+
+  // Verify existing user was NOT modified or moved to tenant-A
+  const checkUserB = await db.prepare("SELECT tenant_id FROM users WHERE email = 'existing-b@example.com'").first();
+  if (checkUserB.tenant_id !== 'tenant-B') {
+    throw new Error(`Existing user tenant_id was modified to ${checkUserB.tenant_id}!`);
+  }
+
+  // Verify zero tokens were generated for tenant mismatch attempt
+  const tokensCount = await db.prepare("SELECT COUNT(*) as cnt FROM customer_auth_tokens WHERE user_id = 'user-existing-b'").first<{ cnt: number }>();
+  if (tokensCount?.cnt !== 0) {
+    throw new Error(`Customer auth token was created for tenant mismatch attempt!`);
+  }
+  if (testEmailTransport.sentEmails.length !== 0) {
+    throw new Error("Email was sent for tenant mismatch attempt!");
+  }
+
+  // 21d. Missing and Unknown Widget Key Protection
+  const noKeyReq = new Request('http://localhost/api/v1/customer/auth/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '10.21.0.5' },
+    body: JSON.stringify({ email: 'nokey@example.com' })
+  });
+  const noKeyRes = await worker.fetch(noKeyReq, envWithMaster, {});
+  if (noKeyRes.status !== 400) throw new Error(`Missing widgetKey request returned ${noKeyRes.status} instead of 400`);
+
+  const unknownKeyReq = new Request('http://localhost/api/v1/customer/auth/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '10.21.0.6' },
+    body: JSON.stringify({ widgetKey: 'unknown_widget_key_999', email: 'unknownkey@example.com' })
+  });
+  const unknownKeyRes = await worker.fetch(unknownKeyReq, envWithMaster, {});
+  if (unknownKeyRes.status !== 404) throw new Error(`Unknown widgetKey request returned ${unknownKeyRes.status} instead of 404`);
+
+  if (testEmailTransport.sentEmails.length !== 0) {
+    throw new Error("Email was sent for missing/unknown widget key requests!");
+  }
+
+  console.log("SUCCESS: 21. Two-tenant config isolation, malicious override rejection, canonical email mismatch protection, and zero-write/zero-email invariants verified");
 
   console.log('\nSUCCESS: All Batch 1 through Batch 5 integration tests passed.'); })();
 

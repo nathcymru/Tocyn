@@ -1,19 +1,26 @@
 import { Env } from "../bindings";
 import { decryptString } from "./crypto";
+import { createSystemTenantDeps } from "../auth/scope";
 
 /**
- * Verifies a Cloudflare Turnstile token if the TURNSTILE_SECRET_KEY is configured.
+ * Verifies a Cloudflare Turnstile token if TURNSTILE_SECRET_KEY is configured for the given tenant.
  *
- * @param env The environment bindings (contains DB and APP_MASTER_KEY)
+ * @param env The environment bindings
+ * @param tenantId Authoritative tenant ID
  * @param token The turnstile token provided by the client
  * @param ip The client's IP address (optional)
- * @returns true if valid or if Turnstile is disabled, false if invalid
+ * @returns true if valid or if Turnstile is disabled for this tenant, false if invalid
  */
-export async function verifyTurnstileToken(env: Env, token?: string, ip?: string): Promise<boolean> {
-  const secretKeyResult = await env.DB.prepare("SELECT value FROM tenant_config WHERE key = 'TURNSTILE_SECRET_KEY' LIMIT 1").first<{value: string}>();
+export async function verifyTurnstileToken(env: Env, tenantId: string, token?: string, ip?: string): Promise<boolean> {
+  if (!tenantId) {
+    return true;
+  }
 
-  if (!secretKeyResult?.value) {
-    // Turnstile is disabled
+  const deps = createSystemTenantDeps(tenantId, 'system', env);
+  const secretKey = await deps.repositories.config.get('TURNSTILE_SECRET_KEY');
+
+  if (!secretKey) {
+    // Turnstile is disabled for this tenant
     return true;
   }
 
@@ -26,10 +33,10 @@ export async function verifyTurnstileToken(env: Env, token?: string, ip?: string
     return false;
   }
 
-  const secretKey = await decryptString(secretKeyResult.value, env.APP_MASTER_KEY);
+  const decryptedKey = await decryptString(secretKey, env.APP_MASTER_KEY);
 
   const formData = new FormData();
-  formData.append('secret', secretKey);
+  formData.append('secret', decryptedKey);
   formData.append('response', token);
   if (ip) {
     formData.append('remoteip', ip);

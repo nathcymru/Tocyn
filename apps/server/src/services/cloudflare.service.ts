@@ -1,32 +1,28 @@
 import { Env } from '../bindings';
 import { UsageStats } from '@luminatick/shared';
 import { decryptString } from '../utils/crypto';
+import { createSystemTenantDeps } from '../auth/scope';
 
 export class CloudflareService {
-  constructor(private env: Env) {}
+  constructor(private env: Env, private tenantId?: string) {}
 
   async getCredentials(): Promise<{ accountId: string, apiToken: string }> {
     let accountId = this.env.CLOUDFLARE_ACCOUNT_ID;
     let apiToken = this.env.CLOUDFLARE_API_TOKEN;
 
-    if (!accountId || !apiToken) {
-      const { results } = await this.env.DB.prepare(
-        "SELECT key, value FROM tenant_config WHERE key IN ('CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN')"
-      ).all<{ key: string, value: string }>();
+    if ((!accountId || !apiToken) && this.tenantId) {
+      const deps = createSystemTenantDeps(this.tenantId, 'system', this.env);
+      const dbAccountId = await deps.repositories.config.get('CLOUDFLARE_ACCOUNT_ID');
+      const dbApiToken = await deps.repositories.config.get('CLOUDFLARE_API_TOKEN');
 
-      const dbConfig = results.reduce((acc, row) => {
-        acc[row.key] = row.value;
-        return acc;
-      }, {} as Record<string, string>);
+      accountId = accountId || dbAccountId || undefined;
 
-      accountId = accountId || dbConfig['CLOUDFLARE_ACCOUNT_ID'];
-
-      if (!apiToken && dbConfig['CLOUDFLARE_API_TOKEN']) {
+      if (!apiToken && dbApiToken) {
         if (!this.env.APP_MASTER_KEY) {
           throw new Error('APP_MASTER_KEY is missing. Cannot decrypt CLOUDFLARE_API_TOKEN.');
         }
         try {
-          apiToken = await decryptString(dbConfig['CLOUDFLARE_API_TOKEN'], this.env.APP_MASTER_KEY);
+          apiToken = await decryptString(dbApiToken, this.env.APP_MASTER_KEY);
         } catch (error) {
           throw new Error('Failed to decrypt CLOUDFLARE_API_TOKEN. ' + (error instanceof Error ? error.message : String(error)));
         }
@@ -161,7 +157,8 @@ export class CloudflareService {
       return acc;
     }, { classAOperations: 0, classBOperations: 0 });
 
-    const aiGroups = account.aiInferenceAdaptiveGroups || [];    const aiSum = aiGroups.reduce((acc: any, g: any) => ({
+    const aiGroups = account.aiInferenceAdaptiveGroups || [];
+    const aiSum = aiGroups.reduce((acc: any, g: any) => ({
       neurons: acc.neurons + (g.sum?.totalNeurons || 0)
     }), { neurons: 0 });
 

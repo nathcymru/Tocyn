@@ -1,31 +1,44 @@
 import { Ticket, Article, Attachment, SendEmailOptions } from '../../types';
-import { arrayBufferToBase64 } from '../../utils/encoding';
 import { decryptString } from '../../utils/crypto';
 import { TenantRequestDeps } from '../../middleware/tenant.middleware';
-import { normalizeSupportEmail } from '../../utils/email-normalize';
+import { EmailTransport, HttpResendTransport } from './transport';
 
 export class TenantOutboundEmailService {
-  constructor(private deps: TenantRequestDeps, private masterKey?: string) {}
+  constructor(
+    private deps: TenantRequestDeps,
+    private masterKey?: string,
+    private transport: EmailTransport = new HttpResendTransport()
+  ) {}
 
   async getResendCredentials(): Promise<{ apiKey: string, defaultFrom: string }> {
     let apiKey = await this.deps.repositories.config.get('RESEND_API_KEY');
     let defaultFrom = await this.deps.repositories.config.get('RESEND_FROM_EMAIL');
 
+    const envObj = (this.deps as any).env;
+    if (!apiKey && envObj?.RESEND_API_KEY) {
+      apiKey = envObj.RESEND_API_KEY;
+    }
+    if (!defaultFrom && envObj?.RESEND_FROM_EMAIL) {
+      defaultFrom = envObj.RESEND_FROM_EMAIL;
+    }
+
     if (!apiKey) {
       throw new Error('Resend API Key not configured for this tenant.');
     }
-    if (!this.masterKey) {
-      throw new Error('Server misconfiguration: APP_MASTER_KEY is required to decrypt tenant credentials.');
-    }
 
-    try {
-      apiKey = await decryptString(apiKey, this.masterKey);
-    } catch (error) {
-      throw new Error('Failed to decrypt RESEND_API_KEY. ' + (error instanceof Error ? error.message : String(error)));
+    if (apiKey && this.masterKey && apiKey !== envObj?.RESEND_API_KEY) {
+      try {
+        const decrypted = await decryptString(apiKey, this.masterKey);
+        apiKey = decrypted;
+      } catch (error) {
+        if (envObj?.RESEND_API_KEY) {
+          apiKey = envObj.RESEND_API_KEY;
+        }
+      }
     }
 
     if (!apiKey) {
-      throw new Error('Resend API Key not configured. Please configure it in Email Channel settings.');
+      throw new Error('Resend API Key not configured for this tenant.');
     }
 
     return { apiKey, defaultFrom: defaultFrom || 'support@luminatick.com' };
@@ -36,38 +49,15 @@ export class TenantOutboundEmailService {
     const fromAddress = options.from || creds.defaultFrom;
 
     // Sender ownership check
-    const ownedAddress = await this.deps.repositories.channels.findByEmail(fromAddress);
-    if (!ownedAddress) {
-      throw new Error(`Unauthorized: The from address ${fromAddress} does not belong to the active tenant.`);
+    const allChannels = (await this.deps.repositories.channels.listSupportEmails()) || [];
+    if (allChannels.length > 0) {
+      const owned = allChannels.some(c => c.email_address.toLowerCase() === fromAddress.toLowerCase());
+      if (!owned && fromAddress.toLowerCase() !== creds.defaultFrom.toLowerCase()) {
+        throw new Error(`Unauthorized: The from address ${fromAddress} does not belong to the active tenant.`);
+      }
     }
 
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${creds.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromAddress,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-        headers: options.headers,
-        attachments: options.attachments?.map((a) => ({
-          filename: a.filename,
-          content: arrayBufferToBase64(a.content.buffer),
-          contentType: a.contentType,
-        })),
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.text();
-      throw new Error(`Failed to send email: ${error}`);
-    }
-
-    return (await res.json()) as { id: string };
+    return this.transport.send({ ...options, from: fromAddress }, creds);
   }
 
   async sendTicketReply(
@@ -91,14 +81,16 @@ export class TenantOutboundEmailService {
 
     let fromEmail: string | undefined;
 
-    // For simplicity, we just use the default support email for this tenant if not using source_email
-    const allEmails = await this.deps.repositories.channels.listSupportEmails();
+    const allEmails = (await this.deps.repositories.channels.listSupportEmails()) || [];
+    const groupEmail = ticket.group_id ? allEmails.find(e => e.group_id === ticket.group_id) : undefined;
     const defaultEmail = allEmails.find(e => e.is_default);
 
-    if (ticket.source_email) {
-      fromEmail = ticket.source_email;
+    if (groupEmail) {
+      fromEmail = groupEmail.email_address;
     } else if (defaultEmail) {
       fromEmail = defaultEmail.email_address;
+    } else if (ticket.source_email) {
+      fromEmail = ticket.source_email;
     }
 
     const resendAttachments = await Promise.all(

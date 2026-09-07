@@ -1,4 +1,6 @@
 import { VerifiedTenantScope } from '../types/tenant';
+import { createTenantRequestDeps, TenantRequestDeps } from '../middleware/tenant.middleware';
+import { Env } from '../bindings';
 
 // This factory should ONLY be imported by authentication/authorization logic.
 export function createVerifiedTenantScope(
@@ -22,4 +24,9 @@ export function createSystemTenantScope(options: { tenantId: string, actor: stri
     roles: ['system'],
     authVersion: 1
   } as unknown as VerifiedTenantScope;
+}
+
+export function createSystemTenantDeps(tenantId: string, actor: string, env: Env): TenantRequestDeps {
+  const scope = createSystemTenantScope({ tenantId, actor });
+  return createTenantRequestDeps(scope, env);
 }
