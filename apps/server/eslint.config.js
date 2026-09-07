@@ -107,7 +107,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["src/auth/scope.ts", "src/middleware/auth.middleware.ts", "src/middleware/widget-auth.middleware.ts", "src/auth/api-key-composition.ts"],
+    files: ["src/auth/scope.ts", "src/middleware/auth.middleware.ts", "src/middleware/widget-auth.middleware.ts", "src/auth/api-key-composition.ts", "src/handlers/customer.handler.ts"],
     rules: {
       "no-restricted-imports": "off"
     }

@@ -5,7 +5,7 @@ import { AuthService } from './auth/auth.service';
 import { EmailTransport } from './email/transport';
 import { WidgetTenantResolver } from '../auth/widget-tenant-resolver';
 import { UserAuthResolver } from '../auth/user-auth-resolver';
-import { createSystemTenantDeps } from '../auth/scope';
+import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import * as jose from 'jose';
 
 export class CustomerAuthService {
@@ -14,12 +14,12 @@ export class CustomerAuthService {
 
   constructor(
     private env: Env,
-    private tenantId?: string,
+    private deps?: TenantRequestDeps,
     private transport?: EmailTransport
   ) {
     this.authService = new AuthService(env);
-    if (tenantId) {
-      this.emailService = new EmailService(env, tenantId, transport);
+    if (deps) {
+      this.emailService = new EmailService(env, deps, transport);
     }
   }
 
@@ -32,15 +32,13 @@ export class CustomerAuthService {
     return resolution?.tenantId ?? null;
   }
 
-  async getConfig(tenantId?: string): Promise<{ TICKET_PREFIX: string, TURNSTILE_SITE_KEY?: string }> {
-    const targetTenantId = tenantId || this.tenantId;
-    if (!targetTenantId) {
+  async getConfig(): Promise<{ TICKET_PREFIX: string, TURNSTILE_SITE_KEY?: string }> {
+    if (!this.deps) {
       return { TICKET_PREFIX: '#' };
     }
-    const deps = createSystemTenantDeps(targetTenantId, 'system', this.env);
 
-    const prefix = await deps.repositories.config.get('TICKET_PREFIX');
-    const siteKey = await deps.repositories.config.get('TURNSTILE_SITE_KEY');
+    const prefix = await this.deps.repositories.config.get('TICKET_PREFIX');
+    const siteKey = await this.deps.repositories.config.get('TURNSTILE_SITE_KEY');
     return {
       TICKET_PREFIX: prefix || '#',
       TURNSTILE_SITE_KEY: siteKey || undefined,
@@ -56,7 +54,7 @@ export class CustomerAuthService {
   }
 
   async requestAuth(email: string, type: 'magic_link' | 'otp' = 'magic_link', baseUrl?: string): Promise<void> {
-    if (!this.tenantId || typeof this.tenantId !== 'string' || !this.tenantId.trim()) {
+    if (!this.deps || !this.deps.scope.tenantId) {
       throw new Error('Invalid tenant context');
     }
 
@@ -70,7 +68,7 @@ export class CustomerAuthService {
 
     if (existingUser) {
       // Existing identity MUST belong to active tenant
-      if (existingUser.tenantId !== this.tenantId) {
+      if (existingUser.tenantId !== this.deps.scope.tenantId) {
         throw new Error('Invalid tenant context');
       }
       if (existingUser.role !== 'customer') {
@@ -80,9 +78,8 @@ export class CustomerAuthService {
       userId = existingUser.userId;
     } else {
       // Create shadow customer user under active tenant scope
-      const deps = createSystemTenantDeps(this.tenantId, 'system', this.env);
-      const createdUser = await deps.repositories.users.create({
-        tenant_id: this.tenantId,
+      const createdUser = await this.deps.repositories.users.create({
+        tenant_id: this.deps.scope.tenantId,
         email: lowerEmail,
         full_name: lowerEmail.split('@')[0],
         role: 'customer',
@@ -99,13 +96,11 @@ export class CustomerAuthService {
     const tokenId = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-    // 3. Store Token
-    await this.env.DB.prepare(
-      'INSERT INTO customer_auth_tokens (id, user_id, token_hash, type, expires_at) VALUES (?, ?, ?, ?, ?)'
-    ).bind(tokenId, userId, tokenHash, type, expiresAt).run();
+    // 3. Store Token securely via repository
+    await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, tokenHash, type, expiresAt);
 
     // 4. Send Email via Tenant EmailService
-    const emailSvc = this.emailService || new EmailService(this.env, this.tenantId, this.transport);
+    const emailSvc = this.emailService || new EmailService(this.env, this.deps, this.transport);
 
     if (type === 'magic_link') {
       const url = `${baseUrl || 'http://localhost:5173'}/auth/verify?token=${plainToken}`;
@@ -121,9 +116,7 @@ export class CustomerAuthService {
       const otp = Math.floor(100000 + (array[0] % 900000)).toString();
       const otpHash = await this.hashToken(otp);
 
-      await this.env.DB.prepare(
-        'UPDATE customer_auth_tokens SET token_hash = ? WHERE id = ?'
-      ).bind(otpHash, tokenId).run();
+      await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, otpHash, type, expiresAt);
 
       await emailSvc.send({
         to: [lowerEmail],
@@ -135,32 +128,19 @@ export class CustomerAuthService {
   }
 
   async verifyAuth(plainToken: string): Promise<{ token: string, user: User } | null> {
-    const tokenHash = await this.hashToken(plainToken);
-
-    const tokenRecord = await this.env.DB.prepare(
-      'SELECT * FROM customer_auth_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?'
-    ).bind(tokenHash, new Date().toISOString()).first<{ user_id: string, id: string }>();
-
-    if (!tokenRecord) {
+    if (!this.deps || !this.deps.scope.tenantId) {
       return null;
     }
 
-    const user = await this.env.DB.prepare(
-      'SELECT * FROM users WHERE id = ?'
-    ).bind(tokenRecord.user_id).first<User>();
+    const tokenHash = await this.hashToken(plainToken);
+    const now = new Date().toISOString();
+
+    // Use isolated verification
+    const user = await this.deps.repositories.users.verifyAndConsumeCustomerAuthToken(tokenHash, now);
 
     if (!user) {
       return null;
     }
-
-    await this.env.DB.prepare(
-      'UPDATE customer_auth_tokens SET used_at = ? WHERE id = ?'
-    ).bind(new Date().toISOString(), tokenRecord.id).run();
-
-    await this.env.DB.prepare(
-      'UPDATE users SET last_login_at = ? WHERE id = ?'
-    ).bind(new Date().toISOString(), user.id).run();
-    user.last_login_at = new Date().toISOString();
 
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(this.env.JWT_SECRET);

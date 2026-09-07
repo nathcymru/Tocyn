@@ -50,6 +50,35 @@ export class SqlUserRepository implements UserRepository {
       .bind(this.scope.tenantId, id)
       .run();
   }
+
+  async storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string): Promise<void> {
+    await this.db.prepare(
+      'INSERT INTO customer_auth_tokens (tenant_id, id, user_id, token_hash, type, expires_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(this.scope.tenantId, tokenId, userId, tokenHash, type, expiresAt).run();
+  }
+
+  async verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string): Promise<User | null> {
+    const tokenRecord = await this.db.prepare(
+      'SELECT t.id, t.user_id FROM customer_auth_tokens t JOIN users u ON t.tenant_id = u.tenant_id AND t.user_id = u.id WHERE t.tenant_id = ? AND t.token_hash = ? AND t.used_at IS NULL AND t.expires_at > ? LIMIT 1'
+    ).bind(this.scope.tenantId, tokenHash, now).first<{ user_id: string, id: string }>();
+
+    if (!tokenRecord) {
+      return null;
+    }
+
+    const user = await this.get(tokenRecord.user_id);
+    if (!user) {
+      return null;
+    }
+
+    await this.db.batch([
+      this.db.prepare('UPDATE customer_auth_tokens SET used_at = ? WHERE tenant_id = ? AND id = ?').bind(now, this.scope.tenantId, tokenRecord.id),
+      this.db.prepare('UPDATE users SET last_login_at = ? WHERE tenant_id = ? AND id = ?').bind(now, this.scope.tenantId, user.id)
+    ]);
+
+    user.last_login_at = now;
+    return user;
+  }
 }
 
 export class SqlTicketRepository implements TicketRepository {

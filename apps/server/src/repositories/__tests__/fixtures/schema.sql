@@ -199,14 +199,16 @@ CREATE TABLE IF NOT EXISTS ticket_sequence (
 );
 
 CREATE TABLE IF NOT EXISTS customer_auth_tokens (
+    tenant_id TEXT NOT NULL,
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     token_hash TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('magic_link', 'otp')),
     expires_at DATETIME NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    used_at DATETIME
+    used_at DATETIME,
+    FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_customer_auth_tokens_user_id ON customer_auth_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_customer_auth_tokens_token_hash ON customer_auth_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_customer_auth_tokens_user ON customer_auth_tokens(tenant_id, user_id);

@@ -1,22 +1,20 @@
 import { Env } from "../bindings";
 import { decryptString } from "./crypto";
-import { createSystemTenantDeps } from "../auth/scope";
+import { TenantRequestDeps } from "../middleware/tenant.middleware";
 
 /**
  * Verifies a Cloudflare Turnstile token if TURNSTILE_SECRET_KEY is configured for the given tenant.
  *
- * @param env The environment bindings
- * @param tenantId Authoritative tenant ID
+ * @param deps The tenant dependencies
  * @param token The turnstile token provided by the client
  * @param ip The client's IP address (optional)
  * @returns true if valid or if Turnstile is disabled for this tenant, false if invalid
  */
-export async function verifyTurnstileToken(env: Env, tenantId: string, token?: string, ip?: string): Promise<boolean> {
-  if (!tenantId) {
-    return true;
+export async function verifyTurnstileToken(env: Env, deps: TenantRequestDeps, token?: string, ip?: string): Promise<boolean> {
+  if (!deps || !deps.scope.tenantId) {
+    return false; // Fail closed if tenant context is missing
   }
 
-  const deps = createSystemTenantDeps(tenantId, 'system', env);
   const secretKey = await deps.repositories.config.get('TURNSTILE_SECRET_KEY');
 
   if (!secretKey) {

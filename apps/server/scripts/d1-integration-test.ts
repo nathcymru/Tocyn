@@ -643,6 +643,49 @@ async function run() {
   if (legacyBody !== 'legacy') throw new Error('Default tenant failed legacy raw R2');
   console.log('SUCCESS: Default tenant allows legacy raw R2');
 
+  console.log("\n--- BATCH 5 TESTS ---");
+  console.log("Testing Customer Token Redemption Tenant Isolation...");
+
+  // Create two customer users with identical IDs in different tenants
+  const sharedUserId = 'colliding-user-123';
+  await db.prepare("INSERT INTO users (id, tenant_id, email, full_name, role) VALUES (?, ?, ?, ?, ?)").bind(sharedUserId, 'tenant-A', 'colA@a.com', 'ColA', 'customer').run();
+  await db.prepare("INSERT INTO users (id, tenant_id, email, full_name, role) VALUES (?, ?, ?, ?, ?)").bind(sharedUserId, 'tenant-B', 'colB@b.com', 'ColB', 'customer').run();
+
+  // Create an auth token for user in Tenant A
+  const tokenId = crypto.randomUUID();
+  const plainToken = 'test_token_123';
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(plainToken));
+  const tokenHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  await db.prepare(
+    'INSERT INTO customer_auth_tokens (tenant_id, id, user_id, token_hash, type, expires_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind('tenant-A', tokenId, sharedUserId, tokenHash, 'magic_link', expiresAt).run();
+
+  // Attempt to redeem in Tenant B (should fail closed!)
+  const { CustomerAuthService } = await import('../src/services/customer-auth.service');
+  const scopeBForAuth = createVerifiedTenantScope('tenant-B', 'system', ['widget'], 1);
+  const depsBForAuth = createTenantRequestDeps(scopeBForAuth, { DB: db, JWT_SECRET: 'secret' } as any);
+  const authServiceB = new CustomerAuthService({ DB: db, JWT_SECRET: 'secret' } as any, depsBForAuth);
+
+  const resultB = await authServiceB.verifyAuth(plainToken);
+  if (resultB !== null) {
+    throw new Error('Tenant B successfully redeemed an auth token belonging to a colliding user in Tenant A!');
+  }
+  console.log('SUCCESS: Tenant B cannot redeem token for colliding user in Tenant A');
+
+  // Attempt to redeem in Tenant A (should succeed)
+  const scopeAForAuth = createVerifiedTenantScope('tenant-A', 'system', ['widget'], 1);
+  const depsAForAuth = createTenantRequestDeps(scopeAForAuth, { DB: db, JWT_SECRET: 'secret' } as any);
+  const authServiceA = new CustomerAuthService({ DB: db, JWT_SECRET: 'secret' } as any, depsAForAuth);
+
+  const resultA = await authServiceA.verifyAuth(plainToken);
+  if (resultA === null || resultA.user.tenant_id !== 'tenant-A') {
+    throw new Error('Tenant A failed to redeem its own token for the colliding user');
+  }
+  console.log('SUCCESS: Tenant A can redeem its own token securely');
+
   console.log("\n--- BATCH 4 TESTS ---");
 
   // 1. ApiAuthResolver EXPLAIN QUERY PLAN
@@ -1214,7 +1257,7 @@ async function run() {
   // Call /api/v1/customer/auth/verify with captured plain token
   const e2eVerifyReq = new Request('http://localhost/api/v1/customer/auth/verify', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Widget-Key': 'pk_widget_tenant_A' },
     body: JSON.stringify({ token: capturedPlainToken })
   });
   const e2eVerifyRes = await worker.fetch(e2eVerifyReq, envMock, {});
@@ -1318,8 +1361,13 @@ async function run() {
   await reposApiKeyB.config.set('TURNSTILE_SECRET_KEY', encTurnstileB);
 
   const { EmailService } = await import('../src/services/email/outbound.service');
-  const emailSvcA = new EmailService(envWithMaster as any, 'tenant-A', testEmailTransport);
-  const emailSvcB = new EmailService(envWithMaster as any, 'tenant-B', testEmailTransport);
+  const scopeAConfig = createVerifiedTenantScope('tenant-A', 'system', ['widget'], 1);
+  const depsAConfig = createTenantRequestDeps(scopeAConfig, envWithMaster);
+  const emailSvcA = new EmailService(envWithMaster as any, depsAConfig, testEmailTransport);
+  
+  const scopeBConfig = createVerifiedTenantScope('tenant-B', 'system', ['widget'], 1);
+  const depsBConfig = createTenantRequestDeps(scopeBConfig, envWithMaster);
+  const emailSvcB = new EmailService(envWithMaster as any, depsBConfig, testEmailTransport);
 
   const credsA = await emailSvcA.getResendCredentials();
   const credsB = await emailSvcB.getResendCredentials();
@@ -1333,12 +1381,14 @@ async function run() {
   // Verify Turnstile reads distinct tenant config
   const { verifyTurnstileToken } = await import('../src/utils/turnstile');
   // Tenant with turnstile configured returns false when no token provided (enforced)
-  const turnstileEnabledA = await verifyTurnstileToken(envWithMaster as any, 'tenant-A');
+  const turnstileEnabledA = await verifyTurnstileToken(envWithMaster as any, depsAConfig);
   if (turnstileEnabledA !== false) {
     throw new Error("verifyTurnstileToken failed to enforce token requirement for tenant-A!");
   }
   // Tenant without turnstile configured returns true (disabled)
-  const turnstileDisabledC = await verifyTurnstileToken(envWithMaster as any, 'tenant-unconfigured-xyz');
+  const scopeCConfig = createVerifiedTenantScope('tenant-unconfigured-xyz', 'system', ['widget'], 1);
+  const depsCConfig = createTenantRequestDeps(scopeCConfig, envWithMaster);
+  const turnstileDisabledC = await verifyTurnstileToken(envWithMaster as any, depsCConfig);
   if (turnstileDisabledC !== true) {
     throw new Error("verifyTurnstileToken failed to bypass check for unconfigured tenant!");
   }

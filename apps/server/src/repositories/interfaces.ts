@@ -7,6 +7,8 @@ export interface UserRepository {
   create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>): Promise<User>;
   update(id: string, data: Partial<User>): Promise<void>;
   delete(id: string): Promise<void>;
+  storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string): Promise<void>;
+  verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string): Promise<User | null>;
 }
 
 export interface TicketRepository {

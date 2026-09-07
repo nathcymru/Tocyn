@@ -66,7 +66,7 @@ function isSensitiveKey(key: string): boolean {
  */
 settings.get("/usage", roleGuard(["admin"]), async (c) => {
   try {
-    const cfService = new CloudflareService(c.env);
+    const cfService = new CloudflareService(c.env, c.get('tenantDeps') as TenantRequestDeps);
     const stats = await cfService.getUsageStats();
     return c.json(stats);
   } catch (err: any) {

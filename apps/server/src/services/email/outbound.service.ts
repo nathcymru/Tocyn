@@ -1,23 +1,22 @@
 import { Env } from '../../bindings';
 import { Ticket, Article, Attachment, SendEmailOptions } from '../../types';
-import { createSystemTenantDeps } from '../../auth/scope';
+import { TenantRequestDeps } from '../../middleware/tenant.middleware';
 import { TenantOutboundEmailService } from './tenant-outbound.service';
 import { EmailTransport, HttpResendTransport } from './transport';
 
 export class EmailService {
   constructor(
     private env: Env,
-    private tenantId: string,
+    private deps: TenantRequestDeps,
     private transport: EmailTransport = new HttpResendTransport()
   ) {
-    if (!tenantId || typeof tenantId !== 'string' || !tenantId.trim()) {
+    if (!deps || !deps.scope.tenantId) {
       throw new Error('Tenant ID required for email service operations');
     }
   }
 
   private getTenantOutboundService(): TenantOutboundEmailService {
-    const deps = createSystemTenantDeps(this.tenantId, 'system', this.env);
-    return new TenantOutboundEmailService(deps, this.env.APP_MASTER_KEY, this.transport);
+    return new TenantOutboundEmailService(this.deps, this.env.APP_MASTER_KEY, this.transport);
   }
 
   async getResendCredentials(): Promise<{ apiKey: string, defaultFrom: string }> {

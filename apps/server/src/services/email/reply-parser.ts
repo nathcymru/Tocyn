@@ -63,6 +63,7 @@ export class ReplyParser {
     } while (current !== previous && iterations < 10);
 
     if (current !== previous) {
+      // Fallback: strip residual angle-bracket chars when iteration limit reached
       current = current.replace(/[<>]/g, '');
     }
 

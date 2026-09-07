@@ -401,14 +401,12 @@ describe('KnowledgeService', () => {
       expect(stripTags('<<p>p>nested text</p></p>')).toBe('nested text');
     });
 
-    it('should respect the max 10 iteration safety threshold and strip residual brackets when limit is reached', async () => {
+    it('should respect the max 10 iteration safety threshold and throw an error when limit is reached', async () => {
       const { stripTags } = await import('../tenant-knowledge.service');
-      // Create a string with 15 nested tags
-      const deeplyNested = '<p>'.repeat(15) + 'deep text' + '</p>'.repeat(15);
-      const result = stripTags(deeplyNested);
-      expect(result).toBe('deep text');
-      expect(result).not.toContain('<');
-      expect(result).not.toContain('>');
+      // Build input requiring >10 passes: each layer of <x/> exposes the next after stripping
+      let deeplyNested = 'text';
+      for (let i = 0; i < 12; i++) { deeplyNested = '<' + deeplyNested + '/>'; }
+      expect(() => stripTags(deeplyNested)).toThrow("Maximum tag stripping depth exceeded: possible malicious input");
     });
   });
 });

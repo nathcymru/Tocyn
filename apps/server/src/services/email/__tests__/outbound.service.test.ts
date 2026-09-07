@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EmailService } from "../outbound.service";
 import { Ticket, Article } from "../../types";
+// eslint-disable-next-line no-restricted-imports
+import { createVerifiedTenantScope } from "../../../auth/scope";
+import { createTenantRequestDeps } from "../../../middleware/tenant.middleware";
 
 const createMockDB = (mockGroupEmail: string | null = null, mockDefaultEmail: string | null = null) => {
   return {
@@ -55,7 +58,7 @@ describe("EmailService Outbound Subject Padding", () => {
   });
 
   it("should format subject with ticket_no without padding (1 -> 1)", async () => {
-    const service = new EmailService(mockEnv as any, 'default-tenant');
+    const service = new EmailService(mockEnv as any, createTenantRequestDeps(createVerifiedTenantScope("default-tenant", "system", [], 1), mockEnv) as any);
     const ticket: Partial<Ticket> = {
       id: "uuid-1",
       ticket_no: 1,
@@ -77,7 +80,7 @@ describe("EmailService Outbound Subject Padding", () => {
   });
 
   it("should format subject with ticket_no without padding (123 -> 123)", async () => {
-    const service = new EmailService(mockEnv as any, 'default-tenant');
+    const service = new EmailService(mockEnv as any, createTenantRequestDeps(createVerifiedTenantScope("default-tenant", "system", [], 1), mockEnv) as any);
     const ticket: Partial<Ticket> = {
       id: "uuid-123",
       ticket_no: 123,
@@ -99,7 +102,7 @@ describe("EmailService Outbound Subject Padding", () => {
   });
 
   it("should fallback to ticket.id if ticket_no is missing", async () => {
-    const service = new EmailService(mockEnv as any, 'default-tenant');
+    const service = new EmailService(mockEnv as any, createTenantRequestDeps(createVerifiedTenantScope("default-tenant", "system", [], 1), mockEnv) as any);
     const ticket: Partial<Ticket> = {
       id: "uuid-123",
       subject: "Help Me",
@@ -132,7 +135,7 @@ describe("EmailService Outbound Group Email Resolution", () => {
   it("should use group email when ticket has group_id and group email exists", async () => {
     const mockDB = createMockDB("sales@test.com", "default@test.com");
     const envWithDb = { ...mockEnv, DB: mockDB };
-    const service = new EmailService(envWithDb as any, 'default-tenant');
+    const service = new EmailService(envWithDb as any, createTenantRequestDeps(createVerifiedTenantScope("default-tenant", "system", [], 1), envWithDb) as any);
 
     const ticket: Partial<Ticket> = {
       id: "uuid-1",
@@ -156,7 +159,7 @@ describe("EmailService Outbound Group Email Resolution", () => {
   it("should fallback to default email when group_id present but no group email exists", async () => {
     const mockDB = createMockDB(null, "default@test.com");
     const envWithDb = { ...mockEnv, DB: mockDB };
-    const service = new EmailService(envWithDb as any, 'default-tenant');
+    const service = new EmailService(envWithDb as any, createTenantRequestDeps(createVerifiedTenantScope("default-tenant", "system", [], 1), envWithDb) as any);
 
     const ticket: Partial<Ticket> = {
       id: "uuid-1",
@@ -180,7 +183,7 @@ describe("EmailService Outbound Group Email Resolution", () => {
   it("should fallback to source_email if no default email exists either", async () => {
     const mockDB = createMockDB(null, null);
     const envWithDb = { ...mockEnv, DB: mockDB };
-    const service = new EmailService(envWithDb as any, 'default-tenant');
+    const service = new EmailService(envWithDb as any, createTenantRequestDeps(createVerifiedTenantScope("default-tenant", "system", [], 1), envWithDb) as any);
 
     const ticket: Partial<Ticket> = {
       id: "uuid-1",
@@ -204,7 +207,7 @@ describe("EmailService Outbound Group Email Resolution", () => {
   it("should fallback to RESEND_FROM_EMAIL if source_email is missing and no DB emails", async () => {
     const mockDB = createMockDB(null, null);
     const envWithDb = { ...mockEnv, DB: mockDB };
-    const service = new EmailService(envWithDb as any, 'default-tenant');
+    const service = new EmailService(envWithDb as any, createTenantRequestDeps(createVerifiedTenantScope("default-tenant", "system", [], 1), envWithDb) as any);
 
     const ticket: Partial<Ticket> = {
       id: "uuid-1",

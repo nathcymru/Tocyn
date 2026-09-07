@@ -16,7 +16,7 @@ export function stripTags(str: string): string {
   } while (current !== previous && iterations < 10);
 
   if (current !== previous) {
-    current = current.replace(/[<>]/g, '');
+    throw new Error("Maximum tag stripping depth exceeded: possible malicious input");
   }
 
   return current;

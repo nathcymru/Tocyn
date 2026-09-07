@@ -1,19 +1,18 @@
 import { Env } from '../bindings';
 import { UsageStats } from '@luminatick/shared';
 import { decryptString } from '../utils/crypto';
-import { createSystemTenantDeps } from '../auth/scope';
+import { TenantRequestDeps } from '../middleware/tenant.middleware';
 
 export class CloudflareService {
-  constructor(private env: Env, private tenantId?: string) {}
+  constructor(private env: Env, private deps?: TenantRequestDeps) {}
 
   async getCredentials(): Promise<{ accountId: string, apiToken: string }> {
     let accountId = this.env.CLOUDFLARE_ACCOUNT_ID;
     let apiToken = this.env.CLOUDFLARE_API_TOKEN;
 
-    if ((!accountId || !apiToken) && this.tenantId) {
-      const deps = createSystemTenantDeps(this.tenantId, 'system', this.env);
-      const dbAccountId = await deps.repositories.config.get('CLOUDFLARE_ACCOUNT_ID');
-      const dbApiToken = await deps.repositories.config.get('CLOUDFLARE_API_TOKEN');
+    if ((!accountId || !apiToken) && this.deps) {
+      const dbAccountId = await this.deps.repositories.config.get('CLOUDFLARE_ACCOUNT_ID');
+      const dbApiToken = await this.deps.repositories.config.get('CLOUDFLARE_API_TOKEN');
 
       accountId = accountId || dbAccountId || undefined;
 

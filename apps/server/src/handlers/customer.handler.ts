@@ -4,7 +4,8 @@ import { Env } from "../bindings";
 import { AppVariables, Article } from "../types";
 import { CustomerAuthService } from "../services/customer-auth.service";
 import { TenantTicketService } from "../services/tenant-ticket.service";
-import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
+import { tenantMiddleware, TenantRequestDeps, createTenantRequestDeps } from "../middleware/tenant.middleware";
+import { createVerifiedTenantScope } from "../auth/scope";
 import { BroadcastService } from "../services/broadcast.service";
 import { widgetAuthMiddleware } from "../middleware/widget-auth.middleware";
 import { roleGuard } from "../middleware/role.guard";
@@ -17,15 +18,19 @@ const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 // --- PUBLIC CONFIG ROUTE ---
 app.get('/config', async (c) => {
   const widgetKey = c.req.header('X-Widget-Key') || c.req.query('key');
-  const baseAuthService = new CustomerAuthService(c.env);
-  let tenantId: string | undefined;
+  let deps: TenantRequestDeps | undefined;
+
   if (widgetKey && typeof widgetKey === 'string' && widgetKey.trim()) {
-    const resolved = await baseAuthService.resolveTenantFromWidgetKey(widgetKey.trim());
-    if (resolved) {
-      tenantId = resolved;
+    const baseAuthService = new CustomerAuthService(c.env);
+    const tenantId = await baseAuthService.resolveTenantFromWidgetKey(widgetKey.trim());
+    if (tenantId) {
+      const scope = createVerifiedTenantScope(tenantId, 'system', ['widget'], 1);
+      deps = createTenantRequestDeps(scope, c.env);
     }
   }
-  const config = await baseAuthService.getConfig(tenantId);
+
+  const authService = new CustomerAuthService(c.env, deps);
+  const config = await authService.getConfig();
   return c.json(config);
 });
 
@@ -50,9 +55,12 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Widget configuration not found' }, 404);
   }
 
+  const scope = createVerifiedTenantScope(tenantId, 'system', ['widget'], 1);
+  const deps = createTenantRequestDeps(scope, c.env);
+
   // Turnstile verification bound to resolved tenant
   try {
-    const isValid = await verifyTurnstileToken(c.env, tenantId, body.turnstileToken, c.req.header('CF-Connecting-IP'));
+    const isValid = await verifyTurnstileToken(c.env, deps, body.turnstileToken, c.req.header('CF-Connecting-IP'));
     if (!isValid) {
       return c.json({ error: 'Turnstile validation failed or token missing' }, 400);
     }
@@ -63,7 +71,7 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
   }
 
-  const authService = new CustomerAuthService(c.env, tenantId, (c.env as any).emailTransport);
+  const authService = new CustomerAuthService(c.env, deps, (c.env as any).emailTransport);
 
   try {
     await authService.requestAuth(body.email, body.type, body.baseUrl);
@@ -78,7 +86,22 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
 
 app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
   const body = await c.req.json();
-  const authService = new CustomerAuthService(c.env);
+
+  const widgetKey = body.widgetKey || c.req.header('X-Widget-Key') || c.req.query('key');
+  if (!widgetKey || typeof widgetKey !== 'string' || !widgetKey.trim()) {
+    return c.json({ error: 'Widget key required' }, 400);
+  }
+
+  const baseAuthService = new CustomerAuthService(c.env);
+  const tenantId = await baseAuthService.resolveTenantFromWidgetKey(widgetKey.trim());
+  if (!tenantId) {
+    return c.json({ error: 'Widget configuration not found' }, 404);
+  }
+
+  const scope = createVerifiedTenantScope(tenantId, 'system', ['widget'], 1);
+  const deps = createTenantRequestDeps(scope, c.env);
+
+  const authService = new CustomerAuthService(c.env, deps);
   const result = await authService.verifyAuth(body.token);
   if (!result) return c.json({ error: 'Invalid token' }, 401);
 
@@ -125,7 +148,7 @@ app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddle
 
   // Turnstile verification
   try {
-    const isValid = await verifyTurnstileToken(c.env, body.turnstileToken, c.req.header('CF-Connecting-IP'));
+    const isValid = await verifyTurnstileToken(c.env, deps, body.turnstileToken, c.req.header('CF-Connecting-IP'));
     if (!isValid) {
       return c.json({ error: 'Turnstile validation failed or token missing' }, 400);
     }

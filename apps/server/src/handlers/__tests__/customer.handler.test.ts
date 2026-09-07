@@ -26,6 +26,7 @@ vi.mock("../../services/customer-auth.service", () => {
   return {
     CustomerAuthService: vi.fn().mockImplementation(function() {
       return {
+        resolveTenantFromWidgetKey: vi.fn().mockResolvedValue("default-tenant"),
         requestAuth: mockRequestAuth,
         verifyAuth: mockVerifyAuth,
         resolveTenantFromWidgetKey: vi.fn().mockResolvedValue("default-tenant"),
@@ -148,7 +149,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ widgetKey: "valid_widget_key", email: "test@example.com", type: "magic_link", baseUrl: "http://localhost:5173" }),
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key" },
         },
         { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any }
       );
@@ -167,7 +168,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ token: "plain-token-123" }),
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key" },
         },
         { DB: mockDB as any, JWT_SECRET, ENVIRONMENT: "development" }
       );
@@ -191,7 +192,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ token: "invalid-token" }),
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key" },
         },
         { DB: mockDB as any, JWT_SECRET, ENVIRONMENT: "development" }
       );
@@ -302,7 +303,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ subject: "Help", message: "I need help", turnstileToken: "valid-token" }),
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": "127.0.0.1" },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": "127.0.0.1" },
         },
         { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any }
       );
@@ -314,7 +315,7 @@ describe("Customer Handler Integration Tests", () => {
       expect(verifyTurnstileToken).toHaveBeenCalled();
       const turnstileArgs = vi.mocked(verifyTurnstileToken).mock.calls[0];
 
-      expect(turnstileArgs[1]).toBe('valid-token');
+      expect(turnstileArgs[2]).toBe('valid-token');
     });
 
     it("2a. validation fails securely for invalid tokens (when configured)", async () => {
@@ -338,7 +339,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ subject: "Help", message: "I need help", turnstileToken: "invalid-token" }),
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
         { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any }
       );
@@ -368,7 +369,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ subject: "Help", message: "I need help" }), // NO turnstileToken
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
         { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any }
       );
@@ -399,7 +400,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ subject: "Help", message: "I need help" }), // NO turnstileToken needed
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
         { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any }
       );
@@ -420,7 +421,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ subject: "Help", message: "I need help" }),
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
         { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any }
       );
@@ -493,7 +494,7 @@ describe("Customer Handler Integration Tests", () => {
             message: "Another reply",
             attachments: [{ filename: "test.png", size: 123, contentType: "image/png", key: "customer-attachments/user-1/s3-key.png" }]
           }),
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
         { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any }
       );
@@ -526,7 +527,7 @@ describe("Customer Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ message: "Hello" }),
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
+          headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
         { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any }
       );
