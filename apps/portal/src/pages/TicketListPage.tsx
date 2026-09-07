@@ -20,33 +20,23 @@ export function TicketListPage() {
   const [newMessage, setNewMessage] = useState('');
   const [creatingTicket, setCreatingTicket] = useState(false);
 
-  const fetchConfig = async () => {
-    try {
-      const res = await portalApi.get<{TICKET_PREFIX: string, TURNSTILE_SITE_KEY?: string}>('/config');
-      setTicketPrefix(res.TICKET_PREFIX);
-      if (res.TURNSTILE_SITE_KEY) {
-        setTurnstileSiteKey(res.TURNSTILE_SITE_KEY);
-      }
-    } catch (err) {
-      console.error('Failed to fetch config', err);
-    }
-  };
-
-  const fetchTickets = async () => {
-    try {
-      const response = await portalApi.get<PaginatedResponse<Ticket>>('/tickets');
-      setTickets(response.data);
-    } catch (err: unknown) {
-      const error = err as Error;
-      setError(error.message || 'Failed to load tickets');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchTickets();
-    fetchConfig();
+    let active = true;
+    portalApi.get<PaginatedResponse<Ticket>>('/tickets')
+      .then(response => { if (active) setTickets(response.data); })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof Error ? err.message : 'Failed to load tickets');
+      })
+      .finally(() => { if (active) setLoading(false); });
+    portalApi.get<{ TICKET_PREFIX: string; TURNSTILE_SITE_KEY?: string }>('/config')
+      .then(res => {
+        if (active) {
+          setTicketPrefix(res.TICKET_PREFIX);
+          if (res.TURNSTILE_SITE_KEY) setTurnstileSiteKey(res.TURNSTILE_SITE_KEY);
+        }
+      })
+      .catch(err => console.error('Failed to fetch config', err));
+    return () => { active = false; };
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {

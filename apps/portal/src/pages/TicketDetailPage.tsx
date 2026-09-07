@@ -7,6 +7,10 @@ import { formatDistanceToNow, format } from 'date-fns';
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
+  return <TicketDetail key={id} id={id} />;
+}
+
+function TicketDetail({ id }: { id: string | undefined }) {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [ticketPrefix, setTicketPrefix] = useState<string>('#');
@@ -19,31 +23,36 @@ export function TicketDetailPage() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchConfig = useCallback(async () => {
-    try {
-      const res = await portalApi.get<{TICKET_PREFIX: string}>('/config');
-      setTicketPrefix(res.TICKET_PREFIX);
-    } catch (err) {
-      console.error('Failed to fetch config', err);
-    }
-  }, []);
-
   const fetchTicket = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
       const data = await portalApi.get<{ ticket: Ticket; articles: Article[] }>(`/tickets/${id}`);
       setTicket(data.ticket);
       setArticles(data.articles);
-    } catch (err: any) {
-      if (!silent) setError(err.message || 'Failed to load ticket details');
+    } catch (err: unknown) {
+      if (!silent) setError(err instanceof Error ? err.message : 'Failed to load ticket details');
     } finally {
       if (!silent) setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
-    fetchConfig();
-    fetchTicket();
+    let active = true;
+    portalApi.get<{ TICKET_PREFIX: string }>('/config')
+      .then(res => { if (active) setTicketPrefix(res.TICKET_PREFIX); })
+      .catch(err => console.error('Failed to fetch config', err));
+    portalApi.get<{ ticket: Ticket; articles: Article[] }>(`/tickets/${id}`)
+      .then(data => {
+        if (active) {
+          setTicket(data.ticket);
+          setArticles(data.articles);
+          setError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof Error ? err.message : 'Failed to load ticket details');
+      })
+      .finally(() => { if (active) setLoading(false); });
 
     let pollInterval: ReturnType<typeof setInterval>;
 
@@ -73,10 +82,11 @@ export function TicketDetailPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      active = false;
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchConfig, fetchTicket]);
+  }, [id, fetchTicket]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -125,8 +135,8 @@ export function TicketDetailPage() {
       setNewMessage('');
       setAttachments([]);
       await fetchTicket();
-    } catch (err: any) {
-      alert(err.message || 'Failed to send reply');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to send reply');
     } finally {
       setSending(false);
     }
