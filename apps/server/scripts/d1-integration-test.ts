@@ -1096,9 +1096,9 @@ async function run() {
   // 3. JWT tenant_id, sub, and aud issuance
   const { AuthService } = await import('../src/services/auth/auth.service');
   const authSvc = new AuthService(envMock);
-  const issuedAppToken = await authSvc.generateToken({ id: 'user-canonical-1', email: 'canonicaluser@example.com', role: 'customer', tenant_id: 'tenant-A' }, 'secret');
+  const issuedAppToken = await authSvc.generateToken({ id: 'user-canonical-1', email: 'canonicaluser@example.com', role: 'customer', tenant_id: 'tenant-A' }, 'secret', true);
   const { payload: verifiedPayload } = await jose.jwtVerify(issuedAppToken, new TextEncoder().encode('secret'));
-  if (verifiedPayload.aud !== 'app' || verifiedPayload.sub !== 'user-canonical-1' || (verifiedPayload as any).tenant_id !== 'tenant-A') {
+  if (verifiedPayload.mfa_verified !== true || verifiedPayload.aud !== 'app' || verifiedPayload.sub !== 'user-canonical-1' || (verifiedPayload as any).tenant_id !== 'tenant-A') {
     throw new Error("JWT token issuance claims invalid: " + JSON.stringify(verifiedPayload));
   }
   console.log("SUCCESS: 3. App JWT tenant_id, sub, and aud: 'app' issuance verified");
@@ -1177,7 +1177,7 @@ async function run() {
   }
 
   // Prove active MFA secret cannot be replaced/destroyed by new setup call
-  const tokenUserA = await authSvc.generateToken({ id: 'local-user-same-id', email: 'userA@unique-a.com', role: 'admin', tenant_id: 'tenant-A' }, 'secret');
+  const tokenUserA = await authSvc.generateToken({ id: 'local-user-same-id', email: 'userA@unique-a.com', role: 'admin', tenant_id: 'tenant-A' }, 'secret', true);
   const setupMfaRes = await worker.fetch(new Request('http://localhost/api/auth/mfa/setup', { method: 'POST', headers: { 'Authorization': `Bearer ${tokenUserA}` } }), envMock, {});
   if (setupMfaRes.status !== 400) {
     const text = await setupMfaRes.text();

@@ -7,14 +7,19 @@ export class AuthService {
   constructor(private env?: Env) {}
 
   /**
-   * Generates a JWT for the given user with aud: "app".
+   * Generates an aud: "app" JWT with an explicitly supplied authentication state.
+   * Unverified tokens are intentionally rejected by protected routes.
+   * Use generateMfaChallengeToken for the MFA challenge flow.
    */
   public async generateToken(
     user: User | { id: string; email: string; role: string; tenant_id?: string },
     secret: string,
-    mfaVerified: boolean = false,
+    mfaVerified: boolean,
     expiresIn: string = "24h"
   ): Promise<string> {
+    if (typeof mfaVerified !== "boolean") {
+      throw new Error("Explicit MFA verification state required");
+    }
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(secret);
 

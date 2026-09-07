@@ -46,6 +46,11 @@ describe('AuthService', () => {
   });
 
   describe('generateToken', () => {
+    it('rejects omitted authentication state instead of minting an ambiguous app token', async () => {
+      // @ts-expect-error The state is mandatory, including for JavaScript callers at runtime.
+      await expect(authService.generateToken(mockUser, secret)).rejects.toThrow('Explicit MFA verification state required');
+    });
+
     it('should generate a valid JWT token', async () => {
       const token = await authService.generateToken(mockUser, secret, false, '1h');
       expect(token).toBeDefined();
