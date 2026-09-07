@@ -14,26 +14,46 @@ Five active repository rulesets protect the default branch and release tags:
 
 The required CodeQL checks are supplied by GitHub's active default setup, observed on PR #23, not the inherited `.github/workflows/codeql.yml` advanced workflow. Keep default setup enabled unless its replacement is deliberately configured and the gate names are updated.
 
-The previous all-branch signature block no longer applies to the foundation branch. Passing CI and the final verified merge remain required. The role-based review exception applies to all repository administrators; use it only for documented solo-maintainer cases.
+## Foundation complete
 
-## Still to verify or configure
+PR #23 merged through the protected squash path at `a949cfb812a43fce05e4155772f1822d923ac7b0`, with a verified signature. The required application checks and both default CodeQL language checks passed. Default CodeQL run [34108290848](https://github.com/nathcymru/Tocyn/actions/runs/34108290848) passed on main using `dynamic/github-code-scanning/codeql`.
 
-- CI is enabled. Run 34107937505 passed all four application checks on commit c64433ffb3cc31ed110b778cb6afc6fb0d1c052a: lint, typecheck, builds and 220 tests (217 server plus three portal verification-flow tests). Keep checking the exact PR head before merging; do not bypass failed checks.
-- Verify Actions read-only default token, external-contributor workflow approvals and allowed-action policy. Pin remaining actions before enabling repository-wide SHA enforcement.
-- Keep active CodeQL default setup; reconcile the inherited advanced workflow before enabling it to avoid duplicate configurations.
-- Verify dependency graph, Dependabot alerts/security updates, secret scanning, push protection and private vulnerability reporting.
-- Verify the Pages contact URL and private reporting fallback before relying on them.
-- Keep production credentials out of PR checks and protect deployment environments.
-- Set repository-wide merge toggles to match squash-only policy and retain automatic branch deletion.
-- Configure release creation permissions and immutable release assets before first publication; tag update/deletion protection alone does not provide these.
-- Populate topics and a verified homepage URL.
+The inactive inherited advanced CodeQL workflow has been removed. Default setup remains responsible for scanning JavaScript/TypeScript and Actions. The remaining checked-in CI workflow uses full commit SHAs for checkout and setup-node, a read-only token, hosted runners, and no persisted checkout credentials. Repository-wide SHA enforcement and the allowed-action policy still need confirmation, including compatibility with GitHub-managed workflows.
 
-## Community publication
+## Settings confirmed by owner-run script
 
-Issues #12–#22 exist. As observed on 7 September 2026, v0.1.0 (Multi-Tenant Architecture Foundation) is assigned to the v0.1.0 issues, and v0.2.0 (Headless UI Extraction) is assigned to #17. The FidesLang objectives remain recorded in those issues. Email migration issue #18 has no milestone assigned; associate it with the intended v0.3.0 milestone when available.
+The owner supplied terminal output from 7 September 2026 showing successful writes and read-back verification for:
 
-Prepared Wiki pages and Discussion posts are in docs/community-drafts. Inspect existing Wiki/Discussions before publishing. Prefer reviewed documentation in docs as the authoritative source and maintainer-only Wiki edits. Categories: Announcements, Q&A, Ideas, Show and tell. Pin Welcome and roadmap posts.
+- Squash-only merge settings and automatic deletion of merged branches.
+- Read-only default Actions token and Actions PR approvals disabled.
+- Approval required for all external-contributor workflows.
+- Dependabot alerts and security updates.
+- Secret scanning, push protection and private vulnerability reporting.
+- Immutable future releases.
+- Repository topics, standard contributor labels and the built Pages homepage.
 
-Use a small label set: bug, enhancement, documentation, security, dependencies, help wanted, good first issue. Apply good first issue only to genuinely bounded, explained work.
+These are owner-run API verification results, not administration reads performed by the connector. The connector cannot independently inspect those administration endpoints.
 
-The current connector cannot change these administrative settings or publish Wiki/Discussions. Draft files are not evidence of publication.
+## Community published
+
+- [Welcome](https://github.com/nathcymru/Tocyn/discussions/32).
+- [Roadmap](https://github.com/nathcymru/Tocyn/discussions/33).
+- [New contributors](https://github.com/nathcymru/Tocyn/discussions/34).
+
+The second script run confirmed the same posts already existed without creating duplicates. It published the five additional Wiki pages and preserved the owner's differing Home page. A differing Home page is a content-review item, not a failed Wiki push. Confirm that Home links to the five pages in docs/community-drafts/wiki/Home.md.
+
+The owner reports completing Wiki collaborator-only editing, Discussion category setup and pinning Welcome/roadmap. Those UI settings have not been independently read back.
+
+Milestones v0.1.0 and v0.2.0 are assigned to the corresponding issues. Email migration issue #18 is now assigned to v0.3.0 - Omnichannel Configuration & Expansion. Do not create duplicate milestones. The FidesLang objectives remain in issues #16 and #17.
+
+Versioned documentation remains authoritative. Use the Wiki for navigation and onboarding, and accept documentation changes by PR. Only label genuinely small, explained tasks as good first issues.
+
+## Remaining checks
+
+1. Confirm the allowed-action policy and repository-wide full-SHA requirement on the actual Actions settings screen. Default token and external-contributor approval settings already passed script verification.
+2. Confirm Wiki Home navigation. Preserve the owner's content when adding missing links.
+3. The homepage is confirmed built by the script, and index.html contains a Web3Forms submission handler. This verifies configuration, not browser rendering, recipient ownership or successful delivery. The owner should verify the contact route; private vulnerability reporting is the primary security route.
+4. Review collaborator release permissions and any production deployment process before the first application release. There is no application deployment or release workflow in the current .github/workflows directory; the observed GitHub Pages deployment serves the public project page. Do not invent a production environment merely to complete a checklist.
+5. Verify dependency-graph status and review actual alerts. Enabled scanning is not proof that the codebase has no vulnerabilities; issue #13 remains the whole-codebase review.
+
+Keep issue #22 open until these checks are recorded. The code and workflow cleanup is contributor work; UI-only checks should be given to the owner one screen at a time.
