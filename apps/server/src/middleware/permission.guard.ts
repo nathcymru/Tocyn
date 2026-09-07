@@ -1,6 +1,7 @@
 import { Context, Next } from "hono";
 import { Env } from "../bindings";
 import { AppVariables } from "../types";
+import { TenantRequestDeps } from "./tenant.middleware";
 
 export const permissionGuard = (settingKey: string) => {
   return async (c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next) => {
@@ -18,13 +19,19 @@ export const permissionGuard = (settingKey: string) => {
       return c.json({ error: "Forbidden", message: "Insufficient permissions" }, 403);
     }
 
-    // Agent check
+    const d = c.get("tenantDeps") as TenantRequestDeps;
+
+    if (!d) {
+      return c.json({ error: "Forbidden", message: `Agent missing permission: ${settingKey}` }, 403);
+    }
+
     try {
-      const config = await c.env.DB.prepare("SELECT value FROM config WHERE key = 'agent_settings_permissions'").first<{value: string}>();
-      const permissions = config?.value ? JSON.parse(config.value) : {};
-      
-      if (permissions[settingKey] === true) {
-        return await next();
+      const configValue = await d.repositories.config.get('agent_settings_permissions');
+      if (configValue) {
+        const permissions = JSON.parse(configValue);
+        if (permissions && permissions[settingKey] === true) {
+          return await next();
+        }
       }
     } catch (e) {
       console.error("Error parsing agent_settings_permissions", e);

@@ -48,9 +48,9 @@ describe('BroadcastService', () => {
     await service.notifyTicketCreated(ticket);
 
     expect(mockDO.fetch).toHaveBeenCalledWith('http://do/broadcast', expect.objectContaining({
-      body: JSON.stringify({ 
-        type: 'ticket.created', 
-        payload: { id: '123', subject: 'Test Ticket', status: 'open', priority: 'normal' } 
+      body: JSON.stringify({
+        type: 'ticket.created',
+        payload: { id: '123', subject: 'Test Ticket', status: 'open', priority: 'normal' }
       }),
     }));
   });
@@ -60,9 +60,9 @@ describe('BroadcastService', () => {
     await service.notifyTicketUpdated(ticket);
 
     expect(mockDO.fetch).toHaveBeenCalledWith('http://do/broadcast', expect.objectContaining({
-      body: JSON.stringify({ 
-        type: 'ticket.updated', 
-        payload: { id: '123', subject: 'Test Ticket', status: 'pending', priority: 'high' } 
+      body: JSON.stringify({
+        type: 'ticket.updated',
+        payload: { id: '123', subject: 'Test Ticket', status: 'pending', priority: 'high' }
       }),
     }));
   });

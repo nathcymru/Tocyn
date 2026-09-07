@@ -1,8 +1,11 @@
 import { Hono } from 'hono';
 import { Env } from '../bindings';
 import { AiService } from '../services/ai.service';
-import { KnowledgeService } from '../services/knowledge.service';
-import { TicketService } from '../services/ticket.service';
+import { WidgetKnowledgeReader } from '../services/tenant-knowledge.service';
+import { StatelessAiService } from '../services/ai.service';
+import { widgetAuthMiddleware } from '../middleware/widget-auth.middleware';
+import { TenantRequestDeps } from '../middleware/tenant.middleware';
+import { TenantTicketService } from '../services/tenant-ticket.service';
 import { rateLimiter } from '../middleware/rate-limiter';
 import { AppVariables } from '../types';
 import { z } from 'zod';
@@ -11,11 +14,11 @@ const widget = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
 
 
+import { widgetTenantMiddleware } from '../middleware/widget-auth.middleware';
+
 // Fetch widget configuration
-widget.get('/config', async (c) => {
-  const { results } = await c.env.DB.prepare(
-    'SELECT key, value FROM config WHERE key LIKE "widget.%"'
-  ).all();
+widget.get('/config', widgetTenantMiddleware, async (c) => {
+  const d = c.get('tenantDeps') as TenantRequestDeps;
 
   const config: Record<string, any> = {
     primaryColor: '#3b82f6',
@@ -27,20 +30,24 @@ widget.get('/config', async (c) => {
     }
   };
 
-  results.forEach((row: any) => {
-    const key = row.key.replace('widget.', '');
-    if (key.includes('.')) {
-      const parts = key.split('.');
-      let current = config;
-      for (let i = 0; i < parts.length - 1; i++) {
-        if (!current[parts[i]]) current[parts[i]] = {};
-        current = current[parts[i]];
+  const widgetKeys = ['widget.primaryColor', 'widget.title', 'widget.welcomeMessage', 'widget.features.aiChat', 'widget.features.ticketForm'];
+  for (const k of widgetKeys) {
+    const val = await d.repositories.config.get(k);
+    if (val !== null) {
+      const key = k.replace('widget.', '');
+      if (key.includes('.')) {
+        const parts = key.split('.');
+        let current = config;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (!current[parts[i]]) current[parts[i]] = {};
+          current = current[parts[i]];
+        }
+        current[parts[parts.length - 1]] = val;
+      } else {
+        config[key] = val;
       }
-      current[parts[parts.length - 1]] = row.value;
-    } else {
-      config[key] = row.value;
     }
-  });
+  }
 
   return c.json(config);
 });
@@ -57,7 +64,7 @@ const chatSchema = z.object({
 });
 
 // AI Chat endpoint
-widget.post('/chat', rateLimiter(5, 60000), async (c) => {
+widget.post('/chat', rateLimiter(5, 60000), widgetAuthMiddleware, async (c) => {
   const body = await c.req.json();
   const result = chatSchema.safeParse(body);
   if (!result.success) {
@@ -66,15 +73,16 @@ widget.post('/chat', rateLimiter(5, 60000), async (c) => {
 
   const { message, history, category_id } = result.data;
 
-  const aiService = new AiService(c.env);
-  const knowledgeService = new KnowledgeService(c.env);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const aiService = new StatelessAiService(c.env.AI);
+  const reader = new WidgetKnowledgeReader(deps, aiService);
 
-  // 1. Search for relevant context using Vectorize using just the new message for best retrieval relevance
-  const contextResults = await knowledgeService.search(message, 3, category_id);
+  const contextResults = await reader.search(message, 3, category_id);
   const context = contextResults.map(r => r.content).join('\n\n');
 
-  // 2. Generate AI response with history context
-  const response = await aiService.generateResponse(message, context, history || []);
+  // Need an AiService that takes env (or AiService extends Stateless)
+  const legacyAi = new AiService(c.env);
+  const response = await legacyAi.generateResponse(message, context, history || []);
 
   return c.json({ response });
 });
@@ -88,9 +96,12 @@ const createWidgetTicketSchema = z.object({
 });
 
 // Ticket Submission endpoint
-widget.post('/tickets', rateLimiter(3, 300000), async (c) => {
+widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, async (c) => {
   const body = await c.req.json();
-  const ticketService = new TicketService(c.env, c.executionCtx);
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  // TODO: Batch 4 will fully migrate ticket workflows, for now we must inject the scoped service if possible.
+  // Wait, let's leave ticketService alone as much as we can unless it's strictly required, but since we have tenantDeps now:
+  const ticketService = new TenantTicketService(deps);
 
   const result = createWidgetTicketSchema.safeParse(body);
   if (!result.success) {
@@ -99,22 +110,14 @@ widget.post('/tickets', rateLimiter(3, 300000), async (c) => {
   const validData = result.data;
 
   try {
-    const ticket = await ticketService.createTicket({
+    const { ticket } = await ticketService.createTicketWithArticle({
       subject: validData.subject,
-      customer_email: validData.email,
-      priority: 'normal',
-      status: 'open',
+      customer_email: c.get('user').email,
       source: 'widget',
-      custom_fields: validData.custom_fields
-    });
-
-    await ticketService.createArticle({
-      ticket_id: ticket.id,
       body: validData.message,
       sender_type: 'customer',
-      is_internal: false,
-      metadata: validData.metadata ? JSON.stringify(validData.metadata) : undefined
-    } as any);
+      sender_id: c.get('user').id
+    });
 
     return c.json(ticket, 201);
   } catch (error) {

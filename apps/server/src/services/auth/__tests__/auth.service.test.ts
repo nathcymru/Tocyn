@@ -23,7 +23,7 @@ describe('AuthService', () => {
     it('should correctly hash a password and verify it', async () => {
       const password = 'mySecurePassword123';
       const hash = await authService.hashPassword(password);
-      
+
       expect(hash).toBeDefined();
       expect(hash).toContain(':'); // Should have salt:iterations:hash format
       const parts = hash.split(':');
@@ -38,7 +38,7 @@ describe('AuthService', () => {
       const password = 'mySecurePassword123';
       const wrongPassword = 'wrongPassword';
       const hash = await authService.hashPassword(password);
-      
+
       const isValid = await authService.verifyPassword(wrongPassword, hash);
       expect(isValid).toBe(false);
     });
@@ -62,7 +62,7 @@ describe('AuthService', () => {
 
     it('should set mfa_verified to true in the token when requested', async () => {
       const token = await authService.generateToken(mockUser, secret, true, '1h');
-      
+
       const secretKey = new TextEncoder().encode(secret);
       const { payload } = await jose.jwtVerify(token, secretKey);
 

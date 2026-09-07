@@ -12,5 +12,14 @@ export function createVerifiedTenantScope(
     actorId,
     roles: Object.freeze([...roles]),
     authVersion,
-  } as VerifiedTenantScope;
+  } as unknown as VerifiedTenantScope;
+}
+
+export function createSystemTenantScope(options: { tenantId: string, actor: string }): VerifiedTenantScope {
+  return {
+    tenantId: options.tenantId,
+    actorId: options.actor,
+    roles: ['system'],
+    authVersion: 1
+  } as unknown as VerifiedTenantScope;
 }

@@ -2,6 +2,7 @@ import { Env } from '../bindings';
 import { User } from '../types';
 import { EmailService } from './email/outbound.service';
 import { AuthService } from './auth/auth.service';
+import * as jose from 'jose';
 
 export class CustomerAuthService {
   async getConfig(): Promise<{ TICKET_PREFIX: string, TURNSTILE_SITE_KEY?: string }> {
@@ -164,7 +165,20 @@ export class CustomerAuthService {
     user.last_login_at = new Date().toISOString();
 
     // Generate JWT
-    const jwt = await this.authService.generateToken(user, this.env.JWT_SECRET, false, "7d");
+    const alg = "HS256";
+    const secretKey = new TextEncoder().encode(this.env.JWT_SECRET);
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: 'customer',
+      tenant_id: user.tenant_id,
+      aud: 'app',
+      iat: Math.floor(Date.now() / 1000),
+    };
+    const jwt = await new jose.SignJWT(payload)
+      .setProtectedHeader({ alg })
+      .setExpirationTime('7d')
+      .sign(secretKey);
 
     return { token: jwt, user };
   }

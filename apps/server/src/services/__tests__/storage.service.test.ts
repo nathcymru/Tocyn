@@ -48,7 +48,7 @@ describe('StorageService', () => {
       const key = 'attachments/123/456/test.pdf';
       const mockContent = new Uint8Array([1, 2, 3]);
       const mockEtag = 'etag-123';
-      
+
       const mockR2Object = {
         body: new ReadableStream({
           start(controller) {
@@ -70,7 +70,7 @@ describe('StorageService', () => {
       expect(response).toBeInstanceOf(Response);
       expect(response!.headers.get('content-type')).toBe('application/pdf');
       expect(response!.headers.get('etag')).toBe(mockEtag);
-      
+
       const responseBody = new Uint8Array(await response!.arrayBuffer());
       expect(responseBody).toEqual(mockContent);
     });

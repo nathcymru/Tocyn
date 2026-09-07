@@ -6,10 +6,10 @@ export class AuthService {
   constructor(private env?: Env) {}
 
   /**
-   * Generates a JWT for the given user.
+   * Generates a JWT for the given user with aud: "app".
    */
   public async generateToken(
-    user: User,
+    user: User | { id: string; email: string; role: string; tenant_id?: string },
     secret: string,
     mfaVerified: boolean = false,
     expiresIn: string = "24h"
@@ -17,17 +17,19 @@ export class AuthService {
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(secret);
 
-    const payload: JWTPayload = {
+    const payload: JWTPayload & { tenant_id?: string } = {
       sub: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role as any,
+      tenant_id: (user as any).tenant_id || "default-tenant",
       mfa_verified: mfaVerified,
       iat: Math.floor(Date.now() / 1000),
-      exp: 0, // Placeholder
+      exp: 0,
     };
 
     const token = await new jose.SignJWT({ ...payload })
       .setProtectedHeader({ alg })
+      .setAudience("app")
       .setIssuedAt()
       .setExpirationTime(expiresIn)
       .sign(secretKey);
@@ -36,39 +38,62 @@ export class AuthService {
   }
 
   /**
-   * Verifies a JWT token.
+   * Generates a short-lived MFA challenge token with aud: "mfa-challenge".
+   */
+  public async generateMfaChallengeToken(
+    user: User | { id: string; email: string; role: string; tenant_id?: string },
+    secret: string,
+    expiresIn: string = "15m"
+  ): Promise<string> {
+    const alg = "HS256";
+    const secretKey = new TextEncoder().encode(secret);
+
+    const payload: JWTPayload & { tenant_id?: string } = {
+      sub: user.id,
+      email: user.email,
+      role: user.role as any,
+      tenant_id: (user as any).tenant_id || "default-tenant",
+      mfa_verified: false,
+      iat: Math.floor(Date.now() / 1000),
+      exp: 0,
+    };
+
+    const token = await new jose.SignJWT({ ...payload })
+      .setProtectedHeader({ alg })
+      .setAudience("mfa-challenge")
+      .setIssuedAt()
+      .setExpirationTime(expiresIn)
+      .sign(secretKey);
+
+    return token;
+  }
+
+  /**
+   * Verifies a JWT token using aud: "app".
    */
   public async verifyToken(token: string): Promise<User | null> {
     if (!this.env?.JWT_SECRET) return null;
-    
+
     try {
       const secretKey = new TextEncoder().encode(this.env.JWT_SECRET);
-      const { payload } = await jose.jwtVerify(token, secretKey);
-      
+      const { payload } = await jose.jwtVerify(token, secretKey, {
+        audience: "app",
+      });
+
       const jwtPayload = payload as unknown as JWTPayload;
 
       if (jwtPayload.mfa_verified === false) {
         return null;
       }
-      
-      // Fetch user from DB to ensure they still exist and have the correct role
-      const user = await this.env.DB.prepare(
-        "SELECT id, email, full_name as name, role, mfa_enabled FROM users WHERE id = ?"
-      )
-        .bind(jwtPayload.sub)
-        .first<User & { name: string }>();
 
-      if (!user) return null;
-      
       return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        mfa_enabled: !!user.mfa_enabled,
+        id: jwtPayload.sub,
+        email: jwtPayload.email,
+        role: jwtPayload.role,
+        tenant_id: (jwtPayload as any).tenant_id,
       } as any;
     } catch (err) {
-      console.error('Token verification failed:', err);
+      console.error("Token verification failed:", err);
       return null;
     }
   }
@@ -77,7 +102,7 @@ export class AuthService {
    * Verifies the password against the hash.
    */
   public async verifyPassword(password: string, storedHash: string): Promise<boolean> {
-    const parts = storedHash.split(':');
+    const parts = storedHash.split(":");
     if (parts.length !== 3) return false;
 
     const salt = this.base64ToUint8Array(parts[0]);
@@ -98,7 +123,7 @@ export class AuthService {
         name: "PBKDF2",
         salt: salt,
         iterations: iterations,
-        hash: "SHA-256"
+        hash: "SHA-256",
       },
       key,
       256
@@ -107,7 +132,6 @@ export class AuthService {
     const derivedArray = new Uint8Array(derivedBits);
     if (derivedArray.length !== hash.length) return false;
 
-    // Constant-time comparison
     let equal = true;
     for (let i = 0; i < hash.length; i++) {
       if (derivedArray[i] !== hash[i]) equal = false;
@@ -136,7 +160,7 @@ export class AuthService {
         name: "PBKDF2",
         salt: salt,
         iterations: iterations,
-        hash: "SHA-256"
+        hash: "SHA-256",
       },
       key,
       256

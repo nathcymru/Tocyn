@@ -25,7 +25,7 @@ app.get('/config', async (c) => {
 
 app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
   const body = await c.req.json();
-  
+
   // Turnstile verification
   try {
     const isValid = await verifyTurnstileToken(c.env, body.turnstileToken, c.req.header('CF-Connecting-IP'));
@@ -50,7 +50,7 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
   const authService = new CustomerAuthService(c.env);
   const result = await authService.verifyAuth(body.token);
   if (!result) return c.json({ error: 'Invalid token' }, 401);
-  
+
   setCookie(c, 'lumina_customer_token', result.token, {
     httpOnly: true,
     secure: c.req.url.startsWith('https'),
@@ -58,7 +58,7 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
     path: '/',
     maxAge: 7 * 24 * 60 * 60 // 7 days
   });
-  
+
   return c.json(result);
 });
 
@@ -91,7 +91,7 @@ app.post('/tickets', authMiddleware, roleGuard(['customer']), tenantMiddleware, 
   const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const ticketService = new TenantTicketService(deps);
-  
+
   // Turnstile verification
   try {
     const isValid = await verifyTurnstileToken(c.env, body.turnstileToken, c.req.header('CF-Connecting-IP'));
@@ -122,11 +122,11 @@ app.get('/tickets/:id', authMiddleware, roleGuard(['customer']), tenantMiddlewar
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const ticketService = new TenantTicketService(deps);
   const ticket = await ticketService.findTicketById(ticketId);
-  
+
   if (!ticket || ticket.customer_email !== payload.email) {
     return c.json({ error: 'Not found' }, 404);
   }
-  
+
   // Exclude internal notes
   const articlesList = await ticketService.getTicketArticles(ticketId);
   const externalArticles = articlesList.filter(a => !a.is_internal);
@@ -139,7 +139,7 @@ app.get('/tickets/:id', authMiddleware, roleGuard(['customer']), tenantMiddlewar
       attachments: atts.map(a => ({ id: a.id, filename: a.file_name, size: a.file_size, contentType: a.content_type, storageKey: a.r2_key }))
     };
   }));
-  
+
   return c.json({ ticket, articles: articlesWithAttachments });
 });
 
@@ -149,12 +149,12 @@ app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), tenan
   const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const ticketService = new TenantTicketService(deps);
-  
+
   const ticket = await ticketService.findTicketById(ticketId);
   if (!ticket || ticket.customer_email !== payload.email) {
     return c.json({ error: 'Not found' }, 404);
   }
-  
+
   const article = await ticketService.createArticle({
     ticket_id: ticketId,
     body: body.message,
@@ -195,7 +195,7 @@ app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), tenan
       attachments.push({ id: added.id, filename: added.file_name, size: added.file_size, contentType: added.content_type, storageKey: added.r2_key });
     }
   }
-  
+
   // Update ticket timestamp
   await ticketService.updateTicketTimestamp(ticketId);
 
@@ -215,7 +215,7 @@ app.post('/tickets/:id/messages', authMiddleware, roleGuard(['customer']), tenan
 app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const attachmentId = c.req.param('id');
   const payload = c.get('jwtPayload');
-  
+
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const attachment = await deps.repositories.attachments.getAttachmentWithMeta(attachmentId!);
   if (!attachment || attachment.customer_email !== payload.email) {
@@ -223,7 +223,7 @@ app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), te
   }
   const response = await deps.attachmentStorage.getAttachment(attachment.r2_key);
   if (!response) return c.json({ error: 'File not found in storage' }, 404);
-  
+
   // Make response mutable to change headers
   const newResponse = new Response(response.body, response);
   const safeFileName = (attachment.file_name || 'attachment').replace(/^.*[\\/]/, '').replace(/[\r\n"]/g, '_');
@@ -235,7 +235,7 @@ app.get('/attachments/:id/download', authMiddleware, roleGuard(['customer']), te
 app.post('/attachments/upload', authMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const payload = c.get('jwtPayload') as any;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  
+
   // Early payload size check via Content-Length (10MB + slight overhead for multipart boundaries)
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const contentLength = parseInt(c.req.header('content-length') || '0', 10);
@@ -266,7 +266,7 @@ app.post('/attachments/upload', authMiddleware, roleGuard(['customer']), tenantM
   const rawExt = hasExtension ? fileName.substring(lastDotIndex + 1) : '';
   const fileExt = rawExt.replace(/[^a-zA-Z0-9]/g, '');
   const extPart = fileExt ? `.${fileExt}` : '';
-  
+
   const key = `customer-attachments/${payload.sub}/${crypto.randomUUID()}${extPart}`;
 
   try {

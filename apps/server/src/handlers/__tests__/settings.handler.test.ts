@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import settings from "../settings.handler";
 import * as jose from "jose";
-import { encryptString } from "../../utils/crypto";
 
 // Mock DB
 const mockDB = {
   prepare: vi.fn().mockReturnThis(),
   bind: vi.fn().mockReturnThis(),
+  first: vi.fn(),
   all: vi.fn(),
-  batch: vi.fn(),
+  run: vi.fn(),
 };
 
 const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
@@ -17,13 +17,16 @@ const APP_MASTER_KEY = "test-master-key-that-is-long-enough-for-aes";
 async function generateAdminToken() {
   const secretKey = new TextEncoder().encode(JWT_SECRET);
   return await new jose.SignJWT({
+    sub: "admin-1",
     id: "admin-1",
     email: "admin@example.com",
     role: "admin",
+    tenant_id: "default-tenant",
     mfa_enabled: false,
     mfa_verified: true,
   })
     .setProtectedHeader({ alg: "HS256" })
+    .setAudience("app")
     .setIssuedAt()
     .setExpirationTime("1h")
     .sign(secretKey);
@@ -32,25 +35,35 @@ async function generateAdminToken() {
 describe("Settings Handler Integration Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDB.prepare.mockReturnThis();
+    mockDB.bind.mockReturnThis();
   });
 
   describe("GET /api/settings", () => {
     it("should return settings and mask sensitive values", async () => {
-      const mockSettings = [
-        { key: "APP_NAME", value: "Luminatick" },
-        { key: "RESEND_API_KEY", value: "super-secret-key" },
-        { key: "OPENAI_SECRET", value: "another-secret" },
-        { key: "PUBLIC_URL", value: "https://example.com" },
-      ];
+      const configMap: Record<string, string> = {
+        APP_NAME: "Luminatick",
+        RESEND_API_KEY: "super-secret-key",
+        OPENAI_SECRET: "another-secret",
+        PUBLIC_URL: "https://example.com",
+      };
 
-      mockDB.all.mockResolvedValueOnce({ results: mockSettings });
+      mockDB.first.mockImplementation(async () => {
+        const calls = vi.mocked(mockDB.bind).mock.calls;
+        const lastKey = calls.length > 0 ? calls[calls.length - 1][1] : undefined;
+        if (lastKey && configMap[lastKey]) {
+          return { value: configMap[lastKey] };
+        }
+        return null;
+      });
+
       const token = await generateAdminToken();
 
       const res = await settings.request(
         "/",
         {
           method: "GET",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -66,18 +79,22 @@ describe("Settings Handler Integration Tests", () => {
     });
 
     it("should return 500 if APP_MASTER_KEY is missing but sensitive values exist", async () => {
-      const mockSettings = [
-        { key: "RESEND_API_KEY", value: "super-secret-key" },
-      ];
+      mockDB.first.mockImplementation(async () => {
+        const calls = vi.mocked(mockDB.bind).mock.calls;
+        const lastKey = calls.length > 0 ? calls[calls.length - 1][1] : undefined;
+        if (lastKey === "RESEND_API_KEY") {
+          return { value: "super-secret-key" };
+        }
+        return null;
+      });
 
-      mockDB.all.mockResolvedValueOnce({ results: mockSettings });
       const token = await generateAdminToken();
 
       const res = await settings.request(
         "/",
         {
           method: "GET",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -92,7 +109,7 @@ describe("Settings Handler Integration Tests", () => {
 
   describe("PUT /api/settings", () => {
     it("should update settings and encrypt sensitive values", async () => {
-      mockDB.batch.mockResolvedValueOnce([{ success: true }]);
+      mockDB.run.mockResolvedValue({ success: true });
       const token = await generateAdminToken();
 
       const payload = {
@@ -105,7 +122,7 @@ describe("Settings Handler Integration Tests", () => {
         {
           method: "PUT",
           body: JSON.stringify(payload),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },
@@ -114,25 +131,25 @@ describe("Settings Handler Integration Tests", () => {
       );
 
       expect(res.status).toBe(200);
-      
+
       // Check that DB.prepare was called twice (once for each key)
       expect(mockDB.prepare).toHaveBeenCalledTimes(2);
-      
-      // Check that DB.bind was called with the unencrypted and encrypted values respectively
-      // Because we don't know the exact encrypted value, we check it's not the plaintext
-      expect(mockDB.bind).toHaveBeenNthCalledWith(1, "APP_NAME", "New Luminatick");
-      
-      const resendBindCall = vi.mocked(mockDB.bind).mock.calls[1];
-      expect(resendBindCall[0]).toBe("RESEND_API_KEY");
-      expect(resendBindCall[1]).not.toBe("new-super-secret-key"); // Should be encrypted
-      expect(typeof resendBindCall[1]).toBe("string");
-      expect(resendBindCall[1].length).toBeGreaterThan("new-super-secret-key".length);
 
-      expect(mockDB.batch).toHaveBeenCalledTimes(1);
+      // Check that DB.bind was called with default-tenant, key, and encrypted value
+      expect(mockDB.bind).toHaveBeenNthCalledWith(1, "default-tenant", "APP_NAME", "New Luminatick");
+
+      const resendBindCall = vi.mocked(mockDB.bind).mock.calls[1];
+      expect(resendBindCall[0]).toBe("default-tenant");
+      expect(resendBindCall[1]).toBe("RESEND_API_KEY");
+      expect(resendBindCall[2]).not.toBe("new-super-secret-key"); // Should be encrypted
+      expect(typeof resendBindCall[2]).toBe("string");
+      expect(resendBindCall[2].length).toBeGreaterThan("new-super-secret-key".length);
+
+      expect(mockDB.run).toHaveBeenCalledTimes(2);
     });
 
     it("should skip updating sensitive settings if value is ••••••••", async () => {
-      mockDB.batch.mockResolvedValueOnce([{ success: true }]);
+      mockDB.run.mockResolvedValue({ success: true });
       const token = await generateAdminToken();
 
       const payload = {
@@ -145,7 +162,7 @@ describe("Settings Handler Integration Tests", () => {
         {
           method: "PUT",
           body: JSON.stringify(payload),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },
@@ -154,11 +171,11 @@ describe("Settings Handler Integration Tests", () => {
       );
 
       expect(res.status).toBe(200);
-      
+
       // Check that DB.prepare was called only once (for APP_NAME)
       expect(mockDB.prepare).toHaveBeenCalledTimes(1);
-      expect(mockDB.bind).toHaveBeenCalledWith("APP_NAME", "Updated Name");
-      expect(mockDB.batch).toHaveBeenCalledTimes(1);
+      expect(mockDB.bind).toHaveBeenCalledWith("default-tenant", "APP_NAME", "Updated Name");
+      expect(mockDB.run).toHaveBeenCalledTimes(1);
     });
 
     it("should return 500 if trying to update sensitive settings without APP_MASTER_KEY", async () => {
@@ -173,7 +190,7 @@ describe("Settings Handler Integration Tests", () => {
         {
           method: "PUT",
           body: JSON.stringify(payload),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },

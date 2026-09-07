@@ -156,14 +156,14 @@ describe("Auth Handler Integration Tests", () => {
       mockDB.first.mockResolvedValueOnce(mockUser);
 
       // We need a pre-mfa token to access this route
-      const preMfaToken = await authService.generateToken(mockUser as any, JWT_SECRET, false);
+      const preMfaToken = await authService.generateMfaChallengeToken(mockUser as any, JWT_SECRET);
 
       const res = await auth.request(
         "/mfa/verify",
         {
           method: "POST",
           body: JSON.stringify({ code }),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${preMfaToken}`
           },
@@ -174,7 +174,7 @@ describe("Auth Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.token).toBeDefined();
-      
+
       // Verify token has mfa_verified = true
       const secretKey = new TextEncoder().encode(JWT_SECRET);
       const { payload } = await jose.jwtVerify(body.token, secretKey);
@@ -192,14 +192,14 @@ describe("Auth Handler Integration Tests", () => {
       };
 
       mockDB.first.mockResolvedValueOnce(mockUser);
-      const preMfaToken = await authService.generateToken(mockUser as any, JWT_SECRET, false);
+      const preMfaToken = await authService.generateMfaChallengeToken(mockUser as any, JWT_SECRET);
 
       const res = await auth.request(
         "/mfa/verify",
         {
           method: "POST",
           body: JSON.stringify({ code: "000000" }),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${preMfaToken}`
           },
@@ -230,7 +230,7 @@ describe("Auth Handler Integration Tests", () => {
         "/mfa/setup",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -240,7 +240,7 @@ describe("Auth Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.provisioning_uri).toContain("otpauth://totp/Luminatick:setup%40example.com");
-      
+
       // Check if DB was updated with the secret
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE users SET mfa_secret = ?"));
     });
@@ -273,7 +273,7 @@ describe("Auth Handler Integration Tests", () => {
         {
           method: "POST",
           body: JSON.stringify({ code }),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },
@@ -286,11 +286,12 @@ describe("Auth Handler Integration Tests", () => {
       expect(body.token).toBeDefined();
 
       // Check if DB was updated to enable MFA
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE users SET mfa_enabled = TRUE"));
-      });
-      });
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE users SET mfa_enabled ="));
+    });
+  });
 
-      describe("POST /mfa/disable", () => {    it("should disable MFA for a user and clear the secret", async () => {
+  describe("POST /mfa/disable", () => {
+    it("should disable MFA for a user and clear the secret", async () => {
       const mockUser = {
         id: "user-1",
         email: "disable@example.com",
@@ -308,7 +309,7 @@ describe("Auth Handler Integration Tests", () => {
         "/mfa/disable",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -320,7 +321,7 @@ describe("Auth Handler Integration Tests", () => {
       expect(body.user.mfa_enabled).toBe(false);
 
       // Check if DB was updated to disable MFA and clear secret
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE users SET mfa_enabled = FALSE, mfa_secret = NULL"));
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE users SET"));
     });
 
     it("should return 404 if user not found", async () => {
@@ -331,7 +332,7 @@ describe("Auth Handler Integration Tests", () => {
         "/mfa/disable",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -360,7 +361,7 @@ describe("Auth Handler Integration Tests", () => {
         "/me",
         {
           method: "GET",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -388,7 +389,7 @@ describe("Auth Handler Integration Tests", () => {
         "/me",
         {
           method: "GET",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },

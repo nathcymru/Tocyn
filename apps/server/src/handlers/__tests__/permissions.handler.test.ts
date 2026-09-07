@@ -15,13 +15,16 @@ const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
 async function generateToken(role: "admin" | "agent" | "customer") {
   const secretKey = new TextEncoder().encode(JWT_SECRET);
   return await new jose.SignJWT({
+    sub: `user-${role}`,
     id: `user-${role}`,
     email: `${role}@example.com`,
     role: role,
+    tenant_id: "default-tenant",
     mfa_enabled: false,
-    mfa_verified: true, // Bypass MFA guard for these tests
+    mfa_verified: true,
   })
     .setProtectedHeader({ alg: "HS256" })
+    .setAudience("app")
     .setIssuedAt()
     .setExpirationTime("1h")
     .sign(secretKey);
@@ -43,7 +46,7 @@ describe("Permissions Handler Integration Tests", () => {
         "/",
         {
           method: "GET",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -53,7 +56,7 @@ describe("Permissions Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual(mockPermissions);
-      expect(mockDB.prepare).toHaveBeenCalledWith("SELECT value FROM config WHERE key = 'agent_settings_permissions'");
+      expect(mockDB.prepare).toHaveBeenCalledWith("SELECT value FROM tenant_config WHERE tenant_id = ? AND key = ?");
     });
 
     it("should return the current permissions mapping for an agent", async () => {
@@ -66,7 +69,7 @@ describe("Permissions Handler Integration Tests", () => {
         "/",
         {
           method: "GET",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -87,7 +90,7 @@ describe("Permissions Handler Integration Tests", () => {
         "/",
         {
           method: "GET",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${token}`
           },
         },
@@ -127,7 +130,7 @@ describe("Permissions Handler Integration Tests", () => {
         {
           method: "PUT",
           body: JSON.stringify(payload),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },
@@ -140,9 +143,9 @@ describe("Permissions Handler Integration Tests", () => {
       expect(body.success).toBe(true);
 
       expect(mockDB.prepare).toHaveBeenCalledWith(
-        "INSERT INTO config (key, value, updated_at) VALUES ('agent_settings_permissions', ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP"
+        "INSERT INTO tenant_config (tenant_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP"
       );
-      expect(mockDB.bind).toHaveBeenCalledWith(JSON.stringify(payload));
+      expect(mockDB.bind).toHaveBeenCalledWith("default-tenant", "agent_settings_permissions", JSON.stringify(payload));
       expect(mockDB.run).toHaveBeenCalled();
     });
 
@@ -157,7 +160,7 @@ describe("Permissions Handler Integration Tests", () => {
         {
           method: "PUT",
           body: JSON.stringify(payload),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },
@@ -179,7 +182,7 @@ describe("Permissions Handler Integration Tests", () => {
         {
           method: "PUT",
           body: JSON.stringify(payload),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },
@@ -201,7 +204,7 @@ describe("Permissions Handler Integration Tests", () => {
         {
           method: "PUT",
           body: JSON.stringify(invalidPayload),
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },

@@ -3,7 +3,7 @@ import { Env } from "../bindings";
 
 /**
  * Simple in-memory rate limiter for Cloudflare Workers.
- * Note: This is per-isolate. For a truly distributed rate limiter, 
+ * Note: This is per-isolate. For a truly distributed rate limiter,
  * use Cloudflare's rate limiting service or a Durable Object.
  */
 const rateLimitMap = new Map<string, { count: number; reset: number }>();

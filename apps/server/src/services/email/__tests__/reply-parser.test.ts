@@ -8,7 +8,7 @@ describe('ReplyParser', () => {
 On Tue, Feb 20, 2024 at 10:00 AM John Doe <john@example.com> wrote:
 > This is the previous message.
 > Some more context.`;
-    
+
     const result = ReplyParser.stripHistory(text);
     expect(result).toBe('This is the new reply.');
   });

@@ -20,7 +20,7 @@ export class CloudflareService {
       }, {} as Record<string, string>);
 
       accountId = accountId || dbConfig['CLOUDFLARE_ACCOUNT_ID'];
-      
+
       if (!apiToken && dbConfig['CLOUDFLARE_API_TOKEN']) {
         if (!this.env.APP_MASTER_KEY) {
           throw new Error('APP_MASTER_KEY is missing. Cannot decrypt CLOUDFLARE_API_TOKEN.');
@@ -46,7 +46,7 @@ export class CloudflareService {
     const now = new Date();
     const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    
+
     const startOfMonthStr = startOfMonth.toISOString();
     const startOfDayStr = startOfDay.toISOString();
     const end = now.toISOString();

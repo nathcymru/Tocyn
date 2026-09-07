@@ -20,7 +20,7 @@ export class TenantTicketService {
       status: 'open',
       priority: 'normal'
     });
-    
+
     const article = await this.deps.repositories.articles.create({
       ticket_id: ticket.id,
       body: data.body,
@@ -43,7 +43,7 @@ export class TenantTicketService {
           try {
             // body_r2_key is assumed to be fully migrated to tenant scope if created through new boundary
             let obj;
-            // Legacy keys do not have the tenant- scope prefix in them yet. 
+            // Legacy keys do not have the tenant- scope prefix in them yet.
             // In the new system, we expect the tenant scope to be implicitly managed.
             const legacyPattern = /^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/;
             if (legacyPattern.test(article.body_r2_key)) {

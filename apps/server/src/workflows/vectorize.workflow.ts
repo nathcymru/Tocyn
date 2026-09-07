@@ -22,7 +22,7 @@ export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
           const doc = await this.env.DB.prepare('SELECT chunk_count FROM knowledge_docs WHERE id = ?')
             .bind(documentId)
             .first<{ chunk_count: number }>();
-          
+
           if (doc && doc.chunk_count > 0) {
             await knowledgeService.deleteDocumentVectors(documentId, doc.chunk_count);
           }
@@ -36,7 +36,7 @@ export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
         const doc = await this.env.DB.prepare('SELECT title, tier FROM knowledge_docs WHERE id = ?')
           .bind(documentId)
           .first<{ title: string, tier: string }>();
-          
+
         return await knowledgeService.processAndStoreVectors(documentId, contentStr, 'document', categoryId, doc?.title, (doc?.tier as 'answer' | 'sop') || 'answer');
       });
 
@@ -60,7 +60,7 @@ export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
             .bind(documentId)
             .first<{ body: string | null, body_r2_key: string | null }>();
           if (!article) throw new Error('Article not found');
-          
+
           let bodyText = article.body || '';
           if (!bodyText && article.body_r2_key) {
             try {
@@ -72,10 +72,10 @@ export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
               console.error('Failed to fetch article body from R2 in workflow', err);
             }
           }
-          
+
           return await knowledgeService.processAndStoreVectors(documentId, bodyText, 'qa');
         });
-        
+
         await step.do('update_qa_status', async () => {
           await this.env.DB.prepare('UPDATE articles SET qa_type = ?, chunk_count = ? WHERE id = ?')
             .bind(qaType, chunkCount, documentId)
@@ -86,7 +86,7 @@ export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
           const article = await this.env.DB.prepare('SELECT chunk_count FROM articles WHERE id = ?')
             .bind(documentId)
             .first<{ chunk_count: number }>();
-            
+
           if (article && article.chunk_count > 0) {
             await knowledgeService.deleteQAVectors(documentId, article.chunk_count);
           }

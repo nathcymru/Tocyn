@@ -89,7 +89,7 @@ describe('AiService', () => {
 
       expect(mockEnv.AI.run).toHaveBeenCalledWith('@cf/meta/llama-3-8b-instruct', expect.objectContaining({
         messages: expect.arrayContaining([
-          expect.objectContaining({ 
+          expect.objectContaining({
             role: 'system',
             content: expect.stringContaining('IMPORTANT: Do not expose SOP.')
           }),

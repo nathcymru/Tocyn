@@ -16,7 +16,7 @@ describe('ApiKeyService', () => {
     };
     env = { DB: mockDb };
     service = new ApiKeyService(env);
-    
+
     // Polyfill for crypto in Node environment for Vitest
     if (typeof global.crypto === 'undefined') {
         const { webcrypto } = require('crypto');
@@ -27,7 +27,7 @@ describe('ApiKeyService', () => {
   describe('createKey', () => {
     it('should create a new API key and return its components', async () => {
       mockDb.run.mockResolvedValue({ success: true });
-      
+
       const name = "Test Key";
       const result = await service.createKey(name);
 

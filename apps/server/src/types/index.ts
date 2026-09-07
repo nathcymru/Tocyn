@@ -1,10 +1,12 @@
 import { VerifiedTenantScope } from '../types/tenant';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
+import { ApiKeyResolution } from '../auth/api-key-resolver';
 export interface AppVariables {
   tenantScope?: VerifiedTenantScope;
   tenantDeps?: TenantRequestDeps;
   jwtPayload: JWTPayload;
   mfaPending?: boolean; // If MFA is required but not yet verified
+  apiKeyResolution?: ApiKeyResolution;
 }
 
 export interface Ticket {
@@ -25,6 +27,7 @@ export interface Ticket {
 }
 
 export interface Article {
+  chunk_count?: number;
   id: string;
   ticket_id: string;
   sender_id?: string;
@@ -63,13 +66,14 @@ export interface SendEmailOptions {
 }
 
 export interface User {
+  tenant_id: string;
   id: string;
   email: string;
   full_name: string;
   role: 'admin' | 'agent' | 'customer';
   password_hash?: string;
   mfa_enabled: boolean;
-  mfa_secret?: string;
+  mfa_secret?: string | null;
   created_at: string;
   last_login_at?: string;
 }
@@ -78,6 +82,7 @@ export interface JWTPayload {
   sub: string;
   email: string;
   role: 'admin' | 'agent' | 'customer';
+  tenant_id?: string;
   mfa_verified: boolean;
   iat: number;
   exp: number;

@@ -1,49 +1,59 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InboundEmailService } from '../inbound.service';
-import { TicketService } from '../../ticket.service';
-import { StorageService } from '../../storage.service';
 import PostalMime from 'postal-mime';
 
-vi.mock('../../ticket.service');
-vi.mock('../../storage.service');
 vi.mock('postal-mime');
 
 describe('InboundEmailService', () => {
-  let env: any;
   let service: InboundEmailService;
-  let mockTicketService: any;
-  let mockStorageService: any;
+  let mockDeps: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    env = {
-      DB: {},
-      ATTACHMENTS_BUCKET: {},
-      RESEND_API_KEY: 'test-key',
-      RESEND_FROM_EMAIL: 'support@example.com',
+    mockDeps = {
+      scope: { tenantId: 'tenant-A' },
+      repositories: {
+        tickets: {
+          findBySubject: vi.fn(),
+          get: vi.fn(),
+          create: vi.fn(),
+          touch: vi.fn()
+        },
+        articles: {
+          findByRawEmailId: vi.fn(),
+          create: vi.fn()
+        },
+        attachments: {
+          create: vi.fn()
+        },
+        users: {
+          findByEmail: vi.fn(),
+          create: vi.fn()
+        }
+      },
+      attachmentStorage: {
+        putAttachment: vi.fn().mockResolvedValue({ key: 'mocked-key' }),
+        deleteAttachment: vi.fn().mockResolvedValue(true)
+      }
     };
     
-    // Resetting mocks for each test
-    // We instantiate the service which then instantiates the mocked services
-    service = new InboundEmailService(env);
-    
-    // Capture the mock instances
-    mockTicketService = (TicketService as any).mock.instances[0];
-    mockStorageService = (StorageService as any).mock.instances[0];
+    service = new InboundEmailService(mockDeps as any);
   });
 
   it('should create a new ticket for a new email', async () => {
     const mockEmail = {
       subject: 'New issue',
-      from: { address: 'customer@example.com' },
+      from: { address: 'customer@example.com', name: 'Customer' },
       text: 'Help me!',
       messageId: 'msg-123',
     };
 
     (PostalMime.prototype.parse as any).mockResolvedValue(mockEmail);
-    mockTicketService.findTicketBySubject.mockResolvedValue(null);
-    mockTicketService.createTicket.mockResolvedValue({ id: 'ticket-1', subject: 'New issue', customer_email: 'customer@example.com' });
-    mockTicketService.createArticle.mockResolvedValue({ id: 'article-1' });
+    mockDeps.repositories.tickets.findBySubject.mockResolvedValue(null);
+    mockDeps.repositories.users.findByEmail.mockResolvedValue(null);
+    mockDeps.repositories.users.create.mockResolvedValue({ id: 'user-1', email: 'customer@example.com' });
+    mockDeps.repositories.tickets.create.mockResolvedValue({ id: 'ticket-1', subject: 'New issue', customer_id: 'user-1' });
+    mockDeps.repositories.articles.create.mockResolvedValue({ id: 'article-1' });
 
     await service.handle({
       from: 'customer@example.com',
@@ -52,11 +62,14 @@ describe('InboundEmailService', () => {
       raw: new ReadableStream(),
     } as any);
 
-    expect(mockTicketService.createTicket).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockDeps.repositories.users.create).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'customer@example.com',
+    }));
+    expect(mockDeps.repositories.tickets.create).toHaveBeenCalledWith(expect.objectContaining({
       subject: 'New issue',
       customer_email: 'customer@example.com',
     }));
-    expect(mockTicketService.createArticle).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockDeps.repositories.articles.create).toHaveBeenCalledWith(expect.objectContaining({
       ticket_id: 'ticket-1',
       body: 'Help me!',
     }));
@@ -71,8 +84,8 @@ describe('InboundEmailService', () => {
     };
 
     (PostalMime.prototype.parse as any).mockResolvedValue(mockEmail);
-    mockTicketService.findTicketBySubject.mockResolvedValue({ id: '123', subject: '[#123] New issue', customer_email: 'customer@example.com' });
-    mockTicketService.createArticle.mockResolvedValue({ id: 'article-2' });
+    mockDeps.repositories.tickets.findBySubject.mockResolvedValue({ id: '123', subject: '[#123] New issue', customer_id: 'user-1' });
+    mockDeps.repositories.articles.create.mockResolvedValue({ id: 'article-2' });
 
     await service.handle({
       from: 'customer@example.com',
@@ -81,38 +94,42 @@ describe('InboundEmailService', () => {
       raw: new ReadableStream(),
     } as any);
 
-    expect(mockTicketService.createTicket).not.toHaveBeenCalled();
-    expect(mockTicketService.createArticle).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockDeps.repositories.tickets.create).not.toHaveBeenCalled();
+    expect(mockDeps.repositories.articles.create).toHaveBeenCalledWith(expect.objectContaining({
       ticket_id: '123',
       body: 'Following up.',
     }));
   });
 
-  it('should add a reply to an existing ticket found by thread headers', async () => {
+  it('should compensate by deleting R2 attachment if DB insert fails', async () => {
     const mockEmail = {
-      subject: 'Help',
-      from: { address: 'customer@example.com' },
-      text: 'Replied by thread.',
-      inReplyTo: 'msg-123',
-      messageId: 'msg-789',
+      subject: 'Help me',
+      from: { address: 'customer@test.com' },
+      text: 'My issue',
+      messageId: 'msg-1',
+      attachments: [{
+        filename: 'test.png',
+        mimeType: 'image/png',
+        content: new Uint8Array([1, 2, 3])
+      }]
     };
 
     (PostalMime.prototype.parse as any).mockResolvedValue(mockEmail);
-    mockTicketService.findTicketBySubject.mockResolvedValue(null);
-    mockTicketService.findTicketByRawEmailId.mockResolvedValue({ id: '123', customer_email: 'customer@example.com' });
-    mockTicketService.createArticle.mockResolvedValue({ id: 'article-3' });
+    mockDeps.repositories.tickets.findBySubject.mockResolvedValue(null);
+    mockDeps.repositories.users.findByEmail.mockResolvedValue({ id: 'user-1', email: 'customer@test.com' });
+    mockDeps.repositories.tickets.create.mockResolvedValue({ id: 'ticket-1', customer_id: 'user-1' });
+    mockDeps.repositories.articles.create.mockResolvedValue({ id: 'article-1' });
 
-    await service.handle({
-      from: 'customer@example.com',
-      to: 'support@luminatick.com',
-      subject: 'Help',
-      raw: new ReadableStream(),
-    } as any);
+    mockDeps.repositories.attachments.create.mockRejectedValue(new Error("FK error"));
 
-    expect(mockTicketService.findTicketByRawEmailId).toHaveBeenCalledWith('msg-123');
-    expect(mockTicketService.createArticle).toHaveBeenCalledWith(expect.objectContaining({
-      ticket_id: '123',
-      body: 'Replied by thread.',
-    }));
+    await expect(service.handle({
+      from: 'customer@test.com',
+      to: 'support@test.com',
+      subject: 'Help me',
+      raw: new ReadableStream()
+    })).rejects.toThrow("FK error");
+
+    expect(mockDeps.attachmentStorage.putAttachment).toHaveBeenCalled();
+    expect(mockDeps.attachmentStorage.deleteAttachment).toHaveBeenCalled();
   });
 });

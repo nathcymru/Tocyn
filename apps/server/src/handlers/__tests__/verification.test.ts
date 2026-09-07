@@ -27,12 +27,13 @@ describe("Ticket Detail Fixes Verification", () => {
     mockDB.all.mockResolvedValue({ results: [] });
     mockDB.first.mockResolvedValue({});
     mockDB.run.mockResolvedValue({ success: true });
-    
+
     const mockUser = {
       id: "agent-1",
       email: "agent@example.com",
       role: "agent" as const,
       mfa_enabled: true,
+      tenant_id: "default-tenant",
     };
     validToken = await authService.generateToken(mockUser as any, JWT_SECRET, true);
   });
@@ -82,6 +83,6 @@ describe("Ticket Detail Fixes Verification", () => {
     expect(await res.json()).toEqual({ success: true });
 
     // Verify ticket update query includes all fields
-    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET priority = ?, assigned_to = ?, group_id = ? WHERE id = ?"));
-    expect(mockDB.bind).toHaveBeenCalledWith("urgent", validAgentUuid, validGroupUuid, "t-1");
+    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET priority = ?, assigned_to = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?"));
+    expect(mockDB.bind).toHaveBeenCalledWith("urgent", validAgentUuid, validGroupUuid, "default-tenant", "t-1");
   });});

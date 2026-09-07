@@ -6,12 +6,12 @@ export interface SuggestionParams {
   systemInstruction?: string;
 }
 
-export class AiService {
-  constructor(private env: Env) {}
+export class StatelessAiService {
+  constructor(private ai: any) {}
 
   async generateEmbeddings(text: string): Promise<number[]> {
     try {
-      const result = await this.env.AI.run('@cf/baai/bge-large-en-v1.5', {
+      const result = await this.ai.run('@cf/baai/bge-large-en-v1.5', {
         text: [text],
       });
       if (!result.data || result.data.length === 0) {
@@ -59,7 +59,7 @@ ${sanitizedInput}
 
 Please provide a suggested response:`;
 
-      const result = await this.env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      const result = await this.ai.run('@cf/meta/llama-3-8b-instruct', {
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -100,7 +100,7 @@ IMPORTANT RULES:
         { role: 'user', content: userMessage }
       ];
 
-      const result = await this.env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      const result = await this.ai.run('@cf/meta/llama-3-8b-instruct', {
         messages: messages as any,
         max_tokens: 512,
       });
@@ -111,4 +111,9 @@ IMPORTANT RULES:
       return "I'm having trouble connecting to my brain. Please try again later.";
     }
   }
+}
+
+
+export class AiService extends StatelessAiService {
+  constructor(env: Env) { super(env.AI); }
 }

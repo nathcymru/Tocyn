@@ -6,7 +6,7 @@ import { decryptString } from '../../utils/crypto';
 export class EmailService {
   constructor(private env: Env) {}
 
-  
+
   async getResendCredentials(): Promise<{ apiKey: string, defaultFrom: string }> {
     let apiKey = this.env.RESEND_API_KEY;
     let defaultFrom = this.env.RESEND_FROM_EMAIL;
@@ -22,7 +22,7 @@ export class EmailService {
       }, {} as Record<string, string>);
 
       defaultFrom = defaultFrom || dbConfig['RESEND_FROM_EMAIL'];
-      
+
       if (!apiKey && dbConfig['RESEND_API_KEY']) {
         if (!this.env.APP_MASTER_KEY) {
           throw new Error('APP_MASTER_KEY is missing. Cannot decrypt RESEND_API_KEY.');
@@ -100,23 +100,23 @@ export class EmailService {
 
     // Determine the from email address
     let fromEmail: string | undefined;
-    
+
     try {
       if (ticket.group_id) {
         const groupEmail = await this.env.DB.prepare(
           'SELECT email_address FROM support_emails WHERE group_id = ? LIMIT 1'
         ).bind(ticket.group_id).first<{ email_address: string }>();
-        
+
         if (groupEmail) {
           fromEmail = groupEmail.email_address;
         }
       }
-      
+
       if (!fromEmail) {
         const defaultEmail = await this.env.DB.prepare(
           'SELECT email_address FROM support_emails WHERE is_default = 1 LIMIT 1'
         ).first<{ email_address: string }>();
-        
+
         if (defaultEmail) {
           fromEmail = defaultEmail.email_address;
         }
@@ -125,7 +125,7 @@ export class EmailService {
       // Table might not exist yet or other DB error
       console.error("Failed to resolve support email from DB:", e);
     }
-    
+
     if (!fromEmail) {
       const creds = await this.getResendCredentials();
       fromEmail = ticket.source_email || creds.defaultFrom;

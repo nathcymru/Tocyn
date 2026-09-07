@@ -4,10 +4,10 @@ import { roleGuard } from "../middleware/role.guard";
 import { permissionGuard } from "../middleware/permission.guard";
 import { AppVariables } from "../types";
 import { z } from "zod";
+import { TenantRequestDeps } from "../middleware/tenant.middleware";
 
 const filters = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
-// Zod schema for filter validation
 const filterConditionSchema = z.object({
   field: z.string(),
   operator: z.string(),
@@ -21,19 +21,12 @@ const filterSchema = z.object({
 
 /**
  * GET /api/settings/filters
- * List all filters (Agents and Admins)
+ * List all filters for the active tenant
  */
 filters.get("/", roleGuard(["agent", "admin"]), async (c) => {
-  const { results } = await c.env.DB.prepare(
-    "SELECT * FROM ticket_filters ORDER BY is_system DESC, created_at ASC"
-  ).all();
-
-  const parsedResults = results.map(filter => ({
-    ...filter,
-    conditions: typeof filter.conditions === 'string' ? JSON.parse(filter.conditions) : filter.conditions
-  }));
-
-  return c.json(parsedResults);
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  const list = await d.repositories.ticketFilters.list();
+  return c.json(list);
 });
 
 /**
@@ -47,23 +40,9 @@ filters.post("/", roleGuard(["admin"]), async (c) => {
     return c.json({ error: result.error.errors[0].message }, 400);
   }
 
-  const id = `filter_${crypto.randomUUID()}`;
-  const { name, conditions } = result.data;
-
-  await c.env.DB.prepare(
-    "INSERT INTO ticket_filters (id, name, conditions) VALUES (?, ?, ?)"
-  )
-    .bind(id, name, JSON.stringify(conditions))
-    .run();
-
-  const filter = await c.env.DB.prepare("SELECT * FROM ticket_filters WHERE id = ?")
-    .bind(id)
-    .first<{ id: string; name: string; conditions: string; is_system: boolean; created_at: string; updated_at: string }>();
-
-  return c.json({
-    ...filter,
-    conditions: filter && typeof filter.conditions === 'string' ? JSON.parse(filter.conditions) : (filter?.conditions || [])
-  }, 201);
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  const filter = await d.repositories.ticketFilters.create(result.data);
+  return c.json(filter, 201);
 });
 
 /**
@@ -72,18 +51,14 @@ filters.post("/", roleGuard(["admin"]), async (c) => {
  */
 filters.get("/:id", roleGuard(["agent", "admin"]), async (c) => {
   const { id } = c.req.param();
-  const filter = await c.env.DB.prepare("SELECT * FROM ticket_filters WHERE id = ?")
-    .bind(id)
-    .first<{ id: string; name: string; conditions: string; is_system: boolean; created_at: string; updated_at: string }>();
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  const filter = await d.repositories.ticketFilters.get(id);
 
   if (!filter) {
     return c.json({ error: "Filter not found" }, 404);
   }
 
-  return c.json({
-    ...filter,
-    conditions: typeof filter.conditions === 'string' ? JSON.parse(filter.conditions) : filter.conditions
-  });
+  return c.json(filter);
 });
 
 /**
@@ -99,34 +74,20 @@ filters.put("/:id", roleGuard(["admin", "agent"]), permissionGuard("filters"), a
     return c.json({ error: result.error.errors[0].message }, 400);
   }
 
-  const { name, conditions } = result.data;
+  const d = c.get('tenantDeps') as TenantRequestDeps;
 
-  const existing = await c.env.DB.prepare("SELECT is_system FROM ticket_filters WHERE id = ?")
-    .bind(id)
-    .first();
-
-  if (!existing) {
-    return c.json({ error: "Filter not found" }, 404);
+  try {
+    const updated = await d.repositories.ticketFilters.update(id, result.data);
+    if (!updated) {
+      return c.json({ error: "Filter not found" }, 404);
+    }
+    return c.json(updated);
+  } catch (err: any) {
+    if (err.message === "Cannot modify system filters") {
+      return c.json({ error: err.message }, 403);
+    }
+    throw err;
   }
-
-  if (existing.is_system) {
-    return c.json({ error: "Cannot modify system filters" }, 403);
-  }
-
-  await c.env.DB.prepare(
-    "UPDATE ticket_filters SET name = ?, conditions = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-  )
-    .bind(name, JSON.stringify(conditions), id)
-    .run();
-
-  const filter = await c.env.DB.prepare("SELECT * FROM ticket_filters WHERE id = ?")
-    .bind(id)
-    .first<{ id: string; name: string; conditions: string; is_system: boolean; created_at: string; updated_at: string }>();
-
-  return c.json({
-    ...filter,
-    conditions: filter && typeof filter.conditions === 'string' ? JSON.parse(filter.conditions) : (filter?.conditions || [])
-  });
 });
 
 /**
@@ -135,24 +96,22 @@ filters.put("/:id", roleGuard(["admin", "agent"]), permissionGuard("filters"), a
  */
 filters.delete("/:id", roleGuard(["admin"]), async (c) => {
   const { id } = c.req.param();
+  const d = c.get('tenantDeps') as TenantRequestDeps;
 
-  const existing = await c.env.DB.prepare("SELECT is_system FROM ticket_filters WHERE id = ?")
-    .bind(id)
-    .first();
-
+  const existing = await d.repositories.ticketFilters.get(id);
   if (!existing) {
     return c.json({ error: "Filter not found" }, 404);
   }
 
-  if (existing.is_system) {
-    return c.json({ error: "Cannot delete system filters" }, 403);
+  try {
+    await d.repositories.ticketFilters.delete(id);
+    return c.json({ success: true });
+  } catch (err: any) {
+    if (err.message === "Cannot delete system filters") {
+      return c.json({ error: err.message }, 403);
+    }
+    throw err;
   }
-
-  await c.env.DB.prepare("DELETE FROM ticket_filters WHERE id = ?")
-    .bind(id)
-    .run();
-
-  return c.json({ success: true });
 });
 
 export default filters;

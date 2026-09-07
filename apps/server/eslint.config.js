@@ -40,8 +40,8 @@ export default tseslint.config(
           patterns: [
             {
               group: ["**/auth/scope", "*/auth/scope", "../auth/scope", "../../auth/scope"],
-              importNames: ["createVerifiedTenantScope"],
-              message: "VerifiedTenantScope can only be constructed by the trusted auth boundary."
+              importNames: ["createVerifiedTenantScope", "createSystemTenantScope"],
+              message: "Scopes can only be constructed by the trusted auth boundary."
             }
           ]
         }
@@ -67,7 +67,10 @@ export default tseslint.config(
   },
   {
     files: [
-      "src/middleware/tenant.middleware.ts"
+      "src/middleware/tenant.middleware.ts",
+      "src/middleware/api-auth.middleware.ts",
+      "src/middleware/auth.middleware.ts",
+      "src/middleware/widget-auth.middleware.ts"
     ],
     rules: {
       "no-restricted-syntax": "off"
@@ -77,7 +80,8 @@ export default tseslint.config(
     files: [
       "scripts/**/*.ts",
       "src/repositories/__tests__/**/*.ts",
-      "src/storage/__tests__/**/*.ts"
+      "src/storage/__tests__/**/*.ts",
+      "src/services/__tests__/**/*.ts"
     ],
     rules: {
       "no-restricted-syntax": "off",
@@ -86,20 +90,7 @@ export default tseslint.config(
   },
   {
     files: [
-      "src/handlers/auth.handler.ts",
-      "src/handlers/channels.handler.ts",
-      "src/handlers/dashboard.handler.ts",
-      "src/handlers/email.handler.ts",
-      "src/handlers/filters.handler.ts",
-      "src/handlers/permissions.handler.ts",
-      "src/handlers/settings.handler.ts",
-      "src/handlers/v1.handler.ts",
-      "src/handlers/widget.handler.ts",
-      "src/middleware/permission.guard.ts",
-      "src/services/__tests__/automation.service.test.ts",
-      "src/services/__tests__/knowledge.service.test.ts",
       "src/services/auth/apiKey.service.ts",
-      "src/services/auth/auth.service.ts",
       "src/services/automation.service.ts",
       "src/services/cloudflare.service.ts",
       "src/services/customer-auth.service.ts",
@@ -115,7 +106,27 @@ export default tseslint.config(
     }
   },
   {
-    files: ["src/auth/scope.ts", "src/middleware/auth.middleware.ts"],
+    files: ["src/auth/scope.ts", "src/middleware/auth.middleware.ts", "src/middleware/widget-auth.middleware.ts", "src/auth/api-key-composition.ts"],
+    rules: {
+      "no-restricted-imports": "off"
+    }
+  },
+  {
+    files: [
+      "src/auth/inbound-resolver.ts",
+      "src/auth/api-key-resolver.ts",
+      "src/auth/automation-resolver.ts",
+      "src/auth/user-auth-resolver.ts",
+      "src/auth/widget-tenant-resolver.ts"
+    ],
+    rules: {
+      "no-restricted-syntax": r2Restriction
+    }
+  },
+  {
+    files: [
+      "src/auth/inbound-composition.ts"
+    ],
     rules: {
       "no-restricted-imports": "off"
     }

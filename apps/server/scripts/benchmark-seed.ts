@@ -55,7 +55,7 @@ for (let i = 0; i < NUM_TICKETS; i++) {
   const now = new Date().toISOString();
 
   const seqRow = insertSequence.get() as { id: number };
-  
+
   insertTicket.run(ticketId, subject, status, priority, customerId, customerEmail, source, now, now, seqRow.id);
 
   // 1-3 messages (articles) per ticket

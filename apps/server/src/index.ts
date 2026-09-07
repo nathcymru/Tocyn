@@ -62,7 +62,7 @@ app.use('/api/*', cors({
 
     if (!origin) return c.env.PORTAL_URL || 'http://localhost:5173';
 
-    // In a single-tenant environment using JWTs (no cookies), reflecting the 
+    // In a single-tenant environment using JWTs (no cookies), reflecting the
     // incoming origin allows users to bind any custom domain seamlessly.
     return origin;
   },

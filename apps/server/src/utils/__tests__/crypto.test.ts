@@ -42,19 +42,19 @@ describe('Crypto Utility', () => {
 
   it('should throw an error on tampered encrypted data', async () => {
     const encrypted = await encryptString(testString, masterKey);
-    
+
     // Tamper by replacing the last character (which is valid base64 character)
     const tampered = encrypted.substring(0, encrypted.length - 1) + (encrypted.endsWith('A') ? 'B' : 'A');
-    
+
     await expect(decryptString(tampered, masterKey)).rejects.toThrow('Decryption failed. Check your APP_MASTER_KEY or data integrity.');
   });
 
   it('should generate different ciphertexts for the same plaintext (IV randomness)', async () => {
     const encrypted1 = await encryptString(testString, masterKey);
     const encrypted2 = await encryptString(testString, masterKey);
-    
+
     expect(encrypted1).not.toBe(encrypted2);
-    
+
     // Both should decrypt back to the original text
     expect(await decryptString(encrypted1, masterKey)).toBe(testString);
     expect(await decryptString(encrypted2, masterKey)).toBe(testString);

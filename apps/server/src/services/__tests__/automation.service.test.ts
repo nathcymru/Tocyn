@@ -109,9 +109,9 @@ describe('AutomationService', () => {
         url: 'https://hooks.slack.com/test',
         headers: { 'X-Custom': 'Value' }
       });
-      
+
       const payload = { ticket: { id: 't1' } };
-      
+
       await (automationService as any).executeWebhook(config, payload);
 
       expect(globalFetch).toHaveBeenCalledWith('https://hooks.slack.com/test', expect.objectContaining({
@@ -159,7 +159,7 @@ describe('AutomationService', () => {
       expect(result.deleted_tickets).toBe(2);
       expect(result.deleted_attachments).toBe(1);
       expect(mockEnv.ATTACHMENTS_BUCKET.delete).toHaveBeenCalledWith('file1.pdf');
-      
+
       // Check that it queried for tickets at least twice
       expect(mockEnv.DB.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT id FROM tickets'));
     });

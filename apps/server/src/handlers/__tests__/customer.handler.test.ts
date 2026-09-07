@@ -52,9 +52,11 @@ vi.mock("../../services/tenant-ticket.service", () => {
 });
 
 let putCalledWithKey = "";
-vi.mock("../../middleware/tenant.middleware", () => {
+vi.mock("../../middleware/tenant.middleware", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../middleware/tenant.middleware")>();
   return {
-    tenantMiddleware: async (c, next) => {
+    ...actual,
+    tenantMiddleware: async (c: any, next: any) => {
       c.set('tenantDeps', {
         scope: { tenantId: 'default-tenant' },
         repositories: {
@@ -66,11 +68,11 @@ vi.mock("../../middleware/tenant.middleware", () => {
           }
         },
         attachmentStorage: {
-          putAttachment: async (key, stream, options) => {
+          putAttachment: async (key: string) => {
             putCalledWithKey = key;
             return {};
           },
-          getAttachment: async (key) => new Response("fake data")
+          getAttachment: async () => new Response("fake data")
         }
       });
       await next();
@@ -101,7 +103,7 @@ const mockDB = {
     };
   }),
   bind: vi.fn().mockReturnThis(),
-  first: vi.fn(),
+  first: vi.fn().mockResolvedValue({ id: "user-1", email: "test@example.com", full_name: "Test User", role: "customer" }),
   all: vi.fn(),
   run: vi.fn(),
 };
@@ -115,6 +117,7 @@ async function generateCustomerToken(overrides = {}) {
     ...overrides
   })
     .setProtectedHeader({ alg: "HS256" })
+    .setAudience("app")
     .setIssuedAt()
     .setExpirationTime("1h")
     .sign(secretKey);

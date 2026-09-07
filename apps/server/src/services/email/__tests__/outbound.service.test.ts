@@ -123,7 +123,7 @@ describe("EmailService Outbound Group Email Resolution", () => {
     const mockDB = createMockDB("sales@test.com", "default@test.com");
     const envWithDb = { ...mockEnv, DB: mockDB };
     const service = new EmailService(envWithDb as any);
-    
+
     const ticket: Partial<Ticket> = {
       id: "uuid-1",
       subject: "Buy",
@@ -142,12 +142,12 @@ describe("EmailService Outbound Group Email Resolution", () => {
       })
     );
   });
-  
+
   it("should fallback to default email when group_id present but no group email exists", async () => {
     const mockDB = createMockDB(null, "default@test.com");
     const envWithDb = { ...mockEnv, DB: mockDB };
     const service = new EmailService(envWithDb as any);
-    
+
     const ticket: Partial<Ticket> = {
       id: "uuid-1",
       subject: "Buy",
@@ -166,12 +166,12 @@ describe("EmailService Outbound Group Email Resolution", () => {
       })
     );
   });
-  
+
   it("should fallback to source_email if no default email exists either", async () => {
     const mockDB = createMockDB(null, null);
     const envWithDb = { ...mockEnv, DB: mockDB };
     const service = new EmailService(envWithDb as any);
-    
+
     const ticket: Partial<Ticket> = {
       id: "uuid-1",
       subject: "Buy",
@@ -190,12 +190,12 @@ describe("EmailService Outbound Group Email Resolution", () => {
       })
     );
   });
-  
+
   it("should fallback to RESEND_FROM_EMAIL if source_email is missing and no DB emails", async () => {
     const mockDB = createMockDB(null, null);
     const envWithDb = { ...mockEnv, DB: mockDB };
     const service = new EmailService(envWithDb as any);
-    
+
     const ticket: Partial<Ticket> = {
       id: "uuid-1",
       subject: "Buy",

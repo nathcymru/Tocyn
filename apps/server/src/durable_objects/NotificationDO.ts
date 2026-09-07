@@ -87,10 +87,10 @@ export class NotificationDO {
         if (attachment) {
           // Prevent memory bloat from malicious long strings
           const rawLocation = data.payload?.location;
-          attachment.location = typeof rawLocation === 'string' 
-            ? rawLocation.substring(0, 100) 
+          attachment.location = typeof rawLocation === 'string'
+            ? rawLocation.substring(0, 100)
             : null;
-            
+
           ws.serializeAttachment(attachment);
 
           this.broadcast({
@@ -112,7 +112,7 @@ export class NotificationDO {
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
     const attachment = ws.deserializeAttachment() as SessionAttachment | null;
-    
+
     if (attachment) {
       this.broadcast({
         type: 'presence.update',
@@ -133,7 +133,7 @@ export class NotificationDO {
   broadcast(message: any, excludeWs?: WebSocket) {
     const msg = JSON.stringify(message);
     const sockets = this.state.getWebSockets();
-    
+
     for (const ws of sockets) {
       if (ws === excludeWs) continue;
       try {
@@ -155,14 +155,14 @@ export class NotificationDO {
   private getAllSessions(): SessionAttachment[] {
     const sockets = this.state.getWebSockets();
     const sessions: SessionAttachment[] = [];
-    
+
     for (const ws of sockets) {
       const attachment = ws.deserializeAttachment() as SessionAttachment | null;
       if (attachment) {
         sessions.push(attachment);
       }
     }
-    
+
     return sessions;
   }
 }

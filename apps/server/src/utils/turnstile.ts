@@ -3,7 +3,7 @@ import { decryptString } from "./crypto";
 
 /**
  * Verifies a Cloudflare Turnstile token if the TURNSTILE_SECRET_KEY is configured.
- * 
+ *
  * @param env The environment bindings (contains DB and APP_MASTER_KEY)
  * @param token The turnstile token provided by the client
  * @param ip The client's IP address (optional)
@@ -11,7 +11,7 @@ import { decryptString } from "./crypto";
  */
 export async function verifyTurnstileToken(env: Env, token?: string, ip?: string): Promise<boolean> {
   const secretKeyResult = await env.DB.prepare("SELECT value FROM config WHERE key = 'TURNSTILE_SECRET_KEY' LIMIT 1").first<{value: string}>();
-  
+
   if (!secretKeyResult?.value) {
     // Turnstile is disabled
     return true;
@@ -27,19 +27,19 @@ export async function verifyTurnstileToken(env: Env, token?: string, ip?: string
   }
 
   const secretKey = await decryptString(secretKeyResult.value, env.APP_MASTER_KEY);
-  
+
   const formData = new FormData();
   formData.append('secret', secretKey);
   formData.append('response', token);
   if (ip) {
     formData.append('remoteip', ip);
   }
-  
+
   const turnstileRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
     method: 'POST',
     body: formData,
   });
-  
+
   const turnstileData = await turnstileRes.json() as { success: boolean };
   return turnstileData.success === true;
 }

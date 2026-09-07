@@ -1,6 +1,8 @@
+import { SqlKnowledgeRepository } from './knowledge.repository';
 import { User, Ticket, Article, Attachment } from '../types';
 
 export interface UserRepository {
+  findByEmail(email: string): Promise<User | null>;
   get(id: string): Promise<User | null>;
   create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>): Promise<User>;
   update(id: string, data: Partial<User>): Promise<void>;
@@ -8,15 +10,21 @@ export interface UserRepository {
 }
 
 export interface TicketRepository {
+  findBySubject(subject: string): Promise<Ticket | null>;
   get(id: string): Promise<Ticket | null>;
   create(data: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'ticket_no'>): Promise<Ticket>;
   update(id: string, data: Partial<Ticket>): Promise<void>;
   touch(id: string): Promise<void>;
   delete(id: string): Promise<void>;
   findCustomerTickets(customerEmail: string, page: number, limit: number): Promise<{ data: Ticket[], total: number }>;
+  findTicketsForRetention(cutoffStr: string): Promise<Ticket[]>;
 }
 
 export interface ArticleRepository {
+  listByTicket(ticketId: string): Promise<Article[]>;
+  updateQAState(id: string, type: string | null, chunkCount: number): Promise<void>;
+  findByRawEmailId(rawEmailId: string): Promise<Article | null>;
+  getRecentCustomerArticleCount(customerId: string, since: string): Promise<number>;
   get(id: string): Promise<Article | null>;
   create(data: Omit<Article, 'id' | 'created_at'>): Promise<Article>;
   update(id: string, data: Partial<Article>): Promise<void>;
@@ -32,9 +40,72 @@ export interface AttachmentRepository {
   getAttachmentWithMeta(id: string): Promise<any>;
 }
 
+
+export interface ChannelsRepository {
+  listSupportEmails(): Promise<any[]>;
+  createSupportEmail(data: { id: string, email_address: string, name?: string, group_id?: string, is_default: boolean }): Promise<any>;
+  deleteSupportEmail(id: string): Promise<void>;
+  getSupportEmail(id: string): Promise<any>;
+  findByEmail(email_address: string): Promise<any>;
+}
+
+export interface ConfigRepository {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+}
+
+export interface ApiKeyRepository {
+  list(): Promise<any[]>;
+  create(name: string, permissions?: string[]): Promise<{ apiKey: string; id: string; name: string; prefix: string; permissions: string[] }>;
+  get(id: string): Promise<any | null>;
+  delete(id: string): Promise<void>;
+}
+
+export interface AutomationRepository {
+  list(): Promise<any[]>;
+  get(id: string): Promise<any | null>;
+  create(data: { name: string; event_type: string; conditions?: string; action_type: string; action_config?: string; is_active: boolean }): Promise<any>;
+  update(id: string, data: Record<string, any>): Promise<any | null>;
+  delete(id: string): Promise<void>;
+  getActiveRules(eventType: string): Promise<any[]>;
+}
+
+export interface TicketFieldRepository {
+  list(): Promise<any[]>;
+  create(data: { name: string; label: string; field_type: string; options?: string | null; is_active: boolean }): Promise<any>;
+}
+
+export interface GroupRepository {
+  list(): Promise<any[]>;
+  get(id: string): Promise<any | null>;
+  create(data: { name: string; description?: string | null }): Promise<any>;
+  delete(id: string): Promise<void>;
+  getMembers(groupId: string): Promise<any[]>;
+  isMember(groupId: string, userId: string): Promise<boolean>;
+  addMember(groupId: string, userId: string): Promise<void>;
+  removeMember(groupId: string, userId: string): Promise<void>;
+  hasTickets(groupId: string): Promise<boolean>;
+}
+
+export interface FilterRepository {
+  list(): Promise<any[]>;
+  get(id: string): Promise<any | null>;
+  create(data: { name: string; conditions: any }): Promise<any>;
+  update(id: string, data: { name: string; conditions: any }): Promise<any | null>;
+  delete(id: string): Promise<void>;
+}
+
 export interface Repositories {
+  knowledge: SqlKnowledgeRepository;
   users: UserRepository;
   tickets: TicketRepository;
   articles: ArticleRepository;
   attachments: AttachmentRepository;
+  channels: ChannelsRepository;
+  config: ConfigRepository;
+  apiKeys: ApiKeyRepository;
+  automations: AutomationRepository;
+  ticketFields: TicketFieldRepository;
+  groups: GroupRepository;
+  ticketFilters: FilterRepository;
 }

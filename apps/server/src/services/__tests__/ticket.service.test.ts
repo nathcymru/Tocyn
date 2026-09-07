@@ -362,7 +362,7 @@ describe("TicketService", () => {
 
       // First query is countQuery, second is tickets query
       mockDB.first.mockResolvedValueOnce({ total: 105 });
-      
+
       const mockTickets = Array.from({ length: 50 }).map((_, i) => ({
         id: `t-${i}`,
         subject: `Ticket ${i}`,
@@ -420,7 +420,7 @@ describe("TicketService", () => {
       // Verify the count query and ticket query contains the IN clauses
       const queries = mockDB.prepare.mock.calls.map(c => c[0]);
       const ticketQuery = queries.find(q => q.includes("SELECT tickets.*") && q.includes("LIMIT ? OFFSET ?"));
-      
+
       expect(ticketQuery).toContain("status IN (?,?)");
       expect(ticketQuery).toContain("priority = ?");
 
@@ -453,7 +453,7 @@ describe("TicketService", () => {
 
       const queries = mockDB.prepare.mock.calls.map(c => c[0]);
       const ticketQuery = queries.find(q => q.includes("SELECT tickets.*") && q.includes("LIMIT ? OFFSET ?"));
-      
+
       expect(ticketQuery).toContain("status != ?");
       expect(ticketQuery).toContain("subject LIKE ?");
 

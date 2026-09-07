@@ -19,12 +19,13 @@ let agentToken: string;
 describe("Group Management Integration Tests", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    
+
     const adminUser = {
       id: "admin-1",
       email: "admin@example.com",
       role: "admin" as const,
       mfa_enabled: true,
+      tenant_id: "default-tenant",
     };
     adminToken = await authService.generateToken(adminUser as any, JWT_SECRET, true);
 
@@ -33,6 +34,7 @@ describe("Group Management Integration Tests", () => {
       email: "agent@example.com",
       role: "agent" as const,
       mfa_enabled: true,
+      tenant_id: "default-tenant",
     };
     agentToken = await authService.generateToken(agentUser as any, JWT_SECRET, true);
   });
@@ -46,7 +48,7 @@ describe("Group Management Integration Tests", () => {
         "/groups",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${adminToken}`,
             "Content-Type": "application/json"
           },
@@ -66,7 +68,7 @@ describe("Group Management Integration Tests", () => {
         "/groups",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${agentToken}`,
             "Content-Type": "application/json"
           },
@@ -162,7 +164,7 @@ describe("Group Management Integration Tests", () => {
         "/groups/g-1/members",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${adminToken}`,
             "Content-Type": "application/json"
           },
@@ -191,7 +193,7 @@ describe("Group Management Integration Tests", () => {
 
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true });
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("DELETE FROM user_groups WHERE user_id = ? AND group_id = ?"));
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("DELETE FROM user_groups WHERE tenant_id = ? AND user_id = ? AND group_id = ?"));
     });
 
     it("should return 403 for non-admins adding members", async () => {
@@ -199,7 +201,7 @@ describe("Group Management Integration Tests", () => {
         "/groups/g-1/members",
         {
           method: "POST",
-          headers: { 
+          headers: {
             "Authorization": `Bearer ${agentToken}`,
             "Content-Type": "application/json"
           },

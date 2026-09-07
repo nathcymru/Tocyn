@@ -22,7 +22,7 @@ export class ApiKeyService {
     const now = new Date().toISOString();
 
     await this.env.DB.prepare(
-      "INSERT INTO api_keys (id, name, key_hash, prefix, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)"
+      "INSERT INTO api_keys (id, name, key_hash, prefix, permissions, is_active, created_at) VALUES (?, ?, ?, ?, 'tickets:read', 1, ?)"
     )
       .bind(id, name, keyHash, prefix, now)
       .run();

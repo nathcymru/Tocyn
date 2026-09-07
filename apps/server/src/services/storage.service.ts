@@ -26,11 +26,11 @@ export class StorageService {
   async getAttachment(key: string): Promise<Response | null> {
     const obj = await this.env.ATTACHMENTS_BUCKET.get(key);
     if (!obj) return null;
-    
+
     const headers = new Headers();
     obj.writeHttpMetadata(headers);
     headers.set('etag', obj.httpEtag);
-    
+
     return new Response(obj.body, { headers });
   }
 }

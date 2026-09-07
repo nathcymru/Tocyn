@@ -5,40 +5,39 @@ import { mfaGuard } from "../middleware/mfa.guard";
 import { roleGuard } from "../middleware/role.guard";
 import { AppVariables } from "../types";
 import { z } from "zod";
+import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 
 const permissions = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
-permissions.use("*", authMiddleware, mfaGuard);
+permissions.use("*", authMiddleware, tenantMiddleware, mfaGuard);
 
-// Schema for updating permissions
 const updatePermissionsSchema = z.record(z.boolean());
 
 /**
  * GET /api/permissions
- * Fetch current agent permissions mapping.
- * Both admins and agents can read it, so the frontend can adjust UI.
+ * Fetch current agent permissions mapping for the active tenant.
  */
 permissions.get("/", async (c) => {
-  const config = await c.env.DB.prepare("SELECT value FROM config WHERE key = 'agent_settings_permissions'").first<{value: string}>();
-  const perms = config?.value ? JSON.parse(config.value) : {};
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  const configValue = await d.repositories.config.get('agent_settings_permissions');
+  const perms = configValue ? JSON.parse(configValue) : {};
   return c.json(perms);
 });
 
 /**
  * PUT /api/permissions
- * Update agent permissions mapping (Admin only).
+ * Update agent permissions mapping for the active tenant (Admin only).
  */
 permissions.put("/", roleGuard(["admin"]), async (c) => {
   const body = await c.req.json();
   const result = updatePermissionsSchema.safeParse(body);
-  
+
   if (!result.success) {
     return c.json({ error: "Invalid permissions format" }, 400);
   }
 
-  await c.env.DB.prepare(
-    "INSERT INTO config (key, value, updated_at) VALUES ('agent_settings_permissions', ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP"
-  ).bind(JSON.stringify(result.data)).run();
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  await d.repositories.config.set('agent_settings_permissions', JSON.stringify(result.data));
 
   return c.json({ success: true });
 });

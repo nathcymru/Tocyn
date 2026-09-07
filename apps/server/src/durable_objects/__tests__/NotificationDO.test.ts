@@ -38,9 +38,9 @@ describe('NotificationDO', () => {
   });
 
   it('should initialize session attachment and broadcast presence on connection', async () => {
-    const otherWS = { 
-      send: vi.fn(), 
-      deserializeAttachment: vi.fn().mockReturnValue({ connectionId: 'test-conn-2', userId: '2', name: 'Other', location: 'ticket:1' }) 
+    const otherWS = {
+      send: vi.fn(),
+      deserializeAttachment: vi.fn().mockReturnValue({ connectionId: 'test-conn-2', userId: '2', name: 'Other', location: 'ticket:1' })
     };
     mockState.getWebSockets.mockReturnValue([mockWS, otherWS]);
 
@@ -72,7 +72,7 @@ describe('NotificationDO', () => {
     } as any;
 
     const response = await doInstance.fetch(request);
-    
+
     // Restore original response
     global.Response = originalResponse;
 
@@ -96,18 +96,18 @@ describe('NotificationDO', () => {
   });
 
   it('should handle presence updates and truncate long locations to prevent memory bloat', async () => {
-    const otherWS = { 
-      send: vi.fn(), 
-      deserializeAttachment: vi.fn().mockReturnValue({ connectionId: 'test-conn-2', userId: '2', name: 'Other', location: null }) 
+    const otherWS = {
+      send: vi.fn(),
+      deserializeAttachment: vi.fn().mockReturnValue({ connectionId: 'test-conn-2', userId: '2', name: 'Other', location: null })
     };
     mockState.getWebSockets.mockReturnValue([mockWS, otherWS]);
 
     const longLocation = 'a'.repeat(200);
-    const message = JSON.stringify({ 
-      type: 'presence.update', 
-      payload: { location: longLocation } 
+    const message = JSON.stringify({
+      type: 'presence.update',
+      payload: { location: longLocation }
     });
-    
+
     await doInstance.webSocketMessage(mockWS as any, message);
 
     // Should truncate to 100 chars
@@ -117,7 +117,7 @@ describe('NotificationDO', () => {
       name: 'Agent',
       location: 'a'.repeat(100)
     });
-    
+
     expect(otherWS.send).toHaveBeenCalledWith(expect.stringContaining('"type":"presence.update"'));
     expect(otherWS.send).toHaveBeenCalledWith(expect.stringContaining('"location":"' + 'a'.repeat(100) + '"'));
   });
