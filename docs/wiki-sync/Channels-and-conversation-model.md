@@ -1,5 +1,7 @@
 # Channels and conversation model
 
+The approved target [[System-architecture]] places these channel paths alongside the shared headless browser surfaces and distinct ingress, consumer and outbound-dispatch responsibilities. API/portal-first release sequencing does not narrow the omnichannel architecture.
+
 Tocyn's helpdesk core is channel-independent. External providers are adapters around canonical Tocyn ticket/article/conversation state rather than separate ticket systems.
 
 ```mermaid

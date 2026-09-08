@@ -2,11 +2,84 @@
 
 # Tocyn
 
+[![License: MIT](https://shieldcn.dev/github/license/nathcymru/Tocyn.svg)](LICENSE)
+[![Cloudflare Workers](https://shieldcn.dev/badge/Cloudflare-Workers-F38020.svg?logo=cloudflare)](https://github.com/nathcymru/Tocyn/wiki/Architecture-and-tenant-isolation)
+[![CI](https://shieldcn.dev/github/ci/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/actions/workflows/ci.yml)
+[![CodeQL enabled](https://shieldcn.dev/badge/CodeQL-enabled-2088FF.svg?logo=github)](https://github.com/nathcymru/Tocyn/security/code-scanning)
 [![Sponsor Tocyn](https://shieldcn.dev/github/sponsors/nathcymru.svg)](https://github.com/sponsors/nathcymru)
 
 **Tocyn** (Welsh for “ticket”, pronounced roughly “Tock-in”) is an open-source, multi-tenant helpdesk/support system built for Cloudflare's edge application stack. It is a fork of [Luminatick](https://github.com/05ng/luminatick) and is released under the MIT licence.
 
 > **Pre-release:** Tocyn has no stable release and no project-operated hosted helpdesk service. Current source is under active development. Do not treat the repository, roadmap or documentation as evidence of production readiness.
+
+Tocyn is being built as an omnichannel, multi-tenant helpdesk: service users contact support through a portal, embedded widget, programmatic API or external channel, while human operators work in one canonical conversation workspace. Bounded AI assistance and governed autonomous workflows extend that shared model; they do not create a separate helpdesk or bypass human control.
+
+## Approved target architecture
+
+**Approved / planned target, not a claim that every component is implemented or deployed.** The principal diagram shows the accepted system boundaries. The delivery-status section below identifies the current foundations and remaining work.
+
+```mermaid
+flowchart LR
+  subgraph Browser["Browser delivery - shared headless UI planned"]
+    UI["Ark / Zag behaviour + static CSS tokens"]
+    D["Operator dashboard"]
+    P["Customer portal"]
+    W["Optional Shadow DOM widget"]
+    UI --> D
+    UI --> P
+    UI --> W
+  end
+  X["Programmatic API consumers"]
+  CH["Support email / Slack / Teams / WhatsApp / Telegram - planned adapters"]
+  subgraph Runtime["Cloudflare runtime responsibilities - target, not a deployment inventory"]
+    API["Application API - authenticate and resolve tenant"]
+    I["Ingress Worker - verify provider and connection; reserved admission"]
+    J["Durable raw envelope and pending journal"]
+    Q["Ingress Queue"]
+    C["Consumer - normalise, deduplicate, recheck authority"]
+    CORE["Canonical ticket / conversation operations"]
+    OQ["Outbound Queue - recoverable outbox publication"]
+    OUT["Dispatch - recheck authority, retry, provider adapter"]
+    G["Governed action gate - owner ceiling, tenant restrictions, approval, audit, takeover"]
+    WF["Workflows - vectorisation"]
+    DO["Durable Objects - realtime and budget coordination"]
+  end
+  DB[("D1 - scoped state, audit and outbox")]
+  R2[("R2 - bodies, media and raw envelopes")]
+  VX[("Vectorize - scoped derived knowledge")]
+  AI["Workers AI - bounded advisory / enrichment"]
+  REF["Controlled reference API before customer-backend mutation"]
+  D --> API
+  P --> API
+  W --> API
+  X --> API
+  CH --> I --> J --> Q --> C --> CORE
+  J --> R2
+  J --> DB
+  API --> CORE
+  CORE --> DB
+  CORE --> R2
+  CORE --> DO
+  CORE --> AI
+  CORE --> VX
+  CORE --> WF
+  WF --> AI
+  WF --> VX
+  CORE -->|"D1 mutation + outbox intent; publish after commit"| OQ
+  OQ --> OUT --> CH
+  CORE --> G --> REF
+  G --> DB
+```
+
+The dashboard, portal and optional widgets share planned Ark/Zag behavioural primitives with extendable TypeScript interfaces, static CSS and standard `--tocyn-*` custom properties. Tenant tokens apply at the document/container boundary; the Web Component wrapper isolates widget CSS in Shadow DOM while exposing the defined token API. Standalone operation never requires custom-element registration. Browser UI stays outside API Worker bundles; runtime CSS-in-JS is forbidden (#48/#66/#67).
+
+API consumers authenticate at the application API. Support email, Slack, Teams, WhatsApp and Telegram enter through verified provider/connection adapters. Ingress reserves capacity, durably records bounded raw envelopes and a recoverable journal, then acknowledges using provider-specific semantics. Queues carry compact references to a consumer that normalises and deduplicates before canonical ticket/conversation writes. D1 owns scoped relational state, audit and transactional outbound intent; R2 owns bodies/media/raw content. Recoverable outbox publication feeds a separate dispatch responsibility for provider replies, bounded retries and authority rechecks (#51/#87/#88/#91).
+
+These are distinct application API, edge-ingress, asynchronous-consumer and outbound-dispatch runtime responsibilities, not one synchronous Worker request. The accepted work establishes their contracts and Queue boundaries; it does **not** yet fix a deployment-wide Worker count or mandate particular Worker-to-Worker Service Binding/RPC wiring. Any direct internal service call must preserve verified tenant/correlation context and recheck the receiving operation's authority; a service boundary or tenant path is never permission by itself. Resource placement and concrete binding choices remain implementation decisions within those contracts.
+
+Durable Objects supply realtime coordination and approved quota coordination, never memory-only durable acceptance. Workers AI and Vectorize support bounded enrichment/knowledge assistance, with Workflows for vectorisation. Persist accepted content before optional AI. Governed operations additionally require the deployment-owner ceiling, tenant restrictions, operation-bound approval where required, verification, attributable audit and takeover fencing; the first mutation proof uses the controlled reference API (#80–#83, ADR-0010). No diagram arrow grants cross-tenant data access or autonomous authority.
+
+Target authority: [headless primitives #48](https://github.com/nathcymru/Tocyn/issues/48), [omnichannel tracker #49](https://github.com/nathcymru/Tocyn/issues/49), [durable ingress #51](https://github.com/nathcymru/Tocyn/issues/51), [consumer #87](https://github.com/nathcymru/Tocyn/issues/87), [dispatch #88](https://github.com/nathcymru/Tocyn/issues/88), [recovery #91](https://github.com/nathcymru/Tocyn/issues/91) and [accepted ADRs](https://github.com/nathcymru/Tocyn/wiki/Architecture-decision-records).
 
 ## Current status
 
@@ -26,31 +99,8 @@ The first planned test outcome is a **human-led API/portal private beta**, forec
 
 The approved roadmap distinguishes **implemented source**, **beta/environment validation**, and **production readiness**. A feature appearing in an issue or architecture document does not mean it is already deployed.
 
-## How Tocyn fits together
 
-```mermaid
-flowchart LR
-  UI[Dashboard / Portal / Widget / API]
-  W[Cloudflare Worker API]
-  D1[(D1)]
-  R2[(R2)]
-  DO[Durable Object]
-  AI[Workers AI]
-  VX[(Vectorize)]
-
-  UI --> W
-  W --> D1
-  W --> R2
-  W --> DO
-  W --> AI
-  W --> VX
-```
-
-The diagram is an arrangement overview. In prose: browser/API surfaces call a Hono Worker; the Worker uses D1 for relational state, R2 for file/offloaded content, a tenant-keyed Durable Object for real-time operator coordination, and Workers AI/Vectorize for knowledge/AI-assistance functions. Tenant authority is derived from authenticated/verified scope before tenant-owned data is accessed.
-
-Current `apps/server/wrangler.json` does **not** define Cloudflare Queue or Cloudflare Calls bindings, so documentation does not claim those services are already active. Provider integrations such as Slack, Teams, WhatsApp and Telegram remain planned adapter work.
-
-Read the detailed [system architecture](docs/architecture/system-overview.md).
+Read the detailed [target architecture and current runtime evidence](docs/architecture/system-overview.md).
 
 ## Multi-tenancy and security
 

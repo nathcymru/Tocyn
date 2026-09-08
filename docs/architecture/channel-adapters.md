@@ -1,5 +1,7 @@
 # Channel adapter architecture
 
+The approved target [system overview](system-overview.md) places these channel paths alongside the shared headless browser surfaces and distinct ingress, consumer and outbound-dispatch responsibilities. API/portal-first release sequencing does not narrow the omnichannel architecture.
+
 ## Principle
 
 External messaging systems are adapters around Tocyn's canonical ticket/conversation state. They must not create parallel helpdesk models or make provider-specific identifiers the source of tenant authority.
