@@ -1,67 +1,172 @@
-![Tocyn Banner](https://raw.githubusercontent.com/nathcymru/Tocyn/main/public/assets/brand/tocyn-github-repo-header.webp)
+![Tocyn repository banner](public/assets/brand/tocyn-github-repo-header.webp)
 
 # Tocyn
 
-[![License: MIT](https://shieldcn.dev/github/license/nathcymru/Tocyn.svg)](LICENSE)
-[![Cloudflare Workers](https://shieldcn.dev/badge/Cloudflare-Workers-F38020.svg?logo=cloudflare)](https://github.com/nathcymru/Tocyn/wiki/Architecture-and-tenant-isolation)
-[![CI](https://shieldcn.dev/github/ci/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/actions/workflows/ci.yml)
-[![CodeQL enabled](https://shieldcn.dev/badge/CodeQL-enabled-2088FF.svg?logo=github)](https://github.com/nathcymru/Tocyn/security/code-scanning)
+**Tocyn** (Welsh for “ticket”, pronounced roughly “Tock-in”) is an open-source, multi-tenant helpdesk/support system built for Cloudflare's edge application stack. It is a fork of [Luminatick](https://github.com/05ng/luminatick) and is released under the MIT licence.
 
-Tocyn (Welsh for “ticket”) is an open-source helpdesk being developed as a multi-tenant application on the Cloudflare serverless edge. It is a fork of [Luminatick by 05ng](https://github.com/05ng/luminatick) and retains the original MIT attribution.
+> **Pre-release:** Tocyn has no stable release and no project-operated hosted helpdesk service. Current source is under active development. Do not treat the repository, roadmap or documentation as evidence of production readiness.
 
-**Status: early development; no stable release yet.** Phase 1 application-enforced tenant isolation has been implemented and source-review acceptance completed, while isolated deployment/beta verification and production cutover remain separate gates.
+## Current status
 
-## Current direction
+The repository currently contains:
 
-Tocyn has working API and portal foundations, operator interfaces, ticketing, knowledge/AI assistance and Cloudflare-backed services. The approved roadmap now separates architectural capability milestones (`M0.x`–`M7.x`) from software releases.
+- a Hono/Cloudflare Worker API backend;
+- operator dashboard, customer portal and embeddable widget applications;
+- authentication, permissions, ticket/conversation and knowledge-base foundations;
+- D1-backed application state;
+- R2-backed attachment/offloaded-body storage;
+- tenant-keyed Durable Object real-time coordination;
+- Workers AI + Vectorize knowledge/AI-assistance foundations;
+- an injectable email transport with Resend configuration;
+- Phase 1 application-enforced tenant ownership/isolation changes in source.
 
-The first planned release boundary is a **human-led API/portal private beta**, currently forecast for **21 November 2026** with candidate prerelease `v0.4.0-beta.1`. Slack, support email and autonomous resolution follow as independent roadmap capabilities; they do not block the first beta.
+The first planned test outcome is a **human-led API/portal private beta**, forecast for **21 November 2026**, candidate `v0.4.0-beta.1`. That prerelease has not been created. Slack, support-email expansion and governed autonomous customer-backend actions follow in later roadmap work.
 
-See the [approved architectural roadmap](https://github.com/nathcymru/Tocyn/wiki/Approved-architectural-roadmap), [issues](https://github.com/nathcymru/Tocyn/issues) and [roadmap summary](docs/roadmap.md).
+The approved roadmap distinguishes **implemented source**, **beta/environment validation**, and **production readiness**. A feature appearing in an issue or architecture document does not mean it is already deployed.
 
-## Architecture
+## How Tocyn fits together
 
-The application targets Cloudflare Workers, D1, R2, Durable Objects, Workers AI, Vectorize and related edge services. Cost/capacity limits, tenant isolation and failure recovery are explicit roadmap concerns; no statement here is a production-readiness declaration.
+```mermaid
+flowchart LR
+  UI[Dashboard / Portal / Widget / API]
+  W[Cloudflare Worker API]
+  D1[(D1)]
+  R2[(R2)]
+  DO[Durable Object]
+  AI[Workers AI]
+  VX[(Vectorize)]
 
-Authentication/transactional mail currently uses an injectable transport with Resend retained for the first isolated beta. Cloudflare-native transactional mail migration and full helpdesk support-email conversations are separate roadmap items.
+  UI --> W
+  W --> D1
+  W --> R2
+  W --> DO
+  W --> AI
+  W --> VX
+```
 
-## Repository guide
+The diagram is an arrangement overview. In prose: browser/API surfaces call a Hono Worker; the Worker uses D1 for relational state, R2 for file/offloaded content, a tenant-keyed Durable Object for real-time operator coordination, and Workers AI/Vectorize for knowledge/AI-assistance functions. Tenant authority is derived from authenticated/verified scope before tenant-owned data is accessed.
 
-- [Contributing](CONTRIBUTING.md)
-- [Documentation index](docs/README.md)
-- [Agent governance](docs/agents/README.md)
-- [Repository structure](docs/repository-structure.md)
+Current `apps/server/wrangler.json` does **not** define Cloudflare Queue or Cloudflare Calls bindings, so documentation does not claim those services are already active. Provider integrations such as Slack, Teams, WhatsApp and Telegram remain planned adapter work.
+
+Read the detailed [system architecture](docs/architecture/system-overview.md).
+
+## Multi-tenancy and security
+
+Tocyn's core invariant is that a tenant ID supplied in a URL, payload, webhook or automation rule is **not authority**. Request-driven data/storage operations must use a verified tenant scope and scoped repositories/storage adapters.
+
+Phase 1 migrations qualify core ownership records by tenant, including users, groups, tickets, articles, attachments, memberships and support-email configuration. R2/Vectorize side effects are also treated as tenant-owned derived/external state rather than being authorised by raw object/vector identifiers.
+
+See:
+
+- [Data and tenant boundaries](docs/architecture/data-and-tenant-boundaries.md)
 - [Security policy](SECURITY.md)
-- [Community standards](CODE_OF_CONDUCT.md)
-- [Application icons](public/app_icons/README.md)
+- [Multitenancy implementation/review evidence](docs/architecture/multitenancy/)
 
-Use development resources and synthetic data. Remote deployment, provider activation, production migrations, tags and releases require their own approved gates.
+Please report vulnerabilities privately under [SECURITY.md](SECURITY.md).
 
-## Roadmap model
+## Channels and conversations
+
+Tocyn uses a canonical ticket/conversation model. External providers are intended to be adapters around that core rather than separate helpdesk implementations.
+
+Current beta sequencing is intentionally conservative:
+
+1. prove API/portal canonical conversations and human operation;
+2. add shared adapter/dispatch infrastructure and Slack;
+3. expand support email and other approved external channels;
+4. introduce governed autonomous resolution only after the human fallback, policy gate and audit controls are proven.
+
+See [Channel adapter architecture](docs/architecture/channel-adapters.md).
+
+## AI and autonomous operations
+
+Current AI facilities are advisory/knowledge-oriented: embeddings, knowledge-grounded responses and suggested replies. Tocyn does **not** currently give AI standing authority over customer backend systems.
+
+Approved future autonomous actions are policy-gated:
+
+`deployment-owner authority ceiling → tenant restriction → runtime policy → allow / human approval / deny`
+
+The first write-capability proof will use an isolated reference API before any real customer backend becomes a dependency. See [AI and autonomous operations](docs/architecture/ai-and-autonomous-operations.md).
+
+## Privacy engineering
+
+The Tocyn project does not operate a hosted customer helpdesk and does not automatically receive application-level data from independent Tocyn deployments. Repository/community touchpoints are covered by [PRIVACY_POLICY.md](PRIVACY_POLICY.md).
+
+The roadmap includes future FidesLang privacy-as-code metadata under issues #16/#17. **FidesLang declarations are not yet present in the inspected `main` branch.** When implemented, the metadata is intended to describe data categories/subjects/uses for privacy tooling; it will not replace authentication, authorisation or tenant isolation.
+
+Technical privacy documentation:
+
+- [Privacy architecture](docs/privacy/privacy-architecture.md)
+- [GDPR deployer technical guide](docs/privacy/gdpr-compliance-user-guide.md)
+
+Using Tocyn or future FidesLang metadata does not by itself make a deployment GDPR-compliant. Independent deployers remain responsible for their own legal roles, configurations, processing purposes, retention, notices, contracts and operational compliance.
+
+## Repository layout
+
+```text
+apps/                 Application workspaces
+packages/             Shared runtime packages
+public/               Public assets and application icon package
+docs/                 Architecture, privacy, security and operational docs
+.agents/              Vendor-neutral agent skills/workflows/resources/state
+.github/               GitHub workflows/templates/Copilot shim
+tools/                 Development tooling
+scripts/               Utility scripts
+```
+
+GitHub-standard files such as `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `PRIVACY_POLICY.md` and `AGENTS.md` intentionally remain at repository root.
+
+See [Repository structure](docs/repository-structure.md) and [Documentation index](docs/README.md).
+
+## Application icons and brand assets
+
+- canonical public brand assets: [`public/assets/brand/`](public/assets/brand/)
+- platform application icon package: [`public/app_icons/`](public/app_icons/)
+
+Do not reintroduce loose root image copies solely for README/Page compatibility; repository references should use the canonical public asset paths.
+
+## Development
+
+This is a pnpm workspace. Start with the current repository instructions rather than historical phase documents.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md) for contribution and coding-agent governance. Repository work is issue-owned, PR-delivered, and uses persistent progress/completion receipts so the roadmap remains a living record.
+
+## Roadmap
+
+Current architectural milestones are capability-based rather than version-based:
 
 | Phase | Focus |
 | --- | --- |
-| M0 | Engineering, cost/capacity and delivery environments |
-| M1 | Core data and intake |
-| M2 | Human workspace |
-| M3 | AI enrichment |
-| M4 | Policy-gated autonomous resolution |
-| M5 | Governance and oversight |
-| M6 | Service-user experience |
-| M7 | Channel integrations |
+| M0 | Engineering, platform/cost controls and delivery environments |
+| M1 | Core data, intake, ticket-feed validation and transactional mail |
+| M2 | Human workspace, composer/productivity, real-time state and design system |
+| M3 | Context aggregation, triage/summarisation and operator AI assistance |
+| M4 | Tool boundaries, governed autonomous resolution and human handoff |
+| M5 | Authorisation, audit/oversight, analytics, privacy metadata and workflow administration |
+| M6 | Portal/service-user experience, SLA, cross-channel continuity and deterministic self-service |
+| M7 | WhatsApp, Telegram, Slack, Teams and support-email integrations |
 
-Milestones answer **what capability are we completing?** Releases answer **what tested source snapshot can people use?** The `beta-blocker` label independently answers **what prevents the next beta?**
+Milestones describe architecture/capability completion. Releases are separate Git tags/GitHub Releases. `beta-blocker` is a cross-cutting readiness label rather than a milestone.
 
-## Help build Tocyn
+- [Approved architectural roadmap](https://github.com/nathcymru/Tocyn/wiki/Approved-architectural-roadmap)
+- [Repository roadmap pointer](docs/roadmap.md)
+- [Architecture decision records](docs/adr/README.md)
 
-Contributions to documentation, testing, accessibility, security and implementation are welcome. Start with a clearly scoped issue and coordinate before substantial work.
+## Public project page
 
-- [Questions and ideas](https://github.com/nathcymru/Tocyn/discussions)
-- [Report a non-security bug](https://github.com/nathcymru/Tocyn/issues/new/choose)
-- [Report a vulnerability privately](SECURITY.md)
+The repository's GitHub Pages project page is: https://nathcymru.github.io/Tocyn/
 
-## Licence and acknowledgement
+It is a project/contributor information surface, **not** a hosted Tocyn application. Do not submit credentials, customer/tenant data or vulnerability details through its public contact form.
 
-Tocyn is released under the [MIT licence](LICENSE). The original Luminatick copyright and permission notice are retained.
+## Licence and upstream attribution
 
-Cloudflare and related product names are trademarks of Cloudflare, Inc. Tocyn is an independent open-source project and is not affiliated with, endorsed by or sponsored by Cloudflare, Inc.
+Tocyn is provided under the [MIT License](LICENSE), including its “AS IS” warranty disclaimer. The upstream Luminatick attribution/licence history is preserved in the repository.
+
+Tocyn is an independent open-source project and is not affiliated with or endorsed by Cloudflare, GitHub, Ethyca/Fides or the external channel providers referenced by its roadmap.

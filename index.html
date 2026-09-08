@@ -1,270 +1,128 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tocyn - Edge-Native Helpdesk</title>
-    
-    <!-- Styling: Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        // Injecting Cloudflare's signature brand colors
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        cloudflare: {
-                            orange: '#F38020',
-                            dark: '#1E1E1E',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    
-    <!-- Functionality: Canvas Confetti & Web3Forms hCaptcha -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
-    <script src="https://web3forms.com/client/script.js" async defer></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tocyn — open-source multi-tenant helpdesk</title>
+  <meta name="description" content="Tocyn is a pre-release open-source multi-tenant helpdesk built for Cloudflare's edge application stack.">
+  <script src="https://web3forms.com/client/script.js" async defer></script>
+  <style>
+    :root { color-scheme: light; --ink:#1f2937; --muted:#596579; --line:#dce2ea; --accent:#f38020; --panel:rgba(255,255,255,.94); }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); font:16px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#eef2f6 url('./public/assets/brand/tocyn-background.webp') center/cover fixed; }
+    body::before { content:""; position:fixed; inset:0; background:rgba(255,255,255,.84); z-index:-1; }
+    main { max-width:960px; margin:auto; padding:32px 18px 64px; }
+    section, footer { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:28px; margin:0 0 22px; box-shadow:0 8px 28px rgba(15,23,42,.07); }
+    header { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+    header img { width:min(300px,75vw); height:auto; }
+    h1,h2 { line-height:1.2; margin-top:0; }
+    h1 { font-size:clamp(2rem,6vw,3.2rem); margin-bottom:4px; }
+    h2 { font-size:1.45rem; }
+    a { color:#8a440b; text-underline-offset:3px; }
+    .notice { border-left:4px solid var(--accent); padding:12px 16px; background:#fff8f1; border-radius:8px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+    .card { border:1px solid var(--line); border-radius:12px; padding:16px; background:#fafbfc; }
+    .tag { display:inline-block; padding:3px 9px; border-radius:999px; background:#fff0e3; color:#7c3d08; font-size:.82rem; font-weight:650; }
+    ul { padding-left:22px; }
+    label { display:block; font-weight:650; margin:12px 0 5px; }
+    input, textarea { width:100%; border:1px solid #b8c0cc; border-radius:8px; padding:10px 12px; font:inherit; background:#fff; }
+    input:focus, textarea:focus { outline:3px solid rgba(243,128,32,.25); border-color:var(--accent); }
+    button { margin-top:14px; border:0; border-radius:9px; padding:10px 18px; background:var(--accent); color:white; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.65; cursor:wait; }
+    footer { display:flex; gap:20px; align-items:flex-start; font-size:.9rem; color:var(--muted); }
+    footer img { width:180px; max-width:35vw; height:auto; }
+  </style>
 </head>
+<body>
+<main>
+  <section>
+    <header>
+      <img src="./public/assets/brand/tocyn-logo-color.webp" alt="Tocyn">
+      <div>
+        <span class="tag">Pre-release open source</span>
+        <h1>Tocyn</h1>
+        <p>Welsh for “ticket” — a multi-tenant helpdesk/support project for Cloudflare's edge application stack.</p>
+      </div>
+    </header>
+    <p class="notice"><strong>No hosted Tocyn service is operated by the project.</strong> This page describes the source project. It is not a customer helpdesk login and it is not evidence of production readiness.</p>
+  </section>
 
-<!-- Background Image with Fixed Attachment -->
-<body class="text-gray-900 font-sans antialiased min-h-screen p-4 md:p-8 bg-gray-100 bg-[url('./Tocyn_Background.webp')] bg-cover bg-center bg-fixed relative">
+  <section>
+    <h2>Current source</h2>
+    <div class="grid">
+      <div class="card"><strong>Application surfaces</strong><br>Operator dashboard, customer portal, widget and programmatic API foundations.</div>
+      <div class="card"><strong>Cloudflare runtime</strong><br>Hono Worker with D1, R2, a tenant-keyed Durable Object, Workers AI, Vectorize and a vectorisation Workflow.</div>
+      <div class="card"><strong>Tenant ownership</strong><br>Phase 1 tenant-qualified ownership/isolation is implemented in source; environment and production cutover remain separate gates.</div>
+      <div class="card"><strong>Email</strong><br>Injectable mail transport with current Resend configuration. Full support-email channel activation is later roadmap work.</div>
+    </div>
+    <p>The current Worker configuration does not define Cloudflare Queue or Cloudflare Calls bindings. Slack, Teams, WhatsApp, Telegram and governed autonomous customer-backend actions are approved roadmap work rather than deployed capabilities.</p>
+  </section>
 
-    <!-- Translucent Overlay to ensure text legibility against the background image -->
-    <div class="fixed inset-0 bg-white/85 backdrop-blur-sm z-0"></div>
+  <section>
+    <h2>Roadmap</h2>
+    <p>The first planned test outcome is a human-led API/portal private beta, candidate <code>v0.4.0-beta.1</code>, forecast for 21 November 2026. The tag/release has not been created.</p>
+    <p><a href="https://github.com/nathcymru/Tocyn/wiki/Approved-architectural-roadmap">Approved architectural roadmap</a> · <a href="https://github.com/nathcymru/Tocyn/wiki/System-architecture">System architecture</a> · <a href="https://github.com/nathcymru/Tocyn/wiki/Architecture-decision-records">ADRs</a></p>
+  </section>
 
-    <main class="max-w-4xl mx-auto space-y-8 relative z-10">
-        
-        <!-- Hero Section -->
-        <section class="bg-white/95 shadow-lg border border-gray-200 border-t-4 border-t-cloudflare-orange rounded-xl p-8">
-            <header class="mb-6">
-                <div class="flex flex-col sm:flex-row sm:items-center gap-5 mb-4">
-                    <!-- Color Logo at the top -->
-                    <img src="./tocyn_color.webp" alt="Tocyn Logo" class="h-16 w-auto object-contain">
-                    <div>
-                        <h1 class="text-4xl font-bold tracking-tight text-cloudflare-dark">Tocyn</h1>
-                        <p class="text-sm font-bold text-cloudflare-orange uppercase tracking-wide mt-1">
-                            Pronounced "Tock-in" &bull; Welsh for 'Ticket'
-                        </p>
-                    </div>
-                </div>
-                
-                <!-- shieldcn.dev Repository Metrics -->
-                <div class="flex flex-wrap gap-2 items-center mb-6">
-                    <img src="https://shieldcn.dev/github/license/nathcymru/Tocyn.svg" alt="License" class="h-6 shadow-sm rounded">
-                    <img src="https://shieldcn.dev/github/stars/nathcymru/Tocyn.svg" alt="Stars" class="h-6 shadow-sm rounded">
-                    <img src="https://shieldcn.dev/github/issues/nathcymru/Tocyn.svg" alt="Issues" class="h-6 shadow-sm rounded">
-                </div>
-            </header>
-            
-            <div class="prose prose-gray max-w-none text-gray-700 space-y-4 leading-relaxed">
-                <p>
-                    <strong>Tocyn</strong> is a multi-tenant helpdesk and support system built entirely on the Cloudflare serverless edge.
-                </p>
-                <p>
-                    Tocyn is a fork of Luminatik. While the original project laid the groundwork for an edge-native service layer, Tocyn shifts the architecture to support multi-tenant helpdesk operations, integrating real-time communications and third-party channels. 
-                </p>
-            </div>
-        </section>
+  <section>
+    <h2>Privacy and security</h2>
+    <p>Independent deployers control their own Tocyn environments and data. The project does not automatically receive application-level data from those deployments. Future FidesLang privacy metadata is planned under roadmap issues #16/#17 and is not currently implemented in <code>main</code>.</p>
+    <p><a href="./PRIVACY_POLICY.md">Repository privacy policy</a> · <a href="./SECURITY.md">Security policy</a> · <a href="https://github.com/nathcymru/Tocyn/wiki/PRIVACY_ARCHITECTURE">Privacy architecture</a> · <a href="https://github.com/nathcymru/Tocyn/wiki/GDPR_COMPLIANCE_USER_GUIDE">GDPR deployer technical guide</a></p>
+  </section>
 
-        <!-- Architecture Section -->
-        <section class="bg-white/95 shadow-lg border border-gray-200 rounded-xl p-8">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-semibold text-cloudflare-dark">Architecture and Infrastructure</h2>
-                <img src="https://img.shields.io/badge/100%25-Cloudflare-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="100% Cloudflare" class="h-6 hidden sm:block">
-            </div>
-            
-            <p class="text-gray-700 mb-6 leading-relaxed">
-                Tocyn strictly enforces a 100% Cloudflare infrastructure footprint. This deliberate vendor lock-in sacrifices provider portability in exchange for zero-maintenance global deployment, low-latency edge execution, and a unified security perimeter.
-            </p>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="p-5 border border-gray-100 rounded-lg bg-gray-50/80 hover:bg-white transition-colors shadow-sm">
-                    <div class="flex items-center gap-2 mb-2">
-                        <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Workers Badge">
-                    </div>
-                    <p class="text-sm text-gray-600">Handles HTTP routing, tenant authentication, and API logic. Strict edge CPU time and memory limits require that heavy or long-running tasks be deferred asynchronously.</p>
-                </div>
-                <div class="p-5 border border-gray-100 rounded-lg bg-gray-50/80 hover:bg-white transition-colors shadow-sm">
-                    <div class="flex items-center gap-2 mb-2">
-                        <img src="https://img.shields.io/badge/Cloudflare-D1-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="D1 Badge">
-                    </div>
-                    <p class="text-sm text-gray-600">SQLite at the edge. Tenant data isolation is enforced logically via application middleware. Client-side state management mitigates D1's eventual consistency for read replicas.</p>
-                </div>
-                <div class="p-5 border border-gray-100 rounded-lg bg-gray-50/80 hover:bg-white transition-colors shadow-sm">
-                    <div class="flex items-center gap-2 mb-2">
-                        <img src="https://img.shields.io/badge/Cloudflare-R2-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="R2 Badge">
-                    </div>
-                    <p class="text-sm text-gray-600">Stores ticket attachments, avatars, and media. Time-limited pre-signed URLs are generated by Workers to ensure secure, transient client access.</p>
-                </div>
-                <div class="p-5 border border-gray-100 rounded-lg bg-gray-50/80 hover:bg-white transition-colors shadow-sm">
-                    <div class="flex items-center gap-2 mb-2">
-                        <img src="https://img.shields.io/badge/Cloudflare-Queues-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Queues Badge">
-                    </div>
-                    <p class="text-sm text-gray-600">Decouples background tasks from the main request lifecycle. Used for webhook dispatching, SLA breach detection, and inbound message parsing.</p>
-                </div>
-                <div class="p-5 border border-gray-100 rounded-lg bg-gray-50/80 hover:bg-white transition-colors shadow-sm md:col-span-2 border-l-4 border-l-cloudflare-orange">
-                    <div class="flex items-center gap-2 mb-2">
-                        <img src="https://img.shields.io/badge/Cloudflare-Durable_Objects-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Durable Objects Badge">
-                    </div>
-                    <p class="text-sm text-gray-600">Manages persistent WebSocket connections, live agent presence, and WebRTC signalling for video calls. Provides a strictly consistent, single point of coordination to prevent race conditions during concurrent updates.</p>
-                </div>
-            </div>
-        </section>
+  <section>
+    <h2>Contribute or contact the project</h2>
+    <p>For normal bugs/features, prefer <a href="https://github.com/nathcymru/Tocyn/issues">GitHub Issues</a> or <a href="https://github.com/nathcymru/Tocyn/discussions">Discussions</a>. Security vulnerabilities must use the private route in <a href="./SECURITY.md">SECURITY.md</a>.</p>
+    <p>Do not submit credentials, tenant/customer data, ticket exports or vulnerability details through this public form. The form is delivered through Web3Forms and uses hCaptcha; see the <a href="./PRIVACY_POLICY.md">privacy policy</a>.</p>
+    <form id="form" novalidate>
+      <label for="name">Name</label>
+      <input id="name" name="name" autocomplete="name" required>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required>
+      <label for="github">GitHub handle (optional)</label>
+      <input id="github" name="github" pattern="^[a-zA-Z0-9\-]+$">
+      <label for="message">Message</label>
+      <textarea id="message" name="message" rows="5" required></textarea>
+      <div class="h-captcha" data-captcha="true"></div>
+      <button type="submit">Send message</button>
+    </form>
+  </section>
 
-        <!-- Integrations Section -->
-        <section class="bg-white/95 shadow-lg border border-gray-200 rounded-xl p-8">
-            <h2 class="text-2xl font-semibold mb-4 text-cloudflare-dark">Integrations and Channels</h2>
-            <p class="text-gray-700 mb-6 leading-relaxed">
-                Beyond standard web forms and email ingestion, Tocyn is engineered to handle multiple synchronous and asynchronous support vectors:
-            </p>
-            <ul class="space-y-4 text-sm text-gray-700">
-                <li class="flex items-start bg-gray-50 p-4 rounded-md border border-gray-100">
-                    <img src="https://img.shields.io/badge/Cloudflare-Calls-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Calls" class="mr-4 mt-0.5">
-                    <div>
-                        <strong class="text-gray-900 block text-base mb-1">WebRTC Video & Audio</strong>
-                        Direct video and audio communication embedded into the interface. Durable Objects handle session signalling for remote diagnostics without third-party clients.
-                    </div>
-                </li>
-                <li class="flex items-start bg-gray-50 p-4 rounded-md border border-gray-100">
-                    <span class="mr-4 mt-1 text-cloudflare-orange font-bold text-xl">&bull;</span>
-                    <div>
-                        <strong class="text-gray-900 block text-base mb-1">Signal Integration</strong>
-                        Bi-directional messaging integration allowing secure, end-to-end encrypted interactions with clients who prefer instant messaging.
-                    </div>
-                </li>
-                <li class="flex items-start bg-gray-50 p-4 rounded-md border border-gray-100">
-                    <span class="mr-4 mt-1 text-cloudflare-orange font-bold text-xl">&bull;</span>
-                    <div>
-                        <strong class="text-gray-900 block text-base mb-1">Remote Support Orchestration</strong>
-                        Webhook and API endpoints interface with third-party RMM tools, automatically mapping remote session IDs to specific support tickets.
-                    </div>
-                </li>
-            </ul>
-        </section>
-
-        <!-- Contribution / Contact Form -->
-        <section class="bg-white/95 shadow-lg border border-gray-200 rounded-xl p-8">
-            <h2 class="text-2xl font-semibold mb-2 text-cloudflare-dark">Contribute or Request Access</h2>
-            <p class="text-gray-600 mb-6">Use this form to report bugs, suggest features, or enquire about deploying Tocyn in your workplace.</p>
-            
-            <form id="form" class="space-y-5 max-w-2xl" novalidate>
-                <div>
-                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                    <input type="text" id="name" name="name" required 
-                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-cloudflare-orange focus:border-cloudflare-orange outline-none transition-colors"
-                        placeholder="Jane Doe">
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                        <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                        <input type="email" id="email" name="email" required 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-cloudflare-orange focus:border-cloudflare-orange outline-none transition-colors"
-                            placeholder="jane@example.com">
-                    </div>
-                    
-                    <div>
-                        <label for="github" class="block text-sm font-medium text-gray-700 mb-1">GitHub Handle (Optional)</label>
-                        <input type="text" id="github" name="github" pattern="^[a-zA-Z0-9\-]+$" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-cloudflare-orange focus:border-cloudflare-orange outline-none transition-colors"
-                            placeholder="janedoe">
-                    </div>
-                </div>
-
-                <div>
-                    <label for="message" class="block text-sm font-medium text-gray-700 mb-1">Details</label>
-                    <textarea id="message" name="message" rows="4" required 
-                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-cloudflare-orange focus:border-cloudflare-orange outline-none transition-colors resize-y"
-                        placeholder="Provide details about your contribution, issue, or deployment inquiry..."></textarea>
-                </div>
-
-                <!-- hCaptcha Widget Container -->
-                <div class="h-captcha" data-captcha="true"></div>
-
-                <button type="submit" 
-                    class="w-full md:w-auto px-6 py-2.5 bg-cloudflare-orange hover:bg-[#E37010] text-white font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cloudflare-orange transition-colors">
-                    Send Message
-                </button>
-            </form>
-        </section>
-
-        <!-- Footer / Legal -->
-        <footer class="bg-white/95 shadow-lg border border-gray-200 rounded-xl p-8 flex flex-col md:flex-row gap-6 items-start">
-            <!-- B&W Logo in the Footer -->
-            <img src="./tocyn_black_and_white.webp" alt="Tocyn Logo (B&W)" class="h-12 w-auto opacity-75 grayscale">
-            
-            <div class="text-xs text-gray-500 space-y-4 leading-relaxed">
-                <p>
-                    <strong class="text-gray-700">Licence:</strong> Tocyn is released under the MIT Licence. Both Tocyn and Luminatik (the foundational architecture project) operate under this licence. A copy of the Luminatik copyright notice is retained in the source repository to acknowledge their engineering effort.
-                </p>
-                <p>
-                    <strong class="text-gray-700">Trademarks:</strong> Tocyn is built to integrate with Cloudflare's infrastructure, including Workers, D1, and Stream. "Cloudflare", the Cloudflare logo, and related product names are trademarks and/or registered trademarks of Cloudflare, Inc. in the United States and other jurisdictions. Tocyn is an independent open-source project and is not affiliated with, endorsed by, or sponsored by Cloudflare, Inc.
-                </p>
-            </div>
-        </footer>
-
-    </main>
-
-    <script>
-        const form = document.getElementById('form');
-        const submitBtn = form.querySelector('button[type="submit"]');
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            if (!form.checkValidity()) {
-                form.reportValidity();
-                return;
-            }
-
-            const hCaptchaField = form.querySelector('textarea[name="h-captcha-response"]');
-            if (hCaptchaField && !hCaptchaField.value) {
-                alert("Please complete the hCaptcha challenge before submitting.");
-                return;
-            }
-
-            const formData = new FormData(form);
-            formData.append("access_key", "81411b5c-79a4-4992-91bc-f49d9af48df5");
-
-            const originalText = submitBtn.textContent;
-            submitBtn.textContent = "Sending...";
-            submitBtn.disabled = true;
-
-            try {
-                const response = await fetch("https://api.web3forms.com/submit", {
-                    method: "POST",
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    confetti({
-                        particleCount: 150,
-                        spread: 80,
-                        origin: { y: 0.6 },
-                        colors: ['#F38020', '#1E1E1E', '#ffffff'] // Custom Cloudflare confetti colors
-                    });
-                    
-                    alert("Success! Your message has been sent.");
-                    form.reset();
-                    
-                    if (typeof hcaptcha !== 'undefined') {
-                        hcaptcha.reset();
-                    }
-                } else {
-                    alert("Error: " + data.message);
-                }
-
-            } catch (error) {
-                alert("Something went wrong. Please check your connection and try again.");
-            } finally {
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-            }
-        });
-    </script>
+  <footer>
+    <img src="./public/assets/brand/tocyn-logo-black-and-white.webp" alt="Tocyn">
+    <div>
+      <p>Tocyn is released under the <a href="./LICENSE">MIT License</a> and retains the upstream Luminatick attribution/licence history.</p>
+      <p>Tocyn is an independent open-source project and is not affiliated with or endorsed by Cloudflare, GitHub, Ethyca/Fides or external channel providers referenced by the roadmap.</p>
+    </div>
+  </footer>
+</main>
+<script>
+const form = document.getElementById('form');
+const button = form.querySelector('button[type="submit"]');
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!form.checkValidity()) { form.reportValidity(); return; }
+  const captcha = form.querySelector('textarea[name="h-captcha-response"]');
+  if (captcha && !captcha.value) { alert('Please complete the hCaptcha challenge.'); return; }
+  const data = new FormData(form);
+  data.append('access_key', '81411b5c-79a4-4992-91bc-f49d9af48df5');
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Sending…';
+  try {
+    const response = await fetch('https://api.web3forms.com/submit', { method:'POST', body:data });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || 'Form submission failed');
+    alert('Your message has been sent.');
+    form.reset();
+    if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
+  } catch (error) {
+    alert('The message could not be sent. Please use GitHub Issues/Discussions for non-sensitive contact.');
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+});
+</script>
 </body>
 </html>

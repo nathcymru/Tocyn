@@ -22,4 +22,6 @@ Reports may concern authentication, authorisation, tenant boundaries, database a
 
 Assess Node.js-related findings against the component and runtime affected; they are not categorically excluded. Potential cross-tenant disclosure receives urgent investigation. Severity depends on demonstrated impact.
 
-FidesLang metadata does not replace access controls. Disabling optional end-user privacy tooling must never disable tenant isolation or security controls.
+FidesLang metadata does not replace access controls. Disabling optional end-user privacy tooling must never disable tenant isolation or security controls. Furthermore, while fideslang provides a standardized metadata taxonomy for privacy-as-code declarations, its integration is completely decoupled from system-level access enforcement. Vulnerabilities exposed via misconfigured data protection layers, unvalidated API boundaries interacting with fideslang orchestration engines, or unauthorized exposure of fideslang policy files must be reported using the private channels specified above.
+
+Operational failures in self-deployed environments should also be assessed against the [MIT `LICENSE`](LICENSE): Tocyn is supplied on an **"AS IS"** basis without warranty. That licence boundary does not diminish the need to report defects in Tocyn itself through the private channels above, and it does not remove a deployer's own legal or security obligations.

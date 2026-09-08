@@ -10,7 +10,7 @@ Before changing anything, establish the task's authority in this order:
 2. the current GitHub issue's approved scope, acceptance criteria, milestone and dependencies;
 3. accepted ADRs and the approved architectural roadmap;
 4. this file;
-5. relevant `.agents/skills/`, `.agents/workflows/` and `.agents/resources/` material;
+5. relevant `.agents/skills/`, `.agents/workflows/`, `.agents/rules/` and `.agents/resources/` material;
 6. implementation documentation and nearby code.
 
 Historical text preserved inside issues or documents is evidence, not current authority where a newer approved scope explicitly supersedes it. Never silently broaden an issue because related work looks convenient.
@@ -30,12 +30,13 @@ node tools/agent-context/index.mjs impact <exact-file-path>
 
 Then read the returned source locations and relevant tests. Use `rg` for SQL, configuration, dynamic calls and relationships the graph cannot resolve. Do not dump the generated index or repeatedly read whole directories.
 
-Load the relevant skill:
+Load the relevant skill/rule:
 
 - `.agents/skills/tocyn-context/SKILL.md` — navigation, impact and economical validation.
 - `.agents/skills/tocyn-security-review/SKILL.md` — application/security changes and reviews.
 - `.agents/skills/tocyn-tenant-isolation/SKILL.md` — tenant design, storage and authorization.
 - `.agents/skills/tocyn-delivery-governance/SKILL.md` — issue, PR, Project, progress and schedule hygiene.
+- `.agents/rules/documentation.md` — documentation status accuracy, Mermaid use, link/asset hygiene and privacy/legal boundaries.
 
 ## Delivery is issue-driven and PR-based
 
@@ -105,6 +106,14 @@ Do not report arbitrary percentages. Derive progress from acceptance outcomes an
 If progress cannot be defended from evidence, leave the previous value and explain the uncertainty.
 
 See `.agents/workflows/issue-delivery.md`, `.agents/workflows/pull-request-completion.md` and `.agents/workflows/roadmap-reforecast.md`.
+
+## Documentation is implementation evidence
+
+Repository/Wiki documentation must remain aligned with current code and approved roadmap decisions. Do not describe planned channels, autonomous actions, privacy metadata, deployments or infrastructure as implemented merely because an issue/ADR exists.
+
+When a diagram materially improves understanding, use Mermaid according to `.agents/rules/documentation.md`. Diagrams supplement prose; they never carry the only copy of a security, privacy or procedural requirement.
+
+When moving documentation/assets, update every repository/Wiki-sync reference in the same PR. Prefer canonical public assets under `public/` rather than loose root compatibility copies.
 
 ## Security, privacy and execution boundaries
 
