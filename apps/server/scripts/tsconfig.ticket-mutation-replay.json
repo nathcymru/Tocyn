@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "local-tenant-fixture.ts",
+    "ticket-mutation-replay.test.ts"
+  ]
+}

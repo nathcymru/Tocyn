@@ -1,4 +1,5 @@
 import { Context, Next } from 'hono';
+import { TicketMutationReplayService, type MutationPrincipal } from '../services/ticket-mutation-replay.service';
 import { VerifiedTenantScope } from '../types/tenant';
 import { Repositories } from '../repositories/interfaces';
 import { createRepositories } from '../repositories';
@@ -10,6 +11,7 @@ export type TenantRequestDeps = {
   attachmentStorage: TenantAttachmentStorage;
   legacyArticleStorage?: LegacyArticleBodyStorage;
   vectorStorage: TenantVectorStorage;
+  ticketMutationReplay: (principal: MutationPrincipal) => TicketMutationReplayService;
 };
 
 export const tenantMiddleware = async (c: Context, next: Next) => {
@@ -38,7 +40,8 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any): T
     repositories,
     attachmentStorage,
     legacyArticleStorage,
-    vectorStorage
+    vectorStorage,
+    ticketMutationReplay: principal => new TicketMutationReplayService(env.DB, scope, principal),
   };
 }
 

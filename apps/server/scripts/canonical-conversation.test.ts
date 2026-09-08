@@ -279,3 +279,19 @@ test('canonical projector preserves historical facts without inferring authentic
   assert.deepEqual(projection.messages[1].content.body, { status: 'unknown' }, 'Unhydrated R2 body must remain unknown');
   assert.equal(JSON.stringify(projection).includes('tenant-private/body-key'), false, 'Canonical projector must not expose an R2 body key');
 });
+
+
+test('portal and widget author attribution requires the recorded ticket customer', () => {
+  const ticket = { id: 'ticket', customer_id: 'customer-a', customer_email: 'tocyn-auth-test-a@example.invalid', source: 'portal' } as Ticket;
+  for (const intake_source of ['portal', 'widget'] as const) {
+    for (const sender_id of ['customer-a', 'customer-b', undefined]) {
+      const article = { id: 'message', ticket_id: ticket.id, sender_type: 'customer', sender_id, intake_source } as Article;
+      const author = projectCanonicalConversation(ticket, [article]).messages[0].author;
+      assert.equal(author.kind, sender_id === ticket.customer_id ? 'authenticated-customer' : 'recorded-customer');
+      assert.deepEqual(author.email, sender_id === ticket.customer_id ? { status: 'known', value: ticket.customer_email } : { status: 'not-recorded' });
+      const unowned = projectCanonicalConversation({ ...ticket, customer_id: undefined }, [article]).messages[0].author;
+      assert.equal(unowned.provenance, 'stored-article');
+      assert.deepEqual(unowned.email, { status: 'not-recorded' });
+    }
+  }
+});

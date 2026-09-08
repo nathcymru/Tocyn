@@ -62,6 +62,10 @@ vi.mock("../../services/tenant-ticket.service", () => {
   };
 });
 
+// These are handler orchestration tests. Real authorization, atomicity and replay
+// are exercised with isolated D1 by scripts/ticket-mutation-replay.test.ts.
+const mockPrepareMutation = vi.fn();
+const mockCommitMutation = vi.fn();
 let putCalledWithKey = "";
 vi.mock("../../middleware/tenant.middleware", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../middleware/tenant.middleware")>();
@@ -70,6 +74,7 @@ vi.mock("../../middleware/tenant.middleware", async (importOriginal) => {
     tenantMiddleware: async (c: any, next: any) => {
       c.set('tenantDeps', {
         scope: { tenantId: 'default-tenant' },
+        ticketMutationReplay: () => ({ prepareMutation: mockPrepareMutation, commit: mockCommitMutation }),
         repositories: {
           attachments: {
             getAttachmentWithMeta: async () => ({ r2_key: "test-key", customer_email: "test@example.com", file_name: "test.png" })
@@ -137,6 +142,13 @@ async function generateCustomerToken(overrides = {}) {
 describe("Customer Handler Integration Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrepareMutation.mockResolvedValue({ replay: null });
+    mockCommitMutation.mockImplementation(async (_prepared, attachments) => ({
+      status: 201, replayed: false, keyed: false, ticketId: 'ticket-1', articleId: 'article-1',
+      body: attachments === undefined
+        ? { ticket: { id: 'ticket-1' }, article: { id: 'article-1' }, canonical: {} }
+        : { id: 'article-1', attachments },
+    }));
     mockDB.all.mockResolvedValue({ results: [] });
     mockRequestAuth.mockResolvedValue(undefined);
     mockVerifyAuth.mockResolvedValue({
@@ -440,15 +452,10 @@ describe("Customer Handler Integration Tests", () => {
       expect(res.status).toBe(201);
       const body = await res.json();
       expect(body.ticket.id).toBe("ticket-1");
-      expect(mockCreateTicketWithArticle).toHaveBeenCalledWith({
-        subject: "Help",
-        customer_email: "test@example.com",
-        customer_id: "user-1",
-        source: "portal",
-        body: "I need help",
-        sender_id: "user-1",
-        sender_type: "customer"
-      });
+      expect(mockPrepareMutation).toHaveBeenCalledWith({
+        operation: 'portal.ticket.create', data: { subject: 'Help', body: 'I need help', custom_fields: undefined },
+      }, undefined);
+      expect(mockCommitMutation).toHaveBeenCalledWith({ replay: null });
     });
   });
 
@@ -515,25 +522,20 @@ describe("Customer Handler Integration Tests", () => {
       const body = await res.json();
       expect(body.id).toBe("article-1");
       expect(body.attachments).toHaveLength(1);
-      expect(mockCreateArticle).toHaveBeenCalledWith({
-        ticket_id: "ticket-1",
-        body: "Another reply",
-        sender_type: "customer", is_internal: false,
-        sender_id: "user-1",
-        intake_source: "portal"
-      });
-      expect(mockAddAttachment).toHaveBeenCalledWith({
-        article_id: "article-1",
-        file_name: "test.png",
-        file_size: 123,
-        content_type: "image/png",
-        r2_key: "customer-attachments/user-1/s3-key.png"
-      });
+      expect(mockPrepareMutation).toHaveBeenCalledWith({
+        operation: 'portal.ticket.reply', ticketId: 'ticket-1', data: {
+          body: 'Another reply', attachments: [{ filename: 'test.png', storageKey: 'customer-attachments/user-1/s3-key.png' }],
+        },
+      }, undefined);
+      expect(mockCommitMutation).toHaveBeenCalledWith({ replay: null }, [{
+        filename: 'test.png', storageKey: 'customer-attachments/user-1/s3-key.png', size: 123, contentType: 'image/png',
+      }]);
     });
 
     it("should return 404 if ticket not found", async () => {
       const token = await generateCustomerToken();
-      mockFindTicketById.mockResolvedValueOnce(null);
+      const { TicketMutationError } = await import('../../services/ticket-mutation-replay.service');
+      mockPrepareMutation.mockRejectedValueOnce(new TicketMutationError(404, 'not_found', 'Not found'));
 
       const res = await customer.request(
         "/tickets/ticket-1/messages",

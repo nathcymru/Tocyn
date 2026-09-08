@@ -64,7 +64,7 @@ X-API-Key: lt_abcd1234.somesupersecretstring
 #### 2. Create Ticket
 - **URL**: `POST /tickets`
 - **Rate Limit**: 10 requests per minute.
-- **Behavior**: If `customer_email` does not exist in the system, a "shadow user" is automatically created and assigned the `customer` role. All timestamps (e.g., `created_at`) are explicitly set using UTC ISO strings (`new Date().toISOString()`) to ensure accurate chronological sorting and avoid SQLite timezone shifts.
+- **Behavior**: `customer_email` is declared requester contact data; it does not create or impersonate a customer account.
 - **Body**:
   ```json
   {
@@ -91,6 +91,78 @@ X-API-Key: lt_abcd1234.somesupersecretstring
   }
   ```
 - **Response**: `201 Created`.
+
+### Optional retry safety for mutations
+
+`POST /tickets` and `POST /tickets/:id/articles` accept an optional,
+`Idempotency-Key` header whose case-sensitive value matches `[A-Za-z0-9._~-]{1,128}`.
+The same optional header applies to the customer portal ticket and message POST
+routes. Missing keys preserve the existing unkeyed behaviour.
+
+For a valid key, retries within 24 hours by the same authenticated tenant and
+principal return the original immutable application response and status with
+`Idempotency-Replayed: true`; the first keyed success returns the same response
+with `Idempotency-Replayed: false`. A different effective mutation for the same
+key returns `409` with `idempotency_conflict`. A deleted/redacted original
+returns `410` with `idempotency_result_gone`; it is never recreated. Reply requests
+first require the current target ticket to be accessible: missing or inaccessible
+tickets return `404` before receipt lookup. A reply tombstone can return `410`
+when the ticket remains authorized, for example after article/attachment deletion.
+
+Every attempt still authenticates and authorizes normally. Current key
+permissions, customer ownership, request limits, and origin policy apply before
+cached response data is considered. Mutations require `application/json`, use a
+64 KiB streamed request limit, and return controlled `400` malformed JSON/key,
+`413` oversized body, `415` unsupported media type, or `503` when a committed
+result cannot be resolved safely. Browser clients may send `Idempotency-Key` and
+read `Idempotency-Replayed` through the configured exact-origin CORS policy;
+API preflights also allow `X-API-Key`. Widget wildcard origins do not gain API-key
+header permission.
+
+The namespace includes tenant, current API-key/customer principal, operation and
+hashed key. Effective input is normalized and versioned; omitted API create bodies
+remain supported. The database clock fixes a 24-hour window without extending it
+on replay. Successful mutations atomically commit their rows and a versioned raw
+snapshot receipt (maximum 256 KiB); concurrent losing batches roll back. The v1
+response renderer and canonical projector must retain compatible behavior for all
+live v1 receipts; response changes require a new response version.
+
+Portal reply commits its article, attachments and ticket timestamp together.
+Existing R2 objects are checked only for new mutations; saved replies do not reread
+R2. Saved portal creates do not consume Turnstile again. The winning portal reply
+invokes one best-effort notification sequence after commit; the existing broadcast
+service may try the transport up to three times. Broadcast failure does not change
+the successful response, and a crash before broadcast can lose the event; a ticket
+detail refresh recovers committed state.
+
+New mutations remove at most 100 expired tenant receipts. Operators can purge a
+bounded batch from an existing local fixture with
+`node apps/server/scripts/purge-expired-mutation-receipts.mjs --local --persist-to PATH --tenant TENANT --limit 100`.
+The path must already exist; this command does not create remote resources.
+Dormant tenants have no hard physical-deletion SLA in this local beta; production
+cleanup scheduling remains a separate release gate. Privacy deletion redacts saved
+content into expiry-bounded key/fingerprint tombstones.
+
+Reproduce the isolated local acceptance and its type checks with:
+
+```sh
+npm run typecheck:ticket-mutation-replay --workspace=apps/server
+npm run test:ticket-mutation-replay --workspace=apps/server
+```
+
+These checks use local D1/R2/notification simulations and synthetic identities;
+they do not authorize remote migration or production rollout.
+
+Local acceptance on 9 September 2026 passed all 10 cases. Six concurrent API
+creates produced one ticket, article and receipt; five concurrent attachment
+replies produced one article, one attachment and one notification invocation.
+The measured create snapshot was 1,001 bytes. Injected receipt, second-write and
+attachment failures added zero D1 rows; attachment failure/recovery used two R2
+validation reads without deleting the existing upload. The expiry race produced
+one winner, and bounded cleanup removed 100 tenant A receipts and zero tenant B
+receipts. A failing notification transport used three attempts; replay added none.
+These are fixture measurements and regression evidence, not production capacity
+or a physical-deletion SLA.
 
 #### 5. Update/Close Ticket
 - **URL**: `PATCH /tickets/:id`
@@ -222,4 +294,3 @@ Comprehensive testing was performed with **18 specific test cases** for Phase 1.
     *   **Validation**: Verified `400 Bad Request` for missing or invalid schema fields.
 3.  **Dashboard API (Integration Tests)**:
     *   Verified that only authenticated and MFA-verified agents can create or revoke API keys.
-

@@ -76,10 +76,13 @@ describe("v1 Handler Integration Tests", () => {
     });
     mockDB.run.mockResolvedValue({ success: true });
     mockDB.all.mockResolvedValue({ results: [] });
-    mockDB.batch.mockResolvedValue([
-      { results: [{ id: "t-123", subject: "Test Ticket", customer_email: "test@example.com", ticket_no: 1, status: "open", priority: "normal", source: "api", created_at: "2026-01-01" }] },
-      { results: [{ id: "a-123", ticket_id: "t-123", sender_type: "customer", is_internal: false, created_at: "2026-01-01" }] },
-    ]);
+    // The atomic service reads its immutable snapshot from the final batch statement.
+    mockDB.batch.mockResolvedValue([{ results: [{ response_snapshot: JSON.stringify({
+      version: 1,
+      ticket: { id: 't-123', subject: 'Test Ticket', customer_email: 'test@example.com', ticket_no: 1, status: 'open', priority: 'normal', source: 'api', created_at: '2026-01-01' },
+      article: { id: 'a-123', ticket_id: 't-123', sender_type: 'customer', is_internal: false, created_at: '2026-01-01' },
+      attachments: [],
+    }) }] }]);
   });
 
   describe("Authentication", () => {

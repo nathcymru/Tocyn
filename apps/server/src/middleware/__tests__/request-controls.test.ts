@@ -49,4 +49,40 @@ describe('request controls', () => {
     const response = await app.request('/api/data', { headers: { Origin: 'http://localhost:5173' } }, { PORTAL_URL: 'http://localhost:5173', ENVIRONMENT: 'preview' });
     expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
+  it('permits the optional retry header only for configured credentialed origins', async () => {
+    const app = new Hono(); app.use('*', apiCors); app.post('/api/data', c => c.text('ok'));
+    const env = { PORTAL_URL: 'https://portal.example.com', ENVIRONMENT: 'production' };
+    const preflight = await app.request('/api/data', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: env.PORTAL_URL,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type,idempotency-key',
+      },
+    }, env);
+    expect(preflight.headers.get('Access-Control-Allow-Headers')).toContain('Idempotency-Key');
+    const response = await app.request('/api/data', { method: 'POST', headers: { Origin: env.PORTAL_URL } }, env);
+    expect(response.headers.get('Access-Control-Expose-Headers')).toContain('Idempotency-Replayed');
+  });
+  it('preflights API credentials with retry keys only on the configured API origin', async () => {
+    const app = new Hono(); app.use('*', apiCors);
+    const env = { PORTAL_URL: 'https://portal.example.com', ENVIRONMENT: 'production' };
+    const headers = {
+      Origin: env.PORTAL_URL,
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'content-type,x-api-key,idempotency-key',
+    };
+    const allowed = await app.request('/api/v1/tickets', { method: 'OPTIONS', headers }, env);
+    expect(allowed.headers.get('Access-Control-Allow-Origin')).toBe(env.PORTAL_URL);
+    expect(allowed.headers.get('Access-Control-Allow-Headers')).toContain('X-API-Key');
+    expect(allowed.headers.get('Access-Control-Allow-Headers')).toContain('Idempotency-Key');
+    const denied = await app.request('/api/v1/tickets', {
+      method: 'OPTIONS', headers: { ...headers, Origin: 'https://untrusted.example.com' },
+    }, env);
+    expect(denied.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    const widget = await app.request('/api/v1/widget/tickets', { method: 'OPTIONS', headers }, env);
+    expect(widget.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(widget.headers.get('Access-Control-Allow-Headers')).not.toContain('X-API-Key');
+  });
+
 });
