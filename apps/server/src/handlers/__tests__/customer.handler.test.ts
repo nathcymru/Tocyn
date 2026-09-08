@@ -447,7 +447,7 @@ describe("Customer Handler Integration Tests", () => {
         source: "portal",
         body: "I need help",
         sender_id: "user-1",
-        sender_type: "customer", is_internal: false
+        sender_type: "customer"
       });
     });
   });

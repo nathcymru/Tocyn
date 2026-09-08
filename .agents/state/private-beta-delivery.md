@@ -171,3 +171,23 @@ builds, portal 13, widget 3 and root 31 pass. Complete local D1/auth/fixture/cor
 storage/realtime chain passed. Independent review findings resolved, including
 unsupported sender types staying unknown. Root reviewed final docs and changes.
 Ready for one coherent PR and mandatory remote CI; no issue completion claimed yet.
+
+PR #112 opened at f789cb8. CI found an exact portal mock expectation missed after
+a late typed-input cleanup removed an unused is_internal:false argument but left
+the old exact mock expectation. The initial flag restoration passes runtime tests
+but conflicts with the narrower typed input, so correct the mock to the new input
+and retain real atomic is_internal:false evidence. Freeze source
+before final validation: earlier partial-suite receipts cannot cover later edits.
+Batch this correction with any already-running automatic review findings before
+push; no manual repeat review requested. #59 remains In progress.
+
+PR #112 automatic review found incomplete required fields in a regression fixture
+and message-only properties passed into ticket-only creation. Owner batches typed
+input corrections with the exact mock fix; require full server tests and types on
+the final frozen source. No additional metered review requested.
+
+#112 corrective batch frozen: ticket-only inputs omit message fields; regression
+input supplies all required typed facts; portal exact mock follows the narrower
+service input while real persistence remains explicitly public. Final source
+server 340, canonical route 2, atomic 2 and all server/script types pass. Root
+reviewed the complete corrective diff before combined push.

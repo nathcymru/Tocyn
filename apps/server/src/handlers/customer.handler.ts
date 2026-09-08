@@ -176,7 +176,7 @@ app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddle
     source: 'portal',
     body: body.message,
     sender_id: payload.sub,
-    sender_type: 'customer'
+    sender_type: 'customer',
   });
   return c.json({
     ...result,

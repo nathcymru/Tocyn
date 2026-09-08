@@ -64,11 +64,13 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
       custom_fields: validData.custom_fields,
       status: validData.status,
       source: 'api' as const,
-      body: validData.body,
-      sender_type: 'customer' as const,
     };
     const created = validData.body?.trim()
-      ? await ticketService.createTicketWithArticle({ ...ticketData, body: validData.body })
+      ? await ticketService.createTicketWithArticle({
+        ...ticketData,
+        body: validData.body,
+        sender_type: 'customer',
+      })
       : { ticket: await ticketService.createTicket(ticketData), article: null };
 
     return c.json({
