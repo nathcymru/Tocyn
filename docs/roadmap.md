@@ -1,47 +1,36 @@
 # Tocyn roadmap
 
-These are maintainer-approved targets, not statements of completed work or promised dates. Coordinate implementation with active contributors before starting overlapping work.
+The previous version-based roadmap in this file was superseded by the owner-approved backlog migration on 8 September 2026.
 
-| Milestone | Outcome |
+The authoritative roadmap is maintained through GitHub architectural milestones, issues/dependencies and the Wiki:
+
+- Approved roadmap: https://github.com/nathcymru/Tocyn/wiki/Approved-architectural-roadmap
+- Migration receipt: https://github.com/nathcymru/Tocyn/wiki/Backlog-migration-2026-09-08
+- Issues: https://github.com/nathcymru/Tocyn/issues
+
+## Architectural phases
+
+| Phase | Outcome family |
 | --- | --- |
-| v0.1.0 | Repository and security foundations; agreed coding conventions; FidesLang across the majority of applicable application code |
-| v0.2.0 | Systematic whole-codebase FidesLang review and coverage across all applicable areas |
-| v0.3.0 | Replace Resend with Cloudflare-native email, including migration and operational documentation |
+| M0 | Engineering, platform cost/capacity and delivery environments |
+| M1 | Core data, canonical intake/webhooks and transactional mail |
+| M2 | Human workspace, productivity, real-time state and headless design system |
+| M3 | Governed context aggregation, triage and operator AI assistance |
+| M4 | Policy-gated tool execution, autonomous resolution and human handoff |
+| M5 | Roles, auditability, analytics, privacy controls and workflow administration |
+| M6 | Portal/service-user experience, SLA, continuity and deterministic self-service |
+| M7 | WhatsApp, Telegram, Slack, Teams and support-email integrations |
 
-## v0.1.0: foundations
+Architectural milestones describe capabilities. Git tags/releases describe tested software snapshots. They are deliberately independent.
 
-Establish working PR checks and appropriate repository rules. Review the whole codebase for vulnerabilities and general health, triage findings and resolve release-blocking risks. Define and implement coding conventions in a separate formatting change.
+## Current approved forecasts
 
-Inventory privacy-relevant data structures, processing operations, storage and integration boundaries. Define the FidesLang representation and validate coverage against that inventory. Report the numerator, denominator and exclusions when claiming majority coverage.
+These are planning forecasts, not production commitments:
 
-Define the tenant-isolation model and meaningful cross-tenant tests. An early release is not a claim of production readiness.
+- first human-led API/portal private beta: **21 November 2026**, candidate `v0.4.0-beta.1` (not yet created);
+- support-email readiness: **4 February 2027**;
+- autonomous reference-workflow readiness: **23 June 2027**;
+- scoped roadmap completion: **16 July 2027**;
+- no production deployment date is approved.
 
-## v0.2.0: complete privacy coverage
-
-Review every application area against the inventory, implement the remaining applicable metadata and document justified exclusions. Add validation to prevent regression.
-
-Make the functionality that consumes this metadata available as an option to end users, with documented configuration, enabled/disabled behaviour and examples. Metadata and optional tooling do not replace mandatory security or tenant isolation.
-
-## v0.3.0: Cloudflare email
-
-Verify native email capabilities against required inbound/outbound flows, authentication messages, replies, attachments, delivery failures and operational needs. Replace Resend, document migration and remove obsolete dependencies, configuration and instructions.
-
-The public project page's Web3Forms contact form is separate from application hosting and remains outside this migration.
-
-## Later proposals
-
-Queues-based processing, audio/video, Signal integration and remote-support orchestration remain proposals until scoped and implemented. Discuss requirements and feasibility before committing delivery dates.
-
-## Tracked work
-
-- [v0.1.0: verify CI and align repository protection](https://github.com/nathcymru/Tocyn/issues/12)
-- [v0.1.0: review the whole codebase for security vulnerabilities](https://github.com/nathcymru/Tocyn/issues/13)
-- [v0.1.0: agree and implement coding standards](https://github.com/nathcymru/Tocyn/issues/14)
-- [v0.1.0: audit general codebase health and test coverage](https://github.com/nathcymru/Tocyn/issues/15)
-- [v0.1.0: inventory and implement majority FidesLang coverage](https://github.com/nathcymru/Tocyn/issues/16)
-- [v0.2.0: complete FidesLang coverage and optional end-user capabilities](https://github.com/nathcymru/Tocyn/issues/17)
-- [v0.3.0: replace Resend with Cloudflare-native email](https://github.com/nathcymru/Tocyn/issues/18)
-- [v0.1.0: define tenant isolation and cross-tenant regression tests](https://github.com/nathcymru/Tocyn/issues/19)
-- [v0.1.0: verify contributor setup from a clean checkout](https://github.com/nathcymru/Tocyn/issues/20)
-- [v0.1.0: review dashboard and portal accessibility](https://github.com/nathcymru/Tocyn/issues/21)
-- [v0.1.0: complete repository settings and community launch](https://github.com/nathcymru/Tocyn/issues/22)
+The first-beta blocker set is tracked by the `beta-blocker` label. Baseline schedule dates must be preserved when reforecasting so actual/forecast variance remains measurable.
