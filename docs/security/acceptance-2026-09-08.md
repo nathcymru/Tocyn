@@ -42,7 +42,11 @@ external email, paid AI and deployed Cloudflare resources are not exercised.
 ## Session lifecycle contract
 
 Logout invalidates **all sessions for that user**, including bearer copies and MFA
-challenges. Other users and tenants remain unaffected. Legacy tokens correspond to
+challenges. Other users and tenants remain unaffected. Both clients clear local sign-in state
+on a failed request and explain that server revocation was not confirmed. The portal
+logout route expires its cookie even when database authentication/revocation fails;
+a network failure cannot guarantee cookie removal and the message advises clearing
+site data on shared devices. Legacy tokens correspond to
 session version zero; their existing bounded lifetime remains valid only until the
 first revocation. Every newly issued token includes the current version. Role/email/
 password/MFA-enabled changes, rotation of an enabled MFA secret and membership

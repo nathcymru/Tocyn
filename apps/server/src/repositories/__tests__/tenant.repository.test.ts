@@ -107,6 +107,11 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
       .setProtectedHeader({ alg: 'HS256' }).setAudience('widget').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));
     expect((await app.request('/customer/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${widget}` } }, env)).status).toBe(200);
     expect((await app.request('/customer/auth/me', { headers: { Authorization: `Bearer ${widget}` } }, env)).status).toBe(401);
+    const unavailable = { ...env, DB: { prepare() { throw new Error('Database unavailable'); } } };
+    const failedLogout = await app.request('/customer/auth/logout', { method: 'POST', headers: { Cookie: `lumina_customer_token=${widget}` } }, unavailable);
+    expect(failedLogout.status).toBe(401);
+    expect(failedLogout.headers.get('Set-Cookie')).toContain('lumina_customer_token=;');
+    expect(failedLogout.headers.get('Set-Cookie')).toContain('Max-Age=0');
   });
 
   it('invalidates sessions across role roundtrips, credential changes and membership removal', async () => {

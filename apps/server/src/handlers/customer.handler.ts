@@ -121,10 +121,13 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
   return c.json(result);
 });
 
-app.post('/auth/logout', widgetAuthMiddleware, roleGuard(['customer']), async (c) => {
+app.post('/auth/logout', async (c, next) => {
+  // Clear the browser cookie even if authentication or database revocation fails.
+  deleteCookie(c, 'lumina_customer_token', { path: '/' });
+  await next();
+}, widgetAuthMiddleware, roleGuard(['customer']), async (c) => {
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   await deps.repositories.users.revokeSessions((c.get('jwtPayload') as any).sub);
-  deleteCookie(c, 'lumina_customer_token', { path: '/' });
   return c.json({ success: true });
 });
 

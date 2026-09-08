@@ -55,10 +55,11 @@ function UserMenu() {
   }, []);
 
   const handleLogout = async () => {
-    try { await dashboardApi.post('/auth/logout'); }
-    catch { window.alert('Sign out could not be completed. Please retry.'); return; }
-    logout();
-    navigate('/login');
+    let confirmed = false;
+    try { await dashboardApi.post('/auth/logout'); confirmed = true; }
+    catch { /* Local sign-out must still complete. */ }
+    finally { logout(); navigate('/login'); }
+    if (!confirmed) window.alert("Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.");
   };
 
   return (
