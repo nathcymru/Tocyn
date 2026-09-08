@@ -44,7 +44,7 @@ function unknownParticipant(): CanonicalParticipant {
 }
 
 function messageAuthor(ticket: Ticket, article: Article): CanonicalParticipant {
-  if (article.sender_type === 'customer' && article.intake_source === 'portal' && article.sender_id) {
+  if (article.sender_type === 'customer' && article.intake_source === 'portal' && article.sender_id && article.sender_id === ticket.customer_id) {
     return {
       kind: 'authenticated-customer',
       id: known(article.sender_id),
@@ -52,7 +52,7 @@ function messageAuthor(ticket: Ticket, article: Article): CanonicalParticipant {
       provenance: 'authenticated-customer',
     };
   }
-  if (article.sender_type === 'customer' && article.intake_source === 'widget' && article.sender_id) {
+  if (article.sender_type === 'customer' && article.intake_source === 'widget' && article.sender_id && article.sender_id === ticket.customer_id) {
     return {
       kind: 'authenticated-customer',
       id: known(article.sender_id),

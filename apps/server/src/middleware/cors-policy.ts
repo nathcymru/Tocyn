@@ -27,8 +27,8 @@ export const apiCors: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => 
     origin: (origin) => widget ? '*' : (allowed.has(origin) ? origin : undefined),
     credentials: !widget,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Lumina-Source', 'X-Widget-Key'],
-    exposeHeaders: ['Content-Length'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Lumina-Source', 'X-Widget-Key', 'Idempotency-Key', ...(!widget ? ['X-API-Key'] : [])],
+    exposeHeaders: ['Content-Length', 'Idempotency-Replayed'],
     maxAge: 600,
   })(c, next);
 };

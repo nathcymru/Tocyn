@@ -15,6 +15,8 @@ import { roleGuard } from "../middleware/role.guard";
 import { rateLimiter } from "../middleware/rate-limiter";
 import { decryptString } from "../utils/crypto";
 import { verifyTurnstileToken } from "../utils/turnstile";
+import { TicketMutationError } from '../services/ticket-mutation-replay.service';
+import { MutationInputError, mutationInputErrorBody, normalizeAttachmentReferences, portalTicketCreateSchema, portalTicketReplySchema, readIdempotencyKey, readMutationJson } from './mutation-request';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -152,36 +154,37 @@ app.get('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddlew
 
 app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(3, 60000), async (c) => {
   const payload = c.get('jwtPayload');
-  const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const ticketService = new TenantTicketService(deps);
-
-  // Turnstile verification
   try {
-    const isValid = await verifyTurnstileToken(c.env, deps, body.turnstileToken, c.req.header('CF-Connecting-IP'));
-    if (!isValid) {
-      return c.json({ error: 'Turnstile validation failed or token missing' }, 400);
+    const body = await readMutationJson(c);
+    const key = readIdempotencyKey(c);
+    const parsed = portalTicketCreateSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors }, 400);
+    const mutation = deps.ticketMutationReplay({
+      kind: 'customer', id: payload.sub, sessionVersion: payload.session_version ?? 0, expiresAt: payload.exp ?? 0,
+    });
+    const prepared = await mutation.prepareMutation({ operation: 'portal.ticket.create', data: {
+      subject: parsed.data.subject, body: parsed.data.message, custom_fields: parsed.data.custom_fields,
+    } }, key);
+    if (prepared.replay) {
+      if (prepared.replay.keyed) c.header('Idempotency-Replayed', 'true');
+      return c.json(prepared.replay.body, prepared.replay.status);
     }
-  } catch (error: any) {
-    if (error.message.includes('APP_MASTER_KEY')) {
-      return c.json({ error: "Server misconfiguration: APP_MASTER_KEY is missing." }, 500);
+    try {
+      const valid = await verifyTurnstileToken(c.env, deps, parsed.data.turnstileToken, c.req.header('CF-Connecting-IP'));
+      if (!valid) return c.json({ error: 'Turnstile validation failed or token missing' }, 400);
+    } catch (error: any) {
+      if (error.message?.includes('APP_MASTER_KEY')) return c.json({ error: 'Server misconfiguration: APP_MASTER_KEY is missing.' }, 500);
+      return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
     }
-    return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
+    const outcome = await mutation.commit(prepared);
+    if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
+    return c.json(outcome.body, outcome.status);
+  } catch (error) {
+    if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
+    if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
+    throw error;
   }
-
-  const result = await ticketService.createTicketWithArticle({
-    subject: body.subject,
-    customer_email: payload.email,
-    customer_id: payload.sub,
-    source: 'portal',
-    body: body.message,
-    sender_id: payload.sub,
-    sender_type: 'customer',
-  });
-  return c.json({
-    ...result,
-    canonical: ticketService.projectCanonicalConversation(result.ticket, [result.article]),
-  }, 201);
 });
 
 app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
@@ -224,74 +227,48 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
 app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(5, 60000), async (c) => {
   const payload = c.get('jwtPayload');
   const ticketId = c.req.param('id')!;
-  const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const ticketService = new TenantTicketService(deps);
-
-  const ticket = await ticketService.findTicketById(ticketId);
-  if (!ticket || ticket.customer_email !== payload.email) {
-    return c.json({ error: 'Not found' }, 404);
-  }
-
-  let verifiedAttachments;
-  try { verifiedAttachments = await validateAttachmentReferences(deps, `customer-attachments/${payload.sub}/`, body.attachments); }
-  catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
-
-  const article = await ticketService.createArticle({
-    ticket_id: ticketId,
-    body: body.message,
-    sender_type: 'customer',
-    sender_id: payload.sub, is_internal: false,
-    intake_source: 'portal',
-  });
-
-  const attachments: any[] = [];
-  if (Array.isArray(verifiedAttachments)) {
-    const expectedPrefix = `customer-attachments/${payload.sub}/`;
-    for (const att of verifiedAttachments) {
-      const r2Key = att.storageKey;
-      if (!r2Key || typeof r2Key !== 'string' || !r2Key.startsWith(expectedPrefix)) {
-        return c.json({ error: 'Unauthorized attachment access' }, 403);
-      }
-
-      if (!att.filename || typeof att.filename !== 'string') {
-        return c.json({ error: "Invalid attachment filename" }, 400);
-      }
-      const sanitizedFilename = att.filename.replace(/^.*[\\/]/, '').replace(/[\r\n]/g, '');
-
-      if (typeof att.size !== 'number' || att.size < 0 || att.size > 10 * 1024 * 1024) {
-        return c.json({ error: "Invalid attachment size" }, 400);
-      }
-
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/csv'];
-      if (!allowedTypes.includes(att.contentType)) {
-        return c.json({ error: "Unsupported attachment content type" }, 415);
-      }
-
-      const added = await ticketService.addAttachment({
-        article_id: article.id,
-        file_name: sanitizedFilename,
-        file_size: att.size,
-        content_type: att.contentType,
-        r2_key: r2Key
-      });
-      attachments.push({ id: added.id, filename: added.file_name, size: added.file_size, contentType: added.content_type, storageKey: added.r2_key });
+  try {
+    const body = await readMutationJson(c);
+    const key = readIdempotencyKey(c);
+    const parsed = portalTicketReplySchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors }, 400);
+    const attachments = normalizeAttachmentReferences(parsed.data.attachments);
+    const mutation = deps.ticketMutationReplay({
+      kind: 'customer', id: payload.sub, sessionVersion: payload.session_version ?? 0, expiresAt: payload.exp ?? 0,
+    });
+    // prepare reauthorizes current ownership before it can return a saved response.
+    const prepared = await mutation.prepareMutation({ operation: 'portal.ticket.reply', ticketId, data: {
+      body: parsed.data.message, attachments,
+    } }, key);
+    if (prepared.replay) {
+      if (prepared.replay.keyed) c.header('Idempotency-Replayed', 'true');
+      return c.json(prepared.replay.body, prepared.replay.status);
     }
+    let verifiedAttachments;
+    try {
+      verifiedAttachments = await validateAttachmentReferences(deps, `customer-attachments/${payload.sub}/`, attachments);
+    } catch {
+      return c.json({ error: 'Invalid attachment reference' }, 400);
+    }
+    const outcome = await mutation.commit(prepared, verifiedAttachments);
+    if (!outcome.replayed) {
+      try {
+        await new BroadcastService(c.env, deps.scope).broadcast('article.created', {
+          ticketId: outcome.ticketId, articleId: outcome.articleId, senderType: 'customer', isInternal: false,
+        });
+      } catch {
+        // The committed response remains successful; refreshing the ticket recovers missed events.
+        console.warn('Portal reply notification failed after commit');
+      }
+    }
+    if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
+    return c.json(outcome.body, outcome.status);
+  } catch (error) {
+    if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
+    if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
+    throw error;
   }
-
-  // Update ticket timestamp
-  await ticketService.updateTicketTimestamp(ticketId);
-
-  // Broadcast the update
-  const broadcastService = new BroadcastService(c.env, deps.scope);
-  await broadcastService.broadcast("article.created", {
-    ticketId,
-    articleId: article.id,
-    senderType: "customer",
-    isInternal: false,
-  });
-
-  return c.json({ ...article, attachments }, 201);
 });
 
 // --- ATTACHMENT ROUTES ---

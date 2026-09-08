@@ -73,6 +73,14 @@ export type LocalTenantFixture = Readonly<{
   request: (path: string, options?: {
     method?: string;
     body?: unknown;
+    /** Sends bytes as supplied, for bounded malformed/streamed request checks. */
+    rawBody?: BodyInit;
+    /** Defaults to application/json for a supplied body or raw body. Use null to omit it. */
+    contentType?: string | null;
+    /** Additional request headers for narrow route-level assertions such as CORS preflight. */
+    headers?: Record<string, string>;
+    /** Optional case-sensitive retry key mapped to the public Idempotency-Key header. */
+    idempotencyKey?: string;
     token?: string;
     apiKey?: string;
     origin?: string;
@@ -91,6 +99,10 @@ export type LocalTenantFixture = Readonly<{
   widgetTokenTenant: (token: string) => Promise<Tenant>;
   assertStoredCredentialProtection: (rawApiKey: string) => Promise<void>;
   resourceUsage: () => Promise<Readonly<{ d1Rows: number; r2Objects: number; routeRequests: number }>>;
+  notificationAttempts: () => number;
+  resetNotificationAttempts: () => void;
+  /** Fails only the local notification provider; D1/R2 remain real Miniflare bindings. */
+  failNotificationAttempts: (count: number) => void;
 }>;
 
 export type FixtureReport = Readonly<{
@@ -294,7 +306,22 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
     const db = await miniflare.getD1Database('DB');
     const rawBucket = await miniflare.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
     const r2 = countedR2Bucket(rawBucket);
-    const env = localEnv(db, r2.bucket);
+    let notificationAttempts = 0;
+    let remainingNotificationFailures = 0;
+    const notificationDo = {
+      idFromName: (name: string) => name,
+      get: (_id: string) => ({
+        fetch: async () => {
+          notificationAttempts++;
+          if (remainingNotificationFailures > 0) {
+            remainingNotificationFailures--;
+            throw new Error('Synthetic local notification failure');
+          }
+          return new Response(null, { status: 204 });
+        },
+      }),
+    } as unknown as DurableObjectNamespace;
+    const env = { ...localEnv(db, r2.bucket), NOTIFICATION_DO: notificationDo };
     const privatePrincipals = generatedPrincipals();
     const localRuntime = createLocalRuntime();
     const requestIp = `fixture-run-${++fixtureRun}`;
@@ -307,15 +334,19 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
     const request: LocalTenantFixture['request'] = async (path, options = {}) => {
       assert.ok(path.startsWith('/'), 'Fixture requests must use an application path');
       routeRequests++;
-      const headers = new Headers();
-      if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+      const headers = new Headers(options.headers);
+      const suppliedBody = options.rawBody ?? (options.body === undefined ? undefined : JSON.stringify(options.body));
+      if (options.contentType === null) headers.delete('Content-Type');
+      else if (options.contentType !== undefined) headers.set('Content-Type', options.contentType);
+      else if (suppliedBody !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+      if (options.idempotencyKey !== undefined) headers.set('Idempotency-Key', options.idempotencyKey);
       if (options.token) headers.set('Authorization', `Bearer ${options.token}`);
       if (options.apiKey) headers.set('X-API-Key', options.apiKey);
       if (options.origin) headers.set('Origin', options.origin);
       headers.set('cf-connecting-ip', options.ip ?? requestIp);
       const response = await localRuntime.fetch(new Request(`http://localhost:8787${path}`, {
         method: options.method ?? 'GET', headers,
-        ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+        ...(suppliedBody === undefined ? {} : { body: suppliedBody }),
       }), env, {} as ExecutionContext);
       return response as FixtureResponse;
     };
@@ -393,6 +424,12 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
           (SELECT count(*) FROM users) + (SELECT count(*) FROM tickets) + (SELECT count(*) FROM api_keys) AS count`).first<{ count: number }>();
         const objects = await r2.bucket.list();
         return Object.freeze({ d1Rows: rows?.count ?? 0, r2Objects: objects.objects.length, routeRequests });
+      },
+      notificationAttempts: () => notificationAttempts,
+      resetNotificationAttempts: () => { notificationAttempts = 0; remainingNotificationFailures = 0; },
+      failNotificationAttempts: count => {
+        assert.ok(Number.isSafeInteger(count) && count >= 0, 'Notification failure count must be a non-negative integer');
+        remainingNotificationFailures = count;
       },
     });
     return await callback(fixture);

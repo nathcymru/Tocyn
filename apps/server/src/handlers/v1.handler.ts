@@ -6,17 +6,9 @@ import { rateLimiter } from "../middleware/rate-limiter";
 import { AppVariables } from "../types";
 import { TenantRequestDeps } from "../middleware/tenant.middleware";
 import { TenantTicketService } from "../services/tenant-ticket.service";
-
-const createTicketSchema = z.object({
-  subject: z.string().min(1, "Subject is required"),
-  customer_email: z.string().email("Invalid email address"),
-  body: z.string().optional(),
-  priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
-  status: z.enum(["open", "pending", "resolved", "closed"]).default("open"),
-  group_id: z.string().uuid().optional().nullable(),
-  assigned_to: z.string().uuid().optional().nullable(),
-  custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
-});
+import { TicketMutationError } from '../services/ticket-mutation-replay.service';
+import { apiTicketCreateSchema, apiTicketReplySchema, MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMutationJson } from './mutation-request';
+import { requestBounds } from '../middleware/request-bounds';
 
 const updateTicketSchema = z.object({
   status: z.enum(["open", "pending", "resolved", "closed"]).optional(),
@@ -33,6 +25,7 @@ const v1 = new Hono<{ Bindings: Env; Variables: AppVariables }>();
  * apiAuthMiddleware resolves the API key to TenantRequestDeps.
  */
 v1.use("*", apiAuthMiddleware);
+v1.use("*", requestBounds(64 * 1024));
 
 /**
  * POST /api/v1/tickets
@@ -44,43 +37,25 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
     return c.json({ error: "Forbidden: API key lacks required permission" }, 403);
   }
 
-  const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const ticketService = new TenantTicketService(deps);
-
-  const result = createTicketSchema.safeParse(body);
+  let body: unknown; let key: string | undefined;
+  try { body = await readMutationJson(c); key = readIdempotencyKey(c); } catch (error) {
+    if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status); throw error;
+  }
+  const result = apiTicketCreateSchema.safeParse(body);
   if (!result.success) {
     return c.json({ error: "Validation failed", details: result.error.flatten().fieldErrors }, 400);
   }
   const validData = result.data;
 
   try {
-    const ticketData = {
-      subject: validData.subject,
-      customer_email: validData.customer_email,
-      priority: validData.priority,
-      assigned_to: validData.assigned_to,
-      group_id: validData.group_id,
-      custom_fields: validData.custom_fields,
-      status: validData.status,
-      source: 'api' as const,
-    };
-    const created = validData.body?.trim()
-      ? await ticketService.createTicketWithArticle({
-        ...ticketData,
-        body: validData.body,
-        sender_type: 'customer',
-      })
-      : { ticket: await ticketService.createTicket(ticketData), article: null };
-
-    return c.json({
-      ...created.ticket,
-      canonical: ticketService.projectCanonicalConversation(
-        created.ticket,
-        created.article ? [created.article] : [],
-      ),
-    }, 201);
+    const mutation = deps.ticketMutationReplay({ kind: 'api-key', id: resolution!.apiKeyId });
+    const prepared = await mutation.prepareMutation({ operation: 'api.ticket.create', data: validData }, key);
+    const outcome = prepared.replay || await mutation.commit(prepared);
+    if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
+    return c.json(outcome.body, outcome.status);
   } catch (error) {
+    if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
     console.error("API Create Ticket Error:", error);
     return c.json({ error: "Failed to create ticket" }, 500);
   }
@@ -131,13 +106,11 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
 
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
-  const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const ticketService = new TenantTicketService(deps);
-
-  if (!body.body) {
-    return c.json({ error: "Missing required field: body" }, 400);
-  }
+  let body: unknown; let key: string | undefined;
+  try { body = await readMutationJson(c); key = readIdempotencyKey(c); } catch (error) { if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status); throw error; }
+  const parsed = apiTicketReplySchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors }, 400);
 
   const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
@@ -145,18 +118,13 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
   }
 
   try {
-    const article = await ticketService.createArticle({
-      ticket_id: id,
-      body: body.body,
-      sender_type: body.sender_type || 'customer',
-      is_internal: body.is_internal || false,
-      intake_source: 'api',
-    });
-
-    await deps.repositories.tickets.touch(id);
-
-    return c.json(article, 201);
+    const mutation = deps.ticketMutationReplay({ kind: 'api-key', id: resolution!.apiKeyId });
+    const prepared = await mutation.prepareMutation({ operation: 'api.ticket.reply', ticketId: id, data: parsed.data }, key);
+    const outcome = prepared.replay || await mutation.commit(prepared);
+    if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
+    return c.json(outcome.body, outcome.status);
   } catch (error) {
+    if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
     console.error("API Add Article Error:", error);
     return c.json({ error: "Failed to add article" }, 500);
   }
