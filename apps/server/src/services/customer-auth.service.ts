@@ -147,6 +147,7 @@ export class CustomerAuthService {
       return null;
     }
     const payload = {
+      session_version: user.session_version ?? 0,
       sub: user.id,
       email: user.email,
       role: 'customer',

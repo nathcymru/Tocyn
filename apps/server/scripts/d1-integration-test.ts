@@ -1,3 +1,4 @@
+import { splitSql } from './split-sql';
 import { Miniflare, convertV4MiniflareOptions, Headers as MiniflareHeaders } from 'miniflare';
 import assert from 'node:assert';
 import { createVerifiedTenantScope } from '../src/auth/scope';
@@ -31,8 +32,8 @@ async function run() {
 
     // Exercise the deployable migration chain, not a hand-built final schema.
     for (const migration of readdirSync(join(process.cwd(), 'migrations')).filter(n => n.endsWith('.sql')).sort()) {
-      const sql = readFileSync(join(process.cwd(), 'migrations', migration), 'utf8').replace(/--[^\n]*/g, '');
-      const statements = sql.split(';').map(s => s.trim()).filter(Boolean);
+      const sql = readFileSync(join(process.cwd(), 'migrations', migration), 'utf8');
+      const statements = splitSql(sql);
       await db.batch(statements.map(stmt => db.prepare(stmt)));
       if (migration.startsWith('0013_')) {
         await db.batch([
@@ -271,7 +272,7 @@ async function run() {
     };
 
     // We execute the emailHandler directly
-    const handler = new EmailHandler({ DB: db, ATTACHMENTS_BUCKET: bucket, APP_MASTER_KEY: 'test_key' } as any);
+    const handler = new EmailHandler({ DB: db, ATTACHMENTS_BUCKET: bucket, APP_MASTER_KEY: 'test_key', INBOUND_EMAIL_AUTH_VERIFIED: 'true' } as any);
     await handler.handleEmail(mockMessage as any, null as any);
 
     if (mockMessage.rejected !== 'Unknown recipient') throw new Error("Handler did not reject unknown recipient");
@@ -339,8 +340,8 @@ async function run() {
     const secret = new TextEncoder().encode('super_secret_test_key_for_jwt');
     await db.prepare("INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-A', 'userA', 'userA@domain.com', 'admin')").run();
     await db.prepare("INSERT INTO users (tenant_id, id, email, role) VALUES ('tenant-B', 'userB', 'userB@domain.com', 'admin')").run();
-    const tokenA = await new jose.SignJWT({ sub: 'userA', role: 'admin', tenant_id: 'tenant-A', mfa_verified: true }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').sign(secret);
-    const tokenB = await new jose.SignJWT({ sub: 'userB', role: 'admin', tenant_id: 'tenant-B', mfa_verified: true }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').sign(secret);
+    const tokenA = await new jose.SignJWT({ sub: 'userA', role: 'admin', tenant_id: 'tenant-A', mfa_verified: true }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h').setAudience('app').sign(secret);
+    const tokenB = await new jose.SignJWT({ sub: 'userB', role: 'admin', tenant_id: 'tenant-B', mfa_verified: true }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h').setAudience('app').sign(secret);
 
     apiApp.use('*', async (c, next) => {
       c.env = { DB: db, ATTACHMENTS_BUCKET: bucket, APP_MASTER_KEY: 'test_key', JWT_SECRET: 'super_secret_test_key_for_jwt' };
@@ -477,7 +478,7 @@ async function run() {
 
   const createToken = async (tenantId, role, sub, email, aud = 'app') => {
     return await new SignJWT({ aud, sub, email, role, tenant_id: tenantId, mfa_verified: aud === 'app' })
-      .setProtectedHeader({ alg: 'HS256' })
+      .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h')
       .sign(secret);
   };
 
@@ -666,7 +667,7 @@ async function run() {
   console.log('SUCCESS: Wrong audience and role rejected by widget auth');
 
   // 12. widget JWT without tenant_id
-  const badJwt = await new SignJWT({ aud: 'widget', sub: 'user', role: 'customer' }).setProtectedHeader({ alg: 'HS256' }).sign(secret);
+  const badJwt = await new SignJWT({ aud: 'widget', sub: 'user', role: 'customer' }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h').sign(secret);
   const badJwtReq = new Request('http://localhost/api/v1/widget/tickets', {
     headers: { 'Authorization': `Bearer ${badJwt}` }
   });
@@ -1157,24 +1158,21 @@ async function run() {
 
   // 5. Missing-tenant, missing-aud, and missing-sub JWT rejection on authMiddleware
   const missingAudToken = await new jose.SignJWT({ sub: 'user-1', tenant_id: 'tenant-A', role: 'customer' })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('1h')
+    .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h')
     .sign(new TextEncoder().encode('secret'));
   const missingAudRes = await worker.fetch(new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingAudToken}` } }), envMock, {});
   if (missingAudRes.status !== 401) throw new Error("Missing aud JWT was not rejected by authMiddleware!");
 
   const missingSubToken = await new jose.SignJWT({ tenant_id: 'tenant-A', role: 'customer' })
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h')
     .setAudience('app')
-    .setExpirationTime('1h')
     .sign(new TextEncoder().encode('secret'));
   const missingSubRes = await worker.fetch(new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingSubToken}` } }), envMock, {});
   if (missingSubRes.status !== 401) throw new Error("Missing sub JWT was not rejected by authMiddleware!");
 
   const missingTenantToken = await new jose.SignJWT({ sub: 'user-1', role: 'customer' })
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h')
     .setAudience('app')
-    .setExpirationTime('1h')
     .sign(new TextEncoder().encode('secret'));
   const missingTenantReq = new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingTenantToken}` } });
   const missingTenantRes = await worker.fetch(missingTenantReq, envMock, {});
@@ -1199,7 +1197,7 @@ async function run() {
   }
 
   // Prove active MFA secret cannot be replaced/destroyed by new setup call
-  const tokenUserA = await authSvc.generateToken({ id: 'local-user-same-id', email: 'userA@unique-a.com', role: 'admin', tenant_id: 'tenant-A', mfa_verified: true }, 'secret', true);
+  const tokenUserA = await authSvc.generateToken((await reposApiKeyA.users.get('local-user-same-id'))!, 'secret', true);
   const setupMfaRes = await worker.fetch(new Request('http://localhost/api/auth/mfa/setup', { method: 'POST', headers: { 'Authorization': `Bearer ${tokenUserA}` } }), envMock, {});
   if (setupMfaRes.status !== 400) {
     const text = await setupMfaRes.text();
@@ -1643,6 +1641,33 @@ async function run() {
   }
 
   console.log("SUCCESS: 21. Two-tenant config isolation, malicious override rejection, canonical email mismatch protection, and zero-write/zero-email invariants verified");
+
+  // Real D1 verification of the session epoch and transactional retention freeze.
+  const lifecycleRepos = createRepositories(createVerifiedTenantScope('tenant-A', 'lifecycle', ['agent'], 1), db as any);
+  const lifecycleUser = await lifecycleRepos.users.create({ email: 'lifecycle@example.test', full_name: 'Lifecycle fixture', role: 'agent', mfa_enabled: true } as any);
+  const lifecycleToken = await authSvc.generateToken(lifecycleUser, 'secret', true);
+  const logoutResponse = await worker.fetch(new Request('http://localhost/api/auth/logout', {
+    method: 'POST', headers: { Authorization: `Bearer ${lifecycleToken}` }
+  }), envMock, {});
+  assert.equal(logoutResponse.status, 200);
+  const copiedResponse = await worker.fetch(new Request('http://localhost/api/auth/me', {
+    headers: { Authorization: `Bearer ${lifecycleToken}` }
+  }), envMock, {});
+  assert.equal(copiedResponse.status, 401);
+  const retentionTicket = await lifecycleRepos.tickets.create({ subject: 'D1 cleanup', customer_email: 'cleanup@example.test', source: 'email', status: 'closed', priority: 'normal' } as any);
+  const retentionArticle = await lifecycleRepos.articles.create({ ticket_id: retentionTicket.id, sender_type: 'customer', body: 'Synthetic' } as any);
+  await lifecycleRepos.attachments.create({ article_id: retentionArticle.id, file_name: 'a', file_size: 1, content_type: 'text/plain', r2_key: 'synthetic' } as any);
+  await lifecycleRepos.tickets.withExternalWrite(retentionTicket.id, async () => {
+    assert.equal(await lifecycleRepos.tickets.claimRetention(retentionTicket.id, '2099-01-01'), null);
+  });
+  const retentionClaim = (await lifecycleRepos.tickets.claimRetention(retentionTicket.id, '2099-01-01'))!;
+  await assert.rejects(() => lifecycleRepos.articles.create({ ticket_id: retentionTicket.id, sender_type: 'customer', body: 'Late' } as any), /retention/);
+  await assert.rejects(() => lifecycleRepos.articles.delete(retentionArticle.id), /retention/);
+  assert.equal(await lifecycleRepos.tickets.completeRetention(retentionTicket.id, 'wrong'), false);
+  assert.equal(await lifecycleRepos.tickets.completeRetention(retentionTicket.id, retentionClaim.token), true);
+  assert.equal(await lifecycleRepos.tickets.get(retentionTicket.id), null);
+  assert.equal(await lifecycleRepos.tickets.completeRetention(retentionTicket.id, retentionClaim.token), false);
+  console.log('SUCCESS: Real D1 copied-token revocation, external-write exclusion and atomic retention finalization');
 
   console.log('\nSUCCESS: All Batch 1 through Batch 5 integration tests passed.'); })();
 

@@ -1,3 +1,11 @@
+import { TenantKnowledgeService } from '../../services/tenant-knowledge.service';
+import { Hono } from 'hono';
+import * as jose from 'jose';
+import authHandler from '../../handlers/auth.handler';
+import customerHandler from '../../handlers/customer.handler';
+import { AuthService } from '../../services/auth/auth.service';
+import { TenantAutomationService } from '../../services/tenant-automation.service';
+import { splitSql } from '../../../scripts/split-sql';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { readFileSync, readdirSync } from 'fs';
@@ -66,6 +74,147 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     expect((await Promise.all(requests)).filter(Boolean)).toHaveLength(5);
     expect(await reposB.requestLimits.consume('chat:shared-user', 5, 60000, 1000)).toBe(true);
     expect(await reposA.requestLimits.consume('chat:shared-user', 5, 60000, 61000)).toBe(true);
+  });
+
+  it('parses the complete migration chain including quoted delimiters and trigger bodies', () => {
+    const target = new Database(':memory:');
+    target.pragma('foreign_keys = ON');
+    for (const name of readdirSync(join(__dirname, '../../../migrations')).filter(n => n.endsWith('.sql')).sort()) {
+      for (const statement of splitSql(readFileSync(join(__dirname, '../../../migrations', name), 'utf8'))) target.exec(statement);
+    }
+    expect(splitSql("SELECT 'a;--b'; /* ignored; */ SELECT CASE WHEN 1 THEN 'x' ELSE 'y' END;")).toHaveLength(2);
+    target.close();
+  });
+
+  it('revokes copied staff and widget tokens through the real logout routes while preserving another tenant', async () => {
+    const secret = 'synthetic-revocation-secret';
+    const env = { DB: d1, JWT_SECRET: secret } as any;
+    const service = new AuthService(env);
+    const a = await reposA.users.create({ email: 'a@revocation.test', role: 'agent', mfa_enabled: true } as any);
+    const b = await reposB.users.create({ email: 'b@revocation.test', role: 'agent', mfa_enabled: true } as any);
+    const token = await service.generateToken(a, secret, true);
+    const other = await service.generateToken(b, secret, true);
+    const app = new Hono().route('/auth', authHandler).route('/customer', customerHandler);
+    expect((await app.request('/auth/me', { headers: { Authorization: `Bearer ${token}` } }, env)).status).toBe(200);
+    expect((await app.request('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }, env)).status).toBe(200);
+    expect((await app.request('/auth/me', { headers: { Authorization: `Bearer ${token}` } }, env)).status).toBe(401);
+    expect(await service.verifyToken(token)).toBeNull();
+    expect(await service.verifyToken(other)).not.toBeNull();
+    const fresh = await service.generateToken((await reposA.users.get(a.id))!, secret, true);
+    expect(await service.verifyToken(fresh)).not.toBeNull();
+    const customer = await reposA.users.create({ email: 'customer@revocation.test', role: 'customer', mfa_enabled: false } as any);
+    const widget = await new jose.SignJWT({ sub: customer.id, tenant_id: 'tenant-A', email: customer.email, role: 'customer', session_version: 0 })
+      .setProtectedHeader({ alg: 'HS256' }).setAudience('widget').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));
+    expect((await app.request('/customer/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${widget}` } }, env)).status).toBe(200);
+    expect((await app.request('/customer/auth/me', { headers: { Authorization: `Bearer ${widget}` } }, env)).status).toBe(401);
+    const unavailable = { ...env, DB: { prepare() { throw new Error('Database unavailable'); } } };
+    const failedLogout = await app.request('/customer/auth/logout', { method: 'POST', headers: { Cookie: `lumina_customer_token=${widget}` } }, unavailable);
+    expect(failedLogout.status).toBe(401);
+    expect(failedLogout.headers.get('Set-Cookie')).toContain('lumina_customer_token=;');
+    expect(failedLogout.headers.get('Set-Cookie')).toContain('Max-Age=0');
+  });
+
+  it('invalidates sessions across role roundtrips, credential changes and membership removal', async () => {
+    const a = await reposA.users.create({ email: 'authority@revocation.test', role: 'agent', mfa_enabled: true } as any);
+    const secret = 'synthetic-secret'; const service = new AuthService({ DB: d1, JWT_SECRET: secret } as any);
+    const original = await service.generateToken(a, secret, true);
+    sqlite.prepare("UPDATE users SET role = 'customer' WHERE id = ?").run(a.id);
+    sqlite.prepare("UPDATE users SET role = 'agent' WHERE id = ?").run(a.id);
+    expect(await service.verifyToken(original)).toBeNull();
+    for (const [column, value] of [['email', 'changed@revocation.test'], ['password_hash', 'changed'], ['mfa_secret', 'rotated-enabled-secret'], ['mfa_enabled', 0]]) {
+      const token = await service.generateToken((await reposA.users.get(a.id))!, secret, true);
+      sqlite.prepare(`UPDATE users SET ${column} = ? WHERE id = ?`).run(value, a.id);
+      expect(await service.verifyToken(token)).toBeNull();
+    }
+    sqlite.prepare("INSERT INTO groups (tenant_id,id,name) VALUES ('tenant-A','group','Group')").run();
+    sqlite.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('tenant-A',?,'group')").run(a.id);
+    const token = await service.generateToken((await reposA.users.get(a.id))!, secret, true);
+    sqlite.prepare("DELETE FROM user_groups WHERE tenant_id = 'tenant-A' AND user_id = ?").run(a.id);
+    expect(await service.verifyToken(token)).toBeNull();
+  });
+
+  it('freezes retention ownership against concurrent writes and retries an external failure without losing the manifest', async () => {
+    const ticket = await reposA.tickets.create({ subject: 'Expired', customer_email: 'c@test.com', source: 'email', status: 'closed', priority: 'normal' } as any);
+    const article = await reposA.articles.create({ ticket_id: ticket.id, sender_type: 'customer', body: 'Body', is_internal: false } as any);
+    const attachment = await reposA.attachments.create({ article_id: article.id, file_name: 'a', file_size: 1, content_type: 'text/plain', r2_key: 'file' } as any);
+    sqlite.prepare("UPDATE tickets SET updated_at = '2000-01-01' WHERE id = ?").run(ticket.id);
+    const deleted = new Set<string>(); let fail = true;
+    const service = new TenantAutomationService({ repositories: { ...reposA,
+      automations: { getActiveRules: async () => [{ action_config: '{"days_to_keep":30,"delete_attachments":true}' }] } },
+      attachmentStorage: { deleteAttachment: async (key: string) => {
+        await expect(reposA.articles.create({ ticket_id: ticket.id, sender_type: 'customer', body: 'Late' } as any)).rejects.toThrow('retention');
+        await expect(reposA.attachments.create({ ...attachment, r2_key: 'late' })).rejects.toThrow('retention');
+        await expect(reposA.articles.update(article.id, { body: 'Changed' })).rejects.toThrow('retention');
+        await expect(reposA.attachments.delete(attachment.id)).rejects.toThrow('retention');
+        await expect(reposA.tickets.update(ticket.id, { status: 'open' })).rejects.toThrow('retention');
+        await expect(reposA.tickets.withExternalWrite(ticket.id, async () => {})).rejects.toThrow('busy');
+        if (fail) throw new Error('Storage unavailable'); deleted.add(key);
+      } } } as any);
+    expect(await service.runRetention()).toEqual({ deleted_tickets: 0, deleted_attachments: 0 });
+    expect(await reposA.attachments.get(attachment.id)).not.toBeNull();
+    expect(await reposB.tickets.claimRetention(ticket.id, '2099-01-01')).toBeNull();
+    expect(await reposA.tickets.completeRetention(ticket.id, 'wrong')).toBe(false);
+    fail = false;
+    expect(await service.runRetention()).toEqual({ deleted_tickets: 1, deleted_attachments: 1 });
+    expect(deleted).toEqual(new Set(['file']));
+    expect(await reposA.tickets.get(ticket.id)).toBeNull();
+    expect(sqlite.prepare('SELECT count(*) AS n FROM ticket_cleanup_claims').get()).toEqual({ n: 0 });
+  });
+
+  it('does not start retention during a durable external write and ignores stale finalizers', async () => {
+    const ticket = await reposA.tickets.create({ subject: 'Expired', customer_email: 'c@test.com', source: 'email', status: 'closed', priority: 'normal' } as any);
+    await reposA.tickets.withExternalWrite(ticket.id, async () => {
+      expect(await reposA.tickets.claimRetention(ticket.id, '2099-01-01')).toBeNull();
+      expect(await reposA.tickets.completeRetention(ticket.id, 'wrong')).toBe(false);
+      expect(await reposA.tickets.get(ticket.id)).not.toBeNull();
+    });
+    const claim = (await reposA.tickets.claimRetention(ticket.id, '2099-01-01'))!;
+    expect(await reposA.tickets.completeRetention(ticket.id, claim.token)).toBe(true);
+    expect(await reposA.tickets.completeRetention(ticket.id, claim.token)).toBe(false);
+  });
+
+  it('retains uncertain write claims and rolls back a failed database finalization', async () => {
+    const ticket = await reposA.tickets.create({ subject: 'Cleanup', customer_email: 'c@test.com', source: 'email', status: 'closed', priority: 'normal' } as any);
+    await expect(reposA.tickets.withExternalWrite(ticket.id, async () => { throw new Error('Unknown remote outcome'); })).rejects.toThrow('Unknown');
+    expect(await reposA.tickets.claimRetention(ticket.id, '2099-01-01')).toBeNull();
+    const writeClaim = sqlite.prepare('SELECT token FROM ticket_cleanup_claims WHERE ticket_id = ?').get(ticket.id) as any;
+    await reposA.tickets.releaseClaim(ticket.id, writeClaim.token);
+    const article = await reposA.articles.create({ ticket_id: ticket.id, sender_type: 'customer', body: 'Body' } as any);
+    const attachment = await reposA.attachments.create({ article_id: article.id, file_name: 'a', file_size: 1, content_type: 'text/plain', r2_key: 'file' } as any);
+    sqlite.exec('CREATE TABLE blocking_reference (tenant_id TEXT, article_id TEXT, FOREIGN KEY(tenant_id, article_id) REFERENCES articles(tenant_id,id))');
+    sqlite.prepare('INSERT INTO blocking_reference VALUES (?,?)').run('tenant-A', article.id);
+    const claim = (await reposA.tickets.claimRetention(ticket.id, '2099-01-01'))!;
+    await expect(reposA.tickets.completeRetention(ticket.id, claim.token)).rejects.toThrow('FOREIGN KEY');
+    expect(await reposA.attachments.get(attachment.id)).not.toBeNull();
+    expect(sqlite.prepare('SELECT mode FROM ticket_cleanup_claims WHERE ticket_id = ?').get(ticket.id)).toEqual({ mode: 'retention' });
+    sqlite.exec('DELETE FROM blocking_reference');
+    expect(await reposA.tickets.completeRetention(ticket.id, claim.token)).toBe(true);
+  });
+
+  it('withdraws QA visibility before a failed vector deletion and retains the cleanup manifest', async () => {
+    const ticket = await reposA.tickets.create({ subject: 'QA', customer_email: 'c@test.com', source: 'email', status: 'closed', priority: 'normal' } as any);
+    const article = await reposA.articles.create({ ticket_id: ticket.id, sender_type: 'agent', body: 'Previously public' } as any);
+    await reposA.articles.updateQAState(article.id, 'answer', 1);
+    const deleteByIds = vi.fn(async () => {
+      expect((await reposA.articles.get(article.id))?.qa_type).toBeNull();
+      throw new Error('Vector unavailable');
+    });
+    const service = new TenantKnowledgeService({ repositories: reposA, attachmentStorage: {}, vectorStorage: { deleteByIds } } as any, {} as any);
+    await expect(service.markArticleAsQA(article.id, null)).rejects.toThrow('Vector unavailable');
+    expect(await reposA.articles.get(article.id)).toMatchObject({ qa_type: null, chunk_count: 1 });
+    expect(await reposA.tickets.claimRetention(ticket.id, '2099-01-01')).toBeNull();
+    expect(deleteByIds).toHaveBeenCalledWith([`qa_${article.id}_0`]);
+  });
+
+  it.each(['2026-09-01T12:00:00.000Z', '2026-09-01 12:00:00'])('compares retention times chronologically at the boundary (%s)', async cutoff => {
+    for (const [index, timestamp] of ['2026-09-01 11:59:59', '2026-09-01T11:59:59.000Z', '2026-09-01 12:00:00', '2026-09-01 12:00:01', '2026-09-01T12:00:01.000Z', 'invalid'].entries()) {
+      const ticket = await reposA.tickets.create({ subject: `Boundary ${index}`, customer_email: 'c@test.com', source: 'email', status: 'closed', priority: 'normal' } as any);
+      sqlite.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(timestamp, ticket.id);
+      const selected = await reposA.tickets.findTicketsForRetention(cutoff);
+      const claim = await reposA.tickets.claimRetention(ticket.id, cutoff);
+      expect(selected.some(row => row.id === ticket.id)).toBe(index < 2);
+      expect(Boolean(claim)).toBe(index < 2);
+    }
   });
 
   it('binds OTP redemption to its tenant and challenge and limits guesses durably', async () => {

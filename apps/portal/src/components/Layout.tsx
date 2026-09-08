@@ -8,13 +8,16 @@ export function Layout() {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
+    let confirmed = false;
     try {
       await portalApi.post('/auth/logout');
-    } catch (e) {
-      console.error(e);
+      confirmed = true;
+    } catch { /* Local sign-out must still complete. */ }
+    finally {
+      logout();
+      navigate('/login');
     }
-    logout();
-    navigate('/login');
+    if (!confirmed) window.alert("Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.");
   };
 
   return (
@@ -36,7 +39,8 @@ export function Layout() {
               <button
                 onClick={handleLogout}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                title="Log out"
+                title="Sign out of all sessions"
+                aria-label="Sign out of all sessions"
               >
                 <LogOut className="w-5 h-5" />
               </button>

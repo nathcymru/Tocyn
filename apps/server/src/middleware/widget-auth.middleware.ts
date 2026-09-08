@@ -20,6 +20,8 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
   try {
     const secret = new TextEncoder().encode(c.env.JWT_SECRET);
     const { payload } = await jose.jwtVerify(token, secret, {
+      algorithms: ['HS256'],
+      requiredClaims: ['exp', 'iat', 'sub'],
       audience: 'widget'
     });
 
@@ -39,6 +41,9 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
 
     const resolver = new UserAuthResolver(c.env.DB);
     const userRes = await resolver.resolveUserById(payload.tenant_id as string, payload.sub as string);
+    if (userRes && (!Number.isSafeInteger(payload.session_version ?? 0) || (payload.session_version ?? 0) !== userRes.sessionVersion)) {
+      return c.json({ error: "Unauthorized: Session revoked" }, 401);
+    }
     if (!userRes) {
       return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
     }

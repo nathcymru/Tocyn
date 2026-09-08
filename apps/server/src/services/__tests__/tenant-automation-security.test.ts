@@ -24,7 +24,7 @@ describe('tenant automation safety', () => {
   it.each(['attachment', 'vector'])('retains ownership after %s deletion failure and succeeds on retry', async (failure) => {
     const deps: any = { repositories: {
       automations: { getActiveRules: vi.fn().mockResolvedValue([{ action_config: '{"days_to_keep":30,"delete_attachments":true}' }]) },
-      tickets: { findTicketsForRetention: vi.fn().mockResolvedValue([{ id: 'ticket' }]), delete: vi.fn() },
+      tickets: { claimRetention: async () => ({ token: 'claim', created: false }), get: async () => ({ id: 'ticket' }), completeRetention: vi.fn().mockResolvedValue(true), findTicketsForRetention: vi.fn().mockResolvedValue([{ id: 'ticket' }]), delete: vi.fn() },
       articles: { listByTicket: vi.fn().mockResolvedValue([{ id: 'article', qa_type: 'answer', chunk_count: 1 }]), delete: vi.fn() },
       attachments: { findByArticle: vi.fn().mockResolvedValue([{ id: 'attachment', r2_key: 'logical-file' }]), delete: vi.fn() },
     }, attachmentStorage: { deleteAttachment: vi.fn().mockResolvedValue(undefined) }, vectorStorage: { deleteByIds: vi.fn().mockResolvedValue(undefined) } };
@@ -48,7 +48,7 @@ describe('tenant automation safety', () => {
       legacyArticleStorage: legacy ? new LegacyArticleBodyStorage(scope, bucket) : undefined,
       repositories: {
         automations: { getActiveRules: async () => [{ action_config: '{"days_to_keep":30}' }] },
-        tickets: { findTicketsForRetention: async () => [{ id: 'ticket' }], delete: vi.fn() },
+        tickets: { claimRetention: async () => ({ token: 'claim', created: false }), get: async () => ({ id: 'ticket' }), completeRetention: vi.fn().mockResolvedValue(true), findTicketsForRetention: async () => [{ id: 'ticket' }], delete: vi.fn() },
         articles: { listByTicket: async () => [{ id: 'article', body_r2_key: bodyKey }], delete: vi.fn() },
         attachments: { findByArticle: async () => [], delete: vi.fn() },
       }

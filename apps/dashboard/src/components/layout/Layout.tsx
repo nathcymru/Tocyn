@@ -1,3 +1,4 @@
+import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { 
@@ -53,9 +54,12 @@ function UserMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    let confirmed = false;
+    try { await dashboardApi.post('/auth/logout'); confirmed = true; }
+    catch { /* Local sign-out must still complete. */ }
+    finally { logout(); navigate('/login'); }
+    if (!confirmed) window.alert("Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.");
   };
 
   return (
@@ -87,7 +91,7 @@ function UserMenu() {
             className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            Logout
+            Sign out of all sessions
           </button>
         </div>
       )}
@@ -96,7 +100,7 @@ function UserMenu() {
 }
 
 export function Layout() {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
@@ -126,10 +130,6 @@ export function Layout() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   useEffect(() => {
     if (!lastMessage) return;

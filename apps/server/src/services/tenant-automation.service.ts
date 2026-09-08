@@ -167,9 +167,7 @@ export class TenantAutomationService {
         const config: RetentionConfig = JSON.parse(rule.action_config);
         const days = config.days_to_keep ?? 365;
         if (!Number.isInteger(days) || days < 1 || days > 36500 || (config.delete_attachments !== undefined && typeof config.delete_attachments !== 'boolean')) throw new Error('Invalid retention configuration');
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
-        const cutoffStr = cutoffDate.toISOString();
+        const cutoffStr = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
         // Find qualifying tickets within this tenant's scope
         const toDelete = await this.deps.repositories.tickets.findTicketsForRetention(cutoffStr);
@@ -177,13 +175,21 @@ export class TenantAutomationService {
         for (const ticket of toDelete) {
           if (!this.evaluateConditions(rule.conditions, { ticket })) continue;
           try {
-            // 1. Get articles for this ticket
+            const claim = await this.deps.repositories.tickets.claimRetention(ticket.id, cutoffStr);
+            if (!claim) continue;
+            const current = await this.deps.repositories.tickets.get(ticket.id);
+            if (!current || !this.evaluateConditions(rule.conditions, { ticket: current })) {
+              // Preserve the claim: another runner may already be using this manifest.
+              continue;
+            }
             const articles = await this.deps.repositories.articles.listByTicket(ticket.id);
 
+            let attachmentCount = 0;
             // Keep database ownership records until every external deletion succeeds.
             // A retry can repeat idempotent deletes using those same records.
             for (const article of articles) {
               const attachments = await this.deps.repositories.attachments.findByArticle(article.id);
+              attachmentCount += attachments.length;
               if (attachments.length && !config.delete_attachments) {
                 throw new Error('Retention requires attachment deletion consent');
               }
@@ -197,25 +203,17 @@ export class TenantAutomationService {
                   await this.deps.attachmentStorage.deleteAttachment(article.body_r2_key);
                 }
               }
-              if (article.qa_type) {
+              if (article.qa_type || article.chunk_count) {
                 if (!this.deps.vectorStorage) throw new Error('Vector storage unavailable');
                 const count = article.chunk_count;
                 if (!Number.isSafeInteger(count) || !count || count < 1 || count > 10000) throw new Error('Vector cleanup manifest unavailable');
                 await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${article.id}_${i}`));
               }
             }
-            for (const article of articles) {
-              const attachments = await this.deps.repositories.attachments.findByArticle(article.id);
-              for (const attachment of attachments) {
-                await this.deps.repositories.attachments.delete(attachment.id);
-                totalDeletedAttachments++;
-              }
-              await this.deps.repositories.articles.delete(article.id);
+            if (await this.deps.repositories.tickets.completeRetention(ticket.id, claim.token)) {
+              totalDeletedTickets++;
+              totalDeletedAttachments += attachmentCount;
             }
-
-            // 5. Delete the ticket
-            await this.deps.repositories.tickets.delete(ticket.id);
-            totalDeletedTickets++;
           } catch (e) {
             console.error('Tenant retention cleanup failed; ownership retained for retry');
           }

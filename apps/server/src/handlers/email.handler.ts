@@ -11,6 +11,12 @@ export class EmailHandler {
 
   async handleEmail(message: ForwardableEmailMessage, ctx: ExecutionContext): Promise<void> {
     try {
+      // The deployment owner must first verify gateway authentication and header
+      // sanitization in isolated staging; message headers cannot enable this gate.
+      if (this.env.INBOUND_EMAIL_AUTH_VERIFIED !== 'true') {
+        message.setReject('Inbound email is not enabled');
+        return;
+      }
       const senderEmail = message.from.toLowerCase().trim();
       const headers = (message as any).headers;
 
@@ -21,7 +27,7 @@ export class EmailHandler {
         authResults.includes('dkim=fail') || 
         authResults.includes('dmarc=fail')
       ) {
-        console.warn(`[Security] Rejected spoofed email from ${message.from}. Auth-Results: ${authResults}`);
+        console.warn('[Security] Rejected email authentication failure');
         message.setReject('Spam/Spoofed email rejected due to authentication failure');
         return;
       }
@@ -34,7 +40,7 @@ export class EmailHandler {
       } else {
         record.count++;
         if (record.count > 5) {
-          console.warn(`[Security] Isolate rate limited email burst from ${senderEmail}. Count: ${record.count}`);
+          console.warn('[Security] Email burst rate limited');
           message.setReject('Rate limited: Too many messages sent in a short burst');
           return;
         }
@@ -49,7 +55,7 @@ export class EmailHandler {
       );
 
       if (!deps) {
-        console.warn(`[Security] Rejected email to unknown recipient: ${message.to}`);
+        console.warn('[Security] Rejected unknown email recipient');
         message.setReject('Unknown recipient');
         return;
       }
@@ -61,7 +67,7 @@ export class EmailHandler {
       if (user) {
         const recentArticles = await deps.repositories.articles.getRecentCustomerArticleCount(user.id, oneHourAgo);
         if (recentArticles > 20) {
-          console.warn(`[Security] Database rate limited email from ${senderEmail}. Recent articles: ${recentArticles}`);
+          console.warn('[Security] Email account rate limited');
           message.setReject('Rate limited: Too many messages sent recently');
           return;
         }

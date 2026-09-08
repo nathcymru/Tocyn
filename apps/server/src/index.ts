@@ -43,8 +43,14 @@ app.get('/api/realtime', async (c) => {
   }
 
   // Construct a new Request and inject trusted headers
-  const newReq = new Request(c.req.raw.url, c.req.raw);
+  const internalUrl = new URL(c.req.raw.url);
+  internalUrl.search = '';
+  const newReq = new Request(internalUrl, c.req.raw);
   newReq.headers.set('X-User-ID', user.id);
+  newReq.headers.set('X-Tenant-ID', user.tenant_id!);
+  newReq.headers.set('X-Session-Version', String(user.session_version));
+  newReq.headers.set('X-Session-Expiry', String((user as any).session_expires_at));
+  newReq.headers.set('X-Session-Role', user.role);
   newReq.headers.set('X-User-Name', user.full_name || user.email);
 
   const id = c.env.NOTIFICATION_DO.idFromName(`tenant:${user.tenant_id}`);

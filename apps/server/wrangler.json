@@ -53,6 +53,6 @@
     }
   ],
   "observability": {
-                "enabled": true
+                "enabled": false
         }
 }

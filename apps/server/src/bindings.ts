@@ -13,6 +13,7 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   ENVIRONMENT?: string;
+  INBOUND_EMAIL_AUTH_VERIFIED?: string;
   PORTAL_URL?: string;
   CORS_ORIGINS?: string;
   DISABLE_RATE_LIMIT?: string;

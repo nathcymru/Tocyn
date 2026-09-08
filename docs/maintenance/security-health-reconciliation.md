@@ -74,10 +74,7 @@ Checked-in Actions remain pinned. Repository-wide SHA enforcement remains deferr
 
 ## Remaining bounded work
 
-- #13: reconcile session lifecycle/realtime expiry and revocation, edge mail-authentication
-  assurance, and deployment-specific logging/access policy against the private register.
-  HTTP deletion/demotion rejection is not a claim that open sockets or copied bearer
-  sessions have a complete revocation lifecycle.
+- #13: source remediation is reconciled in [the 8 September acceptance record](../security/acceptance-2026-09-08.md); final PR checks and merge are required for closure. Deployment-specific evidence remains gated by #42.
 - #12: dependency-only heads previously lacked the two required default CodeQL Analyze
   contexts. A passing code-containing PR does not by itself resolve that settings gap.
 - #42: provisioning for the tenant schema, backup/restore rehearsals, isolated Cloudflare

@@ -81,7 +81,8 @@ export default tseslint.config(
       "scripts/**/*.ts",
       "src/repositories/__tests__/**/*.ts",
       "src/storage/__tests__/**/*.ts",
-      "src/services/__tests__/**/*.ts"
+      "src/services/__tests__/**/*.ts",
+      "src/durable_objects/__tests__/**/*.ts"
     ],
     rules: {
       "no-restricted-syntax": "off",

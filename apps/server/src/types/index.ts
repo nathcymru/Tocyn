@@ -66,6 +66,7 @@ export interface SendEmailOptions {
 }
 
 export interface User {
+  session_version?: number;
   tenant_id: string;
   id: string;
   email: string;
@@ -79,6 +80,7 @@ export interface User {
 }
 
 export interface JWTPayload {
+  session_version?: number;
   sub: string;
   email: string;
   role: 'admin' | 'agent' | 'customer';
