@@ -1,29 +1,29 @@
 # Tocyn application icon asset package
 
-This package contains platform-targeted application icon assets derived from the approved Tocyn logo design.
+Platform-targeted application icons derived from the approved Tocyn logo assets.
 
-## Included required outputs
+## Outputs
 
-- `app-icon-opaque.png` — 1024x1024, PNG, full colour, opaque background
-- `icon.png` — 1024x1024, PNG, full colour, transparent background
-- `ic_background.svg` — 512x512 SVG, full colour, opaque background layer
-- `ic_foreground.svg` — 512x512 SVG, full colour, transparent foreground layer
-- `ic_monochrome.svg` — 512x512 SVG, monochrome single-colour style asset
-- `maskable-icon.png` — 512x512, PNG, full colour, opaque background
-- `apple-touch-icon.png` — 180x180, PNG, full colour, opaque background
-- `icon.svg` — scalable SVG, full colour, transparent favicon asset
+- `ios/app-icon-opaque.png` — 1024×1024 PNG, opaque iOS/App Store master.
+- `electron/icon.png` — 1024×1024 PNG, transparent Electron master.
+- `android/ic_background.svg` — 512×512 adaptive background.
+- `android/ic_foreground.svg` — 512×512 adaptive foreground.
+- `android/ic_monochrome.svg` — 512×512 themed/monochrome icon.
+- `web/maskable-icon.png` — 512×512 opaque maskable icon.
+- `web/apple-touch-icon.png` — 180×180 Apple touch icon.
+- `web/icon.svg` — scalable web/favicon asset.
 
-## Source files included
+Source artwork is under `source/`.
 
-- `source/tocyn-icon-color-source.png`
-- `source/tocyn-logo-horizontal-source.png`
-- `source/tocyn-icon-monochrome-source.png`
+## Regeneration
 
-## Included script
+Requires Pillow:
 
-- `generate_tocyn_app_assets.py` — regenerates the packaged outputs from the source PNG files (requires `Pillow`: `pip install Pillow`; run: `python3 generate_tocyn_app_assets.py`).
+```sh
+python3 -m pip install Pillow
+python3 public/app_icons/generate_tocyn_app_assets.py
+```
 
-## Notes
+The generator writes directly to the platform subdirectories and does not create temporary repository files.
 
-- Opaque PNG assets use a neutral light background (`#F3F4F6`) because iOS, Apple touch icon, and common PWA icon flows reject transparency or display more consistently with an opaque square master.
-- SVG files are packaged as SVG format assets and embed the normalized PNG artwork to preserve the approved logo drawing exactly.
+The foreground/monochrome/web SVGs intentionally embed normalized PNG artwork so the approved source drawing is preserved exactly. They are packaging assets and should not be pulled into a runtime bundle unless the target actually needs them. If repository size later becomes material, replace them only from approved vector source artwork rather than auto-tracing the raster logo.
