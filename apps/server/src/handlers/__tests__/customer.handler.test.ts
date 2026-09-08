@@ -20,10 +20,14 @@ const mockVerifyAuth = vi.fn().mockResolvedValue({
 });
 
 const mockFindTickets = vi.fn().mockResolvedValue({ data: [], total: 0 });
-const mockCreateTicketWithArticle = vi.fn().mockResolvedValue({ id: "ticket-1" });
+const mockCreateTicketWithArticle = vi.fn().mockResolvedValue({
+  ticket: { id: "ticket-1", customer_email: "test@example.com" },
+  article: { id: "article-1", ticket_id: "ticket-1", is_internal: false },
+});
 const mockFindTicketById = vi.fn().mockResolvedValue({ id: "ticket-1", customer_email: "test@example.com" });
 const mockCreateArticle = vi.fn().mockResolvedValue({ id: "article-1" });
 const mockAddAttachment = vi.fn().mockResolvedValue({ id: "attachment-1" });
+const mockProjectCanonicalConversation = vi.fn().mockReturnValue({ conversation: {}, messages: [] });
 
 vi.mock("../../services/customer-auth.service", () => {
   return {
@@ -45,6 +49,7 @@ vi.mock("../../services/tenant-ticket.service", () => {
       return {
         findTickets: mockFindTickets,
         createTicketWithArticle: mockCreateTicketWithArticle,
+        projectCanonicalConversation: mockProjectCanonicalConversation,
         findTicketById: mockFindTicketById,
         createArticle: mockCreateArticle,
         addAttachment: mockAddAttachment,
@@ -139,7 +144,10 @@ describe("Customer Handler Integration Tests", () => {
       user: { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", role: "customer" }
     });
     mockFindTickets.mockResolvedValue({ data: [], total: 0 });
-    mockCreateTicketWithArticle.mockResolvedValue({ id: "ticket-1", subject: "Test" });
+    mockCreateTicketWithArticle.mockResolvedValue({
+      ticket: { id: "ticket-1", subject: "Test", customer_email: "test@example.com" },
+      article: { id: "article-1", ticket_id: "ticket-1", is_internal: false },
+    });
     mockFindTicketById.mockResolvedValue({ id: "ticket-1", customer_email: "test@example.com" });
     mockCreateArticle.mockResolvedValue({ id: "article-1" });
     mockAddAttachment.mockResolvedValue({ id: "attachment-1" });
@@ -313,7 +321,7 @@ describe("Customer Handler Integration Tests", () => {
 
       expect(res.status).toBe(201);
       const body = await res.json();
-      expect(body.id).toBe("ticket-1");
+      expect(body.ticket.id).toBe("ticket-1");
 
       expect(verifyTurnstileToken).toHaveBeenCalled();
       const turnstileArgs = vi.mocked(verifyTurnstileToken).mock.calls[0];
@@ -410,7 +418,7 @@ describe("Customer Handler Integration Tests", () => {
 
       expect(res.status).toBe(201);
       const body = await res.json();
-      expect(body.id).toBe("ticket-1");
+      expect(body.ticket.id).toBe("ticket-1");
 
     });
   });
@@ -431,10 +439,11 @@ describe("Customer Handler Integration Tests", () => {
 
       expect(res.status).toBe(201);
       const body = await res.json();
-      expect(body.id).toBe("ticket-1");
+      expect(body.ticket.id).toBe("ticket-1");
       expect(mockCreateTicketWithArticle).toHaveBeenCalledWith({
         subject: "Help",
         customer_email: "test@example.com",
+        customer_id: "user-1",
         source: "portal",
         body: "I need help",
         sender_id: "user-1",
@@ -510,7 +519,8 @@ describe("Customer Handler Integration Tests", () => {
         ticket_id: "ticket-1",
         body: "Another reply",
         sender_type: "customer", is_internal: false,
-        sender_id: "user-1"
+        sender_id: "user-1",
+        intake_source: "portal"
       });
       expect(mockAddAttachment).toHaveBeenCalledWith({
         article_id: "article-1",

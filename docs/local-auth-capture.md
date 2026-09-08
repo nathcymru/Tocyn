@@ -69,7 +69,7 @@ Stop the local servers first, then run from the repository root:
 npm run test:local-auth --workspace=apps/server
 ```
 
-This starts owned loopback Worker/portal processes, applies all 23 migrations to a
+This starts owned loopback Worker/portal processes, applies the complete checked-in migration chain to a
 fresh temporary database and provisions minimal synthetic tenant configuration.
 It exercises the real request, capture and verification handlers, wrong-tenant and
 replayed-token rejection, hostile-origin reset rejection, and a Worker restart.

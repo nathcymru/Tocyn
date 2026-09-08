@@ -1,6 +1,6 @@
 import { normalizeSupportEmail } from '../utils/email-normalize';
 import { VerifiedTenantScope } from '../types/tenant';
-import { UserRepository, TicketRepository, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
+import { UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
 import { D1Database } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 
@@ -336,12 +336,44 @@ export class SqlTicketRepository implements TicketRepository {
   async create(data: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'ticket_no'>): Promise<Ticket> {
     const id = crypto.randomUUID();
     const result = await this.db.prepare(
-      "INSERT INTO tickets (tenant_id, id, subject, status, priority, customer_id, customer_email, assigned_to, group_id, source, source_email, custom_fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *"
+      "INSERT INTO tickets (tenant_id, id, subject, status, priority, customer_id, customer_email, assigned_to, group_id, source, source_email, custom_fields, intake_received_at, intake_processed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *"
     ).bind(
-      this.scope.tenantId, id, data.subject, data.status, data.priority, data.customer_id || null, data.customer_email, data.assigned_to || null, data.group_id || null, data.source, data.source_email || null, data.custom_fields ? (typeof data.custom_fields === 'string' ? data.custom_fields : JSON.stringify(data.custom_fields)) : null
+      this.scope.tenantId, id, data.subject, data.status, data.priority, data.customer_id || null, data.customer_email, data.assigned_to || null, data.group_id || null, data.source, data.source_email || null, data.custom_fields ? (typeof data.custom_fields === 'string' ? data.custom_fields : JSON.stringify(data.custom_fields)) : null,
+      data.intake_received_at ?? null, data.intake_processed_at ?? null,
     ).first<Ticket>();
     if (!result) throw new Error("Failed to create ticket");
     return result;
+  }
+
+  async createWithInitialArticle(data: InitialTicketArticleData): Promise<{ ticket: Ticket; article: Article }> {
+    const ticketId = crypto.randomUUID();
+    const articleId = crypto.randomUUID();
+    const { ticket, article } = data;
+    // D1 executes the batch as one transaction. A failed article insert rolls
+    // back the ticket too; neither tenant nor parent IDs come from the input.
+    const results = await this.db.batch<Ticket | Article>([
+      this.db.prepare(`INSERT INTO tickets
+        (tenant_id, id, subject, status, priority, customer_id, customer_email, assigned_to, group_id, source, source_email, custom_fields, intake_received_at, intake_processed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`).bind(
+        this.scope.tenantId, ticketId, ticket.subject, ticket.status, ticket.priority,
+        ticket.customer_id || null, ticket.customer_email, ticket.assigned_to || null,
+        ticket.group_id || null, ticket.source, ticket.source_email || null,
+        ticket.custom_fields ? (typeof ticket.custom_fields === 'string' ? ticket.custom_fields : JSON.stringify(ticket.custom_fields)) : null,
+        ticket.intake_received_at, ticket.intake_processed_at,
+      ),
+      this.db.prepare(`INSERT INTO articles
+        (tenant_id, id, ticket_id, sender_id, sender_type, body, body_r2_key, snippet, raw_email_id, qa_type, is_internal, intake_source, received_at, processed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`).bind(
+        this.scope.tenantId, articleId, ticketId, article.sender_id || null, article.sender_type,
+        article.body || null, article.body_r2_key || null, article.snippet || null,
+        article.raw_email_id || null, article.qa_type || null, article.is_internal ? 1 : 0,
+        article.intake_source, article.received_at, article.processed_at,
+      ),
+    ]);
+    const createdTicket = results[0].results[0] as Ticket | undefined;
+    const createdArticle = results[1].results[0] as Article | undefined;
+    if (!createdTicket || !createdArticle) throw new Error('Failed to create ticket and initial article');
+    return { ticket: createdTicket, article: { ...createdArticle, is_internal: Boolean(createdArticle.is_internal) } };
   }
 
   async touch(id: string): Promise<void> {
@@ -424,9 +456,10 @@ export class SqlArticleRepository implements ArticleRepository {
   async create(data: Omit<Article, 'id' | 'created_at'>): Promise<Article> {
     const id = crypto.randomUUID();
     const result = await this.db.prepare(
-      "INSERT INTO articles (tenant_id, id, ticket_id, sender_id, sender_type, body, body_r2_key, snippet, raw_email_id, qa_type, is_internal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *"
+      "INSERT INTO articles (tenant_id, id, ticket_id, sender_id, sender_type, body, body_r2_key, snippet, raw_email_id, qa_type, is_internal, intake_source, received_at, processed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *"
     ).bind(
-      this.scope.tenantId, id, data.ticket_id, data.sender_id || null, data.sender_type, data.body || null, data.body_r2_key || null, data.snippet || null, data.raw_email_id || null, data.qa_type || null, data.is_internal ? 1 : 0
+      this.scope.tenantId, id, data.ticket_id, data.sender_id || null, data.sender_type, data.body || null, data.body_r2_key || null, data.snippet || null, data.raw_email_id || null, data.qa_type || null, data.is_internal ? 1 : 0,
+      data.intake_source ?? null, data.received_at ?? null, data.processed_at ?? null,
     ).first<Article>();
     if (!result) throw new Error("Failed to create article");
     return {

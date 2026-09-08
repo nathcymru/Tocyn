@@ -8,6 +8,7 @@ This directory contains the version-controlled implementation, architecture, pri
   - [System overview](architecture/system-overview.md)
   - [Data and tenant boundaries](architecture/data-and-tenant-boundaries.md)
   - [Channel adapters](architecture/channel-adapters.md)
+  - [Canonical conversation contract](architecture/canonical-conversation-contract.md)
   - [AI and autonomous operations](architecture/ai-and-autonomous-operations.md)
 - [Privacy engineering](privacy/README.md)
   - [Privacy architecture](privacy/privacy-architecture.md)

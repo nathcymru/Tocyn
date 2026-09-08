@@ -13,6 +13,18 @@ export interface UserRepository {
   verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string): Promise<User | null>;
 }
 
+export type InitialTicketArticleData = {
+  ticket: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'ticket_no' | 'tenant_id'> & {
+    intake_received_at: string;
+    intake_processed_at: string;
+  };
+  article: Omit<Article, 'id' | 'created_at' | 'ticket_id' | 'tenant_id'> & {
+    intake_source: Ticket['source'];
+    received_at: string;
+    processed_at: string;
+  };
+};
+
 export interface TicketRepository {
   claimRetention(id: string, cutoff: string): Promise<{ token: string } | null>;
   releaseClaim(id: string, token: string): Promise<void>;
@@ -24,6 +36,7 @@ export interface TicketRepository {
   findBySubject(subject: string): Promise<Ticket | null>;
   get(id: string): Promise<Ticket | null>;
   create(data: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'ticket_no'>): Promise<Ticket>;
+  createWithInitialArticle(data: InitialTicketArticleData): Promise<{ ticket: Ticket; article: Article }>;
   update(id: string, data: Partial<Ticket>): Promise<void>;
   touch(id: string): Promise<void>;
   delete(id: string): Promise<void>;

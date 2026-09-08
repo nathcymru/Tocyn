@@ -65,13 +65,19 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
       status: validData.status,
       source: 'api' as const,
       body: validData.body,
-      sender_type: 'customer',
+      sender_type: 'customer' as const,
     };
-    const ticket = validData.body?.trim()
-      ? (await ticketService.createTicketWithArticle(ticketData)).ticket
-      : await deps.repositories.tickets.create(ticketData);
+    const created = validData.body?.trim()
+      ? await ticketService.createTicketWithArticle({ ...ticketData, body: validData.body })
+      : { ticket: await ticketService.createTicket(ticketData), article: null };
 
-    return c.json(ticket, 201);
+    return c.json({
+      ...created.ticket,
+      canonical: ticketService.projectCanonicalConversation(
+        created.ticket,
+        created.article ? [created.article] : [],
+      ),
+    }, 201);
   } catch (error) {
     console.error("API Create Ticket Error:", error);
     return c.json({ error: "Failed to create ticket" }, 500);
@@ -91,6 +97,7 @@ v1.get("/tickets/:id", async (c) => {
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const ticketService = new TenantTicketService(deps);
 
   const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
@@ -98,10 +105,15 @@ v1.get("/tickets/:id", async (c) => {
   }
 
   const articles = (await deps.repositories.articles.listByTicket(id)).filter(article => !article.is_internal);
+  const canonicalArticles = await Promise.all(articles.map(async article => ({
+    ...article,
+    attachments: await ticketService.getArticleAttachments(article.id),
+  })));
 
   return c.json({
     ...ticket,
-    articles
+    articles,
+    canonical: ticketService.projectCanonicalConversation(ticket, canonicalArticles),
   });
 });
 
@@ -119,6 +131,7 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
   if (!id) return c.json({ error: 'Missing ID' }, 400);
   const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const ticketService = new TenantTicketService(deps);
 
   if (!body.body) {
     return c.json({ error: "Missing required field: body" }, 400);
@@ -130,11 +143,12 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
   }
 
   try {
-    const article = await deps.repositories.articles.create({
+    const article = await ticketService.createArticle({
       ticket_id: id,
       body: body.body,
       sender_type: body.sender_type || 'customer',
-      is_internal: body.is_internal || false
+      is_internal: body.is_internal || false,
+      intake_source: 'api',
     });
 
     await deps.repositories.tickets.touch(id);
