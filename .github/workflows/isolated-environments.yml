@@ -37,7 +37,6 @@ jobs:
       TOCYN_RELEASE_TARGET: preview
       TOCYN_RELEASE_MODE: ${{ inputs.operation == 'park' && 'park' || 'rehearse' }}
       TOCYN_REVISION: ${{ inputs.revision }}
-      TOCYN_RELEASE_DIR: ${{ runner.temp }}/tocyn-release
       TOCYN_D1_DATABASE_ID: ${{ vars.TOCYN_D1_DATABASE_ID }}
       TOCYN_D1_DATABASE_NAME: tocyn-preview-db
       TOCYN_ATTACHMENTS_BUCKET: tocyn-preview-attachments
@@ -56,6 +55,8 @@ jobs:
       TOCYN_KNOWN_GOOD_ARTIFACT_RUN_ID: ${{ vars.TOCYN_KNOWN_GOOD_ARTIFACT_RUN_ID }}
       VITE_API_URL: ${{ vars.TOCYN_API_ORIGIN }}
     steps:
+      - name: Select runner-local release directory
+        run: echo "TOCYN_RELEASE_DIR=$RUNNER_TEMP/tocyn-release" >> "$GITHUB_ENV"
       - name: Check out trusted main workflow source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -172,7 +173,6 @@ jobs:
       TOCYN_RELEASE_TARGET: beta
       TOCYN_RELEASE_MODE: ${{ inputs.operation == 'park' && 'park' || 'rehearse' }}
       TOCYN_REVISION: ${{ inputs.revision }}
-      TOCYN_RELEASE_DIR: ${{ runner.temp }}/tocyn-release
       TOCYN_D1_DATABASE_ID: ${{ vars.TOCYN_D1_DATABASE_ID }}
       TOCYN_D1_DATABASE_NAME: tocyn-beta-db
       TOCYN_ATTACHMENTS_BUCKET: tocyn-beta-attachments
@@ -191,6 +191,8 @@ jobs:
       TOCYN_KNOWN_GOOD_ARTIFACT_RUN_ID: ${{ vars.TOCYN_KNOWN_GOOD_ARTIFACT_RUN_ID }}
       VITE_API_URL: ${{ vars.TOCYN_API_ORIGIN }}
     steps:
+      - name: Select runner-local release directory
+        run: echo "TOCYN_RELEASE_DIR=$RUNNER_TEMP/tocyn-release" >> "$GITHUB_ENV"
       - name: Check out trusted main workflow source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
