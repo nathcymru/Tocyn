@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { portalApi } from './api/client';
 import { Layout } from './components/Layout';
@@ -7,6 +7,8 @@ import { LoginPage } from './pages/LoginPage';
 import { VerifyPage } from './pages/VerifyPage';
 import { TicketListPage } from './pages/TicketListPage';
 import { TicketDetailPage } from './pages/TicketDetailPage';
+
+const LocalAuthCapturePage = import.meta.env.DEV ? lazy(() => import('./pages/LocalAuthCapturePage').then(module => ({ default: module.LocalAuthCapturePage }))) : null;
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -24,8 +26,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const { login, logout, setLoading } = useAuthStore();
+  const localCaptureRoute = import.meta.env.DEV && window.location.pathname === '/__local/auth-capture';
 
   useEffect(() => {
+    if (localCaptureRoute) {
+      return;
+    }
     portalApi.get<{ user: { id: string; name: string; email: string } }>('/auth/me')
       .then((data) => {
         login(data.user);
@@ -36,11 +42,12 @@ export default function App() {
       .finally(() => {
         setLoading(false);
       });
-  }, [login, logout, setLoading]);
+  }, [localCaptureRoute, login, logout, setLoading]);
 
   return (
     <BrowserRouter>
       <Routes>
+        {LocalAuthCapturePage && <Route path="/__local/auth-capture" element={<Suspense fallback={<p>Loading local capture…</p>}><LocalAuthCapturePage /></Suspense>} />}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         

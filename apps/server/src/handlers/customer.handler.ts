@@ -74,7 +74,7 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
   }
 
-  const authService = new CustomerAuthService(c.env, deps, (c.env as any).emailTransport, resolvers.identity);
+  const authService = new CustomerAuthService(c.env, deps, c.env.emailTransport, resolvers.identity);
 
   try {
     const result = await authService.requestAuth(parsedAuth.data.email, parsedAuth.data.type);

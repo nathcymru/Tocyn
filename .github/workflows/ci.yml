@@ -30,7 +30,7 @@ jobs:
           - check: build
             command: npm run build --workspace=apps/dashboard && npm run build --workspace=apps/portal && npm run build --workspace=apps/widget
           - check: test
-            command: npm test && cd apps/server && bash ./scripts/d1-smoke-test.sh && npx tsx scripts/d1-integration-test.ts
+            command: npm test && cd apps/server && bash ./scripts/d1-smoke-test.sh && npx tsx scripts/d1-integration-test.ts && node scripts/local-auth-smoke.mjs
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

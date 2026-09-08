@@ -22,6 +22,10 @@ export async function verifyTurnstileToken(env: Env, deps: TenantRequestDeps, to
     return true;
   }
 
+  // Local capture mode must never decrypt or submit a stale tenant key to the
+  // remote verifier. A configured challenge is therefore unavailable locally.
+  if (env.ENVIRONMENT === 'local') return false;
+
   if (!env.APP_MASTER_KEY) {
     throw new Error("Server misconfiguration: APP_MASTER_KEY is missing.");
   }

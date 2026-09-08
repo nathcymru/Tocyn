@@ -27,6 +27,9 @@ export class CustomerAuthService {
 
     const prefix = await this.deps.repositories.config.get('TICKET_PREFIX');
     const siteKey = await this.deps.repositories.config.get('TURNSTILE_SITE_KEY');
+    // A stale local D1 setting must not cause the development portal to load a
+    // third-party Turnstile widget. Authentication itself fails closed below.
+    if (this.env.ENVIRONMENT === 'local') return { TICKET_PREFIX: prefix || '#' };
     return {
       TICKET_PREFIX: prefix || '#',
       TURNSTILE_SITE_KEY: siteKey || undefined,

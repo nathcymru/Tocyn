@@ -1,3 +1,5 @@
+import type { EmailTransport } from './services/email/transport';
+
 export interface Env {
   VECTORIZE_WORKFLOW: any; // Type 'Workflow' missing in older workers-types
   DB: D1Database;
@@ -19,4 +21,6 @@ export interface Env {
   CORS_ORIGINS?: string;
   DISABLE_RATE_LIMIT?: string;
   OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST?: string;
+  /** Injected solely by src/local-index.ts; never a Worker binding or secret. */
+  emailTransport?: EmailTransport;
 }

@@ -29,7 +29,7 @@ waives checks, signed commits or main integrity. Do not request this approval ag
 
 ## Integrated work and evidence
 
-Current main: `f0bb45e2b72eb1c1e5ba9f75ccd40b486fd716e1` (verified PR #102 merge).
+Current main: `913b0c8e0c0b9bada3b8abb8aada7a98ac13e323` (verified PR #103 merge).
 Earlier foundations #43/#46/#47 remain implemented, without production clearance.
 
 [#20](https://github.com/nathcymru/Tocyn/issues/20) is complete through
@@ -55,46 +55,52 @@ at `523add383d89861b89f5e550f7df439170454bd2` produced byte-identical 36-file ar
 `50b28abe64fcde5f17018608288103d80643e28cfa78d8127a28deb188582000`.
 See `docs/isolated-environments.md` for evidence and limitations. No remote operation occurred.
 
-## Immediate main-health repair
+## Main health and local runtime evidence
 
-GitHub rejected the new manual workflow before any job on main:
-[run 34277346687](https://github.com/nathcymru/Tocyn/actions/runs/34277346687).
-`runner.temp` is unavailable in job-level environment expressions. PR CI/CodeQL had
-passed but did not validate this semantic restriction. Do not claim healthy workflow
-registration until the repair is integrated and main verified.
+[PR #103](https://github.com/nathcymru/Tocyn/pull/103) repaired the invalid job-level
+`runner.temp` expression and added checksum-pinned actionlint 1.7.12 to required CI.
+The old workflow fails both semantic checks; corrected workflows pass. Required PR
+checks and main CI/CodeQL passed. The manual release workflow is now registered;
+no workflow dispatch or remote operation occurred.
+[Receipt](https://github.com/nathcymru/Tocyn/issues/57#issuecomment-5591843731).
 
-Repair branch `codex/57-workflow-context-fix` moves release-directory initialization
-into runner steps and adds checksum-pinned actionlint 1.7.12 to the existing CI lint
-gate. Local actionlint rejects the exact old workflow at both offending lines and
-accepts all corrected workflows; five focused workflow tests and diff checks pass.
-This is necessary #57 correctness work, not a change to readiness criteria.
+Local runtime branch `codex/57-local-beta-runtime` is based on current main above.
+The dedicated local entrypoint provides bounded in-memory mail capture, fails closed
+on provider fallback, and binds loopback. Stale local Turnstile configuration cannot
+call Cloudflare. Portal/dashboard use fixed loopback ports 5174/5173; login links
+resolve to the actual portal route. Capture UI belongs to portal development tooling,
+not the API Worker bundle; this final acceptance correction passed browser and runtime verification.
+
+The actual disposable Wrangler rehearsal applied 23 migrations, exercised customer
+request/capture/verify, rejected wrong-tenant token use and replay, preserved the
+signed identity through a Worker restart, and cleared ephemeral capture. The last
+completed run took 5.558 seconds and measured local state from 1,433,208 to 2,742,448
+bytes. These are one synthetic run's disk measurements, not production capacity.
+SIGINT/SIGTERM cleanup released both ports and deleted only run-owned temporary state.
+No measured external request counter is claimed; the local transport disables mail.
+
+Validation before the final UI relocation: server 339 tests, portal 12, widget 3;
+root tooling 31 tests; relevant lint/typecheck, D1 smoke/integration, frontend builds
+and semantic workflow validation passed. The real Wrangler rehearsal is added to CI.
+Final UI keyboard/direct-load/reload checks passed; final portal suite is 13 tests.
+Independent high-effort review passed, including production output exclusion and
+three focused relocation tests. Required PR checks remain pending. #57 is not yet accepted.
 
 ## Active allocation and integration order
 
 | Workstream | Agent/environment | Model/effort | Ownership/state |
 | --- | --- | --- | --- |
-| Coordination, main repair integration | Root/local | Inherited session | Issue/Project/state, workflow correction, acceptance |
-| Semantic workflow validation | dependency_audit/local repair checkout | gpt-5.6-terra/medium | Helper and CI wiring complete; root review passed |
-| #57 local runtime/mail capture | beta_environment_impl/local runtime checkout | gpt-5.6-terra/high | Active; auth/provider and exposure boundaries |
-| Independent local runtime review | release_packaging_escalation/Codex | gpt-6-astra/high | Active read-only; explicit boundary/real auth proof |
-| Prior provider/Access review | tenant_acceptance_prep/Codex | gpt-5.6-terra/high | Completed bounded source review |
+| Coordination, real runtime acceptance | Root/local | Inherited session | Issue/Project/state, disposable runtime proof, integration |
+| #57 local runtime/mail capture | beta_environment_impl/local checkout | gpt-5.6-terra/high | Authentication boundaries reviewed; dev UI relocation complete; final checks |
+| Independent security review | release_packaging_escalation/Codex | gpt-6-astra/high | Runtime/helper review passed; final relocation review passed |
+| #58 ready-plan refinement | dependency_audit/local | gpt-5.6-terra/medium | Read-only acceptance/interactive fixture preparation |
 | Work pool review attempt | Existing Work task | Existing configuration | Connector timed out; execution unconfirmed |
 
-Local runtime branch: `codex/57-local-beta-runtime`, based on `f0bb45e`.
-Integrate workflow repair first, refresh the local branch, then validate/integrate
-local runtime. Root owns this state file. Runtime owner owns local entrypoint/config,
-mail transport, focused tests and operator docs; no overlapping workflow edits.
-Four concurrent Codex slots are available including root; no greater count is claimed.
-Work connector retries timed out and Computer Use explicitly denied app access.
-No macOS permission prompt was generated; owner consent cannot change that tool restriction.
-
-Local capture contract: localhost:8787 and 127.0.0.1:8787 work while the server binds
-loopback. Capture is injected by the dedicated local entrypoint, never enabled merely
-by a production/isolated env string. No provider fallback on absent/failed capture.
-Default recipient is the approved synthetic address. Bounded retention/count and
-local inspection/reset must not expose mail in other runtimes or committed artifacts.
-Complete the real request -> captured message/link -> verify -> replay-rejection path;
-retain normal tenant resolution, credential hashing, rate limiting and JWT issuance.
+Root owns this state and runtime rehearsal; application owner owns the local runtime,
+portal capture UI and focused tests. Four concurrent Codex slots exist including root.
+Work connector retries timed out and Computer Use explicitly denied native app access.
+No macOS permission prompt was generated; no Mac permission is pending. Browser
+Computer Use works and is used for local UI checks. No denied route is circumvented.
 
 ## Critical path and readiness
 
@@ -134,8 +140,7 @@ be hidden inside these exclusions. No release/tag, customer onboarding or produc
 is developed. Preserve prior numeric progress until acceptance evidence supports a
 re-estimate; no actual completion or 100% claim. Reforecast dependencies only with evidence.
 
-1. Publish/integrate the bounded workflow repair after required checks and standing
-   review authority; verify main health and record receipt.
+1. Finish independent review, publish the coherent local-runtime PR and require all CI/security checks.
 2. Complete #57 local capture/runtime implementation and independent review; run actual
    loopback Wrangler auth, isolation, reset/retention and resource/recovery evidence.
 3. Update local operator docs and #57 acceptance mapping. Integrate via coherent PR,

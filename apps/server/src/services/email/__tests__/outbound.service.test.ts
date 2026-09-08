@@ -2,6 +2,7 @@ import { encryptString } from '../../../utils/crypto';
 let encryptedTestKey = '';
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EmailService } from "../outbound.service";
+import { LOCAL_AUTH_CAPTURE_RECIPIENT, LocalAuthCaptureTransport } from '../transport';
 import { Ticket, Article } from "../../types";
 // eslint-disable-next-line no-restricted-imports
 import { createVerifiedTenantScope } from "../../../auth/scope";
@@ -144,6 +145,26 @@ describe('EmailService isolated recipient allowlist', () => {
     await expect(service.send({ to: ['other@example.test'], subject: 'Test', text: 'Test' })).rejects.toThrow('not in the isolated allowlist');
     await service.send({ to: ['recipient@example.test'], subject: 'Test', text: 'Test' });
     expect(transport.send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('EmailService local capture enforcement', () => {
+  it('refuses a local provider fallback before reading tenant provider configuration', async () => {
+    const configGet = vi.fn(async () => { throw new Error('provider configuration must not be read'); });
+    const deps = { scope: { tenantId: 'local-tenant' }, repositories: { config: { get: configGet }, channels: { listSupportEmails: async () => [] } } };
+    const service = new EmailService({ ENVIRONMENT: 'local' } as any, deps as any);
+    await expect(service.send({ to: [LOCAL_AUTH_CAPTURE_RECIPIENT], subject: 'Local', text: 'Local' })).rejects.toThrow('refuses external email transport');
+    expect(configGet).not.toHaveBeenCalled();
+  });
+
+  it('uses the injected local capture without reading or decrypting Resend configuration', async () => {
+    const configGet = vi.fn(async () => { throw new Error('provider configuration must not be read'); });
+    const deps = { scope: { tenantId: 'local-tenant' }, repositories: { config: { get: configGet }, channels: { listSupportEmails: async () => [] } } };
+    const capture = new LocalAuthCaptureTransport();
+    const service = new EmailService({ ENVIRONMENT: 'local' } as any, deps as any, capture);
+    await service.send({ to: [LOCAL_AUTH_CAPTURE_RECIPIENT], subject: 'Local', text: 'Local' });
+    expect(capture.list()).toHaveLength(1);
+    expect(configGet).not.toHaveBeenCalled();
   });
 });
 
