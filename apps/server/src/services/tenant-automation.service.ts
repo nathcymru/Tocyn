@@ -167,9 +167,7 @@ export class TenantAutomationService {
         const config: RetentionConfig = JSON.parse(rule.action_config);
         const days = config.days_to_keep ?? 365;
         if (!Number.isInteger(days) || days < 1 || days > 36500 || (config.delete_attachments !== undefined && typeof config.delete_attachments !== 'boolean')) throw new Error('Invalid retention configuration');
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
-        const cutoffStr = cutoffDate.toISOString();
+        const cutoffStr = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
         // Find qualifying tickets within this tenant's scope
         const toDelete = await this.deps.repositories.tickets.findTicketsForRetention(cutoffStr);

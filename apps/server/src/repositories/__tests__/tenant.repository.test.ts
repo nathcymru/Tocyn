@@ -201,6 +201,17 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     expect(deleteByIds).toHaveBeenCalledWith([`qa_${article.id}_0`]);
   });
 
+  it.each(['2026-09-01T12:00:00.000Z', '2026-09-01 12:00:00'])('compares retention times chronologically at the boundary (%s)', async cutoff => {
+    for (const [index, timestamp] of ['2026-09-01 11:59:59', '2026-09-01T11:59:59.000Z', '2026-09-01 12:00:00', '2026-09-01 12:00:01', '2026-09-01T12:00:01.000Z', 'invalid'].entries()) {
+      const ticket = await reposA.tickets.create({ subject: `Boundary ${index}`, customer_email: 'c@test.com', source: 'email', status: 'closed', priority: 'normal' } as any);
+      sqlite.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(timestamp, ticket.id);
+      const selected = await reposA.tickets.findTicketsForRetention(cutoff);
+      const claim = await reposA.tickets.claimRetention(ticket.id, cutoff);
+      expect(selected.some(row => row.id === ticket.id)).toBe(index < 2);
+      expect(Boolean(claim)).toBe(index < 2);
+    }
+  });
+
   it('binds OTP redemption to its tenant and challenge and limits guesses durably', async () => {
     const a = await reposA.users.create({ email: 'otp-a@example.com', role: 'customer', mfa_enabled: false } as any);
     const b = await reposB.users.create({ email: 'otp-b@example.com', role: 'customer', mfa_enabled: false } as any);

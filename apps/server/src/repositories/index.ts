@@ -116,7 +116,7 @@ export class SqlUserRepository implements UserRepository {
 export class SqlTicketRepository implements TicketRepository {
   async claimRetention(id: string, cutoff: string): Promise<{ token: string } | null> {
     await this.db.prepare(`INSERT OR IGNORE INTO ticket_cleanup_claims (tenant_id, ticket_id, token, mode)
-      SELECT tenant_id, id, ?, 'retention' FROM tickets WHERE tenant_id = ? AND id = ? AND updated_at < ?`)
+      SELECT tenant_id, id, ?, 'retention' FROM tickets WHERE tenant_id = ? AND id = ? AND julianday(updated_at) < julianday(?)`)
       .bind(crypto.randomUUID(), this.scope.tenantId, id, cutoff).run();
     const claim = await this.db.prepare("SELECT token FROM ticket_cleanup_claims WHERE tenant_id = ? AND ticket_id = ? AND mode = 'retention'")
       .bind(this.scope.tenantId, id).first<{token: string}>();
@@ -381,7 +381,7 @@ export class SqlTicketRepository implements TicketRepository {
 
   async findTicketsForRetention(cutoffStr: string): Promise<Ticket[]> {
     const { results } = await this.db.prepare(
-      "SELECT * FROM tickets WHERE tenant_id = ? AND updated_at < ?"
+      "SELECT * FROM tickets WHERE tenant_id = ? AND julianday(updated_at) < julianday(?)"
     ).bind(this.scope.tenantId, cutoffStr).all<Ticket>();
     return results || [];
   }
