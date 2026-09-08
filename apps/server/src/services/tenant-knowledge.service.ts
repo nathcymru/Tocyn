@@ -198,6 +198,8 @@ export class TenantKnowledgeService {
         });
       } else {
         const count = current.chunk_count || 1;
+        // Revoke visibility before external deletion, retaining its cleanup manifest.
+        await this.deps.repositories.articles.updateQAState(articleId, null, count);
         await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${articleId}_${i}`));
         await this.deps.repositories.articles.updateQAState(articleId, null, 0);
       }

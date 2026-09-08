@@ -1,3 +1,4 @@
+import { TenantKnowledgeService } from '../../services/tenant-knowledge.service';
 import { Hono } from 'hono';
 import * as jose from 'jose';
 import authHandler from '../../handlers/auth.handler';
@@ -183,6 +184,21 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     expect(sqlite.prepare('SELECT mode FROM ticket_cleanup_claims WHERE ticket_id = ?').get(ticket.id)).toEqual({ mode: 'retention' });
     sqlite.exec('DELETE FROM blocking_reference');
     expect(await reposA.tickets.completeRetention(ticket.id, claim.token)).toBe(true);
+  });
+
+  it('withdraws QA visibility before a failed vector deletion and retains the cleanup manifest', async () => {
+    const ticket = await reposA.tickets.create({ subject: 'QA', customer_email: 'c@test.com', source: 'email', status: 'closed', priority: 'normal' } as any);
+    const article = await reposA.articles.create({ ticket_id: ticket.id, sender_type: 'agent', body: 'Previously public' } as any);
+    await reposA.articles.updateQAState(article.id, 'answer', 1);
+    const deleteByIds = vi.fn(async () => {
+      expect((await reposA.articles.get(article.id))?.qa_type).toBeNull();
+      throw new Error('Vector unavailable');
+    });
+    const service = new TenantKnowledgeService({ repositories: reposA, attachmentStorage: {}, vectorStorage: { deleteByIds } } as any, {} as any);
+    await expect(service.markArticleAsQA(article.id, null)).rejects.toThrow('Vector unavailable');
+    expect(await reposA.articles.get(article.id)).toMatchObject({ qa_type: null, chunk_count: 1 });
+    expect(await reposA.tickets.claimRetention(ticket.id, '2099-01-01')).toBeNull();
+    expect(deleteByIds).toHaveBeenCalledWith([`qa_${article.id}_0`]);
   });
 
   it('binds OTP redemption to its tenant and challenge and limits guesses durably', async () => {

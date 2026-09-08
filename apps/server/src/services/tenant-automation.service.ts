@@ -205,7 +205,7 @@ export class TenantAutomationService {
                   await this.deps.attachmentStorage.deleteAttachment(article.body_r2_key);
                 }
               }
-              if (article.qa_type) {
+              if (article.qa_type || article.chunk_count) {
                 if (!this.deps.vectorStorage) throw new Error('Vector storage unavailable');
                 const count = article.chunk_count;
                 if (!Number.isSafeInteger(count) || !count || count < 1 || count > 10000) throw new Error('Vector cleanup manifest unavailable');

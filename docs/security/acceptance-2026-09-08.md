@@ -69,7 +69,9 @@ external deletion. Only after external cleanup succeeds does a D1 transaction re
 all ownership. Wrong/foreign/stale finalizers do not delete a ticket.
 
 Knowledge-index writes hold a durable write claim while external work is pending.
-Retention cannot begin concurrently. Failed or interrupted external writes retain
+Retention cannot begin concurrently. QA withdrawal revokes database visibility before
+external deletion while retaining the chunk manifest; a failed deletion cannot keep
+the article publicly retrievable. Failed or interrupted external writes retain
 that claim because their remote outcome may be uncertain. Claims never expire
 automatically: deleting a lock on a timer could allow an old writer to recreate
 already-deleted data. A reconciler must stop the relevant workflow, confirm no writer
