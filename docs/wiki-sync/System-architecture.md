@@ -86,7 +86,35 @@ Tocyn is pre-release. The current repository contains a Hono-based Cloudflare Wo
 
 ## Current runtime arrangement
 
+```mermaid
+flowchart LR
+    subgraph Clients
+      D[Operator dashboard]
+      P[Customer portal]
+      W[Widget]
+      API[Programmatic API]
+    end
+    H[Hono Worker]
+    DB[(D1)]
+    R2[(R2)]
+    DO[Notification Durable Object]
+    AI[Workers AI]
+    VX[(Vectorize)]
+    WF[Vectorize workflow]
 
+    D --> H
+    P --> H
+    W --> H
+    API --> H
+    H --> DB
+    H --> R2
+    H --> DO
+    H --> AI
+    H --> VX
+    H --> WF
+    WF --> AI
+    WF --> VX
+```
 
 In the current implementation, all application surfaces call the API Worker. D1 owns relational records; R2 holds attachments/offloaded bodies; the tenant-keyed Durable Object coordinates real-time operator connections; Workers AI/Vectorize support knowledge/AI functions; and a Cloudflare Workflow supports vectorisation. Current `wrangler.json` has no Queue or Cloudflare Calls binding, so those are not presented as deployed services.
 
