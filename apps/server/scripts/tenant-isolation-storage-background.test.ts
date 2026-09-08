@@ -32,9 +32,22 @@ async function widgetToken(fixture: LocalTenantFixture, name: 'customerA' | 'cus
   return token;
 }
 
+function unexpectedVectorBoundary() {
+  let calls = 0;
+  const reject = async (): Promise<never> => {
+    calls++;
+    throw new Error('Unexpected vector operation in attachment-only acceptance fixture');
+  };
+  return {
+    index: { upsert: reject, getByIds: reject, deleteByIds: reject, query: reject },
+    operationCount: () => calls,
+  };
+}
+
 function scopedDeps(fixture: LocalTenantFixture, tenantId: string, extra: Record<string, unknown> = {}) {
   return createTenantRequestDeps(createSystemTenantScope({ tenantId, actor: 'synthetic-acceptance' }), {
-    DB: fixture.db, ATTACHMENTS_BUCKET: fixture.r2.bucket, ...extra,
+    DB: fixture.db, ATTACHMENTS_BUCKET: fixture.r2.bucket,
+    VECTOR_INDEX: unexpectedVectorBoundary().index, ...extra,
   });
 }
 
@@ -78,8 +91,9 @@ test('retention source contract: failed A cleanup freezes writes; retry deletes 
     const b = fixture.principals.customerB.tenantId;
     await seedAttachment(fixture, a);
     await seedAttachment(fixture, b);
-    const depsA = scopedDeps(fixture, a);
-    const depsB = scopedDeps(fixture, b);
+    const vector = unexpectedVectorBoundary();
+    const depsA = scopedDeps(fixture, a, { VECTOR_INDEX: vector.index });
+    const depsB = scopedDeps(fixture, b, { VECTOR_INDEX: vector.index });
     await fixture.db.prepare("UPDATE tickets SET status = 'closed', updated_at = '2000-01-01T00:00:00.000Z' WHERE tenant_id = ? AND id = ?")
       .bind(a, 'fixture-ticket').run();
     await depsA.repositories.automations.create({ name: 'Synthetic retention', event_type: 'scheduled.retention', action_type: 'retention', is_active: true,
@@ -93,6 +107,7 @@ test('retention source contract: failed A cleanup freezes writes; retry deletes 
     };
     const service = new TenantAutomationService(depsA);
     assert.deepEqual(await service.runRetention(), { deleted_tickets: 0, deleted_attachments: 0 });
+    assert.equal(vector.operationCount(), 0, 'Injected R2 failure must not hide an unexpected vector call');
     assert.ok(await depsA.repositories.tickets.get('fixture-ticket'));
     assert.ok(await depsA.repositories.attachments.get('shared-attachment'));
     let wrote = false;
@@ -109,6 +124,7 @@ test('retention source contract: failed A cleanup freezes writes; retry deletes 
     const beforeRetry = fixture.r2.operationCounts();
     assert.deepEqual(await service.runRetention(), { deleted_tickets: 0, deleted_attachments: 0 });
     assert.deepEqual(fixture.r2.operationCounts(), beforeRetry, 'Completed retention retry must perform no storage work');
+    assert.equal(vector.operationCount(), 0, 'Attachment-only retention and recovery must perform no vector operation');
   });
 });
 

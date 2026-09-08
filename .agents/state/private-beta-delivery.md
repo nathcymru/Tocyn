@@ -30,15 +30,15 @@ Browser Computer Use works. Do not circumvent the denied native route.
 
 Main `4bf6dc5af44674a77002a0d2f0585d9b8df0d6c3` (PR #110), verified signed merge.
 Main CI 34284398955 and CodeQL 34284398552 passed. Required dependency-only PR checks
-matched github-actions app15368. No manual repeat Copilot reviews requested.
+matched github-actions app 15368. No manual repeat Copilot reviews requested.
 
 | Issue / PR | Accepted state and evidence |
 | --- | --- |
-| #20 / #101 | Complete. Merge3fae282; contributor setup, Node22/npm10, 23 local migrations and serving/checks. Project Done100, actual8Sep, unchanged baseline8–10Sep, variance-2 Mon–Sat days. |
-| #57 / #102–105 | Complete for current owner-local scope. #102 source deployment/artifact preparation; #103 semantic workflow repair; #104 local runtime/capture; #105 exact loopback CORS/test corrections. Project Done100, actual8Sep, unchanged baseline11–22Sep, variance-12. No historical remote proof claimed. |
+| #20 / #101 | Complete. Merge 3fae282; contributor setup, Node 22/npm 10, 23 local migrations and serving/checks. Project Done / 100%, actual 8 Sep, unchanged baseline 8–10 Sep, variance -2 Mon–Sat days. |
+| #57 / #102–105 | Complete for current owner-local scope. #102 source deployment/artifact preparation; #103 semantic workflow repair; #104 local runtime/capture; #105 exact loopback CORS/test corrections. Project Done / 100%, actual 8 Sep, unchanged baseline 11–22 Sep, variance -12. No historical remote proof claimed. |
 | #58 / #110 | Complete. Four reusable principals, actual password/MFA/portal authentication, scoped keys and recovery. Project Done/100%, actual 8 Sep, unchanged baseline 23–28 Sep, variance -17 Mon–Sat days. |
-| #106 / #107 | Source patch integrated18a5ea7, signed; Vitest/mocker4.1.11. All checks/main CI34282806598/CodeQL34282806746 passed. Alerts99/100 fixed at22:14:52Z; issue closed; ProjectDone100 actual8Sep. |
-| #108 / #109 | Source patch integrated80e23ba, signed; exact Sharp0.35.4 override and platform companions. Upstream Miniflare still pinned0.35.2; no unrelated upgrade. Alert101 fixed at22:14:52Z; issue closed; ProjectDone100 actual8Sep. |
+| #106 / #107 | Source patch integrated 18a5ea7, signed; Vitest/mocker 4.1.11. All checks/main CI 34282806598 / CodeQL 34282806746 passed. Alerts 99/100 fixed at 22:14:52Z; issue closed; Project Done / 100% actual 8 Sep. |
+| #108 / #109 | Source patch integrated 80e23ba, signed; exact Sharp 0.35.4 override and platform companions. Upstream Miniflare still pinned 0.35.2; no unrelated upgrade. Alert 101 fixed at 22:14:52Z; issue closed; Project Done / 100% actual 8 Sep. |
 
 #57 evidence: actual request/capture/verify, wrong-tenant/replay rejection, local
 restart/session durability, ephemeral capture clearing, interruption cleanup. Source
@@ -51,9 +51,9 @@ screen-reader session or broader #21 acceptance is claimed.
 passed checks and later received approval. One nonblocking fixed-input test-style
 suggestion was assessed and resolved without a redundant patch/review cycle.
 
-GitHub now reports alerts99/100/101 fixed at22:14:52Z on8Sep, matching patched
+GitHub now reports alerts 99/100/101 fixed at 22:14:52Z on 8 Sep, matching patched
 local/published inventories. No alert dismissal occurred. Completion receipts and
-Project fields for #106/#108 are synchronized; both issues are closed Done100 actual8Sep. #12 retains broader required
+Project fields for #106/#108 are synchronized; both issues are closed Done / 100% actual 8 Sep. #12 retains broader required
 context enforcement scope; its positive evidence from #107 does not close it.
 
 ## Active allocation and integration
@@ -78,14 +78,14 @@ same-ID scoped ticket positives, denied writes, role-change rejection, protected
 credential storage, two portal magic-link/widget flows and recovery after callback
 failure. Capture instances originate from the guarded local entrypoint factory.
 
-Validation: server340 tests; focused fixture2; independent address/boundary18 tests;
+Validation: server 340 tests; focused fixture 2; independent address/boundary 18 tests;
 server and dedicated fixture-script typechecks, lint and workflow semantics pass.
-Final verifier:41 route requests,8 selected D1 rows,0 R2 objects,0 FK violations.
+Final verifier: 41 route requests, 8 selected D1 rows, 0 R2 objects, 0 FK violations.
 Counts are not total D1 operations or production capacity. Root real Wrangler PTY
 proof ran A and B portal authentication in separate fresh instances, keeping negative
 attempts below the unchanged five/minute verification limit. Each run also completed
-2 customer password and2 operator MFA logins; SIGINT/SIGTERM exits130/143 released
-8787 and deletedownedstate,5.36/5.50s. Credentials never appeared in reports.
+2 customer password and 2 operator MFA logins; SIGINT/SIGTERM exits 130/143 released
+8787 and deleted owned state,5.36/5.50s. Credentials never appeared in reports.
 Required CI ran script typecheck, verifier and repeated/failure-cleanup tests and passed.
 
 ## Critical path and ready queue
@@ -149,7 +149,7 @@ Next dependency prep: /tmp/tocyn-60-mutation-inventory.md records existing API/p
 mutation routes and conditional-write precedents. No idempotency implementation is
 claimed; #60 requires high-effort design after #59. Do not broaden to other surfaces.
 
-#19 checkpoint: server340, fixture3, core1 and storage/background4 tests plus all
+#19 checkpoint: server 340, fixture 3, core 1 and storage/background 4 tests plus all
 script types and clean full/production audit passed. Independent core review passed.
 CI now requires both new acceptance suites. Remaining full build/lint/integration
 checks are running. The local manifest has a real DO binding: core owner adds a
@@ -157,7 +157,7 @@ bounded actual socket/revocation proof alongside explicitly labelled source test
 No new owner gate or remote runtime clearance is implied.
 
 #19 remaining validation passed: three frontend builds, workflow/portal/server lint,
-portal13/widget3/root31 tests, D1 smoke plus all five integration batches, actual
+portal 13 / widget 3 / root 31 tests, D1 smoke plus all five integration batches, actual
 local auth/reset/restart smoke. All test listeners released for the realtime proof.
 
 #59 readonly contract proposal: /tmp/tocyn-59-contract-proposal.md. It preserves
@@ -166,15 +166,21 @@ store. This is a proposal: owner agent must verify every required metadata field
 truthful direction/internal-note semantics and shared contracts against #59/ADR.
 Do not mechanically mark all newly obtainable API/portal lifecycle data unknown.
 
-Realtime harness preparation: use configured8787, not random port; local entrypoint
-intentionally restricts origins to8787. Root suggested free port before inspecting
+Realtime harness preparation: use configured 8787, not random port; local entrypoint
+intentionally restricts origins to 8787. Root suggested free port before inspecting
 that guard; corrected without broadening it. Check port free and own cleanup.
 #59 /tmp/tocyn-59-contract-review.md adds critical corrections: internal direction,
 author/requester provenance, truthful typed facts, and atomic ticket+first-message
 failure behavior. #60 owns replay/conflict protocol, not this prerequisite.
 
-#19 real Wrangler WebSocket proof passed5713ms: two actual MFA-issued tokens, A/B
-isolated events, revokedA closes1008, B continues. Ownedstate cleaned; no tokens
+#19 real Wrangler WebSocket proof passed 5713 ms: two actual MFA-issued tokens, A/B
+isolated events, revoked A closes 1008, B continues. Owned state cleaned; no tokens
 or socket URLs in output. CI requires this proof after other local runtime checks.
-Nine beta gates still open until coordinator accepts integrated19; allsecurity
-maintenance106/108 complete. Final narrow scriptreview and PR integration next.
+Nine beta gates still open until coordinator accepts integrated19; all security
+maintenance 106/108 complete. Final narrow scriptreview and PR integration next.
+
+PR #111 head 8f208f3 passed all required checks and internal reviews. Automatic
+review completed with two findings: clarify state spacing and provide an explicit
+fail-on-unexpected-use vector double in the storage tests. Corrections are batched;
+no new metered review requested. Repeat affected checks and required PR checks before
+integration. #19 remains In progress until final signed acceptance.
