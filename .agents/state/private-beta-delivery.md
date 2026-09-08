@@ -123,3 +123,9 @@ The [issue progress receipt](https://github.com/nathcymru/Tocyn/issues/20#issuec
 records the exact validated revision and remaining gate. #20 remains open/In progress;
 all twelve beta blockers remain open. No forecast or numerical progress was invented.
 Dependency-cleared beta implementation cannot proceed past #20 until integration.
+
+Automatic Copilot review identified one remaining migration-command inconsistency.
+`migration:create` now selects the same local profile; an isolated temporary-directory
+check created exactly one SQL migration and applied nothing to a database. The correction
+and evidence are consolidated in #101; recheck required CI on its new head. No additional
+Copilot review was requested. Owner review-exception authority remains pending.

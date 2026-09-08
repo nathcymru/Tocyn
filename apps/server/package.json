@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev --config wrangler.local.json",
     "deploy": "wrangler deploy",
-    "migration:create": "wrangler d1 migrations create luminatick-db",
+    "migration:create": "wrangler d1 migrations create tocyn-local --config wrangler.local.json",
     "migration:apply": "wrangler d1 migrations apply tocyn-local --local --config wrangler.local.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

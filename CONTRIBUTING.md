@@ -37,6 +37,8 @@ The checked-in production-oriented `apps/server/wrangler.json` retains inherited
 
 Local Worker state is stored under `apps/server/.wrangler/` and is ignored by Git. To reset local D1/R2/DO state, stop the server and remove that directory; then rerun the migration command. This deletes only local synthetic state. The inherited [deployment guide](docs/deployment.md) is not a validated provisioning route. Commands containing `:prod`, `--remote`, or `deploy` affect Cloudflare resources and are outside normal contributor setup.
 
+To create a migration for a scoped schema change, run `npm run migration:create --workspace=apps/server -- descriptive_name`. This selects the same local configuration and writes a new SQL file under `apps/server/migrations`; it does not apply that migration to a database. Review the SQL before applying it locally.
+
 | Profile | Resources and consumption | Recovery |
 | --- | --- | --- |
 | `wrangler.local.json` | Local D1 rows, R2 objects and Durable Object state stored under `.wrangler`; no Cloudflare account or billable resource is used. AI, Vectorize and Workflow features are omitted. | Stop the Worker, remove `apps/server/.wrangler/`, and rerun `npm run db:migrate:local`. |

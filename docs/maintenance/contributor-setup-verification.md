@@ -14,6 +14,7 @@ Workflow, mail credentials or production resource identifiers.
 | `npm ci --ignore-scripts` | Locked dependency installation passed; native SQLite tests need the normal install below. |
 | `npm ci` | Passed with the native SQLite binary available. This is the documented contributor/CI install. |
 | Copy synthetic `.dev.vars.example`; `npm run db:migrate:local` | All 23 migrations applied to the distinct local database. |
+| Server `migration:create` command | Passed in a temporary copy of the configuration and migrations: created exactly one new SQL file with the local profile; no database application or retained test migration. |
 | `npm run dev:server` | Local-only bindings listed at startup; `/health` returned HTTP 200. |
 | Dashboard and portal development servers | Started; independent HTTP probes returned 200 HTML. |
 | Widget development server | Started; `/src/main.tsx` returned HTTP 200 JavaScript. It is a library, with no standalone HTML page or API proxy. |
