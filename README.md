@@ -178,15 +178,7 @@ Do not reintroduce loose root image copies solely for README/Page compatibility;
 
 ## Development
 
-This is a pnpm workspace. Start with the current repository instructions rather than historical phase documents.
-
-```bash
-pnpm install --frozen-lockfile
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-```
+This is an npm workspace. Start with the current [contributor instructions](CONTRIBUTING.md) rather than historical phase documents.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md) for contribution and coding-agent governance. Repository work is issue-owned, PR-delivered, and uses persistent progress/completion receipts so the roadmap remains a living record.
 

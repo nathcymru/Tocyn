@@ -10,40 +10,55 @@ Describe the intended behaviour and acceptance criteria before large architectur
 
 ## Development setup
 
-Use Node.js 22.12 or newer in the Node 22 line and npm. The repository is an npm workspace with a root lockfile.
+Use Node.js `>=22.12.0 <23` and npm 10. The repository is an npm workspace with a root lockfile. The same Node range is used by CI.
 
 ```bash
 git clone https://github.com/nathcymru/Tocyn.git
 cd Tocyn
 npm ci
+cp apps/server/.dev.vars.example apps/server/.dev.vars
 npm run db:migrate:local
 npm run dev:server
 ```
 
-In separate terminals, start the interfaces you need:
+This starts the API at `http://localhost:8787` with local D1, R2 and Durable Object emulation. Workers AI, Vectorize and the vectorisation Workflow are deliberately omitted from this configuration, so AI/knowledge routes are not part of the wholly local walkthrough. The example variables are synthetic development values. Do not put account tokens, provider keys, or production values in `.dev.vars`.
+
+In separate terminals, start the interfaces you need. Dashboard and portal proxy `/api` to the local API. The widget is a script library without a standalone HTML page or development API proxy: its dev server serves `/src/main.tsx`. An embedding application supplies its API origin through `VITE_API_URL` and its public configuration selector through `data-widget-key` or `VITE_WIDGET_KEY`; an authenticated customer token is still required. Use synthetic values only.
 
 ```bash
 npm run dev:dashboard
 npm run dev:portal
+npm run dev --workspace=apps/widget
 ```
 
-Inspect `.env.example` and `apps/server/.dev.vars.example` for configuration. Use local untracked configuration and synthetic test data. Some existing AI/Vectorize bindings use remote services: local development does not guarantee an entirely offline or cost-free run. The clean-checkout verification issue tracks remaining setup gaps.
+The obsolete `db:seed:local` and server `seed` commands have been removed. Their historical generator requires `--legacy-schema` and may only target a separately reviewed pre-tenant local database. Do not use it for setup or tenancy evidence. Repeatable two-tenant fixture/provisioning is tracked by [#58](https://github.com/nathcymru/Tocyn/issues/58). Until that fixture exists, use the isolated D1 checks below as the synthetic tenancy demonstration.
 
-The inherited [deployment guide](docs/deployment.md) covers provisioning. Commands containing `:prod`, `--remote`, or `deploy` affect Cloudflare resources and are not required for an ordinary documentation contribution.
+The checked-in production-oriented `apps/server/wrangler.json` retains inherited remote D1, R2, Vectorize and Workers AI identifiers. It is not used by the default server command. `apps/server/wrangler.local.json` contains only distinct local D1, R2 and Durable Object bindings, so the documented development route needs no Cloudflare login, account, remote resource, provider key, or paid AI call.
+
+Local Worker state is stored under `apps/server/.wrangler/` and is ignored by Git. To reset local D1/R2/DO state, stop the server and remove that directory; then rerun the migration command. This deletes only local synthetic state. The inherited [deployment guide](docs/deployment.md) is not a validated provisioning route. Commands containing `:prod`, `--remote`, or `deploy` affect Cloudflare resources and are outside normal contributor setup.
+
+| Profile | Resources and consumption | Recovery |
+| --- | --- | --- |
+| `wrangler.local.json` | Local D1 rows, R2 objects and Durable Object state stored under `.wrangler`; no Cloudflare account or billable resource is used. AI, Vectorize and Workflow features are omitted. | Stop the Worker, remove `apps/server/.wrangler/`, and rerun `npm run db:migrate:local`. |
+| `wrangler.json` | Inherited deployment bindings name D1, R2, a Durable Object, Vectorize, Workers AI and a Workflow. D1/R2 operations and storage, Durable Object activity, Vectorize queries/storage, AI inference and Workflow executions can consume provider resources when deployed or deliberately connected remotely. | Environment inventory, backups, rollback and remote recovery are controlled by [#57](https://github.com/nathcymru/Tocyn/issues/57); do not use local recovery commands on a remote account. |
 
 ## Checks
 
 ```bash
 npm run lint --workspace=apps/portal
+(cd apps/server && npx eslint .)
 npm run typecheck --workspace=apps/server
 npm run build --workspace=apps/dashboard
 npm run build --workspace=apps/portal
 npm run build --workspace=apps/widget
-npm run test --workspace=apps/server -- --run
-npm exec --workspace=apps/portal -- vitest run src/__tests__/VerifyPage.test.tsx
+npm test
+(cd apps/server && bash ./scripts/d1-smoke-test.sh)
+(cd apps/server && npx tsx scripts/d1-integration-test.ts)
 ```
 
-Portal linting is the current lint coverage, not a claim of repository-wide linting. CI explicitly runs the server tests and portal verification-flow regression tests; extending the remaining frontend test coverage is tracked separately. Report pre-existing failures instead of suppressing them.
+The D1 smoke test creates a temporary local database, proves a cross-tenant foreign-key write is rejected, and runs foreign-key and quick checks. The Miniflare integration check runs the migration chain with two synthetic tenants and exercises application isolation paths. These checks do not prove a deployed Cloudflare environment or authenticated browser onboarding; #58 owns repeatable local tenant fixtures and #57 owns isolated environment verification. Report pre-existing failures instead of suppressing them.
+
+See the [8 September setup verification](docs/maintenance/contributor-setup-verification.md) for observed results and limitations.
 
 ## Pull requests
 
