@@ -45,7 +45,8 @@ Logout invalidates **all sessions for that user**, including bearer copies and M
 challenges. Other users and tenants remain unaffected. Legacy tokens correspond to
 session version zero; their existing bounded lifetime remains valid only until the
 first revocation. Every newly issued token includes the current version. Role/email/
-password/MFA-enabled changes and membership removal/update increment the version,
+password/MFA-enabled changes, rotation of an enabled MFA secret and membership
+removal/update increment the version,
 so reverting a role does not revive old sessions. Migration 0022 is required.
 
 Realtime upgrade validates the signed token before forwarding trusted internal

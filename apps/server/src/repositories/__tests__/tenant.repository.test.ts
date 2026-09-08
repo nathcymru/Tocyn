@@ -115,7 +115,7 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     sqlite.prepare("UPDATE users SET role = 'customer' WHERE id = ?").run(a.id);
     sqlite.prepare("UPDATE users SET role = 'agent' WHERE id = ?").run(a.id);
     expect(await service.verifyToken(original)).toBeNull();
-    for (const [column, value] of [['email', 'changed@revocation.test'], ['password_hash', 'changed'], ['mfa_enabled', 0]]) {
+    for (const [column, value] of [['email', 'changed@revocation.test'], ['password_hash', 'changed'], ['mfa_secret', 'rotated-enabled-secret'], ['mfa_enabled', 0]]) {
       const token = await service.generateToken((await reposA.users.get(a.id))!, secret, true);
       sqlite.prepare(`UPDATE users SET ${column} = ? WHERE id = ?`).run(value, a.id);
       expect(await service.verifyToken(token)).toBeNull();
