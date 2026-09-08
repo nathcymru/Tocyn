@@ -7,8 +7,19 @@ export class TenantOutboundEmailService {
   constructor(
     private deps: TenantRequestDeps,
     private masterKey?: string,
-    private transport: EmailTransport = new HttpResendTransport()
+    private transport: EmailTransport = new HttpResendTransport(),
+    private environment?: string,
+    private recipientAllowlist?: string
   ) {}
+
+  private assertIsolatedRecipientAllowlist(recipients: string[]): void {
+    if (!['preview', 'beta'].includes(this.environment || '')) return;
+    const allowed = new Set((this.recipientAllowlist || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean));
+    if (allowed.size === 0) throw new Error('Outbound email is disabled until an isolated recipient allowlist is configured');
+    for (const recipient of recipients) {
+      if (!allowed.has(recipient.trim().toLowerCase())) throw new Error('Outbound email recipient is not in the isolated allowlist');
+    }
+  }
 
   async getResendCredentials(): Promise<{ apiKey: string, defaultFrom: string }> {
     let apiKey = await this.deps.repositories.config.get('RESEND_API_KEY');
@@ -21,6 +32,7 @@ export class TenantOutboundEmailService {
   }
 
   async send(options: SendEmailOptions): Promise<{ id: string }> {
+    this.assertIsolatedRecipientAllowlist(options.to);
     const creds = await this.getResendCredentials();
     const fromAddress = options.from || creds.defaultFrom;
 

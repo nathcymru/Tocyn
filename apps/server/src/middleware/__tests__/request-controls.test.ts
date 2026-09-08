@@ -44,4 +44,9 @@ describe('request controls', () => {
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
     expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull();
   });
+  it('does not allow preview HTTP localhost origins', async () => {
+    const app = new Hono(); app.use('*', apiCors); app.get('/api/data', c => c.text('ok'));
+    const response = await app.request('/api/data', { headers: { Origin: 'http://localhost:5173' } }, { PORTAL_URL: 'http://localhost:5173', ENVIRONMENT: 'preview' });
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
 });

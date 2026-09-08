@@ -9,7 +9,8 @@ export const apiCors: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => 
     if (!value) continue;
     try {
       const url = new URL(value.trim());
-      if (url.protocol === 'https:' || (c.env.ENVIRONMENT !== 'production' && url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) allowed.add(url.origin);
+      const localDevelopment = !['preview', 'beta', 'production'].includes(c.env.ENVIRONMENT || 'development');
+      if (url.protocol === 'https:' || (localDevelopment && url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) allowed.add(url.origin);
     } catch { /* Invalid configuration never becomes an allowed origin. */ }
   }
   // CORS alone does not prevent cookie-authenticated form submissions.

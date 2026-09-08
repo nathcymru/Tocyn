@@ -17,6 +17,7 @@ This directory contains the version-controlled implementation, architecture, pri
 - [Roadmap pointer and forecasts](roadmap.md)
 - [Security implementation material](security/)
 - [Deployment guide](deployment.md) — inherited/operational material; current issue/release gates control remote actions.
+- [Isolated preview and beta release preparation](isolated-environments.md) — #57 source controls, owner operation choices, and unrun remote acceptance contract.
 - [Agent development tooling](agent-development.md)
 - [Repository structure](repository-structure.md)
 - [Wiki synchronization bundle](wiki-sync/README.md)

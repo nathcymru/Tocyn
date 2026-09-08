@@ -15,6 +15,8 @@ export interface Env {
   ENVIRONMENT?: string;
   INBOUND_EMAIL_AUTH_VERIFIED?: string;
   PORTAL_URL?: string;
+  DASHBOARD_URL?: string;
   CORS_ORIGINS?: string;
   DISABLE_RATE_LIMIT?: string;
+  OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST?: string;
 }

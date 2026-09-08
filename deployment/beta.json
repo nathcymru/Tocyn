@@ -1,0 +1,14 @@
+{
+  "environment": "beta",
+  "resources": {
+    "apiWorker": "tocyn-api-beta",
+    "d1Database": "tocyn-beta-db",
+    "r2AttachmentsBucket": "tocyn-beta-attachments",
+    "notificationDurableObject": "tocyn-api-beta/NotificationDO",
+    "portalPagesProject": "tocyn-portal-beta",
+    "dashboardPagesProject": "tocyn-dashboard-beta"
+  },
+  "requiredSecrets": ["JWT_SECRET", "MFA_ENCRYPTION_KEY", "APP_MASTER_KEY", "OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST"],
+  "disabledCapabilities": ["ai", "vectorize", "vectorizeWorkflow", "emailRouting", "cron", "queues", "webhooks"],
+  "ingress": { "workersDev": false, "routes": [] }
+}
