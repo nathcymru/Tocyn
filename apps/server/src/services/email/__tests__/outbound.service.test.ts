@@ -135,15 +135,15 @@ describe('EmailService isolated recipient allowlist', () => {
 
   it('refuses preview mail until the protected recipient allowlist is present', async () => {
     const service = new EmailService({ ...mockEnv, ENVIRONMENT: 'preview' } as any, createTenantRequestDeps(createVerifiedTenantScope('default-tenant', 'system', [], 1), mockEnv) as any);
-    await expect(service.send({ to: ['synthetic@example.test'], subject: 'Test', text: 'Test' })).rejects.toThrow('allowlist');
+    await expect(service.send({ to: ['synthetic@example.test'], html: '<p>Synthetic</p>', subject: 'Test', text: 'Test' })).rejects.toThrow('allowlist');
   });
 
   it('sends preview mail only to an exact allowlisted recipient', async () => {
     const transport = { send: vi.fn().mockResolvedValue({ id: 'test-message' }) };
     const env = { ...mockEnv, ENVIRONMENT: 'preview', OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST: 'recipient@example.test' };
     const service = new EmailService(env as any, createTenantRequestDeps(createVerifiedTenantScope('default-tenant', 'system', [], 1), env) as any, transport as any);
-    await expect(service.send({ to: ['other@example.test'], subject: 'Test', text: 'Test' })).rejects.toThrow('not in the isolated allowlist');
-    await service.send({ to: ['recipient@example.test'], subject: 'Test', text: 'Test' });
+    await expect(service.send({ to: ['other@example.test'], html: '<p>Synthetic</p>', subject: 'Test', text: 'Test' })).rejects.toThrow('not in the isolated allowlist');
+    await service.send({ to: ['recipient@example.test'], html: '<p>Synthetic</p>', subject: 'Test', text: 'Test' });
     expect(transport.send).toHaveBeenCalledTimes(1);
   });
 });
@@ -153,7 +153,7 @@ describe('EmailService local capture enforcement', () => {
     const configGet = vi.fn(async () => { throw new Error('provider configuration must not be read'); });
     const deps = { scope: { tenantId: 'local-tenant' }, repositories: { config: { get: configGet }, channels: { listSupportEmails: async () => [] } } };
     const service = new EmailService({ ENVIRONMENT: 'local' } as any, deps as any);
-    await expect(service.send({ to: [LOCAL_AUTH_CAPTURE_RECIPIENT], subject: 'Local', text: 'Local' })).rejects.toThrow('refuses external email transport');
+    await expect(service.send({ to: [LOCAL_AUTH_CAPTURE_RECIPIENT], html: '<p>Synthetic</p>', subject: 'Local', text: 'Local' })).rejects.toThrow('refuses external email transport');
     expect(configGet).not.toHaveBeenCalled();
   });
 
@@ -162,7 +162,7 @@ describe('EmailService local capture enforcement', () => {
     const deps = { scope: { tenantId: 'local-tenant' }, repositories: { config: { get: configGet }, channels: { listSupportEmails: async () => [] } } };
     const capture = new LocalAuthCaptureTransport();
     const service = new EmailService({ ENVIRONMENT: 'local' } as any, deps as any, capture);
-    await service.send({ to: [LOCAL_AUTH_CAPTURE_RECIPIENT], subject: 'Local', text: 'Local' });
+    await service.send({ to: [LOCAL_AUTH_CAPTURE_RECIPIENT], html: '<p>Synthetic</p>', subject: 'Local', text: 'Local' });
     expect(capture.list()).toHaveLength(1);
     expect(configGet).not.toHaveBeenCalled();
   });
