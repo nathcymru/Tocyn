@@ -21,7 +21,7 @@ This package contains platform-targeted application icon assets derived from the
 
 ## Included script
 
-- `generate_tocyn_app_assets.py` — regenerates the packaged outputs from the source PNG files.
+- `generate_tocyn_app_assets.py` — regenerates the packaged outputs from the source PNG files (requires `Pillow`: `pip install Pillow`; run: `python3 generate_tocyn_app_assets.py`).
 
 ## Notes
 
