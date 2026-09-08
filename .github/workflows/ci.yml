@@ -24,7 +24,7 @@ jobs:
       matrix:
         include:
           - check: lint
-            command: npm run lint --workspace=apps/portal && cd apps/server && npx eslint .
+            command: bash scripts/validate-workflows.sh && npm run lint --workspace=apps/portal && cd apps/server && npx eslint .
           - check: typecheck
             command: npm run typecheck --workspace=apps/server
           - check: build
