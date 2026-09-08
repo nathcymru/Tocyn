@@ -2,6 +2,8 @@
 
 # Tocyn
 
+[![Sponsor Tocyn](https://shieldcn.dev/github/sponsors/nathcymru.svg)](https://github.com/sponsors/nathcymru)
+
 **Tocyn** (Welsh for “ticket”, pronounced roughly “Tock-in”) is an open-source, multi-tenant helpdesk/support system built for Cloudflare's edge application stack. It is a fork of [Luminatick](https://github.com/05ng/luminatick) and is released under the MIT licence.
 
 > **Pre-release:** Tocyn has no stable release and no project-operated hosted helpdesk service. Current source is under active development. Do not treat the repository, roadmap or documentation as evidence of production readiness.
@@ -158,6 +160,24 @@ Milestones describe architecture/capability completion. Releases are separate Gi
 - [Approved architectural roadmap](https://github.com/nathcymru/Tocyn/wiki/Approved-architectural-roadmap)
 - [Repository roadmap pointer](docs/roadmap.md)
 - [Architecture decision records](docs/adr/README.md)
+
+## Contributors
+
+Thanks to everyone helping build, test, document and review Tocyn.
+
+[![Tocyn contributors](https://shieldcn.dev/contributors/nathcymru/Tocyn.svg)](https://github.com/nathcymru/Tocyn/graphs/contributors)
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the contributor overview and [CONTRIBUTING.md](CONTRIBUTING.md) to get involved.
+
+## Support Tocyn
+
+Tocyn is free and open source. Optional GitHub sponsorship helps cover project-related hosting, documentation, testing and development-service costs.
+
+Monthly tiers are **$1**, **$3**, and **$5**. Every tier supports the same open-source project; sponsorship does not buy private features, roadmap priority, an SLA or a hosted Tocyn service.
+
+[![Tocyn sponsors](https://shieldcn.dev/sponsors/nathcymru.svg)](https://github.com/sponsors/nathcymru)
+
+See [SPONSORS.md](SPONSORS.md) or [sponsor `nathcymru` on GitHub](https://github.com/sponsors/nathcymru).
 
 ## Public project page
 

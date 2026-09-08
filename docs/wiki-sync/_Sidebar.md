@@ -3,6 +3,8 @@
 - [[Home]]
 - [[Start-here]]
 
+[![Sponsor Tocyn](https://shieldcn.dev/github/sponsors/nathcymru.svg)](https://github.com/sponsors/nathcymru)
+
 ### Architecture
 
 - [[System-architecture]]
@@ -26,8 +28,11 @@
 - [Repository privacy policy](https://github.com/nathcymru/Tocyn/blob/main/PRIVACY_POLICY.md)
 - [Security policy](https://github.com/nathcymru/Tocyn/blob/main/SECURITY.md)
 
-### Contribute
+### Contribute & support
 
 - [README](https://github.com/nathcymru/Tocyn#readme)
 - [Issues](https://github.com/nathcymru/Tocyn/issues)
 - [Contributing](https://github.com/nathcymru/Tocyn/blob/main/CONTRIBUTING.md)
+- [Contributors](https://github.com/nathcymru/Tocyn/blob/main/CONTRIBUTORS.md)
+- [Sponsors](https://github.com/nathcymru/Tocyn/blob/main/SPONSORS.md)
+- [Sponsor on GitHub](https://github.com/sponsors/nathcymru)
