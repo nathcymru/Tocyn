@@ -36,7 +36,8 @@ available.
 
 The local entry point injects an in-memory email transport into the existing
 customer authentication service. That transport accepts only
-`tocyn-auth-test@example.invalid`; it never reads tenant Resend credentials,
+`tocyn-auth-test@example.invalid`, `tocyn-auth-test-a@example.invalid`, and
+`tocyn-auth-test-b@example.invalid`; it never reads tenant Resend credentials,
 makes a provider request, or falls back to a provider transport. Messages are
 kept for at most 15 minutes and ten entries. Inspect or clear them at:
 
@@ -96,3 +97,77 @@ portal build inspection excludes the development capture route/code.
 No remote deployment, provider activation, production migration or rollback is proved
 by this rehearsal. Local-only scope is the owner's current #57 target; the remaining
 beta issue gates still apply.
+
+## Reusable A/B local tenant fixture (#58)
+
+The local capture rehearsal above proves the customer magic-link loop. The separate
+#58 fixture creates two fresh synthetic tenant scopes and four password principals:
+customer and administrator for each tenant. The customer and administrator local IDs
+intentionally collide across tenants. Customer login addresses are the two approved
+local capture aliases, while administrator addresses are distinct canonical `.test`
+addresses because the current login index is global.
+
+Run the disposable route-level verification from the repository root:
+
+```sh
+npm run test:local-tenants --workspace=apps/server
+```
+
+It creates an in-memory local D1/R2 fixture, applies all checked-in migrations, and
+uses the existing authentication, MFA challenge/verification, dashboard API-key and
+`/api/v1` handlers. It proves customer password and magic-link/widget authentication, administrator MFA,
+wrong password/OTP denial, canonical-email collision rejection, A/B key metadata isolation,
+read-only/revoked/malformed-key denial, and `PRAGMA foreign_key_check`. Its JSON
+receipt contains counts and statuses only. The helper always disposes the in-memory
+bindings; `npm run test:local-tenants:focused --workspace=apps/server` repeats fresh
+runs and exercises failure cleanup.
+
+For a human operator to inspect the same kind of fixture through the real loopback
+Worker, use an interactive terminal only:
+
+```sh
+npm run fixture:local-tenants --workspace=apps/server
+```
+
+The command refuses CI, redirected output, extra arguments, and a busy port. It creates
+a new temporary local state directory, applies migrations, starts only a local Worker
+at `http://localhost:8787` bound to `127.0.0.1`, then reveals the four generated
+synthetic passwords, each customer portal login URL with its public widget key, and
+administrator TOTP enrollment URIs once to that terminal. It
+never prints an API key, writes a credential export, changes existing `.wrangler`
+state, starts a browser frontend, contacts a provider, or accepts a remote target.
+Stopping it removes the run-owned state. Start the portal and dashboard separately
+with the fixed-port commands above if their existing interfaces are wanted.
+
+The administrator MFA secret is a fixture-only direct encrypted bootstrap because a
+new administrator cannot reach the current normal MFA setup route before MFA has been
+verified. This does not implement commercial onboarding or general MFA self-enrollment.
+The fixture does not replace #19's broader cross-surface tenant-isolation matrix, #57's
+local customer-mail capture proof, or #62's human ticket-handling workflow.
+
+### #58 validation receipt (8 September 2026)
+
+The route verifier passed with two tenants, four principals, MFA logins, real
+same-ID tenant-scoped ticket reads, permission/revocation negatives and protected
+credential storage checks. It also exercised both magic-link request/capture/verify
+flows, wrong-tenant keys, widget-audience identity and replay denial. The final run
+recorded 41 route requests, eight selected D1 rows (users, tickets and API keys), zero
+R2 objects and zero foreign-key violations. These are measured fixture counts, not
+total database operations or production capacity. Focused checks repeated fresh
+fixtures and verified cleanup after an injected callback failure. Live role-change
+rejection was tested; broader session-version/cross-surface acceptance remains #19.
+
+An independent pseudo-terminal rehearsal exercised the actual interactive Wrangler
+runner without printing credentials into its report. Each of two runs completed two
+customer password logins and two operator MFA logins through HTTP. Tenant A's portal
+magic-link flow ran in the first instance, tenant B's in the second; each proved
+foreign-key rejection, widget identity and replay denial. Separate fresh runs kept
+negative attempts below the unchanged five-verification-per-minute IP limit.
+SIGINT exited130 and SIGTERM exited143; both released port8787 and removed owned
+state. Runs took 5.36 and 5.50 seconds. Credentials stayed in rehearsal memory and
+were discarded. #62 still owns the complete human handling workflow.
+
+Both server and dedicated fixture-script typechecks pass; focused fixture tests,
+server regressions and independent security review pass. Required CI now runs the
+fixture-script typecheck, redacted verifier and repeated-run/failure-cleanup tests.
+No browser authentication UI bypass, mail provider or remote resource was introduced.

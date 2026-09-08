@@ -11,6 +11,12 @@ export interface EmailTransport {
 }
 
 export const LOCAL_AUTH_CAPTURE_RECIPIENT = 'tocyn-auth-test@example.invalid';
+export const LOCAL_AUTH_CAPTURE_RECIPIENTS = Object.freeze([
+  LOCAL_AUTH_CAPTURE_RECIPIENT,
+  'tocyn-auth-test-a@example.invalid',
+  'tocyn-auth-test-b@example.invalid',
+]);
+const LOCAL_AUTH_CAPTURE_RECIPIENT_SET = new Set(LOCAL_AUTH_CAPTURE_RECIPIENTS);
 const LOCAL_PORTAL_ORIGINS = new Set(['http://localhost:5174', 'http://127.0.0.1:5174']);
 
 export type LocalAuthCaptureMessage = Readonly<{
@@ -45,8 +51,9 @@ export class LocalAuthCaptureTransport implements EmailTransport {
 
   async send(options: SendEmailOptions, creds: EmailTransportCredentials): Promise<{ id: string }> {
     this.prune();
-    if (options.to.length !== 1 || options.to[0].trim().toLowerCase() !== LOCAL_AUTH_CAPTURE_RECIPIENT) {
-      throw new Error(`Local auth capture accepts only ${LOCAL_AUTH_CAPTURE_RECIPIENT}`);
+    const recipient = options.to.length === 1 ? options.to[0].trim().toLowerCase() : '';
+    if (!LOCAL_AUTH_CAPTURE_RECIPIENT_SET.has(recipient)) {
+      throw new Error(`Local auth capture accepts only ${LOCAL_AUTH_CAPTURE_RECIPIENTS.join(', ')}`);
     }
     const text = (options.text || '').slice(0, 4096);
     const candidate = text.match(/http:\/\/[^\s]+\/verify\?[^\s]+/)?.[0];
@@ -62,7 +69,7 @@ export class LocalAuthCaptureTransport implements EmailTransport {
       id: crypto.randomUUID(),
       createdAt,
       expiresAt: new Date(this.now() + 15 * 60 * 1000).toISOString(),
-      to: LOCAL_AUTH_CAPTURE_RECIPIENT,
+      to: recipient,
       from: options.from || creds.defaultFrom,
       subject: options.subject.slice(0, 200),
       text,
