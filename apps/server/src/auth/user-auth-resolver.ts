@@ -1,3 +1,4 @@
+import { Env } from '../bindings';
 import { D1Database } from '@cloudflare/workers-types';
 
 export interface UserAuthResolution {
@@ -8,9 +9,14 @@ export interface UserAuthResolution {
   email?: string;
   fullName?: string;
   mfaEnabled: boolean;
+  sessionVersion: number;
 }
 
 export class UserAuthResolver {
+  static fromEnvironment(env: Env): UserAuthResolver {
+    return new UserAuthResolver(env.DB);
+  }
+
   constructor(private db: D1Database) {}
 
   async resolveCredentialsByEmail(email: string): Promise<UserAuthResolution | null> {
@@ -19,7 +25,7 @@ export class UserAuthResolver {
     if (!canonicalEmail) return null;
 
     const user = await this.db
-      .prepare("SELECT tenant_id, id, role, password_hash, mfa_enabled FROM users WHERE lower(trim(email)) = ?")
+      .prepare("SELECT tenant_id, id, role, password_hash, session_version, mfa_enabled FROM users WHERE lower(trim(email)) = ?")
       .bind(canonicalEmail)
       .first<{
         tenant_id: string;
@@ -27,6 +33,7 @@ export class UserAuthResolver {
         role: string;
         password_hash: string | null;
         mfa_enabled: number | boolean;
+        session_version: number;
       }>();
 
     if (!user) return null;
@@ -37,6 +44,7 @@ export class UserAuthResolver {
       role: user.role,
       passwordHash: user.password_hash,
       mfaEnabled: !!user.mfa_enabled,
+      sessionVersion: user.session_version ?? 0,
     };
   }
 
@@ -44,7 +52,7 @@ export class UserAuthResolver {
     if (!tenantId || !userId) return null;
 
     const user = await this.db
-      .prepare("SELECT tenant_id, id, role, password_hash, mfa_enabled, email, full_name FROM users WHERE tenant_id = ? AND id = ?")
+      .prepare("SELECT tenant_id, id, role, password_hash, session_version, mfa_enabled, email, full_name FROM users WHERE tenant_id = ? AND id = ?")
       .bind(tenantId, userId)
       .first<{
         tenant_id: string;
@@ -54,6 +62,7 @@ export class UserAuthResolver {
         role: string;
         password_hash: string | null;
         mfa_enabled: number | boolean;
+        session_version: number;
       }>();
 
     if (!user) return null;
@@ -66,6 +75,7 @@ export class UserAuthResolver {
       role: user.role,
       passwordHash: user.password_hash,
       mfaEnabled: !!user.mfa_enabled,
+      sessionVersion: user.session_version ?? 0,
     };
   }
 }

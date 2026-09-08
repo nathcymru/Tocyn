@@ -184,29 +184,24 @@ export class TenantKnowledgeService {
     const prevArticle = await this.deps.repositories.articles.get(articleId);
     if (!prevArticle) return;
     
-    if (type) {
-      const content = prevArticle.body || '';
-      const chunkCount = 1;
-      await this.deps.repositories.articles.updateQAState(articleId, type, chunkCount);
-      
+    await this.deps.repositories.tickets.withExternalWrite(prevArticle.ticket_id, async () => {
+      // Re-read under the durable write claim; retention cannot start until it ends.
+      const current = await this.deps.repositories.articles.get(articleId);
+      if (!current) return;
       const chunkId = `qa_${articleId}_0`;
-      const embedding = await this.aiService.generateEmbeddings(content);
-      await this.deps.vectorStorage.upsert(chunkId, embedding, {
-        source_id: articleId,
-        type: 'qa',
-        text: content,
-        tier: type, status: 'published'
-      });
-    } else {
-      const chunkCount = prevArticle.chunk_count || 1;
-      await this.deps.repositories.articles.updateQAState(articleId, null, 0);
-      
-      const vectorIdsToDelete = [];
-      for (let i = 0; i < chunkCount; i++) {
-        vectorIdsToDelete.push(`qa_${articleId}_${i}`);
+      if (type) {
+        const content = current.body || '';
+        const embedding = await this.aiService.generateEmbeddings(content);
+        await this.deps.repositories.articles.updateQAState(articleId, type, 1);
+        await this.deps.vectorStorage.upsert(chunkId, embedding, {
+          source_id: articleId, type: 'qa', text: content, tier: type, status: 'published'
+        });
+      } else {
+        const count = current.chunk_count || 1;
+        await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${articleId}_${i}`));
+        await this.deps.repositories.articles.updateQAState(articleId, null, 0);
       }
-      await this.deps.vectorStorage.deleteByIds(vectorIdsToDelete);
-    }
+    });
   }
 
   async getAiSuggestion(ticketId: string): Promise<string> {

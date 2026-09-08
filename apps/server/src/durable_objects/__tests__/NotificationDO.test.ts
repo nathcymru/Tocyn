@@ -1,142 +1,67 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationDO } from '../NotificationDO';
 
-describe('NotificationDO', () => {
-  let doInstance: NotificationDO;
-  let mockState: any;
-  let mockEnv: any;
-  let mockWS: any;
-
+describe('realtime session lifecycle', () => {
+  let state: any, env: any, user: any, sockets: any[], instance: NotificationDO;
+  const socket = (overrides = {}) => {
+    let attachment = { connectionId: 'c', userId: 'u', name: 'Agent', location: null,
+      tenantId: 'A', role: 'agent', version: 0, expiresAt: Math.floor(Date.now() / 1000) + 60, ...overrides };
+    return { send: vi.fn(), close: vi.fn(), serializeAttachment: vi.fn(value => { attachment = value; }), deserializeAttachment: () => attachment };
+  };
   beforeEach(() => {
-    mockState = {
-      getWebSockets: vi.fn().mockReturnValue([]),
-      acceptWebSocket: vi.fn(),
-    };
-    mockEnv = {};
-    mockWS = {
-      send: vi.fn(),
-      serializeAttachment: vi.fn(),
-      deserializeAttachment: vi.fn().mockReturnValue({ connectionId: 'test-conn-1', userId: '1', name: 'Agent', location: null }),
-    };
-    doInstance = new NotificationDO(mockState, mockEnv);
+    vi.useFakeTimers();
+    user = { tenant_id: 'A', id: 'u', role: 'agent', session_version: 0 };
+    sockets = [];
+    state = { id: { equals: (id: string) => id === 'tenant:A' }, getWebSockets: () => sockets,
+      acceptWebSocket: (ws: any) => sockets.push(ws), storage: { setAlarm: vi.fn(), deleteAlarm: vi.fn() } };
+    env = { NOTIFICATION_DO: { idFromName: (name: string) => name },
+      DB: { prepare: () => ({ bind: () => ({ first: async () => user }) }) } };
+    instance = new NotificationDO(state, env);
   });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-  it('should handle broadcast requests', async () => {
-    const request = new Request('http://do/broadcast', {
-      method: 'POST',
-      body: JSON.stringify({ type: 'test', payload: { data: 'hi' } }),
-    });
-
-    const socket1 = { send: vi.fn(), deserializeAttachment: vi.fn() };
-    const socket2 = { send: vi.fn(), deserializeAttachment: vi.fn() };
-    mockState.getWebSockets.mockReturnValue([socket1, socket2]);
-
-    const response = await doInstance.fetch(request);
-    expect(response.status).toBe(200);
-    expect(socket1.send).toHaveBeenCalledWith(JSON.stringify({ type: 'test', payload: { data: 'hi' } }));
-    expect(socket2.send).toHaveBeenCalledWith(JSON.stringify({ type: 'test', payload: { data: 'hi' } }));
+  it('delivers only to current staff in this tenant and rejects legacy attachments', async () => {
+    const valid = socket(), foreign = socket({ tenantId: 'B' }), legacy = socket({ expiresAt: undefined });
+    sockets.push(valid, foreign, legacy);
+    await instance.broadcast({ type: 'ticket.updated' });
+    expect(valid.send).toHaveBeenCalledOnce();
+    for (const ws of [foreign, legacy]) { expect(ws.send).not.toHaveBeenCalled(); expect(ws.close).toHaveBeenCalled(); }
   });
-
-  it('should initialize session attachment and broadcast presence on connection', async () => {
-    const otherWS = {
-      send: vi.fn(),
-      deserializeAttachment: vi.fn().mockReturnValue({ connectionId: 'test-conn-2', userId: '2', name: 'Other', location: 'ticket:1' })
-    };
-    mockState.getWebSockets.mockReturnValue([mockWS, otherWS]);
-
-    const request = new Request('http://do/api/realtime', {
-      headers: new Headers({
-        'Upgrade': 'websocket',
-        'X-User-ID': '1',
-        'X-User-Name': 'Agent'
-      })
-    });
-
-    // Mock WebSocketPair
-    const serverWS = { ...mockWS };
-    const clientWS = {};
-    global.WebSocketPair = vi.fn().mockImplementation(function() {
-      return { 0: clientWS, 1: serverWS };
-    }) as any;
-
-    const originalResponse = global.Response;
-    global.Response = class {
-      status: number;
-      body: any;
-      init: any;
-      constructor(body: any, init: any) {
-        this.status = init?.status || 200;
-        this.body = body;
-        this.init = init;
-      }
-    } as any;
-
-    const response = await doInstance.fetch(request);
-
-    // Restore original response
-    global.Response = originalResponse;
-
-    expect((response as any).status).toBe(101);
-
-    // Verify serializeAttachment was called with initial state
-    expect(serverWS.serializeAttachment).toHaveBeenCalledWith({
-      connectionId: expect.any(String),
-      userId: '1',
-      name: 'Agent',
-      location: null,
-    });
-
-    // Verify initial state was sent to the connecting user
-    expect(serverWS.send).toHaveBeenCalledWith(expect.stringContaining('"type":"presence.sync"'));
-    expect(serverWS.send).toHaveBeenCalledWith(expect.stringContaining('"userId":"2"'));
-
-    // Verify other users were notified of the new connection
-    expect(otherWS.send).toHaveBeenCalledWith(expect.stringContaining('"type":"presence.update"'));
-    expect(otherWS.send).toHaveBeenCalledWith(expect.stringContaining('"userId":"1"'));
+  it.each(['logout', 'demotion', 'deletion', 'expiry', 'database'])('denies outbound and inbound activity after %s, including a fresh DO instance', async reason => {
+    const ws = socket(); sockets.push(ws);
+    await instance.broadcast({ type: 'before' }); expect(ws.send).toHaveBeenCalledOnce(); ws.send.mockClear();
+    if (reason === 'logout') user.session_version++;
+    if (reason === 'demotion') user.role = 'customer';
+    if (reason === 'deletion') user = null;
+    if (reason === 'expiry') vi.advanceTimersByTime(60_000);
+    if (reason === 'database') env.DB.prepare = () => { throw new Error('offline'); };
+    instance = new NotificationDO(state, env);
+    await instance.broadcast({ type: 'secret' });
+    await instance.webSocketMessage(ws as any, '{"type":"presence.update","payload":{"location":"secret"}}');
+    expect(ws.send).not.toHaveBeenCalled(); expect(ws.serializeAttachment).not.toHaveBeenCalled(); expect(ws.close).toHaveBeenCalledWith(1008, expect.any(String));
   });
-
-  it('should handle presence updates and truncate long locations to prevent memory bloat', async () => {
-    const otherWS = {
-      send: vi.fn(),
-      deserializeAttachment: vi.fn().mockReturnValue({ connectionId: 'test-conn-2', userId: '2', name: 'Other', location: null })
-    };
-    mockState.getWebSockets.mockReturnValue([mockWS, otherWS]);
-
-    const longLocation = 'a'.repeat(200);
-    const message = JSON.stringify({
-      type: 'presence.update',
-      payload: { location: longLocation }
-    });
-
-    await doInstance.webSocketMessage(mockWS as any, message);
-
-    // Should truncate to 100 chars
-    expect(mockWS.serializeAttachment).toHaveBeenCalledWith({
-      connectionId: 'test-conn-1',
-      userId: '1',
-      name: 'Agent',
-      location: 'a'.repeat(100)
-    });
-
-    expect(otherWS.send).toHaveBeenCalledWith(expect.stringContaining('"type":"presence.update"'));
-    expect(otherWS.send).toHaveBeenCalledWith(expect.stringContaining('"location":"' + 'a'.repeat(100) + '"'));
+  it('expires idle connections with durable alarms', async () => {
+    const ws = socket({ expiresAt: Math.floor(Date.now() / 1000) + 5 }); sockets.push(ws);
+    await instance.alarm(); expect(state.storage.setAlarm).toHaveBeenCalledWith((Math.floor(Date.now() / 1000) + 5) * 1000);
+    vi.advanceTimersByTime(5000); await new NotificationDO(state, env).alarm();
+    expect(ws.close).toHaveBeenCalled(); expect(state.storage.deleteAlarm).toHaveBeenCalled();
   });
-
-  it('should cleanup session on close by reading attachment and broadcasting offline', async () => {
-    const otherWS = { send: vi.fn(), deserializeAttachment: vi.fn() };
-    mockState.getWebSockets.mockReturnValue([otherWS]);
-
-    await doInstance.webSocketClose(mockWS as any, 1000, 'Normal', true);
-
-    expect(mockWS.deserializeAttachment).toHaveBeenCalled();
-    expect(otherWS.send).toHaveBeenCalledWith(JSON.stringify({
-      type: 'presence.update',
-      payload: {
-        connectionId: 'test-conn-1',
-        userId: '1',
-        name: 'Agent',
-        status: 'offline',
-      }
-    }));
+  it('bounds presence updates and does not disclose authorization attachments', async () => {
+    const ws = socket(), other = socket({ connectionId: 'other' }); sockets.push(ws, other);
+    await instance.webSocketMessage(ws as any, JSON.stringify({ type: 'presence.update', payload: { location: 'x'.repeat(300) } }));
+    const event = JSON.parse(other.send.mock.calls[0][0]);
+    expect(event.payload.location).toHaveLength(100);
+    for (const privateField of ['version', 'expiresAt', 'role', 'tenantId']) expect(event.payload).not.toHaveProperty(privateField);
+  });
+  it('initializes a valid connection and schedules expiry before returning the upgrade', async () => {
+    const server = socket();
+    vi.stubGlobal('WebSocketPair', class { 0 = {}; 1 = server; });
+    vi.stubGlobal('Response', class { status: number; constructor(_body: any, init: any) { this.status = init.status; } });
+    const response = await instance.fetch(new Request('https://internal/api/realtime', { headers: {
+      Upgrade: 'websocket', 'X-User-ID': 'u', 'X-User-Name': 'Agent', 'X-Tenant-ID': 'A',
+      'X-Session-Role': 'agent', 'X-Session-Version': '0', 'X-Session-Expiry': String(Math.floor(Date.now() / 1000) + 60),
+    } }));
+    expect(response.status).toBe(101); expect(state.storage.setAlarm).toHaveBeenCalled();
+    expect(server.send).toHaveBeenCalledWith(expect.stringContaining('presence.sync'));
   });
 });

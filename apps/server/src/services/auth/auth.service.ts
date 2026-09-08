@@ -12,7 +12,7 @@ export class AuthService {
    * Use generateMfaChallengeToken for the MFA challenge flow.
    */
   public async generateToken(
-    user: User | { id: string; email: string; role: string; tenant_id?: string },
+    user: User | { id: string; email: string; role: string; tenant_id?: string; session_version?: number },
     secret: string,
     mfaVerified: boolean,
     expiresIn: string = "24h"
@@ -29,6 +29,7 @@ export class AuthService {
     }
 
     const payload: JWTPayload & { tenant_id?: string } = {
+      session_version: user.session_version ?? 0,
       sub: user.id,
       email: user.email,
       role: user.role as any,
@@ -52,7 +53,7 @@ export class AuthService {
    * Generates a short-lived MFA challenge token with aud: "mfa-challenge".
    */
   public async generateMfaChallengeToken(
-    user: User | { id: string; email: string; role: string; tenant_id?: string },
+    user: User | { id: string; email: string; role: string; tenant_id?: string; session_version?: number },
     secret: string,
     expiresIn: string = "15m"
   ): Promise<string> {
@@ -65,6 +66,7 @@ export class AuthService {
     const secretKey = new TextEncoder().encode(secret);
 
     const payload: JWTPayload & { tenant_id?: string } = {
+      session_version: user.session_version ?? 0,
       sub: user.id,
       email: user.email,
       role: user.role as any,
@@ -93,6 +95,8 @@ export class AuthService {
     try {
       const secretKey = new TextEncoder().encode(this.env.JWT_SECRET);
       const { payload } = await jose.jwtVerify(token, secretKey, {
+        algorithms: ["HS256"],
+        requiredClaims: ["exp", "iat", "sub"],
         audience: "app",
       });
 
@@ -110,8 +114,10 @@ export class AuthService {
 
       const resolver = new UserAuthResolver(this.env.DB);
       const resolved = await resolver.resolveUserById(tenantId, jwtPayload.sub);
-      if (!resolved || resolved.role !== jwtPayload.role) return null;
+      if (!resolved || resolved.role !== jwtPayload.role || !Number.isSafeInteger(jwtPayload.session_version ?? 0) || resolved.sessionVersion !== (jwtPayload.session_version ?? 0)) return null;
       return {
+        session_version: resolved.sessionVersion,
+        session_expires_at: jwtPayload.exp,
         id: resolved.userId,
         email: resolved.email,
         full_name: resolved.fullName,
@@ -119,7 +125,7 @@ export class AuthService {
         tenant_id: resolved.tenantId,
       } as any;
     } catch (err) {
-      console.error("Token verification failed:", err);
+      console.error("Token verification failed");
       return null;
     }
   }

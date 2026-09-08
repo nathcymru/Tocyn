@@ -177,7 +177,13 @@ export class TenantAutomationService {
         for (const ticket of toDelete) {
           if (!this.evaluateConditions(rule.conditions, { ticket })) continue;
           try {
-            // 1. Get articles for this ticket
+            const claim = await this.deps.repositories.tickets.claimRetention(ticket.id, cutoffStr);
+            if (!claim) continue;
+            const current = await this.deps.repositories.tickets.get(ticket.id);
+            if (!current || !this.evaluateConditions(rule.conditions, { ticket: current })) {
+              // Preserve the claim: another runner may already be using this manifest.
+              continue;
+            }
             const articles = await this.deps.repositories.articles.listByTicket(ticket.id);
 
             // Keep database ownership records until every external deletion succeeds.
@@ -204,18 +210,12 @@ export class TenantAutomationService {
                 await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${article.id}_${i}`));
               }
             }
-            for (const article of articles) {
-              const attachments = await this.deps.repositories.attachments.findByArticle(article.id);
-              for (const attachment of attachments) {
-                await this.deps.repositories.attachments.delete(attachment.id);
-                totalDeletedAttachments++;
-              }
-              await this.deps.repositories.articles.delete(article.id);
+            let attachmentCount = 0;
+            for (const article of articles) attachmentCount += (await this.deps.repositories.attachments.findByArticle(article.id)).length;
+            if (await this.deps.repositories.tickets.completeRetention(ticket.id, claim.token)) {
+              totalDeletedTickets++;
+              totalDeletedAttachments += attachmentCount;
             }
-
-            // 5. Delete the ticket
-            await this.deps.repositories.tickets.delete(ticket.id);
-            totalDeletedTickets++;
           } catch (e) {
             console.error('Tenant retention cleanup failed; ownership retained for retry');
           }

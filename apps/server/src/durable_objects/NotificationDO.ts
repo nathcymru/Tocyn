@@ -1,168 +1,110 @@
 import { Env } from '../bindings';
+import { UserAuthResolver } from '../auth/user-auth-resolver';
 
 interface SessionAttachment {
   connectionId: string;
   userId: string;
   name: string;
   location: string | null;
+  tenantId: string;
+  role: string;
+  version: number;
+  expiresAt: number;
 }
 
+/** Revalidate hibernated sessions before any event delivery and at least every 30s. */
 export class NotificationDO {
-  state: DurableObjectState;
+  constructor(public state: DurableObjectState, private env: Env) {}
 
-  constructor(state: DurableObjectState, env: Env) {
-    this.state = state;
+  private async active(ws: WebSocket): Promise<boolean> {
+    try {
+      const session = ws.deserializeAttachment() as SessionAttachment | null;
+      if (session && Number.isSafeInteger(session.expiresAt) && session.expiresAt * 1000 > Date.now() &&
+          Number.isSafeInteger(session.version) && session.version >= 0 &&
+          ['agent', 'admin'].includes(session.role) && session.tenantId &&
+          this.state.id.equals(this.env.NOTIFICATION_DO.idFromName(`tenant:${session.tenantId}`))) {
+        const user = await UserAuthResolver.fromEnvironment(this.env).resolveUserById(session.tenantId, session.userId);
+        if (user && user.role === session.role && user.sessionVersion === session.version) return true;
+      }
+    } catch { /* Database failures deny delivery, including after hibernation. */ }
+    try { ws.close(1008, 'Session no longer authorized'); } catch { /* Already closed. */ }
+    return false;
+  }
+
+  private presence(session: SessionAttachment) {
+    return { connectionId: session.connectionId, userId: session.userId, name: session.name, location: session.location };
+  }
+
+  private async scheduleAlarm() {
+    const expiries = this.state.getWebSockets().map(ws => (ws.deserializeAttachment() as SessionAttachment | null)?.expiresAt)
+      .filter((expiry): expiry is number => typeof expiry === 'number' && expiry * 1000 > Date.now());
+    if (expiries.length) await this.state.storage.setAlarm(Math.min(Date.now() + 30_000, ...expiries.map(expiry => expiry * 1000)));
+    else await this.state.storage.deleteAlarm();
+  }
+
+  async alarm() {
+    try { await Promise.all(this.state.getWebSockets().map(ws => this.active(ws))); }
+    finally { await this.scheduleAlarm(); }
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-
-    // Internal broadcast from the Worker
     if (url.pathname === '/broadcast') {
-      const data = await request.json();
-      this.broadcast(data);
+      await this.broadcast(await request.json());
       return new Response('OK');
     }
-
-    // WebSocket upgrade
-    if (request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('Expected Upgrade: websocket', { status: 426 });
-    }
-
-    const userId = request.headers.get('X-User-ID');
-    const userName = request.headers.get('X-User-Name') || '';
-
-    if (!userId) {
-      console.warn('[NotificationDO] Missing X-User-ID header');
-      return new Response('Unauthorized', { status: 401 });
-    }
-
+    if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected Upgrade: websocket', { status: 426 });
+    const session: SessionAttachment = {
+      connectionId: crypto.randomUUID(), userId: request.headers.get('X-User-ID') || '',
+      name: request.headers.get('X-User-Name') || '', location: null,
+      tenantId: request.headers.get('X-Tenant-ID') || '', role: request.headers.get('X-Session-Role') || '',
+      version: Number(request.headers.get('X-Session-Version') ?? NaN),
+      expiresAt: Number(request.headers.get('X-Session-Expiry') ?? NaN),
+    };
     const { 0: client, 1: server } = new WebSocketPair();
-
-    this.handleSession(server, {
-      id: userId,
-      name: userName,
-    });
-
+    this.state.acceptWebSocket(server);
+    server.serializeAttachment(session);
+    if (!await this.active(server)) return new Response('Unauthorized', { status: 401 });
+    await this.scheduleAlarm();
+    const sessions = [];
+    for (const ws of this.state.getWebSockets()) {
+      if (await this.active(ws)) sessions.push(this.presence(ws.deserializeAttachment() as SessionAttachment));
+    }
+    await this.send(server, { type: 'presence.sync', payload: sessions });
+    await this.broadcast({ type: 'presence.update', payload: { ...this.presence(session), status: 'online' } }, server);
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  handleSession(ws: WebSocket, user: { id: string; name: string }) {
-    this.state.acceptWebSocket(ws);
-
-    const attachment: SessionAttachment = {
-      connectionId: crypto.randomUUID(),
-      userId: user.id,
-      name: user.name,
-      location: null,
-    };
-    ws.serializeAttachment(attachment);
-
-    // Send initial presence state
-    const allSessions = this.getAllSessions();
-    this.send(ws, {
-      type: 'presence.sync',
-      payload: allSessions,
-    });
-
-    // Notify others of new connection
-    this.broadcast({
-      type: 'presence.update',
-      payload: {
-        connectionId: attachment.connectionId,
-        userId: user.id,
-        name: user.name,
-        location: null,
-        status: 'online',
-      },
-    }, ws);
-  }
-
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    if (!await this.active(ws)) return;
+    if (typeof message !== 'string' || message.length > 4096) { ws.close(1009, 'Message too large'); return; }
     try {
-      const data = JSON.parse(message as string);
-
-      if (data.type === 'presence.update') {
-        const attachment = ws.deserializeAttachment() as SessionAttachment | null;
-        if (attachment) {
-          // Prevent memory bloat from malicious long strings
-          const rawLocation = data.payload?.location;
-          attachment.location = typeof rawLocation === 'string'
-            ? rawLocation.substring(0, 100)
-            : null;
-
-          ws.serializeAttachment(attachment);
-
-          this.broadcast({
-            type: 'presence.update',
-            payload: {
-              connectionId: attachment.connectionId,
-              userId: attachment.userId,
-              name: attachment.name,
-              location: attachment.location,
-              status: 'online',
-            },
-          });
-        }
-      }
-    } catch (err) {
-      console.error('WebSocket message error:', err);
-    }
+      const data = JSON.parse(message);
+      if (data.type !== 'presence.update') return;
+      const session = ws.deserializeAttachment() as SessionAttachment;
+      session.location = typeof data.payload?.location === 'string' ? data.payload.location.slice(0, 100) : null;
+      ws.serializeAttachment(session);
+      await this.broadcast({ type: 'presence.update', payload: { ...this.presence(session), status: 'online' } });
+    } catch { console.error('Invalid realtime message'); }
   }
 
-  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
-    const attachment = ws.deserializeAttachment() as SessionAttachment | null;
-
-    if (attachment) {
-      this.broadcast({
-        type: 'presence.update',
-        payload: {
-          connectionId: attachment.connectionId,
-          userId: attachment.userId,
-          name: attachment.name,
-          status: 'offline',
-        },
-      });
-    }
+  async webSocketClose(ws: WebSocket, _code: number, _reason: string, _wasClean: boolean) {
+    const session = ws.deserializeAttachment() as SessionAttachment | null;
+    if (session) await this.broadcast({ type: 'presence.update', payload: { ...this.presence(session), status: 'offline' } }, ws);
+    await this.scheduleAlarm();
   }
 
-  async webSocketError(ws: WebSocket, error: any) {
-    this.webSocketClose(ws, 1006, 'Error', false);
+  async webSocketError(ws: WebSocket, _error: unknown) {
+    try { ws.close(1011, 'Connection error'); } catch { /* Already closed. */ }
+    await this.webSocketClose(ws, 1011, '', false);
   }
 
-  broadcast(message: any, excludeWs?: WebSocket) {
-    const msg = JSON.stringify(message);
-    const sockets = this.state.getWebSockets();
-
-    for (const ws of sockets) {
-      if (ws === excludeWs) continue;
-      try {
-        ws.send(msg);
-      } catch (err) {
-        // Just ignore, the websocket will be closed
-      }
-    }
+  async broadcast(message: unknown, excludeWs?: WebSocket) {
+    await Promise.all(this.state.getWebSockets().filter(ws => ws !== excludeWs).map(ws => this.send(ws, message)));
   }
 
-  send(ws: WebSocket, message: any) {
-    try {
-      ws.send(JSON.stringify(message));
-    } catch (err) {
-      console.error('Failed to send message:', err);
-    }
-  }
-
-  private getAllSessions(): SessionAttachment[] {
-    const sockets = this.state.getWebSockets();
-    const sessions: SessionAttachment[] = [];
-
-    for (const ws of sockets) {
-      const attachment = ws.deserializeAttachment() as SessionAttachment | null;
-      if (attachment) {
-        sessions.push(attachment);
-      }
-    }
-
-    return sessions;
+  async send(ws: WebSocket, message: unknown) {
+    if (!await this.active(ws)) return;
+    try { ws.send(JSON.stringify(message)); } catch { /* Closed connection. */ }
   }
 }

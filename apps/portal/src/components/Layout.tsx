@@ -10,8 +10,9 @@ export function Layout() {
   const handleLogout = async () => {
     try {
       await portalApi.post('/auth/logout');
-    } catch (e) {
-      console.error(e);
+    } catch {
+      window.alert('Sign out could not be completed. Please retry.');
+      return;
     }
     logout();
     navigate('/login');
@@ -36,7 +37,8 @@ export function Layout() {
               <button
                 onClick={handleLogout}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                title="Log out"
+                title="Sign out of all sessions"
+                aria-label="Sign out of all sessions"
               >
                 <LogOut className="w-5 h-5" />
               </button>

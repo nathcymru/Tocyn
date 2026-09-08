@@ -19,6 +19,8 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
 
   try {
     const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET), {
+      algorithms: ['HS256'],
+      requiredClaims: ['exp', 'iat', 'sub'],
       audience: "app",
     });
 
@@ -40,6 +42,9 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
 
     const resolver = new UserAuthResolver(c.env.DB);
     const userRes = await resolver.resolveUserById(tenantId, sub);
+    if (userRes && (!Number.isSafeInteger(payload.session_version ?? 0) || (payload.session_version ?? 0) !== userRes.sessionVersion)) {
+      return c.json({ error: "Unauthorized: Session revoked" }, 401);
+    }
     if (!userRes) {
       return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
     }
@@ -71,6 +76,8 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
 
   try {
     const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET), {
+      algorithms: ['HS256'],
+      requiredClaims: ['exp', 'iat', 'sub'],
       audience: "mfa-challenge",
     });
 
@@ -92,6 +99,9 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
 
     const resolver = new UserAuthResolver(c.env.DB);
     const userRes = await resolver.resolveUserById(tenantId, sub);
+    if (userRes && (!Number.isSafeInteger(payload.session_version ?? 0) || (payload.session_version ?? 0) !== userRes.sessionVersion)) {
+      return c.json({ error: "Unauthorized: Session revoked" }, 401);
+    }
     if (!userRes) {
       return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
     }

@@ -39,6 +39,7 @@ auth.post("/login", rateLimiter(5, 60000), loginAuthResolverMiddleware, async (c
     email: email.toLowerCase().trim(),
     role: authUser.role as any,
     tenant_id: authUser.tenantId,
+    session_version: authUser.sessionVersion,
   };
 
   // If MFA is required, return a short-lived mfa-challenge token
@@ -115,6 +116,7 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
     email: user.email,
     role: user.role,
     tenant_id: user.tenant_id || (payload as any).tenant_id,
+    session_version: user.session_version ?? 0,
   };
 
   const fullToken = await authService.generateToken(
@@ -194,12 +196,14 @@ auth.post("/mfa/confirm", authMiddleware, tenantMiddleware, async (c) => {
   }
 
   await d.repositories.users.update(user.id, { mfa_enabled: true });
+  user.session_version = (await d.repositories.users.get(user.id))?.session_version ?? 0;
 
   const userPayload = {
     id: user.id,
     email: user.email,
     role: user.role,
     tenant_id: user.tenant_id || (payload as any).tenant_id,
+    session_version: user.session_version ?? 0,
   };
 
   const fullToken = await authService.generateToken(
@@ -250,9 +254,14 @@ auth.post("/mfa/disable", authMiddleware, tenantMiddleware, async (c) => {
   });
 });
 
-/**
- * Get current user (me)
- */
+// Revoke all sessions for the authenticated account.
+auth.post("/logout", authMiddleware, tenantMiddleware, async (c) => {
+  const d = c.get("tenantDeps") as TenantRequestDeps;
+  await d.repositories.users.revokeSessions((c.get("jwtPayload") as JWTPayload).sub);
+  return c.json({ success: true });
+});
+
+/** Get current user (me). */
 auth.get("/me", authMiddleware, tenantMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
   const d = c.get("tenantDeps") as TenantRequestDeps;

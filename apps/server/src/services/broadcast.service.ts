@@ -20,7 +20,7 @@ export class BroadcastService {
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (err) {
-      console.error('Broadcast failed:', err);
+      console.error('Broadcast failed');
       if (retries > 0) {
         await new Promise(res => setTimeout(res, 10));
         return this.broadcast(type, payload, retries - 1);

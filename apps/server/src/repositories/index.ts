@@ -5,6 +5,11 @@ import { D1Database } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 
 export class SqlUserRepository implements UserRepository {
+  async revokeSessions(id: string): Promise<void> {
+    await this.db.prepare('UPDATE users SET session_version = session_version + 1 WHERE tenant_id = ? AND id = ?')
+      .bind(this.scope.tenantId, id).run();
+  }
+
   constructor(private scope: VerifiedTenantScope, private db: D1Database) {}
 
   async list(options: {role?: string; page: number; limit: number; staffOnly?: boolean}): Promise<any[]> {
@@ -109,6 +114,45 @@ export class SqlUserRepository implements UserRepository {
 }
 
 export class SqlTicketRepository implements TicketRepository {
+  async claimRetention(id: string, cutoff: string): Promise<{ token: string } | null> {
+    await this.db.prepare(`INSERT OR IGNORE INTO ticket_cleanup_claims (tenant_id, ticket_id, token, mode)
+      SELECT tenant_id, id, ?, 'retention' FROM tickets WHERE tenant_id = ? AND id = ? AND updated_at < ?`)
+      .bind(crypto.randomUUID(), this.scope.tenantId, id, cutoff).run();
+    const claim = await this.db.prepare("SELECT token FROM ticket_cleanup_claims WHERE tenant_id = ? AND ticket_id = ? AND mode = 'retention'")
+      .bind(this.scope.tenantId, id).first<{token: string}>();
+    return claim;
+  }
+
+  async releaseClaim(id: string, token: string): Promise<void> {
+    await this.db.prepare('DELETE FROM ticket_cleanup_claims WHERE tenant_id = ? AND ticket_id = ? AND token = ?')
+      .bind(this.scope.tenantId, id, token).run();
+  }
+
+  async withExternalWrite<T>(id: string, operation: () => Promise<T>): Promise<T> {
+    const token = crypto.randomUUID();
+    const result = await this.db.prepare(`INSERT OR IGNORE INTO ticket_cleanup_claims (tenant_id, ticket_id, token, mode)
+      SELECT tenant_id, id, ?, 'write' FROM tickets WHERE tenant_id = ? AND id = ?`)
+      .bind(token, this.scope.tenantId, id).run();
+    if (!result.meta.changes) throw new Error('Ticket busy or unavailable');
+    // An ambiguous external failure retains the claim for explicit reconciliation.
+    const value = await operation();
+    await this.releaseClaim(id, token);
+    return value;
+  }
+
+  async completeRetention(id: string, token: string): Promise<boolean> {
+    // A transaction-local finalizing state permits only the matching claim to
+    // delete ownership. Failure rolls the freeze and all ownership rows back.
+    const guard = "EXISTS (SELECT 1 FROM ticket_cleanup_claims WHERE tenant_id = ? AND ticket_id = ? AND token = ? AND mode = 'finalizing')";
+    const results = await this.db.batch([
+      this.db.prepare("UPDATE ticket_cleanup_claims SET mode = 'finalizing' WHERE tenant_id = ? AND ticket_id = ? AND token = ? AND mode = 'retention'").bind(this.scope.tenantId, id, token),
+      this.db.prepare(`DELETE FROM attachments WHERE tenant_id = ? AND article_id IN (SELECT id FROM articles WHERE tenant_id = ? AND ticket_id = ?) AND ${guard}`).bind(this.scope.tenantId, this.scope.tenantId, id, this.scope.tenantId, id, token),
+      this.db.prepare(`DELETE FROM articles WHERE tenant_id = ? AND ticket_id = ? AND ${guard}`).bind(this.scope.tenantId, id, this.scope.tenantId, id, token),
+      this.db.prepare(`DELETE FROM tickets WHERE tenant_id = ? AND id = ? AND ${guard}`).bind(this.scope.tenantId, id, this.scope.tenantId, id, token),
+    ]);
+    return results[3].meta.changes > 0;
+  }
+
   constructor(private scope: VerifiedTenantScope, private db: D1Database) {}
 
   async list(
