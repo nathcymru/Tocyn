@@ -1,6 +1,6 @@
 # Isolated preview and beta release preparation
 
-This is **source preparation** for [#57](https://github.com/nathcymru/Tocyn/issues/57). It is not evidence of a deployed preview or beta, protected GitHub environment, Cloudflare resource, Access policy, Resend delivery, migration, or rollback rehearsal. Remote actions require the owner choices below.
+This is **source preparation** for [#57](https://github.com/nathcymru/Tocyn/issues/57). It is not evidence of a deployed preview or beta, protected GitHub environment, Cloudflare resource, Access policy, Resend delivery, migration, or rollback rehearsal. The current owner-directed beta uses **local Wrangler simulations and local mail capture only**; see [local authentication capture](local-auth-capture.md). Remote actions are prohibited for this phase. The owner choices below are historical future prerequisites, not instructions to perform them now.
 
 ## Prepared source controls
 

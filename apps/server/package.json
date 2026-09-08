@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev --config wrangler.local.json",
+    "dev": "wrangler dev --local --ip 127.0.0.1 --port 8787 --config wrangler.local.json",
     "deploy": "wrangler deploy",
     "migration:create": "wrangler d1 migrations create tocyn-local --config wrangler.local.json",
     "migration:apply": "wrangler d1 migrations apply tocyn-local --local --config wrangler.local.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:local-auth": "node scripts/local-auth-smoke.mjs"
   },
   "dependencies": {
     "@luminatick/shared": "*",

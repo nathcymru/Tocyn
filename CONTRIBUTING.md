@@ -23,7 +23,9 @@ npm run dev:server
 
 This starts the API at `http://localhost:8787` with local D1, R2 and Durable Object emulation. Workers AI, Vectorize and the vectorisation Workflow are deliberately omitted from this configuration, so AI/knowledge routes are not part of the wholly local walkthrough. The example variables are synthetic development values. Do not put account tokens, provider keys, or production values in `.dev.vars`.
 
-In separate terminals, start the interfaces you need. Dashboard and portal proxy `/api` to the local API. The widget is a script library without a standalone HTML page or development API proxy: its dev server serves `/src/main.tsx`. An embedding application supplies its API origin through `VITE_API_URL` and its public configuration selector through `data-widget-key` or `VITE_WIDGET_KEY`; an authenticated customer token is still required. Use synthetic values only.
+Local customer authentication messages are captured only in memory; see [local authentication capture](docs/local-auth-capture.md). The loopback profile refuses provider email transport and accepts only the documented synthetic `.invalid` recipient.
+
+In separate terminals, start the interfaces you need. The dashboard binds loopback port 5173 and the customer portal binds loopback port 5174; both proxy `/api` to the local API. Customer magic links use the portal `/verify` route on port 5174. The widget is a script library without a standalone HTML page or development API proxy: its dev server serves `/src/main.tsx`. An embedding application supplies its API origin through `VITE_API_URL` and its public configuration selector through `data-widget-key` or `VITE_WIDGET_KEY`; an authenticated customer token is still required. Use synthetic values only.
 
 ```bash
 npm run dev:dashboard

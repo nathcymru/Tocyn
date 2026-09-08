@@ -11,3 +11,6 @@ APP_MASTER_KEY=dev_master_key_change_me_in_production
 # MFA Encryption Key for securing user TOTP secrets
 # Must be a long, secure, and unpredictable string (at least 32 characters)
 MFA_ENCRYPTION_KEY=dev_mfa_encryption_key_change_me_in_production
+
+# Local auth messages are captured in memory by src/local-index.ts. Do not add
+# RESEND_API_KEY, provider tokens, or real addresses to this local profile.

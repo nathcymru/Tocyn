@@ -1,7 +1,7 @@
 import { Ticket, Article, Attachment, SendEmailOptions } from '../../types';
 import { decryptString } from '../../utils/crypto';
 import { TenantRequestDeps } from '../../middleware/tenant.middleware';
-import { EmailTransport, HttpResendTransport } from './transport';
+import { EmailTransport, HttpResendTransport, isLocalAuthCaptureTransport } from './transport';
 
 export class TenantOutboundEmailService {
   constructor(
@@ -31,9 +31,18 @@ export class TenantOutboundEmailService {
     return { apiKey, defaultFrom };
   }
 
+  private async getTransportCredentials(): Promise<{ apiKey: string, defaultFrom: string }> {
+    if (isLocalAuthCaptureTransport(this.transport)) {
+      if (this.environment !== 'local') throw new Error('Local auth capture transport is only valid in the local runtime');
+      return this.transport.credentials;
+    }
+    if (this.environment === 'local') throw new Error('Local runtime refuses external email transport without the local capture adapter');
+    return this.getResendCredentials();
+  }
+
   async send(options: SendEmailOptions): Promise<{ id: string }> {
     this.assertIsolatedRecipientAllowlist(options.to);
-    const creds = await this.getResendCredentials();
+    const creds = await this.getTransportCredentials();
     const fromAddress = options.from || creds.defaultFrom;
 
     // Sender ownership check
