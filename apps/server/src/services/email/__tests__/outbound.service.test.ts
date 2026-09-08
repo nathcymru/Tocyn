@@ -126,6 +126,27 @@ describe("EmailService Outbound Subject Padding", () => {
   });
 });
 
+describe('EmailService isolated recipient allowlist', () => {
+  beforeEach(async () => {
+    encryptedTestKey = await encryptString('test-key', mockEnv.APP_MASTER_KEY);
+    vi.clearAllMocks();
+  });
+
+  it('refuses preview mail until the protected recipient allowlist is present', async () => {
+    const service = new EmailService({ ...mockEnv, ENVIRONMENT: 'preview' } as any, createTenantRequestDeps(createVerifiedTenantScope('default-tenant', 'system', [], 1), mockEnv) as any);
+    await expect(service.send({ to: ['synthetic@example.test'], subject: 'Test', text: 'Test' })).rejects.toThrow('allowlist');
+  });
+
+  it('sends preview mail only to an exact allowlisted recipient', async () => {
+    const transport = { send: vi.fn().mockResolvedValue({ id: 'test-message' }) };
+    const env = { ...mockEnv, ENVIRONMENT: 'preview', OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST: 'recipient@example.test' };
+    const service = new EmailService(env as any, createTenantRequestDeps(createVerifiedTenantScope('default-tenant', 'system', [], 1), env) as any, transport as any);
+    await expect(service.send({ to: ['other@example.test'], subject: 'Test', text: 'Test' })).rejects.toThrow('not in the isolated allowlist');
+    await service.send({ to: ['recipient@example.test'], subject: 'Test', text: 'Test' });
+    expect(transport.send).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("EmailService Outbound Group Email Resolution", () => {
   beforeEach(async () => {
     encryptedTestKey = await encryptString("test-key", mockEnv.APP_MASTER_KEY);

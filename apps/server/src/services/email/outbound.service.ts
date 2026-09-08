@@ -16,7 +16,13 @@ export class EmailService {
   }
 
   private getTenantOutboundService(): TenantOutboundEmailService {
-    return new TenantOutboundEmailService(this.deps, this.env.APP_MASTER_KEY, this.transport);
+    return new TenantOutboundEmailService(
+      this.deps,
+      this.env.APP_MASTER_KEY,
+      this.transport,
+      this.env.ENVIRONMENT,
+      this.env.OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST
+    );
   }
 
   async getResendCredentials(): Promise<{ apiKey: string, defaultFrom: string }> {

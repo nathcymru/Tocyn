@@ -1,131 +1,185 @@
 # Private-beta delivery coordination
 
-Updated: 8 September 2026. Coordinator: current accelerated-delivery owner instruction.
-This is a recoverable execution snapshot; GitHub issues, PRs and Project remain the
-authoritative acceptance and schedule records. No issue is complete from this file alone.
+Updated: 8 September 2026. This is the owner-requested recoverable execution snapshot.
+GitHub issues, PRs and Project 4 remain authoritative for acceptance and scheduling.
+No credentials, customer data, private findings or hidden reasoning belong here.
 
-## Verified baseline and authority
+## Authority and accepted baseline
 
-- Clean local `main` and fetched `origin/main`: `2eedcab2458685612d7c4e92c9d69234cc99e844`.
-- Latest baseline CI succeeded (run 34265759898); no open PRs at reconstruction.
-- Recent integrated foundations: #43 tenant isolation, #46 security/dependency remediation,
-  #47 source-security acceptance; #95/#97/#98/#100 governance/docs/community changes.
-- Current approved issue scope supersedes preserved historical scope. ADR-0011 through
-  ADR-0015 and the approved architectural roadmap define API/portal-first beta boundaries.
-- The current owner instruction authorises implementation and greater useful concurrency;
-  it does not erase baseline dates or authorise production, paid resources, live customer
-  providers, public release, or production traffic cutover.
-- GitHub Project 4: baseline dates unchanged. #20 set In progress, Actual start 2026-09-08;
-  existing Progress % retained at 0 pending accepted evidence.
+The current owner instruction authorises accelerated issue-driven implementation,
+useful agent concurrency and persistent state. It does not authorise production,
+paid resources, live customer providers, public releases or traffic cutover.
+Current issue scopes supersede preserved historical scope; accepted ADRs and the
+approved architectural roadmap define the two-tenant API/portal private beta.
+
+Current accepted `main`: `3fae282897b5059ff4d6b3c16e4c9b867c8fbcd0` (PR #101).
+Earlier integrated foundations include #43 tenant isolation, #46 security/dependency
+remediation and #47 source-security acceptance. Those do not confer runtime clearance.
+
+The owner explicitly authorised the existing PR-only review exception for #101.
+All six mandatory checks passed first; the squash merge has a verified signature.
+No CI/security/signature/main-integrity bypass was used.
+
+## Completed delivery
+
+[#20](https://github.com/nathcymru/Tocyn/issues/20) is complete through
+[PR #101](https://github.com/nathcymru/Tocyn/pull/101). Supported Node 22.19/npm 10.9.3
+install, 23 local migrations, local API and frontend serving, builds/lint/typecheck,
+unit tests, synthetic D1 checks and local resource/recovery evidence were verified.
+Independent review and the automatic review finding were resolved. The migration
+creation command was tested in a temporary directory without database application.
+
+[Completion receipt](https://github.com/nathcymru/Tocyn/issues/20#issuecomment-5590997788).
+Project: Done, 100%, Actual start/completion 2026-09-08. Baseline start/target preserved
+at 2026-09-08 / 2026-09-10; actual variance -2 Monday–Saturday working days.
+See `docs/maintenance/contributor-setup-verification.md` for acceptance limitations.
+Reusable interactive two-tenant provisioning remains #58, not part of #20 completion.
+The post-merge main CI run 34271638658 also succeeded at the accepted merge revision.
 
 ## Readiness and dependency plan
 
-Not ready. All twelve approved beta blockers remain open:
+Not ready. Eleven approved beta blockers remain open. The integrated prerequisite
+#20 is complete; all later acceptance gates remain required.
 
-| Issue | Required predecessors | Integration gate / outcome |
+| Issue | Required predecessors | Outcome / integration gate |
 | --- | --- | --- |
-| #20 | Existing baseline | Reproducible local setup, migrations, synthetic checks, all app commands |
-| #57 | #20 | Isolated deployment, trusted workflow, controlled auth mail, rollback evidence |
+| #57 | #20 complete | Isolated deployment, trusted workflow, controlled auth mail, rollback evidence |
 | #58 | #57 | Repeatable two-tenant provisioning and scoped credentials |
-| #19 | #58 | Complete per-surface tenant acceptance, including failure/revocation cases |
+| #19 | #58 | Per-surface tenant acceptance including negative/failure/revocation cases |
 | #59 | #19 | Canonical API/portal conversation contracts |
 | #60 | #59 | Validated, retry-safe mutations |
-| #63 | #59 | Audit events; integrate after #60 (explicit integration constraint) |
-| #93 | #57, #60 | Narrow authoritative beta admission/resource controls |
+| #63 | #59 | Attributable audit events; integrate after #60 |
+| #93 | #57, #60 | Authoritative narrow beta resource/admission controls |
 | #61 | #60, #63 | Portal conversation end-to-end acceptance |
-| #62 | #60, #63 | Human operator handling and response retrieval |
+| #62 | #60, #63 | Human handling and response retrieval |
 | #21 | #61, #62 | Automated plus keyboard/screen-reader accessibility acceptance |
 | #65 | #57, #58, #19, #60, #61, #62, #63, #21, #93 | Final two-tenant AI-unavailable rehearsal and candidate evidence |
 
-Critical execution prefix: #20 -> #57 -> #58 -> #19 -> #59 -> #60.
-After #59, #63 preparation/implementation may overlap #60 but cannot integrate first.
-After #60/#63, independent #61/#62/#93 areas may proceed concurrently; #21 follows
-both frontend outcomes. #65 joins every required gate. Preparation and targeted review
-may run ahead without claiming dependencies are complete.
+Critical remaining prefix: #57 -> #58 -> #19 -> #59 -> #60.
+#63 may develop after #59 but integrates after #60. Then #61/#62/#93 may run
+concurrently in independent areas. #21 follows both frontend outcomes. #65 joins all
+required gates. Preparatory analysis may run ahead without claiming completion.
 
-Full cost governance #50/#64/#90, durable ingestion #91, headless redesign #48/#66,
-production readiness #42, native mail #18, provider channels, autonomous resolution and
-privacy metadata are not first-beta blockers. Necessary correctness work discovered in
-a beta issue remains required and must be tracked; these exclusions cannot hide defects.
+Full cost governance #50/#64/#90, durable ingestion #91, UI redesign #48/#66,
+production readiness #42, native mail #18, provider channels, autonomous resolution
+and privacy metadata are not first-beta blockers. Any additional work necessary for
+a beta issue's correctness remains required and tracked; exclusions cannot hide defects.
 
-## Allocation and integration ownership
+## Active allocation and ownership
 
 | Task | Agent / environment | Model / effort | Reason / state |
 | --- | --- | --- | --- |
-| Coordination, acceptance, integration | Root / local | Inherited session configuration | Cross-cutting authority; coordinator alone accepts completion |
-| Dependency audit; then #57 preparation | dependency_audit / Codex subagent | gpt-5.6-terra / medium | Bounded read-only evidence synthesis; dependency audit complete |
-| #20 implementation and command verification | setup_plan / isolated local checkout | gpt-5.6-terra / medium | Established setup patterns with bounded config changes; active |
-| #57/#65 independent acceptance review | Existing ChatGPT Work task | Existing task configuration, lowest sufficient requested | Dispatch returned conversation-load timeout; execution unconfirmed |
+| Coordination, acceptance, integration | Root / local | Inherited session | Cross-cutting authority; coordinator accepts issue completion |
+| #57 source implementation | beta_environment_impl / isolated checkout | gpt-5.6-terra / high | Credential, trust, environment and recovery boundaries; source checkpoint validated |
+| #57 release packaging escalation | release_packaging_escalation / Codex | gpt-6-astra / high | Escalated artifact integrity/provenance corrections passed focused tests |
+| #57 independent security review | tenant_acceptance_prep / Codex | gpt-5.6-terra / high | Bounded deployment trust review passed |
+| #58 preparation; #57 demonstration documentation | dependency_audit / Codex | gpt-5.6-terra / medium | #58/matrix preparation and canonical documentation complete |
+| #20 setup implementation | setup_plan / Codex | gpt-5.6-terra / medium | Complete and integrated |
+| Work acceptance-review attempt | Existing ChatGPT Work task | Existing configuration | Connector load timeout; execution unconfirmed |
 
-Active branch: `codex/20-contributor-setup`. Implementation owner edits setup/docs/config;
-coordinator owns this state file. No overlapping file ownership. PR: [#101](https://github.com/nathcymru/Tocyn/pull/101). Supported-runtime validation,
-independent review and all six required CI/CodeQL checks passed at `cea8f55`.
-Normal merge was rejected by the approving-review rule; owner review-exception authority
-is pending. This snapshot-only follow-up must also pass required checks before merge. Preserve one coherent issue PR and batch corrections.
+Active branch: `codex/57-isolated-beta-environments`, based on merged #101.
+Implementation owner controls deployment scripts/config/workflow and application code.
+The packaging escalation agent exclusively owns `scripts/deployment/isolated-release.mjs`,
+`isolated-release.test.mjs` and `verify-release-artifact.mjs`; the issue owner yielded these.
+Documentation preparation is complete in `docs/isolated-environments.md` and `docs/README.md`. Root alone owns this state file and GitHub governance.
+The independent security reviewer remains read-only, avoiding overlapping edits. Source-preparation [PR #102](https://github.com/nathcymru/Tocyn/pull/102) is open.
+Published source/evidence head `912b4e67475363fb096623a7a01eb20f1c471b13` passed
+all CI/security checks. This later state-only receipt does not alter application or
+release code; required checks must still be verified on the current PR head.
 
-The environment exposes four concurrent Codex agent slots including the coordinator.
-Do not claim greater concurrency or successful use of a separate allowance without evidence.
+Four concurrent Codex slots are exposed including root. No greater concurrency is
+claimed. Work's connector timed out; Computer Use then explicitly denied access to
+the app. Do not bypass that restriction or claim use of its separate allowance.
+The owner offered to approve Mac access; no Mac prompt had been raised. A subsequent
+retry of the supported Work connector also returned a conversation-load timeout.
 
-## Validation and operational gates
+## Next-dependency findings
 
-- Required GitHub checks: Tocyn / lint, typecheck, build, test;
-  Analyze (javascript-typescript), Analyze (actions). Strict current-base checks apply.
-- Internal diff/acceptance review precedes near-final PR creation. Existing GitHub rules
-  automatically request Copilot reviews for drafts and on push; avoid intermediate PR
-  creation and repeated pushes. No additional manual Copilot requests planned.
-- #20: supported Node 22.12+ below 23, locked install, local migrations, synthetic D1
-  integration, all documented app starts/builds/checks, resource and recovery evidence.
-- Initial coordinator install under machine-default Node 26 completed but produced an
-  engine warning; it is not supported-runtime verification. Node 22.19 is available;
-  issue owner must use it in the isolated checkout.
-- No deployed beta or verified test-mail environment exists in the inspected evidence.
-  #57 must prepare concrete manifests and destinations before seeking missing operational
-  authority. Never reuse inherited identifiers as an approved target.
-- Local/synthetic tests do not prove Cloudflare runtime, distributed, real email, browser,
-  screen-reader, recovery or final integrated-revision acceptance.
+#58 preparation requires A/B customer and A/B operator principals. Existing canonical
+email uniqueness is global; demonstrate duplicate-canonical-email rejection and do not
+claim same-email membership across tenants. Scoped local IDs may collide in tests.
+Operators must authenticate through the real MFA challenge/verification path before
+using protected management endpoints; customer-only fixtures are insufficient for the
+approved human-led beta. A fixture may bootstrap generated, encrypted MFA material,
+but that does not prove interactive operator self-enrollment. #58/#62 must track any
+necessary gap without disabling MFA or silently excluding operators from the beta.
+
+## #57 execution and final external-operation gates
+
+Project #57: In progress, Actual/Forecast start 2026-09-08 following early prerequisite
+integration. Baseline start/target remain 2026-09-11 / 2026-09-22. Forecast target and
+successor dates stay unchanged while external-operation evidence remains uncertain.
+Progress stays at its prior value until acceptance evidence supports an update.
+
+Read-only resource inventory found no approved existing Tocyn environment. Prepare
+disjoint `tocyn-preview` and `tocyn-beta` stacks; never reuse unrelated resources or
+copy a broad local OAuth credential into CI. Explicit resource/secret manifests,
+trusted immutable revisions, protected deployment jobs, fail-closed environment
+validation, reproducible artifacts and rollback preparation are authorised source work.
+
+Actual resource provisioning/selection, restricted ingress, least-privilege credentials,
+exact trusted origins, test-mail sender/recipient allowlist and isolated data restore
+must be concrete and owner-approved before external execution. Default deployments
+must not expose test APIs before the approved access boundary exists. #93 runtime
+admission/invitation controls remain distinct from deployment-workflow protection.
+No deployment or mail demonstration exists yet; source preparation alone cannot close #57.
+
+## Validation and review gates
+
+Mandatory checks: Tocyn / lint, typecheck, build, test; Analyze (javascript-typescript)
+and Analyze (actions). Strict current-base checks and verified main commits apply.
+Do focused tests first, internal review and acceptance checks before a meaningful PR,
+then all required checks on the final head. Existing GitHub rules automatically review
+drafts and pushes with Copilot; consolidate corrections and avoid manual rerequests.
+
+GitHub open CodeQL, Dependabot and secret-scanning alert counts were zero at baseline
+reconstruction. This is a dated observation, not a security certification. #19's private
+preparation must be reconciled with final fixtures/runtime evidence; disabled surfaces
+remain explicitly unsupported and private pre-activation findings stay private.
+
+## Current #57 local validation checkpoint
+
+Application owner reports passing server 329, portal 12 and widget 3 tests; server
+typecheck/lint, portal lint, local D1 smoke/integration and all three frontend builds.
+Independent bounded review passed provider-resource/Access preflight, default and
+wildcard Pages coverage, actual discovered-alias ingress probes and known-good rollback.
+These are local synthetic checks only. Escalated packaging verification now passes
+19 deployment tests, including artifact tamper, clean-source, path escape and fixture
+reproducibility checks. Actual application builds at source checkpoint `523add383d89861b89f5e550f7df439170454bd2`
+from two clean checkout locations produced byte-identical 36-file artifacts (2,217,507
+bytes), verified by portable Wrangler dry runs. Release digest:
+`50b28abe64fcde5f17018608288103d80643e28cfa78d8127a28deb188582000`.
+See `docs/isolated-environments.md` for exact local evidence and unrun remote gates.
+[CI 34276137746](https://github.com/nathcymru/Tocyn/actions/runs/34276137746) and
+[CodeQL 34276135027](https://github.com/nathcymru/Tocyn/actions/runs/34276135027)
+passed on the initial published head. Normal merge was rejected by the approving-review
+rule. Owner confirmation is pending on whether the #101 PR-only exception extends
+to #102/future validated delivery PRs; no exception was used for #102.
+[Progress receipt](https://github.com/nathcymru/Tocyn/issues/57#issuecomment-5591606696).
+The coordinator also requested the isolated account/domain and test-email recipient.
+No macOS permission prompt is pending; the Work connector/tool limitation remains.
+Actual environment acceptance is still required before #57 completion. All agents
+have completed their assigned source/review/preparation work; no implementation is
+silently running while awaiting these owner-controlled gates.
+
+## Consolidated automatic review corrections
+
+The automatic PR review identified an invalid Git existence-check flag and an unclear
+Worker-secret-verifier filename error. Both were corrected together. Executable CLI
+tests now prove trusted-main checkout, malformed/missing/off-main rejection without
+checkout, and invalid config-path rejection before file/provider access. The complete
+deployment suite passes 21 tests. Required checks on the resulting head remain the
+merge gate; no manual Copilot re-review was requested.
 
 ## Exact next actions
 
-1. #20 local changes and command evidence are complete; see
-   `docs/maintenance/contributor-setup-verification.md`. Obsolete local seed scripts were
-   removed after internal review. All documented checks passed on Node 22.19/npm 10.9.3.
-   Independent dashboard/portal/widget HTTP probes passed. PR #101 is ready and awaits
-   an approving review or explicit owner authority for the existing PR-only exception.
-2. Internal review and corrections are complete. Verify all required checks on the final
-   PR head and integrate only when the approving-review boundary is satisfied.
-   Do not bypass CI, security or signature requirements.
-3. Finish #57 manifest/workflow/owner-input preparation while #20 runs; begin dependency-
-   cleared implementation after #20 acceptance. Do not deploy during preparation.
-4. Update issue/Project and this snapshot on meaningful delivery, merge, blocker or handoff.
-   Preserve baseline and use evidence for progress/forecast changes.
-5. Report concise operational progress in the coordinating task at least every 30 minutes.
-
-## Preparation receipts
-
-- #57 resource inventory found no approved existing Tocyn target. Prepare disjoint preview
-  and beta stacks; no unrelated resources may be reused. Separate isolated credentials,
-  exact origins, controlled mail destinations and restore decisions are final operational
-  gates; they do not prevent source preparation.
-- #19 read-only surface audit is complete. It must reconcile existing Phase 1 tests against
-  #58 fixtures and final runtime evidence. Disabled optional surfaces remain explicitly
-  unsupported; private pre-activation findings must not be copied to public tracking.
-- GitHub open CodeQL, Dependabot and secret-scanning alert counts were each zero during
-  reconstruction. This is a dated baseline observation, not a security certification.
-- Work acceptance-review dispatch returned a conversation-load timeout. No separate-pool
-  execution is confirmed; local internal review completed the bounded review instead.
-
-## Current integration blocker
-
-GitHub rejected the normal squash merge of #101 after all required checks passed.
-The owner has been asked to authorise the existing PR-only administrator review
-exception for this PR or supply an approving review. No exception was used.
-The [issue progress receipt](https://github.com/nathcymru/Tocyn/issues/20#issuecomment-5590889725)
-records the exact validated revision and remaining gate. #20 remains open/In progress;
-all twelve beta blockers remain open. No forecast or numerical progress was invented.
-Dependency-cleared beta implementation cannot proceed past #20 until integration.
-
-Automatic Copilot review identified one remaining migration-command inconsistency.
-`migration:create` now selects the same local profile; an isolated temporary-directory
-check created exactly one SQL migration and applied nothing to a database. The correction
-and evidence are consolidated in #101; recheck required CI on its new head. No additional
-Copilot review was requested. Owner review-exception authority remains pending.
+1. Source implementation, independent review and local validation are complete.
+2. Verify current #102 CI/security and any automatic review results; obtain the
+   owner review or explicitly scoped PR-only exception before merging. Never bypass
+   required CI/security checks. Then record merge evidence and refresh main.
+3. Maintain a coherent #57 PR with Progresses #57 while deployed/mail/rollback evidence is
+   outstanding. Present concrete external-operation authority choices after preparation.
+4. After #57 accepted integration and real demonstration, implement #58, then #19.
+5. Update issue/Project and this snapshot on meaningful delivery, merge, blocker or handoff.
+   Preserve baseline dates; derive progress and reforecasting from acceptance evidence.
+6. Give operational updates in the coordinating task at least every 30 minutes.
