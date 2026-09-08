@@ -82,3 +82,8 @@ deployment operation. These synthetic parked artifacts are local reproducibility
 evidence, not approved deployment targets. Existing dashboard chunk-size/config
 loader warnings and Wrangler's ignored minify flag with `--no-bundle` were nonfatal.
 CI on the published PR and every external demonstration above remain separate gates.
+
+The consolidated automatic-review correction fixes the trusted-revision Git existence
+check and validates the Worker-secret-verifier config filename. The deployment suite
+now has 21 passing tests, including real Git main/off-main/missing-revision CLI cases.
+It does not change the application or artifact packaging bytes tested above.

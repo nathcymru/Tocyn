@@ -1,8 +1,56 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const workflow = readFileSync(new URL('../../.github/workflows/isolated-environments.yml', import.meta.url), 'utf8');
+
+test('trusted revision CLI checks out a real main commit and rejects malformed, missing and side-branch revisions', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-trusted-revision-'));
+  const git = args => execFileSync('git', args, { cwd: directory, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const script = fileURLToPath(new URL('./verify-trusted-revision.mjs', import.meta.url));
+  const verify = revision => spawnSync(process.execPath, [script], {
+    cwd: directory, encoding: 'utf8', env: { ...process.env, TOCYN_REVISION: revision }
+  });
+  try {
+    git(['init', '--initial-branch=main']);
+    git(['config', 'user.name', 'Synthetic test']);
+    git(['config', 'user.email', 'synthetic@example.test']);
+    writeFileSync(join(directory, 'fixture.txt'), 'main fixture');
+    git(['add', 'fixture.txt']);
+    git(['-c', 'commit.gpgsign=false', 'commit', '-m', 'main fixture']);
+    const trusted = git(['rev-parse', 'HEAD']);
+    git(['update-ref', 'refs/remotes/origin/main', trusted]);
+    git(['checkout', '-b', 'untrusted']);
+    writeFileSync(join(directory, 'fixture.txt'), 'side branch');
+    git(['add', 'fixture.txt']);
+    git(['-c', 'commit.gpgsign=false', 'commit', '-m', 'side fixture']);
+    const untrusted = git(['rev-parse', 'HEAD']);
+    const valid = verify(trusted);
+    assert.equal(valid.status, 0, valid.stderr);
+    assert.equal(git(['rev-parse', 'HEAD']), trusted);
+    for (const revision of ['main', 'f'.repeat(40), untrusted]) {
+      assert.notEqual(verify(revision).status, 0);
+      assert.equal(git(['rev-parse', 'HEAD']), trusted);
+    }
+    assert.match(verify(untrusted).stderr, /not reachable from trusted origin\/main/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('Worker secret verifier rejects a wrong config filename before file or provider access', () => {
+  const script = fileURLToPath(new URL('./verify-worker-secrets.mjs', import.meta.url));
+  for (const args of [[], ['/missing/wrangler.source.json']]) {
+    const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Usage: verify-worker-secrets/);
+    assert.doesNotMatch(result.stderr, /ENOENT/);
+  }
+});
 
 test('isolated release is manual, main-only, and uses hardcoded protected environments', () => {
   assert.match(workflow, /workflow_dispatch:/);

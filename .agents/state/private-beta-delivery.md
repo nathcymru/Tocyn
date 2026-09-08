@@ -162,6 +162,15 @@ Actual environment acceptance is still required before #57 completion. All agent
 have completed their assigned source/review/preparation work; no implementation is
 silently running while awaiting these owner-controlled gates.
 
+## Consolidated automatic review corrections
+
+The automatic PR review identified an invalid Git existence-check flag and an unclear
+Worker-secret-verifier filename error. Both were corrected together. Executable CLI
+tests now prove trusted-main checkout, malformed/missing/off-main rejection without
+checkout, and invalid config-path rejection before file/provider access. The complete
+deployment suite passes 21 tests. Required checks on the resulting head remain the
+merge gate; no manual Copilot re-review was requested.
+
 ## Exact next actions
 
 1. Source implementation, independent review and local validation are complete.
