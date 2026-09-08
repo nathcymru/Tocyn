@@ -26,6 +26,7 @@ function localSecret(): string {
 
 function interactiveAllowed(): boolean {
   return process.argv.slice(2).join(' ') === '--interactive-credentials'
+    && process.stdin.isTTY === true
     && process.stdout.isTTY === true
     && process.stderr.isTTY === true
     && process.env.CI === undefined;
