@@ -15,6 +15,25 @@ describe('AiService', () => {
     aiService = new AiService(mockEnv);
   });
 
+  it('logs only an allowlisted category for sensitive provider errors', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = new TypeError('private prompt and credential');
+    error.name = 'private provider response';
+    (mockEnv.AI.run as any).mockRejectedValue(error);
+    try {
+      await expect(aiService.generateEmbeddings('private input')).rejects.toThrow('Failed to generate embeddings');
+      await aiService.generateSuggestion({ input: 'private input', context: [] });
+      await aiService.generateResponse('private input', 'private context');
+      expect(log.mock.calls).toEqual([
+        ['AI Embedding error:', { category: 'TypeError' }],
+        ['AI Suggestion error:', { category: 'TypeError' }],
+        ['AI Response error:', { category: 'TypeError' }],
+      ]);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   describe('generateEmbeddings', () => {
     it('should generate embeddings for given text', async () => {
       const mockResult = {

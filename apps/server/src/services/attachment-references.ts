@@ -9,8 +9,10 @@ export async function validateAttachmentReferences(deps: TenantRequestDeps, pref
   const seen = new Set<string>();
   const result = [];
   const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/csv'];
-  for (const item of input) {
-    const key = item?.storageKey || item?.key;
+  for (const entry of input as unknown[]) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) throw new AttachmentReferenceError('Invalid attachment reference');
+    const item = entry as Record<string, unknown>;
+    const key = item.storageKey || item.key;
     if (typeof key !== 'string' || !key.startsWith(prefix) || seen.has(key) || typeof item.filename !== 'string') throw new AttachmentReferenceError('Invalid attachment reference');
     const filename = item.filename.replace(/^.*[\\/]/, '').replace(/[\r\n]/g, '');
     if (!filename || filename.length > 255) throw new AttachmentReferenceError('Invalid attachment filename');

@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { validateAttachmentReferences } from '../attachment-references';
+import { AttachmentReferenceError, validateAttachmentReferences } from '../attachment-references';
 
 describe('attachment reference preflight', () => {
+  it.each([null, undefined, false, 42, 'file', [], {}, { storageKey: 'customer-attachments/a/file', filename: null }])('rejects malformed entries before storage access: %j', async (entry) => {
+    const getAttachment = vi.fn();
+    const deps = { attachmentStorage: { getAttachment } } as any;
+    await expect(validateAttachmentReferences(deps, 'customer-attachments/a/', [entry])).rejects.toBeInstanceOf(AttachmentReferenceError);
+    expect(getAttachment).not.toHaveBeenCalled();
+  });
+
   it('uses stored metadata and rejects a later wrong-owner reference before callers write', async () => {
     const getAttachment = vi.fn().mockImplementation(async () => ({ size: 3, httpMetadata: { contentType: 'text/plain' }, body: new ReadableStream({ start(c) { c.close(); } }) }));
     const deps = { attachmentStorage: { getAttachment } } as any;

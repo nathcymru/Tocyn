@@ -1,10 +1,9 @@
 import { tenantRateLimit } from '../middleware/tenant-rate-limit';
 import { Hono } from 'hono';
 import { Env } from '../bindings';
-import { AiService } from '../services/ai.service';
+import { AiService, StatelessAiService } from '../services/ai.service';
 import { WidgetKnowledgeReader } from '../services/tenant-knowledge.service';
-import { StatelessAiService } from '../services/ai.service';
-import { widgetAuthMiddleware } from '../middleware/widget-auth.middleware';
+import { widgetAuthMiddleware, widgetTenantMiddleware } from '../middleware/widget-auth.middleware';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { TenantTicketService } from '../services/tenant-ticket.service';
 import { rateLimiter } from '../middleware/rate-limiter';
@@ -14,10 +13,6 @@ import { requestBounds } from '../middleware/request-bounds';
 
 const widget = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 widget.use('*', requestBounds(64 * 1024));
-
-
-
-import { widgetTenantMiddleware } from '../middleware/widget-auth.middleware';
 
 // Embeds authenticate explicitly with a customer bearer token, without ambient cookies.
 widget.get('/session', widgetAuthMiddleware, (c) => c.json({ user: { email: c.get('jwtPayload')!.email } }));
