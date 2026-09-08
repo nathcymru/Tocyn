@@ -22,7 +22,8 @@ npm run dev:portal
 npm run dev:dashboard
 ```
 
-The local Worker allows exactly those two browser origins. Magic links target
+The local Worker allows those two browser origins and their exact `127.0.0.1`
+equivalents. Magic links target
 the portal's `/verify` route at port 5174, so the portal performs the existing
 customer verification request through its local API proxy.
 
