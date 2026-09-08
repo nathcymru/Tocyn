@@ -186,10 +186,12 @@ export class TenantAutomationService {
             }
             const articles = await this.deps.repositories.articles.listByTicket(ticket.id);
 
+            let attachmentCount = 0;
             // Keep database ownership records until every external deletion succeeds.
             // A retry can repeat idempotent deletes using those same records.
             for (const article of articles) {
               const attachments = await this.deps.repositories.attachments.findByArticle(article.id);
+              attachmentCount += attachments.length;
               if (attachments.length && !config.delete_attachments) {
                 throw new Error('Retention requires attachment deletion consent');
               }
@@ -210,8 +212,6 @@ export class TenantAutomationService {
                 await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${article.id}_${i}`));
               }
             }
-            let attachmentCount = 0;
-            for (const article of articles) attachmentCount += (await this.deps.repositories.attachments.findByArticle(article.id)).length;
             if (await this.deps.repositories.tickets.completeRetention(ticket.id, claim.token)) {
               totalDeletedTickets++;
               totalDeletedAttachments += attachmentCount;

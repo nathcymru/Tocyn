@@ -1159,7 +1159,6 @@ async function run() {
   // 5. Missing-tenant, missing-aud, and missing-sub JWT rejection on authMiddleware
   const missingAudToken = await new jose.SignJWT({ sub: 'user-1', tenant_id: 'tenant-A', role: 'customer' })
     .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h')
-    .setExpirationTime('1h')
     .sign(new TextEncoder().encode('secret'));
   const missingAudRes = await worker.fetch(new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingAudToken}` } }), envMock, {});
   if (missingAudRes.status !== 401) throw new Error("Missing aud JWT was not rejected by authMiddleware!");
@@ -1167,7 +1166,6 @@ async function run() {
   const missingSubToken = await new jose.SignJWT({ tenant_id: 'tenant-A', role: 'customer' })
     .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h')
     .setAudience('app')
-    .setExpirationTime('1h')
     .sign(new TextEncoder().encode('secret'));
   const missingSubRes = await worker.fetch(new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingSubToken}` } }), envMock, {});
   if (missingSubRes.status !== 401) throw new Error("Missing sub JWT was not rejected by authMiddleware!");
@@ -1175,7 +1173,6 @@ async function run() {
   const missingTenantToken = await new jose.SignJWT({ sub: 'user-1', role: 'customer' })
     .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h')
     .setAudience('app')
-    .setExpirationTime('1h')
     .sign(new TextEncoder().encode('secret'));
   const missingTenantReq = new Request('http://localhost/api/auth/me', { headers: { 'Authorization': `Bearer ${missingTenantToken}` } });
   const missingTenantRes = await worker.fetch(missingTenantReq, envMock, {});
