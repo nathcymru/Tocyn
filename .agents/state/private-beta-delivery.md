@@ -82,9 +82,10 @@ Implementation owner controls deployment scripts/config/workflow and application
 The packaging escalation agent exclusively owns `scripts/deployment/isolated-release.mjs`,
 `isolated-release.test.mjs` and `verify-release-artifact.mjs`; the issue owner yielded these.
 Documentation preparation is complete in `docs/isolated-environments.md` and `docs/README.md`. Root alone owns this state file and GitHub governance.
-The independent security reviewer remains read-only, avoiding overlapping edits. One coherent #57 source-preparation PR is the next publication boundary. Resolve its
-current URL/checks from branch `codex/57-isolated-beta-environments`; this snapshot
-is recorded before publication to avoid repeated review-triggering metadata pushes.
+The independent security reviewer remains read-only, avoiding overlapping edits. Source-preparation [PR #102](https://github.com/nathcymru/Tocyn/pull/102) is open.
+Published source/evidence head `912b4e67475363fb096623a7a01eb20f1c471b13` passed
+all CI/security checks. This later state-only receipt does not alter application or
+release code; required checks must still be verified on the current PR head.
 
 Four concurrent Codex slots are exposed including root. No greater concurrency is
 claimed. Work's connector timed out; Computer Use then explicitly denied access to
@@ -149,12 +150,24 @@ from two clean checkout locations produced byte-identical 36-file artifacts (2,2
 bytes), verified by portable Wrangler dry runs. Release digest:
 `50b28abe64fcde5f17018608288103d80643e28cfa78d8127a28deb188582000`.
 See `docs/isolated-environments.md` for exact local evidence and unrun remote gates.
-PR publication/required CI and actual environment acceptance remain pending.
+[CI 34276137746](https://github.com/nathcymru/Tocyn/actions/runs/34276137746) and
+[CodeQL 34276135027](https://github.com/nathcymru/Tocyn/actions/runs/34276135027)
+passed on the initial published head. Normal merge was rejected by the approving-review
+rule. Owner confirmation is pending on whether the #101 PR-only exception extends
+to #102/future validated delivery PRs; no exception was used for #102.
+[Progress receipt](https://github.com/nathcymru/Tocyn/issues/57#issuecomment-5591606696).
+The coordinator also requested the isolated account/domain and test-email recipient.
+No macOS permission prompt is pending; the Work connector/tool limitation remains.
+Actual environment acceptance is still required before #57 completion. All agents
+have completed their assigned source/review/preparation work; no implementation is
+silently running while awaiting these owner-controlled gates.
 
 ## Exact next actions
 
 1. Source implementation, independent review and local validation are complete.
-2. Publish the consolidated branch and check all mandatory CI/security results.
+2. Verify current #102 CI/security and any automatic review results; obtain the
+   owner review or explicitly scoped PR-only exception before merging. Never bypass
+   required CI/security checks. Then record merge evidence and refresh main.
 3. Maintain a coherent #57 PR with Progresses #57 while deployed/mail/rollback evidence is
    outstanding. Present concrete external-operation authority choices after preparation.
 4. After #57 accepted integration and real demonstration, implement #58, then #19.
