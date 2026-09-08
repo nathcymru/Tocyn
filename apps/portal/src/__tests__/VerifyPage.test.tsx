@@ -1,14 +1,14 @@
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { VerifyPage } from '../pages/VerifyPage';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
 vi.mock('../api/client', () => ({ portalApi: { post: vi.fn() } }));
 
-function mount(entry: string) {
+function mount(entry: string | { pathname: string; state: { challengeId: string } }) {
   return render(
     <StrictMode>
       <MemoryRouter initialEntries={[entry]}>
@@ -53,16 +53,48 @@ describe('verification flows', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 
+  it('restores the OTP challenge from browser history when the router restarts', async () => {
+    window.history.replaceState(null, '', '/login');
+    vi.mocked(portalApi.post).mockResolvedValue({
+      user: { id: 'synthetic-user', name: 'Test', email: 'test@example.com' },
+      token: 'synthetic-session',
+    });
+    function BrowserFlow() {
+      return <BrowserRouter><Routes>
+        <Route path="/login" element={<Link to="/verify" state={{ email: 'test@example.com', challengeId: 'history-challenge' }}>Continue</Link>} />
+        <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/tickets" element={<div>Ticket destination</div>} />
+      </Routes></BrowserRouter>;
+    }
+    const first = render(<BrowserFlow />);
+    fireEvent.click(screen.getByText('Continue'));
+    expect(await screen.findByText('test@example.com')).toBeInTheDocument();
+    // A document reload reconstructs the router while preserving the history entry.
+    // Use the real BrowserRouter to both write and recover state, not a mocked location.
+    first.unmount();
+    const restarted = render(<BrowserFlow />);
+    try {
+      expect(screen.getByText('test@example.com')).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Authentication Code'), { target: { value: '123456' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
+      expect(await screen.findByText('Ticket destination')).toBeInTheDocument();
+      expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/auth/verify', { token: '123456', challengeId: 'history-challenge' });
+    } finally {
+      restarted.unmount();
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
   it('verifies a manually entered code only after submission', async () => {
     vi.mocked(portalApi.post).mockResolvedValue({
       user: { id: 'synthetic-user', name: 'Test', email: 'test@example.com' },
       token: 'synthetic-session',
     });
-    mount('/verify');
+    mount({ pathname: '/verify', state: { challengeId: 'synthetic-challenge' } });
     expect(portalApi.post).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText('Authentication Code'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
     expect(await screen.findByText('Ticket destination')).toBeInTheDocument();
-    expect(portalApi.post).toHaveBeenCalledWith('/auth/verify', { token: '123456' });
+    expect(portalApi.post).toHaveBeenCalledWith('/auth/verify', { token: '123456', challengeId: 'synthetic-challenge' });
   });
 });
