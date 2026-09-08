@@ -1,6 +1,12 @@
-# Deployment Guide
+# Deployment guide (historical, not an approved runbook)
 
-This document explains how to deploy Luminatick to your own Cloudflare environment.
+Tocyn has no owner-approved production deployment date. This document preserves an inherited Luminatick procedure for historical reference; it is not a validated Tocyn provisioning, migration, or seeding runbook. Do not run its commands against an account, and do not use `npm run setup:prod`, `deploy*`, `seed:prod`, `--remote`, or a provider setup as contributor-setup evidence. Isolated preview/beta manifests, credentials, deployment rehearsal, rollback and controlled provider testing are owned by [#57](https://github.com/nathcymru/Tocyn/issues/57).
+
+For wholly local development, use [CONTRIBUTING.md](../CONTRIBUTING.md). It uses `apps/server/wrangler.local.json`, synthetic secrets, and local emulation for D1, R2 and Durable Objects. The local walkthrough omits AI, Vectorize and the Workflow, avoiding remote credentials and charges.
+
+The historical text below predates the tenant schema and Node 22 support policy. In particular, its production seed command invokes a generator that now refuses current-schema databases unless explicitly marked as a reviewed legacy schema; it must not be adapted for tenant provisioning. Repeatable two-tenant fixtures are owned by [#58](https://github.com/nathcymru/Tocyn/issues/58).
+
+## Preserved inherited procedure
 
 ## Architecture: Option 3 (Hybrid Offloading)
 

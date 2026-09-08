@@ -3,11 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --config wrangler.local.json",
     "deploy": "wrangler deploy",
-    "migration:create": "wrangler d1 migrations create luminatick-db",
-    "migration:apply": "wrangler d1 migrations apply luminatick-db --local",
-    "seed": "npx tsx src/scripts/seed.ts --file seed.sql && npx wrangler d1 execute luminatick-db --local --file=seed.sql && node -e \"const fs=require('fs'); if(fs.existsSync('seed.sql')) fs.unlinkSync('seed.sql')\"",
+    "migration:create": "wrangler d1 migrations create tocyn-local --config wrangler.local.json",
+    "migration:apply": "wrangler d1 migrations apply tocyn-local --local --config wrangler.local.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "test:watch": "vitest"
