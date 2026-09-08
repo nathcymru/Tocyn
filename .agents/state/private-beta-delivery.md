@@ -184,3 +184,8 @@ review completed with two findings: clarify state spacing and provide an explici
 fail-on-unexpected-use vector double in the storage tests. Corrections are batched;
 no new metered review requested. Repeat affected checks and required PR checks before
 integration. #19 remains In progress until final signed acceptance.
+
+Automatic follow-up on a3b23c9 identified fixture-only use of the auth scope
+constructor. Replaced it with the system bootstrap scope; actual route-issued
+credentials still prove authorization. Core acceptance, script typecheck and lint
+pass. No application boundary changed and no manual repeat review requested.

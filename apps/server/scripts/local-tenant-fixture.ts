@@ -7,7 +7,7 @@ import * as jose from 'jose';
 import { Headers as MiniflareHeaders, Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { createLocalRuntime } from '../src/local-index';
 import type { Env } from '../src/bindings';
-import { createVerifiedTenantScope } from '../src/auth/scope';
+import { createSystemTenantScope } from '../src/auth/scope';
 import { createRepositories } from '../src/repositories';
 import { AuthService } from '../src/services/auth/auth.service';
 import { MFAService } from '../src/services/auth/mfa.service';
@@ -361,7 +361,7 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
         const principal = privatePrincipals[operator];
         assert.equal(principal.role, 'admin', 'Fixture API keys are available only for its fixed synthetic operators');
         const repositories = createRepositories(
-          createVerifiedTenantScope(principal.tenantId, principal.localId, ['admin'], 1),
+          createSystemTenantScope({ tenantId: principal.tenantId, actor: 'synthetic-fixture-key-bootstrap' }),
           db,
         );
         const created = await repositories.apiKeys.create(`fixture-${operator}`, [...permissions]);
