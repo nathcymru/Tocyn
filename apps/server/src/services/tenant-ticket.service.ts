@@ -1,6 +1,27 @@
 import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { Ticket, Article, Attachment } from '../types';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
+import {
+  ArticleWithCanonicalAttachments,
+  CanonicalConversation,
+} from '../types/canonical-conversation';
+import { projectCanonicalConversation as project } from './canonical-conversation.service';
+
+export type InitialConversationInput = {
+  subject: string;
+  customer_email: string;
+  source: Ticket['source'];
+  body: string;
+  sender_type: Article['sender_type'];
+  sender_id?: string;
+  status?: Ticket['status'];
+  priority?: Ticket['priority'];
+  assigned_to?: string | null;
+  group_id?: string | null;
+  customer_id?: string | null;
+  source_email?: string | null;
+  custom_fields?: Ticket['custom_fields'];
+};
 
 export class TenantTicketService {
   constructor(private deps: TenantRequestDeps) {}
@@ -13,29 +34,42 @@ export class TenantTicketService {
     return this.deps.repositories.tickets.get(id);
   }
 
-  async createTicketWithArticle(data: any): Promise<{ ticket: Ticket, article: Article }> {
-    const ticket = await this.deps.repositories.tickets.create({
-      subject: data.subject,
-      customer_email: data.customer_email,
-      source: data.source,
-      status: data.status ?? 'open',
-      priority: data.priority ?? 'normal',
-      assigned_to: data.assigned_to,
-      group_id: data.group_id,
-      customer_id: data.customer_id,
-      source_email: data.source_email,
-      custom_fields: data.custom_fields
+  async createTicket(data: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'ticket_no'>): Promise<Ticket> {
+    const observedAt = new Date().toISOString();
+    return this.deps.repositories.tickets.create({
+      ...data,
+      intake_received_at: observedAt,
+      intake_processed_at: observedAt,
     });
+  }
 
-    const article = await this.deps.repositories.articles.create({
-      ticket_id: ticket.id,
-      body: data.body,
-      sender_type: data.sender_type,
-      sender_id: data.sender_id,
-      is_internal: false
+  async createTicketWithArticle(data: InitialConversationInput): Promise<{ ticket: Ticket, article: Article }> {
+    const observedAt = new Date().toISOString();
+    return this.deps.repositories.tickets.createWithInitialArticle({
+      ticket: {
+        subject: data.subject,
+        customer_email: data.customer_email,
+        source: data.source,
+        status: data.status ?? 'open',
+        priority: data.priority ?? 'normal',
+        assigned_to: data.assigned_to,
+        group_id: data.group_id,
+        customer_id: data.customer_id,
+        source_email: data.source_email,
+        custom_fields: data.custom_fields,
+        intake_received_at: observedAt,
+        intake_processed_at: observedAt,
+      },
+      article: {
+        body: data.body,
+        sender_type: data.sender_type,
+        sender_id: data.sender_id,
+        is_internal: false,
+        intake_source: data.source,
+        received_at: observedAt,
+        processed_at: observedAt,
+      },
     });
-
-    return { ticket, article };
   }
 
   async getTicketArticles(ticketId: string): Promise<Article[]> {
@@ -62,7 +96,22 @@ export class TenantTicketService {
   }
 
   async createArticle(data: Omit<Article, 'id' | 'created_at'>): Promise<Article> {
-    return this.deps.repositories.articles.create(data);
+    // Only a route/service that explicitly identifies its intake path receives
+    // new server-observed facts. Legacy repository callers remain not-recorded.
+    if (!data.intake_source) return this.deps.repositories.articles.create(data);
+    const observedAt = new Date().toISOString();
+    return this.deps.repositories.articles.create({
+      ...data,
+      received_at: observedAt,
+      processed_at: observedAt,
+    });
+  }
+
+  projectCanonicalConversation(
+    ticket: Ticket,
+    articles: ArticleWithCanonicalAttachments[],
+  ): CanonicalConversation {
+    return project(ticket, articles);
   }
 
   async addAttachment(data: Omit<Attachment, 'id' | 'created_at'>): Promise<Attachment> {

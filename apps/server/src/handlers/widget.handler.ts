@@ -128,7 +128,8 @@ widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, tenantRate
       custom_fields: validData.custom_fields,
       body: validData.message,
       sender_type: 'customer',
-      sender_id: c.get('user').id
+      sender_id: c.get('user').id,
+      customer_id: c.get('user').id,
     });
 
     return c.json(ticket, 201);

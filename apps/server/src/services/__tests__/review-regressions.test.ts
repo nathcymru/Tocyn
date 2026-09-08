@@ -44,10 +44,15 @@ describe('PR 43 review regressions', () => {
     expect(usageBindings[0].slice(1)).toEqual(['tenant-A','key-A']);
   });
   it('preserves validated ticket fields', async () => {
-    const create = vi.fn().mockResolvedValue({id:'ticket'});
-    const service = new TenantTicketService({repositories:{tickets:{create},articles:{create:vi.fn()}}} as any);
-    await service.createTicketWithArticle({subject:'Issue',status:'pending',priority:'high',assigned_to:'agent',group_id:'group',custom_fields:'{}'});
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({status:'pending',priority:'high',assigned_to:'agent',group_id:'group',custom_fields:'{}'}));
+    const createWithInitialArticle = vi.fn().mockResolvedValue({ticket:{id:'ticket'},article:{id:'article'}});
+    const service = new TenantTicketService({repositories:{tickets:{createWithInitialArticle},articles:{create:vi.fn()}}} as any);
+    await service.createTicketWithArticle({
+      subject:'Issue', customer_email:'customer@example.test', source:'api', body:'Initial message', sender_type:'customer',
+      status:'pending',priority:'high',assigned_to:'agent',group_id:'group',custom_fields:'{}',
+    });
+    expect(createWithInitialArticle).toHaveBeenCalledWith(expect.objectContaining({
+      ticket: expect.objectContaining({status:'pending',priority:'high',assigned_to:'agent',group_id:'group',custom_fields:'{}'}),
+    }));
   });
   it('returns a controlled response for a missing API database binding', async () => {
     const app = new Hono(); app.use('*',apiAuthMiddleware); app.get('/',c=>c.text('unexpected'));

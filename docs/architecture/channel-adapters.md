@@ -8,6 +8,9 @@ External messaging systems are adapters around Tocyn's canonical ticket/conversa
 
 The first private beta intentionally validates the canonical API/portal path before adding Slack to the critical path. Slack, support email, Teams, WhatsApp and Telegram are later integration milestones.
 
+The implemented API/portal field contract and its local verification boundary
+are documented in [Canonical conversation contract](canonical-conversation-contract.md).
+
 ```mermaid
 flowchart LR
     subgraph Inbound[External / service-user channels]

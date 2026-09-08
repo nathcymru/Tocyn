@@ -22,6 +22,9 @@ export interface Ticket {
   custom_fields?: Record<string, any>;
   source: 'email' | 'web' | 'widget' | 'api' | 'dashboard' | 'portal';
   source_email?: string | null;
+  // Server-observed intake facts. Historical rows intentionally remain null.
+  intake_received_at?: string | null;
+  intake_processed_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +41,11 @@ export interface Article {
   raw_email_id?: string;
   qa_type?: 'question' | 'answer';
   is_internal: boolean;
+  // `intake_source` is the actual path that created this message. It must not
+  // be inferred from its parent ticket for later replies or historical rows.
+  intake_source?: Ticket['source'] | null;
+  received_at?: string | null;
+  processed_at?: string | null;
   created_at: string;
 }
 

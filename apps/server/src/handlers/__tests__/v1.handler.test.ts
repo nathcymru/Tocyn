@@ -7,6 +7,7 @@ const mockDB: any = {
   all: vi.fn(),
   first: vi.fn(),
   run: vi.fn(),
+  batch: vi.fn(),
   lastQuery: "",
 };
 
@@ -75,6 +76,10 @@ describe("v1 Handler Integration Tests", () => {
     });
     mockDB.run.mockResolvedValue({ success: true });
     mockDB.all.mockResolvedValue({ results: [] });
+    mockDB.batch.mockResolvedValue([
+      { results: [{ id: "t-123", subject: "Test Ticket", customer_email: "test@example.com", ticket_no: 1, status: "open", priority: "normal", source: "api", created_at: "2026-01-01" }] },
+      { results: [{ id: "a-123", ticket_id: "t-123", sender_type: "customer", is_internal: false, created_at: "2026-01-01" }] },
+    ]);
   });
 
   describe("Authentication", () => {

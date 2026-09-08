@@ -172,12 +172,16 @@ app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddle
   const result = await ticketService.createTicketWithArticle({
     subject: body.subject,
     customer_email: payload.email,
+    customer_id: payload.sub,
     source: 'portal',
     body: body.message,
-    sender_id: payload.sub, is_internal: false,
-    sender_type: 'customer'
+    sender_id: payload.sub,
+    sender_type: 'customer',
   });
-  return c.json(result, 201);
+  return c.json({
+    ...result,
+    canonical: ticketService.projectCanonicalConversation(result.ticket, [result.article]),
+  }, 201);
 });
 
 app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
@@ -199,12 +203,22 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
   const articlesWithAttachments = await Promise.all(externalArticles.map(async (article) => {
     const atts = await ticketService.getArticleAttachments(article.id);
     return {
-      ...article,
-      attachments: atts.map(a => ({ id: a.id, filename: a.file_name, size: a.file_size, contentType: a.content_type, storageKey: a.r2_key }))
+      response: {
+        ...article,
+        attachments: atts.map(a => ({ id: a.id, filename: a.file_name, size: a.file_size, contentType: a.content_type, storageKey: a.r2_key })),
+      },
+      canonical: { ...article, attachments: atts },
     };
   }));
 
-  return c.json({ ticket, articles: articlesWithAttachments });
+  return c.json({
+    ticket,
+    articles: articlesWithAttachments.map(article => article.response),
+    canonical: ticketService.projectCanonicalConversation(
+      ticket,
+      articlesWithAttachments.map(article => article.canonical),
+    ),
+  });
 });
 
 app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(5, 60000), async (c) => {
@@ -227,7 +241,8 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
     ticket_id: ticketId,
     body: body.message,
     sender_type: 'customer',
-    sender_id: payload.sub, is_internal: false
+    sender_id: payload.sub, is_internal: false,
+    intake_source: 'portal',
   });
 
   const attachments: any[] = [];
