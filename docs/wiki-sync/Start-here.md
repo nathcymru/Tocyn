@@ -2,7 +2,7 @@
 
 ## What Tocyn is
 
-Tocyn is a pre-release, open-source, multi-tenant helpdesk/support system built around a Cloudflare Worker API, D1, R2, Durable Objects, Workers AI and Vectorize, with operator/dashboard, customer portal and widget surfaces.
+Tocyn is being built as an omnichannel, multi-tenant helpdesk: service users contact support through a portal, embedded widget, programmatic API or external channel, while human operators work in one canonical conversation workspace. Bounded AI assistance and governed autonomous workflows extend that shared model; they do not create a separate helpdesk or bypass human control. The approved design combines shared headless dashboard/portal/widget UI, verified support-email/Slack/Teams/WhatsApp/Telegram adapters, distinct ingress/consumer/dispatch responsibilities and tenant-scoped Cloudflare state. See [[System-architecture]] for the target diagram and current implementation status.
 
 It is a fork of Luminatick, but Tocyn's current roadmap, tenant model and governance are maintained independently in this repository.
 

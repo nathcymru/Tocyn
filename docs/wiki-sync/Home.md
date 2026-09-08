@@ -2,7 +2,7 @@
 
 [![Sponsor Tocyn](https://shieldcn.dev/github/sponsors/nathcymru.svg)](https://github.com/sponsors/nathcymru)
 
-Tocyn is an open-source, multi-tenant helpdesk/support system for Cloudflare's edge application stack. It is **pre-release** and the Tocyn project does not currently operate a hosted customer helpdesk service.
+Tocyn is an open-source, multi-tenant omnichannel helpdesk being built for Cloudflare's edge application stack: a unified human workspace, shared headless portal/widget interfaces, verified external-channel adapters and governed AI operations around canonical conversation state. It is **pre-release** and the Tocyn project does not currently operate a hosted customer helpdesk service.
 
 ## Start points
 

@@ -2,6 +2,14 @@
 
 Apply this rule whenever a task changes README, `docs/`, Wiki source, public project-page copy, ADRs or policy documentation.
 
+## Architecture authority and delivery evidence
+
+- Product/architecture overview pages must explain **what Tocyn is**, then its **approved target architecture**, then **delivery/implementation status**. The principal diagram represents the approved target; a current-state topology is a separately labelled supplement.
+- Accepted roadmap issues and ADRs establish architectural truth; code/configuration establish implementation state; actual environment verification establishes deployment evidence. Current code must not silently redefine the approved end state.
+- Keep approved channels, headless/browser-runtime separation and asynchronous/service responsibilities in the target model even when their implementation is pending. Label them explicitly **Approved / planned** or **Not yet implemented**; release sequencing does not remove them from the architecture.
+- A missing binding is evidence about the current runtime, not a reason to omit an approved target component. Do not invent a Worker count, binding/RPC topology or architectural decision where the approved contracts leave it open; identify that boundary and its source.
+- Preserve working badges, sponsorship/contributor additions, links and unrelated accurate material during targeted corrections.
+
 ## Status accuracy
 
 - Ground current-state claims in the repository/configuration being changed.

@@ -12,6 +12,6 @@ This directory is the repository-backed technical architecture reference for Toc
 
 ## Authority
 
-Runtime code and migrations remain the implementation authority. The approved GitHub milestones/issues and accepted ADRs define approved future architecture. Historical `phase-*` design documents may explain provenance but do not override current code, issues or ADRs.
+Approved roadmap issues and accepted ADRs define the target architecture. Runtime code and migrations establish how much is implemented; actual environment evidence establishes what is deployed. Present the target first, with delivery status separately stated. Current code must not silently redefine the approved end-state topology. Historical `phase-*` design documents may explain provenance but do not override current code, issues or ADRs.
 
 Diagrams in these pages supplement the prose. The same material is described in text so the documentation remains understandable without Mermaid rendering.

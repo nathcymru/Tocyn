@@ -41,14 +41,28 @@
       <div>
         <span class="tag">Pre-release open source</span>
         <h1>Tocyn</h1>
-        <p>Welsh for “ticket” — a multi-tenant helpdesk/support project for Cloudflare's edge application stack.</p>
+        <p>Welsh for “ticket” — an omnichannel, multi-tenant helpdesk for Cloudflare's edge application stack.</p>
       </div>
     </header>
     <p class="notice"><strong>No hosted Tocyn service is operated by the project.</strong> This page describes the source project. It is not a customer helpdesk login and it is not evidence of production readiness.</p>
   </section>
 
   <section>
-    <h2>Current source</h2>
+    <h2>What Tocyn is building</h2>
+    <p>Tocyn brings human operators, service users and governed AI workflows into one canonical conversation workspace across API, portal, widgets, support email, Slack, Microsoft Teams, WhatsApp and Telegram.</p>
+    <h3>Approved target architecture</h3>
+    <div class="grid">
+      <div class="card"><strong>Shared browser UI</strong><br>Dashboard, portal and optional Shadow DOM widgets share planned Ark/Zag behavioural primitives, extendable interfaces and standard CSS-variable themes. Static styling stays separate from behaviour and API Worker bundles.</div>
+      <div class="card"><strong>Verified channel boundaries</strong><br>Application API and external-provider ingress establish tenant authority. Durable raw envelopes and journals precede acknowledgement; Queues feed normalisation and deduplication into canonical conversation state.</div>
+      <div class="card"><strong>Reliable state and replies</strong><br>D1 state/audit/outbox, R2 bodies/media and a distinct asynchronous dispatch responsibility preserve replies and recovery. Durable Objects provide realtime and budget coordination.</div>
+      <div class="card"><strong>Bounded, governed assistance</strong><br>Workers AI, Vectorize and Workflows support knowledge/enrichment. Autonomous actions require owner/tenant policy, approval where required, audit and human takeover, proven first against a controlled reference API.</div>
+    </div>
+    <p><strong>Target architecture, not a deployment claim.</strong> API, ingress, consumer and dispatch are distinct runtime responsibilities; concrete Worker allocation and service-binding wiring remain governed implementation choices. Standalone use does not require embedding.</p>
+    <p><a href="https://github.com/nathcymru/Tocyn/wiki/System-architecture">Target architecture diagram and delivery status</a></p>
+  </section>
+
+  <section>
+    <h2>Delivery status — current source</h2>
     <div class="grid">
       <div class="card"><strong>Application surfaces</strong><br>Operator dashboard, customer portal, widget and programmatic API foundations.</div>
       <div class="card"><strong>Cloudflare runtime</strong><br>Hono Worker with D1, R2, a tenant-keyed Durable Object, Workers AI, Vectorize and a vectorisation Workflow.</div>
