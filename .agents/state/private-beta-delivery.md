@@ -82,7 +82,9 @@ Implementation owner controls deployment scripts/config/workflow and application
 The packaging escalation agent exclusively owns `scripts/deployment/isolated-release.mjs`,
 `isolated-release.test.mjs` and `verify-release-artifact.mjs`; the issue owner yielded these.
 Documentation preparation is complete in `docs/isolated-environments.md` and `docs/README.md`. Root alone owns this state file and GitHub governance.
-The independent security reviewer remains read-only, avoiding overlapping edits. One coherent #57 PR; no PR created yet.
+The independent security reviewer remains read-only, avoiding overlapping edits. One coherent #57 source-preparation PR is the next publication boundary. Resolve its
+current URL/checks from branch `codex/57-isolated-beta-environments`; this snapshot
+is recorded before publication to avoid repeated review-triggering metadata pushes.
 
 Four concurrent Codex slots are exposed including root. No greater concurrency is
 claimed. Work's connector timed out; Computer Use then explicitly denied access to
@@ -142,15 +144,18 @@ Independent bounded review passed provider-resource/Access preflight, default an
 wildcard Pages coverage, actual discovered-alias ingress probes and known-good rollback.
 These are local synthetic checks only. Escalated packaging verification now passes
 19 deployment tests, including artifact tamper, clean-source, path escape and fixture
-reproducibility checks. Actual application builds from two clean checkout locations
-remain pending at this source checkpoint. No PR, remote execution or acceptance
-completion is claimed yet.
+reproducibility checks. Actual application builds at source checkpoint `523add383d89861b89f5e550f7df439170454bd2`
+from two clean checkout locations produced byte-identical 36-file artifacts (2,217,507
+bytes), verified by portable Wrangler dry runs. Release digest:
+`50b28abe64fcde5f17018608288103d80643e28cfa78d8127a28deb188582000`.
+See `docs/isolated-environments.md` for exact local evidence and unrun remote gates.
+PR publication/required CI and actual environment acceptance remain pending.
 
 ## Exact next actions
 
-1. Finish #57 implementation and targeted/static/local verification.
-2. Complete independent trust-boundary review; consolidate corrections and full checks.
-3. Open a coherent #57 PR with Progresses #57 while deployed/mail/rollback evidence is
+1. Source implementation, independent review and local validation are complete.
+2. Publish the consolidated branch and check all mandatory CI/security results.
+3. Maintain a coherent #57 PR with Progresses #57 while deployed/mail/rollback evidence is
    outstanding. Present concrete external-operation authority choices after preparation.
 4. After #57 accepted integration and real demonstration, implement #58, then #19.
 5. Update issue/Project and this snapshot on meaningful delivery, merge, blocker or handoff.

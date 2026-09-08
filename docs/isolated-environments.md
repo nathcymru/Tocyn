@@ -58,3 +58,27 @@ Rollback must use the recorded same-environment known-good artifact, re-verify i
 
 The worktree contains reviewable manifests, guards, trusted-workflow preparation, artifact/receipt checks, protected-ingress verification preparation, mail allowlist enforcement, and code rollback preparation. It does not yet evidence any external configuration or operation listed above. Record only checks actually run in the eventual #57 delivery receipt, keep #57 open until the selected isolated deployment, authentication email, counters, and rollback evidence are available, and do not treat this preparation as production cutover authority.
 
+
+## Local source verification — 8 September 2026
+
+Source checkpoint `523add383d89861b89f5e550f7df439170454bd2` passed:
+
+- server 329, portal 12 and widget 3 tests; server typecheck/lint and portal lint;
+- local D1 smoke/integration checks and dashboard, portal and widget builds;
+- 19 deployment tests covering configuration, artifact tampering, path/symlink escape,
+  clean source, provider mismatch, Pages ingress and rollback contracts.
+
+Two clean checkout locations at that checkpoint used Node 22.19.0/npm 10.9.3, the
+locked dependencies, identical synthetic preview origins/D1 identity and
+`VITE_API_URL`, fresh dashboard/portal builds and actual Wrangler dry-run bundles.
+Both packaged artifacts passed verification and the portable `--no-bundle` dry run.
+All 36 files were byte-identical, totalling 2,217,507 bytes. Release digest:
+`50b28abe64fcde5f17018608288103d80643e28cfa78d8127a28deb188582000`.
+The packaging gate checked the Worker build metadata for browser UI/React and agent
+tooling imports before removing build-only metadata.
+
+No provider receipt was finalized and no resource was provisioned or contacted by a
+deployment operation. These synthetic parked artifacts are local reproducibility
+evidence, not approved deployment targets. Existing dashboard chunk-size/config
+loader warnings and Wrangler's ignored minify flag with `--no-bundle` were nonfatal.
+CI on the published PR and every external demonstration above remain separate gates.
