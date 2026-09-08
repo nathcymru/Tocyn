@@ -13,7 +13,7 @@ export const mfaGuard = async (c: Context<{ Bindings: Env; Variables: AppVariabl
     return c.json({ error: "Unauthorized", message: "No session found" }, 401);
   }
 
-  if (payload.mfa_verified === false) {
+  if (payload.mfa_verified !== true) {
     return c.json(
       { error: "Forbidden", message: "MFA verification required" },
       403

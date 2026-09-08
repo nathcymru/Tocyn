@@ -13,6 +13,7 @@ class D1Mock implements D1Database {
     return {
       bind: (...args: any[]) => {
         return {
+          _execute: () => { const info = this.db.prepare(query).run(...args); return { success: true, meta: { changes: info.changes } }; },
           first: async <T>() => {
             const stmt = this.db.prepare(query);
             return (stmt.get(...args) || null) as T | null;
@@ -32,7 +33,7 @@ class D1Mock implements D1Database {
   }
   // Other methods stubbed...
   dump() { return Promise.resolve(new ArrayBuffer(0)); }
-  batch() { return Promise.resolve([]); }
+  batch(statements: any[]) { return Promise.resolve(this.db.transaction(() => statements.map(statement => statement._execute()))()); }
   exec() { return Promise.resolve({ count: 0, duration: 0 }); }
 }
 
@@ -58,6 +59,34 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
 
   afterEach(() => {
     sqlite.close();
+  });
+
+  it('enforces request limits across fresh repositories while isolating tenants', async () => {
+    const requests = Array.from({ length: 12 }, () => createRepositories(scopeA, d1).requestLimits.consume('chat:shared-user', 5, 60000, 1000));
+    expect((await Promise.all(requests)).filter(Boolean)).toHaveLength(5);
+    expect(await reposB.requestLimits.consume('chat:shared-user', 5, 60000, 1000)).toBe(true);
+    expect(await reposA.requestLimits.consume('chat:shared-user', 5, 60000, 61000)).toBe(true);
+  });
+
+  it('binds OTP redemption to its tenant and challenge and limits guesses durably', async () => {
+    const a = await reposA.users.create({ email: 'otp-a@example.com', role: 'customer', mfa_enabled: false } as any);
+    const b = await reposB.users.create({ email: 'otp-b@example.com', role: 'customer', mfa_enabled: false } as any);
+    const expiry = new Date(Date.now() + 60000).toISOString();
+    const now = new Date().toISOString();
+    await reposA.users.storeCustomerAuthToken(a.id, 'challenge-a', 'hash-a', 'otp', expiry);
+    await reposB.users.storeCustomerAuthToken(b.id, 'challenge-b', 'hash-b', 'otp', expiry);
+    expect(await reposA.users.verifyAndConsumeCustomerAuthToken('hash-b', now, 'challenge-b')).toBeNull();
+    expect(await reposA.users.verifyAndConsumeCustomerAuthToken('hash-a', now)).toBeNull();
+    expect(await reposA.users.verifyAndConsumeCustomerAuthToken('hash-b', now, 'challenge-a')).toBeNull();
+    expect((await reposA.users.verifyAndConsumeCustomerAuthToken('hash-a', now, 'challenge-a'))?.id).toBe(a.id);
+    expect(await reposA.users.verifyAndConsumeCustomerAuthToken('hash-a', now, 'challenge-a')).toBeNull();
+    await Promise.all(Array.from({ length: 8 }, () => reposB.users.verifyAndConsumeCustomerAuthToken('wrong', now, 'challenge-b')));
+    expect(sqlite.prepare("SELECT attempts FROM customer_auth_tokens WHERE id = 'challenge-b'").get()).toEqual({ attempts: 5 });
+    expect(await reposB.users.verifyAndConsumeCustomerAuthToken('hash-b', now, 'challenge-b')).toBeNull();
+    await reposA.users.storeCustomerAuthToken(a.id, 'old', 'old-hash', 'otp', expiry);
+    await reposA.users.storeCustomerAuthToken(a.id, 'new', 'new-hash', 'otp', expiry);
+    expect(await reposA.users.verifyAndConsumeCustomerAuthToken('old-hash', now, 'old')).toBeNull();
+    expect((await reposA.users.verifyAndConsumeCustomerAuthToken('new-hash', now, 'new'))?.id).toBe(a.id);
   });
 
   it('proves identical IDs can exist in two tenants', async () => {

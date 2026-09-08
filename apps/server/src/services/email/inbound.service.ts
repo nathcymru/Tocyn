@@ -36,7 +36,15 @@ export class InboundEmailService {
       }
     }
     
-    const customerEmail = email.from?.address || message.from;
+    // Thread identifiers locate a ticket; they do not authorise its sender.
+    // Use the envelope sender supplied by the trusted inbound boundary.
+    const customerEmail = message.from.trim().toLowerCase();
+    if (!customerEmail || (email.from?.address && email.from.address.trim().toLowerCase() !== customerEmail)) {
+      throw new Error('Inbound sender mismatch');
+    }
+    if (ticket && ticket.customer_email?.trim().toLowerCase() !== customerEmail) {
+      throw new Error('Inbound participant not authorised');
+    }
     const body = ReplyParser.stripHistory(email.text, email.html);
 
     if (!ticket) {

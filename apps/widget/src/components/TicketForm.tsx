@@ -23,7 +23,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       const response = await fetch(`${BASE_URL}/tickets`, {
         method: 'POST',
         headers: widgetHeaders(),
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify(formData),
       });
 

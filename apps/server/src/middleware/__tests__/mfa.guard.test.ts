@@ -3,6 +3,18 @@ import { Hono } from "hono";
 import { mfaGuard } from "../mfa.guard";
 
 describe("mfaGuard", () => {
+  it.each([undefined, null, 0, 1, "true", "false", {}, []])("rejects a non-boolean MFA claim: %j", async (claim) => {
+    const app = new Hono();
+    let dispatched = false;
+    app.use("*", async (c, next) => {
+      c.set("jwtPayload", { sub: "user-1", mfa_verified: claim });
+      await next();
+    });
+    app.use("*", mfaGuard);
+    app.get("/protected", (c) => { dispatched = true; return c.text("OK"); });
+    expect((await app.request("/protected")).status).toBe(403);
+    expect(dispatched).toBe(false);
+  });
   it("should call next() if mfa_verified is true", async () => {
     const app = new Hono();
     app.use("*", async (c, next) => {

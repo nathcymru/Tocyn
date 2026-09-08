@@ -1,3 +1,4 @@
+import { RE2JS } from 're2js';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { Ticket, Article } from '../types';
 
@@ -25,7 +26,7 @@ interface WebhookConfig {
  * No raw ATTACHMENTS_BUCKET or VECTOR_INDEX access.
  */
 export class TenantAutomationService {
-  constructor(private deps: TenantRequestDeps) {}
+  constructor(private deps: TenantRequestDeps, private webhookOrigins: readonly string[] = []) {}
 
   async getActiveRules(eventType: string): Promise<any[]> {
     return this.deps.repositories.automations.getActiveRules(eventType);
@@ -65,12 +66,12 @@ export class TenantAutomationService {
                 console.error('Regex too long, skipping for safety');
                 return false;
               }
-              const regex = new RegExp(condition.value, 'i');
+              const regex = RE2JS.compile(condition.value, RE2JS.CASE_INSENSITIVE);
               const stringToTest = String(valueToTest);
               if (stringToTest.length > 1000) return false;
-              return regex.test(stringToTest);
+              return regex.matcher(stringToTest).find();
             } catch (e) {
-              console.error(`Invalid regex in automation rule: ${condition.value}`, e);
+              console.error('Unsupported automation regular expression');
               return false;
             }
           default:
@@ -78,7 +79,7 @@ export class TenantAutomationService {
         }
       });
     } catch (e) {
-      console.error('Failed to parse automation conditions', e);
+      console.error('Invalid automation conditions');
       return false;
     }
   }
@@ -113,15 +114,17 @@ export class TenantAutomationService {
   private async executeWebhook(configJson: string, payload: any): Promise<void> {
     try {
       const config: WebhookConfig = JSON.parse(configJson);
-      if (!config.url.startsWith('http')) {
-        console.error('Invalid webhook URL protocol');
-        return;
+      const target = new URL(config.url);
+      if (target.protocol !== 'https:' || target.username || target.password || !this.webhookOrigins.includes(target.origin)) {
+        throw new Error('Webhook origin not permitted');
       }
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch(config.url, {
+      try {
+      const response = await fetch(target.href, {
+        redirect: 'error',
         method: config.method || 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,16 +138,16 @@ export class TenantAutomationService {
         signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
-        console.error(`Webhook failed with status ${response.status}: ${await response.text()}`);
+        console.error(`Webhook failed with status ${response.status}`);
       }
+      await response.body?.cancel();
+      } finally { clearTimeout(timeoutId); }
     } catch (e: any) {
       if (e.name === 'AbortError') {
         console.error('Webhook request timed out');
       } else {
-        console.error('Failed to execute webhook', e);
+        console.error('Failed to execute webhook');
       }
     }
   }
@@ -162,7 +165,8 @@ export class TenantAutomationService {
     for (const rule of rules) {
       try {
         const config: RetentionConfig = JSON.parse(rule.action_config);
-        const days = config.days_to_keep || 365;
+        const days = config.days_to_keep ?? 365;
+        if (!Number.isInteger(days) || days < 1 || days > 36500 || (config.delete_attachments !== undefined && typeof config.delete_attachments !== 'boolean')) throw new Error('Invalid retention configuration');
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
         const cutoffStr = cutoffDate.toISOString();
@@ -171,40 +175,41 @@ export class TenantAutomationService {
         const toDelete = await this.deps.repositories.tickets.findTicketsForRetention(cutoffStr);
 
         for (const ticket of toDelete) {
+          if (!this.evaluateConditions(rule.conditions, { ticket })) continue;
           try {
             // 1. Get articles for this ticket
             const articles = await this.deps.repositories.articles.listByTicket(ticket.id);
 
-            // 2. For each article, clean up attachments (R2 + metadata)
+            // Keep database ownership records until every external deletion succeeds.
+            // A retry can repeat idempotent deletes using those same records.
+            for (const article of articles) {
+              const attachments = await this.deps.repositories.attachments.findByArticle(article.id);
+              if (attachments.length && !config.delete_attachments) {
+                throw new Error('Retention requires attachment deletion consent');
+              }
+              for (const attachment of attachments) {
+                await this.deps.attachmentStorage.deleteAttachment(attachment.r2_key);
+              }
+              if (article.body_r2_key) {
+                if (this.deps.legacyArticleStorage && /^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/.test(article.body_r2_key)) {
+                  await this.deps.legacyArticleStorage.deleteLegacyArticleBody(article.body_r2_key);
+                } else {
+                  await this.deps.attachmentStorage.deleteAttachment(article.body_r2_key);
+                }
+              }
+              if (article.qa_type) {
+                if (!this.deps.vectorStorage) throw new Error('Vector storage unavailable');
+                const count = article.chunk_count;
+                if (!Number.isSafeInteger(count) || !count || count < 1 || count > 10000) throw new Error('Vector cleanup manifest unavailable');
+                await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${article.id}_${i}`));
+              }
+            }
             for (const article of articles) {
               const attachments = await this.deps.repositories.attachments.findByArticle(article.id);
               for (const attachment of attachments) {
-                if (config.delete_attachments) {
-                  try {
-                    await this.deps.attachmentStorage.deleteAttachment(attachment.r2_key);
-                    totalDeletedAttachments++;
-                  } catch (e) {
-                    console.error(`Failed to delete R2 object: ${attachment.r2_key}`, e);
-                  }
-                }
                 await this.deps.repositories.attachments.delete(attachment.id);
+                totalDeletedAttachments++;
               }
-
-              // 3. Clean up vectors for QA articles
-              if (article.qa_type && this.deps.vectorStorage) {
-                const count = article.chunk_count || 10;
-                const vectorIds: string[] = [];
-                for (let i = 0; i < count; i++) {
-                  vectorIds.push(`qa_${article.id}_${i}`);
-                }
-                try {
-                  await this.deps.vectorStorage.deleteByIds(vectorIds);
-                } catch (e) {
-                  console.error('Failed to delete vectors during retention:', e);
-                }
-              }
-
-              // 4. Delete the article
               await this.deps.repositories.articles.delete(article.id);
             }
 
@@ -212,11 +217,11 @@ export class TenantAutomationService {
             await this.deps.repositories.tickets.delete(ticket.id);
             totalDeletedTickets++;
           } catch (e) {
-            console.error(`Error cleaning up ticket ${ticket.id}:`, e);
+            console.error('Tenant retention cleanup failed; ownership retained for retry');
           }
         }
       } catch (e) {
-        console.error('Error running retention rule:', e);
+        console.error('Tenant retention rule failed');
       }
     }
 

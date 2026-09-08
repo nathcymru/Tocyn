@@ -403,6 +403,7 @@ describe("Dashboard Handler Integration Tests", () => {
     it("should create an article with attachments", async () => {
       const mockTicket = { id: "t-1", group_id: "g-1", customer_id: "c-1" };
       const mockArticle = { id: "art-1", ticket_id: "t-1", body: "Here is the requested file." };
+      mockBucket.get.mockResolvedValueOnce({ size: 1024, httpMetadata: { contentType: "application/pdf" }, body: new ReadableStream({ start(c) { c.close(); } }) });
       const mockAttachment = { id: "att-1", file_name: "invoice.pdf", file_size: 1024, content_type: "application/pdf", r2_key: "agent-attachments/agent-1/uuid.pdf" };
 
       firstQueue.push(mockTicket, { 1: 1 }, mockTicket, mockArticle, mockAttachment);

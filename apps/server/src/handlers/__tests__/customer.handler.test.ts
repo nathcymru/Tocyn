@@ -78,7 +78,7 @@ vi.mock("../../middleware/tenant.middleware", async (importOriginal) => {
             putCalledWithKey = key;
             return {};
           },
-          getAttachment: async () => new Response("fake data")
+          getAttachment: async () => Object.assign(new Response("fake data"), { size: 123, httpMetadata: { contentType: "image/png" } })
         }
       });
       await next();
@@ -160,7 +160,7 @@ describe("Customer Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.success).toBe(true);
-      expect(mockRequestAuth).toHaveBeenCalledWith("test@example.com", "magic_link", "http://localhost:5173");
+      expect(mockRequestAuth).toHaveBeenCalledWith("test@example.com", "magic_link");
     });
   });
 
@@ -184,7 +184,7 @@ describe("Customer Handler Integration Tests", () => {
       const setCookieHeader = res.headers.get("Set-Cookie");
       expect(setCookieHeader).toContain("lumina_customer_token=mock-jwt-token");
       expect(setCookieHeader).toContain("HttpOnly");
-      expect(mockVerifyAuth).toHaveBeenCalledWith("plain-token-123");
+      expect(mockVerifyAuth).toHaveBeenCalledWith("plain-token-123", undefined);
     });
 
     it("should return 401 if token is invalid", async () => {

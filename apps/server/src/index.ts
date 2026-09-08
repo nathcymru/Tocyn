@@ -1,6 +1,6 @@
 import { VectorizeWorkflow } from './workflows/vectorize.workflow';
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
+import { apiCors } from './middleware/cors-policy';
 import { Env } from './bindings';
 import { EmailHandler } from './handlers/email.handler';
 import { InboundEmailService } from './services/email/inbound.service';
@@ -52,26 +52,8 @@ app.get('/api/realtime', async (c) => {
   return obj.fetch(newReq);
 });
 
-// Enable CORS for the dashboard, portal, and widget
-app.use('/api/*', cors({
-  origin: (origin, c) => {
-    // Widget needs to be embedded on any site
-    if (c.req.path.startsWith('/api/v1/widget')) {
-      return origin || '*';
-    }
-
-    if (!origin) return c.env.PORTAL_URL || 'http://localhost:5173';
-
-    // In a single-tenant environment using JWTs (no cookies), reflecting the
-    // incoming origin allows users to bind any custom domain seamlessly.
-    return origin;
-  },
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Lumina-Source'],
-  exposeHeaders: ['Content-Length'],
-  maxAge: 600,
-  credentials: true,
-}));
+// Credentialed browser access is limited to configured application origins.
+app.use('/api/*', apiCors);
 
 // Health check
 app.get('/health', (c) => c.text('OK'));

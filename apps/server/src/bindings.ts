@@ -14,5 +14,6 @@ export interface Env {
   CLOUDFLARE_API_TOKEN?: string;
   ENVIRONMENT?: string;
   PORTAL_URL?: string;
+  CORS_ORIGINS?: string;
   DISABLE_RATE_LIMIT?: string;
 }

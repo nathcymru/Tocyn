@@ -1,5 +1,13 @@
 import { Env } from '../bindings';
 
+// Provider messages, custom names and stacks can contain prompts or credentials.
+function errorCategory(error: unknown): string {
+  if (error instanceof TypeError) return 'TypeError';
+  if (error instanceof RangeError) return 'RangeError';
+  if (error instanceof Error) return 'Error';
+  return 'UnknownError';
+}
+
 export interface SuggestionParams {
   input: string;
   context: string[];
@@ -21,7 +29,7 @@ export class StatelessAiService {
       const rawVector = Array.isArray(result.data[0]) ? result.data[0] : result.data;
       return Array.from(rawVector);
     } catch (error) {
-      console.error('AI Embedding error:', error);
+      console.error('AI Embedding error:', { category: errorCategory(error) });
       throw new Error('Failed to generate embeddings');
     }
   }
@@ -73,7 +81,7 @@ Please provide a suggested response:`;
 
       return result.response;
     } catch (error) {
-      console.error('AI Suggestion error:', error);
+      console.error('AI Suggestion error:', { category: errorCategory(error) });
       return "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
     }
   }
@@ -107,7 +115,7 @@ IMPORTANT RULES:
 
       return result.response || "I'm sorry, I couldn't generate a response.";
     } catch (error) {
-      console.error('AI Response error:', error);
+      console.error('AI Response error:', { category: errorCategory(error) });
       return "I'm having trouble connecting to my brain. Please try again later.";
     }
   }

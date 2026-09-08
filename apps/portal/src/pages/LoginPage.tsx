@@ -36,7 +36,7 @@ export function LoginPage() {
     setError(null);
 
     try {
-      await portalApi.post('/auth/request', {
+      const result = await portalApi.post<{ challengeId?: string }>('/auth/request', {
         email,
         type,
         turnstileToken,
@@ -46,7 +46,7 @@ export function LoginPage() {
       
       if (type === 'otp') {
         setTimeout(() => {
-          navigate('/verify', { state: { email } });
+          navigate('/verify', { state: { email, challengeId: result.challengeId } });
         }, 1500);
       }
     } catch (err: unknown) {

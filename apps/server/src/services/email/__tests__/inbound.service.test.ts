@@ -84,7 +84,7 @@ describe('InboundEmailService', () => {
     };
 
     (PostalMime.prototype.parse as any).mockResolvedValue(mockEmail);
-    mockDeps.repositories.tickets.findBySubject.mockResolvedValue({ id: '123', subject: '[#123] New issue', customer_id: 'user-1' });
+    mockDeps.repositories.tickets.findBySubject.mockResolvedValue({ id: '123', subject: '[#123] New issue', customer_id: 'user-1', customer_email: 'customer@example.com' });
     mockDeps.repositories.articles.create.mockResolvedValue({ id: 'article-2' });
 
     await service.handle({
@@ -99,6 +99,30 @@ describe('InboundEmailService', () => {
       ticket_id: '123',
       body: 'Following up.',
     }));
+  });
+
+  it.each(['subject', 'inReplyTo', 'references'])('rejects an unrelated sender using %s without writes', async (route) => {
+    const ticket = { id: 'private-ticket', customer_id: 'owner', customer_email: 'owner@example.com' };
+    (PostalMime.prototype.parse as any).mockResolvedValue({
+      subject: 'Thread', from: { address: 'other@example.com' }, text: 'Untrusted reply',
+      inReplyTo: route === 'inReplyTo' ? 'message-id' : undefined,
+      references: route === 'references' ? 'message-id' : undefined,
+    });
+    mockDeps.repositories.tickets.findBySubject.mockResolvedValue(route === 'subject' ? ticket : null);
+    mockDeps.repositories.articles.findByRawEmailId.mockResolvedValue({ ticket_id: ticket.id });
+    mockDeps.repositories.tickets.get.mockResolvedValue(ticket);
+    await expect(service.handle({ from: 'other@example.com', to: 'support@example.com', subject: 'Thread', raw: new ReadableStream() })).rejects.toThrow('participant');
+    expect(mockDeps.repositories.articles.create).not.toHaveBeenCalled();
+    expect(mockDeps.repositories.tickets.touch).not.toHaveBeenCalled();
+    expect(mockDeps.repositories.users.create).not.toHaveBeenCalled();
+    expect(mockDeps.attachmentStorage.putAttachment).not.toHaveBeenCalled();
+  });
+
+  it('rejects a forged MIME sender before creating a customer', async () => {
+    (PostalMime.prototype.parse as any).mockResolvedValue({ from: { address: 'victim@example.com' }, text: 'Text' });
+    await expect(service.handle({ from: 'other@example.com', to: 'support@example.com', subject: 'Thread', raw: new ReadableStream() })).rejects.toThrow('sender mismatch');
+    expect(mockDeps.repositories.users.create).not.toHaveBeenCalled();
+    expect(mockDeps.repositories.articles.create).not.toHaveBeenCalled();
   });
 
   it('should compensate by deleting R2 attachment if DB insert fails', async () => {

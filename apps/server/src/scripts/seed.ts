@@ -8,6 +8,10 @@ import * as fs from 'fs';
  */
 
 async function seed() {
+  // This legacy seed targets the pre-tenant schema. Never apply it implicitly to Phase 1.
+  if (!process.argv.includes('--legacy-schema')) {
+    throw new Error('Legacy seed requires --legacy-schema and an explicitly reviewed pre-tenant local database; Phase 1 provisioning is tracked in #42.');
+  }
   const authService = new AuthService();
   const adminId = "00000000-0000-0000-0000-000000000001";
   const adminEmail = "admin@luminatick.local";
@@ -23,29 +27,29 @@ async function seed() {
 
   // 1. Initial Config
   sqlStatements.push(
-    `INSERT OR REPLACE INTO config (key, value) VALUES ('COMPANY_NAME', 'Luminatick Support');`,
-    `INSERT OR REPLACE INTO config (key, value) VALUES ('PORTAL_URL', 'https://support.example.com');`,
-    `INSERT OR REPLACE INTO config (key, value) VALUES ('SYSTEM_TIMEZONE', 'UTC');`,
-    `INSERT OR REPLACE INTO config (key, value) VALUES ('TICKET_PREFIX', 'SUP-');`,
-    `INSERT OR REPLACE INTO config (key, value) VALUES ('DEFAULT_EMAIL_SIGNATURE', '---\\nLuminatick Support Team');`,
-    `INSERT OR REPLACE INTO config (key, value) VALUES ('ALLOW_PUBLIC_SIGNUP', 'false');`,
-    `INSERT OR REPLACE INTO config (key, value) VALUES ('DEFAULT_TICKET_STATUS', 'open');`
+    `INSERT OR IGNORE INTO config (key, value) VALUES ('COMPANY_NAME', 'Luminatick Support');`,
+    `INSERT OR IGNORE INTO config (key, value) VALUES ('PORTAL_URL', 'https://support.example.com');`,
+    `INSERT OR IGNORE INTO config (key, value) VALUES ('SYSTEM_TIMEZONE', 'UTC');`,
+    `INSERT OR IGNORE INTO config (key, value) VALUES ('TICKET_PREFIX', 'SUP-');`,
+    `INSERT OR IGNORE INTO config (key, value) VALUES ('DEFAULT_EMAIL_SIGNATURE', '---\\nLuminatick Support Team');`,
+    `INSERT OR IGNORE INTO config (key, value) VALUES ('ALLOW_PUBLIC_SIGNUP', 'false');`,
+    `INSERT OR IGNORE INTO config (key, value) VALUES ('DEFAULT_TICKET_STATUS', 'open');`
   );
 
   // 2. Default Group
   const groupId = "00000000-0000-0000-0000-000000000002";
   sqlStatements.push(
-    `INSERT OR REPLACE INTO groups (id, name, description) VALUES ('${groupId}', 'General Support', 'The default group for all incoming tickets.');`
+    `INSERT OR IGNORE INTO groups (id, name, description) VALUES ('${groupId}', 'General Support', 'The default group for all incoming tickets.');`
   );
 
   // 3. Admin User
   sqlStatements.push(
-    `INSERT OR REPLACE INTO users (id, email, full_name, password_hash, role, mfa_enabled) VALUES ('${adminId}', '${adminEmail}', 'System Admin', '${passwordHash}', 'admin', FALSE);`
+    `INSERT OR IGNORE INTO users (id, email, full_name, password_hash, role, mfa_enabled) VALUES ('${adminId}', '${adminEmail}', 'System Admin', '${passwordHash}', 'admin', FALSE);`
   );
 
   // 4. Assign Admin to General Support
   sqlStatements.push(
-    `INSERT OR REPLACE INTO user_groups (user_id, group_id) VALUES ('${adminId}', '${groupId}');`
+    `INSERT OR IGNORE INTO user_groups (user_id, group_id) VALUES ('${adminId}', '${groupId}');`
   );
 
   const sqlOutput = "-- Luminatick Seed Data\n" + sqlStatements.join("\n");
@@ -59,9 +63,9 @@ async function seed() {
     console.log(sqlOutput);
   }
 
-  console.error("\n--- SEED SUCCESS ---");
+  console.error("\n--- LEGACY SQL GENERATED (NOT APPLIED) ---");
   console.error(`Admin Email: ${adminEmail}`);
-  console.error(`Admin Password: ${adminPassword}`);
+  console.error(`Password for a newly inserted admin only: ${adminPassword}`);
   console.error("---------------------\n");
 
   console.error("\n--- POST-DEPLOYMENT ACTION REQUIRED ---");

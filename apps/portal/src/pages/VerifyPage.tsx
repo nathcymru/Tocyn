@@ -36,7 +36,7 @@ export function VerifyPage() {
     verification.current.request
       .then(response => {
         if (!active) return;
-        if (response.token) localStorage.setItem('lumina_customer_token', response.token);
+        if (response.token) { try { localStorage.setItem('lumina_customer_token', response.token); } catch { /* HttpOnly cookie remains available. */ } }
         login(response.user);
         navigate('/tickets', { replace: true });
       })
@@ -51,9 +51,9 @@ export function VerifyPage() {
     setError(null);
 
     try {
-      const response = await portalApi.post<{ user: User, token: string }>('/auth/verify', { token: tokenToVerify });
+      const response = await portalApi.post<{ user: User, token: string }>('/auth/verify', { token: tokenToVerify, challengeId: location.state?.challengeId });
       if (response.token) {
-        localStorage.setItem('lumina_customer_token', response.token);
+        try { localStorage.setItem('lumina_customer_token', response.token); } catch { /* HttpOnly cookie remains available. */ }
       }
       login(response.user);
       navigate('/tickets', { replace: true });

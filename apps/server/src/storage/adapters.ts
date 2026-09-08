@@ -142,6 +142,13 @@ export class LegacyArticleBodyStorage {
     }
   }
 
+  async deleteLegacyArticleBody(legacyKey: string) {
+    if (!/^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/.test(legacyKey)) {
+      throw new Error('Invalid legacy article body key format');
+    }
+    return this.rawBucket.delete(legacyKey);
+  }
+
   async getLegacyUnscopedAttachment(legacyKey: string) {
     const legacyPattern = /^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/;
     if (!legacyPattern.test(legacyKey)) {

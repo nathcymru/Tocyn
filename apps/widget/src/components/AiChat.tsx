@@ -53,7 +53,7 @@ const AiChat: React.FC<Props> = ({ config }) => {
       const response = await fetch(`${BASE_URL}/chat`, {
         method: 'POST',
         headers: widgetHeaders(),
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({ message: input, history }),
       });
 

@@ -41,7 +41,7 @@ export class CustomerAuthService {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  async requestAuth(email: string, type: 'magic_link' | 'otp' = 'magic_link', baseUrl?: string): Promise<void> {
+  async requestAuth(email: string, type: 'magic_link' | 'otp' = 'magic_link', baseUrl?: string): Promise<{ challengeId?: string }> {
     if (!this.deps || !this.deps.scope.tenantId) {
       throw new Error('Invalid tenant context');
     }
@@ -61,7 +61,7 @@ export class CustomerAuthService {
       }
       if (existingUser.role !== 'customer') {
         // Non-customer role; return silently to prevent user enumeration
-        return;
+        return { challengeId: type === 'otp' ? crypto.randomUUID() : undefined };
       }
       userId = existingUser.userId;
     } else {
@@ -110,7 +110,7 @@ export class CustomerAuthService {
       const array = new Uint32Array(1);
       crypto.getRandomValues(array);
       const otp = Math.floor(100000 + (array[0] % 900000)).toString();
-      const otpHash = await this.hashToken(otp);
+      const otpHash = await this.hashToken(`${tokenId}\0${otp}`);
 
       await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, otpHash, type, expiresAt);
 
@@ -121,18 +121,20 @@ export class CustomerAuthService {
         text: `Hello,\n\nYour login code is: ${otp}\n\nThis code expires in 15 minutes.`,
       });
     }
+    return { challengeId: type === 'otp' ? tokenId : undefined };
   }
 
-  async verifyAuth(plainToken: string): Promise<{ token: string, user: User } | null> {
+  async verifyAuth(plainToken: string, challengeId?: string): Promise<{ token: string, user: User } | null> {
     if (!this.deps || !this.deps.scope.tenantId) {
       return null;
     }
 
-    const tokenHash = await this.hashToken(plainToken);
+    if (challengeId ? !/^[0-9a-f-]{36}$/.test(challengeId) || !/^\d{6}$/.test(plainToken) : !/^[0-9a-f]{64}$/.test(plainToken)) return null;
+    const tokenHash = await this.hashToken(challengeId ? `${challengeId}\0${plainToken}` : plainToken);
     const now = new Date().toISOString();
 
     // Use isolated verification
-    const user = await this.deps.repositories.users.verifyAndConsumeCustomerAuthToken(tokenHash, now);
+    const user = await this.deps.repositories.users.verifyAndConsumeCustomerAuthToken(tokenHash, now, challengeId);
 
     if (!user) {
       return null;
