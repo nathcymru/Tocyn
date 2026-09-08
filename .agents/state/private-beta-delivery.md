@@ -58,8 +58,10 @@ a beta issue remains required and must be tracked; these exclusions cannot hide 
 | #57/#65 independent acceptance review | Existing ChatGPT Work task | Existing task configuration, lowest sufficient requested | Dispatch returned conversation-load timeout; execution unconfirmed |
 
 Active branch: `codex/20-contributor-setup`. Implementation owner edits setup/docs/config;
-coordinator owns this state file. No overlapping file ownership. PR preparation: supported-runtime validation and independent review passed; the final
-PR must still pass all required GitHub checks before integration. Preserve one coherent issue PR and batch corrections.
+coordinator owns this state file. No overlapping file ownership. PR: [#101](https://github.com/nathcymru/Tocyn/pull/101). Supported-runtime validation,
+independent review and all six required CI/CodeQL checks passed at `cea8f55`.
+Normal merge was rejected by the approving-review rule; owner review-exception authority
+is pending. This snapshot-only follow-up must also pass required checks before merge. Preserve one coherent issue PR and batch corrections.
 
 The environment exposes four concurrent Codex agent slots including the coordinator.
 Do not claim greater concurrency or successful use of a separate allowance without evidence.
@@ -87,9 +89,11 @@ Do not claim greater concurrency or successful use of a separate allowance witho
 1. #20 local changes and command evidence are complete; see
    `docs/maintenance/contributor-setup-verification.md`. Obsolete local seed scripts were
    removed after internal review. All documented checks passed on Node 22.19/npm 10.9.3.
-   Independent dashboard/portal/widget HTTP probes passed. Open and validate its PR.
-2. Independently review its changes; fix the complete finding set, run required checks,
-   then open one meaningful PR and integrate only through repository gates.
+   Independent dashboard/portal/widget HTTP probes passed. PR #101 is ready and awaits
+   an approving review or explicit owner authority for the existing PR-only exception.
+2. Internal review and corrections are complete. Verify all required checks on the final
+   PR head and integrate only when the approving-review boundary is satisfied.
+   Do not bypass CI, security or signature requirements.
 3. Finish #57 manifest/workflow/owner-input preparation while #20 runs; begin dependency-
    cleared implementation after #20 acceptance. Do not deploy during preparation.
 4. Update issue/Project and this snapshot on meaningful delivery, merge, blocker or handoff.
@@ -109,3 +113,13 @@ Do not claim greater concurrency or successful use of a separate allowance witho
   reconstruction. This is a dated baseline observation, not a security certification.
 - Work acceptance-review dispatch returned a conversation-load timeout. No separate-pool
   execution is confirmed; local internal review completed the bounded review instead.
+
+## Current integration blocker
+
+GitHub rejected the normal squash merge of #101 after all required checks passed.
+The owner has been asked to authorise the existing PR-only administrator review
+exception for this PR or supply an approving review. No exception was used.
+The [issue progress receipt](https://github.com/nathcymru/Tocyn/issues/20#issuecomment-5590889725)
+records the exact validated revision and remaining gate. #20 remains open/In progress;
+all twelve beta blockers remain open. No forecast or numerical progress was invented.
+Dependency-cleared beta implementation cannot proceed past #20 until integration.
