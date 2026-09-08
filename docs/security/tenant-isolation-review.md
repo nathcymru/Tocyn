@@ -1,5 +1,10 @@
 # Tenant-isolation review and release gates
 
+This is the preserved 7 September review baseline. Phase 1 implementation followed
+in PR #43; see the [current acceptance matrix](tenant-isolation-acceptance.md) for
+local evidence and remaining runtime/production gates. The findings below describe
+the reviewed historical revision, not the current implementation.
+
 Reviewed `cd6ba5ec463fd1aa0bf4844171e9f0d6fb8ff8d8` on 7 September 2026.
 **Result: multi-tenant deployment blocked.** The inherited application is single-tenant.
 Completing this review does not complete the multi-tenant implementation in issue #19.

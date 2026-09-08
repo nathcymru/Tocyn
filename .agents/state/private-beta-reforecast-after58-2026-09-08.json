@@ -1,0 +1,162 @@
+{
+  "generatedAt": "2026-09-08",
+  "basis": {
+    "event": "PR #110 for #58 merged 2026-09-08T22:09:05Z at 4bf6dc5af44674a77002a0d2f0585d9b8df0d6c3; required CI and CodeQL contexts passed.",
+    "calendar": "Monday-Saturday, 8 productive hours/day; Sunday excluded",
+    "effort": "Approved 3x planning allowance, including implementation, validation and review; no additional owner hours assumed.",
+    "capacity": "One sequential issue per W1/W2; shared review/integration capacity remains 4 hours/day.",
+    "scope": "Current beta is owner-local only. Historical remote deployment, mail and rollback proof is not a critical-path gate."
+  },
+  "changes": [
+    {
+      "issue": 58,
+      "status": "Done",
+      "actualStart": "2026-09-08",
+      "baselineTarget": "2026-09-28",
+      "reason": "Coordinator accepted #58 after signed integration, internal review, required PR checks and passing main CI/CodeQL under standing owner authority.",
+      "actualCompletion": "2026-09-08",
+      "scheduleVarianceWorkingDays": -17
+    },
+    {
+      "issue": 19,
+      "workstream": "W1",
+      "planningEffortHours": 48,
+      "actualStart": "2026-09-08",
+      "forecastStart": "2026-09-08",
+      "forecastTarget": "2026-09-15",
+      "baselineTarget": "2026-10-06",
+      "scheduleVarianceWorkingDays": -18,
+      "predecessors": [
+        58
+      ],
+      "reason": "Work began late on 8 September. Preserve the actual start; the conservative six-working-day count starts 9 September after #58 integration."
+    },
+    {
+      "issue": 59,
+      "workstream": "W1",
+      "planningEffortHours": 48,
+      "forecastStart": "2026-09-16",
+      "forecastTarget": "2026-09-22",
+      "baselineTarget": "2026-10-14",
+      "scheduleVarianceWorkingDays": -19,
+      "predecessors": [
+        19
+      ],
+      "reason": "Six working days after #19; Sunday excluded."
+    },
+    {
+      "issue": 60,
+      "workstream": "W1",
+      "planningEffortHours": 48,
+      "forecastStart": "2026-09-23",
+      "forecastTarget": "2026-09-29",
+      "baselineTarget": "2026-10-22",
+      "scheduleVarianceWorkingDays": -20,
+      "predecessors": [
+        59
+      ],
+      "reason": "Six working days after #59; Sunday excluded."
+    },
+    {
+      "issue": 63,
+      "workstream": "W1",
+      "planningEffortHours": 48,
+      "forecastStart": "2026-09-30",
+      "forecastTarget": "2026-10-06",
+      "baselineTarget": "2026-10-30",
+      "scheduleVarianceWorkingDays": -21,
+      "predecessors": [
+        59,
+        60
+      ],
+      "reason": "Both dependencies complete; six working days."
+    },
+    {
+      "issue": 93,
+      "workstream": "W2",
+      "planningEffortHours": 24,
+      "forecastStart": "2026-09-30",
+      "forecastTarget": "2026-10-02",
+      "baselineTarget": "2026-10-31",
+      "scheduleVarianceWorkingDays": -25,
+      "predecessors": [
+        57,
+        60
+      ],
+      "reason": "Three working days concurrent with #63 after #60."
+    },
+    {
+      "issue": 61,
+      "workstream": "W1",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-10-07",
+      "forecastTarget": "2026-10-12",
+      "baselineTarget": "2026-11-05",
+      "scheduleVarianceWorkingDays": -21,
+      "predecessors": [
+        60,
+        63
+      ],
+      "reason": "Five working days after the shared predecessors."
+    },
+    {
+      "issue": 62,
+      "workstream": "W2",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-10-07",
+      "forecastTarget": "2026-10-12",
+      "baselineTarget": "2026-11-07",
+      "scheduleVarianceWorkingDays": -23,
+      "predecessors": [
+        60,
+        63
+      ],
+      "reason": "Five working days concurrent with #61 in W2."
+    },
+    {
+      "issue": 21,
+      "workstream": "W2",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-10-13",
+      "forecastTarget": "2026-10-17",
+      "baselineTarget": "2026-11-13",
+      "scheduleVarianceWorkingDays": -23,
+      "predecessors": [
+        61,
+        62
+      ],
+      "reason": "Five working days after both workflow predecessors."
+    },
+    {
+      "issue": 65,
+      "workstream": "W2",
+      "planningEffortHours": 48,
+      "forecastStart": "2026-10-19",
+      "forecastTarget": "2026-10-24",
+      "baselineTarget": "2026-11-21",
+      "scheduleVarianceWorkingDays": -24,
+      "predecessors": [
+        57,
+        58,
+        19,
+        60,
+        61,
+        62,
+        63,
+        21,
+        93
+      ],
+      "reason": "Six working days after the final beta predecessors; this remains the critical beta completion forecast, not a release promise."
+    }
+  ],
+  "unchanged": {
+    "baselineDates": true,
+    "planningEffortMultiplier": "3x",
+    "workstreams": 2,
+    "sharedReviewIntegrationHoursPerDay": 4
+  },
+  "risks": [
+    "Forecast assumes each remaining issue is accepted on its proposed target without scope, security or CI rework.",
+    "No extra owner capacity hours are assumed."
+  ]
+}

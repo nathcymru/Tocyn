@@ -7,6 +7,8 @@ import * as jose from 'jose';
 import { Headers as MiniflareHeaders, Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { createLocalRuntime } from '../src/local-index';
 import type { Env } from '../src/bindings';
+import { createVerifiedTenantScope } from '../src/auth/scope';
+import { createRepositories } from '../src/repositories';
 import { AuthService } from '../src/services/auth/auth.service';
 import { MFAService } from '../src/services/auth/mfa.service';
 import { splitSql } from './split-sql';
@@ -24,6 +26,15 @@ const fixtureWidgetKeys: Record<Tenant, string> = {
 type PrincipalName = typeof principalNames[number];
 type Tenant = 'fixture-tenant-a' | 'fixture-tenant-b';
 type Role = 'customer' | 'admin';
+type OperatorPrincipal = 'operatorA' | 'operatorB';
+type TicketPermission = 'tickets:read' | 'tickets:write';
+
+type R2OperationCounts = Readonly<{
+  get: number;
+  put: number;
+  delete: number;
+  list: number;
+}>;
 
 type PrivatePrincipal = {
   tenantId: Tenant;
@@ -48,9 +59,16 @@ export type FixtureResponse = Response & {
   json: <T = unknown>() => Promise<T>;
 };
 
+/** Local-only binding shared with route composition; unavailable outside a fixture callback. */
+export type FixtureR2 = Readonly<{
+  bucket: R2Bucket;
+  operationCounts: () => R2OperationCounts;
+}>;
+
 export type LocalTenantFixture = Readonly<{
   principals: Readonly<Record<PrincipalName, FixturePrincipal>>;
   db: D1Database;
+  r2: FixtureR2;
   rateLimitIdentity: string;
   request: (path: string, options?: {
     method?: string;
@@ -63,6 +81,12 @@ export type LocalTenantFixture = Readonly<{
   login: (principal: PrincipalName, password?: string) => Promise<FixtureResponse>;
   currentMfaCode: (principal: 'operatorA' | 'operatorB') => string;
   invalidMfaCode: (principal: 'operatorA' | 'operatorB') => string;
+  createScopedApiKey: (operator: OperatorPrincipal, permissions: readonly TicketPermission[]) => Promise<Readonly<{
+    id: string;
+    apiKey: string;
+    permissions: readonly TicketPermission[];
+  }>>;
+  revokePrincipalSessions: (principal: PrincipalName) => Promise<void>;
   tokenTenant: (token: string) => Promise<Tenant>;
   widgetTokenTenant: (token: string) => Promise<Tenant>;
   assertStoredCredentialProtection: (rawApiKey: string) => Promise<void>;
@@ -231,6 +255,24 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
   }
 }
 
+function countedR2Bucket(bucket: R2Bucket): FixtureR2 {
+  const counts = { get: 0, put: 0, delete: 0, list: 0 };
+  const counted = new Proxy(bucket, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== 'function' || !['get', 'put', 'delete', 'list'].includes(String(property))) return value;
+      return (...args: unknown[]) => {
+        counts[property as keyof typeof counts]++;
+        return value.apply(target, args);
+      };
+    },
+  }) as R2Bucket;
+  return Object.freeze({
+    bucket: counted,
+    operationCounts: () => Object.freeze({ ...counts }),
+  });
+}
+
 /**
  * Creates only in-memory local D1/R2 bindings. The callback receives route-level
  * handles; plaintext synthetic credentials never appear in a report or filesystem.
@@ -239,18 +281,20 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
   const headersGlobal = globalThis as typeof globalThis & { Headers: typeof MiniflareHeaders };
   const originalHeaders = headersGlobal.Headers;
   Object.assign(headersGlobal, { Headers: MiniflareHeaders });
-  const miniflare = new Miniflare(convertV4MiniflareOptions({ workers: [{
-    name: fixtureMarker,
-    modules: true,
-    script: 'export default { fetch() { return new Response("fixture"); } }',
-    d1Databases: { DB: 'e2d1b2a2-b2f8-42f4-82f7-0c58f5371e58' },
-    r2Buckets: ['ATTACHMENTS_BUCKET'],
-  }] }));
+  let miniflare: Miniflare | undefined;
 
   try {
+    miniflare = new Miniflare(convertV4MiniflareOptions({ workers: [{
+      name: fixtureMarker,
+      modules: true,
+      script: 'export default { fetch() { return new Response("fixture"); } }',
+      d1Databases: { DB: 'e2d1b2a2-b2f8-42f4-82f7-0c58f5371e58' },
+      r2Buckets: ['ATTACHMENTS_BUCKET'],
+    }] }));
     const db = await miniflare.getD1Database('DB');
-    const bucket = await miniflare.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
-    const env = localEnv(db, bucket);
+    const rawBucket = await miniflare.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
+    const r2 = countedR2Bucket(rawBucket);
+    const env = localEnv(db, r2.bucket);
     const privatePrincipals = generatedPrincipals();
     const localRuntime = createLocalRuntime();
     const requestIp = `fixture-run-${++fixtureRun}`;
@@ -279,6 +323,7 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
     const fixture: LocalTenantFixture = Object.freeze({
       principals: Object.freeze(Object.fromEntries(principalNames.map(name => [name, publicPrincipal(name, privatePrincipals[name])])) as Record<PrincipalName, FixturePrincipal>),
       db,
+      r2,
       rateLimitIdentity: requestIp,
       request,
       login: (principal, password = privatePrincipals[principal].password) => request('/api/auth/login', {
@@ -311,6 +356,22 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
         }
         throw new Error('Unable to derive a deliberately invalid fixture OTP');
       },
+      createScopedApiKey: async (operator, permissions) => {
+        assert.ok(permissions.length > 0 && permissions.every(permission => permission === 'tickets:read' || permission === 'tickets:write'), 'Fixture API-key permissions must be ticket permissions');
+        const principal = privatePrincipals[operator];
+        assert.equal(principal.role, 'admin', 'Fixture API keys are available only for its fixed synthetic operators');
+        const repositories = createRepositories(
+          createVerifiedTenantScope(principal.tenantId, principal.localId, ['admin'], 1),
+          db,
+        );
+        const created = await repositories.apiKeys.create(`fixture-${operator}`, [...permissions]);
+        return Object.freeze({ id: created.id, apiKey: created.apiKey, permissions: Object.freeze([...permissions]) });
+      },
+      revokePrincipalSessions: async principal => {
+        const identity = privatePrincipals[principal];
+        await db.prepare('UPDATE users SET session_version = session_version + 1 WHERE tenant_id = ? AND id = ?')
+          .bind(identity.tenantId, identity.localId).run();
+      },
       assertStoredCredentialProtection: async rawApiKey => {
         const rows = await db.prepare('SELECT email, password_hash, mfa_secret, mfa_enabled FROM users WHERE email IN (?, ?, ?, ?)').bind(...principalNames.map(name => privatePrincipals[name].email)).all<{
           email: string; password_hash: string; mfa_secret: string | null; mfa_enabled: number;
@@ -330,14 +391,14 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
       resourceUsage: async () => {
         const rows = await db.prepare(`SELECT
           (SELECT count(*) FROM users) + (SELECT count(*) FROM tickets) + (SELECT count(*) FROM api_keys) AS count`).first<{ count: number }>();
-        const objects = await bucket.list();
+        const objects = await r2.bucket.list();
         return Object.freeze({ d1Rows: rows?.count ?? 0, r2Objects: objects.objects.length, routeRequests });
       },
     });
     return await callback(fixture);
   } finally {
     Object.assign(headersGlobal, { Headers: originalHeaders });
-    await miniflare.dispose();
+    await miniflare?.dispose();
   }
 }
 

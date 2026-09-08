@@ -16,6 +16,7 @@ This directory contains the version-controlled implementation, architecture, pri
 - [Agent governance](agents/README.md)
 - [Roadmap pointer and forecasts](roadmap.md)
 - [Security implementation material](security/)
+- [Current tenant-isolation acceptance matrix](security/tenant-isolation-acceptance.md)
 - [Deployment guide](deployment.md) — inherited/operational material; current issue/release gates control remote actions.
 - [Isolated preview and beta release preparation](isolated-environments.md) — #57 source controls, owner operation choices, and unrun remote acceptance contract.
 - [Agent development tooling](agent-development.md)

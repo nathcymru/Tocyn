@@ -14,7 +14,12 @@
     "test:local-tenants": "tsx scripts/verify-local-tenant-fixture.ts",
     "test:local-tenants:focused": "tsx --test scripts/local-tenant-fixture.test.ts",
     "fixture:local-tenants": "tsx scripts/run-local-tenant-fixture.ts --interactive-credentials",
-    "typecheck:local-tenants": "tsc -p scripts/tsconfig.local-tenant-fixture.json"
+    "typecheck:local-tenants": "tsc -p scripts/tsconfig.local-tenant-fixture.json",
+    "test:tenant-isolation-core": "tsx --test scripts/tenant-isolation-core.test.ts",
+    "typecheck:tenant-isolation-core": "tsc -p scripts/tsconfig.tenant-isolation-core.json",
+    "test:tenant-isolation-storage-background": "tsx --test scripts/tenant-isolation-storage-background.test.ts",
+    "typecheck:tenant-isolation-storage-background": "tsc -p scripts/tsconfig.tenant-isolation-storage-background.json",
+    "test:local-tenant-realtime": "node --import tsx scripts/local-tenant-realtime-smoke.mjs"
   },
   "dependencies": {
     "@luminatick/shared": "*",
