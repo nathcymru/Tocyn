@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "local-tenant-fixture.ts",
+    "local-tenant-fixture.test.ts",
+    "verify-local-tenant-fixture.ts",
+    "run-local-tenant-fixture.ts"
+  ]
+}

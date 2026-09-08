@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HttpResendTransport, LOCAL_AUTH_CAPTURE_RECIPIENT, LocalAuthCaptureTransport } from '../transport';
+import { HttpResendTransport, LOCAL_AUTH_CAPTURE_RECIPIENT, LOCAL_AUTH_CAPTURE_RECIPIENTS, LocalAuthCaptureTransport } from '../transport';
 
 afterEach(() => vi.unstubAllGlobals());
 describe('email provider error redaction', () => {
@@ -21,7 +21,12 @@ describe('local auth capture transport', () => {
     expect(capture.list()).toMatchObject([{ to: LOCAL_AUTH_CAPTURE_RECIPIENT, loginLink: 'http://localhost:5174/verify?token=synthetic&key=local-key' }]);
     await capture.send({ to: [LOCAL_AUTH_CAPTURE_RECIPIENT], html: '<p>Synthetic</p>', subject: 'Wrong local port', text: 'http://localhost:8787/verify?token=synthetic' }, capture.credentials);
     expect(capture.list().at(-1)?.loginLink).toBeUndefined();
+    for (const recipient of LOCAL_AUTH_CAPTURE_RECIPIENTS) {
+      await capture.send({ to: [recipient], html: '<p>Synthetic</p>', subject: 'Allowed', text: 'Synthetic local message' }, capture.credentials);
+    }
+    expect(capture.list().map(message => message.to)).toEqual(expect.arrayContaining([...LOCAL_AUTH_CAPTURE_RECIPIENTS]));
     await expect(capture.send({ to: ['outside@example.com'], html: '<p>Synthetic</p>', subject: 'No', text: 'No' }, capture.credentials)).rejects.toThrow(LOCAL_AUTH_CAPTURE_RECIPIENT);
+    await expect(capture.send({ to: ['tocyn-auth-test-c@example.invalid'], html: '<p>Synthetic</p>', subject: 'No', text: 'No' }, capture.credentials)).rejects.toThrow(LOCAL_AUTH_CAPTURE_RECIPIENT);
     for (let index = 0; index < 10; index += 1) {
       await capture.send({ to: [LOCAL_AUTH_CAPTURE_RECIPIENT], html: '<p>Synthetic</p>', subject: `Captured ${index}`, text: 'Synthetic local message' }, capture.credentials);
     }

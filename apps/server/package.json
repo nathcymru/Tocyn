@@ -10,7 +10,11 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "test:watch": "vitest",
-    "test:local-auth": "node scripts/local-auth-smoke.mjs"
+    "test:local-auth": "node scripts/local-auth-smoke.mjs",
+    "test:local-tenants": "tsx scripts/verify-local-tenant-fixture.ts",
+    "test:local-tenants:focused": "tsx --test scripts/local-tenant-fixture.test.ts",
+    "fixture:local-tenants": "tsx scripts/run-local-tenant-fixture.ts --interactive-credentials",
+    "typecheck:local-tenants": "tsc -p scripts/tsconfig.local-tenant-fixture.json"
   },
   "dependencies": {
     "@luminatick/shared": "*",
