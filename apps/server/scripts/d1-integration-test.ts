@@ -1130,10 +1130,14 @@ async function run() {
   const mfaChallengeTokenForRoutes = await authSvc.generateMfaChallengeToken({ id: 'user-1', email: 'test@example.com', role: 'admin', tenant_id: 'tenant-A', mfa_verified: true }, 'secret');
   const appTokenForRoutes = issuedAppToken;
 
-  // Case 4a: mfa-challenge -> /mfa/setup -> 401
-  const req4a = new Request('http://localhost/api/auth/mfa/setup', { method: 'POST', headers: { 'Authorization': `Bearer ${mfaChallengeTokenForRoutes}` } });
+  // Case 4a: unrelated audience -> /mfa/setup -> 401. Enrollment accepts only
+  // verified app or MFA-challenge sessions; ordinary app routes remain app-only.
+  const foreignEnrollmentToken = await new jose.SignJWT({ ...verifiedPayload })
+    .setProtectedHeader({ alg: 'HS256' }).setAudience('widget')
+    .sign(new TextEncoder().encode('secret'));
+  const req4a = new Request('http://localhost/api/auth/mfa/setup', { method: 'POST', headers: { 'Authorization': `Bearer ${foreignEnrollmentToken}` } });
   const res4a = await worker.fetch(req4a, envMock, {});
-  if (res4a.status !== 401) throw new Error("Route /mfa/setup accepted mfa-challenge token!");
+  if (res4a.status !== 401) throw new Error("Route /mfa/setup accepted unrelated token audience!");
 
   // Case 4b: mfa-challenge -> /mfa/disable -> 401
   const req4b = new Request('http://localhost/api/auth/mfa/disable', { method: 'POST', headers: { 'Authorization': `Bearer ${mfaChallengeTokenForRoutes}` } });

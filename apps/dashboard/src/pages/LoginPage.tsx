@@ -16,6 +16,7 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError('');
     setLoading(true);
 
@@ -48,15 +49,19 @@ export function LoginPage() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-md">
+          <div id="staff-login-error" role="alert" aria-atomic="true" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form aria-busy={loading} onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+            <label htmlFor="staff-login-email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
             <input
+              id="staff-login-email"
+              name="email"
+              autoComplete="username"
+              aria-describedby={error ? "staff-login-error" : undefined}
               type="email"
               required
               className="input"
@@ -66,8 +71,12 @@ export function LoginPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+            <label htmlFor="staff-login-password" className="block text-sm font-medium text-slate-700 mb-1">Password</label>
             <input
+              id="staff-login-password"
+              name="password"
+              autoComplete="current-password"
+              aria-describedby={error ? "staff-login-error" : undefined}
               type="password"
               required
               className="input"
@@ -78,12 +87,13 @@ export function LoginPage() {
           </div>
           <button
             type="submit"
-            disabled={loading}
-            className="btn btn-primary w-full h-11"
+            aria-disabled={loading}
+            className="btn btn-primary w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? 'Signing in…' : ''}</p>
       </div>
     </div>
   );

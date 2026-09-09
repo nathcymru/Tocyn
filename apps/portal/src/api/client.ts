@@ -99,20 +99,40 @@ export const portalApi = {
     request<T>(path, { ...options, method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string, options?: RequestInit) => request<T>(path, { ...options, method: 'DELETE' }),
   download: async (path: string, filename: string) => {
+    const generation = useAuthStore.getState().authGeneration;
+    const assertCurrentSession = () => {
+      if (useAuthStore.getState().authGeneration !== generation) {
+        throw new DOMException('Download cancelled after authentication changed', 'AbortError');
+      }
+    };
     const headers = new Headers();
+    const widgetKey = getWidgetKey();
+    if (widgetKey) headers.set('X-Widget-Key', widgetKey);
     const token = getCustomerToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
-    const res = await fetch(`${BASE_URL}${path}`, { headers });
-    if (!res.ok) throw new Error('Failed to download');
+    const res = await fetch(`${BASE_URL}${path}`, { headers, credentials: 'include' });
+    assertCurrentSession();
+    if (res.status === 401) {
+      useAuthStore.getState().logout();
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/verify') {
+        window.location.href = '/login';
+      }
+      throw new ApiError('Unauthorized', 401);
+    }
+    if (!res.ok) throw new ApiError('Failed to download', res.status);
     const blob = await res.blob();
+    assertCurrentSession();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    try {
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+    } finally {
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    }
   },
 
 };

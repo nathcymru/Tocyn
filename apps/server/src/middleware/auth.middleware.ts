@@ -131,6 +131,36 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
   }
 };
 
+/**
+ * Enrollment alone accepts either a password-authenticated challenge or an
+ * existing completed app session. Decode only selects the existing verifier;
+ * it never grants identity, scope or admission before signature verification.
+ */
+export const mfaEnrollmentMiddleware = async (
+  c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next,
+) => {
+  const header = c.req.header("Authorization");
+  const token = header?.startsWith("Bearer ")
+    ? header.substring(7) : getCookie(c, "lumina_customer_token");
+  if (!token) return c.json({ error: "Unauthorized: Missing enrollment session" }, 401);
+
+  let audience: unknown;
+  try { audience = jose.decodeJwt(token).aud; }
+  catch { return c.json({ error: "Unauthorized: Invalid enrollment session" }, 401); }
+
+  if (audience === "mfa-challenge") return mfaChallengeMiddleware(c, next);
+  if (audience === "app") {
+    return authMiddleware(c, async () => {
+      if (c.get("jwtPayload").mfa_verified !== true) {
+        c.res = c.json({ error: "Unauthorized: Incomplete app session" }, 401);
+        return;
+      }
+      await next();
+    });
+  }
+  return c.json({ error: "Unauthorized: Invalid enrollment audience" }, 401);
+};
+
 export const loginAuthResolverMiddleware = async (c: Context, next: Next) => {
   if (!c.env.DB) return c.json({ error: "Authentication unavailable" }, 503);
   const body = await c.req.json().catch(() => ({}));

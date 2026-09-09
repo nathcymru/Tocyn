@@ -13,6 +13,24 @@ export class SqlUserRepository implements UserRepository {
       .bind(this.scope.tenantId, id).run();
   }
 
+  /** A late setup request cannot replace an authenticator enabled in the meantime. */
+  async beginMfaEnrollment(id: string, encryptedSecret: string, sessionVersion: number): Promise<boolean> {
+    const changed = await this.db.prepare(`UPDATE users SET mfa_secret = ?
+      WHERE tenant_id = ? AND id = ? AND mfa_enabled = 0 AND session_version = ?
+      RETURNING id`)
+      .bind(encryptedSecret, this.scope.tenantId, id, sessionVersion).first<{ id: string }>();
+    return changed !== null;
+  }
+
+  /** Confirm only the still-pending secret that this request actually verified. */
+  async completeMfaEnrollment(id: string, expectedSecret: string, sessionVersion: number): Promise<boolean> {
+    const changed = await this.db.prepare(`UPDATE users SET mfa_enabled = 1
+      WHERE tenant_id = ? AND id = ? AND mfa_enabled = 0 AND mfa_secret = ? AND session_version = ?
+      RETURNING id`)
+      .bind(this.scope.tenantId, id, expectedSecret, sessionVersion).first<{ id: string }>();
+    return changed !== null;
+  }
+
   constructor(private scope: VerifiedTenantScope, private db: D1Database) {}
 
   async list(options: {role?: string; page: number; limit: number; staffOnly?: boolean}): Promise<any[]> {

@@ -39,11 +39,13 @@ interface Toast {
   ticketId?: string;
 }
 
-function UserMenu() {
+function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const disclosureId = React.useId();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -64,24 +66,34 @@ function UserMenu() {
   };
 
   return (
-    <div className="relative mt-2" ref={menuRef}>
+    <div className="relative mt-2" ref={menuRef} onKeyDown={event => {
+      if (event.key === 'Escape' && isOpen) {
+        event.preventDefault(); event.stopPropagation();
+        setIsOpen(false); trigger.current?.focus();
+      }
+    }}>
       <button
+        type="button"
+        ref={trigger}
+        aria-label="Account options"
+        aria-expanded={isOpen}
+        aria-controls={disclosureId}
         onClick={() => setIsOpen(!isOpen)}
         title={user?.full_name || 'User'}
-        className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold border border-slate-600 hover:ring-2 hover:ring-brand-500 transition-all focus:outline-none"
+        className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold border border-slate-600 hover:ring-2 hover:ring-brand-500 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         {user?.full_name?.[0] || 'A'}
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
+        <div id={disclosureId} className="absolute bottom-full left-0 mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
           <div className="px-4 py-2 border-b border-slate-700">
             <p className="text-sm font-medium text-white truncate">{user?.full_name}</p>
             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
           </div>
           <Link
             to="/profile/security"
-            onClick={() => setIsOpen(false)}
+            onClick={() => { setIsOpen(false); onNavigate?.(); }}
             className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
           >
             <Key className="w-4 h-4" />
@@ -100,6 +112,60 @@ function UserMenu() {
   );
 }
 
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const location = useLocation();
+  return (
+        <div className="flex flex-col h-full items-center py-4">
+          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-8 shadow-sm hover:bg-brand-400 transition-colors">
+            L
+          </Link>
+
+          <nav aria-label="Workspace navigation" className="flex-1 w-full px-2 space-y-2">
+            {navigation.map((item) => {
+              const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  title={item.name}
+                  aria-label={item.name}
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={onNavigate}
+                  className={cn(
+                    "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
+                    isActive
+                      ? "bg-slate-800 text-white shadow-inner"
+                      : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+                  )}
+                >
+                  <item.icon className="w-6 h-6" />
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="w-full px-2 space-y-2 mt-auto pb-4 border-t border-slate-800/50 pt-4 flex flex-col items-center relative">
+            <Link
+              to="/settings"
+              title="Settings"
+              aria-label="Settings"
+              onClick={onNavigate}
+              className={cn(
+                "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
+                location.pathname.startsWith('/settings')
+                  ? "bg-slate-800 text-white shadow-inner"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              )}
+            >
+              <Settings className="w-6 h-6" />
+            </Link>
+
+            <UserMenu onNavigate={onNavigate} />
+          </div>
+        </div>
+  );
+}
+
 export function Layout() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -110,6 +176,28 @@ export function Layout() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showConnDetails, setShowConnDetails] = useState(false);
   const connDetailsRef = useRef<HTMLDivElement>(null);
+  const connectionTrigger = useRef<HTMLButtonElement>(null);
+  const connectionId = React.useId();
+  const mobileDialog = useRef<HTMLDialogElement>(null);
+  const mobileDialogId = React.useId();
+  const navigationTrigger = useRef<HTMLButtonElement>(null);
+  const restoreNavigationFocus = useRef(true);
+  const main = useRef<HTMLElement>(null);
+
+  useEffect(() => { main.current?.focus(); }, [location.pathname]);
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    restoreNavigationFocus.current = true;
+    const dialog = mobileDialog.current;
+    const opener = navigationTrigger.current;
+    dialog?.showModal();
+    dialog?.querySelector<HTMLButtonElement>('button')?.focus();
+    return () => {
+      if (dialog?.open) dialog.close();
+      if (restoreNavigationFocus.current && opener?.isConnected) opener.focus();
+      else main.current?.focus();
+    };
+  }, [isSidebarOpen]);
   const [searchInput, setSearchInput] = useState('');
 
   useEffect(() => {
@@ -158,7 +246,11 @@ export function Layout() {
       setToasts(prev => [toast, ...prev].slice(0, 5));
       
       setTimeout(() => {
-        setToasts(prev => prev.filter(t => t.id !== toast.id));
+        // Do not remove a notification while its keyboard action has focus.
+        const focused = document.activeElement?.closest('[data-ticket-notification]');
+        if (focused?.getAttribute('data-ticket-notification') !== toast.id) {
+          setToasts(prev => prev.filter(t => t.id !== toast.id));
+        }
       }, 8000);
     }
   }, [lastMessage, queryClient]);
@@ -170,11 +262,8 @@ export function Layout() {
         {toasts.map(toast => (
           <div 
             key={toast.id}
+            data-ticket-notification={toast.id}
             className="bg-white border border-slate-200 shadow-xl rounded-lg p-4 w-80 pointer-events-auto transform transition-all animate-in slide-in-from-right hover:scale-[1.02] cursor-pointer"
-            onClick={() => {
-              if (toast.ticketId) navigate(`/tickets/${toast.ticketId}`);
-              setToasts(prev => prev.filter(t => t.id !== toast.id));
-            }}
           >
             <div className="flex items-start gap-3">
               <div className={cn(
@@ -183,16 +272,23 @@ export function Layout() {
               )}>
                 <Bell className="w-4 h-4" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{toast.title}</p>
+              <button type="button" aria-label={`Open ticket notification: ${toast.title}`}
+                onClick={() => {
+                  if (toast.ticketId) navigate(`/tickets/${toast.ticketId}`);
+                  setToasts(prev => prev.filter(t => t.id !== toast.id));
+                }} className="flex-1 min-w-0 text-left rounded focus-visible:outline focus-visible:outline-2">
+                <p role="status" className="text-sm font-semibold text-slate-900">{toast.title}</p>
                 <p className="text-xs text-slate-500 truncate">{toast.message}</p>
-              </div>
-              <button 
+              </button>
+              <button
+                type="button"
+                aria-label="Dismiss ticket notification"
                 onClick={(e) => {
                   e.stopPropagation();
+                  main.current?.focus();
                   setToasts(prev => prev.filter(t => t.id !== toast.id));
                 }}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="text-slate-600 hover:text-slate-900 p-1 rounded focus-visible:outline focus-visible:outline-2"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -201,69 +297,29 @@ export function Layout() {
         ))}
       </div>
 
-      {/* Mobile sidebar backdrop */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-16 bg-slate-900 border-r border-slate-800 transform transition-transform duration-200 lg:translate-x-0 lg:static lg:inset-0",
-        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="flex flex-col h-full items-center py-4">
-          <Link to="/" className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-8 shadow-sm hover:bg-brand-400 transition-colors">
-            L
-          </Link>
-
-          <nav className="flex-1 w-full px-2 space-y-2">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  title={item.name}
-                  className={cn(
-                    "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
-                    isActive 
-                      ? "bg-slate-800 text-white shadow-inner" 
-                      : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-                  )}
-                >
-                  <item.icon className="w-6 h-6" />
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="w-full px-2 space-y-2 mt-auto pb-4 border-t border-slate-800/50 pt-4 flex flex-col items-center relative">
-            <Link
-              to="/settings"
-              title="Settings"
-              className={cn(
-                "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
-                location.pathname.startsWith('/settings')
-                  ? "bg-slate-800 text-white shadow-inner"
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-              )}
-            >
-              <Settings className="w-6 h-6" />
-            </Link>
-
-            <UserMenu />
-          </div>
-        </div>
+      <aside className="hidden lg:block w-16 shrink-0 bg-slate-900 border-r border-slate-800">
+        <SidebarContent />
       </aside>
+      {isSidebarOpen && (
+        <dialog id={mobileDialogId} ref={mobileDialog} aria-label="Navigation" onCancel={() => setIsSidebarOpen(false)}
+          className="fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none w-20 overflow-visible border-0 bg-slate-900 text-white p-2 backdrop:bg-slate-900/50">
+          <button type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
+            className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X aria-hidden="true" /></button>
+          <div className="h-[calc(100dvh-4rem)]"><SidebarContent onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
+        </dialog>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
-          <button 
-            className="lg:hidden p-2 text-slate-600"
+          <button
+            type="button"
+            ref={navigationTrigger}
+            aria-label="Open navigation"
+            aria-haspopup="dialog"
+            aria-expanded={isSidebarOpen}
+            aria-controls={mobileDialogId}
+            className="lg:hidden rounded p-2 text-slate-600 focus-visible:outline focus-visible:outline-2"
             onClick={() => setIsSidebarOpen(true)}
           >
             <Menu className="w-6 h-6" />
@@ -273,7 +329,8 @@ export function Layout() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search tickets..." 
+              placeholder="Search tickets..."
+              aria-label="Search all tickets"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
@@ -290,11 +347,20 @@ export function Layout() {
             />
           </div>
 
-          <div className="flex items-center gap-4 relative" ref={connDetailsRef}>
+          <div className="flex items-center gap-4 relative" ref={connDetailsRef} onKeyDown={event => {
+            if (event.key === 'Escape' && showConnDetails) {
+              event.preventDefault();
+              setShowConnDetails(false); connectionTrigger.current?.focus();
+            }
+          }}>
             <button 
+              type="button"
+              ref={connectionTrigger}
+              aria-expanded={showConnDetails}
+              aria-controls={connectionId}
               onClick={() => setShowConnDetails(!showConnDetails)}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm hover:shadow",
+                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
                 isConnected 
                   ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" 
                   : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
@@ -306,7 +372,7 @@ export function Layout() {
             </button>
 
             {showConnDetails && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
+              <div id={connectionId} className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-bold text-slate-900">Connection Status</h3>
                   <div className={cn(
@@ -335,6 +401,7 @@ export function Layout() {
                     onClick={() => {
                       manualReconnect();
                       setShowConnDetails(false);
+                      connectionTrigger.current?.focus();
                     }}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors"
                   >
@@ -347,7 +414,7 @@ export function Layout() {
           </div>
         </header>
 
-        <main className={cn("flex-1 overflow-auto", !location.pathname.startsWith('/settings') && "p-4 lg:p-8")}>
+        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn("flex-1 overflow-auto", !location.pathname.startsWith('/settings') && "p-4 lg:p-8")}>
           <Outlet />
         </main>
       </div>

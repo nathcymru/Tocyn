@@ -33,7 +33,7 @@ describe('visible conversation pagination',()=>{
     await screen.findByText('Later accepted reply');
     expect(screen.getByText('First accepted message')).toBeTruthy();
     expect(portalApi.get).toHaveBeenCalledWith('/tickets/ticket?article_cursor=opaque-cursor');
-    expect(screen.getByRole('status').textContent).toContain('All messages are loaded');
+    expect(screen.getByRole('status', { name: 'Message pagination' }).textContent).toContain('All messages are loaded');
     expect(screen.getByRole('button',{name:'All messages loaded'})).toBe(button);
     expect(document.activeElement).toBe(button);
     expect(button.hasAttribute('disabled')).toBe(false);
@@ -48,7 +48,7 @@ describe('visible conversation pagination',()=>{
       return {ticket,articles:[article('first','Preserved message')],pagination:{has_more:true,next_cursor:'opaque-cursor'}} as never;
     });
     mount();fireEvent.click(await screen.findByRole('button',{name:'Load more messages'}));
-    await waitFor(()=>expect(screen.getByRole('status').textContent).toContain('Could not load the next page'));
+    await waitFor(()=>expect(screen.getByRole('status', { name: 'Message pagination' }).textContent).toContain('Could not load the next page'));
     expect(screen.getByText('Preserved message')).toBeTruthy();
     expect(screen.getByRole('button',{name:'Load more messages'}).hasAttribute('disabled')).toBe(false);
   });

@@ -14,6 +14,11 @@ export function MfaPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [setupAttempt, setSetupAttempt] = useState(0);
+  const [setupStatus, setSetupStatus] = useState('');
+  const setupPromise = React.useRef<Promise<SetupResponse> | null>(null);
+  const retryingSetup = React.useRef(false);
+  const codeInput = React.useRef<HTMLInputElement>(null);
   const [setupData, setSetupData] = useState<SetupResponse | null>(null);
   
   const navigate = useNavigate();
@@ -21,26 +26,35 @@ export function MfaPage() {
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
-    if (user && !user.mfa_enabled) {
-      // Initiate MFA setup for users who are required to have it but don't yet
-      const startSetup = async () => {
-        try {
-          setLoading(true);
-          const data = await dashboardApi.post<SetupResponse>('/auth/mfa/setup');
-          setSetupData(data);
-        } catch (err: any) {
-          setError(err.message || 'Failed to start MFA setup');
-        } finally {
-          setLoading(false);
-        }
-      };
-      startSetup();
-    }
-  }, [user]);
+    if (!user || user.mfa_enabled) return;
+    let active = true;
+    setLoading(true);
+    // Reuse the same initial request across effect cleanup/setup. An explicit
+    // retry clears this promise only after a failed attempt has settled.
+    setupPromise.current ??= dashboardApi.post<SetupResponse>('/auth/mfa/setup');
+    setupPromise.current.then(data => {
+      if (!active) return;
+      setSetupData(data);
+      setError('');
+      setSetupStatus('Authenticator setup ready. Scan the QR code or enter the text key, then enter your authentication code.');
+      if (retryingSetup.current) {
+        codeInput.current?.focus();
+        retryingSetup.current = false;
+      }
+    }).catch((err: unknown) => {
+      if (active) {
+        setSetupStatus('');
+        setError(err instanceof Error ? err.message : 'Failed to start MFA setup');
+      }
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [user, setupAttempt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || code.length !== 6 || (!user?.mfa_enabled && !setupData)) return;
     setError('');
+    setSetupStatus('');
     setLoading(true);
 
     try {
@@ -90,7 +104,7 @@ export function MfaPage() {
           <h1 className="text-2xl font-bold text-slate-900">
             {isSetupMode ? 'Set up Two-Factor Authentication' : 'Two-Factor Authentication'}
           </h1>
-          <p className="text-slate-500 mt-2">
+          <p id="mfa-instructions" className="text-slate-600 mt-2">
             {isSetupMode 
               ? 'Your account requires an additional layer of security. Please scan the QR code with your authenticator app.'
               : 'Enter the 6-digit code from your authenticator app'}
@@ -98,18 +112,31 @@ export function MfaPage() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 text-red-700 text-sm rounded-r-md flex items-start">
+          <div id="mfa-error" role="alert" aria-atomic="true" className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 text-red-700 text-sm rounded-r-md flex items-start">
             <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
             <p>{error}</p>
           </div>
         )}
 
+        {isSetupMode && !setupData && error && (
+          <button type="button" aria-disabled={loading}
+            onClick={() => {
+              if (loading) return;
+              setLoading(true);
+              retryingSetup.current = true;
+              setupPromise.current = null;
+              setSetupAttempt(previous => previous + 1);
+            }} className="mb-4 rounded border border-slate-500 px-3 py-2 text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+            Retry authenticator setup
+          </button>
+        )}
+
         {isSetupMode && setupData && (
           <div className="mb-6 text-center">
             <div className="bg-white p-4 rounded-lg inline-block shadow-sm border border-gray-100 mb-4">
-              <QRCodeSVG value={setupData.provisioning_uri} size={180} />
+              <QRCodeSVG role="img" aria-label="Authenticator setup QR code; a text key follows" value={setupData.provisioning_uri} size={180} />
             </div>
-            <p className="text-xs text-gray-500 max-w-[250px] mx-auto">
+            <p className="text-xs text-gray-700 max-w-[250px] mx-auto">
               If you can't scan the QR code, manually enter this secret key:<br/>
               <code className="bg-gray-100 px-2 py-1 rounded mt-2 inline-block font-mono text-sm break-all">
                 {getSecretFromUri(setupData.provisioning_uri)}
@@ -118,30 +145,38 @@ export function MfaPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form aria-busy={loading} onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2 text-center">
+            <label htmlFor="mfa-code" className="block text-sm font-medium text-slate-700 mb-2 text-center">
               Authentication Code
             </label>
             <input
+              id="mfa-code"
+              ref={codeInput}
+              readOnly={loading}
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              aria-describedby={error ? "mfa-instructions mfa-error" : "mfa-instructions"}
               type="text"
               required
               maxLength={6}
               className="input text-center text-3xl tracking-[0.5em] font-mono h-14"
               placeholder="000000"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
               autoFocus
             />
           </div>
           <button
             type="submit"
-            disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
-            className="btn btn-primary w-full h-11 text-base font-medium"
+            aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
+            className="btn btn-primary w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11 text-base font-medium"
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </button>
         </form>
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
       </div>
     </div>
   );

@@ -65,7 +65,7 @@ export function VerifyPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code) return;
+    if (loading || code.length !== 6) return;
     verifyToken(code);
   };
 
@@ -73,7 +73,7 @@ export function VerifyPage() {
   if (tokenParam && !error) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <div role="status" aria-live="polite" className="sm:mx-auto sm:w-full sm:max-w-md text-center">
           <Loader2 className="mx-auto w-12 h-12 text-brand-600 animate-spin mb-4" />
           <h2 className="text-2xl font-extrabold text-gray-900">Verifying your login...</h2>
         </div>
@@ -104,12 +104,12 @@ export function VerifyPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-md">
+            <div id="portal-verify-error" role="alert" aria-atomic="true" className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md">
               {error}
             </div>
           )}
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form aria-busy={loading} className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="code" className="block text-sm font-medium text-gray-700">
                 Authentication Code
@@ -118,10 +118,12 @@ export function VerifyPage() {
                 <input
                   id="code"
                   name="code"
+                  inputMode="numeric"
+                  aria-describedby={error ? "portal-verify-error" : undefined}
                   type="text"
                   required
                   value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-brand-500 focus:border-brand-500 text-center text-2xl tracking-widest uppercase font-mono"
                   placeholder="123456"
                   maxLength={6}
@@ -134,14 +136,15 @@ export function VerifyPage() {
             <div>
               <button
                 type="submit"
-                disabled={loading || code.length !== 6}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed items-center gap-2"
+                aria-disabled={loading || code.length !== 6}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 aria-disabled:bg-brand-700 aria-disabled:cursor-default items-center gap-2"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
                 {loading ? 'Verifying...' : 'Verify Code'}
               </button>
             </div>
           </form>
+          <p role="status" aria-live="polite" className="mt-3 text-sm text-gray-700">{loading ? 'Verifying code…' : ''}</p>
 
           <div className="mt-6 text-center">
             <button

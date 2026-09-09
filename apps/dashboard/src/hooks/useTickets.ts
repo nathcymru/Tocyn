@@ -6,6 +6,7 @@ export function useTickets(params: Record<string, string> = {}) {
   const queryParams = new URLSearchParams(params).toString();
   return useQuery({
     queryKey: ['tickets', params],
+    placeholderData: previous => previous,
     queryFn: async () => {
       const data = await dashboardApi.get<PaginatedResponse<Ticket>>(`/tickets?${queryParams}`);
       return data;
