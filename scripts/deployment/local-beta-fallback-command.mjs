@@ -10,7 +10,7 @@ async function main() {
   const taskRoot = join(request.taskRoot, 'fallback-runtime');
   mkdirSync(taskRoot, { mode: 0o700 });
   const receipt = { commands: [], cleanup: 'pending' };
-  const lifecycle = new RehearsalLifecycle(taskRoot, receipt);
+  const lifecycle = new RehearsalLifecycle(taskRoot, receipt, { failedOutputDirectory: request.failedOutputDirectory });
   let result;
   try {
     result = await runSameStateFallback({ candidate: request.candidate, knownGood: request.knownGood, taskRoot, lifecycle });

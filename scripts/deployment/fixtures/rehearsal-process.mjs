@@ -6,7 +6,12 @@ const self = fileURLToPath(import.meta.url);
 const [mode = process.env.REHEARSAL_FIXTURE_MODE, ...args] = process.argv.slice(2);
 const idle = () => setInterval(() => {}, 1000);
 
-if (mode === 'idle') {
+if (mode === 'output') {
+  // Fixed synthetic bytes exercise draining and failure retention without code generation.
+  process.stdout.write('x'.repeat(Number(args[1] || 0)));
+  process.stderr.write('synthetic-private-tail\n');
+  process.exitCode = Number(args[0]);
+} else if (mode === 'idle') {
   if (args[0] === 'ignore-term') process.on('SIGTERM', () => {});
   idle();
 } else if (mode === 'npm-nested') {
@@ -20,7 +25,7 @@ if (mode === 'idle') {
   const [task, fixture, receiptPath] = args;
   mkdirSync(task, { recursive: true, mode: 0o700 });
   const receipt = { commands: [], cleanup: 'pending' };
-  const lifecycle = new RehearsalLifecycle(task, receipt);
+  const lifecycle = new RehearsalLifecycle(task, receipt, { failedOutputDirectory: process.env.REHEARSAL_FAILED_OUTPUT_DIRECTORY, ownsFailedOutputDirectory: !!process.env.REHEARSAL_FAILED_OUTPUT_DIRECTORY });
   installSignalCleanup(lifecycle, receipt, receiptPath);
   void lifecycle.run('npm', ['run', 'fixture'], fixture, process.env).catch(() => {});
 } else if (mode === 'leader') {

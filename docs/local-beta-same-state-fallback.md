@@ -61,14 +61,16 @@ native bind probe confirmed port 8787 was released.
 
 This receipt identifies the tested source commit. Later documentation or
 integration commits are not silently substituted for that candidate. The
-corrected accessibility/MFA source is integrated at signed
-`65ad06ee3e905acf9ec59d17bdd951993381e818`. The final artifact build and acceptance-matrix rehearsal have not completed
-successfully. The first accepted-source
-attempt stopped before fallback at a runner command error, recorded in the
-[rehearsal evidence](./local-beta-rehearsal.md). After the narrow correction is
-accepted, the coordinator selects that exact signed revision as candidate and signed
+corrected application source and tooling are integrated at signed
+`953af436fdb1cb2517e85cac103e48fe9e53da85`. The final artifact build and
+acceptance-matrix rehearsal have not completed successfully. Both accepted-source
+attempts stopped before fallback: the first at a runner command error and the
+second at an unexplained runtime-test failure, recorded in the
+[rehearsal evidence](./local-beta-rehearsal.md). After the artifact-input and
+private-diagnostic correction is accepted, the coordinator selects that exact
+signed revision as candidate and signed
 `58feb5e4deef55670f635f099eb67c6bcfffae56` as the prior known-good application.
-That technical run may proceed while owner-dependent screen-reader evidence is pending, but cannot
-close #65 or claim readiness. Any later reader-driven source fix changes the
+That technical run may proceed while owner-dependent screen-reader evidence is
+pending. Issue #65 and the readiness gate remain open. Any later reader-driven source fix changes the
 candidate and requires affected checks again. This bounded runtime check does
 not claim production readiness.

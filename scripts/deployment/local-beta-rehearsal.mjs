@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import registry from './rehearsal-process-registry.cjs';
 import { assertPythonPty } from './rehearsal-prerequisites.mjs';
+import { FailedCommandOutput } from './rehearsal-failed-output.mjs';
 import { createServer } from 'node:net';
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,9 +34,11 @@ const requiredAcceptanceCommands = [
   ['npm', ['run', 'test:local-beta', '--workspace=apps/server']],
   ['npm', ['run', 'test:local-beta-runtime', '--workspace=apps/server']],
   ['npm', ['run', 'lint', '--workspace=apps/portal']],
+  ['npm', ['run', 'build', '--workspace=apps/widget']],
+];
+const artifactBuildCommands = [
   ['npm', ['run', 'build', '--workspace=apps/dashboard']],
   ['npm', ['run', 'build', '--workspace=apps/portal']],
-  ['npm', ['run', 'build', '--workspace=apps/widget']],
 ];
 
 function fail(message) { throw new Error(`Local beta rehearsal rejected: ${message}`); }
@@ -78,6 +81,7 @@ export function rehearsalPlan(revision, knownGoodRevision) {
   return Object.freeze({
     mode: 'local-only-park', candidate: revision, knownGood: knownGoodRevision,
     acceptanceCommands: requiredAcceptanceCommands.map(([command, args]) => [command, ...args]),
+    artifactBuildCommands: artifactBuildCommands.map(([command, args]) => [command, ...args]),
     artifactCommands: ['prepare', 'wrangler-dry-run', 'package', 'verify-release-artifact', 'wrangler-no-bundle-dry-run'],
     forbidden: ['--remote', 'finalize', 'verify-provider-resources', 'verify-rollback', 'publish-pages', 'provider credentials'],
     fallback: 'Start candidate and known-good local fixtures only with the same nonempty compatible synthetic conversation state; stop and report incompatible schemas rather than treating a fresh empty state as rollback.',
@@ -123,10 +127,14 @@ export function receiptCommand(command, args) {
 }
 
 export class RehearsalLifecycle {
-  constructor(taskRoot, receipt) {
+  constructor(taskRoot, receipt, { failedOutputDirectory, ownsFailedOutputDirectory = false } = {}) {
     assertRehearsalPlatform();
     registry.checkDirectory(taskRoot);
+    if (ownsFailedOutputDirectory && !failedOutputDirectory) fail('owned failed-output directory requires a destination');
     this.taskRoot = taskRoot; this.receipt = receipt; this.scopes = new Map(); this.interrupted = false; this.cleanupPromise = undefined;
+    if (failedOutputDirectory) registry.checkDirectory(failedOutputDirectory);
+    this.failedOutputDirectory = failedOutputDirectory;
+    this.ownsFailedOutputDirectory = ownsFailedOutputDirectory;
     this.registryRoot = join(taskRoot, 'processes');
     mkdirSync(this.registryRoot, { mode: 0o700 });
   }
@@ -137,6 +145,7 @@ export class RehearsalLifecycle {
     const directory = join(this.registryRoot, randomUUID());
     mkdirSync(directory, { mode: 0o700 });
     const scope = { directory, started: Date.now(), command: receiptCommand(command, args), child: undefined, stopped: false, stopPromise: undefined };
+    if (this.failedOutputDirectory) scope.output = new FailedCommandOutput(this.failedOutputDirectory);
     // Register the scope before spawning; even a spawn/registration failure remains cleanup-owned.
     const handle = {
       get pid() { return scope.child?.pid; },
@@ -144,7 +153,12 @@ export class RehearsalLifecycle {
       get signalCode() { return scope.child?.signalCode ?? null; },
     };
     this.scopes.set(handle, scope);
-    scope.child = spawn(command, args, { cwd, env: { ...env, TOCYN_REHEARSAL_PROCESS_REGISTRY: directory, TOCYN_REHEARSAL_ANCESTOR_REGISTRIES: '[]', NODE_OPTIONS: `--require=${JSON.stringify(preload)}` }, stdio: 'ignore', detached: true });
+    scope.child = spawn(command, args, { cwd, env: { ...env, TOCYN_REHEARSAL_PROCESS_REGISTRY: directory, TOCYN_REHEARSAL_ANCESTOR_REGISTRIES: '[]', NODE_OPTIONS: `--require=${JSON.stringify(preload)}` }, stdio: scope.output ? ['ignore', 'pipe', 'pipe'] : 'ignore', detached: true });
+    if (scope.output) {
+      scope.child.stdout.on('data', chunk => scope.output.append('stdout', chunk));
+      scope.child.stderr.on('data', chunk => scope.output.append('stderr', chunk));
+      scope.outputClosed = new Promise(resolvePromise => scope.child.once('close', resolvePromise));
+    }
     handle.exited = new Promise(resolvePromise => {
       scope.child.once('error', () => resolvePromise({ code: null, signal: null }));
       scope.child.once('exit', (code, signal) => resolvePromise({ code, signal }));
@@ -159,20 +173,49 @@ export class RehearsalLifecycle {
     const scope = this.scopes.get(handle);
     const { code, signal } = await handle.exited;
     // Leader exit never removes ownership. Finish all descendants before the next command.
-    await this.stopScope(scope);
     const passed = code === 0 && !signal;
-    this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: passed ? 'passed' : 'failed', exitCode: code, signal });
+    let diagnostics;
+    try {
+      await this.stopScope(scope);
+      diagnostics = await this.finishOutput(scope, !passed);
+    } catch (error) {
+      this.retainOutputAfterFailure(scope);
+      throw error;
+    }
+    this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: passed ? 'passed' : 'failed', exitCode: code, signal, ...(diagnostics ? { diagnostics } : {}) });
     if (!passed) fail(`local command failed: ${scope.command}`);
+  }
+
+  retainOutputAfterFailure(scope) {
+    try {
+      scope.output?.finish(true);
+      if (scope.output?.unavailable) this.receipt.diagnostics = 'unavailable';
+    }
+    catch { this.receipt.diagnostics = 'unavailable'; }
   }
 
   async stopService(handle) {
     const scope = this.scopes.get(handle);
     if (!scope) fail('service does not belong to this rehearsal');
+    const alreadyExited = handle.exitCode !== null || handle.signalCode !== null;
     await this.stopScope(scope);
+    const diagnostics = await this.finishOutput(scope, alreadyExited);
     if (!scope.reportedStop) {
-      this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: 'stopped' });
+      this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: 'stopped', ...(diagnostics ? { diagnostics } : {}) });
       scope.reportedStop = true;
     }
+  }
+
+  async finishOutput(scope, failed) {
+    if (!scope.output || scope.output.finished) return scope.output?.result;
+    // Stop verified descendants before waiting for their inherited output pipes.
+    let timer;
+    try {
+      await Promise.race([scope.outputClosed, new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Owned command output did not settle')), 2000);
+      })]);
+      return scope.output.finish(failed);
+    } finally { clearTimeout(timer); }
   }
 
   stopScope(scope) {
@@ -244,7 +287,19 @@ export class RehearsalLifecycle {
     if (!this.cleanupPromise) this.cleanupPromise = (async () => {
       const stopped = await Promise.allSettled([...this.scopes.values()].map(scope => this.stopScope(scope)));
       const failure = stopped.find(result => result.status === 'rejected');
+      // A command interrupted before its caller can finish still leaves private evidence.
+      const outputs = await Promise.allSettled([...this.scopes.values()].filter(scope => scope.output && !scope.output.finished).map(async scope => {
+        if (failure) this.retainOutputAfterFailure(scope);
+        else await this.finishOutput(scope, true);
+      }));
+      const outputFailure = outputs.find(result => result.status === 'rejected');
+      if (outputFailure || [...this.scopes.values()].some(scope => scope.output?.unavailable)) this.receipt.diagnostics = 'unavailable';
       if (failure?.status === 'rejected') throw failure.reason;
+      if (outputFailure?.status === 'rejected') throw outputFailure.reason;
+      if (this.ownsFailedOutputDirectory) {
+        try { if (!readdirSync(this.failedOutputDirectory).length) rmSync(this.failedOutputDirectory, { recursive: true }); }
+        catch { this.receipt.diagnostics = 'unavailable'; fail('private diagnostics cleanup could not be completed'); }
+      }
       for (const name of ['candidate', 'comparison', 'known-good']) {
         const worktree = join(this.taskRoot, name);
         if (statExists(worktree)) {
@@ -302,12 +357,14 @@ async function runAcceptanceCommands(worktree, env, lifecycle) {
   }
 }
 
-async function buildParkArtifact(worktree, revision, taskRoot, label, lifecycle, { runAcceptance = false } = {}) {
+export async function buildParkArtifact(worktree, revision, taskRoot, label, lifecycle, { runAcceptance = false } = {}) {
   const release = join(taskRoot, `${label}-release`);
   const env = syntheticPackagingEnvironment(localEnvironment(process.env, taskRoot), worktree);
   await lifecycle.run('npm', ['ci', '--ignore-scripts', '--offline'], worktree, env);
   await lifecycle.run('npm', ['rebuild', 'better-sqlite3', '--workspace=apps/server'], worktree, env);
   if (runAcceptance) await runAcceptanceCommands(worktree, env, lifecycle);
+  // Each fresh checkout must produce its own packaged frontend inputs.
+  for (const [command, args] of artifactBuildCommands) await lifecycle.run(command, args, worktree, env);
   await lifecycle.run('node', ['scripts/deployment/isolated-release.mjs', 'prepare', '--target', 'beta', '--revision', revision, '--mode', 'park', '--output', release], worktree, env);
   await lifecycle.run(process.execPath, [join(worktree, 'node_modules/wrangler/bin/wrangler.js'), 'deploy', '--dry-run', '--outdir', join(release, 'worker'), '--metafile', join(release, 'worker-meta.json'), '--config', join(release, 'wrangler.source.json')], worktree, env);
   await lifecycle.run('node', ['scripts/deployment/isolated-release.mjs', 'package', '--target', 'beta', '--revision', revision, '--mode', 'park', '--output', release], worktree, env);
@@ -347,7 +404,9 @@ export async function runRehearsal({ revision, knownGood, receiptPath }) {
     frontendInputs: { apiUrl: 'https://api.beta.local.invalid', widgetKey: 'local-rehearsal-widget-key' },
     fallback: { result: 'not-run', reason: 'local fallback has not run' }, commands: [], cleanup: 'pending',
   };
-  const lifecycle = new RehearsalLifecycle(taskRoot, receipt);
+  const failedOutputDirectory = mkdtempSync(join(dirname(receiptPath), '.rehearsal-failed-output-'));
+  chmodSync(failedOutputDirectory, 0o700);
+  const lifecycle = new RehearsalLifecycle(taskRoot, receipt, { failedOutputDirectory, ownsFailedOutputDirectory: true });
   const removeSignalHandlers = installSignalCleanup(lifecycle, receipt, receiptPath);
   try {
     const candidate = join(taskRoot, 'candidate'); const comparison = join(taskRoot, 'comparison');
@@ -365,7 +424,7 @@ export async function runRehearsal({ revision, knownGood, receiptPath }) {
     await lifecycle.run('npm', ['rebuild', 'better-sqlite3', '--workspace=apps/server'], knownGoodSource, env);
     const fallbackRequest = join(taskRoot, 'fallback-request.json');
     const fallbackReceipt = join(taskRoot, 'fallback-receipt.json');
-    writeFileSync(fallbackRequest, JSON.stringify({ taskRoot, receiptPath: fallbackReceipt,
+    writeFileSync(fallbackRequest, JSON.stringify({ taskRoot, receiptPath: fallbackReceipt, failedOutputDirectory,
       candidate: { source: candidate, revision }, knownGood: { source: knownGoodSource, revision: knownGood },
     }), { mode: 0o600 });
     try {
