@@ -208,7 +208,7 @@ only in the runner-owned Worker startup configuration; there is no HTTP control
 route or deployable binding for either capability.
 
 The 9 September 2026 run completed in 11.58 seconds and reported four Worker
-starts, 41 requests, nine selected D1 rows, five new articles and five new
+starts, 42 requests, nine selected D1 rows, five new articles and five new
 conversation events. After the final expiry restart zero captured messages
 remained; the earlier successful-delivery assertion checked one capture to the
 owner, while the injected failure checked that none was recorded. Those are
