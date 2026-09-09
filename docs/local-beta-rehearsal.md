@@ -104,7 +104,8 @@ engine, repeated npm/PTY Ctrl-C disposed the tree and private state, port 8787
 was reusable, and an unrelated sentinel remained alive. This is lifecycle
 evidence only. The [same-state runtime evidence](./local-beta-same-state-fallback.md)
 is recorded against its own clean candidate; the complete final two-artifact
-and acceptance-matrix rehearsal remains unrun.
+and acceptance-matrix rehearsal has not completed successfully; the failed first
+attempt is recorded below.
 
 POSIX lifecycle execution cases are skipped on unsupported test hosts, while
 the platform refusal contract remains tested without changing host identity.
@@ -130,3 +131,23 @@ inspection and teardown. The focused suite then passed 18 tests; actual Wrangler
 interruption was repeated in 4.09s with one completed/zero skipped, seven owned
 processes, full disposal, sentinel preservation and an independent port reuse
 probe. Other signal errors remain failures.
+
+
+The first complete technical attempt on signed candidate
+`018aff41cb55dbdf34bd6e60246827715fb00403`, with signed known-good
+`58feb5e4deef55670f635f099eb67c6bcfffae56`, failed at the second matrix entry:
+the runner requested a nonexistent server `lint` script. Five prior setup/check
+commands passed; that lint command exited 1. No artifact, fallback, application
+HTTP flow or auth mail ran. The retained redacted receipt reports `cleanup: disposed`
+and fallback `not-run`; all three local port probes passed and no owned rehearsal
+task directory remained. This failed attempt is not acceptance evidence.
+
+The corrected entry invokes installed ESLint from the server workspace with
+`npm exec --offline --no --workspace=apps/server -- eslint .`, matching CI's
+`cd apps/server && npx eslint .` semantics while refusing installation/network
+fallback. Its receipt label is the fixed `server ESLint`. The exact command and
+workspace/local-package resolution passed locally. A regression checks every
+matrix script against its workspace package and verifies the installed/local tool
+entrypoints. The other 23 matrix entries existed; no acceptance check was removed.
+A fresh full run must use the correction's accepted immutable revision and retain
+the earlier failed receipt separately.

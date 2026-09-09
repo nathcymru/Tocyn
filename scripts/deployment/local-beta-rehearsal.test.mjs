@@ -285,3 +285,25 @@ test('teardown tolerates a process that exits after inspection but preserves oth
   const denied = Object.assign(new Error('synthetic denied signal'), { code: 'EPERM' });
   assert.throws(() => killIfPresent(child.pid, () => { throw denied; }), error => error === denied);
 });
+
+
+test('every rehearsal npm script exists in its workspace and direct tools are installed locally', () => {
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const plan = rehearsalPlan(sha, 'b'.repeat(40));
+  for (const [command, ...args] of plan.acceptanceCommands) {
+    assert.equal(command, 'npm');
+    const workspace = args.find(value => value.startsWith('--workspace='))?.slice('--workspace='.length) || '.';
+    const pkg = JSON.parse(readFileSync(join(root, workspace, 'package.json'), 'utf8'));
+    if (args[0] === 'run') assert.equal(typeof pkg.scripts?.[args[1]], 'string', `Missing rehearsal script ${workspace}:${args[1]}`);
+    else {
+      assert.deepEqual(args, ['exec', '--offline', '--no', '--workspace=apps/server', '--', 'eslint', '.']);
+      assert.equal(receiptCommand(command, args), 'server ESLint');
+    }
+  }
+  for (const relative of [
+    'node_modules/eslint/bin/eslint.js', 'node_modules/wrangler/bin/wrangler.js',
+    'node_modules/tsx/dist/loader.mjs', 'scripts/deployment/isolated-release.mjs',
+    'scripts/deployment/verify-release-artifact.mjs', 'scripts/deployment/local-beta-fallback-command.mjs',
+    'apps/server/scripts/run-local-beta-operator.ts',
+  ]) assert.ok(existsSync(join(root, relative)), `Missing local rehearsal tool ${relative}`);
+});
