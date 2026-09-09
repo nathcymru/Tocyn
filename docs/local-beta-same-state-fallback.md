@@ -61,9 +61,12 @@ native bind probe confirmed port 8787 was released.
 
 This receipt identifies the tested source commit. Later documentation or
 integration commits are not silently substituted for that candidate. The
-complete technical artifact and acceptance-matrix rehearsal remains unrun
-until the corrected accessibility/MFA source is integrated. That technical run
-may proceed while owner-dependent screen-reader evidence is pending, but cannot
+corrected accessibility/MFA source is integrated at signed
+`65ad06ee3e905acf9ec59d17bdd951993381e818`. The complete technical artifact and
+acceptance-matrix rehearsal remains unrun until the tooling increment is accepted.
+It will use that exact signed accepted tooling merge as candidate and signed
+`58feb5e4deef55670f635f099eb67c6bcfffae56` as the prior known-good application.
+That technical run may proceed while owner-dependent screen-reader evidence is pending, but cannot
 close #65 or claim readiness. Any later reader-driven source fix changes the
 candidate and requires affected checks again. This bounded runtime check does
 not claim production readiness.
