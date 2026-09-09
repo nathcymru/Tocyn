@@ -216,6 +216,12 @@ disposal-run measurements, not capacity or production claims. The runner also
 reports `cleanup: disposed`; it does not inspect or reset a developer's existing
 state.
 
+The final guarded browser check on `2add038` redeemed a locally captured link,
+loaded tickets, and used **Sign out all sessions**. It returned to login without
+a warning; a later navigation to tickets remained redirected to login. This
+confirms the normal portal sign-out request has an empty body, revokes the
+server session, and is not merely a local browser-token clear.
+
 This exercise proves the server workflow only. Portal keyboard, focus, labels,
 announcements and contrast remain owned by #21; it does not claim that broader
 UI accessibility acceptance or beta deployment evidence.
