@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 02:31 UTC. This is the authoritative coordinator view.
+Updated 9 September 2026, 03:04 UTC. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -39,48 +39,47 @@ do not skip affected tests. Preserve CRLF in existing dashboard source files.
 
 ## Accepted main and remaining gates
 
-Accepted signed main: 58feb5e4deef55670f635f099eb67c6bcfffae56 (PR117), merged
-02:23:38 UTC. All required PR checks passed on 316a7cb; GitHub signature is valid.
-Postmerge security 34303032583 and main CI 34303033014 both passed.
+Accepted signed main: d394bd71d020204f75999cf1f21ad6022f478787 (PR119), merged
+02:45:32 UTC. All required PR checks passed and GitHub signature is valid.
+Postmerge security 34304488185 and main CI 34304488433 both passed.
 Root /Users/ty/Documents/Tocyn is clean at this main revision.
 
 Not beta-ready. Four issues remain open: #62, #21, #93 and #65.
 
-1. #62 functional implementation is on accepted #61 and undergoing final checks.
-   Merge its functional increment, retaining the actual reader acceptance gap.
-2. #21 combines accepted portal/operator work and validates/fixes included UI.
-   Its actual reader evidence also completes the changed-control gates in #62/#93.
-3. #65 final candidate joins all accepted prerequisites, real local matrix,
-   reproducible parked artifacts and compatible same-state code fallback.
+1. #62 functional implementation is merged; actual reader/UI acceptance remains.
+2. #21 is correcting the browser-discovered mandatory MFA enrollment blocker and
+   completing included UI validation. Its reader evidence also supports #62/#93.
+3. #65 lifecycle and focused same-state proof pass. Final accepted-source technical
+   matrix and parked artifact reproducibility follow corrected #21 integration.
+   These may run while reader evidence is pending, but cannot close readiness.
+   A later reader-driven source change invalidates the technical candidate.
 
-#93 functional guardrails are already merged; its reader criterion remains open.
+#93 functional guardrails are merged; its reader criterion remains open.
 No gate is waived or transferred merely to close its owning issue.
 
 ## Current ownership and branches
 
-Root owns this file, acceptance, GitHub/Project state, final browser work and CI.
-Authoritative worktree: /tmp/tocyn-62-guarded-integration,
-branch codex/62-local-operator-workflows. Root is its only current editor.
+Root owns this file, acceptance, GitHub/Project truth and final browser review.
+Authoritative state worktree: /tmp/tocyn-21-integrated-accessibility,
+branch codex/21-integrated-accessibility. The issue owner will include this state
+in the next coherent checkpoint and preserve the original PR116 recovery ref.
 
 | Work | Agent / model / effort | Current state and reason |
 | --- | --- | --- |
-| #62 integration | Root; Astra/high | Auth/query state and final integration. Own commit 8b322da on signed 58feb5e; no PR yet. Original cdcb74c and original branch/stash preserved. |
-| #21 accessibility | beta_guardrails_impl; Astra/high | Cross-session/recovery integration. Temporary /tmp/tocyn-21-integrated-accessibility contains 316a7cb + cdcb74c + original21 through 02996f8. Preparation only; final base must consume signed62. Original draft PR116 unchanged. |
-| #65 lifecycle | release_packaging_escalation; Astra/high | Escalated after repeated lower-model lifecycle corrections failed. Owns existing /tmp/tocyn-65-local-rehearsal and draft PR118. Frozen prior head a6bd66d is not accepted. |
-| #65 fallback helper | retry_acceptance; Terra/high | Separate /tmp/tocyn-65-local-fallback; pure comparison commit c467985, now implementing actual same-state orchestration. No edits to lifecycle/runner/package files. Astra is issue owner and integrates the bounded commit. |
+| #62 integration | Root; Astra/high | Complete functional PR119; issue stays open for reader/UI evidence. Final original branch721ae6f and recovery stash preserved. |
+| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Temporary candidate b2bc593, isolated correction /tmp/tocyn-21-mfa-correction. Security/session and enrollment race boundaries justify high effort. Refresh signed119 and update existing PR116. |
+| #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Owner of /tmp/tocyn-65-local-rehearsal and draft118. Clean2314188 has real interruption and same-state proof; preparing evidence/CI update. |
+| Independent review | retry_acceptance; Terra/high | Bounded lifecycle/fallback and frontend reviews complete, no blocking findings. Actual screen-reader/mobile evidence not claimed. Currently idle; no redundant review loop. |
 
-Current root #62 validation uses exact CI commands extracted into
-/tmp/tocyn-62-required-{lint,typecheck,build,test}.sh, with corresponding logs.
-Lint session 25463, typecheck session 34769 and build session 96747 exited 0. Full test session 27897 passed upstream suites, then timed out in the existing guarded
-runtime fetch. No listener remained. The unchanged isolated runtime case passed
-in 8.51 seconds; launcher retry session 80882 exited 0. Remaining operator 2/portal1 checks in session 93443
-exited 0. Operator loop: 27 requests, selected D1 row delta 3, zero R2 objects; portal: 69 requests.
-No timeout increase or application workaround. Ports 8787/5173/5174 are free.
-All required local checks have now passed; transient timeout is recorded.
+#21 browser fixture has been disposed. #65 interruption/fallback fixture also
+fully disposed and returned8787 to #21 for corrected runtime tests. Root browser
+windows closed and credential memory cleared. No remote services used.
 
-Next: commit final state/evidence, push branch, create the
-prepared Progresses62 PR using /tmp/tocyn-62-pr-body.md. Required CI must pass.
-Do not close62 before reader evidence. Then refresh21 against its signed merge.
+Next: corrected MFA runtime proof, clean #21 integration refresh and final browser
+checks; update existing draft116 and pass all required checks. Preserve reader
+acceptance as open. #65 prepares existing draft118 in parallel and then runs the
+technical rehearsal on the accepted corrected source. Final readiness awaits
+complete acceptance, not merely passing machine checks.
 
 ## Current evidence and unresolved implementation
 
@@ -210,3 +209,27 @@ working commentary at least every 60 seconds. Updates are informational, not app
 gates. Use followup_task to wake idle agents; send_message alone does not wake them.
 Non-beta roadmap #50/#64/#90(full cost)/#91 (journals)/#48/#66 (redesign)/#42 (production)/#18
 (native email) stays out of critical-path capacity except required correctness.
+
+## Coordinator update — 2026-09-09 02:52 UTC
+
+PR #119 merged at 02:45:32 UTC as signed d394bd71d020204f75999cf1f21ad6022f478787. Required PR checks and internal review passed; main CI 34304488433 and security 34304488185 passed. Issue #62 remains open for reader/UI acceptance; partial receipt 5594997825 records the boundary. Root main is clean at that revision.
+
+Four beta blockers remain open: #62, #21, #93 and #65. No readiness declaration. #21 owns local ports 8787/5173/5174 with isolated synthetic fixtures. Its temporary candidate b2bc593 includes portal reference fallback and initial browser evidence. Browser portal login, create, reply, dialog initial/Escape focus passed. Full focus-cycle and actual screen-reader acceptance are not claimed. Fifty historical synthetic articles were added solely to exercise pagination; they are not admitted writes or fabricated audit receipts.
+
+Normal unenrolled operator login exposed an MFA enrollment blocker. The #21 owner is implementing the narrow login/session correction and negative regressions; sensitive diagnosis stays private. Original PR #116 remains recoverable. Final source must refresh from accepted #119 before integration.
+
+#65 owner release_packaging_escalation (Astra/high) has lifecycle 13, pure fallback 4 and runtime/bootstrap 2 checks passing. Root and targeted Terra/high internal review precede the actual repeated-PTY Wrangler interruption test. No live recovery/fallback proof yet; wait for explicit #21 port release. Same-state fallback implementation is integrated, and unavailable fallback remains a failed rehearsal. Final complete rehearsal waits for all prerequisite acceptance.
+
+Owner permits all three example.invalid local test recipients and standing PR-only approving-review exceptions after mandatory checks and internal review pass. No remote Cloudflare or external mail action is allowed. Safari/VoiceOver approval question remains pending; no OS permission change or actual reader proof. Work execution remains unavailable/unconfirmed; do not report that pool as used.
+
+Next: finish and independently review MFA correction; resume exact-candidate browser/reader acceptance; release local ports for #65 interruption and same-state proof; integrate #21 after all required checks; close #62/#93 only against complete acceptance; run final #65 candidate rehearsal. Operational update delivered 02:52 UTC; next due 03:22 UTC while active.
+
+### Local test handoff — 02:58 UTC
+
+#21 browser windows closed and tool-local credentials cleared. Owner disposed API/Vite fixtures, verified private handoff removal and bind reuse on 8787/5173/5174. #65 now owns the local port for interruption and focused same-state proof. #21 correction is isolated in /tmp/tocyn-21-mfa-correction, preserving the browser candidate; initial server 370 tests pass, conditional enrollment race protection is under review before final runtime validation. Partial root browser receipt is /tmp/tocyn-21-root-browser-receipt.md; actual screen reader remains pending.
+
+#21 partial browser progress receipt: https://github.com/nathcymru/Tocyn/issues/21#issuecomment-5595086687. #65 actual interruption passed in 6.2 seconds: local health 200, seven recorded processes including workerd, repeated real npm/PTY Ctrl-C, complete disposal and port release, unrelated sentinel preserved. Same-state fallback proof is next and still unproved.
+
+#65 focused same-state proof passed on clean 2314188a990265c98d67757048184d1815e3a3ec against signed 58feb5e4deef55670f635f099eb67c6bcfffae56. 21.1 seconds; one ticket, four articles, four audit events and authorised canonical digest preserved; admission running/revision 1/tickets 1/mutations 4/uploads 0 unchanged. Inner/outer cleanup disposed and 8787 reusable. Root inspected redacted receipt /tmp/tocyn-65-focused-fallback-receipt.json. Port returned to #21 for corrected runtime/browser checks. Final artifact rehearsal remains pending prerequisites.
+
+Independent internal review: Terra/high found no actionable frontend delta defect through b2bc593, with actual reader/mobile containment explicitly unproved. Root reviewed MFA audience delegation and conditional setup/confirm writes; no remaining blocking finding after stale enrollment write correction. Final tests and exact-source integration remain required. #65 owner preparing coherent update to existing draft #118, with Progresses #65 only.
