@@ -466,3 +466,34 @@ server run lacked its local native SQLite binding after ignore-scripts setup;
 a Node 22 rebuild resolved setup and the complete server suite then passed. The
 existing frontend bundle-size warning remains. Required CI, accepted-source
 rehearsal, fixture teardown and issue acceptance remain integration gates.
+
+### Accepted correction and reader teardown
+
+PR #124 accepted the correction as signed commit
+`049ea82a02571681f834bcd87d43253603edf71f` on 9 September 2026. Its application
+files exactly match the reader-tested `ba026f4` candidate. PR CI run 34320237473
+and security run 34320234786 passed; exact-head JavaScript/TypeScript, Python and
+Actions analyses returned zero findings. Internal review and actual reader
+verification preceded the single approved automatic review; its non-blocking
+presentation comment was dispositioned without changing the tested source.
+
+The final local reader receipt was running policy revision 5, 2 tickets,
+13 admitted mutations and 1 upload attempt. Persisted rows were 2 tickets,
+64 articles, 1 attachment, 13 conversation events, 5 users, 1 group and
+1 membership. The additional user/group and historical articles were explicit
+synthetic fixture preparation, not fabricated admitted mutations.
+
+Both operators signed out normally and customer sessions were revoked. Only the
+three created Safari test/capture tabs were closed; the original Start Page was
+retained. VoiceOver returned to off and its AppleScript-control checkbox to
+unchecked; the existing caption preference was unchanged. Responsive mode was
+exited and localhost download permission remained Ask. Private authentication
+bindings were cleared. The owned dashboard, portal and guarded API sessions were
+stopped, their private fixture directory and handoff removed, and native bind
+checks confirmed ports 8787, 5173 and 5174 reusable. The two exact-matching
+65-byte synthetic source/download files were removed after verification.
+
+Independent acceptance review found no remaining included-workflow reader gap.
+Fast pending and injected read-failure variants remain evidenced by the stated
+executable regressions, not relabelled as manual observations. Final beta
+acceptance is recorded with the accepted-source rehearsal and issue receipts.

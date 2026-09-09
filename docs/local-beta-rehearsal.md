@@ -243,3 +243,61 @@ returned zero results. The prior failed 018aff41 and 953af436 attempts remain
 historical failures; this successful run does not establish the cause of the
 original 953af436 runtime failure. Actual screen-reader acceptance remains a
 separate prerequisite for overall beta readiness.
+
+## Final-source storage failure and verified recovery
+
+The first attempt on accepted `049ea82a02571681f834bcd87d43253603edf71f`
+ran out of local disk space during known-good dependency installation, observed
+scope 44 of the expected 46. The task-specific npm log confirms ENOSPC. The final
+receipt write also failed, so command exit codes/durations and the masked earlier
+cleanup exception cannot be reconstructed as a complete runner receipt.
+
+The [recovered failure record](./evidence/local-beta-rehearsal-2026-09-09-049ea82-storage-failure.json)
+is explicitly partial evidence. Independent read-only verification found matching
+40-file artifacts after failure, but fallback had not run. Automatic cleanup had
+43 closing markers for 44 scopes and conservatively retained state. An independent
+identity audit established zero live matches among 475 recorded identities before
+manual disposal of only that run's owned state. Native binds verified all three
+ports released. No release, deployment, provider or external-mail action occurred.
+
+Only generated dependencies in completed Tocyn temporary worktrees were reclaimed;
+source, Git state, uncommitted work and historical receipts remained. A subsequent
+attempt was authorised after verified cleanup and more than 17 GB free space,
+using the same immutable candidate/known-good revisions and a separate receipt.
+This operational recovery does not relabel the failed attempt as successful or
+weaken its fail-closed cleanup/acceptance rules.
+
+## Final accepted-source rehearsal passed
+
+The separate fresh attempt on signed accepted
+`049ea82a02571681f834bcd87d43253603edf71f`, against signed known-good
+`58feb5e4deef55670f635f099eb67c6bcfffae56`, passed on 9 September 2026.
+The [complete redacted receipt](./evidence/local-beta-rehearsal-2026-09-09-049ea82.json)
+contains all 46 passed commands, zero skipped. Independent audit matched the
+exact ordered plan: 22 once-only acceptance commands, dashboard/portal builds
+and five artifact steps in each of two independent checkouts, setup and fallback.
+
+Total recorded command time was 166,442 ms; wall time was 171,573 ms. The local
+runtime check took 23,209 ms and the same-state fallback wrapper 11,606 ms. The
+artifacts matched byte-for-byte: 40 files, 2,316,679 bytes, release digest
+`7afaa9a67aa52f22a6aeb5753059c3529291efd8de95493ab837c2ed268d536f`.
+
+Actual candidate/known-good runtime fallback preserved 1 ticket, 4 articles and
+4 events; admission remained running, revision 1, 1 ticket, 4 mutations and zero
+upload attempts. The migration manifest digest was
+`63e69593e6d1a35d3b0e45cf8195244be139539a5b003d6ea0912d3ec347f10d`;
+the canonical-state digest was
+`840f06e263629a2623ab0b23af5da59504f496e07a04f23da6c4050f2de4e764`.
+
+Inner and outer cleanup were disposed. Native binds confirmed ports
+8787/5173/5174 reusable, with zero owned task directories and no successful-run
+private output retained. Earlier failed attempts and their recovery remain
+separate evidence above. This accepted application also has actual
+[Safari/VoiceOver evidence](./login-accessibility.md); later evidence-only commits
+do not introduce untested application behavior.
+
+The parked artifacts prepare candidate `v0.4.0-beta.1` source/package evidence;
+they deliberately expose no application route. Local runtime acceptance is proved
+by the separate actual fixture and same-state probes. No release/tag, remote
+resource, provider activation or deployment was performed. The final scope and
+remaining boundaries are in the [Private Beta Readiness Report](./private-beta-readiness.md).
