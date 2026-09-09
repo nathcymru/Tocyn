@@ -1,5 +1,5 @@
 import { beforeAll, afterAll, afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TicketListPage } from '../pages/TicketListPage';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
@@ -19,7 +19,7 @@ afterAll(() => {
   if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose);
   else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
 });
-afterEach(() => { cleanup(); vi.resetAllMocks(); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); });
 const ticket = { id: 'ticket', subject: 'Accepted conversation', status: 'open', priority: 'normal', ticket_no: 1, created_at: '2026-09-09 00:00:00' };
 const article = { id: 'article', body: 'Accepted message', sender_type: 'customer', created_at: '2026-09-09 00:00:00', attachments: [{ id: 'file', filename: 'readable.txt', size: 100 }] };
 const detail = { ticket, articles: [article], pagination: { has_more: false, next_cursor: null } };
@@ -124,7 +124,7 @@ describe('portal conversation accessibility and recovery', () => {
     expect(message.readOnly).toBe(true);
     reject(new Error('Attachment transfer unavailable'));
     const alert = await screen.findByRole('alert');
-    expect(message.getAttribute('aria-describedby')).toBe(alert.id);
+    expect(message.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
     expect(message.value).toBe('Preserved reply');
     expect(screen.getByRole('button', { name: 'Remove chosen.txt' })).toBeTruthy();
     expect(document.activeElement).toBe(submit);
@@ -146,6 +146,71 @@ describe('portal conversation accessibility and recovery', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Conversation messages' }));
     expect(portalApi.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for sibling uploads to settle and reuses their successful references on retry', async () => {
+    setupReads(); mountDetail();
+    fireEvent.change(await screen.findByLabelText('Reply'), { target: { value: 'Reply with two files' } });
+    const first = new File(['first'], 'first.txt');
+    const second = new File(['second'], 'second.txt');
+    fireEvent.change(screen.getByLabelText('Choose reply attachments'), { target: { files: [first, second] } });
+    let finishSibling!: (result: { key: string }) => void;
+    vi.mocked(portalApi.postForm)
+      .mockRejectedValueOnce(new Error('First upload failed'))
+      .mockImplementationOnce(() => new Promise(resolve => { finishSibling = resolve as typeof finishSibling; }));
+    const submit = screen.getByRole('button', { name: 'Send Reply' });
+    fireEvent.click(submit);
+    await act(async () => {});
+    expect(submit.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(submit);
+    expect(portalApi.postForm).toHaveBeenCalledTimes(2);
+    await act(async () => { finishSibling({ key: 'second-key' }); });
+    expect((await screen.findByRole('alert')).textContent).toContain('First upload failed');
+    vi.mocked(portalApi.postForm).mockResolvedValueOnce({ key: 'first-key' });
+    vi.mocked(portalApi.post).mockResolvedValueOnce({});
+    fireEvent.click(submit);
+    await screen.findByText('Reply sent.');
+    expect(portalApi.postForm).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(portalApi.postForm).mock.calls[2][1].get('file')).toBe(first);
+    expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/tickets/ticket/messages', {
+      message: 'Reply with two files',
+      attachments: [
+        { filename: 'first.txt', size: first.size, contentType: 'application/octet-stream', storageKey: 'first-key' },
+        { filename: 'second.txt', size: second.size, contentType: 'application/octet-stream', storageKey: 'second-key' }
+      ]
+    });
+  });
+
+  it('reuses completed uploads after a rejected message write', async () => {
+    setupReads(); mountDetail();
+    fireEvent.change(await screen.findByLabelText('Reply'), { target: { value: 'Retained draft' } });
+    fireEvent.change(screen.getByLabelText('Choose reply attachments'), { target: { files: [new File(['file'], 'file.txt')] } });
+    vi.mocked(portalApi.postForm).mockResolvedValueOnce({ key: 'saved-key' });
+    vi.mocked(portalApi.post).mockRejectedValueOnce(new Error('Intake stopped'));
+    const submit = screen.getByRole('button', { name: 'Send Reply' });
+    fireEvent.click(submit);
+    await screen.findByRole('alert');
+    vi.mocked(portalApi.post).mockResolvedValueOnce({});
+    fireEvent.click(submit);
+    await screen.findByText('Reply sent.');
+    expect(portalApi.postForm).toHaveBeenCalledTimes(1);
+    expect(portalApi.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('explains required reply text and prevents attachment-only uploads', async () => {
+    setupReads(); mountDetail();
+    const message = await screen.findByLabelText('Reply');
+    fireEvent.change(message, { target: { value: '   ' } });
+    fireEvent.change(screen.getByLabelText('Choose reply attachments'), { target: { files: [new File(['file'], 'file.txt')] } });
+    expect(screen.getByText('Reply text is required, including when attaching files.')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: 'Send Reply' });
+    expect(submit.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(submit);
+    expect(screen.getByRole('alert').textContent).toContain('Enter reply text');
+    expect(message.getAttribute('aria-describedby')).toContain('reply-requirement');
+    expect(portalApi.postForm).not.toHaveBeenCalled();
+    expect(portalApi.post).not.toHaveBeenCalled();
   });
 
   it('reports download failure inline and permits explicit retry without losing control focus', async () => {

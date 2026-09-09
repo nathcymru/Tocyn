@@ -6,6 +6,8 @@ import { Loader2, ArrowLeft, Paperclip, Send, X } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 
+type UploadedAttachment = { filename: string; size: number; contentType: string; storageKey: string };
+
 type DetailPage = { ticket: Ticket; articles: Article[]; pagination?: { next_cursor: string | null; has_more: boolean } };
 
 export function TicketDetailPage() {
@@ -50,16 +52,22 @@ function TicketDetail({ id }: { id: string | undefined }) {
   
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const completedUploads = useRef(new Map<File, UploadedAttachment>());
 
   const fetchTicket = useCallback(async (silent = false) => {
     const generation = ++requestGeneration.current;
+    // The newest read owns both its result and the visible busy indicators.
     setRefreshing(true);
+    setLoadingMore(false);
+    setPageStatus('Refreshing messages…');
     try {
       if (!silent) setLoading(true);
       let data = await portalApi.get<DetailPage>(`/tickets/${id}`);
+      if (generation !== requestGeneration.current) return;
       const accumulated = [...data.articles];
       for (let page = 1; page < loadedPages.current && data.pagination?.next_cursor; page++) {
         data = await portalApi.get<DetailPage>(`/tickets/${id}?article_cursor=${encodeURIComponent(data.pagination.next_cursor)}`);
+        if (generation !== requestGeneration.current) return;
         accumulated.push(...data.articles);
       }
       if (generation !== requestGeneration.current) return;
@@ -73,40 +81,52 @@ function TicketDetail({ id }: { id: string | undefined }) {
       setPageStatus(`Showing ${data.articles.length} messages.${data.pagination?.has_more ? ' More messages are available.' : ''}`);
       return true;
     } catch (err: unknown) {
+      if (generation !== requestGeneration.current) return;
       const message = err instanceof Error ? err.message : 'Failed to load ticket details';
       if (!silent) setError(message);
       else setRefreshError(message);
+      setPageStatus('Could not refresh messages. Try again.');
       return false;
     } finally {
-      setRefreshing(false);
-      if (!silent) setLoading(false);
+      if (generation === requestGeneration.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
     }
   }, [id]);
 
+  const invalidateReads = useCallback(() => { requestGeneration.current++; }, []);
+
   useEffect(() => {
     let active = true;
+    const generation = ++requestGeneration.current;
     portalApi.get<{ TICKET_PREFIX: string }>('/config')
       .then(res => { if (active) setTicketPrefix(res.TICKET_PREFIX); })
       .catch(err => console.error('Failed to fetch config', err));
+    // Initial loading already has visible state; later reads use fetchTicket.
     portalApi.get<DetailPage>(`/tickets/${id}`)
       .then(data => {
-        if (active) {
-          setTicket(data.ticket);
-          setArticles(data.articles);
-          setNextCursor(data.pagination?.next_cursor ?? null);
-          setPaginationVisible(Boolean(data.pagination));
-              setPageStatus(`Showing ${data.articles.length} messages.${data.pagination?.has_more ? ' More messages are available.' : ''}`);
-          setError(null);
-        }
+        if (!active || generation !== requestGeneration.current) return;
+        setTicket(data.ticket);
+        setArticles(data.articles);
+        setNextCursor(data.pagination?.next_cursor ?? null);
+        setPaginationVisible(Boolean(data.pagination));
+        setPageStatus(`Showing ${data.articles.length} messages.${data.pagination?.has_more ? ' More messages are available.' : ''}`);
+        setError(null);
       })
       .catch((err: unknown) => {
-        if (active) setError(err instanceof Error ? err.message : 'Failed to load ticket details');
+        if (active && generation === requestGeneration.current) {
+          setError(err instanceof Error ? err.message : 'Failed to load ticket details');
+        }
       })
-      .finally(() => { if (active) setLoading(false); });
+      .finally(() => {
+        if (active && generation === requestGeneration.current) setLoading(false);
+      });
 
     let pollInterval: ReturnType<typeof setInterval>;
 
     const startPolling = () => {
+      clearInterval(pollInterval);
       pollInterval = setInterval(() => {
         fetchTicket(true);
       }, 60000);
@@ -133,15 +153,17 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
     return () => {
       active = false;
+      invalidateReads();
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [id, fetchTicket]);
+  }, [id, fetchTicket, invalidateReads]);
 
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
     const generation = ++requestGeneration.current;
     setLoadingMore(true);
+    setRefreshing(false);
     setPageStatus('Loading more messages…');
     try {
       const data = await portalApi.get<DetailPage>(`/tickets/${id}?article_cursor=${encodeURIComponent(nextCursor)}`);
@@ -151,8 +173,11 @@ function TicketDetail({ id }: { id: string | undefined }) {
       setNextCursor(data.pagination?.next_cursor ?? null);
       setPageStatus(`Loaded ${data.articles.length} more messages.${data.pagination?.has_more ? ' More messages are available.' : ' All messages are loaded.'}`);
     } catch (err: unknown) {
+      if (generation !== requestGeneration.current) return;
       setPageStatus(err instanceof Error ? err.message : 'Could not load more messages. Try again.');
-    } finally { setLoadingMore(false); }
+    } finally {
+      if (generation === requestGeneration.current) setLoadingMore(false);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,6 +194,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
   const removeAttachment = (index: number) => {
     if (sending) return;
+    completedUploads.current.delete(attachments[index]);
     setAttachments(prev => prev.filter((_, i) => i !== index));
     setReplyStatus('Attachment removed.');
     attachButton.current?.focus();
@@ -176,28 +202,35 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (sending || (!newMessage.trim() && attachments.length === 0)) return;
+    if (sending) return;
+    if (!newMessage.trim()) {
+      setReplyError('Enter reply text before sending attachments.');
+      return;
+    }
     setReplyError(null);
     setReplyStatus('Sending reply…');
 
     setSending(true);
     try {
-      // 1. Upload attachments concurrently via the worker endpoint
-      const uploadedAttachments = await Promise.all(
-        attachments.map(async (file) => {
+      // Keep the attempt pending until every upload settles. Retain successful
+      // references so a later retry only uploads files that still need one.
+      const outcomes = await Promise.allSettled(
+        [...new Set(attachments)].map(async (file) => {
+          if (completedUploads.current.has(file)) return;
           const formData = new FormData();
           formData.append('file', file);
-
-          const uploadResponse = await portalApi.postForm<{ key: string }>('/attachments/upload', formData);
-
-          return {
+          const uploaded = await portalApi.postForm<{ key: string }>('/attachments/upload', formData);
+          completedUploads.current.set(file, {
             filename: file.name,
             size: file.size,
             contentType: file.type || 'application/octet-stream',
-            storageKey: uploadResponse.key
-          };
+            storageKey: uploaded.key
+          });
         })
       );
+      const failed = outcomes.find(outcome => outcome.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
+      const uploadedAttachments = attachments.map(file => completedUploads.current.get(file)!);
 
       // 2. Send message with attachment metadata
       await portalApi.post(`/tickets/${id}/messages`, {
@@ -208,8 +241,9 @@ function TicketDetail({ id }: { id: string | undefined }) {
       // 3. Reset form and refresh ticket
       setNewMessage('');
       setAttachments([]);
+      completedUploads.current.clear();
       const refreshed = await fetchTicket(true);
-      setReplyStatus(refreshed ? 'Reply sent.' : 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.');
+      setReplyStatus(refreshed !== false ? 'Reply sent.' : 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.');
     } catch (err: unknown) {
       setReplyStatus('');
       setReplyError(err instanceof Error ? err.message : 'Failed to send reply');
@@ -344,10 +378,11 @@ function TicketDetail({ id }: { id: string | undefined }) {
               <label htmlFor="reply-message" className="text-sm font-medium text-gray-700">Reply</label>
               {replyError && <p id="reply-error" role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{replyError}</p>}
               <p role="status" aria-label="Reply status" className="text-sm text-gray-700">{replyStatus}</p>
+              <p id="reply-requirement" className="text-sm text-gray-700">Reply text is required, including when attaching files.</p>
               <textarea
                 id="reply-message"
                 readOnly={sending}
-                aria-describedby={replyError ? 'reply-error' : undefined}
+                aria-describedby={replyError ? 'reply-requirement reply-error' : 'reply-requirement'}
                 value={newMessage}
                 onChange={(e) => { if (!sending) setNewMessage(e.target.value); }}
                 placeholder="Type your reply here..."
@@ -400,7 +435,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                 
                 <button
                   type="submit"
-                  aria-disabled={sending || (!newMessage.trim() && attachments.length === 0)}
+                  aria-disabled={sending || !newMessage.trim()}
                   className="flex items-center gap-2 bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 transition-colors aria-disabled:bg-brand-700 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 font-medium"
                 >
                   {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}

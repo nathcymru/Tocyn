@@ -20,7 +20,15 @@ A successful reply followed by a failed history refresh is announced as a saved
 reply with an explicit read retry. It does not ask the customer to resend. Failed
 initial list/detail reads and attachment downloads also expose explicit recovery.
 The accepted #93 bounded pagination and its focus-preserving control remain in
-place.
+place. The newest read owns success, failure and loading indicators, including
+when polling or a visibility refresh overlaps pagination. Superseded reads cannot
+overwrite current feedback or leave the pagination control busy.
+
+Reply text is required before any attachment upload. An upload attempt remains
+pending until every sibling settles; successful upload references are retained in
+the current draft and reused if another upload or the message write fails. Removing
+a file drops its retained reference; successful message submission clears the
+cache. These references stay within the mounted conversation and are not persisted.
 
 Credential submission, password-to-MFA navigation, single-use magic-link handling,
 OTP challenge state and authenticated navigation retain their existing contracts.
@@ -41,9 +49,10 @@ npm run build --workspace=apps/dashboard
 npm run build --workspace=apps/portal
 ```
 
-At this source checkpoint, all five dashboard cases and all 29 portal cases pass.
+At this source checkpoint, all five dashboard cases and all 36 portal cases pass.
 These include four dashboard login cases, six portal login accessibility cases,
-eight portal conversation accessibility/recovery cases and existing login,
+eleven portal conversation accessibility/recovery cases, four overlapping-read
+regressions and existing login,
 magic-link, OTP and #93 pagination regressions. Both frontend builds and portal
 lint pass. Component checks assert names, selected states, associated errors,
 pending feedback, focusable controls, retained drafts and explicit recovery.
@@ -56,8 +65,10 @@ No live API/provider requests, fixture rows or R2 objects are created by these
 component tests. Mock request assertions show that repeated pending activation
 adds no second authentication, create or upload request; attachment upload failure
 retains the draft and adds no message write; and recovery after a saved reply's
-read failure adds no second message write. List/detail read retries and download
-retries are explicit. This is component resource evidence, not a live runtime
+read failure adds no second message write. Partial upload failure waits for the remaining sibling and retries only the failed
+file (three uploads for two files across two attempts); a rejected message write
+reuses its completed upload. Attachment-only submission performs zero upload or
+message calls. List/detail read retries and download retries are explicit. This is component resource evidence, not a live runtime
 measurement.
 
 ## Remaining acceptance
