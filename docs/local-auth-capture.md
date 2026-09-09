@@ -197,10 +197,11 @@ commits; the successful delivery reaches only the owning approved capture
 recipient. No provider credentials are read and no external mail is sent.
 
 The runner restarts only its own loopback Worker with a construction-time local
-authentication clock. It proves the same clock is used for the captured link,
-stored challenge expiry, signed widget JWT and normal JWT verification. This is
-not a global simulated clock: D1 `unixepoch()` behavior and beta admission or
-retention clocks continue to use their normal local runtime semantics. It also
+auth/capture/diagnostics clock. It proves the same clock is used for the captured
+link, stored challenge expiry, signed widget JWT, normal JWT verification and
+bounded local-beta diagnostics. This is not a global simulated clock: D1
+`unixepoch()` behavior and beta admission, replay, mutation, or retention clocks
+continue to use their normal local runtime semantics. It also
 proves an expired 15-minute challenge, a separately revoked session, and a
 seven-day expired widget session. The temporary clock and failure count exist
 only in the runner-owned Worker startup configuration; there is no HTTP control
