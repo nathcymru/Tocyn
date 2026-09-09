@@ -233,7 +233,8 @@ test('localhost Wrangler proves portal login, tenant isolation, delivery recover
     const customerA = credentials.find(credential => credential.email === 'tocyn-auth-test-a@example.invalid');
     const customerB = credentials.find(credential => credential.email === 'tocyn-auth-test-b@example.invalid');
     const operatorA = credentials.find(credential => credential.email === 'fixture.operator.a@example.test');
-    assert.ok(customerA && customerB && operatorA?.provisioningUri, 'bootstrap must retain only the approved customer recipients and one synthetic operator');
+    assert.ok(customerA && customerB && operatorA?.provisioningUri,
+      'bootstrap must retain only the approved customer recipients and one synthetic operator');
     const operatorProvisioningUri = operatorA.provisioningUri;
     const baseline = await workflow.conversationCounts();
 
@@ -251,6 +252,34 @@ test('localhost Wrangler proves portal login, tenant isolation, delivery recover
       return result;
     };
 
+    const unconfiguredAccount = await workflow.json<{ mfa_required?: boolean; token?: string }>('/api/auth/login', {
+      email: customerB.email, password: customerB.password,
+    });
+    assertStatus(unconfiguredAccount.response, 200, 'normal unconfigured account login');
+    assert.equal(unconfiguredAccount.body.mfa_required, false, 'unconfigured account must receive its ordinary authenticated session');
+    assert.ok(unconfiguredAccount.body.token, 'unconfigured account login must issue a session');
+    for (const [body, contentType, status, label] of [
+      ['null', 'application/json', 400, 'null'],
+      ['[]', 'application/json', 400, 'array'],
+      ['{', 'application/json', 400, 'malformed JSON'],
+      ['{}', 'text/plain', 415, 'non-JSON media type'],
+    ] as const) {
+      const rejected = await workflow.request('/api/auth/mfa/setup', {
+        method: 'POST', token: unconfiguredAccount.body.token, headers: { 'Content-Type': contentType }, body,
+      });
+      assertStatus(rejected, status, `nonempty ${label} MFA setup payload must remain guarded`);
+    }
+    const oversizedSetup = await workflow.request('/api/auth/mfa/setup', {
+      method: 'POST', token: unconfiguredAccount.body.token, headers: { 'Content-Type': 'application/json' }, body: 'x'.repeat(64 * 1024 + 1),
+    });
+    assertStatus(oversizedSetup, 413, 'bodyless MFA setup must retain the 64 KiB streamed request limit');
+    const setupMfa = await workflow.request('/api/auth/mfa/setup', {
+      method: 'POST', token: unconfiguredAccount.body.token, headers: { 'Content-Type': 'application/json' },
+    });
+    assertStatus(setupMfa, 200, 'bodyless guarded MFA setup must reach the authenticated handler');
+    const setupMfaBody = await setupMfa.json() as { provisioning_uri?: string };
+    assert.ok(typeof setupMfaBody.provisioning_uri === 'string' && setupMfaBody.provisioning_uri.length > 0,
+      'bodyless MFA setup must return its provisioning result without exposing it in test output');
     const aChallenge = await requestLink(customerA.email, 'fixture-widget-key-a');
     const bChallenge = await requestLink(customerB.email, 'fixture-widget-key-b');
     const expiredChallenge = await requestLink(customerA.email, 'fixture-widget-key-a');
@@ -314,9 +343,9 @@ test('localhost Wrangler proves portal login, tenant isolation, delivery recover
     const expired = await verify(expiredChallenge, 'fixture-widget-key-a');
     assertStatus(expired.response, 401, 'expired persisted challenge must be rejected through normal verification');
     const bLogout = await workflow.request('/api/v1/customer/auth/logout', {
-      method: 'POST', token: verifiedB.body.token, headers: { 'Content-Type': 'application/json' }, body: '{}',
+      method: 'POST', token: verifiedB.body.token, headers: { 'Content-Type': 'application/json' },
     });
-    assertStatus(bLogout, 200, 'unexpired tenant B customer may revoke its own session');
+    assertStatus(bLogout, 200, 'bodyless guarded customer logout may revoke its own session');
     const revoked = await workflow.request('/api/v1/customer/auth/me', { token: verifiedB.body.token });
     assertStatus(revoked, 401, 'session revocation must be distinct from token expiry');
     const activeA = await workflow.request('/api/v1/customer/auth/me', { token: verifiedA.body.token });
@@ -351,6 +380,13 @@ test('localhost Wrangler proves portal login, tenant isolation, delivery recover
       'customer history must expose only public intake/reply events');
     assert.ok(publicHistory.events?.every(event => JSON.stringify(event.facts) === '{}'), 'customer history must redact internal facts');
     assert.equal(publicHistory.events?.some(event => event.articleId === internalNote.body.id), false, 'customer history must omit the internal note event');
+
+    const staffLogout = await workflow.request('/api/auth/logout', {
+      method: 'POST', token: successfulDeliverySession, headers: { 'Content-Type': 'application/json' },
+    });
+    assertStatus(staffLogout, 200, 'bodyless guarded staff logout may revoke its own session');
+    const revokedStaff = await workflow.request('/api/auth/me', { token: successfulDeliverySession });
+    assertStatus(revokedStaff, 401, 'staff logout must revoke the current session');
 
     await workflow.restart(startClock + 7 * 24 * 60 * 60_000 + 1, 0);
     const expiredSession = await workflow.request('/api/v1/customer/auth/me', { token: verifiedA.body.token });

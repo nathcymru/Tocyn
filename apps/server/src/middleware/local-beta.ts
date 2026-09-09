@@ -33,6 +33,16 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
   return 'disabled';
 }
 
+/** These existing authenticated actions deliberately ignore an empty POST payload. */
+function permitsEmptyAuthAction(method: string, path: string): boolean {
+  return method === 'POST' && [
+    '/api/auth/logout',
+    '/api/auth/mfa/setup',
+    '/api/auth/mfa/disable',
+    '/api/v1/customer/auth/logout',
+  ].includes(path);
+}
+
 export const localBetaGuard: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
   if (c.env.LOCAL_BETA_ENABLED === undefined || c.env.LOCAL_BETA_ENABLED === 'false') return next();
   const invalidRuntime = !localBetaEnabled(c.env) || c.env.ENVIRONMENT !== 'local'
@@ -79,19 +89,22 @@ export const localBetaGuard: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
   const requestLimit = route === 'upload' ? 10 * 1024 * 1024 + 50000 : 64 * 1024;
   return requestBounds(requestLimit)(c, async () => {
     if (['POST', 'PATCH', 'PUT'].includes(c.req.method) && route !== 'upload' && c.req.raw.body) {
-      if (!/^application\/json(?:\s*;|$)/i.test(c.req.header('Content-Type') || '')) {
-        c.res = c.json({ code: 'unsupported_media_type', error: 'Content-Type must be application/json' }, 415);
-        return;
-      }
-      try {
-        const value = await c.req.raw.clone().json();
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-          c.res = c.json({ code: 'invalid_json', error: 'A single JSON object is required' }, 400);
+      const rawBody = await c.req.raw.clone().text();
+      if (!(permitsEmptyAuthAction(c.req.method, c.req.path) && rawBody.length === 0)) {
+        if (!/^application\/json(?:\s*;|$)/i.test(c.req.header('Content-Type') || '')) {
+          c.res = c.json({ code: 'unsupported_media_type', error: 'Content-Type must be application/json' }, 415);
           return;
         }
-      } catch {
-        c.res = c.json({ code: 'invalid_json', error: 'Invalid JSON request body' }, 400);
-        return;
+        try {
+          const value = JSON.parse(rawBody);
+          if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            c.res = c.json({ code: 'invalid_json', error: 'A single JSON object is required' }, 400);
+            return;
+          }
+        } catch {
+          c.res = c.json({ code: 'invalid_json', error: 'Invalid JSON request body' }, 400);
+          return;
+        }
       }
     }
     try {
