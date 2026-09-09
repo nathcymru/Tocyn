@@ -9,6 +9,7 @@ const mockDB = {
   all: vi.fn(),
   first: vi.fn(),
   run: vi.fn(),
+  batch: vi.fn(),
 };
 
 const mockNotificationsDO = {
@@ -39,6 +40,7 @@ describe("Dashboard Handler Integration Tests", () => {
     firstQueue = [];
     mockDB.all.mockResolvedValue({ results: [] });
     mockDB.run.mockResolvedValue({ success: true });
+    mockDB.batch.mockResolvedValue([{results:[{id:'t-1'}]}]);
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
     mockDB.first.mockImplementation(async () => {
@@ -215,8 +217,10 @@ describe("Dashboard Handler Integration Tests", () => {
       expect(await res.json()).toEqual({ success: true });
 
       // Verify ticket update query
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET status = ?, assigned_to = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?"));
-      expect(mockDB.bind).toHaveBeenCalledWith("resolved", validUuid, "default-tenant", "t-1");
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET status=?,assigned_to=?,updated_at=CURRENT_TIMESTAMP"));
+      expect(mockDB.bind).toHaveBeenCalledWith("resolved", validUuid, "default-tenant", "t-1", "resolved", validUuid);
+      expect(mockDB.batch).toHaveBeenCalledTimes(1);
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO conversation_events"));
       // Verify system note insertion
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO articles"));
     });
@@ -406,7 +410,9 @@ describe("Dashboard Handler Integration Tests", () => {
       mockBucket.get.mockResolvedValueOnce({ size: 1024, httpMetadata: { contentType: "application/pdf" }, body: new ReadableStream({ start(c) { c.close(); } }) });
       const mockAttachment = { id: "att-1", file_name: "invoice.pdf", file_size: 1024, content_type: "application/pdf", r2_key: "agent-attachments/agent-1/uuid.pdf" };
 
-      firstQueue.push(mockTicket, { 1: 1 }, mockTicket, mockArticle, mockAttachment);
+      firstQueue.push(mockTicket, { 1: 1 });
+      mockDB.batch.mockResolvedValue([{results:[{response_snapshot:JSON.stringify({version:2,ticket:mockTicket,
+        article:{...mockArticle,is_internal:true},attachments:[mockAttachment],audit:[{eventId:'event-1',articleId:mockArticle.id}]})}]}]);
 
       const res = await dashboard.request(
         "/tickets/t-1/articles",
@@ -436,6 +442,8 @@ describe("Dashboard Handler Integration Tests", () => {
       const body = await res.json();
       expect(body.attachments).toHaveLength(1);
       expect(body.attachments[0].filename).toBe("invoice.pdf");
+      expect(mockDB.batch).toHaveBeenCalledTimes(1);
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO conversation_events"));
     });
   });
 });

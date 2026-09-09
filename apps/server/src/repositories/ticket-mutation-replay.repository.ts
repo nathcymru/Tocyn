@@ -1,3 +1,5 @@
+import { conversationMutationEvent } from './conversation-audit.repository';
+import type { ConversationActor } from '../types/conversation-audit';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { InitialTicketArticleData } from './interfaces';
@@ -19,6 +21,7 @@ const namespaceWhere = 'tenant_id = ? AND principal_kind = ? AND principal_id = 
 
 export type MutationCandidate = {
   ticketId: string; articleId?: string;
+  audit?: ConversationActor;
   ticket?: InitialTicketArticleData['ticket'];
   article?: InitialTicketArticleData['article'];
   attachments: (VerifiedMutationAttachment & { id: string })[];
@@ -104,19 +107,25 @@ export class TicketMutationReplayRepository {
     if (!candidate.ticket) statements.push(this.db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?')
       .bind(this.scope.tenantId, candidate.ticketId));
 
+    const eventId = candidate.audit ? crypto.randomUUID() : undefined;
+    if (candidate.audit && eventId) statements.push(conversationMutationEvent(this.db,this.scope,{
+      id:eventId,ticketId:candidate.ticketId,articleId:candidate.articleId,actor:candidate.audit,
+      intake:Boolean(candidate.ticket),internal:Boolean(candidate.article?.is_internal),
+    }));
+    const version = candidate.audit ? 2 : 1;
     const attachmentSnapshots = candidate.attachments.map(() => `json((SELECT ${attachmentJson} FROM attachments x WHERE x.tenant_id = ? AND x.id = ?))`);
-    const snapshot = `json_object('version',1,
+    const snapshot = `json_object('version',${version},
       'ticket',json((SELECT ${ticketJson} FROM tickets t WHERE t.tenant_id = ? AND t.id = ?)),
       'article',json((SELECT ${articleJson} FROM articles a WHERE a.tenant_id = ? AND a.id = ?)),
-      'attachments',json_array(${attachmentSnapshots.join(',')}))`;
+      'attachments',json_array(${attachmentSnapshots.join(',')})${eventId ? ", 'audit',json_array(json_object('eventId',?,'articleId',?))" : ''})`;
     const snapshotValues = [this.scope.tenantId, candidate.ticketId, this.scope.tenantId, candidate.articleId ?? null,
-      ...candidate.attachments.flatMap(a => [this.scope.tenantId, a.id])];
+      ...candidate.attachments.flatMap(a => [this.scope.tenantId, a.id]), ...(eventId ? [eventId,candidate.articleId ?? null] : [])];
     if (ns) {
       // Deliberately last: uniqueness failure rolls back every losing mutation.
       statements.push(this.db.prepare(`INSERT INTO ticket_mutation_receipts
         (tenant_id,principal_kind,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,
          result_ticket_id,result_article_id,response_status,response_snapshot)
-        VALUES (?,?,?,?,?,?,1,1,?,?,201,${snapshot}) RETURNING response_snapshot`)
+        VALUES (?,?,?,?,?,?,1,${version},?,?,201,${snapshot}) RETURNING response_snapshot`)
         .bind(...this.namespaceValues(ns), ns.payloadHash, candidate.ticketId, candidate.articleId ?? null, ...snapshotValues));
     } else {
       statements.push(this.db.prepare(`SELECT ${snapshot} AS response_snapshot`).bind(...snapshotValues));

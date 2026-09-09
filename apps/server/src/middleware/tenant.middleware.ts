@@ -1,3 +1,5 @@
+import { ConversationAuditRepository } from '../repositories/conversation-audit.repository';
+import { TicketMutationReplayRepository } from '../repositories/ticket-mutation-replay.repository';
 import { Context, Next } from 'hono';
 import { TicketMutationReplayService, type MutationPrincipal } from '../services/ticket-mutation-replay.service';
 import { VerifiedTenantScope } from '../types/tenant';
@@ -7,6 +9,8 @@ import { TenantAttachmentStorage, LegacyArticleBodyStorage, TenantVectorStorage 
 
 export type TenantRequestDeps = {
   scope: VerifiedTenantScope;
+  conversationAudit: ConversationAuditRepository;
+  ticketMutations: TicketMutationReplayRepository;
   repositories: Repositories;
   attachmentStorage: TenantAttachmentStorage;
   legacyArticleStorage?: LegacyArticleBodyStorage;
@@ -37,6 +41,8 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any): T
 
   return {
     scope,
+    conversationAudit: new ConversationAuditRepository(env.DB,scope),
+    ticketMutations: new TicketMutationReplayRepository(env.DB,scope),
     repositories,
     attachmentStorage,
     legacyArticleStorage,

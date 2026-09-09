@@ -1,0 +1,110 @@
+{
+  "status": "Applied to Project and receipts including shared integration sequencing correction",
+  "basis": {
+    "calendar": "Monday\u2013Saturday, 8 productive hours/day; Sunday excluded. #63 six full days counted from10September. #93 reserves its final day for integration after #63; W2 does not overlap #62.",
+    "effort": "Approved 3x planning allowance includes implementation, validation and review; no additional owner hours assumed.",
+    "capacity": "One sequential issue per W1/W2; shared review/integration capacity remains 4 hours/day.",
+    "scope": "Current beta is owner-local only. Historical remote-operation proof is not a critical-path gate.",
+    "event": "Signed #113 accepted646e1a9 with passing mainCI/security; #63/#93 substantive starts9 September Europe/London."
+  },
+  "changes": [
+    {
+      "issue": 63,
+      "workstream": "W1",
+      "planningEffortHours": 48,
+      "forecastStart": "2026-09-09",
+      "forecastTarget": "2026-09-16",
+      "baselineTarget": "2026-10-30",
+      "scheduleVarianceWorkingDays": -38,
+      "predecessors": [
+        59,
+        60
+      ],
+      "reason": "Accepted #60 and active #63/#93; approved effort/calendar and baseline unchanged.",
+      "actualStart": "2026-09-09",
+      "status": "In progress"
+    },
+    {
+      "issue": 93,
+      "workstream": "W2",
+      "planningEffortHours": 24,
+      "forecastStart": "2026-09-09",
+      "forecastTarget": "2026-09-17",
+      "baselineTarget": "2026-10-31",
+      "scheduleVarianceWorkingDays": -38,
+      "predecessors": [
+        57,
+        60
+      ],
+      "reason": "Shared-batch integration follows #63 acceptance; reserve #93 final integration day before W2 starts #62. Downstream dates follow actual integration/capacity order.",
+      "actualStart": "2026-09-09",
+      "status": "In progress",
+      "integrationPredecessors": [
+        63
+      ]
+    },
+    {
+      "issue": 61,
+      "workstream": "W1",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-09-17",
+      "forecastTarget": "2026-09-22",
+      "baselineTarget": "2026-11-05",
+      "scheduleVarianceWorkingDays": -38,
+      "predecessors": [
+        60,
+        63
+      ],
+      "reason": "Accepted #60 and active #63/#93; approved effort/calendar and baseline unchanged."
+    },
+    {
+      "issue": 62,
+      "workstream": "W2",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-09-18",
+      "forecastTarget": "2026-09-23",
+      "baselineTarget": "2026-11-07",
+      "scheduleVarianceWorkingDays": -39,
+      "predecessors": [
+        60,
+        63
+      ],
+      "reason": "Shared-batch integration follows #63 acceptance; reserve #93 final integration day before W2 starts #62. Downstream dates follow actual integration/capacity order."
+    },
+    {
+      "issue": 21,
+      "workstream": "W2",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-09-24",
+      "forecastTarget": "2026-09-29",
+      "baselineTarget": "2026-11-13",
+      "scheduleVarianceWorkingDays": -39,
+      "predecessors": [
+        61,
+        62
+      ],
+      "reason": "Shared-batch integration follows #63 acceptance; reserve #93 final integration day before W2 starts #62. Downstream dates follow actual integration/capacity order."
+    },
+    {
+      "issue": 65,
+      "workstream": "W2",
+      "planningEffortHours": 48,
+      "forecastStart": "2026-09-30",
+      "forecastTarget": "2026-10-06",
+      "baselineTarget": "2026-11-21",
+      "scheduleVarianceWorkingDays": -40,
+      "predecessors": [
+        57,
+        58,
+        19,
+        60,
+        61,
+        62,
+        63,
+        21,
+        93
+      ],
+      "reason": "Shared-batch integration follows #63 acceptance; reserve #93 final integration day before W2 starts #62. Downstream dates follow actual integration/capacity order."
+    }
+  ]
+}

@@ -284,8 +284,10 @@ describe("v1 Handler Integration Tests", () => {
       }, { DB: mockDB as any });
 
       expect(res.status).toBe(200);
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET status = ?"));
-      expect(mockDB.bind).toHaveBeenCalledWith("closed", "default-tenant", "t-123");
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET status=?"));
+      expect(mockDB.bind).toHaveBeenCalledWith("closed", "default-tenant", "t-123", "closed");
+      expect(mockDB.batch).toHaveBeenCalledTimes(1);
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO conversation_events"));
     });
   });
 

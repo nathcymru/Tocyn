@@ -49,7 +49,7 @@ export type CanonicalMessage = {
     occurredAt: CanonicalFact<never>;
   };
   delivery: CanonicalFact<never>;
-  audit: CanonicalFact<never>;
+  audit: CanonicalFact<{eventId:string}>;
 };
 
 export type CanonicalConversation = {
@@ -75,7 +75,7 @@ export type CanonicalConversation = {
       occurredAt: CanonicalFact<never>;
     };
     delivery: CanonicalFact<never>;
-    audit: CanonicalFact<never>;
+    audit: CanonicalFact<{eventId:string}>;
   };
   messages: CanonicalMessage[];
 };

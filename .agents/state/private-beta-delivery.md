@@ -28,8 +28,8 @@ Browser Computer Use works. Do not circumvent the denied native route.
 
 ## Main and integrated evidence
 
-Main `e0ce28bc3e9dc7bd520f129274a802e7bec67832` (PR #112), verified signed merge.
-Main CI 34290185403 and security analysis 34290185066 passed. Required dependency-only PR checks
+Main `646e1a9959a2ab94d3509b227da5c4daf81c73ee` (PR #113), verified signed merge.
+Main CI 34292262043 and security analysis 34292261623 passed. Required dependency-only PR checks
 matched github-actions app 15368. No manual repeat Copilot reviews requested.
 
 | Issue / PR | Accepted state and evidence |
@@ -57,116 +57,156 @@ local/published inventories. No alert dismissal occurred. Completion receipts an
 Project fields for #106/#108 are synchronized; both issues are closed Done / 100% actual 8 Sep. #12 retains broader required
 context enforcement scope; its positive evidence from #107 does not close it.
 
-## Current integration and allocation
+## Latest accepted issues
 
-#59 accepted via #112, signed e0ce28b. Final head e3bb873 passed required checks;
-main CI/security passed. Canonical route/projector 2, atomic D1 2, server 340,
-portal 13, widget 3, root 31, all required types/lint/build/local integration passed.
-Project Done / 100%; start 8 September, completion 9 September Europe/London;
-baseline 14 October unchanged, variance -30 Monday–Saturday days.
-Receipt: https://github.com/nathcymru/Tocyn/issues/59#issuecomment-5593265051
+#59 via #112: signed e0ce28b; canonical API/portal intake, truthful source/timing,
+identity provenance, compatibility and atomic initial persistence. Main CI/security
+passed. Project Done100%; start8 September, completion9 September; unchanged
+baseline14 October, variance-30 Mon–Sat days.
+https://github.com/nathcymru/Tocyn/issues/59#issuecomment-5593265051
 
-Late #112 review identified missing sender/customer equality in authenticated
-canonical attribution. Root fixes projector and focused regression in #60 before
-snapshots reuse it. N+1 attachment reads are a measured read-bound concern for #93 pagination/resource acceptance; no unrelated concurrent read-path refactor. No repeated
-metered review requested. No #60 completion claim.
+#60 via #113: final PR head38bc33d500297bc86b5bcc4f8a3b24e717d45536;
+signed merge646e1a9959a2ab94d3509b227da5c4daf81c73ee at23:48:20Z 8 September
+(9 September Europe/London). Required PR checks from app15368 passed; main
+CI34292262043 and security34292261623 passed. Internal implementation/security
+reviews passed. Standing approving-review exception used, no machine bypass.
+Project Done100%; start/completion9 September; unchanged baseline22 October,
+variance-37 Mon–Sat days. Completion: https://github.com/nathcymru/Tocyn/issues/60#issuecomment-5593570669
+
+Four API/portal mutation routes use optional scoped keys, fixed24h expiry,
+immutable version1 raw snapshots, final unique receipt INSERT in same D1 batch,
+current authentication/visibility and deletion tombstones. Unkeyed/bodyless behavior
+retained.64KiB streamed requests;128KiB derived fingerprint cap;256KiB receipt cap.
+Scoped repositories own all SQL; trusted tenantDeps composes service. Portal reply
+atomically includes attachments/touch and winner-only best-effort notification.
+No replay notification, no CAPTCHA/R2 repeat on stored success.100 expired rows
+per bounded cleanup; no dormant-tenant physical-deletion SLA or production claim.
+
+Validated server349/replay10/canonical3/atomic2/portal13/widget3/root31; all
+server/script types, lint/workflow checks, three builds and full local D1/auth/
+reset/restart/fixture/core/storage/realtime chain. Real races: sixAPI creates→one
+mutation/receipt; fiveattachment replies→onearticle/attachment; directengine8→one.
+Injected row/receipt failures roll back. Snapshot1001bytes. Actual local Wrangler
+purge removed100expiredA, preserved2expiredA+1activeA+3expiredB; invalid/remote
+options refused, ownedstate removed. Notification failure3transport attempts,
+replay0. No new UI. Full reproduction/resource limits in docs/phase-1.4-api-spec.md.
+
+## Review disposition and lessons
+
+Late #112 authenticated-message attribution correction integrated in #113: sender
+must match recorded ticket customer; focused matching/missing/mismatching tests pass.
+#112 N+1 attachment reads are assigned to #93 bounded detail-read implementation.
+Late #113 automatic review has two nonblocking follow-ups: unused retry headers
+on wildcard widget routes (no retry capability/API-key permission) are narrowed by
+#93; document intentional128KiB derived fingerprint versus64KiB external limit in
+#63 versioned contract. These do not allow oversized external requests or privilege
+gain. Resolve review threads after corresponding integration; no repeated metered
+review request. Review IDs/comments are accessible on #113.
+
+Avoid repeated partial route handoffs: #60 terra/high integration was escalated to
+Astra/medium after incomplete edits, then full tests passed. Always use Node22;
+Node26 failed native addon ABI. Raw SQL service/handler access must stay behind
+repositories; do not suppress lint. Receipt table has no tenant-registry FK because
+no tenant registry exists. Wrangler local --json omits meta.changes; bounded purge
+uses numeric-only RETURNING row count. Freeze source before final validation.
+
+## Active allocation and exclusive ownership
 
 | Task | Agent / model / effort | Ownership and reason |
 | --- | --- | --- |
-| Coordination | Root / inherited | CI, state, GitHub, review, integration; canonical attribution correction |
-| #60 owner | release_packaging_escalation / gpt-6-astra / high | Migration, repository, atomic replay engine, immutable snapshots, service; concurrency/security |
-| #60 route completion | portal_integration_finish / gpt-6-astra / medium | Completes four route integrations/mocks/docs; escalated after repeated partial handoffs from beta_environment_impl (terra/high) |
-| #60 acceptance | retry_acceptance / gpt-5.6-terra / high | New real-D1 concurrent/failure tests, dedicated config and narrow fixture options/counters; isolation and rollback |
-| Work pool | Existing attempt | Connector timeout; no confirmed execution or extra capacity claimed |
+| Coordinator | Root / inherited | CI, state, GitHub, integration and final acceptance |
+| #63 owner | release_packaging_escalation / gpt-6-astra / high | Event migration, repositories/services/routes, versioned snapshots, existing mocks/docs; atomicity/privacy |
+| #63 acceptance | retry_acceptance / gpt-5.6-terra / high | New real-D1 audit acceptance/config, agreed narrow fixture helpers; concurrency/isolation |
+| #93 owner | beta_guardrails_impl / gpt-6-astra / high | Independent policy/counter/operator/read bounds and tests; durable admission/auth boundaries |
+| Work pool | Existing attempt | Connector timeout, native tool denial; no execution/capacity claimed |
 
-Branch codex/60-retry-safe-mutations in /tmp/tocyn-60-retry-safe-mutations starts
-from e0ce28b. Node 22 locked script-free install and native fixture rebuild passed.
-Runtime PATH prefix: /Users/ty/.local/share/fnm/node-versions/v22.19.0/installation/bin.
-Four actual Codex slots including root; exclusive file ownership agreed. No PR yet.
-Actual start 9 September; receipt:
-https://github.com/nathcymru/Tocyn/issues/60#issuecomment-5593266188
+Four active Codex slots including root. Both issue owners start9 September after
+accepted #60. Root alone declares acceptance. Worktrees from646e1a9:
+- /tmp/tocyn-63-conversation-audit, branch codex/63-conversation-audit (authoritative state).
+- /tmp/tocyn-93-local-beta-guardrails, branch codex/93-local-beta-guardrails.
 
-## #60 agreed contract
+Node22 PATH prefix /Users/ty/.local/share/fnm/node-versions/v22.19.0/installation/bin.
+Both locked script-free installs and better-sqlite3 rebuilds passed, zero advisories.
+No PR yet for #63/#93. Designs /tmp/tocyn-63-design.md and /tmp/tocyn-93-design.md;
+approved issue/ADR scope is authoritative. Do not overwrite independent branch work.
 
-Optional validated Idempotency-Key on API/portal ticket create and reply. Namespace
-includes tenant, current API-key/customer principal, operation and hashed key.
-Fixed 24-hour database-clock replay window; semantic versioned input fingerprint.
-64 KiB streamed JSON bound and typed validation; receipt snapshot bound 256 KiB.
-Preserve unkeyed behavior and bodyless create compatibility.
+## Integration plan and ready queue
 
-One D1 batch commits all mutation rows plus a completed immutable versioned raw
-record snapshot receipt, unique insert last. A conflicting concurrent candidate
-rolls back completely, reads winner and reauthorizes before replay or 409 conflict.
-No pending lease, second receipt commit, replacement insert, outbox or new journal.
-Current auth/permission/ownership remain mandatory on every retry. Replay renders
-original response, without repeating mutation, CAPTCHA consumption or notification.
+#63 owns all shared mutation batch assembly until accepted merge. #93 independently
+builds policy/counter/control/read-bound files; no circular import of unmerged #93
+into #63. After #63 integration, rebase #93 and add admission+counter to the same
+batches before mutation/event/final receipt. One owner edits shared files at a time;
+no generic arbitrary SQL hook or duplicate commit engine. Same-key race at final
+quota slot must replay valid winner, not falsely429. No-op/replay charges zero.
 
-Expired-key replacement is conditional inside the batch. Bounded tenant cleanup
-100 rows per new mutation plus operator purge; no hard physical-deletion SLA for
-dormant tenants. Privacy deletion atomically redacts receipts into expiry-bounded
-key/fingerprint tombstones: matching retries 410, conflicting reuse 409, no content
-resurrection. Production cleanup SLA stays #42, not a new local beta approval gate.
-Portal reply atomically includes article, attachments and ticket touch. Existing
-R2 objects are read before new mutation only. Winner-only best-effort broadcast;
-crash before broadcast can lose an event and detail refresh recovers state.
+#63: four fixed tenant events (intake/reply/assignment/state), actual transaction
+prior/new facts, trusted submitting actor distinct from message author, bounded
+safe history and current visibility. Public history conservatively intake/replies;
+no internal sequence/count clues. Conversation-lifecycle erasure. Keep liveV1
+snapshots unchanged; newV2 includes truthful fixed audit refs. No journal/outbox.
 
-Independent acceptance covers concurrent same/conflicting keys, tenant/principal
-isolation, permission revocation, immutable/lost responses, malformed/oversize data,
-atomic injected failures, expiry races, privacy tombstones, notification failure,
-CORS, unkeyed compatibility and bounded resource/cleanup evidence.
+#93: exact two-tenant/invited-principal local admission, finite durable counters,
+stop/restart/recovery, upload-attempt bounds, bounded paged reads/attachments,
+disabled optionalAI/jobs/providers, bounded diagnostics. Proposed conservative
+local defaults are implementation choices, not invented owner commitments.
+Preserve human handling and accepted conversations; no #50/#90 broad budgets.
 
-## Critical path and next actions
+Not beta-ready. Six gates remain: #63/#93 active; then #61/#62 in parallel after
+#60/#63; #21 after both; #65 joins all beta prerequisites for final local rehearsal.
+Completed #20/#57/#58/#19/#59/#60 and security#106/#108. No owner action pending.
+Non-beta: fullcost#50/#64/#90, journals#91, redesign#48/#66, production#42,
+nativeemail#18/futurechannels/autonomy/privacy. Required correctness never excluded.
 
-Not beta-ready. Completed #20, owner-local #57, #58, #19 and #59; security #106/#108
-also complete. Seven beta gates remain:
-#60 active → #63 and #93 in parallel → #61/#62 → #21 → #65 final local rehearsal.
-#65 joins all beta prerequisites. #63 depends on #59 and integrates after #60;
-#93 depends on #57/#60. No owner action is currently pending.
+Next: settle audit typed contract, implement/validate owned workstreams, issue63
+checked integration, refresh successors and integrate guarded batches. Keep full
+required checks at PR boundaries and updates tied to evidence. Forecast after60
+preserves baselines/3× effort/Mon–Sat/two-stream/shared-review model; all six successor forecasts and issue receipts synchronized. See private-beta-reforecast-after60-2026-09-09.json.
 
-Next: settle typed engine interface, implement three owned streams, run targeted
-then full required validation, internal review, coherent PR and checked integration.
-Coordinator alone accepts issue completion. Refresh successors after accepted merge.
-Forecast after #59: #60 target 16 September, #65 target 12 October; unchanged
-baselines, 3× effort, Monday–Saturday calendar and two-stream/shared-review capacity.
-See private-beta-reforecast-after59-2026-09-09.json; all seven successor Project forecasts and issue receipts synchronized.
+Operational update delivered23:54Z 8 September (00:54BST9 September); next due
+by00:24Z9 September. Continue concise interim findings and genuine beta completion.
 
-Prepared design: /tmp/tocyn-60-design.md. Next guardrails inventory:
-/tmp/tocyn-93-preparation.md. Approved issue/ADR scope remains authoritative.
-Non-beta work: full cost governance #50/#64/#90, journals #91, redesign #48/#66,
-production #42, native email #18 and future channels/autonomy/privacy metadata.
-Required correctness cannot be excluded merely because related work is non-beta.
+Forecast correction: independent #93 policy work can start with #63, but final
+shared integration cannot finish before #63. Reserve #93 integration17 September
+(after #63 target16 September), then W2 #62 starts18 September and targets23.
+#61 remains17–22 September; #21 moves24–29 September; #65 forecast30 September–
+6 October. The previous5 October forecast failed to reserve that integration day.
+Baselines/approved effort remain unchanged; this is an implementation sequencing
+constraint, not a new product prerequisite. All four affected Project fields and issue receipts are synchronized.
 
-Last operational update 23:24Z 8 September (00:24 BST 9 September). Next due by
-23:54Z. Continue through genuine readiness, with concise interim findings.
+Early #63 review: API history preserves existing public-message-only read semantics;
+full internal/state/assignment reconstruction stays staff-authorized. Retained system
+notes use readable transaction-derived prose rather than JSON/UUIDs. Migration version
+CHECK changed to NULL-safe comparison; dedicated negative fixture required. V1 replay
+renderer remains frozen, new V2/live detail uses only visible event references.
 
-#60 implementation checkpoint: root canonical attribution regression and dedicated types
-pass. Request/CORS foundation 15 tests passed. Initial real API subset exposed a
-receipt FK to a nonexistent tenant registry; engine owner removed it, preserving
-scoped tenant keys. API rerun passed 4/4, including six concurrent calls with one winner. Route work reassigned to Astra medium
-after repeated partial handoffs; new owner repairs incomplete intermediate edits
-before subsystem validation. Acceptance suite covers nine broad real-D1 cases;
-full passing evidence is still pending. No PR or completion claim yet.
+Early #93 review: standalone policy tests pass assertion insert/conflict, reserve,
+rollback and revisioned stop/resume. Direct local SQLite operator must be proven
+against actual running Wrangler/warmed connections/concurrent writes and restart;
+otherwise use supported local execution. CLI malformed-policy errors must not echo
+file contents. Guarded beta launch must explicitly enable policy and fail closed,
+not silently use unguarded developer defaults. No new owner approval pending.
 
-Independent frontend validation: all three application builds passed; portal 13,
-widget 3 and root 31 tests passed. Full server and integration checks await stable
-route/engine/test source. Prepared successors are persisted in
-private-beta-next-dependencies.md.
+#63 full validation checkpoint: root's seven dedicated types, complete lint/workflow,
+three builds, portal13/widget3/root31 and full local D1/auth/reset/restart/fixture/
+core/storage/realtime/canonical3/atomic2 chain pass. Independent audit expanded tests
+pending final result. Parent ticket DELETE with live articles fails the existing0014
+NO ACTION FK, not the new audit FK; exercise supported child cleanup/retention order
+and bodyless parent deletion. Do not weaken that existing FK to satisfy an invalid
+test assumption. Root has released port8787 to #93; no persistent server is running.
 
-Final-source checkpoint: replay acceptance 10/10 (16.1s); server 349 across 42
-files; server and six dedicated script typechecks pass. Complete lint, workflow
-semantics, portal lint, three builds, portal13/widget3/root31 pass. Raw SQL service
-and handler wiring detected by lint was corrected through scoped repository methods
-and the trusted tenantDeps factory; no lint exception added. Full local integration
-chain running. Independent security review running. Operator purge actual Wrangler
-proof exposed missing meta.changes in local CLI output; owner correcting result
-counting with bounded numeric-only RETURNING rows. Application source frozen.
+#93 independent guarded fixture tests pass actual principals/invitations, exactcapture,
+revoked session, nine disabled/unclassified route negatives and JSON/page bounds.
+Detail query count four at page sizes1 and50, filter-before-limit and no legacy R2
+body reads. Shared mutation accounting and real Wrangler stop/coherence acceptance
+remain pending integration after #63; no premature enforcement claim.
 
-#60 ready-for-PR evidence: complete local D1/authentication/reset/restart/fixture/
-core/storage/realtime/canonical chain passed. Canonical route3/atomic2 includes the
-attribution regression. Independent security review found no blocking findings;
-existing retention triggers still reject racing mutations atomically. Actual fresh
-Wrangler purge proof passed: 100 expired A receipts removed; 2 expired A, 1 active A
-and 3 expired B preserved; missing args, remote flag and limit101 refused; temporary
-state removed. Direct engine eight-way race committed one ticket/receipt with
-identical responses. Application and operator CLI source now frozen. Required remote
-CI/security and checked integration remain; #60 is not yet accepted.
+#63 independent acceptance checkpoint:8 cases and dedicated types pass. Covers all
+actor sources, concurrent prior/new chain/assignment/no-op, atomic event/late-receipt
+rollback, actual valid V1 runtime replay, V2 stability, current auth/privacy/cursors,
+newly-hidden detail and deletion/redaction. Facts82bytes<=4096; after lifecycle Aevents0,
+B preserved1; selectedfixtureD1rows9 excludesarticles/events, R2objects0, routeRequests3.
+The additional supported retention proof passed: an aged audited bodyless ticket
+completed scoped claimRetention/completeRetention; its events were removed and
+tenant B remained intact. Dedicated types and the lifecycle case passed again.
+Application source is frozen. Coordinator is publishing the coherent #63 PR;
+required remote checks and integration acceptance remain pending.
