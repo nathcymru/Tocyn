@@ -32,16 +32,19 @@ export default function App() {
     if (localCaptureRoute) {
       return;
     }
+    const bootstrapGeneration = useAuthStore.getState().authGeneration;
+    let active = true;
     portalApi.get<{ user: { id: string; name: string; email: string } }>('/auth/me')
       .then((data) => {
-        login(data.user);
+        if (active && useAuthStore.getState().authGeneration === bootstrapGeneration) login(data.user);
       })
       .catch(() => {
-        logout();
+        if (active && useAuthStore.getState().authGeneration === bootstrapGeneration) logout();
       })
       .finally(() => {
-        setLoading(false);
+        if (active && useAuthStore.getState().authGeneration === bootstrapGeneration) setLoading(false);
       });
+    return () => { active = false; };
   }, [localCaptureRoute, login, logout, setLoading]);
 
   return (
