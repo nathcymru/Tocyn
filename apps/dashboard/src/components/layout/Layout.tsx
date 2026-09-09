@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
@@ -101,6 +102,7 @@ function UserMenu() {
 
 export function Layout() {
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
@@ -134,6 +136,14 @@ export function Layout() {
   useEffect(() => {
     if (!lastMessage) return;
 
+    if (['ticket.created', 'ticket.updated', 'article.created'].includes(lastMessage.type)) {
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      void queryClient.invalidateQueries({ queryKey: ['stats'] });
+      const ticketId = lastMessage.type === 'article.created'
+        ? lastMessage.payload?.ticket_id ?? lastMessage.payload?.ticketId : lastMessage.payload?.id;
+      if (typeof ticketId === 'string') void queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
+    }
+
     if (lastMessage.type === 'ticket.created' || lastMessage.type === 'ticket.updated') {
       const isCreated = lastMessage.type === 'ticket.created';
       const toast: Toast = {
@@ -151,7 +161,7 @@ export function Layout() {
         setToasts(prev => prev.filter(t => t.id !== toast.id));
       }, 8000);
     }
-  }, [lastMessage]);
+  }, [lastMessage, queryClient]);
 
   return (
     <div className="min-h-screen flex bg-slate-50">

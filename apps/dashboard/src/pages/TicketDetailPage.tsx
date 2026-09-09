@@ -1,11 +1,12 @@
+import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useTicket, useUpdateTicket } from '../hooks/useTickets';
+import { useTicket, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
 import { useRealtime } from '../hooks/useRealtime';
 import { useTicketFields } from '../hooks/useTicketFields';
-import { dashboardApi } from '../api/client';
+import { ApiError, dashboardApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, 
@@ -22,11 +23,16 @@ import {
   Check
 , Paperclip } from 'lucide-react';
 import { clsx } from 'clsx';
+import { ticketReference } from '../utils/ticket-reference';
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
+  return <TicketDetail key={id} id={id!} />;
+}
+
+function TicketDetail({ id }: { id: string }) {
   const queryClient = useQueryClient();
-  const { data: ticket, isLoading, error, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError } = useTicket(id!);
+  const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError } = useTicket(id!);
   const { data: groups } = useGroups();
   const { data: agents } = useAgents();
   const { data: settings } = useSettings();
@@ -41,6 +47,12 @@ export function TicketDetailPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [attachments, setAttachments] = React.useState<File[]>([]);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  const submission = useRef(false);
+  const changing = useRef(false);
+  const uploads = useRef(new Map<File, { filename: string; contentType: string; size: number; storageKey: string }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filter presence to find other agents viewing this ticket and deduplicate by userId
@@ -53,13 +65,25 @@ export function TicketDetailPage() {
   }, [id, updateLocation]);
 
   useEffect(() => {
-    if (lastMessage?.type === 'article.created' && String(lastMessage.payload?.ticketId) === String(id)) {
-      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+    if (lastMessage?.type === 'article.created' && String(lastMessage.payload?.ticket_id ?? lastMessage.payload?.ticketId) === String(id)) {
+      void queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
     }
   }, [lastMessage, id, queryClient]);
 
-  const handleStatusChange = (status: any) => {
-    updateTicket.mutate({ id: id!, status });
+  const handleTicketChange = async (changes: TicketChanges) => {
+    if (changing.current) return;
+    changing.current = true;
+    setChangeError(null);
+    setNotice('');
+    try {
+      await updateTicket.mutateAsync({ id, ...changes });
+      setNotice('Ticket details saved.');
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') setChangeError(error.message);
+    } finally {
+      changing.current = false;
+    }
   };
 
   const handleToggleQa = async (articleId: string, type: 'question' | 'answer' | null) => {
@@ -87,24 +111,34 @@ export function TicketDetailPage() {
 
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!reply.trim() && attachments.length === 0) || isSubmitting) return;
+    if (!reply.trim() || submission.current) return;
+    submission.current = true;
+    setReplyError(null);
+    setNotice('');
 
     setIsSubmitting(true);
     try {
-      const uploadedAttachments = await Promise.all(
+      const results = await Promise.allSettled(
         attachments.map(async (file) => {
+          const existing = uploads.current.get(file);
+          if (existing) return existing;
           const formData = new FormData();
           formData.append('file', file);
           const res = await dashboardApi.postForm<{ key: string }>('/attachments/upload', formData);
-          return {
+          const uploaded = {
             filename: file.name,
             contentType: file.type,
             size: file.size,
             storageKey: res.key
           };
+          uploads.current.set(file, uploaded);
+          return uploaded;
         })
       );
 
+      const failure = results.find(result => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
+      const uploadedAttachments = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
       await dashboardApi.post(`/tickets/${id}/articles`, { 
         body: reply, 
         is_internal: isInternal,
@@ -112,22 +146,37 @@ export function TicketDetailPage() {
       });
       setReply('');
       setAttachments([]);
+      uploads.current.clear();
+      setNotice(isInternal ? 'Internal note added.' : 'Public reply added to the conversation.');
       setSuggestion(null);
-      // Refresh ticket details to show new article
-      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
-    } catch (err: any) {
-      alert('Failed to send reply: ' + err.message);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['ticket', id] }),
+        queryClient.invalidateQueries({ queryKey: ['tickets'] }),
+      ]);
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        setReplyError(`${error.message}. Your draft is retained. Refresh the conversation before trying again if delivery is uncertain.`);
+      }
     } finally {
+      submission.current = false;
       setIsSubmitting(false);
     }
   };
 
   if (isLoading) return <div className="p-8 text-center text-slate-500">Loading ticket...</div>;
-  if (!ticket) return <div className="p-8 text-center text-slate-500">Ticket not found.</div>;
+  if (!ticket) return <div className="p-8 space-y-4 text-center text-slate-700">
+    <p role="alert">{error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}</p>
+    <button type="button" onClick={() => void refetch()} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</button>
+    <Link to="/tickets" className="block underline">Back to Tickets</Link>
+  </div>;
+  const reference = ticketReference(ticket, ticketPrefix);
 
   return (
     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
       <div className="lg:col-span-3 xl:col-span-4 space-y-6">
+        {error && !isFetchNextPageError && <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">Could not refresh this ticket. Showing the last confirmed details. <button type="button" onClick={() => void refetch()} className="underline">Retry loading ticket</button></div>}
+        {changeError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{changeError}</p>}
+        {notice && <p role="status" className="text-slate-700">{notice}</p>}
         <div className="flex items-center justify-between">
           <Link to="/tickets" className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors">
             <ArrowLeft className="w-4 h-4" />
@@ -135,8 +184,9 @@ export function TicketDetailPage() {
           </Link>
           <div className="flex items-center gap-2">
             <select 
+              aria-label="Status" aria-disabled={updateTicket.isPending}
               value={ticket.status} 
-              onChange={(e) => handleStatusChange(e.target.value)}
+              onChange={(e) => void handleTicketChange({ status: e.target.value as TicketChanges['status'] })}
               className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
             >
               <option value="open">Open</option>
@@ -152,18 +202,18 @@ export function TicketDetailPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <span 
+                  <button type="button" aria-label="Copy ticket reference"
                     onClick={() => {
-                      navigator.clipboard.writeText(`${ticketPrefix}${ticket.ticket_no}`);
+                      navigator.clipboard.writeText(reference);
                       setCopied(true);
                       setTimeout(() => setCopied(false), 2000);
                     }}
                     className="group/copy flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white rounded-lg text-sm font-mono font-bold shadow-sm cursor-pointer hover:bg-slate-800 transition-colors"
-                    title="Click to copy ticket number"
+                    title={reference}
                   >
-                    {ticketPrefix}{ticket.ticket_no || ''}
+                    {reference}
                     {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400 group-hover/copy:text-white transition-colors" />}
-                  </span>
+                  </button>
                   <h1 className="text-2xl font-bold text-slate-900 leading-tight">{ticket.subject}</h1>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-slate-500">
@@ -173,7 +223,7 @@ export function TicketDetailPage() {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
-                    Opened {new Date(ticket.created_at).toLocaleDateString()}
+                    Opened {utcTimestamp(ticket.created_at).toLocaleDateString()}
                   </span>
                 </div>
               </div>
@@ -236,7 +286,7 @@ export function TicketDetailPage() {
                       {article.sender_type} {article.is_internal && '• Internal Note'}
                     </span>
                     <span className="text-[10px] opacity-70">
-                      {new Date(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
@@ -313,12 +363,14 @@ export function TicketDetailPage() {
             </p>
           </div>}
           <div className="p-6 border-t border-slate-200 bg-white">
+            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} <button type="button" onClick={() => void refetch()} className="underline">Refresh conversation</button></p>}
             <form onSubmit={handleSubmitReply} className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <button 
                     type="button"
-                    onClick={() => setIsInternal(false)}
+                    aria-disabled={isSubmitting} aria-pressed={!isInternal}
+                    onClick={() => { if (!submission.current) setIsInternal(false); }}
                     className={clsx(
                       "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
                       !isInternal ? "bg-brand-600 text-white border-brand-700 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
@@ -328,10 +380,11 @@ export function TicketDetailPage() {
                   </button>
                   <button 
                     type="button"
-                    onClick={() => setIsInternal(true)}
+                    aria-disabled={isSubmitting} aria-pressed={isInternal}
+                    onClick={() => { if (!submission.current) setIsInternal(true); }}
                     className={clsx(
                       "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
-                      isInternal ? "bg-amber-500 text-white border-amber-600 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
+                      isInternal ? "bg-amber-700 text-white border-amber-800 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
                     )}
                   >
                     Internal Note
@@ -341,7 +394,7 @@ export function TicketDetailPage() {
                 <button
                   type="button"
                   onClick={handleGetAiSuggestion}
-                  disabled={isGeneratingSuggestion}
+                  disabled={isGeneratingSuggestion || isSubmitting}
                   className="flex items-center gap-2 text-xs font-bold text-brand-600 hover:text-brand-700 px-3 py-1.5 bg-brand-50 rounded-lg transition-colors border border-brand-100"
                 >
                   <Activity className="w-3.5 h-3.5" />
@@ -359,6 +412,7 @@ export function TicketDetailPage() {
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
+                        disabled={isSubmitting}
                         onClick={() => setReply(suggestion)}
                         className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
                       >
@@ -366,6 +420,7 @@ export function TicketDetailPage() {
                       </button>
                       <button
                         type="button"
+                        disabled={isSubmitting}
                         onClick={() => setReply(prev => prev ? `${prev}\n\n${suggestion}` : suggestion)}
                         className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
                       >
@@ -385,7 +440,8 @@ export function TicketDetailPage() {
               )}
               
               <div className="relative">
-                <textarea
+                <label htmlFor="reply-message" className="sr-only">Reply message</label>
+                <textarea id="reply-message" readOnly={isSubmitting} aria-busy={isSubmitting}
                   className={clsx(
                     "w-full rounded-xl border p-4 text-sm focus:ring-4 outline-none min-h-[140px] transition-all resize-none shadow-inner",
                     isInternal 
@@ -394,7 +450,7 @@ export function TicketDetailPage() {
                   )}
                   placeholder={isInternal ? "Type an internal note only visible to agents..." : "Type your reply to the customer..."}
                   value={reply}
-                  onChange={(e) => setReply(e.target.value)}
+                  onChange={(e) => { if (!submission.current) setReply(e.target.value); }}
                 />
               </div>
               
@@ -406,8 +462,9 @@ export function TicketDetailPage() {
                       <span className="truncate max-w-[150px]">{file.name}</span>
                       <button
                         type="button"
-                        onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
-                        className="text-slate-400 hover:text-red-500"
+                        aria-disabled={isSubmitting} aria-label={`Remove ${file.name}`}
+                        onClick={() => { if (submission.current) return; uploads.current.delete(file); setAttachments(prev => prev.filter((_, i) => i !== index)); }}
+                        className="text-slate-600 hover:text-red-700"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -417,15 +474,15 @@ export function TicketDetailPage() {
               )}
 
               <div className="flex items-center justify-between">
-                <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
                   <Info className="w-3 h-3" />
                   {isInternal 
                     ? "Private note for team coordination." 
-                    : "The customer will receive an email notification."}
+                    : "Public replies are visible to the customer in this conversation."}
                 </p>
                 <div className="flex items-center gap-2">
                   <input 
-                    type="file" 
+                    type="file" aria-label="Reply attachments" disabled={isSubmitting}
                     multiple 
                     ref={fileInputRef} 
                     className="hidden" 
@@ -438,7 +495,8 @@ export function TicketDetailPage() {
                   />
                   <button 
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
+                    aria-disabled={isSubmitting} aria-label="Attach files"
+                    onClick={() => { if (!submission.current) fileInputRef.current?.click(); }}
                     className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
                     title="Attach files"
                   >
@@ -446,10 +504,10 @@ export function TicketDetailPage() {
                   </button>
                   <button 
                     type="submit" 
-                    disabled={(!reply.trim() && attachments.length === 0) || isSubmitting}
+                    aria-disabled={!reply.trim() || isSubmitting}
                     className={clsx(
-                      "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:pointer-events-none",
-                      isInternal ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-brand-600 text-white hover:bg-brand-700"
+                      "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
+                      isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"
                     )}
                   >
                     <Send className="w-4 h-4" />
@@ -470,11 +528,12 @@ export function TicketDetailPage() {
           </h3>
           <div className="space-y-4">
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Priority</label>
+              <label htmlFor="ticket-priority" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Priority</label>
               <div className="mt-1">
                 <select 
+                  id="ticket-priority" aria-disabled={updateTicket.isPending}
                   value={ticket.priority} 
-                  onChange={(e) => updateTicket.mutate({ id: ticket.id, priority: e.target.value as any })}
+                  onChange={(e) => void handleTicketChange({ priority: e.target.value as TicketChanges['priority'] })}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
                 >
                   <option value="low">Low</option>
@@ -485,11 +544,12 @@ export function TicketDetailPage() {
               </div>
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assigned To</label>
+              <label htmlFor="ticket-assigned_to" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Assigned To</label>
               <div className="mt-1">
                 <select 
+                  id="ticket-assigned_to" aria-disabled={updateTicket.isPending}
                   value={ticket.assigned_to || ''} 
-                  onChange={(e) => updateTicket.mutate({ id: ticket.id, assigned_to: e.target.value || undefined })}
+                  onChange={(e) => void handleTicketChange({ assigned_to: e.target.value || null })}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
                 >
                   <option value="">Unassigned</option>
@@ -500,11 +560,12 @@ export function TicketDetailPage() {
               </div>
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Group</label>
+              <label htmlFor="ticket-group_id" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Group</label>
               <div className="mt-1">
                 <select 
+                  id="ticket-group_id" aria-disabled={updateTicket.isPending}
                   value={ticket.group_id || ''} 
-                  onChange={(e) => updateTicket.mutate({ id: ticket.id, group_id: e.target.value || undefined })}
+                  onChange={(e) => void handleTicketChange({ group_id: e.target.value || null })}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
                 >
                   <option value="">No Group</option>
@@ -525,8 +586,7 @@ export function TicketDetailPage() {
                     const handleSave = (newValue: any) => {
                       if (value === newValue) return;
                       
-                      updateTicket.mutate({ 
-                        id: ticket.id, 
+                      void handleTicketChange({
                         custom_fields: {
                           ...(ticket.custom_fields || {}),
                           [field.name]: newValue

@@ -431,7 +431,8 @@ dashboard.patch("/tickets/:id", async (c) => {
   const ticket = await d.repositories.tickets.get(id);
   if (!ticket) return c.json({error:'Ticket not found'},404);
   if (agent.role === 'agent' && ticket.group_id && !await d.repositories.groups.isMember(ticket.group_id,agent.sub)) return c.json({error:'Forbidden'},403);
-  await d.conversationAudit.updateWithEvents(id,updateFields,{kind:'staff',id:agent.sub,source:'dashboard'},true);
+  const updated = await d.conversationAudit.updateWithEvents(id,updateFields,{kind:'staff',id:agent.sub,source:'dashboard'},true);
+  if (updated) await new BroadcastService(c.env, d.scope).notifyTicketUpdated(updated);
 
   return c.json({ success: true });
 });

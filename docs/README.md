@@ -10,6 +10,7 @@ This directory contains the version-controlled implementation, architecture, pri
   - [Channel adapters](architecture/channel-adapters.md)
   - [Canonical conversation contract](architecture/canonical-conversation-contract.md)
   - [Conversation audit](architecture/conversation-audit.md)
+  - [Operator workflows](operator-workflows.md)
   - [AI and autonomous operations](architecture/ai-and-autonomous-operations.md)
 - [Privacy engineering](privacy/README.md)
   - [Privacy architecture](privacy/privacy-architecture.md)
