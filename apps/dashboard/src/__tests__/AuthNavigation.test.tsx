@@ -13,6 +13,38 @@ vi.mock('../components/layout/Layout',async () => {
 vi.mock('../pages/DashboardPage',() => ({DashboardPage:()=> <h1>Dashboard ready</h1>}));
 afterEach(() => {cleanup();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();vi.useRealTimers();});
 
+it('keeps a rejected password login mounted with its associated error and permits correction', async () => {
+  window.history.replaceState({}, '', '/login');
+  useAuthStore.getState().logout();
+  const generation = useAuthStore.getState().sessionGeneration;
+  const user = { id: 'synthetic-operator', email: 'operator@example.invalid', full_name: 'Operator', role: 'admin', mfa_enabled: true };
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(Response.json({ error: 'Invalid credentials' }, { status: 401 }))
+    .mockResolvedValueOnce(Response.json({ token: 'synthetic-challenge', user, mfa_required: true }));
+  vi.stubGlobal('fetch', fetchMock);
+  render(<AuthQueryBoundary><App /></AuthQueryBoundary>);
+  const email = screen.getByLabelText('Email Address');
+  const password = screen.getByLabelText('Password');
+  fireEvent.change(email, { target: { value: user.email } });
+  fireEvent.change(password, { target: { value: 'incorrect-synthetic-password' } });
+  const submit = screen.getByRole('button', { name: 'Sign In' });
+  submit.focus(); fireEvent.click(submit);
+  const error = await screen.findByRole('alert');
+  expect(error).toHaveTextContent('Invalid credentials');
+  expect(email).toHaveAttribute('aria-describedby', error.id);
+  expect(password).toHaveAttribute('aria-describedby', error.id);
+  expect(email).toHaveValue(user.email);
+  expect(password).toHaveValue('incorrect-synthetic-password');
+  expect(submit).toHaveFocus();
+  expect(useAuthStore.getState().sessionGeneration).toBe(generation);
+  expect(window.location.pathname).toBe('/login');
+  fireEvent.change(password, { target: { value: 'correct-synthetic-password' } });
+  fireEvent.click(submit);
+  await screen.findByRole('textbox', { name: 'Authentication Code' });
+  expect(window.location.pathname).toBe('/mfa');
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
 it('continues from actual login through MFA to the dashboard when the auth boundary remounts the router', async () => {
   window.history.replaceState({},'','/login');
   useAuthStore.getState().logout();

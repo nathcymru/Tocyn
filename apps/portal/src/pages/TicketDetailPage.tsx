@@ -1,3 +1,4 @@
+import { attachmentSize } from '../utils/attachment-size';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { portalApi } from '../api/client';
@@ -372,7 +373,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                           <Paperclip className="w-4 h-4" />
                           <span className="truncate flex-1">{att.filename || 'Attachment'}</span>
                           <span className="text-xs opacity-75">
-                            {Math.round(att.size / 1024)} KB
+                            {attachmentSize(att.size)}
                           </span>
                         </button>
                       ))}  </div>
