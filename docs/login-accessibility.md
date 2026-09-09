@@ -390,3 +390,79 @@ exited, the private handoff was absent, and native bind probes verified
 8787/5173/5174 reusable. Vite emitted a WebSocket EPIPE during session
 navigation/teardown, without an observed UI failure or conversation write.
 Actual screen-reader output remains required for #21, #62 and #93.
+
+## Actual Safari and VoiceOver checkpoint, 9 September 2026
+
+The owner authorised Safari activation and VoiceOver AppleScript navigation as
+well as reading spoken output. These observations used Safari 27, VoiceOver 10
+and the supported local-only fixture on accepted `dfe88edb` (application identical
+to `39b32b8`). They are actual spoken observations. Where a status was read by
+navigating into it, this does not claim an automatic live announcement.
+
+| Journey | Observed speech and focus |
+| --- | --- |
+| Operator login and ordinary MFA | `Invalid credentials` at Sign In; code instructions and `Invalid MFA code`; corrected normally issued code reached `Workspace main`. |
+| Mandatory MFA setup | Setup readiness and QR/text-key instructions; `Invalid MFA code` at Verify & Enable; fresh correct setup code reached `Workspace main`. Local boolean verification confirmed enrollment. |
+| Operator queue and creation | All Tickets was a selected toggle; dialog Subject, Customer Email, Priority, Group, Assignee and Initial Message were named. Creation returned New Ticket focus; status navigation read `Ticket created.` |
+| Internal note | Internal Note was selected; composer guidance read `Private note for team coordination.` A normal note was saved and the new history count spoken. |
+| Dashboard history | Load more retained focus as `All messages loaded dimmed button`; speech read `Showing 54 messages. All messages are loaded.` |
+| Customer authentication | Magic Link and Code modes exposed selection; request spoke `Sending login instructions…`; wrong code spoke `Unauthorized` at Verify Code. A correct locally captured code reached the readable ticket list. |
+| Customer history | Load more retained the unavailable completion control; speech read `All messages loaded`; status navigation read `Loaded 2 more messages. All messages are loaded.` |
+| Customer reply and stop recovery | Composer read its required-text guidance. Supported stop produced `The operator has stopped this local beta action. Accepted conversations remain available.` at Send Reply, with draft retained. Rejection preserved admission counters; resume and retry succeeded, and status navigation read `Reply sent.` |
+| Customer attachments | Named attachment removal; status navigation read `1 attachment added.` and `Attachment removed.`; removal returned Attach Files focus. A normal upload/reply succeeded. Named download completed with `Attachment download started.` read from its status; the synthetic downloaded file exactly matched all 65 bytes. |
+| Customer creation and signout | Message/Subject/Cancel were spoken; Cancel returned New Ticket. Creation returned that trigger, with `Ticket created. It is now in your ticket list.` read from status. Normal all-session signout returned the named login email field. |
+| Narrow navigation | Safari viewport 390×844; `Open navigation dialogue pop-up button` opened `Navigation web dialogue` at Close navigation. All destination names and current Dashboard state were read. Reader navigation stayed within the dialog; Escape returned the trigger; choosing Filters reached `Workspace main`. Temporary responsive mode was exited. |
+
+The pagination fixture used clearly labelled historical public rows alongside
+normal admitted mutations. Its initial 52 public messages excluded internal notes;
+no historical rows were represented as admission/audit evidence. A normal priority
+change overlapped fixture preparation and accounts for its recorded counter
+increase. Authentication, conversation writes and resource controls used normal
+local runtime paths, with no external mail or remote resources.
+
+A real selected-state defect remains in this checkpoint: saved Priority and
+Assignee values were correct in the open native menu and after reload, but the
+closed control retained its old spoken value. That is an acceptance failure,
+not a persistence failure or a reason to waive reader requirements. The bounded
+native-select correction and its own final-source reader verification are recorded
+separately. Fast transient pending states not observed here retain their deferred
+regression evidence; this table does not turn them into manual observations.
+
+This is partial evidence. Operator selector recovery and the remaining included
+operator handling checks still require acceptance, followed by affected validation
+and the final #21/#62/#93/#65 readiness decision. The active fixture and temporary
+VoiceOver settings still require the recorded teardown before completion.
+
+### Corrected native-selector reader verification
+
+The frozen application candidate `ba026f42d4a457f6d48e3584983eb2213fee9d6a`
+was served by replacing only the dashboard development server; the guarded API
+and customer portal retained their existing isolated state. Normal password/MFA
+login was repeated. Without any page reload after changing each value, VoiceOver
+read the closed controls as `Urgent PRIORITY`, `Unassigned ASSIGNED TO`,
+`Synthetic UUID assignment group GROUP`, and `Pending Status`. Each initiating
+control retained focus. This directly corrects the stale-value finding above.
+
+A supported operator pause then rejected Pending → Resolved with the spoken stop
+message, preserving Pending and focus. The rejection left admission counts at
+2 tickets, 11 mutations and 1 upload. Resume used the exact expected revision;
+retry succeeded and the closed control spoke `Resolved Status`. The operator's
+public-reply guidance was read, a named synthetic attachment was removed with
+Attach files focus restored, and status navigation read `Attachment removed.`
+A normal public response then produced the spoken status
+`Public reply added to the conversation.`
+
+Independent review found and corrected confirmation-read failure and concurrent
+background-refresh cases before this candidate. A failed confirming read keeps
+explicit recovery available and blocks further selector writes; successful
+read-only recovery does not repeat the committed write. Deferred regressions
+cover this failure, pending accessibility state, and focus moving elsewhere.
+They complement the actual successful and rejected reader journeys rather than
+claiming those injected failures were observed manually in Safari.
+
+Candidate validation passed 73 dashboard, 373 server, 59 portal, 3 widget and 61
+root tooling tests, required lint/typechecks and all frontend builds. The initial
+server run lacked its local native SQLite binding after ignore-scripts setup;
+a Node 22 rebuild resolved setup and the complete server suite then passed. The
+existing frontend bundle-size warning remains. Required CI, accepted-source
+rehearsal, fixture teardown and issue acceptance remain integration gates.

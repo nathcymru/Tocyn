@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 05:39 UTC. This is the authoritative coordinating view.
+Updated 9 September 2026, 06:43 UTC. This is the authoritative coordinating view.
 GitHub issues and Project 4 hold acceptance and schedule truth. Detailed historical
 checkpoints remain in Git history, issue receipts and the linked subsystem docs.
 
@@ -26,19 +26,12 @@ Work connector reads recovered once, but repository-task loading timed out; no
 Work execution is confirmed. Native Codex app Computer Use was explicitly denied,
 without a macOS prompt. Do not circumvent that restriction.
 
-The owner has now authorised Safari/VoiceOver testing, temporary AppleScript
-spoken-output reading, and confirmed Safari foreground/any VoiceOver prompt
-allowed. Safari access now works. VoiceOver's own caption-app selection timed
-out. Computer Use explicitly denied UserNotificationCenter for safety reasons;
-that system surface must not be bypassed. The owner confirmed Safari foreground
-and any VoiceOver prompt allowed; no particular prompt interaction is claimed.
-
-An additional request is pending: use VoiceOver's AppleScript navigation commands
-and bring Safari forward when needed. The current AppleScript authority is
-read-only spoken phrases; do not infer navigation authority from elapsed time.
-Computer Use delivered attempted VoiceOver shortcuts as typing in the synthetic
-form, so those attempts are not reader-navigation proof. Real Safari speech is
-now observable; DOM/AX alone still does not satisfy reader acceptance.
+The owner authorised Safari/VoiceOver testing, temporary AppleScript spoken-output
+reading, Safari activation and VoiceOver AppleScript navigation/activation. Safari
+navigation now works; VoiceOver initially interacted inside static text and was
+moved out. Computer Use explicitly denied UserNotificationCenter for safety
+reasons; that system surface must not be bypassed. Actual Safari speech is
+observable; DOM/AX alone still does not satisfy reader acceptance.
 
 Restore test settings afterward: VoiceOver initially off; Allow VoiceOver to be
 controlled with AppleScript initially unchecked; Show caption panel already
@@ -59,6 +52,13 @@ results. Automatic review approved, all threads resolved, closing references
 empty. Main CI 34314352914 and security 34314352283 passed; analyses 1745690006,
 1745687668 and 1745687233 had zero results.
 
+Evidence-only source dfe88edbde579b840dab71d89ea57fe43ba21051 is accepted in
+PR #123; its application matches the technical rehearsal source. The reader
+receipt found a native select accessibility defect: Priority and Assignee saves
+remain stale in closed select speech until reload, although the open menu has
+the correct selected value. Candidate ba026f4 fixes this and passes actual reader checks for all four
+selectors; required integration checks remain. Acceptance is not waived.
+
 Not yet beta-ready. Four beta blockers remain OPEN: #21, #62, #93 and #65.
 #21/#62/#93 functional, keyboard and contrast increments are accepted. Their
 actual-reader criteria remain required. #65 technical rehearsal now passed;
@@ -71,35 +71,43 @@ rehearsal does not waive the reader gate. No production action is authorised.
 
 ## Current ownership and local environment
 
-Root owns acceptance, GitHub/Project truth and actual browser/reader checks.
-Root branch codex/65-technical-rehearsal-evidence at
-/tmp/tocyn-65-technical-rehearsal-evidence contains the technical receipt, docs,
-new native-dialog receipt and this coordinating state. Application code is unchanged.
+Root owns acceptance, GitHub/Project truth and actual reader checks. Candidate
+branch codex/21-select-ax-refresh at /tmp/tocyn-21-select-ax-refresh has source
+ba026f42d4a457f6d48e3584983eb2213fee9d6a plus root evidence/state updates.
 
 | Task | Agent/model/effort | Status and reason |
 | --- | --- | --- |
-| #65 tooling and full rehearsal | release_packaging_escalation, Astra/high | Completed; process ownership/recovery risk. Independent receipt audit also complete. |
-| Failed runtime triage | runtime_failure_triage, Terra/medium | Completed read-only analysis; original failure cause remains unknown. |
-| Reader fixture operation | runtime_failure_triage, Terra/medium | Supported fixture retained; routine setup and cleanup ownership. |
-| Auth/attachment and reader-gate audit | retry_acceptance, Terra/high | Completed; authorization boundaries and acceptance review. |
-| Evidence copyedit | evidence_copyedit, Luna/low | Completed; routine formatting only. |
+| Reader acceptance and integration | Root | Actual spoken checks complete for the recorded journeys; final adjudication/CI and accepted-source rehearsal next. |
+| Native-select correction | retry_acceptance, Terra/high → release_packaging_escalation, Astra/high | Escalated after confirmation/concurrent-refresh review findings; corrected candidate independently reviewed by root and passed actual Safari checks. |
+| Reader fixture lifecycle | runtime_failure_triage, Terra/medium | Retains guarded API 80983, candidate dashboard 94253, portal 13168; routine isolated operation. |
+| Evidence copyedit | evidence_copyedit, Luna/low | Completed bounded state edit; root integrates current observations. |
 
-Active reader fixture is accepted main 39b32b8. Guarded API wrapper session 51488,
-dashboard Vite 50252, portal Vite 65171; runtime_failure_triage owns teardown on
-root request. Root owns 8787/5173/5174 for this reader session. Private credentials
-handoff is outside the repository under the run-owned tocyn-21-browser-juju4ks8
-directory; do not print or copy its contents. Four principals, no conversation
-writes/seeding so far. Safari has the original Start Page plus created dashboard
-and portal tabs. Declined Safari password saving. Normal operator MFA is complete;
-portal remains at login. Sign out, close only created tabs, clear secrets, restore
-VoiceOver settings, dispose fixture, and verify ports when finished.
+Current fixture e6u3abb_ retains its four original principals, synthetic history
+and assignment targets. Root owns 8787/5173/5174. No remote provider/resource is
+in use. Operator B completed mandatory enrollment through its normal login;
+operator A is currently signed in; customer sessions were revoked normally.
+Safari has the original Start Page and three created test/capture tabs. Temporary
+responsive mode was exited. VoiceOver and AppleScript control remain enabled for
+this active test and must return to their original off/unchecked settings. Close
+only created tabs, clear secret bindings, dispose fixture and verify ports.
 
-Actual reader observations so far: required password-field/native empty-form
-validation; MFA instructions; spoken Invalid MFA code; successful Workspace main
-navigation. These are partial observations, not a complete reader receipt.
-Remaining: complete included login/session/MFA setup, portal dialog/history/reply/
-attachments/recovery, operator queue/detail/composer/assignment/state/errors,
-responsive navigation and both real pagination progress/completion announcements.
+Actual speech is recorded in docs/login-accessibility.md: login and MFA errors,
+mandatory setup, queue/create labels and focus, customer OTP, both pagination
+completion controls, customer create/reply/attachment/download/session exit,
+operator internal/public reply, assignment/priority/group/state, stopped rejection
+and resumed recovery, and narrow navigation. All four corrected native selectors
+speak their new closed values without reload and retain focus. Deferred pending
+and fault regressions remain distinct from manual observations.
+
+Latest rejection invariant: 2 tickets/11 mutations/1 upload, unchanged during
+operator pause/rejection. Resume is revision 5; later normal state/public-reply
+writes require a final aggregate receipt. Synthetic download matched all 65 bytes.
+
+Next: integrate the coherent reviewed PR after required CI/security and actual
+analysis results; refresh main, repeat final-source technical rehearsal as required,
+perform acceptance mapping and teardown, then update issue/Project completion
+only with accepted evidence. #21/#62/#93/#65 remain OPEN until that adjudication.
+No additional owner authority is currently pending.
 
 ## Technical rehearsal evidence
 
@@ -182,10 +190,10 @@ private-beta-reforecast-after63-2026-09-09.json remains #93 12 Sep, #62 18 Sep, 
 19-24 Sep, #65 25 Sep-1 Oct. Update completion only after acceptance against merged
 evidence. Owner access has improved but reader outcome is not established yet.
 
-Next: obtain the pending specific navigation authority; complete reader checks on
-the retained fixture; address actual defects if any; finish and validate the evidence
-PR; integrate under existing approval; synchronize all acceptance/progress/schedule
-fields honestly. Do not repeat the full matrix solely for an evidence-only commit.
+Next: complete the select fix/review and corrected reader check; finish the remaining
+reader journeys on the retained fixture; validate affected evidence; integrate under
+existing approval; and synchronize all acceptance/progress/schedule fields honestly.
+Do not repeat the full matrix solely for an evidence-only commit.
 Any application correction requires assessment and affected revalidation.
 
 Operational update delivered 05:26 UTC; next due 05:56 UTC. Root owns updates.
