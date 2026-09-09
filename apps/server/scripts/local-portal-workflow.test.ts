@@ -15,6 +15,7 @@ import { createLocalFixtureBootstrap } from './local-tenant-fixture';
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = resolve(serverRoot, '../..');
 const wrangler = join(repositoryRoot, 'node_modules/wrangler/bin/wrangler.js');
+const betaOperator = join(serverRoot, 'scripts/run-local-beta-operator.ts');
 const origin = 'http://localhost:8787';
 const startClock = Date.UTC(2030, 0, 2, 3, 4, 5);
 
@@ -70,6 +71,31 @@ class LocalPortalWorkflow {
     return json ? result.stdout : '';
   }
 
+  private initializeGuardedBeta(): void {
+    const policyPath = join(this.temporary, 'beta-policy.json');
+    const policy = {
+      runId: `portal-workflow-${randomBytes(8).toString('hex')}`,
+      tenants: ['fixture-tenant-a', 'fixture-tenant-b'],
+      invitations: ['fixture-tenant-a', 'fixture-tenant-b'].flatMap(tenantId => [
+        { tenantId, kind: 'customer', id: 'fixture-customer' },
+        { tenantId, kind: 'staff', id: 'fixture-operator' },
+      ]),
+    };
+    writeFileSync(policyPath, JSON.stringify(policy), { mode: 0o600 });
+    try {
+      const result = spawnSync(process.execPath, ['--import', 'tsx', betaOperator,
+        'initialize', '--local', '--persist-to', this.state, '--expected-revision', '0', '--policy', policyPath], {
+        cwd: serverRoot, env: localEnvironment(), encoding: 'utf8', maxBuffer: 10 * 1024 * 1024,
+      });
+      if (result.status !== 0) throw new Error('The local beta operator rejected the run-owned policy');
+      const initialized = JSON.parse(result.stdout) as { state?: string; revision?: number };
+      assert.deepEqual(initialized, { run_id: policy.runId, revision: 1, state: 'running', ticket_limit: 100, mutation_limit: 1000, recovery_reserve: 200, upload_limit: 100, tickets: 0, mutations: 0, upload_attempts: 0 },
+        'The supported local operator must initialize the exact two-tenant policy before Worker startup');
+    } finally {
+      rmSync(policyPath, { force: true });
+    }
+  }
+
   private async releasePort(): Promise<void> {
     const probe = createServer();
     await new Promise<void>((resolvePromise, reject) => { probe.once('error', reject); probe.listen(8787, '127.0.0.1', resolvePromise); });
@@ -105,6 +131,7 @@ class LocalPortalWorkflow {
     assert.equal(config.vars?.ENVIRONMENT, 'local');
     assert.ok(config.d1_databases.every((binding: { remote?: boolean }) => binding.remote === false));
     assert.ok(config.r2_buckets.every((binding: { remote?: boolean }) => binding.remote === false));
+    config.vars.LOCAL_BETA_ENABLED = 'true';
     config.main = join(serverRoot, 'scripts/local-portal-workflow-entry.ts');
     config.d1_databases[0].migrations_dir = join(serverRoot, 'migrations');
     writeFileSync(this.configPath, JSON.stringify(config), { mode: 0o600 });
@@ -114,6 +141,7 @@ class LocalPortalWorkflow {
     writeFileSync(sqlFile, bootstrap.sql, { mode: 0o600 });
     try { this.command(['d1', 'execute', 'tocyn-local', '--local', '--persist-to', this.state, '--file', sqlFile]); }
     finally { rmSync(sqlFile, { force: true }); }
+    this.initializeGuardedBeta();
     await this.restart(startClock, 0);
     return bootstrap.credentials;
   }
@@ -285,7 +313,9 @@ test('localhost Wrangler proves portal login, tenant isolation, delivery recover
     await workflow.restart(startClock + 15 * 60_000 + 1, 0);
     const expired = await verify(expiredChallenge, 'fixture-widget-key-a');
     assertStatus(expired.response, 401, 'expired persisted challenge must be rejected through normal verification');
-    const bLogout = await workflow.request('/api/v1/customer/auth/logout', { method: 'POST', token: verifiedB.body.token });
+    const bLogout = await workflow.request('/api/v1/customer/auth/logout', {
+      method: 'POST', token: verifiedB.body.token, headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
     assertStatus(bLogout, 200, 'unexpired tenant B customer may revoke its own session');
     const revoked = await workflow.request('/api/v1/customer/auth/me', { token: verifiedB.body.token });
     assertStatus(revoked, 401, 'session revocation must be distinct from token expiry');

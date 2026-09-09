@@ -184,8 +184,11 @@ npm run test:local-portal-workflow --workspace=apps/server
 
 The runner creates a temporary Wrangler configuration, local D1/R2/DO state and
 synthetic principals, then removes all of them when it completes or fails. It
-uses the existing three-address capture allowlist and a real magic-link request
-and redemption, rather than constructing a token. It verifies two tenant
+enables the guarded local-beta profile and initializes its run-owned D1 state
+through the existing local operator command with exactly the two fixture tenants
+and their invited customer/staff principals; its mode-0600 policy file is then
+removed. It uses the existing three-address capture allowlist and a real
+magic-link request and redemption, rather than constructing a token. It verifies two tenant
 customers, foreign challenge/detail denial, redeemed-link replay denial,
 customer list and follow-up replies, MFA-authenticated operator replies,
 customer detail/history retrieval, internal-note filtering, and both failed and
