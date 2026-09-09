@@ -89,14 +89,14 @@ export const localBetaGuard: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
   const requestLimit = route === 'upload' ? 10 * 1024 * 1024 + 50000 : 64 * 1024;
   return requestBounds(requestLimit)(c, async () => {
     if (['POST', 'PATCH', 'PUT'].includes(c.req.method) && route !== 'upload' && c.req.raw.body) {
-      const rawBody = await c.req.raw.clone().text();
-      if (!(permitsEmptyAuthAction(c.req.method, c.req.path) && rawBody.length === 0)) {
+      const rawBody = await c.req.raw.clone().arrayBuffer();
+      if (!(permitsEmptyAuthAction(c.req.method, c.req.path) && rawBody.byteLength === 0)) {
         if (!/^application\/json(?:\s*;|$)/i.test(c.req.header('Content-Type') || '')) {
           c.res = c.json({ code: 'unsupported_media_type', error: 'Content-Type must be application/json' }, 415);
           return;
         }
         try {
-          const value = JSON.parse(rawBody);
+          const value = JSON.parse(new TextDecoder().decode(rawBody));
           if (!value || typeof value !== 'object' || Array.isArray(value)) {
             c.res = c.json({ code: 'invalid_json', error: 'A single JSON object is required' }, 400);
             return;

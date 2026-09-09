@@ -262,6 +262,7 @@ test('localhost Wrangler proves portal login, tenant isolation, delivery recover
       ['null', 'application/json', 400, 'null'],
       ['[]', 'application/json', 400, 'array'],
       ['{', 'application/json', 400, 'malformed JSON'],
+      ['\uFEFF', 'application/json', 400, 'UTF-8 BOM'],
       ['{}', 'text/plain', 415, 'non-JSON media type'],
     ] as const) {
       const rejected = await workflow.request('/api/auth/mfa/setup', {
