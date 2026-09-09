@@ -1,0 +1,364 @@
+{
+  "mode": "local-only-park",
+  "candidate": "39b32b87339a4b2b85b1064b576bb559e90fece8",
+  "knownGood": "58feb5e4deef55670f635f099eb67c6bcfffae56",
+  "providerReceipt": "absent",
+  "deployment": "not-run",
+  "mail": "local-capture",
+  "frontendInputs": {
+    "apiUrl": "https://api.beta.local.invalid",
+    "widgetKey": "local-rehearsal-widget-key"
+  },
+  "fallback": {
+    "mode": "local-only-same-state",
+    "candidate": "39b32b87339a4b2b85b1064b576bb559e90fece8",
+    "knownGood": "58feb5e4deef55670f635f099eb67c6bcfffae56",
+    "fallback": "passed",
+    "migrationManifest": "63e69593e6d1a35d3b0e45cf8195244be139539a5b003d6ea0912d3ec347f10d",
+    "canonical": "35d07058578db140fe2149e52f5e1e9109d4104c3955e81b59dcabe5f6c60702",
+    "resources": {
+      "tickets": 1,
+      "articles": 4,
+      "events": 4
+    },
+    "admission": {
+      "state": "running",
+      "revision": 1,
+      "tickets": 1,
+      "mutations": 4,
+      "uploadAttempts": 0
+    }
+  },
+  "commands": [
+    {
+      "command": "git worktree add",
+      "durationMs": 191,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "git worktree add",
+      "durationMs": 151,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm ci",
+      "durationMs": 3635,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm rebuild better-sqlite3",
+      "durationMs": 501,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run typecheck",
+      "durationMs": 1596,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "server ESLint",
+      "durationMs": 1670,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run typecheck:local-tenants",
+      "durationMs": 1605,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run typecheck:local-beta",
+      "durationMs": 1764,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run typecheck:local-portal-workflow",
+      "durationMs": 1678,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run typecheck:operator-workflow",
+      "durationMs": 1623,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run typecheck:tenant-isolation-core",
+      "durationMs": 1755,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run typecheck:tenant-isolation-storage-background",
+      "durationMs": 1676,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:local-auth",
+      "durationMs": 9576,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:local-portal-workflow",
+      "durationMs": 16152,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:local-tenants",
+      "durationMs": 2475,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:operator-workflow",
+      "durationMs": 4518,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:tenant-isolation-core",
+      "durationMs": 3060,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:tenant-isolation-storage-background",
+      "durationMs": 5231,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:local-tenant-realtime",
+      "durationMs": 8336,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:canonical-conversation-atomic",
+      "durationMs": 2684,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:ticket-mutation-replay",
+      "durationMs": 16944,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:conversation-audit",
+      "durationMs": 9823,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:local-beta",
+      "durationMs": 13121,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run test:local-beta-runtime",
+      "durationMs": 31127,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run lint",
+      "durationMs": 4492,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run build",
+      "durationMs": 1176,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run build",
+      "durationMs": 3635,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run build",
+      "durationMs": 2169,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "node isolated-release.mjs",
+      "durationMs": 254,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "wrangler deploy dry-run",
+      "durationMs": 806,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "node isolated-release.mjs",
+      "durationMs": 177,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "node verify-release-artifact.mjs",
+      "durationMs": 147,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "wrangler deploy dry-run",
+      "durationMs": 678,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm ci",
+      "durationMs": 3550,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm rebuild better-sqlite3",
+      "durationMs": 553,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run build",
+      "durationMs": 4436,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm run build",
+      "durationMs": 1907,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "node isolated-release.mjs",
+      "durationMs": 245,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "wrangler deploy dry-run",
+      "durationMs": 726,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "node isolated-release.mjs",
+      "durationMs": 181,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "node verify-release-artifact.mjs",
+      "durationMs": 309,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "wrangler deploy dry-run",
+      "durationMs": 749,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "git worktree add",
+      "durationMs": 266,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm ci",
+      "durationMs": 6738,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "npm rebuild better-sqlite3",
+      "durationMs": 1034,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "command": "node local-beta-fallback-command.mjs",
+      "durationMs": 19727,
+      "result": "passed",
+      "exitCode": 0,
+      "signal": null
+    }
+  ],
+  "cleanup": "disposed",
+  "artifact": {
+    "files": 40,
+    "bytes": 2314872,
+    "releaseDigest": "ae998a526d1cf5e11bd36cd5fed587d463da7c48fd10408e845b30d383acc0f6",
+    "mode": "park"
+  },
+  "fallbackCleanup": "disposed"
+}
