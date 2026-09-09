@@ -32,6 +32,7 @@ export function TicketDetailPage() {
 }
 
 function TicketDetail({ id }: { id: string }) {
+  type TicketSelectControl = 'status' | 'priority' | 'assigned_to' | 'group_id';
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError } = useTicket(id!);
   const { data: groups } = useGroups();
@@ -56,6 +57,62 @@ function TicketDetail({ id }: { id: string }) {
   const uploads = useRef(new Map<File, { filename: string; contentType: string; size: number; storageKey: string }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
+  const ticketSelectRefs = useRef<Record<TicketSelectControl, HTMLSelectElement | null>>({
+    status: null,
+    priority: null,
+    assigned_to: null,
+    group_id: null,
+  });
+  const [ticketSelectVersions, setTicketSelectVersions] = useState<Record<TicketSelectControl, number>>({
+    status: 0,
+    priority: 0,
+    assigned_to: 0,
+    group_id: 0,
+  });
+  const pendingTicketSelectFocus = useRef<TicketSelectControl | null>(null);
+  const [pendingTicketSelectRefresh, setPendingTicketSelectRefresh] = useState<TicketSelectControl | null>(null);
+  const [isConfirmingTicketSelect, setIsConfirmingTicketSelect] = useState(false);
+
+  React.useLayoutEffect(() => {
+    const control = pendingTicketSelectFocus.current;
+    if (!control) return;
+    pendingTicketSelectFocus.current = null;
+    ticketSelectRefs.current[control]?.focus();
+  }, [ticketSelectVersions]);
+
+  const refreshTicketSelect = (control: TicketSelectControl, restoreFocus = false) => {
+    // WebKit can retain the prior accessibility value for a native select after
+    // its value changes in place. Replace it only after the authoritative
+    // mutation/refetch succeeds, and restore focus only when it still owns it.
+    if (restoreFocus || document.activeElement === ticketSelectRefs.current[control]) {
+      pendingTicketSelectFocus.current = control;
+    }
+    setTicketSelectVersions(previous => ({ ...previous, [control]: previous[control] + 1 }));
+  };
+
+  const retryTicketDetail = async (trigger?: HTMLElement) => {
+    if (changing.current) return;
+    changing.current = true;
+    setIsConfirmingTicketSelect(true);
+    const retryOwnedFocus = trigger !== undefined && document.activeElement === trigger;
+    try {
+      await refetch({ throwOnError: true });
+      if (pendingTicketSelectRefresh) {
+        const control = pendingTicketSelectRefresh;
+        setPendingTicketSelectRefresh(null);
+        // The recovery control is removed after a successful read. Return focus
+        // to the refreshed select only if the retry still owned it.
+        const restoreFocus = retryOwnedFocus && document.activeElement === trigger;
+        refreshTicketSelect(control, restoreFocus);
+        setNotice('Ticket details saved.');
+      }
+    } catch {
+      // Keep recovery available even if a background read clears the query error.
+    } finally {
+      changing.current = false;
+      setIsConfirmingTicketSelect(false);
+    }
+  };
 
   // Filter presence to find other agents viewing this ticket and deduplicate by userId
   const rawViewers = presence.filter(p => p.location === `ticket:${id}`);
@@ -73,13 +130,26 @@ function TicketDetail({ id }: { id: string }) {
     }
   }, [lastMessage, id, queryClient]);
 
-  const handleTicketChange = async (changes: TicketChanges) => {
-    if (changing.current) return;
+  const handleTicketChange = async (changes: TicketChanges, control?: TicketSelectControl) => {
+    if (changing.current || (control && pendingTicketSelectRefresh)) return;
     changing.current = true;
     setChangeError(null);
     setNotice('');
     try {
       await updateTicket.mutateAsync({ id, ...changes });
+      if (control) {
+        setIsConfirmingTicketSelect(true);
+        try {
+          await refetch({ throwOnError: true });
+          refreshTicketSelect(control);
+        } catch {
+          setPendingTicketSelectRefresh(control);
+          setNotice('Ticket details saved. Refresh the ticket before making another change.');
+          return;
+        } finally {
+          setIsConfirmingTicketSelect(false);
+        }
+      }
       setNotice('Ticket details saved.');
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') setChangeError(error.message);
@@ -168,7 +238,7 @@ function TicketDetail({ id }: { id: string }) {
   if (isLoading) return <div className="p-8 text-center text-slate-500">Loading ticket...</div>;
   if (!ticket) return <div className="p-8 space-y-4 text-center text-slate-700">
     <p role="alert">{error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}</p>
-    <button type="button" onClick={() => void refetch()} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</button>
+    <button type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</button>
     <Link to="/tickets" className="block underline">Back to Tickets</Link>
   </div>;
   const reference = ticketReference(ticket, ticketPrefix);
@@ -176,7 +246,10 @@ function TicketDetail({ id }: { id: string }) {
   return (
     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
       <div className="lg:col-span-3 xl:col-span-4 space-y-6">
-        {error && !isFetchNextPageError && <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">Could not refresh this ticket. Showing the last confirmed details. <button type="button" onClick={() => void refetch()} className="underline">Retry loading ticket</button></div>}
+        {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="rounded border border-red-300 bg-red-50 p-3 text-red-900">
+          {error ? 'Could not refresh this ticket. Showing the last confirmed details. ' : 'Confirm the saved ticket details before making another change. '}
+          <button type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</button>
+        </div>}
         {changeError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{changeError}</p>}
         {notice && <p role="status" className="text-slate-700">{notice}</p>}
         <div className="flex items-center justify-between">
@@ -185,10 +258,15 @@ function TicketDetail({ id }: { id: string }) {
             Back to Tickets
           </Link>
           <div className="flex items-center gap-2">
-            <select 
-              aria-label="Status" aria-disabled={updateTicket.isPending}
-              value={ticket.status} 
-              onChange={(e) => void handleTicketChange({ status: e.target.value as TicketChanges['status'] })}
+            <select
+              key={`ticket-status-${ticketSelectVersions.status}`}
+              ref={node => { ticketSelectRefs.current.status = node; }}
+              aria-label="Status" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+              value={ticket.status}
+              onChange={(e) => {
+                if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
+                void handleTicketChange({ status: e.target.value as TicketChanges['status'] }, 'status');
+              }}
               className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
             >
               <option value="open">Open</option>
@@ -542,10 +620,15 @@ function TicketDetail({ id }: { id: string }) {
             <div>
               <label htmlFor="ticket-priority" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Priority</label>
               <div className="mt-1">
-                <select 
-                  id="ticket-priority" aria-disabled={updateTicket.isPending}
-                  value={ticket.priority} 
-                  onChange={(e) => void handleTicketChange({ priority: e.target.value as TicketChanges['priority'] })}
+                <select
+                  key={`ticket-priority-${ticketSelectVersions.priority}`}
+                  ref={node => { ticketSelectRefs.current.priority = node; }}
+                  id="ticket-priority" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  value={ticket.priority}
+                  onChange={(e) => {
+                    if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.priority; return; }
+                    void handleTicketChange({ priority: e.target.value as TicketChanges['priority'] }, 'priority');
+                  }}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
                 >
                   <option value="low">Low</option>
@@ -558,10 +641,15 @@ function TicketDetail({ id }: { id: string }) {
             <div>
               <label htmlFor="ticket-assigned_to" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Assigned To</label>
               <div className="mt-1">
-                <select 
-                  id="ticket-assigned_to" aria-disabled={updateTicket.isPending}
-                  value={ticket.assigned_to || ''} 
-                  onChange={(e) => void handleTicketChange({ assigned_to: e.target.value || null })}
+                <select
+                  key={`ticket-assigned_to-${ticketSelectVersions.assigned_to}`}
+                  ref={node => { ticketSelectRefs.current.assigned_to = node; }}
+                  id="ticket-assigned_to" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  value={ticket.assigned_to || ''}
+                  onChange={(e) => {
+                    if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.assigned_to || ''; return; }
+                    void handleTicketChange({ assigned_to: e.target.value || null }, 'assigned_to');
+                  }}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
                 >
                   <option value="">Unassigned</option>
@@ -574,10 +662,15 @@ function TicketDetail({ id }: { id: string }) {
             <div>
               <label htmlFor="ticket-group_id" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Group</label>
               <div className="mt-1">
-                <select 
-                  id="ticket-group_id" aria-disabled={updateTicket.isPending}
-                  value={ticket.group_id || ''} 
-                  onChange={(e) => void handleTicketChange({ group_id: e.target.value || null })}
+                <select
+                  key={`ticket-group_id-${ticketSelectVersions.group_id}`}
+                  ref={node => { ticketSelectRefs.current.group_id = node; }}
+                  id="ticket-group_id" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  value={ticket.group_id || ''}
+                  onChange={(e) => {
+                    if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.group_id || ''; return; }
+                    void handleTicketChange({ group_id: e.target.value || null }, 'group_id');
+                  }}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
                 >
                   <option value="">No Group</option>
