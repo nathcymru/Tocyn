@@ -1,6 +1,7 @@
 import { TenantKnowledgeService } from '../../services/tenant-knowledge.service';
 import { Hono } from 'hono';
 import * as jose from 'jose';
+import * as OTPAuth from 'otpauth';
 import authHandler from '../../handlers/auth.handler';
 import customerHandler from '../../handlers/customer.handler';
 import { AuthService } from '../../services/auth/auth.service';
@@ -67,6 +68,72 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
 
   afterEach(() => {
     sqlite.close();
+  });
+
+  it('completes mandatory enrollment from issued credentials and revokes the consumed challenge without changing another tenant', async () => {
+    const JWT_SECRET = 'synthetic-enrollment-jwt-secret';
+    const env = { DB: d1, JWT_SECRET, MFA_ENCRYPTION_KEY: 'synthetic-enrollment-key' } as any;
+    const service = new AuthService(env);
+    const password = 'synthetic-enrollment-password';
+    const hash = await service.hashPassword(password);
+    sqlite.prepare('INSERT INTO users(tenant_id,id,email,role,password_hash) VALUES (?,?,?,?,?)')
+      .run('tenant-A', 'shared-operator', 'enroll-a@example.invalid', 'admin', hash);
+    sqlite.prepare('INSERT INTO users(tenant_id,id,email,role,password_hash) VALUES (?,?,?,?,?)')
+      .run('tenant-B', 'shared-operator', 'enroll-b@example.invalid', 'admin', hash);
+    const request = (path: string, token?: string, body?: unknown) => authHandler.request(path, {
+      method: path === '/me' ? 'GET' : 'POST',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }, env);
+    const login = await request('/login', undefined, { email: 'enroll-a@example.invalid', password });
+    expect(login.status).toBe(200);
+    const challenge = await login.json();
+    expect(challenge.mfa_required).toBe(true);
+    expect(challenge.user.mfa_enabled).toBe(false);
+    expect((await request('/me', challenge.token)).status).toBe(401);
+    const setup = await request('/mfa/setup', challenge.token);
+    expect(setup.status).toBe(200);
+    const authenticator = OTPAuth.URI.parse((await setup.json()).provisioning_uri) as OTPAuth.TOTP;
+    const code = authenticator.generate();
+    const invalidCode = Array.from({ length: 10 }, (_, digit) => String(digit).repeat(6))
+      .find(candidate => authenticator.validate({ token: candidate, window: 1 }) === null)!;
+    expect((await request('/mfa/confirm', challenge.token, { code: invalidCode })).status).toBe(400);
+    const confirmed = await request('/mfa/confirm', challenge.token, { code });
+    expect(confirmed.status).toBe(200);
+    const session = await confirmed.json();
+    expect(session.user.mfa_enabled).toBe(true);
+    expect((await request('/me', session.token)).status).toBe(200);
+    expect((await request('/mfa/setup', challenge.token)).status).toBe(401);
+    expect((await request('/mfa/confirm', challenge.token, { code })).status).toBe(401);
+    const a = sqlite.prepare('SELECT mfa_enabled,session_version FROM users WHERE tenant_id=? AND id=?').get('tenant-A', 'shared-operator');
+    const b = sqlite.prepare('SELECT mfa_enabled,session_version,mfa_secret FROM users WHERE tenant_id=? AND id=?').get('tenant-B', 'shared-operator');
+    expect(a).toEqual({ mfa_enabled: 1, session_version: 1 });
+    expect(b).toEqual({ mfa_enabled: 0, session_version: 0, mfa_secret: null });
+    expect((await request('/logout', session.token)).status).toBe(200);
+    expect((await request('/mfa/setup', session.token)).status).toBe(401);
+  });
+
+  it('rejects stale enrollment writes in both setup/confirmation interleavings', async () => {
+    sqlite.prepare('INSERT INTO users(tenant_id,id,email,role) VALUES (?,?,?,?)')
+      .run('tenant-A', 'user-A', 'race-a@example.invalid', 'admin');
+    sqlite.prepare('INSERT INTO users(tenant_id,id,email,role) VALUES (?,?,?,?)')
+      .run('tenant-B', 'user-A', 'race-b@example.invalid', 'admin');
+    // Confirmation read secret one before a second setup rotates the pending secret.
+    expect(await reposA.users.beginMfaEnrollment('user-A', 'pending-one', 0)).toBe(true);
+    const original = await reposA.users.get('user-A');
+    expect(await reposA.users.beginMfaEnrollment('user-A', 'pending-two', 0)).toBe(true);
+    expect(await reposA.users.completeMfaEnrollment('user-A', original!.mfa_secret!, 0)).toBe(false);
+    // A setup request read disabled/version zero before this confirmation won.
+    expect(await reposA.users.completeMfaEnrollment('user-A', 'pending-two', 0)).toBe(true);
+    expect(await reposA.users.beginMfaEnrollment('user-A', 'late-pending-secret', 0)).toBe(false);
+    expect(await reposA.users.completeMfaEnrollment('user-A', 'pending-two', 0)).toBe(false);
+    const current = await reposA.users.get('user-A');
+    expect(current?.mfa_secret === 'pending-two').toBe(true);
+    expect(current?.mfa_enabled).toBe(1);
+    expect(current?.session_version).toBe(1);
+    const sibling = await reposB.users.get('user-A');
+    expect(sibling?.mfa_enabled).toBe(0);
+    expect(sibling?.mfa_secret).toBeNull();
   });
 
   it('enforces request limits across fresh repositories while isolating tenants', async () => {

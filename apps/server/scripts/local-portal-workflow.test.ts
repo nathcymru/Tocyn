@@ -155,7 +155,10 @@ class LocalPortalWorkflow {
     this.command(['d1', 'migrations', 'apply', 'tocyn-local', '--local', '--persist-to', this.state]);
     const bootstrap = await createLocalFixtureBootstrap(this.secrets);
     const sqlFile = join(this.temporary, 'fixture.sql');
-    writeFileSync(sqlFile, bootstrap.sql, { mode: 0o600 });
+    // This runner's second operator exercises mandatory first enrollment through
+    // normally issued credentials; the first operator retains enrolled MFA.
+    const enrollmentFixture = "UPDATE users SET mfa_enabled=0,mfa_secret=NULL WHERE tenant_id='fixture-tenant-b' AND id='fixture-operator';";
+    writeFileSync(sqlFile, `${bootstrap.sql}\n${enrollmentFixture}`, { mode: 0o600 });
     try { this.command(['d1', 'execute', 'tocyn-local', '--local', '--persist-to', this.state, '--file', sqlFile]); }
     finally { rmSync(sqlFile, { force: true }); }
     this.initializeGuardedBeta();
@@ -329,6 +332,54 @@ test('localhost Wrangler proves portal login, tenant isolation, delivery recover
     const setupMfaBody = await setupMfa.json() as { provisioning_uri?: string };
     assert.ok(typeof setupMfaBody.provisioning_uri === 'string' && setupMfaBody.provisioning_uri.length > 0,
       'bodyless MFA setup must return its provisioning result without exposing it in test output');
+    const operatorB = credentials.find(credential => credential.email === 'fixture.operator.b@example.test');
+    assert.ok(operatorB, 'second fixture operator must exist');
+    type OperatorAuth = { token?: string; mfa_required?: boolean; user?: { mfa_enabled?: boolean } };
+    const enrollmentLogin = await workflow.json<OperatorAuth>('/api/auth/login', {
+      email: operatorB.email, password: operatorB.password,
+    });
+    assertStatus(enrollmentLogin.response, 200, 'unenrolled operator password login');
+    assert.equal(enrollmentLogin.body.mfa_required, true);
+    assert.equal(enrollmentLogin.body.user?.mfa_enabled, false);
+    assert.ok(enrollmentLogin.body.token, 'normal login must issue an enrollment challenge');
+    const enrollmentChallenge = enrollmentLogin.body.token;
+    assertStatus(await workflow.request('/api/auth/me', { token: enrollmentChallenge }), 401,
+      'enrollment challenge must not grant app access');
+    const enrollmentSetup = await workflow.request('/api/auth/mfa/setup', { method: 'POST', token: enrollmentChallenge });
+    assertStatus(enrollmentSetup, 200, 'bodyless challenge-authenticated enrollment setup');
+    const enrollmentUri = (await enrollmentSetup.json() as { provisioning_uri: string }).provisioning_uri;
+    const authenticator = OTPAuth.URI.parse(enrollmentUri) as OTPAuth.TOTP;
+    const invalidCode = Array.from({ length: 10 }, (_, digit) => String(digit).repeat(6))
+      .find(code => authenticator.validate({ token: code, window: 1 }) === null)!;
+    const invalidConfirmation = await workflow.json('/api/auth/mfa/confirm', { code: invalidCode }, enrollmentChallenge);
+    assertStatus(invalidConfirmation.response, 400, 'authenticated invalid setup code must permit form recovery');
+    const enrollment = await workflow.json<OperatorAuth>('/api/auth/mfa/confirm', { code: totp(enrollmentUri) }, enrollmentChallenge);
+    assertStatus(enrollment.response, 200, 'corrected setup code must finish enrollment');
+    assert.equal(enrollment.body.user?.mfa_enabled, true);
+    assert.ok(enrollment.body.token, 'enrollment must issue a completed app session');
+    assertStatus(await workflow.request('/api/auth/me', { token: enrollment.body.token }), 200,
+      'enrollment must issue the current session version');
+    assertStatus(await workflow.request('/api/auth/mfa/setup', { method: 'POST', token: enrollmentChallenge }), 401,
+      'enabling MFA must revoke the prior challenge');
+    const reusedConfirmation = await workflow.json('/api/auth/mfa/confirm', { code: totp(enrollmentUri) }, enrollmentChallenge);
+    assertStatus(reusedConfirmation.response, 401, 'consumed enrollment challenge must remain revoked');
+    const enrolledLogin = await workflow.json<OperatorAuth>('/api/auth/login', { email: operatorB.email, password: operatorB.password });
+    assertStatus(enrolledLogin.response, 200, 'enrolled operator must receive a fresh challenge');
+    assert.ok(enrolledLogin.body.token);
+    assertStatus(await workflow.request('/api/auth/mfa/setup', { method: 'POST', token: enrolledLogin.body.token }), 400,
+      'fresh enrolled challenge must not replace its authenticator');
+    const reenrollment = await workflow.json('/api/auth/mfa/confirm', { code: totp(enrollmentUri) }, enrolledLogin.body.token);
+    assertStatus(reenrollment.response, 400, 'enrolled challenge must use verification instead of confirmation');
+    const invalidVerification = await workflow.json('/api/auth/mfa/verify', { code: invalidCode }, enrolledLogin.body.token);
+    assertStatus(invalidVerification.response, 400, 'authenticated invalid verification code must permit correction');
+    const verifiedEnrollment = await workflow.json<OperatorAuth>('/api/auth/mfa/verify', { code: totp(enrollmentUri) }, enrolledLogin.body.token);
+    assertStatus(verifiedEnrollment.response, 200, 'normal verification must recover after an invalid code');
+    assert.ok(verifiedEnrollment.body.token);
+    assertStatus(await workflow.request('/api/auth/logout', { method: 'POST', token: verifiedEnrollment.body.token }), 200,
+      'enrolled operator logout must revoke its sessions');
+    assertStatus(await workflow.request('/api/auth/mfa/setup', { method: 'POST', token: verifiedEnrollment.body.token }), 401,
+      'revoked completed session must not start enrollment');
+
     const aChallenge = await requestLink(customerA.email, 'fixture-widget-key-a');
     const bChallenge = await requestLink(customerB.email, 'fixture-widget-key-b');
     const expiredChallenge = await requestLink(customerA.email, 'fixture-widget-key-a');

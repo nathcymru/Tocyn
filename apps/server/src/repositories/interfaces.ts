@@ -4,6 +4,8 @@ import { User, Ticket, Article, Attachment } from '../types';
 
 export interface UserRepository {
   revokeSessions(id: string): Promise<void>;
+  beginMfaEnrollment(id: string, encryptedSecret: string, sessionVersion: number): Promise<boolean>;
+  completeMfaEnrollment(id: string, expectedSecret: string, sessionVersion: number): Promise<boolean>;
   list(options: {role?: string; page: number; limit: number; staffOnly?: boolean}): Promise<any[]>;
   findByEmail(email: string): Promise<User | null>;
   get(id: string): Promise<User | null>;

@@ -520,7 +520,7 @@ export async function verifyTwoTenantFixture(): Promise<FixtureReport> {
       assert.equal(challenge.mfa_required, true, 'Fixture operator login must require MFA');
       await assertStatus(await fixture.request('/api/auth/mfa/verify', {
         method: 'POST', token: challenge.token, body: { code: fixture.invalidMfaCode(operator) },
-      }), 401, 'Wrong operator OTP must be denied');
+      }), 400, 'Authenticated wrong operator OTP must permit correction without granting access');
       await assertStatus(await fixture.request('/api/api-keys', { token: challenge.token }), 401, 'MFA challenge token must not reach dashboard metadata');
       operatorTokens[operator] = tokenFrom(await (await fixture.request('/api/auth/mfa/verify', {
         method: 'POST', token: challenge.token, body: { code: fixture.currentMfaCode(operator) },

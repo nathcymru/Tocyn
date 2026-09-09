@@ -214,7 +214,7 @@ describe("Auth Handler Integration Tests", () => {
         { DB: mockDB as any, JWT_SECRET, MFA_ENCRYPTION_KEY }
       );
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(400);
       const body = await res.json();
       expect(body.error).toBe("Invalid MFA code");
     });
@@ -297,6 +297,70 @@ describe("Auth Handler Integration Tests", () => {
 
       // Check if DB was updated to enable MFA
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE users SET mfa_enabled ="));
+    });
+  });
+
+  describe("enrollment token boundaries", () => {
+    const user = { id: "enrollment-user", tenant_id: "default-tenant", email: "enrollment@example.invalid", role: "admin", mfa_enabled: 0, session_version: 3 };
+
+    it.each(["/mfa/setup", "/mfa/confirm"])("rejects invalid authority before %s changes any account", async path => {
+      mockDB.first.mockResolvedValue(user);
+      for (const changes of [
+        { aud: "widget" }, { aud: "unknown" }, { aud: ["app", "mfa-challenge"] },
+        { aud: "app", mfa_verified: false }, { session_version: 2 },
+        { role: "agent" }, { exp: 1 }, { tenant_id: "" },
+      ]) {
+        const token = await new jose.SignJWT({ sub: user.id, tenant_id: user.tenant_id, role: user.role,
+          session_version: 3, mfa_verified: false, aud: "mfa-challenge", iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 60, ...changes })
+          .setProtectedHeader({ alg: "HS256" }).sign(new TextEncoder().encode(JWT_SECRET));
+        const response = await auth.request(path, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ code: "123456" }) },
+          { DB: mockDB as any, JWT_SECRET, MFA_ENCRYPTION_KEY });
+        expect(response.status).toBe(401);
+      }
+      expect(mockDB.run).not.toHaveBeenCalled();
+      expect(mockDB.prepare.mock.calls.some(([sql]) => /^UPDATE users SET mfa_/.test(sql))).toBe(false);
+    });
+
+    it("does not allow challenge sessions to access app routes or app sessions to verify challenges", async () => {
+      mockDB.first.mockResolvedValue(user);
+      const challenge = await authService.generateMfaChallengeToken(user, JWT_SECRET);
+      const app = await authService.generateToken(user, JWT_SECRET, true);
+      for (const path of ["/me", "/logout", "/mfa/disable"]) {
+        const response = await auth.request(path, { method: path === "/me" ? "GET" : "POST", headers: { Authorization: `Bearer ${challenge}` } }, { DB: mockDB as any, JWT_SECRET });
+        expect(response.status).toBe(401);
+      }
+      const response = await auth.request("/mfa/verify", { method: "POST", headers: { Authorization: `Bearer ${app}` } }, { DB: mockDB as any, JWT_SECRET });
+      expect(response.status).toBe(401);
+      expect(mockDB.run).not.toHaveBeenCalled();
+      expect(mockDB.prepare.mock.calls.some(([sql]) => /^UPDATE users SET mfa_/.test(sql))).toBe(false);
+    });
+
+    it.each(["/mfa/setup", "/mfa/confirm"])("returns a recoverable conflict when an enrollment write loses at %s", async path => {
+      const secret = mfaService.generateSecret();
+      const encrypted = await mfaService.encryptSecret(secret, MFA_ENCRYPTION_KEY);
+      const pending = { ...user, mfa_secret: encrypted };
+      mockDB.first.mockResolvedValueOnce(pending).mockResolvedValueOnce(pending).mockResolvedValueOnce(null);
+      const token = await authService.generateMfaChallengeToken(user, JWT_SECRET);
+      const code = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret) }).generate();
+      const response = await auth.request(path, {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      }, { DB: mockDB as any, JWT_SECRET, MFA_ENCRYPTION_KEY });
+      expect(response.status).toBe(409);
+      const body = await response.json();
+      expect(body.token).toBeUndefined();
+      expect(body.provisioning_uri).toBeUndefined();
+    });
+
+    it.each(["/mfa/setup", "/mfa/confirm"])("rejects enrolled account mutation at %s", async path => {
+      mockDB.first.mockResolvedValue({ ...user, mfa_enabled: 1, mfa_secret: "not-read-for-reenrollment" });
+      const token = await authService.generateMfaChallengeToken(user, JWT_SECRET);
+      const response = await auth.request(path, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ code: "123456" }) },
+        { DB: mockDB as any, JWT_SECRET, MFA_ENCRYPTION_KEY });
+      expect(response.status).toBe(400);
+      expect(mockDB.run).not.toHaveBeenCalled();
+      expect(mockDB.prepare.mock.calls.some(([sql]) => /^UPDATE users SET mfa_/.test(sql))).toBe(false);
     });
   });
 

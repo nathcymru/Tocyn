@@ -3,7 +3,7 @@ import { Env } from "../bindings";
 import { authService } from "../services/auth/auth.service";
 import { mfaService } from "../services/auth/mfa.service";
 import { JWTPayload, AppVariables } from "../types";
-import { authMiddleware, mfaChallengeMiddleware, loginAuthResolverMiddleware } from "../middleware/auth.middleware";
+import { authMiddleware, mfaChallengeMiddleware, mfaEnrollmentMiddleware, loginAuthResolverMiddleware } from "../middleware/auth.middleware";
 import { rateLimiter } from "../middleware/rate-limiter";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { UserAuthResolution } from "../auth/user-auth-resolver";
@@ -108,7 +108,7 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
 
   const isValid = mfaService.verifyCode(code, decryptedSecret);
   if (!isValid) {
-    return c.json({ error: "Invalid MFA code" }, 401);
+    return c.json({ error: "Invalid MFA code" }, 400);
   }
 
   const userPayload = {
@@ -140,7 +140,7 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
 /**
  * Stage 3: Setup MFA
  */
-auth.post("/mfa/setup", authMiddleware, tenantMiddleware, async (c) => {
+auth.post("/mfa/setup", mfaEnrollmentMiddleware, tenantMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
   const d = c.get("tenantDeps") as TenantRequestDeps;
 
@@ -158,7 +158,10 @@ auth.post("/mfa/setup", authMiddleware, tenantMiddleware, async (c) => {
   const uri = mfaService.getProvisioningUri(user.email, secret);
   const encryptedSecret = await mfaService.encryptSecret(secret, c.env.MFA_ENCRYPTION_KEY);
 
-  await d.repositories.users.update(user.id, { mfa_secret: encryptedSecret });
+  const started = await d.repositories.users.beginMfaEnrollment(user.id, encryptedSecret, payload.session_version ?? 0);
+  if (!started) {
+    return c.json({ error: "MFA enrollment changed. Sign in again to continue." }, 409);
+  }
 
   return c.json({
     provisioning_uri: uri,
@@ -168,7 +171,7 @@ auth.post("/mfa/setup", authMiddleware, tenantMiddleware, async (c) => {
 /**
  * Stage 3: Confirm MFA
  */
-auth.post("/mfa/confirm", authMiddleware, tenantMiddleware, async (c) => {
+auth.post("/mfa/confirm", mfaEnrollmentMiddleware, tenantMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
   const { code } = await c.req.json();
 
@@ -183,6 +186,10 @@ auth.post("/mfa/confirm", authMiddleware, tenantMiddleware, async (c) => {
     return c.json({ error: "MFA setup has not been initiated" }, 400);
   }
 
+  if (user.mfa_enabled) {
+    return c.json({ error: "MFA is already enabled" }, 400);
+  }
+
   let decryptedSecret: string;
   try {
     decryptedSecret = await mfaService.decryptSecret(user.mfa_secret, c.env.MFA_ENCRYPTION_KEY);
@@ -192,11 +199,17 @@ auth.post("/mfa/confirm", authMiddleware, tenantMiddleware, async (c) => {
 
   const isValid = mfaService.verifyCode(code, decryptedSecret);
   if (!isValid) {
-    return c.json({ error: "Invalid MFA code" }, 401);
+    return c.json({ error: "Invalid MFA code" }, 400);
   }
 
-  await d.repositories.users.update(user.id, { mfa_enabled: true });
-  user.session_version = (await d.repositories.users.get(user.id))?.session_version ?? 0;
+  const previousVersion = payload.session_version ?? 0;
+  const confirmed = await d.repositories.users.completeMfaEnrollment(user.id, user.mfa_secret, previousVersion);
+  if (!confirmed) {
+    return c.json({ error: "MFA enrollment changed. Sign in again to continue." }, 409);
+  }
+  // Migration 0022 advances this version once when MFA becomes enabled. Do not
+  // adopt a later version from a concurrent logout or authority change.
+  user.session_version = previousVersion + 1;
 
   const userPayload = {
     id: user.id,

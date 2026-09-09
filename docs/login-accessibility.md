@@ -142,3 +142,27 @@ a normally issued unenrolled operator login returned an MFA challenge, but setup
 rejected that challenge. This observation must be resolved and retested before
 claiming the included required configuration journey works. Actual reader
 acceptance remains open independently.
+
+## Mandatory MFA configuration correction
+
+The required configuration journey now accepts the normally issued enrollment
+challenge only at setup/confirmation, using the existing signature, current
+identity, session, tenant and invitation verifiers. Ordinary app and challenge
+verification routes keep their separate audiences. Invalid codes after successful
+authentication return a recoverable validation error; expired or revoked sessions
+still require login. Already enabled accounts cannot repeat enrollment.
+
+Enrollment writes check current account state and session version; confirmation
+also matches the pending authenticator that was verified. Controlled SQLite
+ordering covers stale and duplicate attempts without replacing the accepted
+configuration. Existing session-revocation triggers invalidate the consumed
+challenge, and the returned app token uses only the expected new version.
+
+The updated actual localhost Wrangler workflow passed 84 requests over four Worker
+starts in 13.36 seconds. It covers mandatory enrollment, invalid-code correction,
+normal MFA verification, challenge consumption and logout revocation alongside the
+existing two-tenant customer expiry and captured-delivery recovery cases. Its
+resource receipt remains nine selected D1 rows, five added articles/five events,
+zero final captured messages, and disposed temporary state. Auth configuration
+writes are separate from those conversation counts. No external mail/provider was
+used. This automated runtime result does not close browser or reader acceptance.
