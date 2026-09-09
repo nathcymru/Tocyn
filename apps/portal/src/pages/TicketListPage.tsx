@@ -6,6 +6,7 @@ import type { Ticket, PaginatedResponse } from '../types';
 import { Loader2, Plus, MessageSquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
+import { ticketReference } from '../utils/ticket-reference';
 
 export function TicketListPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -232,7 +233,7 @@ export function TicketListPage() {
                 <Link to={`/tickets/${ticket.id}`} className="block p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <span className="text-sm text-gray-500 font-mono">{ticketPrefix}{ticket.ticket_no}</span>
+                      <span className="text-sm text-gray-500 font-mono">{ticketReference(ticket, ticketPrefix)}</span>
                       <h3 className="text-lg font-medium text-gray-900">{ticket.subject}</h3>
                     </div>
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[ticket.status]}`}>

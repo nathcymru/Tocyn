@@ -117,3 +117,28 @@ These are component and build results. Native mobile/create dialog containment,
 actual speech, and computed state-specific contrast await browser/reader acceptance.
 Tests assert one pending create/read/setup request and no duplicate confirmation;
 no live provider, credential, or message data is part of their output.
+
+## Initial integrated browser observations
+
+The temporary candidate's portal login success heading, create Subject focus,
+Escape/trigger return, create feedback, named focusable history and successful
+reply status/action focus were observed in the local browser. At the native modal
+Tab/Shift-Tab boundary, focus reached browser chrome without an observed background
+page control; this is not a complete keyboard-cycle or screen-reader proof.
+
+The browser exposed a blank reference for records without a ticket number. Portal
+list/detail now use the actual UUID in that case, matching the operator view; no
+number allocation is introduced. Component cases exercise both UUID and allocated
+prefixed references. All 42 portal tests, portal lint and build pass after this fix.
+
+For the same running local pagination fixture, 50 explicitly synthetic historical
+articles were added to a conversation with two admitted messages. The resulting
+52 rows are fixture history, not 52 admitted writes. Ticket, mutation and upload
+attempt counters were identical before and after this fixture setup; the runtime
+was not restarted and no audit receipts were fabricated.
+
+Mandatory enrollment acceptance remains blocked by an observed route mismatch:
+a normally issued unenrolled operator login returned an MFA challenge, but setup
+rejected that challenge. This observation must be resolved and retested before
+claiming the included required configuration journey works. Actual reader
+acceptance remains open independently.

@@ -6,7 +6,7 @@ export interface User {
 
 export interface Ticket {
   id: string;
-  ticket_no: number;
+  ticket_no: number | null;
   subject: string;
   status: 'open' | 'pending' | 'resolved' | 'closed';
   priority: 'low' | 'normal' | 'high' | 'urgent';

@@ -30,6 +30,20 @@ function setupReads() {
 }
 
 describe('portal conversation accessibility and recovery', () => {
+  it.each([null, 42])('shows a truthful ticket reference in list and detail when number is %s', async ticketNumber => {
+    const current = { ...ticket, id: '43c8cee6-28f5-4d32-aa8f-59b80c3a2dc4', ticket_no: ticketNumber };
+    const reference = ticketNumber === null ? current.id : 'CASE-42';
+    vi.mocked(portalApi.get).mockImplementation(async path => (
+      path === '/config' ? { TICKET_PREFIX: 'CASE-' }
+        : path === '/tickets' ? { data: [current] } : { ...detail, ticket: current }
+    ) as never);
+    mountList();
+    expect(await screen.findByText(reference)).toBeTruthy();
+    cleanup();
+    mountDetail();
+    expect(await screen.findByText(new RegExp(`Ticket ${reference} • Created`))).toBeTruthy();
+  });
+
   it('names the native create dialog, focuses its first field and returns focus after its cancel event', async () => {
     setupReads(); mountList();
     const opener = await screen.findByRole('button', { name: 'New Ticket' });

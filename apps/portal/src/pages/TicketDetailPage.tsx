@@ -5,6 +5,7 @@ import type { Ticket, Article } from '../types';
 import { Loader2, ArrowLeft, Paperclip, Send, X } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
+import { ticketReference } from '../utils/ticket-reference';
 
 type UploadedAttachment = { filename: string; size: number; contentType: string; storageKey: string };
 
@@ -301,7 +302,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
             </span>
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Ticket {ticketPrefix}{ticket.ticket_no} • Created {format(utcTimestamp(ticket.created_at), 'MMM d, yyyy h:mm a')}
+            Ticket {ticketReference(ticket, ticketPrefix)} • Created {format(utcTimestamp(ticket.created_at), 'MMM d, yyyy h:mm a')}
           </p>
         </div>
       </div>
