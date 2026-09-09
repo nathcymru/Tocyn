@@ -27,7 +27,10 @@ function obsoleteRequest(): Error {
 
 /** Fence both response data and auth/download side effects to the initiating session. */
 async function sessionRequest<T>(path: string, options: RequestInit, read: (response: Response) => Promise<T>): Promise<T> {
-  const { token, sessionGeneration } = useAuthStore.getState();
+  const { token, user, sessionGeneration } = useAuthStore.getState();
+  // Bad credentials belong to the signed-out form. Protected requests and MFA
+  // challenges still invalidate the current session when authentication fails.
+  const isSignedOutLogin = path === '/auth/login' && options.method === 'POST' && token === null && user === null;
   const assertCurrent = () => {
     const current = useAuthStore.getState();
     if (current.token !== token || current.sessionGeneration !== sessionGeneration) throw obsoleteRequest();
@@ -43,7 +46,7 @@ async function sessionRequest<T>(path: string, options: RequestInit, read: (resp
     if (!(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
     const response = await fetch(`${BASE_URL}${path}`, {...options,headers,signal:controller.signal});
     assertCurrent();
-    if (response.status === 401) {
+    if (response.status === 401 && !isSignedOutLogin) {
       useAuthStore.getState().logout();
       window.location.href = '/login';
       throw new ApiError('Unauthorized',401);

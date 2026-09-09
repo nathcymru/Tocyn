@@ -30,6 +30,16 @@ function setupReads() {
 }
 
 describe('portal conversation accessibility and recovery', () => {
+  it.each([
+    [0, '0 B'], [62, '62 B'], [1536, '1.5 KB'], [1048576, '1 MB'],
+  ])('displays attachment size %s in truthful units', async (size, expected) => {
+    const data = { ...detail, articles: [{ ...article, attachments: [{ id: 'size-fixture', filename: 'size.txt', size }] }] };
+    vi.mocked(portalApi.get).mockImplementation(async path => (path === '/config' ? {} : data) as never);
+    mountDetail();
+    const download = await screen.findByRole('button', { name: 'Download size.txt' });
+    expect(within(download).getByText(expected)).toBeTruthy();
+  });
+
   it.each([null, 42])('shows a truthful ticket reference in list and detail when number is %s', async ticketNumber => {
     const current = { ...ticket, id: '43c8cee6-28f5-4d32-aa8f-59b80c3a2dc4', ticket_no: ticketNumber };
     const reference = ticketNumber === null ? current.id : 'CASE-42';

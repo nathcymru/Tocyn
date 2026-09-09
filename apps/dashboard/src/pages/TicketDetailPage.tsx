@@ -1,3 +1,4 @@
+import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -54,6 +55,7 @@ function TicketDetail({ id }: { id: string }) {
   const changing = useRef(false);
   const uploads = useRef(new Map<File, { filename: string; contentType: string; size: number; storageKey: string }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachButtonRef = useRef<HTMLButtonElement>(null);
 
   // Filter presence to find other agents viewing this ticket and deduplicate by userId
   const rawViewers = presence.filter(p => p.location === `ticket:${id}`);
@@ -311,7 +313,7 @@ function TicketDetail({ id }: { id: string }) {
                           <Paperclip className="w-4 h-4 flex-shrink-0" />
                           <span className="truncate flex-1 text-left">{att.filename || att.file_name || 'Attachment'}</span>
                           <span className="text-xs opacity-75">
-                            {Math.round(att.size || att.file_size / 1024)} KB
+                            {attachmentSize(att.size ?? att.file_size)}
                           </span>
                         </button>
                       ))}
@@ -463,7 +465,13 @@ function TicketDetail({ id }: { id: string }) {
                       <button
                         type="button"
                         aria-disabled={isSubmitting} aria-label={`Remove ${file.name}`}
-                        onClick={() => { if (submission.current) return; uploads.current.delete(file); setAttachments(prev => prev.filter((_, i) => i !== index)); }}
+                        onClick={() => {
+                          if (submission.current) return;
+                          uploads.current.delete(file);
+                          setAttachments(prev => prev.filter((_, i) => i !== index));
+                          setNotice('Attachment removed.');
+                          attachButtonRef.current?.focus();
+                        }}
                         className="text-slate-600 hover:text-red-700"
                       >
                         <X className="w-3 h-3" />
@@ -487,14 +495,18 @@ function TicketDetail({ id }: { id: string }) {
                     ref={fileInputRef} 
                     className="hidden" 
                     onChange={(e) => {
-                      if (e.target.files) {
-                        setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+                      if (submission.current) return;
+                      const selectedFiles = Array.from(e.currentTarget.files ?? []);
+                      if (selectedFiles.length) {
+                        setAttachments(prev => [...prev, ...selectedFiles]);
+                        setNotice(`${selectedFiles.length} attachment${selectedFiles.length === 1 ? '' : 's'} selected.`);
                       }
                       if (fileInputRef.current) fileInputRef.current.value = '';
                     }} 
                   />
                   <button 
                     type="button"
+                    ref={attachButtonRef}
                     aria-disabled={isSubmitting} aria-label="Attach files"
                     onClick={() => { if (!submission.current) fileInputRef.current?.click(); }}
                     className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"

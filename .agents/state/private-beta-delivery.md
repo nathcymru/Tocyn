@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 03:53 UTC. This is the authoritative coordinator view.
+Updated 9 September 2026 for the residual #21 correction checkpoint. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -39,25 +39,38 @@ do not skip affected tests. Preserve CRLF in existing dashboard source files.
 
 ## Accepted main and remaining gates
 
-Accepted signed main: 65ad06ee3e905acf9ec59d17bdd951993381e818 (PR116), merged
-03:38:58 UTC. Root verified the GitHub signature. Required PR CI 34307583055 and
-security 34307580665 passed. Earlier signed PR119 d394bd7 and PR117 58feb5e are
-preserved in history; postmerge PR116 main checks remain separately tracked by root.
+Accepted signed main: 7d8187ca4ae3bd0adeaa8c4e2dbd820e4bac90d5 (PR118), merged
+03:59:44 UTC with signature verified by root. Its tooling changes preserve the
+PR116 application source 65ad06e. PR116 required CI 34307583055 and security 34307580665
+passed; signed PR119 d394bd7 and PR117 58feb5e remain in history.
+Postmerge 7d8187 CI 34309233371 and security 34309232682 pass; root reports
+zero findings in all three actual analyses. #65 partial receipt: issue comment 5595575218.
 
 Not beta-ready. Four issues remain open: #62, #21, #93 and #65.
 
-1. #62 and #93 functional implementations are merged; actual reader acceptance
-   remains in their own criteria.
-2. #21 corrected source is merged, including mandatory MFA enrollment, guarded
-   downloads, polling ownership, named controls and responsive navigation.
-   Actual reader and remaining complete journey/focus-cycle evidence remain open.
-3. #65 tooling is being refreshed onto accepted PR116. After required checks and root
-   acceptance merge PR118, run one full technical matrix/reproducibility/fallback
-   rehearsal against that signed immutable merge in a clean checkout, using signed
-   58feb5e4deef55670f635f099eb67c6bcfffae56 as the prior known-good application. No provisional
-   full run is needed solely to repeat it for a squash SHA. Technical evidence may
-   proceed with reader evidence pending, but cannot close #65/readiness. A later
-   reader-driven source change invalidates the technical candidate.
+1. #62/#93 functional implementations are merged; their own actual-reader criteria
+   remain open. Native keyboard/contrast evidence is in the subsystem receipts.
+2. Residual #21 actual browser acceptance found rejected operator-login feedback,
+   native file-selection retention and displayed attachment-unit defects. Correction
+   source 7b3d49b on signed 7d8187 is isolated in codex/21-login-error-recovery, with
+   63 dashboard/59 portal tests, both frontend builds, portal/server lint, workflow
+   validation and both dependency audits passing. Root reviewed the bounded delta.
+   Corrected-source browser confirmation passed on exact 7b3d49b; coherent PR and
+   mandatory checks/acceptance merge are next.
+   Portal wrong-OTP correction, native Cancel/Close, UUID assignment/group keyboard
+   set/clear/reload, revoked-session reauthentication, attachment download and additional
+   computed contrast now have actual accepted-source browser evidence. No reader claim.
+3. #65 tooling PR118 is accepted. The residual application correction changes the
+   technical candidate: accept its source through required checks/signature, then
+   run/refresh the final immutable technical matrix/reproducibility/fallback receipt
+   against that accepted candidate. Root/#65 owner retain any prior measurements as
+   revision-qualified evidence. Reader authority is pending in parallel; technical
+   evidence alone cannot close #65 or beta readiness.
+
+Critical path: internally reviewed/browser-confirmed #21 correction → mandatory
+PR checks/accepted signed application revision → #65 final technical receipt. Actual
+reader acceptance remains a separate required owner-access dependency for #21/#62/#93.
+No baseline date is changed by this checkpoint. Root owns Project receipts/forecasts.
 
 No gate is waived or transferred merely to close its owning issue.
 
@@ -233,3 +246,20 @@ Use concise working commentary while active. Non-beta roadmap #50/#64/#90(full
 cost)/#91(journals)/#48/#66(redesign)/#42(production)/#18(native email) stays outside
 critical-path scope except required correctness. Historical detailed checkpoints
 remain in Git history, linked issues and subsystem docs; they are not current gates.
+
+
+## Residual correction browser checkpoint
+
+Exact frontend 7b3d49b against the unchanged guarded accepted API passed actual
+wrong-password retention/correction through normal MFA, native operator FileList
+selection/removal/status/focus return, and both 62 B labels. Final counters stayed
+1 ticket / 8 mutations / 1 upload attempt; stored rows stayed 1 ticket / 8 articles /
+1 attachment. Corrected checks added no conversation writes/uploads. Root's earlier
+same-run native UUID assignment/group set/clear/reload, OTP/session recovery,
+Cancel/Close and computed contrast receipts are in docs/login-accessibility.md.
+
+Both normal sign-outs, tab closure, viewport reset and memory clearing completed.
+Owned API/Vite processes exited; fixture/private handoff/source attachment and the
+matching fresh download are absent. Native Node bind probes verified 8787/5173/5174
+reusable; initial non-reuse Python bind EADDRINUSE is retained in the private receipt.
+Ports returned to root coordination. Actual reader remains pending; no issue closed.

@@ -36,6 +36,48 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
 
+it.each([
+  [0, '0 B'], [62, '62 B'], [1536, '1.5 KB'], [1048576, '1 MB'],
+])('displays canonical attachment size %s in truthful units', async (size, expected) => {
+  const data = { ...ticket, articles: ticket.articles.map(article => ({ ...article,
+    attachments: [{ id: 'size-fixture', filename: 'size.txt', size, file_size: 4096 }],
+  })) };
+  transport(() => json(data));
+  showDetail();
+  expect(await screen.findByRole('button', { name: /size\.txt/ })).toHaveTextContent(expected);
+});
+
+it('converts the legacy attachment byte field when canonical size is absent', async () => {
+  const data = { ...ticket, articles: ticket.articles.map(article => ({ ...article,
+    attachments: [{ id: 'legacy-fixture', file_name: 'legacy.txt', file_size: 2048 }],
+  })) };
+  transport(() => json(data)); showDetail();
+  expect(await screen.findByRole('button', { name: /legacy\.txt/ })).toHaveTextContent('2 KB');
+});
+
+it('snapshots native file selection before clearing the input and preserves explicit removal focus', async () => {
+  transport(() => json(ticket));
+  showDetail(); await screen.findByText('Customer question');
+  const input = screen.getByLabelText('Reply attachments') as HTMLInputElement;
+  const file = new File(['synthetic'], 'selected.txt', { type: 'text/plain' });
+  let nativeFiles = [file];
+  Object.defineProperty(input, 'files', { configurable: true, get: () => nativeFiles });
+  Object.defineProperty(input, 'value', { configurable: true, get: () => '', set: () => { nativeFiles = []; } });
+  // A browser clears FileList when value is cleared. Queue another update so the
+  // attachment updater executes after the event, rather than an eager test-only path.
+  act(() => {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Draft' } });
+    fireEvent.change(input);
+  });
+  const remove = await screen.findByRole('button', { name: 'Remove selected.txt' });
+  expect(nativeFiles).toHaveLength(0);
+  expect(vi.mocked(fetch).mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
+  remove.focus(); fireEvent.click(remove);
+  expect(screen.queryByRole('button', { name: 'Remove selected.txt' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Attach files' })).toHaveFocus();
+  expect(screen.getByText('Attachment removed.')).toHaveAttribute('role', 'status');
+});
+
 it('distinguishes a recoverable detail failure from not found and recovers through an explicit retry',async()=>{
   let failed=true;transport(()=>failed?json({error:'Temporarily unavailable'},503):json(ticket));
   showDetail();expect(await screen.findByRole('alert')).toHaveTextContent('Could not load ticket');
