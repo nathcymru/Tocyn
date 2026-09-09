@@ -29,7 +29,8 @@ type ManagedService = { pid?: number; exited: Promise<{ code: number | null; sig
 
 const serverRelative = 'apps/server';
 const requiredSources = ['scripts/local-portal-workflow-entry.ts', 'scripts/local-tenant-fixture.ts', 'scripts/local-beta-state.ts', 'wrangler.local.json'];
-const expectedRecipients = new Set(['tocyn-auth-test-a@example.invalid', 'tocyn-auth-test-b@example.invalid', 'fixture.operator.a@example.test']);
+const fixturePrincipals = new Set(['tocyn-auth-test-a@example.invalid', 'tocyn-auth-test-b@example.invalid', 'fixture.operator.a@example.test', 'fixture.operator.b@example.test']);
+const captureRecipients = new Set(['tocyn-auth-test-a@example.invalid', 'tocyn-auth-test-b@example.invalid']);
 const origin = 'http://localhost:8787';
 const fixedClock = Date.UTC(2030, 0, 2, 3, 4, 5);
 
@@ -59,6 +60,21 @@ function assertCleanSource(source: Source): string {
 function sourceServer(source: Source): string { return join(sourcePath(source), serverRelative); }
 function mode700(path: string): void { mkdirSync(path, { recursive: true, mode: 0o700 }); }
 function mode600(path: string, contents: string): void { writeFileSync(path, contents, { mode: 0o600 }); }
+
+export function assertLocalBindingInventory(config: Record<string, unknown>): void {
+  for (const key of ['ai', 'vectorize', 'workflows', 'queues', 'services', 'service_bindings']) {
+    if (Object.hasOwn(config, key)) fail(`local configuration must not declare ${key}`);
+  }
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) { for (const item of value) walk(item); return; }
+    if (!value || typeof value !== 'object') return;
+    const record = value as Record<string, unknown>;
+    if (record.remote === true) fail('local configuration must not declare a remote binding');
+    for (const nested of Object.values(record)) walk(nested);
+  };
+  walk(config);
+  if ((config.observability as { enabled?: unknown } | undefined)?.enabled !== false) fail('local configuration must disable observability');
+}
 
 function localEnvironment(taskRoot: string): NodeJS.ProcessEnv {
   const base: NodeJS.ProcessEnv = {};
@@ -153,6 +169,7 @@ function localConfig(source: Source, taskRoot: string): string {
   const server = sourceServer(source);
   const config = JSON.parse(readFileSync(join(server, 'wrangler.local.json'), 'utf8')) as { vars?: Record<string, string>; d1_databases?: Array<{ remote?: boolean }>; r2_buckets?: Array<{ remote?: boolean }> } & Record<string, unknown>;
   if (config.vars?.ENVIRONMENT !== 'local' || !config.d1_databases?.every(binding => binding.remote === false) || !config.r2_buckets?.every(binding => binding.remote === false)) fail('source local Wrangler configuration is not local-only');
+  assertLocalBindingInventory(config);
   config.vars = { ...config.vars, LOCAL_BETA_ENABLED: 'true' };
   config.main = join(server, 'scripts/local-portal-workflow-entry.ts');
   config.d1_databases = config.d1_databases.map(binding => ({ ...binding, migrations_dir: join(server, 'migrations') }));
@@ -185,12 +202,14 @@ async function runSeed(lifecycle: FallbackLifecycle, source: Source, state: stri
 async function issueSessionsAndMutate(bootstrap: Bootstrap): Promise<{ customerToken: string; staffToken: string; ticketId: string }> {
   const customer = bootstrap.credentials.find(credential => credential.email === 'tocyn-auth-test-a@example.invalid');
   const operator = bootstrap.credentials.find(credential => credential.email === 'fixture.operator.a@example.test');
-  if (!customer || !operator?.provisioningUri || [...bootstrap.credentials].some(credential => !expectedRecipients.has(credential.email))) fail('supported bootstrap recipients are unavailable');
+  if (!customer || !operator?.provisioningUri || bootstrap.credentials.length !== fixturePrincipals.size || bootstrap.credentials.some(credential => !fixturePrincipals.has(credential.email))) fail('the supported four-principal local fixture is unavailable');
+  if (!captureRecipients.has(customer.email)) fail('the selected fixture customer is not an approved local capture recipient');
   const requested = await postJson<{ success?: boolean }>('/api/v1/customer/auth/request', { email: customer.email, type: 'magic_link', widgetKey: 'fixture-widget-key-a' });
   responseStatus(requested.response, 200, 'customer magic-link request');
   const captured = await request('/__local/auth-capture/messages'); responseStatus(captured, 200, 'local auth capture read');
   const messages = await captured.json() as Array<{ to?: string; loginLink?: string }>;
   const link = messages.find(message => message.to === customer.email)?.loginLink;
+  if (messages.some(message => typeof message.to !== 'string' || !captureRecipients.has(message.to))) fail('local capture produced an unapproved recipient');
   const opaque = link && new URL(link).searchParams.get('token');
   if (!opaque || !/^[0-9a-f]{64}$/.test(opaque)) fail('local capture did not yield an opaque customer challenge');
   const verified = await postJson<{ token?: string }>('/api/v1/customer/auth/verify', { token: opaque, widgetKey: 'fixture-widget-key-a' });
