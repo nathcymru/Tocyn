@@ -22,191 +22,216 @@ Standing approval: PR-only approving-review exception for #102 and subsequent To
 PRs after internal review and all required CI/security checks pass. #101 had explicit
 separate approval. No machine-check or signature bypass; do not ask again.
 
-Work connector attempts timed out; execution unconfirmed. Native Codex app Computer
+Work connector reads recovered once, but repository-task loading still timed out;
+no Work execution is confirmed. Native Codex app Computer
 Use was denied by tool restriction, with no Mac prompt or pending Mac permission.
 Browser Computer Use works. Do not circumvent the denied native route.
 
-## Main and integrated evidence
+## Accepted main and completion evidence
 
-Main `646e1a9959a2ab94d3509b227da5c4daf81c73ee` (PR #113), verified signed merge.
-Main CI 34292262043 and security analysis 34292261623 passed. Required dependency-only PR checks
-matched github-actions app 15368. No manual repeat Copilot reviews requested.
+Main `6a0b3f2cc51c9125d01089044e3d9c53f3b88cf3` (#114), verified signed.
+Main CI 34294704988 and security analysis 34294704689 passed. Required PR
+checks match GitHub Actions app 15368. No repeat manual Copilot review requested.
 
-| Issue / PR | Accepted state and evidence |
+| Issue / PR | Accepted evidence |
 | --- | --- |
-| #20 / #101 | Complete. Merge 3fae282; contributor setup, Node 22/npm 10, 23 local migrations and serving/checks. Project Done / 100%, actual 8 Sep, unchanged baseline 8–10 Sep, variance -2 Mon–Sat days. |
-| #57 / #102–105 | Complete for current owner-local scope. #102 source deployment/artifact preparation; #103 semantic workflow repair; #104 local runtime/capture; #105 exact loopback CORS/test corrections. Project Done / 100%, actual 8 Sep, unchanged baseline 11–22 Sep, variance -12. No historical remote proof claimed. |
-| #58 / #110 | Complete. Four reusable principals, actual password/MFA/portal authentication, scoped keys and recovery. Project Done/100%, actual 8 Sep, unchanged baseline 23–28 Sep, variance -17 Mon–Sat days. |
-| #19 / #111 | Complete. Real A/B auth/D1/R2/DO acceptance, scoped failure/retry and full matrix. Signed merge 987218b; final PR head a7eca61; all required checks and main checks pass. Project Done / 100%, actual 8 Sep, unchanged baseline target 6 Oct, variance -24 Mon–Sat days. |
-| #106 / #107 | Source patch integrated 18a5ea7, signed; Vitest/mocker 4.1.11. All checks/main CI 34282806598 / CodeQL 34282806746 passed. Alerts 99/100 fixed at 22:14:52Z; issue closed; Project Done / 100% actual 8 Sep. |
-| #108 / #109 | Source patch integrated 80e23ba, signed; exact Sharp 0.35.4 override and platform companions. Upstream Miniflare still pinned 0.35.2; no unrelated upgrade. Alert 101 fixed at 22:14:52Z; issue closed; Project Done / 100% actual 8 Sep. |
+| #20 / #101 | Contributor setup complete, signed 3fae282. Done 100%, 8 Sep, baseline target 10 Sep, variance -2 working days. |
+| #57 / #102–105 | Owner-local runtime/source artifacts, capture and loopback CORS complete. Done 100%, 8 Sep, baseline 22 Sep, variance -12. Historical remote scope is not claimed. |
+| #58 / #110 | Four actual issued principals, D1/R2 fixture, captured A/B identities and scoped keys. Signed 4bf6dc5, all checks passed. Done 100%, 8 Sep, baseline 28 Sep, variance -17. |
+| #19 / #111 | Full local isolation matrix plus actual Wrangler WebSocket revocation/preservation, signed 987218b. Done 100%, 8 Sep, baseline 6 Oct, variance -24. AI/vector/workflow boundaries use explicit doubles. |
+| #106 / #107 | Vitest/mocker 4.1.11, signed 18a5ea7; alerts 99/100 fixed, not dismissed. Done 100%, 8 Sep. |
+| #108 / #109 | Narrow Sharp 0.35.4 override, signed 80e23ba; alert 101 fixed. Done 100%, 8 Sep. #12 broader enforcement remains open. |
+| #59 / #112 | Canonical API/portal contract and atomic initial persistence, signed e0ce28b, main checks passed. Done 100%, start 8 Sep/completion 9 Sep, baseline 14 Oct, variance -30. |
+| #60 / #113 | Atomic retry-safe mutations, signed 646e1a9; required and main checks passed. Done 100%, 9 Sep, baseline 22 Oct, variance -37. |
+| #63 / #114 | Transactional attributable conversation events, signed 6a0b3f2; required and main checks passed. Done 100%, 9 Sep, baseline 30 Oct, variance -44. |
 
-#57 evidence: actual request/capture/verify, wrong-tenant/replay rejection, local
-restart/session durability, ephemeral capture clearing, interruption cleanup. Source
-artifact reproducibility proof remains in docs/isolated-environments.md. Portal-only
-capture page passes direct/reload, keyboard/focus, accessibility-tree status and
-5.65:1 primary contrast; absent from API and production portal bundles. No human
-screen-reader session or broader #21 acceptance is claimed.
+Recent completion receipts:
+- #59: https://github.com/nathcymru/Tocyn/issues/59#issuecomment-5593265051
+- #60: https://github.com/nathcymru/Tocyn/issues/60#issuecomment-5593570669
+- #63: https://github.com/nathcymru/Tocyn/issues/63#issuecomment-5593851738
 
-#104 automatic comments arrived after merge; #105 batched all three corrections,
-passed checks and later received approval. One nonblocking fixed-input test-style
-suggestion was assessed and resolved without a redundant patch/review cycle.
+#60 uses optional scoped keys on four API/portal routes, fixed 24h expiry,
+64 KiB streamed input, 128 KiB derived fingerprint and 256 KiB immutable receipts.
+Current authentication/ownership/visibility is checked on every retry. Same-batch
+unique receipt INSERT rolls back losers; no-key/bodyless behavior remains.
+Actual races and rollback tests passed; local cleanup removed 100 expired A rows
+while preserving active A and all B rows. No dormant-tenant deletion SLA is claimed.
 
-GitHub now reports alerts 99/100/101 fixed at 22:14:52Z on 8 Sep, matching patched
-local/published inventories. No alert dismissal occurred. Completion receipts and
-Project fields for #106/#108 are synchronized; both issues are closed Done / 100% actual 8 Sep. #12 retains broader required
-context enforcement scope; its positive evidence from #107 does not close it.
+#63 records intake/reply/assignment/state in the mutation batch with the verified
+submitting actor, actual prior/new values, safe facts and scoped history. Staff see
+full authorized reconstruction; API/customer see only public intake/replies without
+private IDs, state facts or sequence gaps. V1 renderer stays frozen; V2 captures
+immutable event references. No journal, outbox or retroactive invented attribution.
 
-## Latest accepted issues
+#63 validation: server 349; audit 8 plus targeted real audited retention proof;
+replay 10, canonical 3, atomic 2; dedicated types, lint/workflow checks, three builds,
+portal 13/widget 3/root 31; full local D1/auth/reset/restart/fixture/core/storage/
+actual Wrangler realtime chain. Lifecycle measured 82-byte facts (4 KiB cap),
+A events removed including actual retention, B event preserved, R2 zero and three
+route requests. Selected fixture D1 counter nine excludes articles/events.
 
-#59 via #112: signed e0ce28b; canonical API/portal intake, truthful source/timing,
-identity provenance, compatibility and atomic initial persistence. Main CI/security
-passed. Project Done100%; start8 September, completion9 September; unchanged
-baseline14 October, variance-30 Mon–Sat days.
-https://github.com/nathcymru/Tocyn/issues/59#issuecomment-5593265051
+## Critical path and ownership
 
-#60 via #113: final PR head38bc33d500297bc86b5bcc4f8a3b24e717d45536;
-signed merge646e1a9959a2ab94d3509b227da5c4daf81c73ee at23:48:20Z 8 September
-(9 September Europe/London). Required PR checks from app15368 passed; main
-CI34292262043 and security34292261623 passed. Internal implementation/security
-reviews passed. Standing approving-review exception used, no machine bypass.
-Project Done100%; start/completion9 September; unchanged baseline22 October,
-variance-37 Mon–Sat days. Completion: https://github.com/nathcymru/Tocyn/issues/60#issuecomment-5593570669
+Not beta-ready. Five gates remain: #93, #61, #62, then #21, then #65.
+#61/#62 dependencies #60/#63 are cleared. Their final guarded acceptance and shared
+UI/runtime integration follow #93. #21 follows both customer/operator workflows;
+#65 joins all prerequisites for final local rehearsal/artifact preparation.
 
-Four API/portal mutation routes use optional scoped keys, fixed24h expiry,
-immutable version1 raw snapshots, final unique receipt INSERT in same D1 batch,
-current authentication/visibility and deletion tombstones. Unkeyed/bodyless behavior
-retained.64KiB streamed requests;128KiB derived fingerprint cap;256KiB receipt cap.
-Scoped repositories own all SQL; trusted tenantDeps composes service. Portal reply
-atomically includes attachments/touch and winner-only best-effort notification.
-No replay notification, no CAPTCHA/R2 repeat on stored success.100 expired rows
-per bounded cleanup; no dormant-tenant physical-deletion SLA or production claim.
+Authoritative state is this branch: `codex/93-local-beta-guardrails`, worktree
+`/tmp/tocyn-93-local-beta-guardrails`. Root owns state, CI, GitHub, review and acceptance.
 
-Validated server349/replay10/canonical3/atomic2/portal13/widget3/root31; all
-server/script types, lint/workflow checks, three builds and full local D1/auth/
-reset/restart/fixture/core/storage/realtime chain. Real races: sixAPI creates→one
-mutation/receipt; fiveattachment replies→onearticle/attachment; directengine8→one.
-Injected row/receipt failures roll back. Snapshot1001bytes. Actual local Wrangler
-purge removed100expiredA, preserved2expiredA+1activeA+3expiredB; invalid/remote
-options refused, ownedstate removed. Notification failure3transport attempts,
-replay0. No new UI. Full reproduction/resource limits in docs/phase-1.4-api-spec.md.
+| Issue | Agent / environment | Model / effort | Reason |
+| --- | --- | --- | --- |
+| #93 | beta_guardrails_impl; /tmp/tocyn-93-local-beta-guardrails | gpt-6-astra / high | Admission concurrency, auth and durable limits |
+| #62 | release_packaging_escalation; /tmp/tocyn-62-operator-workflows | gpt-6-astra / high | Confirmed authentication-state correctness fix and operator coverage |
+| #61 | retry_acceptance; /tmp/tocyn-61-local-portal-workflows | gpt-5.6-terra / high | Actual auth/session failure and tenant-isolation acceptance |
 
-## Review disposition and lessons
+Branches are respectively `codex/93-local-beta-guardrails`,
+`codex/62-operator-workflows`, `codex/61-local-portal-workflows`. No PR yet for these.
+#93 independent checkpoint ef88533358bff6a2ff77c646e6ea3971719b1110 rebased on #63.
+#61/#62 start receipts and Project In progress / Actual start 9 Sep synchronized:
+https://github.com/nathcymru/Tocyn/issues/61#issuecomment-5593827768
+https://github.com/nathcymru/Tocyn/issues/62#issuecomment-5593823259
 
-Late #112 authenticated-message attribution correction integrated in #113: sender
-must match recorded ticket customer; focused matching/missing/mismatching tests pass.
-#112 N+1 attachment reads are assigned to #93 bounded detail-read implementation.
-Late #113 automatic review has two nonblocking follow-ups: unused retry headers
-on wildcard widget routes (no retry capability/API-key permission) are narrowed by
-#93; document intentional128KiB derived fingerprint versus64KiB external limit in
-#63 versioned contract. These do not allow oversized external requests or privilege
-gain. Resolve review threads after corresponding integration; no repeated metered
-review request. Review IDs/comments are accessible on #113.
+#93 owns shared mutation/detail/upload integration and portal/dashboard pagination.
+Exact invited principals/two tenants, finite counters, recovery reserve, durable
+stop/resume and default-denied unused routes are implemented independently.
+Policy/read tests pass; detail reads are four queries at page sizes 1 and 50 with
+filtering before LIMIT and no legacy R2 body materialization. Portal/dashboard
+pagination component tests pass focus/status and retained-message checks.
+Actual Wrangler proved warm reads, immediate operator stop visibility, restart
+persistence, stale revision denial, counter-preserving resume and malformed-policy
+redaction. Disposable state was removed and port 8787 released.
+Remaining: same-batch guards/receipts/audit, final-slot races, upload integration,
+combined recovery proof, browser acceptance and full required checks.
 
-Avoid repeated partial route handoffs: #60 terra/high integration was escalated to
-Astra/medium after incomplete edits, then full tests passed. Always use Node22;
-Node26 failed native addon ABI. Raw SQL service/handler access must stay behind
-repositories; do not suppress lint. Receipt table has no tenant-registry FK because
-no tenant registry exists. Wrangler local --json omits meta.changes; bounded purge
-uses numeric-only RETURNING row count. Freeze source before final validation.
+#62 first fixes the privately recorded authenticated-state defect with a fresh
+query client per identity generation, old-request cancellation and stale-response
+suppression. Regression covers old 200/401 completion, cached rendering and drafts.
+Independent auth/feed edits proceed; #93 retains useTickets/detail until integration.
+Then assignment clearing, pending/error feedback and actual operator exchange.
+No unpatched reproduction enters public issue/repository state.
 
-## Active allocation and exclusive ownership
+#61 builds the non-interactive local Wrangler exchange with real issued A/B magic
+links and staff password/MFA, public/internal replies, cross-tenant denial, actual
+challenge/session expiry and revocation, plus controlled captured-mail outage.
+Use startup injection/runner-owned seams; no forged tokens or public test controls.
+Shared local runtime/auth/Env seams coordinate with #93 before editing.
 
-| Task | Agent / model / effort | Ownership and reason |
-| --- | --- | --- |
-| Coordinator | Root / inherited | CI, state, GitHub, integration and final acceptance |
-| #63 owner | release_packaging_escalation / gpt-6-astra / high | Event migration, repositories/services/routes, versioned snapshots, existing mocks/docs; atomicity/privacy |
-| #63 acceptance | retry_acceptance / gpt-5.6-terra / high | New real-D1 audit acceptance/config, agreed narrow fixture helpers; concurrency/isolation |
-| #93 owner | beta_guardrails_impl / gpt-6-astra / high | Independent policy/counter/operator/read bounds and tests; durable admission/auth boundaries |
-| Work pool | Existing attempt | Connector timeout, native tool denial; no execution/capacity claimed |
+## Review decisions and failed approaches
 
-Four active Codex slots including root. Both issue owners start9 September after
-accepted #60. Root alone declares acceptance. Worktrees from646e1a9:
-- /tmp/tocyn-63-conversation-audit, branch codex/63-conversation-audit (authoritative state).
-- /tmp/tocyn-93-local-beta-guardrails, branch codex/93-local-beta-guardrails.
+- #113 automatic comment 3963303853: widget CORS unnecessarily advertised retry
+  headers. No widget retry capability or privilege gain; narrow in #93 and test.
+- #113 comment 3963303895: 128 KiB normalized vs 64 KiB raw is intentional derived
+  field allowance, now clarified in #63 docs. Resolved thread PRRT_kwDOUPj5os6gc4Nf with merged evidence on #113.
+- #114 review 5148394400/comment 3963473722: defensive parsing for V2 helper and
+  dispatcher. Existing service catches and JSON constraints fail closed. Batch
+  bounded parsing/null handling regression with #93 replay integration.
+- Do not weaken the existing article-to-ticket NO ACTION FK to satisfy direct
+  parent deletion with live articles. Supported child cleanup and actual retention
+  were tested; the initial invalid test assumption was corrected.
+- Local Wrangler state contains a metadata SQLite file too. Operator discovery
+  must select exactly one migrated beta database and validate fixture rows.
+- Do not put a post-handler response cap on successful mutations: enforce input/
+  snapshot bounds before commit; generic response size cap applies to reads.
+- Node 22 is required; Node 26 produces native-addon ABI failures. Use installed
+  /Users/ty/.local/share/fnm/node-versions/v22.19.0/installation/bin in PATH.
+- Agent send_message does not wake idle agents; use followup_task for new work.
 
-Node22 PATH prefix /Users/ty/.local/share/fnm/node-versions/v22.19.0/installation/bin.
-Both locked script-free installs and better-sqlite3 rebuilds passed, zero advisories.
-No PR yet for #63/#93. Designs /tmp/tocyn-63-design.md and /tmp/tocyn-93-design.md;
-approved issue/ADR scope is authoritative. Do not overwrite independent branch work.
+## Forecast, next actions and boundaries
 
-## Integration plan and ready queue
+After #63 acceptance, apply `private-beta-reforecast-after63-2026-09-09.json`:
+#93 target 12 Sep; #61 target 15 Sep; #62 target 18 Sep; #21 19–24 Sep;
+#65 25 Sep–1 Oct. Preserve all approved baselines and 3× effort. W1 reserves #61;
+W2 reserves #93 then #62; early independent #62 preparation does not claim a third
+full forecast stream. Receipt/Project synchronization status is in that JSON.
 
-#63 owns all shared mutation batch assembly until accepted merge. #93 independently
-builds policy/counter/control/read-bound files; no circular import of unmerged #93
-into #63. After #63 integration, rebase #93 and add admission+counter to the same
-batches before mutation/event/final receipt. One owner edits shared files at a time;
-no generic arbitrary SQL hook or duplicate commit engine. Same-key race at final
-quota slot must replay valid winner, not falsely429. No-op/replay charges zero.
+Next: review #93 combined enforcement and #62 auth boundary; integrate #93 after
+complete checks, refresh #61/#62, finish their actual exchange, then #21 and #65.
+Root consolidates review findings; no repetitive metered Copilot requests.
 
-#63: four fixed tenant events (intake/reply/assignment/state), actual transaction
-prior/new facts, trusted submitting actor distinct from message author, bounded
-safe history and current visibility. Public history conservatively intake/replies;
-no internal sequence/count clues. Conversation-lifecycle erasure. Keep liveV1
-snapshots unchanged; newV2 includes truthful fixed audit refs. No journal/outbox.
+Non-beta roadmap: full cost #50/#64/#90, journal #91, redesign #48/#66,
+production #42, native email #18 and future channels/autonomy/privacy. Required
+correctness remains mandatory. No owner approval is pending.
 
-#93: exact two-tenant/invited-principal local admission, finite durable counters,
-stop/restart/recovery, upload-attempt bounds, bounded paged reads/attachments,
-disabled optionalAI/jobs/providers, bounded diagnostics. Proposed conservative
-local defaults are implementation choices, not invented owner commitments.
-Preserve human handling and accepted conversations; no #50/#90 broad budgets.
+Operational update delivered about 00:24 UTC 9 September; next due 00:54 UTC.
+Continue concise interim findings. No Work execution claim; native denial remains
+respected. Local beta readiness is not production or public release authority.
 
-Not beta-ready. Six gates remain: #63/#93 active; then #61/#62 in parallel after
-#60/#63; #21 after both; #65 joins all beta prerequisites for final local rehearsal.
-Completed #20/#57/#58/#19/#59/#60 and security#106/#108. No owner action pending.
-Non-beta: fullcost#50/#64/#90, journals#91, redesign#48/#66, production#42,
-nativeemail#18/futurechannels/autonomy/privacy. Required correctness never excluded.
+## Next accessibility work prepared for #21
 
-Next: settle audit typed contract, implement/validate owned workstreams, issue63
-checked integration, refresh successors and integrate guarded batches. Keep full
-required checks at PR boundaries and updates tied to evidence. Forecast after60
-preserves baselines/3× effort/Mon–Sat/two-stream/shared-review model; all six successor forecasts and issue receipts synchronized. See private-beta-reforecast-after60-2026-09-09.json.
+Existing portal UI gaps are owned by #21, not silently waived or duplicated before
+its #61/#62 prerequisites. #61 currently adds no new browser UI.
+- TicketListPage: associate Subject/Message labels and ids; replace create alert
+  with an announced/focusable error; focus form on open and restore trigger after
+  close/success; test keyboard, focus and error flow.
+- TicketDetailPage: label reply textarea/file input; name back/remove icon controls;
+  announce reply/upload errors; test keyboard attachment/remove/reply focus flow.
+- Login/Verify already have associated fields; still include in full #21 audit.
 
-Operational update delivered23:54Z 8 September (00:54BST9 September); next due
-by00:24Z9 September. Continue concise interim findings and genuine beta completion.
+#61 independent actual Wrangler exchange/expiry/outage suite passes before guarded
+rebase. Clock injection is authentication-only construction-time test behavior; D1
+and admission clocks remain real. No global simulated-time claim. #93 real live
+stop/reply race, saved replay, restart counters, resume and exhaustion passed.
+#62 auth boundary seven tests and feed/create recovery three tests pass; local
+operator mutation/retrieval suite is being added. Final branch integration and
+required checks remain mandatory for all three issues.
 
-Forecast correction: independent #93 policy work can start with #63, but final
-shared integration cannot finish before #63. Reserve #93 integration17 September
-(after #63 target16 September), then W2 #62 starts18 September and targets23.
-#61 remains17–22 September; #21 moves24–29 September; #65 forecast30 September–
-6 October. The previous5 October forecast failed to reserve that integration day.
-Baselines/approved effort remain unchanged; this is an implementation sequencing
-constraint, not a new product prerequisite. All four affected Project fields and issue receipts are synchronized.
+## Required validation checkpoint — #93
 
-Early #63 review: API history preserves existing public-message-only read semantics;
-full internal/state/assignment reconstruction stays staff-authorized. Retained system
-notes use readable transaction-derived prose rather than JSON/UUIDs. Migration version
-CHECK changed to NULL-safe comparison; dedicated negative fixture required. V1 replay
-renderer remains frozen, new V2/live detail uses only visible event references.
+Root full required typecheck, three builds and full test chain passed. Logs are
+/tmp/tocyn-93-{typecheck,build,test}.log. Workflow semantic tests also passed.
+Required lint found nine real boundary violations, not waived: scope construction
+in application.ts and raw D1/SQL in new middleware/customer-auth service. Owner is
+moving these into existing trusted auth/composition and scoped repository methods;
+no lint rule changes. Revalidate affected auth/guard paths and complete lint after
+correction. All test processes ended and port 8787 is free.
 
-Early #93 review: standalone policy tests pass assertion insert/conflict, reserve,
-rollback and revisioned stop/resume. Direct local SQLite operator must be proven
-against actual running Wrangler/warmed connections/concurrent writes and restart;
-otherwise use supported local execution. CLI malformed-policy errors must not echo
-file contents. Guarded beta launch must explicitly enable policy and fail closed,
-not silently use unguarded developer defaults. No new owner approval pending.
+Root owns dev frontend sessions: dashboard 86583 on 5173, portal 42532 on 5174
+(both #93 worktree, no VITE_API_URL override). Browser tab 2 in iab is a temporary
+portal login tab; no API fixture is running yet. Browser acceptance follows the
+corrected source freeze. Never claim the earlier ef885333 foundation contains the
+uncommitted shared integration. #61 waits for exact accepted #93 merge; its local
+checkpoint b478209 is clean and unpushed. #62 independent tests pass; new detail
+acceptance tests deliberately await its post-#93 page wiring.
 
-#63 full validation checkpoint: root's seven dedicated types, complete lint/workflow,
-three builds, portal13/widget3/root31 and full local D1/auth/reset/restart/fixture/
-core/storage/realtime/canonical3/atomic2 chain pass. Independent audit expanded tests
-pending final result. Parent ticket DELETE with live articles fails the existing0014
-NO ACTION FK, not the new audit FK; exercise supported child cleanup/retention order
-and bodyless parent deletion. Do not weaken that existing FK to satisfy an invalid
-test assumption. Root has released port8787 to #93; no persistent server is running.
+## Browser checkpoint and remaining #93 correction
 
-#93 independent guarded fixture tests pass actual principals/invitations, exactcapture,
-revoked session, nine disabled/unclassified route negatives and JSON/page bounds.
-Detail query count four at page sizes1 and50, filter-before-limit and no legacy R2
-body reads. Shared mutation accounting and real Wrangler stop/coherence acceptance
-remain pending integration after #63; no premature enforcement claim.
+Corrected source passes complete lint (no exemptions), full dedicated types,
+362 server tests, 10 guardrail cases and fresh real beta/auth/realtime tests.
+Browser caught and verified fixes for lost focus on final pagination and numeric
+visibility rendering. Both real views show 50→52 fixture messages, completion
+focus remains, polite status works, contrast 17.74/17.85:1. Stop intake visibly
+rejects and preserves draft/accepted conversation; counters remain1/1/0 on resume.
+51 historical rows were seeded only for pagination, not claimed admissions.
 
-#63 independent acceptance checkpoint:8 cases and dedicated types pass. Covers all
-actor sources, concurrent prior/new chain/assignment/no-op, atomic event/late-receipt
-rollback, actual valid V1 runtime replay, V2 stability, current auth/privacy/cursors,
-newly-hidden detail and deletion/redaction. Facts82bytes<=4096; after lifecycle Aevents0,
-B preserved1; selectedfixtureD1rows9 excludesarticles/events, R2objects0, routeRequests3.
-The additional supported retention proof passed: an aged audited bodyless ticket
-completed scoped claimRetention/completeRetention; its events were removed and
-tenant B remained intact. Dedicated types and the lifecycle case passed again.
-Application source is frozen. Coordinator is publishing the coherent #63 PR;
-required remote checks and integration acceptance remain pending.
+Root stopped frontend/API sessions and closed its three temporary browser tabs.
+All ports8787/5173/5174 were free. Supported npm/PTy Ctrl-C left the exact owned
+fixture directory; root removed it and verified absence. #93 owner is now fixing
+persistent idempotent signal handling and proving actual repeated Ctrl-C cleanup,
+with8787 reserved by that agent. No credentials or state path is preserved here.
+
+#61 confirmed/fixed portal bootstrap stale-401 login race and SQLite UTC display
+on its own branch; commits b478209 then080212a, pending #93 rebase. #62 confirmed
+missing local Vite WebSocket proxy flag and will prove browser connection. These
+are required workflow defects, not scope deferrals. Its owner also independently
+reviews #93 late boundary/UI corrections.
+
+Operational update delivered about00:54 UTC; next due01:24 UTC. No owner action
+pending. Next: accept corrected #93 cleanup evidence, publish coherent PR and
+pass required checks, integrate, then refresh #61/#62 and finish their UI work.
+
+## Final #93 acceptance checkpoint
+
+The final sequential real runtime and actual PTY launcher tests passed (8.7s and
+13.0s). Single and repeated Ctrl-C both remove run-owned state and credentials,
+release the port and exit. Affected launcher lint and local fixture/beta types
+pass. Independent review of late architecture and UI corrections found no
+blocking finding. Source is frozen for the coherent #93 PR; required GitHub
+machine/security checks must still pass before the authorized review exception.
+
+All root temporary tabs and processes are disposed. Port ownership is now handed
+to #62 for independent auth/feed/realtime browser checks while #93 CI runs. #61
+commits b478209 and 080212a remain held for the exact accepted #93 merge. Next:
+publish #93, inspect required checks and automatic review together, integrate,
+then refresh both dependent branches and complete guarded workflow acceptance.

@@ -269,9 +269,9 @@ function TicketDetail({ id }: { id: string | undefined }) {
           })}
         </div>
         {paginationVisible && <div className="border-t border-gray-200 bg-white p-4 space-y-2">
-          <button type="button" onClick={loadMore} disabled={loadingMore} aria-disabled={!nextCursor || loadingMore}
+          <button type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore}
             aria-controls="conversation-messages" aria-busy={loadingMore}
-            className="rounded-md border border-gray-400 bg-white px-4 py-2 text-sm font-medium text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-60">
+            className="rounded-md border border-gray-400 bg-white px-4 py-2 text-sm font-medium text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
             {loadingMore ? 'Loading messages…' : nextCursor ? 'Load more messages' : 'All messages loaded'}
           </button>
           <p role="status" aria-live="polite" className="text-sm text-gray-700">{pageStatus}</p>

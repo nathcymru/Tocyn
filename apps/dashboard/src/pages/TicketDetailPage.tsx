@@ -303,9 +303,9 @@ export function TicketDetailPage() {
           </div>
 
           {ticket.pagination && <div className="border-t border-slate-200 bg-white p-4 space-y-2">
-            <button type="button" onClick={() => { if (hasNextPage) void fetchNextPage(); }} disabled={isFetchingNextPage} aria-disabled={!hasNextPage || isFetchingNextPage}
+            <button type="button" onClick={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage({ cancelRefetch: false }); }} aria-disabled={!hasNextPage || isFetchingNextPage}
               aria-controls="conversation-messages" aria-busy={isFetchingNextPage}
-              className="rounded-md border border-slate-400 bg-white px-4 py-2 text-sm font-medium text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-60">
+              className="rounded-md border border-slate-400 bg-white px-4 py-2 text-sm font-medium text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
               {isFetchingNextPage ? 'Loading messages…' : hasNextPage ? 'Load more messages' : 'All messages loaded'}
             </button>
             <p role="status" aria-live="polite" className="text-sm text-slate-700">

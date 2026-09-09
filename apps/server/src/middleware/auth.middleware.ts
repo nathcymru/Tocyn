@@ -1,3 +1,4 @@
+import { AuthService } from '../services/auth/auth.service';
 import { authorizeLocalBeta } from './local-beta';
 import { BetaAdmissionError } from '../types/local-beta';
 import { Context, Next } from "hono";
@@ -152,3 +153,17 @@ export const loginAuthResolverMiddleware = async (c: Context, next: Next) => {
   c.set("resolvedUser" as any, authUser);
   await next();
 };
+
+/** WebSocket query tokens use the same current session verifier before constructing scope. */
+export async function authenticateRealtimeToken(env: Env, token: string) {
+  let user;
+  try {
+    user = await new AuthService(env).verifyToken(token);
+    if (!user || !['agent', 'admin'].includes(user.role)) return null;
+  } catch {
+    return null;
+  }
+  const scope = createVerifiedTenantScope(user.tenant_id!, user.id, [user.role], 1);
+  await authorizeLocalBeta(env, scope);
+  return user;
+}

@@ -1,3 +1,5 @@
+import { BetaAdmissionError } from '../types/local-beta';
+import type { LocalBetaAdmissionRepository } from '../repositories/local-beta-admission.repository';
 import type { ConversationAuditReference } from '../types/conversation-audit';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
@@ -61,21 +63,37 @@ export function renderMutationSnapshotV1(raw: string, operation: TicketMutationI
 
 /** V2 adds only immutable local event references; V1 rendering remains frozen. */
 export function renderMutationSnapshotV2(raw: string, operation: TicketMutationInput['operation'], replayed: boolean, keyed: boolean): MutationOutcome {
-  const snapshot = JSON.parse(raw) as Omit<MutationSnapshotV1,'version'> & {version:2;audit:ConversationAuditReference[]};
-  if (snapshot.version !== 2 || !Array.isArray(snapshot.audit) || snapshot.audit.length !== 1 || !snapshot.audit[0].eventId) throw unavailable();
-  const result = renderMutationSnapshotV1(JSON.stringify({...snapshot,version:1}),operation,replayed,keyed);
-  const reference = {status:'known',value:{eventId:snapshot.audit[0].eventId}};
+  let snapshot: Omit<MutationSnapshotV1, 'version'> & { version: 2; audit: ConversationAuditReference[] };
+  try {
+    snapshot = JSON.parse(raw);
+  } catch {
+    throw unavailable();
+  }
+  const validAudit = snapshot && snapshot.version === 2 && Array.isArray(snapshot.audit)
+    && snapshot.audit.length === 1 && snapshot.audit[0]
+    && typeof snapshot.audit[0].eventId === 'string' && snapshot.audit[0].eventId;
+  if (!validAudit) throw unavailable();
+  const result = renderMutationSnapshotV1(JSON.stringify({ ...snapshot, version: 1 }), operation, replayed, keyed);
+  const reference = { status: 'known', value: { eventId: snapshot.audit[0].eventId } };
   if (operation.endsWith('.create')) {
     const canonical = result.body.canonical as ReturnType<typeof projectCanonicalConversation>;
-    result.body.canonical = {...canonical, conversation:{...canonical.conversation,audit:reference},
-      messages:canonical.messages.map(message => ({...message,audit:reference}))};
+    result.body.canonical = {
+      ...canonical,
+      conversation: { ...canonical.conversation, audit: reference },
+      messages: canonical.messages.map(message => ({ ...message, audit: reference })),
+    };
   } else result.body.audit = reference;
   return result;
 }
 function renderMutationSnapshot(raw: string, operation: TicketMutationInput['operation'], replayed: boolean, keyed: boolean) {
-  const version = (JSON.parse(raw) as {version:number}).version;
-  if (version === 1) return renderMutationSnapshotV1(raw,operation,replayed,keyed);
-  if (version === 2) return renderMutationSnapshotV2(raw,operation,replayed,keyed);
+  let version: unknown;
+  try {
+    version = (JSON.parse(raw) as { version?: unknown } | null)?.version;
+  } catch {
+    throw unavailable();
+  }
+  if (version === 1) return renderMutationSnapshotV1(raw, operation, replayed, keyed);
+  if (version === 2) return renderMutationSnapshotV2(raw, operation, replayed, keyed);
   throw unavailable();
 }
 
@@ -83,12 +101,13 @@ export class TicketMutationReplayService {
   private readonly repository: TicketMutationReplayRepository;
   private readonly attempts = new WeakMap<PreparedTicketMutation, Attempt>();
 
-  constructor(db: D1Database, private scope: VerifiedTenantScope, private principal: MutationPrincipal) {
-    this.repository = new TicketMutationReplayRepository(db, scope);
+  constructor(db: D1Database, private scope: VerifiedTenantScope, private principal: MutationPrincipal, private admission?: LocalBetaAdmissionRepository) {
+    this.repository = new TicketMutationReplayRepository(db, scope, admission);
   }
 
   private async authorize(): Promise<string | undefined> {
     if (!this.principal.id || !this.scope.tenantId) throw unauthorized();
+    await this.admission?.authorize();
     if (this.principal.kind === 'api-key') {
       const key = await this.repository.activeApiKey(this.principal.id);
       if (!key) throw unauthorized();
@@ -184,12 +203,20 @@ export class TicketMutationReplayService {
         principalKind: this.principal.kind, principalId: this.principal.id, operation: normalized.operation,
         keyHash: await digest(rawIdempotencyKey), payloadHash: await digest(`ticket-mutation-v1\n${serialized}`),
       };
-      const receipt = namespace ? await this.repository.findActive(namespace) : null;
+      let receipt = namespace ? await this.repository.findActive(namespace) : null;
+      if (!receipt && this.admission) {
+        try { await this.admission.authorize(normalized.operation.endsWith('.create')?'create':'conversation'); }
+        catch(error) {
+          // A concurrent winner can consume the final slot between lookup and the advisory check.
+          receipt=namespace?await this.repository.findActive(namespace):null;
+          if(!receipt)throw error;
+        }
+      }
       const prepared = Object.freeze({ replay: receipt && namespace ? await this.replay(receipt, namespace) : null });
       // Hold an owned copy: validated request objects cannot drift after hashing.
       this.attempts.set(prepared, { input: JSON.parse(serialized) as TicketMutationInput, namespace });
       return prepared;
-    } catch (error) { if (error instanceof TicketMutationError) throw error; throw unavailable(); }
+    } catch (error) { if (error instanceof TicketMutationError || error instanceof BetaAdmissionError) throw error; throw unavailable(); }
   }
 
   async commit(prepared: PreparedTicketMutation, verifiedAttachments: VerifiedMutationAttachment[] = []): Promise<MutationOutcome> {
@@ -251,8 +278,9 @@ export class TicketMutationReplayService {
         await this.authorize();
         const winner = attempt.namespace ? await this.repository.findActive(attempt.namespace) : null;
         if (winner && attempt.namespace) return await this.replay(winner, attempt.namespace);
+        await this.admission?.authorize(candidate.ticket?'create':'conversation');
         throw unavailable();
       }
-    } catch (error) { if (error instanceof TicketMutationError) throw error; throw unavailable(); }
+    } catch (error) { if (error instanceof TicketMutationError || error instanceof BetaAdmissionError) throw error; throw unavailable(); }
   }
 }

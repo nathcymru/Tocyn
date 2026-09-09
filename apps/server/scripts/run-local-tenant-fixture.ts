@@ -184,7 +184,11 @@ async function main(): Promise<void> {
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () => {
+  // npm/tsx and the terminal can forward the same signal more than once. Keep
+  // handlers installed until cleanup finishes so a second signal cannot restore
+  // Node's default immediate exit while private run-owned files still exist.
+  process.on(signal, () => {
+    if (cleanupPromise) return;
     void cleanup().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143));
   });
 }

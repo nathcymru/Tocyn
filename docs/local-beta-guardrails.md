@@ -1,9 +1,11 @@
 # Local private-beta guardrails
 
-This is the local-only implementation for issue #93. Final combined mutation/audit
-integration and the running-Wrangler acceptance receipt are still required before
-this branch can be accepted. These controls do not authorize a remote beta or
-production operation and do not provide delegated budgets or billing guarantees.
+This is the local-only implementation for issue #93, integrated with the accepted
+conversation audit and retry commit path. Focused tests demonstrate durable local
+admission, concurrent capacity, bounded reads and running-Wrangler operator
+control. Required CI and browser acceptance determine delivery acceptance. These
+controls do not authorize a remote beta or production operation and do not provide
+delegated budgets or billing guarantees.
 
 ## Explicit local profile
 
@@ -24,6 +26,21 @@ existing application/MFA/widget token audiences. Invitations use tenant, kind
 and exact principal ID. Two scoped API keys are separately and explicitly
 invited; creating a later key never admits it automatically. Interactive output
 contains synthetic credentials and must not be saved in a receipt or shared log.
+
+Start the existing frontends in separate local terminals:
+
+```sh
+npm run dev --workspace=apps/dashboard
+npm run dev --workspace=apps/portal
+```
+
+The dashboard uses `http://localhost:5173`; the portal uses
+`http://localhost:5174`. Leave `VITE_API_URL` unset to use their existing local API
+proxies. Open a generated portal login URL to select its tenant widget key, then
+use the captured local authentication journey. The dashboard uses the generated
+operator password and existing MFA enrollment. Do not put credentials in frontend
+configuration, screenshots, checked-in files or acceptance receipts. The launcher
+requires interactive standard streams and refuses credential output in CI.
 
 The ordinary `fixture:local-tenants` command remains the unguarded development
 fixture for compatibility tests. It is **not** a beta rehearsal. A guarded
@@ -120,18 +137,26 @@ Ticket list pages are 1–1,000 with page sizes 1–50 (default 50); malformed,
 negative, fractional and prefixed numeric values return 400. Article detail uses
 ascending `(created_at,id)` cursors, at most 50 articles per page, and explicit
 `pagination.has_more`/`next_cursor`. Public visibility and current ticket ownership
-are filtered in SQL before limiting. The canonical projection describes only the
-returned article page. Stored response-version-1 retry receipts keep their frozen
+are filtered in SQL before limiting. The canonical messages describe only the
+returned article page. Its conversation-level intake audit reference remains
+truthful independently of that page, provided the initial message is currently
+public; a newly hidden initial message does not expose that reference. Stored response-version-1 retry receipts keep their frozen
 original renderer.
 
 Article body metadata is measured before loading bodies. A page uses a 256 KiB raw
 article budget and a separate 256 KiB attachment metadata budget, at most 500
-attachment rows, and a final 1 MiB JSON response ceiling. A page may contain fewer
+attachment rows, and a final 1 MiB JSON read response ceiling. A page may contain fewer
 than its requested number of articles when its byte budget is reached. The next
 cursor makes this visible. An oversized individual legacy article or R2-backed
 legacy body gives a controlled error for operator review; no body is silently
 omitted or automatically imported. Four scoped queries suffice for both one and
-50 selected articles, including one batched attachment query.
+50 selected articles, including one batched attachment query. This is the article
+page repository query count; authentication, ticket lookup and one bounded audit
+reference query are additional request work. The audit reference result contains
+at most 51 rows. Mutation payloads and retry snapshots are bounded before commit;
+the generic read response ceiling never converts a committed mutation into a
+post-commit 413. Oversized inherited API PATCH response data is rejected before
+changing the ticket or charging a mutation.
 
 Portal and dashboard show a native Load more messages button and a polite status
 region. Existing messages remain during loading and errors, and the completed
@@ -148,10 +173,80 @@ restart/teardown. This is access-time pruning, not unattended physical deletion
 of data in a dormant process. Capture retains its existing independent short TTL.
 Only aggregate synthetic counts belong in saved acceptance receipts.
 
-Focused proof currently includes policy migration/assertion behavior, atomic
-counter rollback, reserved capacity and operator revisions, real Miniflare
-credential/admission and route negatives, four-query bounded detail reads and
-portal pagination focus/status. Final acceptance must additionally include the
-integrated #63/#93 concurrency, replay, injected-failure, upload and real-Wrangler
-stop/restart tests on the accepted revision. Passing local tests does not remove
-the runtime/production release gates.
+The focused checks are repeatable from the repository root:
+
+```sh
+npm run typecheck:local-beta --workspace=apps/server
+npm run test:local-beta --workspace=apps/server
+npm run test:local-beta-runtime --workspace=apps/server
+```
+
+The runtime command runs the Worker proof and then the interactive launch/cleanup
+proof sequentially. Both own `127.0.0.1:8787` while running. Stop any interactive
+fixture first; the tests refuse an occupied port and never select a remote
+fallback. The launch proof uses Python 3 standard-library pseudo-terminal support
+on macOS/Linux so the supported npm command receives a real controlling terminal,
+even when the test runner has piped streams. No credential output is written to
+logs or receipts.
+The normal server test suite includes policy and defensive retry-renderer tests.
+Portal and dashboard test suites include pagination loading, status and focus
+regressions. Run the existing retry and audit suites against the same revision
+for compatibility evidence; required repository CI remains mandatory.
+
+| Local evidence | Measured or asserted result |
+| --- | --- |
+| Two-tenant final-slot race | Two contenders, one new commit, no exceeded ceiling |
+| Same-key final-slot recovery | Matching successful responses, one charge; saved response works while stopped |
+| Atomic fault injection | Admission, ticket, article, attachment, audit and receipt failures preserve all prior committed row/counter counts |
+| Material change and no-op | One charge for a material transition; zero for a repeated or stopped no-op |
+| Expired and removed retry results | One new charge after expiry; removed result returns 410 without restoring capacity |
+| Upload boundary | Durable attempt before R2; failed/uncertain attempts remain charged; stopped/exhausted upload makes zero R2 calls; accepted object remains downloadable |
+| Bounded article page | Four page queries at sizes 1 and 50; zero legacy R2 reads and zero foreign/internal article leakage |
+| Operator and running Worker | Warm connections observe revision changes; concurrent stop counters equal successful commits; restart retains stop/counts; resume does not reset capacity |
+| Disabled optional work | No provider, AI, vector or workflow binding in the local runtime configuration |
+| Diagnostics | At most 1,000 fixed records, each under 1 KiB; access-time TTL and stop/restart reset; malformed policy fragments never appear in CLI errors |
+
+These are synthetic local resource and correctness assertions, not latency,
+production load, provider spending or storage deletion guarantees. In particular,
+R2 uncertainty can leave an unreferenced local object until fixture teardown; the
+counter is conservative and cleanup never deletes accepted attachments. Browser
+acceptance additionally checks the native pagination control, keyboard/focus,
+visible status and existing contrast styling on the integrated revision. Passing
+local tests does not remove the runtime/production release gates.
+
+### Browser acceptance — 9 September 2026
+
+A real guarded Wrangler fixture served the portal and dashboard through their local
+Vite proxies. The portal used a normally issued captured magic link; the operator
+used its generated password and actual MFA. For bounded-history display, one portal
+ticket was created normally and 51 synthetic historical articles were seeded into
+that run-owned local D1 state. Those seed rows are fixture setup, not claimed
+admitted mutations. Both views loaded 50 then 52 messages through real endpoints.
+
+Keyboard activation of the final page preserved focus on the native completion
+button. It has `aria-disabled=true` without a native `disabled` attribute; pending
+and completed handlers prevent additional fetches. Both polite live regions
+announced the completed count. Browser-computed text/white-background contrast was
+17.74:1 for the portal and 17.85:1 for the dashboard. Bounded message visibility
+values are booleans, avoiding a stray numeric display. This is keyboard and
+accessibility-tree evidence; no human screen-reader session is claimed. #21 still
+owns the complete workflow accessibility gate.
+
+The local operator stopped intake at revision 2. Portal submission displayed the
+stop message, retained the draft and left the accepted ticket visible. Resume at
+revision 3 retained tickets=1, mutations=1 and upload_attempts=0. Existing portal
+alert/focus behavior remains explicitly assigned to #21. The portal startup-login
+race and UTC display discrepancy are assigned to #61; the local operator realtime
+proxy is assigned to #62. None is excluded from the remaining beta gates.
+
+Interactive Ctrl-C exposed incomplete temporary-directory cleanup after processes
+stopped. The coordinator removed only the exact run-owned browser fixture directory.
+The corrected launcher keeps its signal handlers installed while its idempotent
+cleanup promise completes, so repeated npm/tsx or terminal signals cannot restore
+Node’s immediate-exit behavior midway through cleanup. A new actual-PTY regression
+then launched the supported `npm run fixture:local-beta --workspace=apps/server`
+command twice, verified its guarded health and private credential file, and sent
+single and repeated Ctrl-C. Both runs removed their exact temporary directory,
+including state and credentials, released port 8787 and exited. Terminal output
+was held in memory only. This corrected proof preserves the initial failure above
+and does not retroactively claim that the original teardown succeeded.

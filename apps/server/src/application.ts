@@ -1,8 +1,8 @@
 import { BetaAdmissionError } from './types/local-beta';
 import { ConversationReadError } from './services/conversation-read-bounds';
 import { Hono } from 'hono';
-import { localBetaGuard, authorizeLocalBeta } from './middleware/local-beta';
-import { createVerifiedTenantScope } from './auth/scope';
+import { localBetaGuard } from './middleware/local-beta';
+import { authenticateRealtimeToken } from './middleware/auth.middleware';
 import { apiCors } from './middleware/cors-policy';
 import { Env } from './bindings';
 import auth from './handlers/auth.handler';
@@ -14,7 +14,6 @@ import permissions from './handlers/permissions.handler';
 import v1 from './handlers/v1.handler';
 import widget from './handlers/widget.handler';
 import customerHandler from './handlers/customer.handler';
-import { AuthService } from './services/auth/auth.service';
 import { environmentGuard } from './middleware/environment-guard';
 import { AppVariables } from './types';
 
@@ -33,12 +32,8 @@ app.get('/api/realtime', async (c) => {
   if (!upgradeHeader || upgradeHeader !== 'websocket') return c.json({ error: 'Expected Upgrade: websocket' }, 426);
   const token = c.req.query('token');
   if (!token) return c.json({ error: 'Unauthorized' }, 401);
-  let user = null;
-  try {
-    user = await new AuthService(c.env).verifyToken(token);
-    if (!user || !['agent', 'admin'].includes(user.role)) return c.json({ error: 'Unauthorized' }, 401);
-  } catch { return c.json({ error: 'Unauthorized' }, 401); }
-  await authorizeLocalBeta(c.env, createVerifiedTenantScope(user.tenant_id!, user.id, [user.role], 1));
+  const user = await authenticateRealtimeToken(c.env, token);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
   const internalUrl = new URL(c.req.raw.url); internalUrl.search = '';
   const newReq = new Request(internalUrl, c.req.raw);
   newReq.headers.set('X-User-ID', user.id);

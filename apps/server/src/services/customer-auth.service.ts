@@ -147,10 +147,9 @@ export class CustomerAuthService {
     const now = new Date().toISOString();
 
     if (localBetaEnabled(this.env)) {
-      const candidate = await this.env.DB.prepare(`SELECT user_id FROM customer_auth_tokens WHERE tenant_id=? AND ${challengeId ? 'id=?' : 'token_hash=?'} LIMIT 1`)
-        .bind(this.deps.scope.tenantId, challengeId ?? tokenHash).first<{user_id:string}>();
-      if (!candidate) return null;
-      try { await authorizeLocalBeta(this.env, this.deps.scope, { kind:'customer', id:candidate.user_id }); }
+      const candidateId = await this.deps.repositories.users.findCustomerAuthTokenUser(tokenHash, challengeId);
+      if (!candidateId) return null;
+      try { await authorizeLocalBeta(this.env, this.deps.scope, { kind: 'customer', id: candidateId }); }
       catch (error) { if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') return null; throw error; }
     }
     // Use isolated verification

@@ -130,13 +130,13 @@ export class TenantTicketService {
 
   async projectAuditedConversation(ticket: Ticket, articles: ArticleWithCanonicalAttachments[]): Promise<CanonicalConversation> {
     const canonical = project(ticket,articles);
-    const references = await this.deps.conversationAudit.references(ticket.id);
+    const references = await this.deps.conversationAudit.references(ticket.id,this.deps.betaAdmission?articles.map(article=>article.id):undefined);
     const visible = new Set(articles.map(article => article.id));
     const byArticle = new Map<string,typeof references[number]>();
     for (const event of references) {
       if (event.article_id && !byArticle.has(event.article_id)) byArticle.set(event.article_id,event);
     }
-    const intake = references.find(event => event.kind === 'ticket.intake' && (!event.article_id || visible.has(event.article_id)));
+    const intake = references.find(event => event.kind === 'ticket.intake' && (this.deps.betaAdmission || !event.article_id || visible.has(event.article_id)));
     return {...canonical,
       conversation:{...canonical.conversation,...(intake ? {audit:{status:'known' as const,value:{eventId:intake.id}}} : {})},
       messages:canonical.messages.map(message => {

@@ -1,5 +1,9 @@
-export type BetaPrincipal = Readonly<{ kind: 'customer' | 'staff' | 'api-key'; id: string }>;
-export type BetaCredential = Readonly<{ sessionVersion: number; expiresAt: number }>;
+export function localBetaEnabled(env: { LOCAL_BETA_ENABLED?: string }): boolean {
+  return env.LOCAL_BETA_ENABLED === 'true';
+}
+
+export type BetaPrincipal = Readonly<{ kind: 'customer' | 'staff' | 'api-key'; id: string; }>;
+export type BetaCredential = Readonly<{ sessionVersion: number; expiresAt: number; }>;
 export type BetaOperation = 'create' | 'conversation' | 'upload';
 export type BetaState = 'running' | 'intake_stopped' | 'writes_stopped';
 export type BetaPolicy = Readonly<{
@@ -20,11 +24,11 @@ export class BetaAdmissionError extends Error {
   }
 }
 export const DEFAULT_BETA_LIMITS = Object.freeze({ ticketLimit: 100, mutationLimit: 1000, recoveryReserve: 200, uploadLimit: 100 });
-export type BetaLimits = { ticketLimit: number; mutationLimit: number; recoveryReserve: number; uploadLimit: number };
+export type BetaLimits = { ticketLimit: number; mutationLimit: number; recoveryReserve: number; uploadLimit: number; };
 export type BetaInitialization = Readonly<{
   runId: string;
   tenants: readonly string[];
-  invitations: readonly (BetaPrincipal & { tenantId: string })[];
+  invitations: readonly (BetaPrincipal & { tenantId: string; })[];
   limits?: Partial<BetaLimits>;
 }>;
 export function validateBetaInitialization(input: BetaInitialization) {
@@ -38,7 +42,7 @@ export function validateBetaInitialization(input: BetaInitialization) {
   if (!input.invitations.length || input.invitations.length > 100) throw new Error('Local beta requires 1 to 100 explicit invitations');
   const keys = new Set<string>();
   for (const invitation of input.invitations) {
-    if (!input.tenants.includes(invitation.tenantId) || !identifier(invitation.id) || !['customer','staff','api-key'].includes(invitation.kind)) throw new Error('Invalid local beta invitation');
+    if (!input.tenants.includes(invitation.tenantId) || !identifier(invitation.id) || !['customer', 'staff', 'api-key'].includes(invitation.kind)) throw new Error('Invalid local beta invitation');
     const key = JSON.stringify([invitation.tenantId, invitation.kind, invitation.id]);
     if (keys.has(key)) throw new Error('Duplicate local beta invitation');
     keys.add(key);

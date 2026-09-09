@@ -87,9 +87,11 @@ test('bounded detail: stable tied-date pages, SQL visibility/ownership, fixed qu
     queries=0;const first=await repo.page('fixture-ticket',{customerEmail:a.email,limit:'1'});assert.equal(queries,4);assert.equal(first.articles.length,1);assert.equal(first.articles[0].id,'bounded-001');
     queries=0;const rest=await repo.page('fixture-ticket',{customerEmail:a.email,limit:'50',cursor:first.pagination.next_cursor!});assert.equal(queries,4);
     assert.equal(rest.articles.length,35);assert.equal(rest.pagination.has_more,false);
-    for(const article of [...first.articles,...rest.articles]) {assert.equal((article as typeof article & {tenant_id:string}).tenant_id,a.tenantId);assert.equal(article.is_internal,0);assert.equal(article.attachments.length,1);assert.equal((article.attachments[0] as typeof article.attachments[0] & {tenant_id:string}).tenant_id,a.tenantId);}
+    for(const article of [...first.articles,...rest.articles]) {assert.equal((article as typeof article & {tenant_id:string}).tenant_id,a.tenantId);assert.equal(article.is_internal,false);assert.equal(article.attachments.length,1);assert.equal((article.attachments[0] as typeof article.attachments[0] & {tenant_id:string}).tenant_id,a.tenantId);}
     assert.equal((await repo.page('fixture-ticket',{customerEmail:b.email})).articles.length,0);
     const staff=await repo.page('fixture-ticket',{limit:'50'});assert.equal(staff.articles.length,50);assert.equal(staff.pagination.has_more,true);
+    assert.equal(staff.articles.find(article=>article.id==='bounded-000')?.is_internal,true);
+    assert.ok(staff.articles.every(article=>typeof article.is_internal==='boolean'));
     await f.db.prepare("UPDATE articles SET body=? WHERE tenant_id=? AND id='bounded-001'").bind('x'.repeat(300000),a.tenantId).run();
     await assert.rejects(repo.page('fixture-ticket',{customerEmail:a.email}),{code:'conversation_page_too_large'});
     await f.db.prepare("UPDATE articles SET body='small',body_r2_key='legacy-never-read' WHERE tenant_id=? AND id='bounded-001'").bind(a.tenantId).run();

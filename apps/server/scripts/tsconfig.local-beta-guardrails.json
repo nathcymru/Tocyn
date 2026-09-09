@@ -9,6 +9,7 @@
     "local-beta-operator.ts",
     "run-local-beta-operator.ts",
     "local-beta-runtime.test.ts",
+    "local-beta-launch.test.ts",
     "local-beta-atomic.test.ts"
   ]
 }

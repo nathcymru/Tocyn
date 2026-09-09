@@ -1,0 +1,121 @@
+{
+  "status": "Applied to Project and issue receipts after accepted #63 integration",
+  "basis": {
+    "calendar": "Monday\u2013Saturday, 8 productive hours/day. Remaining full planning days counted from 10 September; shared integration remains sequential.",
+    "effort": "Approved 3x planning allowance includes implementation, validation and review; no additional owner hours assumed.",
+    "capacity": "W1 reserves #61; W2 reserves #93 then #62. Independent #62 authentication preparation has started, without claiming a third full forecast workstream. Shared review remains 4 hours/day.",
+    "scope": "Current beta is owner-local only. Historical remote-operation proof is not a critical-path gate.",
+    "event": "Signed #114 integrates #63 on 9 September; #61/#62 independent work begins while #93 shared integration progresses."
+  },
+  "changes": [
+    {
+      "issue": 63,
+      "workstream": "W1",
+      "planningEffortHours": 48,
+      "forecastStart": "2026-09-09",
+      "forecastTarget": "2026-09-09",
+      "baselineTarget": "2026-10-30",
+      "scheduleVarianceWorkingDays": -44,
+      "predecessors": [
+        59,
+        60
+      ],
+      "reason": "Actual #63 integration clears the dependency. Preserve approved effort/baselines; #93 completes shared integration before #61/#62 final guarded acceptance. #62 full W2 allowance follows #93 despite early independent auth preparation.",
+      "actualStart": "2026-09-09",
+      "status": "Done",
+      "actualCompletion": "2026-09-09"
+    },
+    {
+      "issue": 93,
+      "workstream": "W2",
+      "planningEffortHours": 24,
+      "forecastStart": "2026-09-09",
+      "forecastTarget": "2026-09-12",
+      "baselineTarget": "2026-10-31",
+      "scheduleVarianceWorkingDays": -42,
+      "predecessors": [
+        57,
+        60
+      ],
+      "reason": "Actual #63 integration clears the dependency. Preserve approved effort/baselines; #93 completes shared integration before #61/#62 final guarded acceptance. #62 full W2 allowance follows #93 despite early independent auth preparation.",
+      "actualStart": "2026-09-09",
+      "status": "In progress",
+      "integrationPredecessors": [
+        63
+      ]
+    },
+    {
+      "issue": 61,
+      "workstream": "W1",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-09-09",
+      "forecastTarget": "2026-09-15",
+      "baselineTarget": "2026-11-05",
+      "scheduleVarianceWorkingDays": -44,
+      "predecessors": [
+        60,
+        63
+      ],
+      "reason": "Actual #63 integration clears the dependency. Preserve approved effort/baselines; #93 completes shared integration before #61/#62 final guarded acceptance. #62 full W2 allowance follows #93 despite early independent auth preparation.",
+      "actualStart": "2026-09-09",
+      "status": "In progress",
+      "integrationPredecessors": [
+        93
+      ]
+    },
+    {
+      "issue": 62,
+      "workstream": "W2",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-09-09",
+      "forecastTarget": "2026-09-18",
+      "baselineTarget": "2026-11-07",
+      "scheduleVarianceWorkingDays": -43,
+      "predecessors": [
+        60,
+        63
+      ],
+      "reason": "Actual #63 integration clears the dependency. Preserve approved effort/baselines; #93 completes shared integration before #61/#62 final guarded acceptance. #62 full W2 allowance follows #93 despite early independent auth preparation.",
+      "actualStart": "2026-09-09",
+      "status": "In progress",
+      "integrationPredecessors": [
+        93
+      ]
+    },
+    {
+      "issue": 21,
+      "workstream": "W2",
+      "planningEffortHours": 36,
+      "forecastStart": "2026-09-19",
+      "forecastTarget": "2026-09-24",
+      "baselineTarget": "2026-11-13",
+      "scheduleVarianceWorkingDays": -43,
+      "predecessors": [
+        61,
+        62
+      ],
+      "reason": "Actual #63 integration clears the dependency. Preserve approved effort/baselines; #93 completes shared integration before #61/#62 final guarded acceptance. #62 full W2 allowance follows #93 despite early independent auth preparation."
+    },
+    {
+      "issue": 65,
+      "workstream": "W2",
+      "planningEffortHours": 48,
+      "forecastStart": "2026-09-25",
+      "forecastTarget": "2026-10-01",
+      "baselineTarget": "2026-11-21",
+      "scheduleVarianceWorkingDays": -44,
+      "predecessors": [
+        57,
+        58,
+        19,
+        60,
+        61,
+        62,
+        63,
+        21,
+        93
+      ],
+      "reason": "Actual #63 integration clears the dependency. Preserve approved effort/baselines; #93 completes shared integration before #61/#62 final guarded acceptance. #62 full W2 allowance follows #93 despite early independent auth preparation."
+    }
+  ]
+}

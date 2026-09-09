@@ -30,9 +30,9 @@
     "typecheck:conversation-audit": "tsc -p scripts/tsconfig.conversation-audit.json",
     "fixture:local-beta": "tsx scripts/run-local-tenant-fixture.ts --interactive-credentials --local-beta",
     "beta:operator": "tsx scripts/run-local-beta-operator.ts",
-    "test:local-beta": "tsx --test scripts/local-beta-guardrails.test.ts",
+    "test:local-beta": "tsx --test scripts/local-beta-guardrails.test.ts scripts/local-beta-atomic.test.ts",
     "typecheck:local-beta": "tsc -p scripts/tsconfig.local-beta-guardrails.json",
-    "test:local-beta-runtime": "tsx --test scripts/local-beta-runtime.test.ts"
+    "test:local-beta-runtime": "tsx --test scripts/local-beta-runtime.test.ts && tsx --test scripts/local-beta-launch.test.ts"
   },
   "dependencies": {
     "@luminatick/shared": "*",
