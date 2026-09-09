@@ -1,4 +1,6 @@
+import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
+import { ticketReference } from '../utils/ticket-reference';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTickets, useCreateTicket } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
@@ -59,6 +61,19 @@ export function TicketListPage() {
   }, [searchParams]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const createDialog = React.useRef<HTMLDialogElement>(null);
+  React.useEffect(() => {
+    if (!isModalOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const dialog = createDialog.current;
+    dialog?.showModal();
+    dialog?.querySelector<HTMLInputElement>('#create-ticket-subject')?.focus();
+    return () => {
+      dialog?.close();
+      previousFocus?.focus();
+    };
+  }, [isModalOpen]);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     subject: '',
@@ -75,7 +90,7 @@ export function TicketListPage() {
 
   const { data: filters, isLoading: isLoadingFilters } = useFilters();
   
-  const { data: paginatedData, isLoading: isLoadingTickets } = useTickets({
+  const { data: paginatedData, isLoading: isLoadingTickets, error: ticketsError, isFetching, refetch } = useTickets({
     page: page.toString(),
     ...(activeFilterId ? { filter_id: activeFilterId } : {}),
     ...(searchQuery ? { search: searchQuery } : {})
@@ -92,6 +107,8 @@ export function TicketListPage() {
 
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (createTicket.isPending) return;
+    setCreateError(null);
     try {
       await createTicket.mutateAsync({
         ...formData,
@@ -111,7 +128,8 @@ export function TicketListPage() {
         custom_fields: {},
       });
     } catch (err) {
-      console.error('Failed to create ticket:', err);
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setCreateError(err instanceof Error ? err.message : 'Failed to create ticket. Please try again.');
     }
   };
 
@@ -170,13 +188,23 @@ export function TicketListPage() {
             </p>
           </div>
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {setCreateError(null);setIsModalOpen(true);}}
             className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors shadow-sm text-sm"
           >
             <Plus className="w-4 h-4" />
             New Ticket
           </button>
         </div>
+
+        {ticketsError && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+            <p>{tickets.length ? 'Could not refresh tickets. Showing the last loaded results.' : 'Could not load tickets.'}</p>
+            <button type="button" onClick={() => {void refetch();}} disabled={isFetching}
+              className="mt-2 rounded border border-red-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">
+              {isFetching ? 'Retrying…' : 'Retry loading tickets'}
+            </button>
+          </div>
+        )}
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
           <div className="p-4 border-b border-slate-200 flex items-center justify-between">
@@ -185,6 +213,7 @@ export function TicketListPage() {
               <input 
                 type="text"
                 placeholder="Search tickets..."
+                aria-label="Search tickets"
                 className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
@@ -225,6 +254,8 @@ export function TicketListPage() {
                   <tr>
                     <td colSpan={7} className="px-6 py-12 text-center text-slate-500">Loading tickets...</td>
                   </tr>
+                ) : ticketsError && tickets.length === 0 ? (
+                  <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-600">Tickets are currently unavailable.</td></tr>
                 ) : tickets.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-12 text-center text-slate-500">No tickets found.</td>
@@ -234,19 +265,20 @@ export function TicketListPage() {
                     <tr key={ticket.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1.5 group/copy">
-                          <span className="font-mono text-xs font-bold text-slate-400">
-                            {ticketPrefix}{ticket.ticket_no || ''}
+                          <span className="font-mono text-xs font-bold text-slate-600 max-w-[12rem] truncate" title={ticketReference(ticket, ticketPrefix)}>
+                            {ticketReference(ticket, ticketPrefix)}
                           </span>
                           <button
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              navigator.clipboard.writeText(`${ticketPrefix}${ticket.ticket_no}`);
+                              navigator.clipboard.writeText(ticketReference(ticket, ticketPrefix));
                               setCopiedId(ticket.id);
                               setTimeout(() => setCopiedId(null), 2000);
                             }}
-                            className="p-1 rounded-md hover:bg-slate-100 text-slate-400 transition-colors opacity-0 group-hover/copy:opacity-100 focus:opacity-100"
-                            title="Copy ticket number"
+                            className="p-1 rounded-md hover:bg-slate-100 text-slate-600 transition-colors opacity-0 group-hover/copy:opacity-100 focus:opacity-100"
+                            title="Copy ticket reference"
+                            aria-label="Copy ticket reference"
                           >
                             {copiedId === ticket.id ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                           </button>
@@ -285,7 +317,7 @@ export function TicketListPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1.5 text-slate-500 text-sm">
                           <Clock className="w-4 h-4" />
-                          {new Date(ticket.updated_at).toLocaleDateString()}
+                          {utcTimestamp(ticket.updated_at).toLocaleDateString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right relative">
@@ -350,40 +382,46 @@ export function TicketListPage() {
 
       {/* New Ticket Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl overflow-hidden">
+        <dialog ref={createDialog} aria-labelledby="create-ticket-heading"
+          onCancel={(event) => { event.preventDefault(); if (!createTicket.isPending) setIsModalOpen(false); }}
+          className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none z-50 open:flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Create New Ticket</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <h2 id="create-ticket-heading" className="text-xl font-bold text-slate-900">Create New Ticket</h2>
+              <button type="button" disabled={createTicket.isPending} aria-label="Close new ticket" onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
                 <X className="w-6 h-6" />
               </button>
             </div>
             <form onSubmit={handleCreateTicket} className="p-6 space-y-4">
+              {createError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-800">{createError}</p>}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+                  <label htmlFor="create-ticket-subject" className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
                   <input
                     type="text"
                     required
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    id="create-ticket-subject"
                     value={formData.subject}
                     onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer Email</label>
+                  <label htmlFor="create-ticket-customer_email" className="block text-sm font-medium text-slate-700 mb-1">Customer Email</label>
                   <input
                     type="email"
                     required
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    id="create-ticket-customer_email"
                     value={formData.customer_email}
                     onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
+                  <label htmlFor="create-ticket-priority" className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
                   <select
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    id="create-ticket-priority"
                     value={formData.priority}
                     onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
                   >
@@ -394,9 +432,10 @@ export function TicketListPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Group</label>
+                  <label htmlFor="create-ticket-group_id" className="block text-sm font-medium text-slate-700 mb-1">Group</label>
                   <select
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    id="create-ticket-group_id"
                     value={formData.group_id}
                     onChange={(e) => setFormData({ ...formData, group_id: e.target.value })}
                   >
@@ -407,9 +446,10 @@ export function TicketListPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
+                  <label htmlFor="create-ticket-assigned_to" className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
                   <select
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    id="create-ticket-assigned_to"
                     value={formData.assigned_to}
                     onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
                   >
@@ -421,18 +461,20 @@ export function TicketListPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Initial Message</label>
+                <label htmlFor="create-ticket-body" className="block text-sm font-medium text-slate-700 mb-1">Initial Message</label>
                 <textarea
                   required
                   rows={4}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  value={formData.body}
+                  id="create-ticket-body"
+                    value={formData.body}
                   onChange={(e) => setFormData({ ...formData, body: e.target.value })}
                 />
               </div>
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
+                  disabled={createTicket.isPending}
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
                 >
@@ -448,7 +490,7 @@ export function TicketListPage() {
               </div>
             </form>
           </div>
-        </div>
+        </dialog>
       )}
     </div>
   );

@@ -9,6 +9,7 @@ This directory is the repository-backed technical architecture reference for Toc
 - [Channel adapter architecture](channel-adapters.md) — canonical conversation boundary and external-channel model.
 - [Canonical conversation contract](canonical-conversation-contract.md) — implemented API/portal projection and local verification evidence.
 - [Conversation audit](conversation-audit.md) — atomic attributable events, authorized history and replay compatibility.
+- [Operator workflows](../operator-workflows.md) — authenticated human handling of API and portal intake, local regression evidence and recovery.
 - [AI and autonomous operations](ai-and-autonomous-operations.md) — current advisory AI and planned policy-gated execution.
 - [Multitenancy evidence](multitenancy/) — Phase 1 implementation/review artefacts retained for provenance.
 

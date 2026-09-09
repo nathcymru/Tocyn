@@ -28,14 +28,18 @@ export function useTicket(id: string) {
   return { ...query, data: first ? { ...first, articles: query.data!.pages.flatMap(page => page.articles) } : undefined };
 }
 
+export type TicketChanges = Omit<Partial<Ticket>, 'assigned_to' | 'group_id'> & { assigned_to?: string | null; group_id?: string | null };
+
 export function useUpdateTicket() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: Partial<Ticket> & { id: string }) =>
-      dashboardApi.patch<Ticket>(`/tickets/${id}`, data),
+    mutationFn: ({ id, ...data }: TicketChanges & { id: string }) =>
+      dashboardApi.patch<{ success: true }>(`/tickets/${id}`, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] });
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tickets'] }),
+        queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] }),
+      ]);
     },
   });
 }
