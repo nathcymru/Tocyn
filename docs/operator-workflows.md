@@ -172,6 +172,14 @@ browser journey is recorded above. Actual screen-reader acceptance remains requi
 before #62 can be reported complete. Semantic component checks and the observed
 native-focus subset do not imply an actual screen-reader audit.
 
+Final integration uses signed portal prerequisite `58feb5e` with operator source
+`8b322da`. Lint, all required typechecks and all three builds passed. The complete
+test chain passed its upstream checks, then one existing guardrail runtime request
+hit its five-second deadline. The unchanged isolated runtime and real-PTY launcher
+checks subsequently passed; the remaining operator and portal runtime suites also
+passed, and all local ports were released. No deadline was increased. This transient failure is
+retained as a validation limitation, and required PR CI must pass before merge.
+
 Existing lower-level evidence is recorded in the
 [tenant-isolation matrix](security/tenant-isolation-acceptance.md),
 [canonical conversation contract](architecture/canonical-conversation-contract.md),
