@@ -246,3 +246,45 @@ requests, auth failure, deferred responses/blobs and optional-storage logout.
 All 53 portal tests, lint and build pass after this batch. These corrections keep
 PR116 in draft until the fresh browser and required checks complete; actual
 reader acceptance remains open.
+
+
+## Responsive navigation and attachment browser acceptance
+
+On exact application source `6dfd26aac0ef6401b1ff4099ec87afa0888892ff`, the
+supported browser viewport override was set to 390×844. The document client width
+was 375 pixels with its scrollbar and had no horizontal overflow. Native responsive
+navigation opened with Close navigation focused; Escape returned focus to its
+opener, and destination activation focused Workspace. Tab boundaries could reach
+browser chrome/document BODY while background controls remained inert; a complete
+in-document focus cycle is not claimed. The portal received its own explicit
+viewport override after opening a new tab.
+
+The actual native file chooser selected a 62-byte synthetic text attachment.
+Removal announced its outcome and returned Attach focus. Selecting it again and
+using native Tab/Enter on the blank reply produced the visible text requirement
+and retained Send Reply focus. At this point local admission counters were
+one ticket, one mutation and zero upload attempts; persisted rows were one ticket,
+one article and zero attachments. File selection/removal and the refused blank
+reply added no upload or message write.
+
+Adding reply text then sending saved the reply/attachment, showed Reply sent and
+reset the composer. The named Download control was activated by keyboard and
+retained focus with download-started feedback. The download event wait timed out,
+but the browser saved the exact fresh synthetic file; its 62-byte size and SHA-256
+matched the source. The reviewer verified and removed only that matching file.
+Final admission counters were one ticket, two mutations and one upload attempt;
+persisted rows were one ticket, two articles and one attachment.
+
+Both normal sign-outs returned login. The reviewer reset the viewport, closed all
+created tabs and cleared credentials. Fixture/frontends stopped, private handoff
+and source attachment were removed, the downloaded copy was absent, and native
+bind probes verified 8787/5173/5174 reusable. Polling has automated fake-timer and
+deferred-request evidence only; no dedicated manual idle-poll assertion or actual
+spoken announcement is claimed.
+
+All ten review threads have individual dispositions. Six were already resolved;
+the OTP, polling and download findings received tested corrections, while the
+suggested native-dialog attribute fallback was explicitly rejected because it
+loses modality. No repeated review request was made. The functional increment is
+reviewable with `Progresses #21`, while actual reader and any remaining complete
+journey/focus-cycle acceptance remain open on the eventual accepted revision.

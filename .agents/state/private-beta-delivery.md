@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 03:21 UTC. This is the authoritative coordinator view.
+Updated 9 September 2026, 03:32 UTC. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -67,7 +67,7 @@ refs are preserved; the temporary integrated worktree remains at d89ef59.
 | Work | Agent / model / effort | Current state and reason |
 | --- | --- | --- |
 | #62 integration | Root; Astra/high | Complete functional PR119; issue stays open for reader/UI evidence. Final original branch721ae6f and recovery stash preserved. |
-| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | PR116 returned to draft after the 03:13 review discovered polling and download-boundary defects. One consolidated correction now passes 53 portal tests/lint/build and root internal review. Fresh responsive/attachment/browser checks and final CI precede readiness; signed #119 integration is preserved. |
+| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Consolidated correction 6dfd26a passes 53 portal tests/lint/build and root internal review. Exact-source responsive/attachment browser acceptance passed; final docs/state and required CI/security precede integration. Signed #119, original recovery refs and open reader gate are preserved. |
 | #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Owner of /tmp/tocyn-65-local-rehearsal and PR118. Final 0c0d080 CI/security are green; unchanged actual interruption/fallback evidence is tied to2314188. Final technical matrix awaits accepted #21. |
 | Independent review | retry_acceptance; Terra/high | Bounded lifecycle/fallback and frontend reviews complete, no blocking findings. Actual screen-reader/mobile evidence not claimed. Currently idle; no redundant review loop. |
 
@@ -75,8 +75,8 @@ refs are preserved; the temporary integrated worktree remains at d89ef59.
 fully disposed and returned8787 to #21 for corrected runtime tests. Root browser
 windows closed and credential memory cleared. No remote services used.
 
-Next: fresh responsive/attachment/polling browser checks on the consolidated
-#21 correction; update existing draft116 and pass all required checks. Preserve reader
+Next: final documentation/state checkpoint on corrected #21, one near-final
+reviewable transition of existing PR116 and all required checks before integration. Preserve reader
 acceptance as open. #65 prepares existing draft118 in parallel and then runs the
 technical rehearsal on the accepted corrected source. Final readiness awaits
 complete acceptance, not merely passing machine checks.
@@ -264,3 +264,31 @@ browser checkpoint, not yet accepted. Supported CUA documentation now exposes
 viewport.set/reset and filechooser.setFiles, so responsive/attachment observations
 are actionable. Actual reader acceptance remains separate and open. No new review
 request, authorization change or allowlist expansion is introduced.
+
+
+## Exact correction browser and review disposition
+
+Application 6dfd26a passed actual 390×844 responsive native navigation: Close initial
+focus, Escape/trigger return and destination/Workspace focus. Browser chrome/BODY
+can receive Tab-boundary focus while background controls stay inert; no complete
+in-document cycle or reader claim. Portal viewport was explicitly set separately.
+Native chooser selection/removal and blank-reply refusal preserved named controls,
+status and focus. Pre-send counters were tickets1/mutations1/uploads0, with
+one article/no attachment. Actual text+62-byte note send/download passed, with
+matching saved-file size/hash; event wait timed out but the actual artifact was
+verified and removed. Final counters tickets1/mutations2/uploads1, rows one ticket,
+two articles/one attachment. Polling is automated fake-timer/deferred proof only.
+Both sign-outs returned login; viewport reset, tabs/credentials cleared, fixtures,
+source/downloaded attachment and private handoff disposed; all three ports reusable.
+#65 subsequently confirmed its own fresh interruption proof disposed and returned
+8787 to root coordination.
+
+All ten PR116 review threads are resolved with individual reasons. Six historical
+threads were already resolved. Final replies: OTP3964345282, native modal fallback
+rejection3964345451, polling3964345630, download3964345799. No blanket resolution or
+extra Copilot request. Browser source remains 6dfd26a; final changes are evidence only.
+Actual reader and remaining complete journey/focus-cycle acceptance stay open.
+
+Last operational update delivered 03:22 UTC; next due 03:52 UTC. PR118 final 0c0d080
+CI/security are green; final technical matrix awaits accepted #21. No beta-ready,
+issue-complete or acceptance-waiver claim is made.
