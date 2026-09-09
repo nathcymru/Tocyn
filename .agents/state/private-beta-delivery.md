@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 04:22 UTC. This is the authoritative coordinator view.
+Updated 9 September 2026, 04:55 UTC. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -39,12 +39,14 @@ do not skip affected tests. Preserve CRLF in existing dashboard source files.
 
 ## Accepted main and remaining gates
 
-Accepted signed main: 018aff41cb55dbdf34bd6e60246827715fb00403 (PR #120), signature
-verified by root. Required CI 34309984129/security 34309983146 passed, three analyses
-zero, automatic review complete without threads; root/Terra/exact browser review
-passed. Main security 34310386087 passed with three zero-result analyses; main CI
-34310386652 passed. Accepted tooling PR #118 is signed
-7d8187, with main CI 34309233371/security 34309232682 passed; #65 partial receipt 5595575218.
+Accepted signed main: 953af436fdb1cb2517e85cac103e48fe9e53da85 (PR #121),
+signature verified by root. Required CI 34311417850/security 34311416672 passed;
+all three actual CodeQL analyses returned zero and both review threads resolved.
+Main CI 34311870594/security 34311870407 passed, with three zero-result analyses.
+Prior application correction PR #120 is signed 018aff41, with main CI
+34310386652/security 34310386087 passed. Accepted tooling PR #118 is signed
+7d8187, with main CI 34309233371/security 34309232682 passed; #65 partial receipt
+5595575218.
 
 Not beta-ready. Four issues remain open: #62, #21, #93 and #65.
 
@@ -53,18 +55,21 @@ Not beta-ready. Four issues remain open: #62, #21, #93 and #65.
 2. The bounded residual #21 application correction is accepted in PR #120. Actual
    reader acceptance remains open for #21/#62/#93; functional/browser checks do
    not waive those criteria.
-3. The first full #65 technical attempt on accepted 018aff41 failed because its
-   matrix invoked a nonexistent server lint script. Cleanup completed; no artifact,
-   fallback or application/auth flow ran. A narrow command-parity correction now
-   uses the actual installed workspace ESLint command and checks every script/tool.
-   After its accepted merge, root dispatches the exact immutable corrected candidate
-   for a fresh full run, keeping signed 58feb5e4deef55670f635f099eb67c6bcfffae56 as
-   prior known-good and retaining the failed 018aff41 receipt separately.
+3. The first full #65 attempt on accepted 018aff41 failed at an absent server lint
+   alias; accepted PR #121 fixes that command. The next full attempt on accepted
+   953af436 passed 19 of 24 matrix entries before the local-beta runtime command
+   exited 1. Its original assertion was lost because child output was discarded.
+   One targeted same-control repeat passed; the original cause remains unexplained.
+   Both failed receipts are preserved, with disposed cleanup and no artifact or
+   fallback claim. The current bounded correction adds private failed-output tails
+   and builds dashboard/portal artifact inputs independently in both clean roots.
 
-Critical path: #65 command-parity correction → required checks/accepted signed
-revision → full technical receipt. Reader acceptance remains a separate required
-owner-access dependency. No baseline, forecast or progress percentage is invented.
-Root owns Project/issue receipts and forecasts.
+Critical path: #65 artifact-input/diagnostic correction → required checks/accepted
+signed revision → full technical receipt. Signed
+58feb5e4deef55670f635f099eb67c6bcfffae56 remains the known-good revision. Reader
+acceptance remains a separate required owner-access dependency. No baseline,
+forecast or progress percentage is invented. Root owns Project/issue receipts
+and forecasts.
 
 No gate is waived or transferred merely to close its owning issue.
 
@@ -72,13 +77,14 @@ No gate is waived or transferred merely to close its owning issue.
 
 Root owns acceptance, GitHub/Project truth and final browser review. Root delegated
 this correction checkpoint to release_packaging_escalation (Astra/high), worktree
-/tmp/tocyn-65-rehearsal-correction, branch codex/65-rehearsal-command-parity.
+/tmp/tocyn-65-artifact-inputs, branch codex/65-rehearsal-artifact-inputs.
 Original recovery branches/stashes and the clean failed-run source are preserved.
 Root's codex/65-technical-rehearsal-evidence branch is reserved for final evidence.
 
 #62/#21/#93 functional increments are accepted; their reader criteria remain open.
-The independent review agents completed their bounded work. No duplicate review
-or remote resources are authorised. #65 correction validation/PR is next; root
+runtime_failure_triage (Terra/medium) completed bounded read-only process/runtime
+triage, without tests or ports. retry_acceptance completed a separate read-only
+reader-gate handoff audit. No duplicate review or remote resources are authorised. #65 correction validation/PR is next; root
 alone accepts its merge and dispatches the next exact-source full rehearsal.
 
 The failed 018aff41 attempt receipt is retained privately at
@@ -90,6 +96,42 @@ resolution, all 24 command/tool inventory checks and 19 lifecycle tests. Fresh i
 setup needed the routine Node 22 better-sqlite3 rebuild before the loader test
 passed. Native bind probes for ports 8787, 5173 and 5174 passed and owned rehearsal task directories were zero. Ports were
 explicitly returned to root; no #65 runtime or full rerun is active.
+
+The second failed receipt is retained privately at
+/tmp/tocyn-65-final-rehearsal-953af436/receipt.json. The runtime command exited 1
+at 25,927 ms; no original subtest output survives. A single unchanged targeted
+repeat under the ownership preload and pinned environment passed both subtests
+at 12,407 and 15,404 ms, zero skipped. Its private diagnostic receipt is
+/tmp/tocyn-65-runtime-diagnostic/receipt.json. This does not establish the original
+cause or full-run success. Independent port probes passed and owned full-run and
+diagnostic task directories were zero. Root completed its bounded native-dialog
+keyboard check and returned ports before the #65 interruption regression.
+
+The new correction retains 22 once-only matrix checks and independently builds
+the packaged dashboard/portal inputs in each checkout. Widget build validation
+remains mandatory once; widget is not a packaged artifact input. Private stdout
+and stderr tails are bounded to 32 KiB each, never copied into public output or
+receipts, and retained only for failed/interrupted commands with mode 0700/0600.
+The first focused test exposed interleaving that could evict stderr from a merged
+tail; separate stream tails corrected it without raising the 64 KiB total bound.
+Focused lifecycle/matrix tests then passed 22/22; pure fallback 5, workflow 5,
+runtime-helper 3 and rehearsal runtime types passed. Capture-enabled actual
+Wrangler interruption passed in 5.94 seconds: one completed, zero skipped, health
+200, seven registered processes including workerd, disposed tree/state, unrelated
+sentinel preserved and private interrupted output retained then test-disposed.
+Native bind probes passed for 8787/5173/5174; owned interruption directories were
+zero. Ports were explicitly returned to root. Root reviewed the code with no
+blocking finding; coherent PR publication and final required checks are next.
+
+Governance discovery: GitHub auto-closed #93 at PR #116 and #65 at PR #118 because
+negated prose still contained closing keywords. Root edited both bodies and
+verified empty closing references, reopened both issues, and confirmed Project
+In progress, unchanged progress and unset completion. Receipts: #93 5595893832;
+#65 5595893993. All four beta-blocker-labelled issues are OPEN. No owner acceptance
+was supplied or inferred. Before every partial merge inspect closingIssuesReferences;
+afterward verify issue state. Partial PR wording uses Progresses #65 and states
+that reader gates remain outstanding.
+
 
 ## Current evidence and unresolved implementation
 
@@ -192,8 +234,9 @@ Private redacted receipt: /tmp/tocyn-65-focused-fallback-receipt.json. This is b
 prior-source evidence, not the final accepted-source rehearsal. Exact migration
 compatibility and nonempty shared state remain mandatory; no reset/reverse
 migration/provider rollback claim. Full parked artifact/matrix/fallback evidence
-remains incomplete after the failed 018aff41 attempt; the corrected-command source
-must be accepted before root dispatches the next full run.
+remains incomplete after both failed 018aff41 and 953af436 attempts. The current
+artifact-input/diagnostic correction must be accepted before root dispatches the
+next full run. Earlier focused fallback evidence remains distinct from these failures.
 
 ## Accepted earlier increments and important decisions
 
@@ -235,7 +278,7 @@ source: private-beta-reforecast-after63-2026-09-09.json. Open forecasts remain #
 Reader/access uncertainty prevents a defensible earlier completion forecast despite
 early code readiness. Do not invent percentages. #61 completed early as recorded above.
 
-Operational update delivered 04:22 UTC; next due 04:52 UTC. Root owns updates.
+Operational update delivered 04:55 UTC; next due 05:25 UTC. Root owns updates.
 Use concise working commentary while active. Non-beta roadmap #50/#64/#90 (full
 cost)/#91 (journals)/#48/#66 (redesign)/#42 (production)/#18 (native email) stays outside
 critical-path scope except required correctness. Historical detailed checkpoints

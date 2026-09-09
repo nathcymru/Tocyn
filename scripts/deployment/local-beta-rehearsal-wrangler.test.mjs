@@ -47,6 +47,7 @@ test('actual nested local Wrangler stops through repeated npm/PTY interruption',
   const task = join(directory, 'task'); mkdirSync(task, { mode: 0o700 });
   for (const name of ['tmp', 'config', 'cache']) mkdirSync(join(task, name), { mode: 0o700 });
   const fixture = join(directory, 'fixture'); mkdirSync(fixture, { mode: 0o700 });
+  const failedOutput = join(directory, 'failed-output'); mkdirSync(failedOutput, { mode: 0o700 });
   const config = JSON.parse(readFileSync(join(root, 'apps/server/wrangler.local.json'), 'utf8'));
   config.main = join(root, 'apps/server/src/local-index.ts');
   config.d1_databases = config.d1_databases.map(binding => ({ ...binding, migrations_dir: join(root, 'apps/server/migrations') }));
@@ -73,7 +74,7 @@ test('actual nested local Wrangler stops through repeated npm/PTY interruption',
     rmSync(directory, { recursive: true, force: true });
   });
   sentinel = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
-  terminal = spawn('python3', ['-c', bridge, process.execPath, processFixture, 'controller', task, fixture, receiptPath], { env: { ...localEnvironment(process.env, task), REHEARSAL_FIXTURE_MODE: 'wrangler', WRANGLER_ARGS: JSON.stringify(wranglerArgs), READY: ready }, stdio: ['pipe', 'pipe', 'pipe'] });
+  terminal = spawn('python3', ['-c', bridge, process.execPath, processFixture, 'controller', task, fixture, receiptPath], { env: { ...localEnvironment(process.env, task), REHEARSAL_FIXTURE_MODE: 'wrangler', WRANGLER_ARGS: JSON.stringify(wranglerArgs), READY: ready, REHEARSAL_FAILED_OUTPUT_DIRECTORY: failedOutput }, stdio: ['pipe', 'pipe', 'pipe'] });
   let output = ''; terminal.stdout.on('data', chunk => { output += chunk; }); terminal.stderr.on('data', chunk => { output += chunk; });
   await waitFor(() => existsSync(ready), 'actual local Wrangler readiness');
   for (const name of readdirSync(join(task, 'processes'))) owned.push(...registry.read(join(task, 'processes', name)));
@@ -85,9 +86,10 @@ test('actual nested local Wrangler stops through repeated npm/PTY interruption',
   assert.equal(code, 130, output);
   assert.equal(JSON.parse(readFileSync(receiptPath, 'utf8')).cleanup, 'disposed');
   assert.equal(existsSync(task), false);
+  assert.equal(readdirSync(failedOutput).length, 1, 'interrupted command retains one bounded private diagnostic');
   await waitFor(() => !registry.snapshot().some(info => !info.zombie && owned.some(record => record.pid === info.pid && record.start === info.start)), 'all observed Wrangler descendants stopped');
   await portFree();
   assert.equal(sentinel.exitCode, null);
   process.kill(sentinel.pid, 0);
-  t.diagnostic(JSON.stringify({ interruption: 'completed', localHealth: 200, registeredProcesses: owned.length, cleanup: 'disposed', loopbackPortReleased: true, unrelatedProcessPreserved: true }));
+  t.diagnostic(JSON.stringify({ interruption: 'completed', localHealth: 200, registeredProcesses: owned.length, cleanup: 'disposed', loopbackPortReleased: true, unrelatedProcessPreserved: true, privateInterruptedOutput: 'retained-and-test-disposed' }));
 });

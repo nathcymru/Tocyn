@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import test from 'node:test';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { receiptCommand, assertRehearsalPlatform, assertCleanRevision, compareArtifactFiles, localEnvironment, pinnedFrontendEnvironment, RehearsalLifecycle, rehearsalPlan } from './local-beta-rehearsal.mjs';
+import { receiptCommand, assertRehearsalPlatform, assertCleanRevision, buildParkArtifact, compareArtifactFiles, localEnvironment, pinnedFrontendEnvironment, RehearsalLifecycle, rehearsalPlan } from './local-beta-rehearsal.mjs';
+import { FAILED_OUTPUT_LIMIT } from './rehearsal-failed-output.mjs';
 
 import { pythonPtyAvailable, assertPythonPty } from './rehearsal-prerequisites.mjs';
 
@@ -192,8 +193,9 @@ test('closing rejects a late detached spawn before it can escape ownership', { s
 
 test('incomplete registration preserves task state and does not claim disposal', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-incomplete-'));
-  const lifecycle = new RehearsalLifecycle(directory, { commands: [] });
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const output = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-incomplete-output-'));
+  const lifecycle = new RehearsalLifecycle(directory, { commands: [] }, { failedOutputDirectory: output, ownsFailedOutputDirectory: true });
+  t.after(() => { rmSync(directory, { recursive: true, force: true }); rmSync(output, { recursive: true, force: true }); });
   const handle = lifecycle.startService(process.execPath, ['-e', 'process.exit(0)'], directory, process.env);
   await handle.exited;
   const { readdirSync } = await import('node:fs');
@@ -201,6 +203,7 @@ test('incomplete registration preserves task state and does not claim disposal',
   writeFileSync(join(scope, 'failed'), 'synthetic registration failure', { mode: 0o600 });
   await assert.rejects(lifecycle.cleanup(), /registration incomplete/);
   assert.equal(existsSync(directory), true);
+  assert.equal(readdirSync(output).length, 1);
 });
 
 test('outer ownership survives an inner lifecycle leader and loader environment changes', { skip: unsupportedPlatform }, async t => {
@@ -290,7 +293,7 @@ test('teardown tolerates a process that exits after inspection but preserves oth
 test('every rehearsal npm script exists in its workspace and direct tools are installed locally', () => {
   const root = fileURLToPath(new URL('../../', import.meta.url));
   const plan = rehearsalPlan(sha, 'b'.repeat(40));
-  for (const [command, ...args] of plan.acceptanceCommands) {
+  for (const [command, ...args] of [...plan.acceptanceCommands, ...plan.artifactBuildCommands]) {
     assert.equal(command, 'npm');
     const workspace = args.find(value => value.startsWith('--workspace='))?.slice('--workspace='.length) || '.';
     const pkg = JSON.parse(readFileSync(join(root, workspace, 'package.json'), 'utf8'));
@@ -306,4 +309,79 @@ test('every rehearsal npm script exists in its workspace and direct tools are in
     'scripts/deployment/verify-release-artifact.mjs', 'scripts/deployment/local-beta-fallback-command.mjs',
     'apps/server/scripts/run-local-beta-operator.ts',
   ]) assert.ok(existsSync(join(root, relative)), `Missing local rehearsal tool ${relative}`);
+});
+
+test('both fresh artifact roots independently build their packaged frontend inputs', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-build-inputs-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const calls = [];
+  const lifecycle = { async run(command, args, cwd) {
+    calls.push({ command, args, cwd });
+    if (command === 'npm' && args[0] === 'run' && args[1] === 'build') {
+      const workspace = args[2].slice('--workspace='.length);
+      const dist = join(cwd, workspace, 'dist');
+      mkdirSync(dist, { recursive: true });
+      writeFileSync(join(dist, 'index.html'), cwd);
+    }
+    if (args[0] === 'scripts/deployment/isolated-release.mjs' && args[1] === 'package') {
+      for (const app of ['dashboard', 'portal']) assert.equal(readFileSync(join(cwd, 'apps', app, 'dist/index.html'), 'utf8'), cwd);
+    }
+  } };
+  for (const label of ['candidate', 'comparison']) {
+    const worktree = join(directory, label);
+    mkdirSync(join(worktree, 'deployment'), { recursive: true });
+    copyFileSync(fileURLToPath(new URL('../../deployment/beta.json', import.meta.url)), join(worktree, 'deployment/beta.json'));
+    await buildParkArtifact(worktree, sha, directory, label, lifecycle);
+    assert.deepEqual(calls.filter(call => call.cwd === worktree && call.args[0] === 'run').map(call => call.args), [
+      ['run', 'build', '--workspace=apps/dashboard'], ['run', 'build', '--workspace=apps/portal'],
+    ]);
+  }
+  const plan = rehearsalPlan(sha, sha);
+  assert.equal(plan.acceptanceCommands.filter(command => command.includes('--workspace=apps/widget') && command.includes('build')).length, 1);
+  assert.equal(plan.acceptanceCommands.some(command => command.includes('build') && command.includes('--workspace=apps/dashboard')), false);
+});
+
+test('owned command output drains privately, retains only bounded failed tails and removes success buffers', { skip: unsupportedPlatform }, async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-output-'));
+  const task = join(directory, 'task'); const output = join(directory, 'output');
+  for (const path of [task, output]) mkdirSync(path, { mode: 0o700 });
+  const receipt = { commands: [] };
+  const lifecycle = new RehearsalLifecycle(task, receipt, { failedOutputDirectory: output, ownsFailedOutputDirectory: true });
+  t.after(async () => { await lifecycle.cleanup(); rmSync(directory, { recursive: true, force: true }); });
+  await lifecycle.run(process.execPath, [processFixture, 'output', '0', '1024'], directory, process.env);
+  assert.deepEqual(readdirSync(output), []);
+  await assert.rejects(lifecycle.run(process.execPath, [processFixture, 'output', '7', String(FAILED_OUTPUT_LIMIT * 3)], directory, process.env), /local command failed/);
+  const [name] = readdirSync(output);
+  assert.equal(readdirSync(output).length, 1);
+  const bytes = readFileSync(join(output, name));
+  const newline = bytes.indexOf(10);
+  const metadata = JSON.parse(bytes.subarray(0, newline).toString());
+  assert.equal(metadata.truncated, true);
+  assert.equal(metadata.streams.stdout.capturedBytes, FAILED_OUTPUT_LIMIT / 2);
+  assert.equal(metadata.streams.stderr.truncated, false);
+  assert.ok(Object.values(metadata.streams).reduce((total, stream) => total + stream.capturedBytes, 0) <= FAILED_OUTPUT_LIMIT);
+  assert.ok(bytes.length < FAILED_OUTPUT_LIMIT + 1024);
+  assert.equal(bytes.subarray(newline + 1).includes(Buffer.from('synthetic-private-tail')), true);
+  assert.equal(statSync(output).mode & 0o777, 0o700);
+  assert.equal(statSync(join(output, name)).mode & 0o777, 0o600);
+  assert.equal(JSON.stringify(receipt).includes(directory), false);
+  assert.equal(JSON.stringify(receipt).includes('synthetic-private-tail'), false);
+  assert.deepEqual(receipt.commands[1].diagnostics, { output: 'retained-private', truncated: true });
+  await lifecycle.cleanup();
+  assert.equal(existsSync(task), false);
+  assert.equal(existsSync(join(output, name)), true);
+});
+
+test('successful lifecycle erases its private diagnostic directory and rejects symlink destinations', { skip: unsupportedPlatform }, async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-output-success-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const task = join(directory, 'task'); const output = join(directory, 'output');
+  for (const path of [task, output]) mkdirSync(path, { mode: 0o700 });
+  symlinkSync(output, join(directory, 'link'));
+  assert.throws(() => new RehearsalLifecycle(task, { commands: [] }, { failedOutputDirectory: join(directory, 'link') }), /ownership directory/);
+  const lifecycle = new RehearsalLifecycle(task, { commands: [] }, { failedOutputDirectory: output, ownsFailedOutputDirectory: true });
+  t.after(() => lifecycle.cleanup());
+  await lifecycle.run(process.execPath, [processFixture, 'output', '0'], directory, process.env);
+  await lifecycle.cleanup();
+  assert.equal(existsSync(output), false);
 });

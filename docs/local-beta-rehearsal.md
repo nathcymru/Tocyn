@@ -6,9 +6,11 @@ revision and compares every artifact file byte-for-byte. It uses the existing
 release preparation and artifact verifier, local Wrangler dry runs, synthetic
 configuration, and no provider credentials.
 
-The candidate checkout runs the focused acceptance matrix once. Both isolated
-checkouts build and verify an artifact, so the comparison still detects an
-unstable package result without repeating the same-SHA acceptance commands.
+The candidate checkout runs the focused acceptance matrix once. Each isolated
+checkout independently builds dashboard and portal before packaging their `dist`
+directories. The widget build remains a mandatory, once-only validation check;
+widget output is not part of this parked artifact. Both artifacts are verified
+and compared without copying build outputs between checkouts.
 
 Run it only after the owner identifies the accepted candidate and known-good
 revisions and authorizes a final rehearsal:
@@ -51,7 +53,19 @@ claim final candidate acceptance.
 The receipt is redacted and records only revisions, command names/results,
 durations, exit codes/signals, artifact manifest totals/digest, the local-only mode, and cleanup. Command labels come from fixed known step names; raw arguments and absolute checkout/tool paths are never serialized.
 It excludes credentials, capture content, recipient identities, tokens, local
-state, logs, and provider receipts. Child output remains suppressed because fixture output can include generated private credentials; failures retain the safe step label and exit status rather than inheriting raw output. This is not a deployment, provider rollback,
+state, logs, and provider receipts. Child output never inherits the public console
+because it can include generated private credentials. Each command drains stdout
+and stderr into separate 32 KiB tails, at most 64 KiB of raw output in total.
+Successful commands erase their buffers; failures write only those tails beneath
+a unique `.rehearsal-failed-output-*` directory beside the receipt. That directory
+uses mode 0700 and files use exclusive creation with mode 0600. Private headers
+record per-stream observed/captured byte counts and explicit truncation. The
+shareable receipt records only whether private output was retained and truncated,
+never its path or contents. Treat retained diagnostics as private credential-bearing
+data, inspect locally, and remove them after diagnosis. A successful rehearsal
+removes its empty diagnostic directory; failed task cleanup preserves failed
+output outside disposable runtime state. Nested fallback commands use the same
+explicit private destination. This is not a deployment, provider rollback,
 backup/restore, migration reversal, or production readiness claim.
 
 The focused lifecycle regression sends repeated terminal `Ctrl-C` through a
@@ -151,3 +165,34 @@ matrix script against its workspace package and verifies the installed/local too
 entrypoints. The other 23 matrix entries existed; no acceptance check was removed.
 A fresh full run must use the correction's accepted immutable revision and retain
 the earlier failed receipt separately.
+
+The second full attempt used accepted signed revision
+`953af436fdb1cb2517e85cac103e48fe9e53da85` and the same signed known-good revision.
+Its first 19 of 24 matrix entries passed, including the corrected ESLint command;
+`test:local-beta-runtime` then exited 1 after 25.9 seconds. Cleanup disposed all
+owned state and released the local ports. No artifact or fallback ran. The old
+runner discarded child output, so the original failing assertion is unavailable
+and its cause remains unexplained. One targeted repeat of the unchanged runtime
+command under the same ownership preload and pinned environment passed both
+subtests (12.4 and 15.4 seconds), with no skips and verified cleanup. That repeat
+does not turn the failed full attempt into acceptance or establish a timeout cause.
+
+The same investigation found that the second clean checkout had no dashboard or
+portal build step before packaging. The correction makes these artifact inputs
+explicit per-checkout prerequisites; it retains all original checks, with 22
+once-only matrix entries plus two frontend builds in each checkout. A focused
+test exercises both preparation paths using synthetic command doubles and rejects
+missing or borrowed frontend outputs. It is source-contract evidence; two real
+artifacts still require a successful accepted-source rehearsal. Private failed
+output retention was added because the missing original assertion prevented a
+definitive runtime diagnosis. No timeout was increased and no acceptance was skipped.
+
+The correction passed 22 lifecycle/matrix tests, five pure fallback tests, five
+workflow tests, three runtime-helper tests and the runtime typecheck. The actual
+capture-enabled npm/PTY/Wrangler interruption test passed in 5.94 seconds on
+macOS/Node 22: one completed test, zero skipped, health 200 and seven registered
+processes including workerd. Tree/state cleanup completed, the unrelated sentinel
+survived, and the interrupted command's private tail was retained then removed by
+the test teardown. Independent bind probes verified ports 8787, 5173 and 5174
+were free; no owned interruption directory remained. This is bounded lifecycle
+evidence, not a successful full technical rehearsal or actual reader acceptance.
