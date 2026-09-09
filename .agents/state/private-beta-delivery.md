@@ -235,3 +235,14 @@ to #62 for independent auth/feed/realtime browser checks while #93 CI runs. #61
 commits b478209 and 080212a remain held for the exact accepted #93 merge. Next:
 publish #93, inspect required checks and automatic review together, integrate,
 then refresh both dependent branches and complete guarded workflow acceptance.
+
+## #93 acceptance correction before integration
+
+PR115 implements and validates the guardrail contract, but actual screen-reader
+announcement evidence remains open for its new pagination controls. The PR uses
+Progresses #93; do not close #93 or set 100%. Keyboard/DOM/AX/contrast evidence
+does not replace an actual reader. Native Safari CUA access timed out (-10005),
+not a macOS permission denial; Codex native access remains previously denied.
+Read-only feasibility and exact next checks: /tmp/tocyn-21-acceptance-plan.md.
+Dependent #61/#62 may integrate against the accepted functional source while
+this explicit beta gate remains open. No acceptance criterion is waived.
