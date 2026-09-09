@@ -6,6 +6,10 @@ revision and compares every artifact file byte-for-byte. It uses the existing
 release preparation and artifact verifier, local Wrangler dry runs, synthetic
 configuration, and no provider credentials.
 
+The candidate checkout runs the focused acceptance matrix once. Both isolated
+checkouts build and verify an artifact, so the comparison still detects an
+unstable package result without repeating the same-SHA acceptance commands.
+
 Run it only after the owner identifies the accepted candidate and known-good
 revisions and authorizes a final rehearsal:
 
@@ -16,8 +20,10 @@ npm run rehearse:local-beta -- --revision <candidate-40-character-sha> \
 
 The command refuses a dirty or mismatched source revision. It creates a
 runner-owned temporary root, keeps Wrangler configuration/cache and temporary
-files beneath that root, clears provider credentials, and removes its generated
-checkouts, build outputs and local state. It never sets `HOME`, invokes remote
+files beneath that root, starts from a small system-runtime environment
+allowlist, and removes its generated checkouts, build outputs and local state.
+It preserves `HOME` and `PATH`, but does not inherit provider credentials,
+application configuration, or arbitrary caller variables. It never invokes remote
 Wrangler options, finalizes an artifact, publishes Pages, reads provider
 resources, calls a rollback verifier, creates a tag, or creates a release.
 
@@ -44,3 +50,8 @@ durations, artifact manifest totals/digest, the local-only mode, and cleanup.
 It excludes credentials, capture content, recipient identities, tokens, local
 state, logs, and provider receipts. This is not a deployment, provider rollback,
 backup/restore, migration reversal, or production readiness claim.
+
+The focused lifecycle regression sends repeated terminal `Ctrl-C` through a
+pseudo-terminal to an npm-launched fixture. It verifies that the fixture's owned
+nested child and runner state are gone while an unrelated process remains alive.
+It is a controlled interruption check, not a final candidate rehearsal.

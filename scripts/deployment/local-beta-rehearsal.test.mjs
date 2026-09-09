@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import test from 'node:test';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -25,18 +25,18 @@ test('CLI rejects a remote selector instead of silently ignoring it', () => {
   assert.match(result.stderr, /local-only allowlist/);
 });
 
-test('task environment removes provider credentials without repurposing HOME', () => {
+test('task environment uses a minimal allowlist without repurposing HOME', () => {
   const taskRoot = join(tmpdir(), 'tocyn-rehearsal-env');
-  const env = localEnvironment({ HOME: '/keep-home', CLOUDFLARE_API_TOKEN: 'secret', CF_API_TOKEN: 'secret', RESEND_API_KEY: 'secret', TOCYN_ACCESS_CLIENT_ID: 'secret', TOCYN_D1_DATABASE_ID: 'unsafe', PATH: process.env.PATH }, taskRoot);
+  const env = localEnvironment({ HOME: '/keep-home', PATH: process.env.PATH, LANG: 'en_GB.UTF-8', CLOUDFLARE_API_TOKEN: 'secret', OPENAI_API_KEY: 'secret', CUSTOM_DEPLOY_KEY: 'secret', VITE_API_URL: 'https://inherited.invalid', VITE_WIDGET_KEY: 'sentinel-do-not-package', TOCYN_D1_DATABASE_ID: 'unsafe' }, taskRoot);
   assert.equal(env.HOME, '/keep-home');
-  for (const name of ['CLOUDFLARE_API_TOKEN', 'CF_API_TOKEN', 'RESEND_API_KEY', 'TOCYN_ACCESS_CLIENT_ID', 'TOCYN_D1_DATABASE_ID']) assert.equal(env[name], undefined);
+  assert.equal(env.PATH, process.env.PATH);
+  assert.equal(env.LANG, 'en_GB.UTF-8');
+  for (const name of ['CLOUDFLARE_API_TOKEN', 'OPENAI_API_KEY', 'CUSTOM_DEPLOY_KEY', 'VITE_API_URL', 'VITE_WIDGET_KEY', 'TOCYN_D1_DATABASE_ID']) assert.equal(env[name], undefined);
   assert.equal(env.WRANGLER_SEND_METRICS, 'false');
   assert.equal(env.XDG_CONFIG_HOME, join(taskRoot, 'config'));
   assert.equal(env.XDG_CACHE_HOME, join(taskRoot, 'cache'));
   assert.equal(env.TMPDIR, join(taskRoot, 'tmp'));
-  const unpinned = localEnvironment({ VITE_API_URL: 'https://inherited.invalid', VITE_WIDGET_KEY: 'sentinel-do-not-package', PATH: process.env.PATH }, taskRoot);
-  assert.equal(unpinned.VITE_API_URL, undefined); assert.equal(unpinned.VITE_WIDGET_KEY, undefined);
-  const frontend = pinnedFrontendEnvironment(unpinned);
+  const frontend = pinnedFrontendEnvironment(env);
   assert.equal(frontend.VITE_API_URL, 'https://api.beta.local.invalid');
   assert.equal(frontend.VITE_WIDGET_KEY, 'local-rehearsal-widget-key');
   assert.equal(JSON.stringify(frontend).includes('sentinel-do-not-package'), false);
@@ -71,22 +71,68 @@ test('owned child failure is redacted and cleanup terminates its process group',
   assert.equal(existsSync(directory), false);
 });
 
-test('repeated Ctrl-C removes only the runner-owned process tree and state', async t => {
+function ptyBridge() {
+  return `import os, pty, select, signal, sys
+pid, fd = pty.fork()
+if pid == 0:
+  os.execvpe(sys.argv[1], sys.argv[1:], os.environ)
+while True:
+  ready, _, _ = select.select([fd, sys.stdin], [], [])
+  if fd in ready:
+    try: data = os.read(fd, 4096)
+    except OSError: data = b''
+    if not data: break
+    os.write(sys.stdout.fileno(), data)
+  if sys.stdin in ready:
+    data = os.read(sys.stdin.fileno(), 4096)
+    if data: os.write(fd, data)
+_, status = os.waitpid(pid, 0)
+if os.WIFEXITED(status): sys.exit(os.WEXITSTATUS(status))
+if os.WIFSIGNALED(status): sys.exit(128 + os.WTERMSIG(status))`;
+}
+
+async function waitFor(predicate, description) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 20));
+  }
+  assert.fail(`timed out waiting for ${description}`);
+}
+
+function processAlive(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+}
+
+test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrelated process', { skip: process.platform === 'win32' }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-signal-'));
-  const task = join(directory, 'task'); const receiptPath = join(directory, 'receipt.json');
+  const task = join(directory, 'task'); const fixture = join(directory, 'fixture'); const receiptPath = join(directory, 'receipt.json');
   const moduleUrl = pathToFileURL(fileURLToPath(new URL('./local-beta-rehearsal.mjs', import.meta.url))).href;
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const program = `import { mkdirSync, writeFileSync } from 'node:fs'; import { RehearsalLifecycle, installSignalCleanup } from ${JSON.stringify(moduleUrl)}; const task=process.env.TASK; mkdirSync(task); const receipt={commands:[],cleanup:'pending'}; const lifecycle=new RehearsalLifecycle(task,receipt); installSignalCleanup(lifecycle,receipt,process.env.RECEIPT); void lifecycle.run(process.execPath,['-e','setInterval(() => {}, 1000)'],task,process.env); process.stdout.write('ready\\n');`;
-  const child = spawn(process.execPath, ['--input-type=module', '-e', program], { env: { ...process.env, TASK: task, RECEIPT: receiptPath }, stdio: ['ignore', 'pipe', 'ignore'] });
-  let output = ''; child.stdout.on('data', chunk => { output += chunk; });
-  for (let attempt = 0; attempt < 50 && !output.includes('ready'); attempt++) await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
-  assert.match(output, /ready/);
-  const exited = once(child, 'exit');
-  child.kill('SIGINT'); await new Promise(resolvePromise => setTimeout(resolvePromise, 10)); child.kill('SIGINT');
+  let sentinel;
+  t.after(() => {
+    if (sentinel?.exitCode === null) sentinel.kill('SIGKILL');
+    rmSync(directory, { recursive: true, force: true });
+  });
+  mkdirSync(fixture);
+  writeFileSync(join(fixture, 'package.json'), JSON.stringify({ private: true, scripts: { fixture: 'node fixture.mjs' } }));
+  writeFileSync(join(fixture, 'fixture.mjs'), `import { spawn } from 'node:child_process'; import { writeFileSync } from 'node:fs'; const nested = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }); nested.unref(); writeFileSync(process.env.GRANDCHILD_PID, String(nested.pid)); const stop = () => { try { process.kill(-nested.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; } setTimeout(() => process.exit(0), 25); }; process.on('SIGINT', stop); process.on('SIGTERM', stop); writeFileSync(process.env.READY, 'ready'); setInterval(() => {}, 1000);`);
+  const program = `import { mkdirSync } from 'node:fs'; import { RehearsalLifecycle, installSignalCleanup } from ${JSON.stringify(moduleUrl)}; const task=process.env.TASK; mkdirSync(task); const receipt={commands:[],cleanup:'pending'}; const lifecycle=new RehearsalLifecycle(task,receipt); installSignalCleanup(lifecycle,receipt,process.env.RECEIPT); void lifecycle.run('npm',['run','fixture'],process.env.FIXTURE,{ ...process.env, GRANDCHILD_PID: process.env.GRANDCHILD_PID, READY: process.env.READY });`;
+  sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  const terminal = spawn('python3', ['-c', ptyBridge(), process.execPath, '--input-type=module', '-e', program], { env: { ...process.env, TASK: task, RECEIPT: receiptPath, FIXTURE: fixture, GRANDCHILD_PID: join(task, 'grandchild.pid'), READY: join(task, 'ready') }, stdio: ['pipe', 'pipe', 'pipe'] });
+  let output = ''; terminal.stdout.on('data', chunk => { output += chunk; });
+  await waitFor(() => existsSync(join(task, 'ready')), 'nested fixture readiness');
+  const grandchildPid = Number(readFileSync(join(task, 'grandchild.pid'), 'utf8'));
+  assert.ok(Number.isInteger(grandchildPid) && grandchildPid > 1);
+  const exited = once(terminal, 'exit');
+  terminal.stdin.write('\x03');
+  await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
+  terminal.stdin.write('\x03');
   const [code] = await exited;
-  assert.equal(code, 130);
+  assert.equal(code, 130, output);
+  await waitFor(() => !processAlive(grandchildPid), 'owned nested fixture termination');
   assert.equal(existsSync(task), false);
-  const receipt = JSON.parse(await (await import('node:fs/promises')).readFile(receiptPath, 'utf8'));
+  assert.equal(processAlive(sentinel.pid), true);
+  const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
   assert.deepEqual({ interrupted: receipt.interrupted, cleanup: receipt.cleanup }, { interrupted: 'SIGINT', cleanup: 'disposed' });
 });
 

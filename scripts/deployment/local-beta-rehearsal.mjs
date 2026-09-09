@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { artifactFiles, digest, verifyReleaseArtifact } from './verify-release-artifact.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const providerVariable = /^(?:CLOUDFLARE_|CF_|RESEND_|TOCYN_(?:ACCESS_|RESTRICTED_INGRESS_APPROVED$|D1_|ATTACHMENTS_|PORTAL_ORIGIN$|DASHBOARD_ORIGIN$|API_ORIGIN$))/;
+const inheritedEnvironment = new Set(['HOME', 'PATH', 'LANG', 'TERM', 'USER', 'LOGNAME', 'SHELL', 'SYSTEMROOT', 'SystemRoot', 'WINDIR', 'ComSpec', 'PATHEXT']);
 const requiredAcceptanceCommands = [
   ['npm', ['run', 'typecheck', '--workspace=apps/server']],
   ['npm', ['run', 'lint', '--workspace=apps/server']],
@@ -35,9 +35,9 @@ function git(cwd, args) { return execFileSync('git', args, { cwd, encoding: 'utf
 
 export function localEnvironment(base, taskRoot) {
   if (!isAbsolute(taskRoot)) fail('task root must be absolute');
-  const env = { ...base, WRANGLER_SEND_METRICS: 'false', TMPDIR: join(taskRoot, 'tmp'), XDG_CONFIG_HOME: join(taskRoot, 'config'), XDG_CACHE_HOME: join(taskRoot, 'cache') };
-  for (const name of Object.keys(env)) if (providerVariable.test(name) || name.startsWith('VITE_')) delete env[name];
-  return env;
+  const env = {};
+  for (const [name, value] of Object.entries(base)) if (inheritedEnvironment.has(name) || name.startsWith('LC_')) env[name] = value;
+  return { ...env, WRANGLER_SEND_METRICS: 'false', TMPDIR: join(taskRoot, 'tmp'), XDG_CONFIG_HOME: join(taskRoot, 'config'), XDG_CACHE_HOME: join(taskRoot, 'cache'), TZ: 'UTC' };
 }
 
 export function pinnedFrontendEnvironment(env) {
@@ -115,12 +115,15 @@ export class RehearsalLifecycle {
     };
     if (running()) { signal('SIGTERM'); if (running()) await waitExit(); }
     if (running()) { signal('SIGKILL'); if (running()) await waitExit(); }
+    if (running()) fail('owned child process did not terminate');
     this.children.delete(child);
   }
 
   cleanup() {
     if (!this.cleanupPromise) this.cleanupPromise = (async () => {
-      await Promise.allSettled([...this.children].map(child => this.stop(child)));
+      const stopped = await Promise.allSettled([...this.children].map(child => this.stop(child)));
+      const failure = stopped.find(result => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
       for (const name of ['candidate', 'comparison']) {
         const worktree = join(this.taskRoot, name);
         if (statExists(worktree)) {
@@ -140,10 +143,14 @@ export function installSignalCleanup(lifecycle, receipt, receiptPath) {
     handling = true;
     lifecycle.interrupted = true;
     receipt.interrupted = signal;
-    void lifecycle.cleanup().finally(() => {
+    void lifecycle.cleanup().then(() => {
       receipt.cleanup = 'disposed';
       writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
       process.exit(code);
+    }).catch(() => {
+      receipt.cleanup = 'incomplete';
+      writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+      process.exit(1);
     });
   };
   const sigint = () => onSignal('SIGINT', 130); const sigterm = () => onSignal('SIGTERM', 143);
@@ -166,16 +173,20 @@ function syntheticPackagingEnvironment(env, worktree) {
 
 async function assertAvailablePorts() { await portFree(8787); await portFree(5174); }
 
-async function buildParkArtifact(worktree, revision, taskRoot, label, lifecycle) {
-  const release = join(taskRoot, `${label}-release`);
-  const env = syntheticPackagingEnvironment(localEnvironment(process.env, taskRoot), worktree);
-  await lifecycle.run('npm', ['ci', '--ignore-scripts', '--offline'], worktree, env);
-  await lifecycle.run('npm', ['rebuild', 'better-sqlite3', '--workspace=apps/server'], worktree, env);
+async function runAcceptanceCommands(worktree, env, lifecycle) {
   for (const [command, args] of requiredAcceptanceCommands) {
     await assertAvailablePorts();
     await lifecycle.run(command, args, worktree, env);
     await assertAvailablePorts();
   }
+}
+
+async function buildParkArtifact(worktree, revision, taskRoot, label, lifecycle, { runAcceptance = false } = {}) {
+  const release = join(taskRoot, `${label}-release`);
+  const env = syntheticPackagingEnvironment(localEnvironment(process.env, taskRoot), worktree);
+  await lifecycle.run('npm', ['ci', '--ignore-scripts', '--offline'], worktree, env);
+  await lifecycle.run('npm', ['rebuild', 'better-sqlite3', '--workspace=apps/server'], worktree, env);
+  if (runAcceptance) await runAcceptanceCommands(worktree, env, lifecycle);
   await lifecycle.run('node', ['scripts/deployment/isolated-release.mjs', 'prepare', '--target', 'beta', '--revision', revision, '--mode', 'park', '--output', release], worktree, env);
   await lifecycle.run(process.execPath, [join(worktree, 'node_modules/wrangler/bin/wrangler.js'), 'deploy', '--dry-run', '--outdir', join(release, 'worker'), '--metafile', join(release, 'worker-meta.json'), '--config', join(release, 'wrangler.source.json')], worktree, env);
   await lifecycle.run('node', ['scripts/deployment/isolated-release.mjs', 'package', '--target', 'beta', '--revision', revision, '--mode', 'park', '--output', release], worktree, env);
@@ -219,16 +230,22 @@ export async function runRehearsal({ revision, knownGood, receiptPath }) {
     const candidate = join(taskRoot, 'candidate'); const comparison = join(taskRoot, 'comparison');
     await lifecycle.run('git', ['worktree', 'add', '--detach', candidate, revision], root, localEnvironment(process.env, taskRoot));
     await lifecycle.run('git', ['worktree', 'add', '--detach', comparison, revision], root, localEnvironment(process.env, taskRoot));
-    const first = await buildParkArtifact(candidate, revision, taskRoot, 'candidate', lifecycle);
+    const first = await buildParkArtifact(candidate, revision, taskRoot, 'candidate', lifecycle, { runAcceptance: true });
     const second = await buildParkArtifact(comparison, revision, taskRoot, 'comparison', lifecycle);
     const comparisonReceipt = compareArtifactFiles(first, second);
     const verified = verifyReleaseArtifact(first, 'beta');
     Object.assign(receipt, { artifact: { ...comparisonReceipt, releaseDigest: verified.provenance.releaseDigest, mode: verified.provenance.mode } });
   } finally {
-    removeSignalHandlers();
-    await lifecycle.cleanup();
-    receipt.cleanup = 'disposed';
-    writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+    try {
+      await lifecycle.cleanup();
+      receipt.cleanup = 'disposed';
+    } catch (error) {
+      receipt.cleanup = 'incomplete';
+      throw error;
+    } finally {
+      removeSignalHandlers();
+      writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+    }
   }
   return receipt;
 }
