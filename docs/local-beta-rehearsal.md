@@ -105,3 +105,8 @@ was reusable, and an unrelated sentinel remained alive. This is lifecycle
 evidence only. The [same-state runtime evidence](./local-beta-same-state-fallback.md)
 is recorded against its own clean candidate; the complete final two-artifact
 and acceptance-matrix rehearsal remains unrun.
+
+POSIX lifecycle execution cases are skipped on unsupported test hosts, while
+the platform refusal contract remains tested without changing host identity.
+Windows execution was not performed for this change; the rehearsal runner does
+not claim Windows support.

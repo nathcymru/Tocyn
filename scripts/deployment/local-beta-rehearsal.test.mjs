@@ -6,9 +6,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { assertCleanRevision, compareArtifactFiles, localEnvironment, pinnedFrontendEnvironment, RehearsalLifecycle, rehearsalPlan } from './local-beta-rehearsal.mjs';
+import { assertRehearsalPlatform, assertCleanRevision, compareArtifactFiles, localEnvironment, pinnedFrontendEnvironment, RehearsalLifecycle, rehearsalPlan } from './local-beta-rehearsal.mjs';
 
 const sha = 'a'.repeat(40);
+const unsupportedPlatform = !['darwin', 'linux'].includes(process.platform);
 
 test('local-only rehearsal plan retains the protected-operation boundary', () => {
   const plan = rehearsalPlan(sha, 'b'.repeat(40));
@@ -56,7 +57,7 @@ test('clean revision check rejects a modified checkout', t => {
   assert.throws(() => assertCleanRevision(directory, revision), /not clean/);
 });
 
-test('owned child failure is redacted and cleanup terminates its process group', async t => {
+test('owned child failure is redacted and cleanup terminates its process group', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-lifecycle-'));
   const receipt = { commands: [] };
   const lifecycle = new RehearsalLifecycle(directory, receipt);
@@ -104,7 +105,7 @@ function processAlive(pid) {
   catch (error) { if (error.code === 'ESRCH') return false; throw error; }
 }
 
-test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrelated process', { skip: process.platform === 'win32' }, async t => {
+test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrelated process', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-signal-'));
   const task = join(directory, 'task'); const fixture = join(directory, 'fixture'); const receiptPath = join(directory, 'receipt.json');
   const moduleUrl = pathToFileURL(fileURLToPath(new URL('./local-beta-rehearsal.mjs', import.meta.url))).href;
@@ -154,7 +155,7 @@ test('artifact comparison requires byte-identical manifests and contents', t => 
   assert.throws(() => compareArtifactFiles(first, second), /same file manifest/);
 });
 
-test('leader exit retains ownership of detached and same-group children', async t => {
+test('leader exit retains ownership of detached and same-group children', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-leader-'));
   const task = join(directory, 'task'); mkdirSync(task, { mode: 0o700 });
   const lifecycle = new RehearsalLifecycle(task, { commands: [] });
@@ -172,7 +173,7 @@ test('leader exit retains ownership of detached and same-group children', async 
   assert.equal(lifecycle.receipt.commands.filter(value => value.result === 'stopped').length, 2);
 });
 
-test('closing rejects a late detached spawn before it can escape ownership', async t => {
+test('closing rejects a late detached spawn before it can escape ownership', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-late-'));
   const task = join(directory, 'task'); mkdirSync(task, { mode: 0o700 });
   const lifecycle = new RehearsalLifecycle(task, { commands: [] });
@@ -185,7 +186,7 @@ test('closing rejects a late detached spawn before it can escape ownership', asy
   assert.equal(readFileSync(result, 'utf8'), 'rejected');
 });
 
-test('incomplete registration preserves task state and does not claim disposal', async t => {
+test('incomplete registration preserves task state and does not claim disposal', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-incomplete-'));
   const lifecycle = new RehearsalLifecycle(directory, { commands: [] });
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -198,7 +199,7 @@ test('incomplete registration preserves task state and does not claim disposal',
   assert.equal(existsSync(directory), true);
 });
 
-test('outer ownership survives an inner lifecycle leader and loader environment changes', async t => {
+test('outer ownership survives an inner lifecycle leader and loader environment changes', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-inner-'));
   const task = join(directory, 'task'); mkdirSync(task, { mode: 0o700 });
   const inner = join(task, 'inner'); mkdirSync(inner, { mode: 0o700 });
@@ -215,7 +216,7 @@ test('outer ownership survives an inner lifecycle leader and loader environment 
   await waitFor(() => !processAlive(nested), 'outer-owned inner child exit');
 });
 
-test('a PID whose recorded start identity no longer matches is never signaled', async t => {
+test('a PID whose recorded start identity no longer matches is never signaled', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-identity-'));
   const lifecycle = new RehearsalLifecycle(directory, { commands: [] });
   const sentinel = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
@@ -230,7 +231,7 @@ test('a PID whose recorded start identity no longer matches is never signaled', 
   assert.equal(processAlive(sentinel.pid), true);
 });
 
-test('the owned TypeScript loader preserves real fixture tests and releases its native children', async t => {
+test('the owned TypeScript loader preserves real fixture tests and releases its native children', { skip: unsupportedPlatform }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-loader-'));
   for (const name of ['tmp', 'config', 'cache']) mkdirSync(join(directory, name), { mode: 0o700 });
   const lifecycle = new RehearsalLifecycle(directory, { commands: [] });
@@ -243,4 +244,11 @@ test('the owned TypeScript loader preserves real fixture tests and releases its 
   const records = readdirSync(join(directory, 'processes')).flatMap(name => registry.read(join(directory, 'processes', name)));
   assert.ok(records.length >= 2, 'loader/test child processes must be registered');
   assert.equal(registry.snapshot().some(info => !info.zombie && records.some(record => record.pid === info.pid && record.start === info.start)), false);
+});
+
+
+test('the runner deliberately refuses unsupported platforms without mutating host identity', () => {
+  for (const platform of ['darwin', 'linux']) assert.doesNotThrow(() => assertRehearsalPlatform(platform));
+  for (const platform of ['win32', 'freebsd', 'unknown']) assert.throws(() => assertRehearsalPlatform(platform), /requires macOS or Linux/);
+  if (unsupportedPlatform) assert.throws(() => assertRehearsalPlatform(), /requires macOS or Linux/);
 });

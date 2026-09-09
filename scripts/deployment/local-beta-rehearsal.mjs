@@ -38,6 +38,9 @@ const requiredAcceptanceCommands = [
 ];
 
 function fail(message) { throw new Error(`Local beta rehearsal rejected: ${message}`); }
+export function assertRehearsalPlatform(platform = process.platform) {
+  if (!['darwin', 'linux'].includes(platform)) fail('local rehearsal process ownership requires macOS or Linux');
+}
 function git(cwd, args) { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
 
 export function localEnvironment(base, taskRoot) {
@@ -93,7 +96,7 @@ const delay = milliseconds => new Promise(resolvePromise => setTimeout(resolvePr
 
 export class RehearsalLifecycle {
   constructor(taskRoot, receipt) {
-    if (!['darwin', 'linux'].includes(process.platform)) fail('local rehearsal process ownership requires macOS or Linux');
+    assertRehearsalPlatform();
     registry.checkDirectory(taskRoot);
     this.taskRoot = taskRoot; this.receipt = receipt; this.scopes = new Map(); this.interrupted = false; this.cleanupPromise = undefined;
     this.registryRoot = join(taskRoot, 'processes');
@@ -298,7 +301,7 @@ function parseArguments(argv) {
 
 export async function runRehearsal({ revision, knownGood, receiptPath }) {
   const plan = rehearsalPlan(revision, knownGood);
-  if (!['darwin', 'linux'].includes(process.platform)) fail('local rehearsal process ownership requires macOS or Linux');
+  assertRehearsalPlatform();
   if (!process.versions.node.startsWith('22.')) fail('Node 22 is required for the local rehearsal');
   assertCleanRevision(root, revision);
   if (!receiptPath || !isAbsolute(receiptPath) || basename(receiptPath) !== 'receipt.json') fail('receipt must be an absolute path named receipt.json');
