@@ -1,4 +1,4 @@
-# Login and portal accessibility — partial #21 implementation
+# Core workflow accessibility — partial #21 implementation
 
 This slice covers the existing dashboard password/MFA pages and portal
 login/verification, ticket creation, history and reply pages. It adds associated
@@ -32,8 +32,9 @@ cache. These references stay within the mounted conversation and are not persist
 
 Credential submission, password-to-MFA navigation, single-use magic-link handling,
 OTP challenge state and authenticated navigation retain their existing contracts.
-No API Worker, authentication-store, app-shell or dashboard queue/detail changes
-are included. The independent #61 UTC timestamp changes must be preserved when
+No API Worker or authentication-store changes are included in the accessibility
+slice. Operator navigation and queue controls are included; the accepted operator
+detail, query identity and realtime invalidation behavior are preserved. The independent #61 UTC timestamp changes must be preserved when
 integrating its portal pages, together with its session boundary and #62's
 navigation tests.
 
@@ -49,7 +50,9 @@ npm run build --workspace=apps/dashboard
 npm run build --workspace=apps/portal
 ```
 
-At this source checkpoint, all five dashboard cases and all 36 portal cases pass.
+At this source checkpoint, all 47 dashboard cases and all 40 portal cases pass on the temporary integrated
+candidate. Its baseline combined 34 dashboard and 40 portal cases; 13 additional
+operator accessibility/recovery cases pass.
 These include four dashboard login cases, six portal login accessibility cases,
 eleven portal conversation accessibility/recovery cases, four overlapping-read
 regressions and existing login,
@@ -73,8 +76,9 @@ measurement.
 
 ## Remaining acceptance
 
-Issue #21 remains partial. Integrate accepted #61 session/verification changes and
-#62 operator workflow changes, preserve their navigation tests, then check the
+Issue #21 remains partial. The temporary candidate combines the frozen #61 and
+#62 source with #21 changes; final acceptance must refresh onto their signed
+merges, preserve their navigation tests, then check the
 whole included login/session, create/history/reply, queue/detail/composer,
 assignment/state, error/dialog and required security-configuration journey.
 
@@ -91,3 +95,25 @@ revoked sessions, captured-mail failure, and two-tenant isolation on the integra
 local revision. Record actual announcement/focus outcomes, resource counters and
 recovery behavior without credentials or message contents. Existing broad
 workflow, production and beta gates remain applicable.
+
+## Integrated operator controls
+
+The global search, account, connection and row-action controls now have accessible
+names and disclosure state. Escape returns focus to the disclosure trigger. Mobile
+navigation reuses the existing destinations in a named native modal dialog, keeping
+closed mobile links out of the keyboard path; cancellation returns focus to its
+trigger and destination selection focuses the workspace. Ticket notifications use
+native open/dismiss controls and retain a focused notification past its timeout.
+
+Ticket creation preserves its submitted draft and focus while pending. Feed retry
+keeps its focused control mounted until the read settles and focuses recovered
+results. Pagination keeps previous data with explicit loading feedback until the
+next page arrives, without changing query identity or the authentication boundary.
+Failed pagination focuses the explicit retry; clipboard failure leaves the visible
+reference available. Required MFA setup has a guarded retry and ready announcement;
+effect replay shares one setup request, and pending confirmation retains its code.
+
+These are component and build results. Native mobile/create dialog containment,
+actual speech, and computed state-specific contrast await browser/reader acceptance.
+Tests assert one pending create/read/setup request and no duplicate confirmation;
+no live provider, credential, or message data is part of their output.

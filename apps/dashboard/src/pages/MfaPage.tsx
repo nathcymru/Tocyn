@@ -14,6 +14,11 @@ export function MfaPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [setupAttempt, setSetupAttempt] = useState(0);
+  const [setupStatus, setSetupStatus] = useState('');
+  const setupPromise = React.useRef<Promise<SetupResponse> | null>(null);
+  const retryingSetup = React.useRef(false);
+  const codeInput = React.useRef<HTMLInputElement>(null);
   const [setupData, setSetupData] = useState<SetupResponse | null>(null);
   
   const navigate = useNavigate();
@@ -21,27 +26,35 @@ export function MfaPage() {
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
-    if (user && !user.mfa_enabled) {
-      // Initiate MFA setup for users who are required to have it but don't yet
-      const startSetup = async () => {
-        try {
-          setLoading(true);
-          const data = await dashboardApi.post<SetupResponse>('/auth/mfa/setup');
-          setSetupData(data);
-        } catch (err: any) {
-          setError(err.message || 'Failed to start MFA setup');
-        } finally {
-          setLoading(false);
-        }
-      };
-      startSetup();
-    }
-  }, [user]);
+    if (!user || user.mfa_enabled) return;
+    let active = true;
+    setLoading(true);
+    // Reuse the same initial request across effect cleanup/setup. An explicit
+    // retry clears this promise only after a failed attempt has settled.
+    setupPromise.current ??= dashboardApi.post<SetupResponse>('/auth/mfa/setup');
+    setupPromise.current.then(data => {
+      if (!active) return;
+      setSetupData(data);
+      setError('');
+      setSetupStatus('Authenticator setup ready. Scan the QR code or enter the text key, then enter your authentication code.');
+      if (retryingSetup.current) {
+        codeInput.current?.focus();
+        retryingSetup.current = false;
+      }
+    }).catch((err: unknown) => {
+      if (active) {
+        setSetupStatus('');
+        setError(err instanceof Error ? err.message : 'Failed to start MFA setup');
+      }
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [user, setupAttempt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading || code.length !== 6 || (!user?.mfa_enabled && !setupData)) return;
     setError('');
+    setSetupStatus('');
     setLoading(true);
 
     try {
@@ -105,6 +118,19 @@ export function MfaPage() {
           </div>
         )}
 
+        {isSetupMode && !setupData && error && (
+          <button type="button" aria-disabled={loading}
+            onClick={() => {
+              if (loading) return;
+              setLoading(true);
+              retryingSetup.current = true;
+              setupPromise.current = null;
+              setSetupAttempt(previous => previous + 1);
+            }} className="mb-4 rounded border border-slate-500 px-3 py-2 text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+            Retry authenticator setup
+          </button>
+        )}
+
         {isSetupMode && setupData && (
           <div className="mb-6 text-center">
             <div className="bg-white p-4 rounded-lg inline-block shadow-sm border border-gray-100 mb-4">
@@ -126,6 +152,8 @@ export function MfaPage() {
             </label>
             <input
               id="mfa-code"
+              ref={codeInput}
+              readOnly={loading}
               name="code"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -136,7 +164,7 @@ export function MfaPage() {
               className="input text-center text-3xl tracking-[0.5em] font-mono h-14"
               placeholder="000000"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
               autoFocus
             />
           </div>
@@ -148,7 +176,7 @@ export function MfaPage() {
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </button>
         </form>
-        <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : ''}</p>
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
       </div>
     </div>
   );

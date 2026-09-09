@@ -119,3 +119,100 @@ it.each([null,62])('displays and copies the actual ticket reference when the num
   fireEvent.click(screen.getByRole('button',{name:'Copy ticket reference'}));
   expect(writeText).toHaveBeenCalledWith(reference);
 });
+
+it('retains focus while retrying a failed feed and moves it to recovered results', async () => {
+  let finish!: (response: Response) => void;
+  let reads = 0;
+  transport(() => ++reads === 1 ? json({ error: 'Unavailable' }, 503) : new Promise(resolve => { finish = resolve; }));
+  showFeed();
+  const retry = await screen.findByRole('button', { name: 'Retry loading tickets' });
+  retry.focus(); fireEvent.click(retry);
+  await waitFor(() => expect(retry).toHaveAttribute('aria-disabled', 'true'));
+  expect(retry).not.toBeDisabled(); expect(retry).toHaveFocus();
+  fireEvent.click(retry); expect(reads).toBe(2);
+  await act(async () => { finish(page()); });
+  expect(await screen.findByRole('heading', { name: 'Tickets' })).toHaveFocus();
+  expect(screen.getByRole('status', { name: 'Ticket list status' })).toHaveTextContent('Tickets refreshed');
+});
+
+it('keeps the pending creation draft and native controls focused until its failure is recoverable', async () => {
+  let finish!: (response: Response) => void;
+  let posts = 0;
+  transport(options => options.method === 'POST' ? (posts++, new Promise(resolve => { finish = resolve; })) : page());
+  showFeed(); await screen.findByRole('link', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'New Ticket' }));
+  const subject = screen.getByRole('textbox', { name: 'Subject' });
+  fireEvent.change(subject, { target: { value: 'Submitted subject' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Customer Email' }), { target: { value: ticket.customer_email } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Initial Message' }), { target: { value: 'Submitted message' } });
+  const submit = screen.getByRole('button', { name: 'Create Ticket' });
+  submit.focus(); fireEvent.click(submit);
+  await waitFor(() => expect(submit).toHaveAttribute('aria-disabled', 'true'));
+  expect(submit).not.toBeDisabled(); expect(submit).toHaveFocus();
+  fireEvent.change(subject, { target: { value: 'Changed while pending' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Priority' }), { target: { value: 'urgent' } });
+  fireEvent.click(submit);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(subject).toHaveValue('Submitted subject');
+  expect(screen.getByRole('combobox', { name: 'Priority' })).toHaveValue('normal');
+  expect(screen.getByRole('status', { name: 'Ticket creation status' })).toHaveTextContent('Creating ticket');
+  expect(posts).toBe(1);
+  await act(async () => { finish(json({ error: 'Intake stopped' }, 503)); });
+  expect(await screen.findByRole('alert')).toHaveTextContent('Intake stopped');
+  expect(subject).toHaveAttribute('aria-describedby', 'create-ticket-error');
+  expect(submit).toHaveFocus();
+});
+
+it('names ticket actions and restores trigger focus when the disclosure is dismissed', async () => {
+  transport(() => page()); showFeed();
+  const trigger = await screen.findByRole('button', { name: 'Actions for #1' });
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(trigger);
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  const action = screen.getByRole('link', { name: 'View Ticket' });
+  action.focus(); fireEvent.keyDown(action, { key: 'Escape' });
+  expect(trigger).toHaveFocus(); expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('link', { name: 'View Ticket' })).not.toBeInTheDocument();
+});
+
+it('announces clipboard failure without losing the visible reference or control focus', async () => {
+  vi.stubGlobal('navigator', Object.create(navigator, { clipboard: { value: { writeText: vi.fn().mockRejectedValue(new Error('Denied')) } } }));
+  transport(() => page()); showFeed();
+  const copy = await screen.findByRole('button', { name: 'Copy ticket reference' });
+  copy.focus(); fireEvent.click(copy);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Select and copy the visible reference');
+  expect(screen.getByText('#1')).toBeInTheDocument(); expect(copy).toHaveFocus();
+});
+
+it('retains pagination focus and announces previous results while the next page is pending', async () => {
+  let finish!: (response: Response) => void;
+  let reads = 0;
+  transport(() => ++reads === 1 ? json({ data: [ticket], meta: { page: 1, total: 2, limit: 1, total_pages: 2 } }) : new Promise(resolve => { finish = resolve; }));
+  showFeed();
+  const next = await screen.findByRole('button', { name: 'Next' });
+  next.focus(); fireEvent.click(next);
+  await waitFor(() => expect(next).toHaveAttribute('aria-disabled', 'true'));
+  expect(next).not.toBeDisabled(); expect(next).toHaveFocus();
+  expect(screen.getByRole('status', { name: 'Ticket list status' })).toHaveTextContent('Previous results remain visible');
+  fireEvent.click(next); expect(reads).toBe(2);
+  await act(async () => { finish(json({ data: [{ ...ticket, id: 'next', subject: 'Next page ticket' }], meta: { page: 2, total: 2, limit: 1, total_pages: 2 } })); });
+  expect(await screen.findByRole('link', { name: 'Next page ticket' })).toBeInTheDocument();
+  expect(next).toHaveFocus(); expect(next).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('status', { name: 'Ticket pages' })).toHaveTextContent('page 2 of 2');
+});
+
+it('moves focus from failed pagination to explicit recovery without presenting an empty feed', async () => {
+  let finish!: (response: Response) => void;
+  let reads = 0;
+  transport(() => ++reads === 1 ? json({ data: [ticket], meta: { page: 1, total: 2, limit: 1, total_pages: 2 } }) : new Promise(resolve => { finish = resolve; }));
+  showFeed();
+  const next = await screen.findByRole('button', { name: 'Next' });
+  next.focus(); fireEvent.click(next);
+  await waitFor(() => expect(reads).toBe(2));
+  await act(async () => { finish(json({ error: 'Page unavailable' }, 503)); });
+  expect(await screen.findByRole('button', { name: 'Retry loading tickets' })).toHaveFocus();
+  expect(screen.getByRole('alert')).toHaveTextContent('Could not load tickets');
+  expect(screen.queryByText('No tickets found.')).not.toBeInTheDocument();
+});

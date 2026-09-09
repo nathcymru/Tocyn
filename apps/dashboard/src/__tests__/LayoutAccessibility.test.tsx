@@ -1,0 +1,99 @@
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { Layout } from '../components/layout/Layout';
+import { useRealtime } from '../hooks/useRealtime';
+import { useAuthStore } from '../store/authStore';
+
+vi.mock('../hooks/useRealtime', () => ({ useRealtime: vi.fn() }));
+vi.mock('../api/client', () => ({ dashboardApi: { post: vi.fn() } }));
+let client: QueryClient;
+const realtime = { isConnected: true, lastMessage: null, presence: [], updateLocation: vi.fn(), connectionDetails: { latency: 10, reconnectCount: 0 }, manualReconnect: vi.fn() };
+function Destination() { const location = useLocation(); return <h1>Route {location.pathname}{location.search}</h1>; }
+function tree() {
+  return <QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets']}><Routes>
+    <Route element={<Layout />}><Route path="*" element={<Destination />} /></Route>
+  </Routes></MemoryRouter></QueryClientProvider>;
+}
+beforeEach(() => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  useAuthStore.getState().setAuth('synthetic-session', { id: 'operator', email: 'operator@example.invalid', full_name: 'Operator', role: 'agent', mfa_enabled: true });
+  vi.mocked(useRealtime).mockReturnValue(realtime as ReturnType<typeof useRealtime>);
+  // These shims exercise open/close callbacks only; native focus containment needs browser acceptance.
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.setAttribute('open', ''); } });
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value(this: HTMLDialogElement) { this.removeAttribute('open'); } });
+});
+afterEach(() => {
+  cleanup(); client.clear(); useAuthStore.getState().logout(); vi.clearAllMocks();
+  Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal'); Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
+});
+
+it('names global search and native navigation, focuses its close control and returns focus on cancel', () => {
+  render(tree());
+  expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
+  const search = screen.getByRole('textbox', { name: 'Search all tickets' });
+  fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
+  expect(screen.getByRole('heading')).toHaveTextContent('/tickets?search=Follow%20up');
+  const trigger = screen.getByRole('button', { name: 'Open navigation' });
+  trigger.focus(); fireEvent.click(trigger);
+  const dialog = screen.getByRole('dialog', { name: 'Navigation' });
+  expect(dialog.tagName).toBe('DIALOG'); expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  expect(within(dialog).getByRole('button', { name: 'Close navigation' })).toHaveFocus();
+  expect(within(dialog).getByRole('link', { name: 'Filters' })).toHaveAttribute('aria-current', 'page');
+  fireEvent(dialog, new Event('cancel', { cancelable: true }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(trigger).toHaveFocus();
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('names account/connection disclosures and restores focus when their child actions close', () => {
+  render(tree());
+  const account = screen.getByRole('button', { name: 'Account options' });
+  fireEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
+  const security = screen.getByRole('link', { name: 'Security Profile' });
+  security.focus(); fireEvent.keyDown(security, { key: 'Escape' });
+  expect(account).toHaveFocus(); expect(account).toHaveAttribute('aria-expanded', 'false');
+  const connection = screen.getByRole('button', { name: 'Real-time' });
+  fireEvent.click(connection); expect(connection).toHaveAttribute('aria-expanded', 'true');
+  const reconnect = screen.getByRole('button', { name: 'Force Reconnect' });
+  reconnect.focus(); fireEvent.keyDown(reconnect, { key: 'Escape' });
+  expect(connection).toHaveFocus(); expect(connection).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(connection); fireEvent.click(screen.getByRole('button', { name: 'Force Reconnect' }));
+  expect(realtime.manualReconnect).toHaveBeenCalledTimes(1); expect(connection).toHaveFocus();
+});
+
+it('closes mobile navigation after a selected destination and focuses the workspace', () => {
+  render(tree()); fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Navigation' })).getByRole('link', { name: 'Dashboard home' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
+  expect(screen.getByRole('heading')).toHaveTextContent('Route /');
+});
+
+it('exposes native notification open and dismiss actions without changing realtime invalidation', () => {
+  const result = render(tree());
+  const invalidate = vi.spyOn(client, 'invalidateQueries');
+  vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.created', payload: { id: 'synthetic-ticket', subject: 'Synthetic arrival' } } } as ReturnType<typeof useRealtime>);
+  act(() => result.rerender(tree()));
+  const open = screen.getByRole('button', { name: 'Open ticket notification: New Ticket' });
+  expect(open.tagName).toBe('BUTTON');
+  expect(screen.getByRole('status')).toHaveTextContent('New Ticket');
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ticket', 'synthetic-ticket'] });
+  fireEvent.click(open);
+  expect(screen.getByRole('heading')).toHaveTextContent('/tickets/synthetic-ticket');
+  expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
+});
+
+it('keeps a focused notification available and returns focus when it is dismissed', () => {
+  vi.useFakeTimers();
+  try {
+    vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.created', payload: { id: 'synthetic-ticket', subject: 'Synthetic arrival' } } } as ReturnType<typeof useRealtime>);
+    render(tree());
+    const dismiss = screen.getByRole('button', { name: 'Dismiss ticket notification' });
+    dismiss.focus(); act(() => vi.advanceTimersByTime(8_000));
+    expect(dismiss).toHaveFocus();
+    fireEvent.click(dismiss);
+    expect(screen.queryByRole('button', { name: 'Dismiss ticket notification' })).not.toBeInTheDocument();
+    expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
+  } finally { vi.useRealTimers(); }
+});
