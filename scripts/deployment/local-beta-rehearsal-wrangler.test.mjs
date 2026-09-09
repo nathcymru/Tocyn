@@ -8,6 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import registry from './rehearsal-process-registry.cjs';
+import { killIfPresent } from './fixtures/rehearsal-test-cleanup.mjs';
 import { assertPythonPty } from './rehearsal-prerequisites.mjs';
 import { localEnvironment } from './local-beta-rehearsal.mjs';
 
@@ -65,7 +66,7 @@ test('actual nested local Wrangler stops through repeated npm/PTY interruption',
       terminal.stdin.write('\x03');
       for (let attempt = 0; attempt < 60 && terminal.exitCode === null; attempt += 1) await delay(100);
     }
-    for (const record of owned) if (registry.snapshot().some(info => info.pid === record.pid && info.start === record.start && !info.zombie)) process.kill(record.pid, 'SIGKILL');
+    for (const record of owned) if (registry.snapshot().some(info => info.pid === record.pid && info.start === record.start && !info.zombie)) killIfPresent(record.pid);
     if (terminal?.exitCode === null) terminal.kill('SIGKILL');
     if (sentinel?.exitCode === null) sentinel.kill('SIGKILL');
     await waitFor(() => !registry.snapshot().some(info => !info.zombie && owned.some(record => record.pid === info.pid && record.start === info.start)), 'test recovery stops owned processes');

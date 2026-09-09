@@ -123,3 +123,10 @@ unrelated sentinel preserved. An independent bind probe passed and no owned
 Wrangler task directories remained. The tested static fixture SHA-256 is
 `3618e4d5985b6f93ba0fb68853dc8d13042f8271ae132322bbfc3c2f48a8f347`;
 the earlier 6.2s run remains separate historical evidence.
+
+A later bounded review correction normalizes ownership-directory inspection
+errors and ignores only `ESRCH` when a test-owned process exits between identity
+inspection and teardown. The focused suite then passed 18 tests; actual Wrangler
+interruption was repeated in 4.09s with one completed/zero skipped, seven owned
+processes, full disposal, sentinel preservation and an independent port reuse
+probe. Other signal errors remain failures.

@@ -1,3 +1,5 @@
+import registry from './rehearsal-process-registry.cjs';
+import { killIfPresent } from './fixtures/rehearsal-test-cleanup.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
@@ -119,7 +121,7 @@ test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrela
     const registry = (await import('./rehearsal-process-registry.cjs')).default;
     const { readdirSync } = await import('node:fs');
     const records = existsSync(join(task, 'processes')) ? readdirSync(join(task, 'processes')).flatMap(name => registry.read(join(task, 'processes', name))) : [];
-    for (const record of records) if (registry.snapshot().some(info => info.pid === record.pid && info.start === record.start && !info.zombie)) process.kill(record.pid, 'SIGKILL');
+    for (const record of records) if (registry.snapshot().some(info => info.pid === record.pid && info.start === record.start && !info.zombie)) killIfPresent(record.pid);
     if (terminal?.exitCode === null) terminal.kill('SIGKILL');
     if (sentinel?.exitCode === null) sentinel.kill('SIGKILL');
     await waitFor(() => !registry.snapshot().some(info => !info.zombie && records.some(record => record.pid === info.pid && record.start === info.start)), 'test recovery termination');
@@ -262,4 +264,24 @@ test('receipts use known command labels and never serialize path or argument dat
 test('missing Python is unavailable to optional tests and rejects explicit acceptance', () => {
   assert.equal(pythonPtyAvailable(''), false);
   assert.throws(() => assertPythonPty(''), /requires python3.*acceptance has not run/);
+});
+
+
+test('ownership directory errors are constant for relative and missing paths', () => {
+  for (const directory of ['synthetic-private-relative', join(tmpdir(), 'synthetic-private-missing', 'ownership')]) {
+    assert.throws(() => registry.checkDirectory(directory), error => {
+      assert.equal(error.message, 'Invalid rehearsal ownership directory');
+      assert.equal(error.message.includes(directory), false);
+      assert.equal(error.cause, undefined);
+      return true;
+    });
+  }
+});
+
+test('teardown tolerates a process that exits after inspection but preserves other signal errors', { skip: unsupportedPlatform }, async () => {
+  const child = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
+  await once(child, 'exit');
+  assert.doesNotThrow(() => killIfPresent(child.pid));
+  const denied = Object.assign(new Error('synthetic denied signal'), { code: 'EPERM' });
+  assert.throws(() => killIfPresent(child.pid, () => { throw denied; }), error => error === denied);
 });

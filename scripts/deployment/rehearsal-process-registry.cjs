@@ -6,8 +6,11 @@ const { createHash } = require('node:crypto');
 const originalExecFileSync = cp.execFileSync;
 const LIMIT = 4096;
 function checkDirectory(directory) {
-  const stat = fs.lstatSync(directory);
-  if (!path.isAbsolute(directory) || !stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o077) || stat.uid !== process.getuid()) throw new Error('Invalid rehearsal ownership directory');
+  if (typeof directory !== 'string' || !path.isAbsolute(directory)) throw new Error('Invalid rehearsal ownership directory');
+  let stat;
+  try { stat = fs.lstatSync(directory); }
+  catch { throw new Error('Invalid rehearsal ownership directory'); }
+  if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o077) || stat.uid !== process.getuid()) throw new Error('Invalid rehearsal ownership directory');
 }
 function privateWrite(file, value) {
   const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);

@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 03:40 UTC. This is the authoritative coordinator view.
+Updated 9 September 2026, 03:53 UTC. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -72,13 +72,14 @@ Original recovery branches/stashes remain preserved.
 | --- | --- | --- |
 | #62 integration | Root; Astra/high | Functional PR119 accepted; issue stays open for reader evidence. |
 | #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Functional PR116 accepted 65ad06e after exact-source browser, runtime, security and review evidence. Actual reader gate preserved. |
-| #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Existing PR118 source refreshed onto 65ad06e. Prior audit 8c91a6b required CI 34307518283 passed; fresh CodeQL analysis 1745369561 zero, alerts 13–18 fixed, all 9 threads resolved. Refreshed local tests pass: dashboard 48, portal 53, server 373, widget 3, root 52; runtime 3/types and workflow validation pass. Refreshed required CI is pending. |
+| #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Existing PR118 source refreshed onto 65ad06e. Prior audit 8c91a6b required CI 34307518283 passed; fresh CodeQL analysis 1745369561 zero, alerts 13–18 fixed, all 9 threads resolved. Refreshed local tests pass: dashboard 48, portal 53, server 373, widget 3, root 52; runtime 3/types and workflow validation pass. Refreshed required CI 34308155782 and zero-result CodeQL passed. Three late review comments received one bounded cleanup correction; final checks pending. |
 | Independent review | retry_acceptance; Terra/high | Bounded lifecycle/fallback and frontend reviews complete; no blocking findings or reader claim. No redundant review loop. |
 
 All root browser windows/credential bindings, #21 fixtures/private downloads and #65
 interruption fixtures are disposed. Native 8787/5173/5174 reuse was verified by #21;
 #65's later independent 8787 probe also passed with zero owned Wrangler task dirs.
-No live fixture or remote service is owned by #65 now. Reserve ports before any run.
+No live fixture or remote service is owned by #65 now. Root has port ownership for
+residual accepted-source browser checks; final rehearsal waits its explicit handoff.
 
 Next: validate/publish refreshed PR118, inspect required CI/security and review state,
 and make it ready for root acceptance. After its signed merge, root dispatches the
@@ -172,6 +173,10 @@ health 200, 7 registered processes including workerd, repeated npm/PTY Ctrl-C, d
 state/tree, port reuse, unrelated sentinel preserved. Fixture SHA256
 3618e4d5985b6f93ba0fb68853dc8d13042f8271ae132322bbfc3c2f48a8f347 records exact program.
 Earlier 6.2s interruption remains historical evidence, not substituted for this run.
+The later bounded directory-error/ESRCH review correction passed lifecycle 18 and
+repeated actual interruption in 4.09s (1 completed, 0 skipped); independent 8787
+bind passed and owned task directories were zero. Root accepted the correction
+semantics; first test run caught missing imports, fixed before both final passes.
 
 Focused same-state fallback passed 21.1s on clean 2314188a990265c98d67757048184d1815e3a3ec
 against signed 58feb5e4deef55670f635f099eb67c6bcfffae56:normal customer/MFA sessions,
@@ -223,7 +228,7 @@ source: private-beta-reforecast-after63-2026-09-09.json. Open forecasts remain #
 Reader/access uncertainty prevents a defensible earlier completion forecast despite
 early code readiness. Do not invent percentages.61 completed early as recorded above.
 
-Last recorded operational update delivered 03:22 UTC; root owns subsequent updates.
+Operational update delivered 03:52 UTC; next due 04:22 UTC. Root owns updates.
 Use concise working commentary while active. Non-beta roadmap #50/#64/#90(full
 cost)/#91(journals)/#48/#66(redesign)/#42(production)/#18(native email) stays outside
 critical-path scope except required correctness. Historical detailed checkpoints
