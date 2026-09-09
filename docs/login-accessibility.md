@@ -30,13 +30,13 @@ the current draft and reused if another upload or the message write fails. Remov
 a file drops its retained reference; successful message submission clears the
 cache. These references stay within the mounted conversation and are not persisted.
 
-Credential submission, password-to-MFA navigation, single-use magic-link handling,
-OTP challenge state and authenticated navigation retain their existing contracts.
-No API Worker or authentication-store changes are included in the accessibility
-slice. Operator navigation and queue controls are included; the accepted operator
-detail, query identity and realtime invalidation behavior are preserved. The independent #61 UTC timestamp changes must be preserved when
-integrating its portal pages, together with its session boundary and #62's
-navigation tests.
+Single-use magic-link handling, OTP challenge state and authentication-store
+boundaries retain their existing contracts. The required MFA configuration
+correction described below changes enrollment authorization and authenticated
+invalid-code responses while preserving ordinary token boundaries. Operator
+navigation and queue controls are included; the accepted operator detail, query
+identity, realtime invalidation, portal UTC formatting and navigation tests are
+preserved on the signed #61/#62 integration base.
 
 ## Executable evidence
 
@@ -50,11 +50,14 @@ npm run build --workspace=apps/dashboard
 npm run build --workspace=apps/portal
 ```
 
-At this source checkpoint, all 47 dashboard cases and all 40 portal cases pass on the temporary integrated
-candidate. Its baseline combined 34 dashboard and 40 portal cases; 13 additional
-operator accessibility/recovery cases pass.
+On the signed dependency integration, all 48 dashboard cases and all 42 portal
+cases pass, with both frontend builds and portal lint. The initial combined
+baseline had 34 dashboard and 40 portal cases; subsequent additions cover
+operator controls, actual-client mandatory MFA recovery and truthful portal
+references. Server checks pass 373 cases, affected typechecks and lint, the full
+D1 integration suite and the four-principal tenant fixture.
 These include four dashboard login cases, six portal login accessibility cases,
-eleven portal conversation accessibility/recovery cases, four overlapping-read
+thirteen portal conversation accessibility/recovery cases, four overlapping-read
 regressions and existing login,
 magic-link, OTP and #93 pagination regressions. Both frontend builds and portal
 lint pass. Component checks assert names, selected states, associated errors,
@@ -76,11 +79,11 @@ measurement.
 
 ## Remaining acceptance
 
-Issue #21 remains partial. The temporary candidate combines the frozen #61 and
-#62 source with #21 changes; final acceptance must refresh onto their signed
-merges, preserve their navigation tests, then check the
-whole included login/session, create/history/reply, queue/detail/composer,
-assignment/state, error/dialog and required security-configuration journey.
+Issue #21 remains partial. The current candidate includes the signed #61/#62
+merges and their navigation tests. Acceptance must cover the whole included
+login/session, create/history/reply, queue/detail/composer, assignment/state,
+error/dialog and required security-configuration journey. The revision-qualified
+browser observations and remaining requirements are recorded below.
 
 Actual browser keyboard/focus, computed state-specific contrast and actual
 screen-reader observations are still required. Exercise native dialog Tab and
@@ -186,5 +189,40 @@ The subsequent corrected candidate is rebased onto signed #119 merge
 preserves the final operator PATCH response type, auth/query/realtime controls,
 portal UTC formatting and bounded message pagination. Mandatory enrollment now
 passes the automated runtime and actual client/router recovery regressions above;
-its fresh browser wrong-code/correct-code acceptance is still pending. No earlier
-provisional browser observation is represented as a final source or reader proof.
+its fresh browser wrong-code/correct-code acceptance was pending at that
+checkpoint and is recorded separately below. No earlier provisional observation
+is represented as a final source or reader proof.
+
+## Corrected MFA browser acceptance
+
+On exact integrated application revision
+`d8dadfefb2ac5c40851c9996bb80d67d79d22b62`, the fresh guarded local fixture's
+unenrolled operator completed normal password login into mandatory setup. The
+code field received initial focus, the QR/text-key controls were named, and setup
+readiness was visible. A guaranteed invalid code produced the associated inline
+`Invalid MFA code` error while preserving setup and focus on Verify & Enable.
+The correct current code from the normally issued setup reached Dashboard with
+Workspace focus and no alert.
+
+The already-enrolled operator separately completed normal password/challenge
+login. An invalid code preserved the MFA form and Verify Code focus with its
+associated inline error; a corrected current code reached Dashboard/Workspace.
+Normal sign-out returned login. Manual input-property observations did not
+establish typed-code retention, so this receipt claims retained form/setup and
+successful correction only; the executable actual-client test covers retained
+code state separately.
+
+All browser tabs were closed and credential/OTP memory cleared. The supported
+fixture and both frontends were stopped, the private credential handoff and
+run-owned fixture directories removed, and native bind probes confirmed ports
+8787/5173/5174 reusable. No additional admitted conversation writes were needed
+for this MFA-specific browser pass.
+
+This completes the discovered mandatory-configuration implementation blocker.
+Actual screen-reader output, responsive/mobile navigation interaction and the
+remaining manual attachment/focus-containment acceptance stay open under #21.
+The authorized browser surface exposed no viewport/zoom control; no media-query
+simulation or OS setting change substitutes for that missing observation.
+#62/#93 reader requirements also remain open. The coherent functional increment
+is reviewable with `Progresses #21`; it does not claim issue completion or beta
+readiness.

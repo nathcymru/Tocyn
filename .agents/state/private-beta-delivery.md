@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 03:04 UTC. This is the authoritative coordinator view.
+Updated 9 September 2026, 03:09 UTC. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -47,8 +47,8 @@ Root /Users/ty/Documents/Tocyn is clean at this main revision.
 Not beta-ready. Four issues remain open: #62, #21, #93 and #65.
 
 1. #62 functional implementation is merged; actual reader/UI acceptance remains.
-2. #21 is correcting the browser-discovered mandatory MFA enrollment blocker and
-   completing included UI validation. Its reader evidence also supports #62/#93.
+2. #21 has corrected the browser-discovered mandatory MFA enrollment blocker and
+   passed both MFA browser journeys; final PR checks and manual UI evidence remain. Its reader evidence also supports #62/#93.
 3. #65 lifecycle and focused same-state proof pass. Final accepted-source technical
    matrix and parked artifact reproducibility follow corrected #21 integration.
    These may run while reader evidence is pending, but cannot close readiness.
@@ -67,7 +67,7 @@ in the next coherent checkpoint and preserve the original PR116 recovery ref.
 | Work | Agent / model / effort | Current state and reason |
 | --- | --- | --- |
 | #62 integration | Root; Astra/high | Complete functional PR119; issue stays open for reader/UI evidence. Final original branch721ae6f and recovery stash preserved. |
-| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Temporary candidate b2bc593, isolated correction /tmp/tocyn-21-mfa-correction. Security/session and enrollment race boundaries justify high effort. Refresh signed119 and update existing PR116. |
+| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Published candidate d8dadfefb2ac5c40851c9996bb80d67d79d22b62 on signed119; original and temporary recovery branches preserved. Security/session and enrollment race boundaries justify high effort. Existing PR116 is receiving one final documentation checkpoint and required checks. |
 | #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Owner of /tmp/tocyn-65-local-rehearsal and draft118. Clean2314188 has real interruption and same-state proof; preparing evidence/CI update. |
 | Independent review | retry_acceptance; Terra/high | Bounded lifecycle/fallback and frontend reviews complete, no blocking findings. Actual screen-reader/mobile evidence not claimed. Currently idle; no redundant review loop. |
 
@@ -233,3 +233,13 @@ Next: finish and independently review MFA correction; resume exact-candidate bro
 #65 focused same-state proof passed on clean 2314188a990265c98d67757048184d1815e3a3ec against signed 58feb5e4deef55670f635f099eb67c6bcfffae56. 21.1 seconds; one ticket, four articles, four audit events and authorised canonical digest preserved; admission running/revision 1/tickets 1/mutations 4/uploads 0 unchanged. Inner/outer cleanup disposed and 8787 reusable. Root inspected redacted receipt /tmp/tocyn-65-focused-fallback-receipt.json. Port returned to #21 for corrected runtime/browser checks. Final artifact rehearsal remains pending prerequisites.
 
 Independent internal review: Terra/high found no actionable frontend delta defect through b2bc593, with actual reader/mobile containment explicitly unproved. Root reviewed MFA audience delegation and conditional setup/confirm writes; no remaining blocking finding after stale enrollment write correction. Final tests and exact-source integration remain required. #65 owner preparing coherent update to existing draft #118, with Progresses #65 only.
+
+## Exact-source MFA browser acceptance — 03:09 UTC
+
+On d8dadfefb2ac5c40851c9996bb80d67d79d22b62, root completed normal unenrolled-B password login, setup-ready status, code initial focus and named QR/text-key presentation. A deliberately invalid code produced an associated inline error while preserving setup; a corrected current issued-key code completed enrollment and focused Workspace. Normally issued enrolled-A password/MFA also recovered from an invalid code and focused Workspace after correction. Normal sign-out returned login. Manual typed-code retention was not established; no digits/key/link are recorded.
+
+Corrected actual Wrangler regression: 84 requests, four starts, nine selected D1 rows, five article/event pairs, zero final captures and disposed cleanup (13.36 seconds). Refreshed frontend checks: dashboard48/portal42 and both builds pass. Internal auth, tenant, concurrency and frontend review found no remaining blocking defect.
+
+Root closed the browser and cleared credentials. Owner disposed both frontends/API, verified private handoff removal, zero interactive fixture directories and 8787/5173/5174 bind reuse. PR116 remains Progresses21, with actual reader/responsive-navigation and other unperformed manual acceptance explicit. Source is frozen; final documentation/CI checks precede integration.
+
+PR118 prior head95d4cf3 passed full required CI34305592423/security. Its owner pushed final portability batch0c0d080 (POSIX execution tests skipped off macOS/Linux with a pure refusal contract test); root49/49 focused tests pass and updated CI is pending. Unchanged actual interruption/fallback evidence remains tied to2314188. No full final technical artifact rehearsal yet.
