@@ -18,7 +18,7 @@ npm run rehearse:local-beta -- --revision <candidate-40-character-sha> \
   --known-good <known-good-40-character-sha> --receipt /absolute/path/receipt.json
 ```
 
-The runner supports macOS and Linux with Node 22; other platforms are refused before work begins. The command refuses a dirty or mismatched source revision. It creates a
+The runner supports macOS and Linux with Node 22 and Python 3 with its `pty` module; other platforms are refused before work begins. The command refuses a dirty or mismatched source revision. It creates a
 runner-owned temporary root, keeps Wrangler configuration/cache and temporary
 files beneath that root, starts from a small system-runtime environment
 allowlist, and removes its generated checkouts, build outputs and local state.
@@ -49,9 +49,9 @@ requires an actual accepted-candidate rehearsal; source tests alone do not
 claim final candidate acceptance.
 
 The receipt is redacted and records only revisions, command names/results,
-durations, artifact manifest totals/digest, the local-only mode, and cleanup.
+durations, exit codes/signals, artifact manifest totals/digest, the local-only mode, and cleanup. Command labels come from fixed known step names; raw arguments and absolute checkout/tool paths are never serialized.
 It excludes credentials, capture content, recipient identities, tokens, local
-state, logs, and provider receipts. This is not a deployment, provider rollback,
+state, logs, and provider receipts. Child output remains suppressed because fixture output can include generated private credentials; failures retain the safe step label and exit status rather than inheriting raw output. This is not a deployment, provider rollback,
 backup/restore, migration reversal, or production readiness claim.
 
 The focused lifecycle regression sends repeated terminal `Ctrl-C` through a
@@ -110,3 +110,16 @@ POSIX lifecycle execution cases are skipped on unsupported test hosts, while
 the platform refusal contract remains tested without changing host identity.
 Windows execution was not performed for this change; the rehearsal runner does
 not claim Windows support.
+
+The generic test suite explicitly skips the optional PTY case when Python/pty
+is unavailable and reports the reason in TAP. The explicit interruption command
+and full rehearsal reject that missing prerequisite before creating task state;
+a skipped test cannot become completed interruption evidence. Static fixture
+programs receive their paths and options as argument/environment data, never
+interpolated executable source. The revised static-fixture interruption program was then rerun on macOS/Node 22:
+one completed test, zero skipped, 4.0 seconds, health 200, seven registered
+processes including workerd, disposed state/tree, reusable port 8787, and the
+unrelated sentinel preserved. An independent bind probe passed and no owned
+Wrangler task directories remained. The tested static fixture SHA-256 is
+`3618e4d5985b6f93ba0fb68853dc8d13042f8271ae132322bbfc3c2f48a8f347`;
+the earlier 6.2s run remains separate historical evidence.

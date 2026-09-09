@@ -9,8 +9,12 @@ source paths: a final candidate and an accepted signed known-good revision. It
 may begin only when their checked-in server migration manifests match exactly.
 It also verifies that the local D1 state contains the ticket, article, audit,
 replay, and local-beta admission tables required by the workflow. A migration
-manifest mismatch records the fallback as unavailable; missing runtime schema
-fails the probe. In either case, it must not reset state, apply a reverse
+manifest mismatch records the fallback as unavailable. A positively identified
+missing required table in fixture-verified state records `runtime_schema_incompatible`
+and makes the outer rehearsal fail; the inventory is checked before starting
+either Worker and before authorized snapshot reads. Unreadable state, an invalid
+fixture identity, HTTP/auth failures and preservation mismatches remain failures,
+not inferred schema unavailability. In either case, it must not reset state, apply a reverse
 migration, or present an empty application as recovery.
 
 The candidate creates state only through the normal local runtime: fixture

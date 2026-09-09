@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import registry from './rehearsal-process-registry.cjs';
+import { assertPythonPty } from './rehearsal-prerequisites.mjs';
 import { localEnvironment } from './local-beta-rehearsal.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -39,6 +40,7 @@ sys.exit(os.waitstatus_to_exitcode(status))`;
 
 test('actual nested local Wrangler stops through repeated npm/PTY interruption', { skip: process.env.TOCYN_REHEARSAL_WRANGLER_TEST !== '1', timeout: 40000 }, async t => {
   assert.ok(['darwin', 'linux'].includes(process.platform));
+  assertPythonPty();
   await portFree();
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-wrangler-'));
   const task = join(directory, 'task'); mkdirSync(task, { mode: 0o700 });
@@ -51,8 +53,8 @@ test('actual nested local Wrangler stops through repeated npm/PTY interruption',
   const ready = join(task, 'ready'); const receiptPath = join(directory, 'receipt.json');
   const wranglerArgs = [join(root, 'node_modules/wrangler/bin/wrangler.js'), 'dev', '--local', '--ip', '127.0.0.1', '--port', '8787', '--persist-to', join(task, 'state'), '--config', join(task, 'wrangler.json')];
   writeFileSync(join(fixture, 'package.json'), JSON.stringify({ private: true, scripts: { fixture: 'node fixture.mjs' } }), { mode: 0o600 });
-  writeFileSync(join(fixture, 'fixture.mjs'), `import {spawn} from 'node:child_process';import {writeFileSync} from 'node:fs';spawn(process.execPath,${JSON.stringify(wranglerArgs)},{detached:true,stdio:'ignore'});process.on('SIGTERM',()=>{});setInterval(()=>{},1000);for(let i=0;i<150;i++){try{const response=await fetch('http://127.0.0.1:8787/health',{redirect:'error',signal:AbortSignal.timeout(300)});await response.body?.cancel();if(response.status===200){writeFileSync(${JSON.stringify(ready)},'ready');break}}catch{}await new Promise(r=>setTimeout(r,100))}`, { mode: 0o600 });
-  const program = `import {RehearsalLifecycle,installSignalCleanup} from ${JSON.stringify(new URL('./local-beta-rehearsal.mjs', import.meta.url).href)};const receipt={commands:[],cleanup:'pending'};const lifecycle=new RehearsalLifecycle(${JSON.stringify(task)},receipt);installSignalCleanup(lifecycle,receipt,${JSON.stringify(receiptPath)});void lifecycle.run('npm',['run','fixture'],${JSON.stringify(fixture)},process.env).catch(()=>{});`;
+  const processFixture = fileURLToPath(new URL('./fixtures/rehearsal-process.mjs', import.meta.url));
+  copyFileSync(processFixture, join(fixture, 'fixture.mjs'));
   let owned = []; let terminal; let sentinel;
   t.after(async () => {
     // Test failure recovery is restricted to recorded identities, never arbitrary port owners.
@@ -70,7 +72,7 @@ test('actual nested local Wrangler stops through repeated npm/PTY interruption',
     rmSync(directory, { recursive: true, force: true });
   });
   sentinel = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
-  terminal = spawn('python3', ['-c', bridge, process.execPath, '--input-type=module', '-e', program], { env: localEnvironment(process.env, task), stdio: ['pipe', 'pipe', 'pipe'] });
+  terminal = spawn('python3', ['-c', bridge, process.execPath, processFixture, 'controller', task, fixture, receiptPath], { env: { ...localEnvironment(process.env, task), REHEARSAL_FIXTURE_MODE: 'wrangler', WRANGLER_ARGS: JSON.stringify(wranglerArgs), READY: ready }, stdio: ['pipe', 'pipe', 'pipe'] });
   let output = ''; terminal.stdout.on('data', chunk => { output += chunk; }); terminal.stderr.on('data', chunk => { output += chunk; });
   await waitFor(() => existsSync(ready), 'actual local Wrangler readiness');
   for (const name of readdirSync(join(task, 'processes'))) owned.push(...registry.read(join(task, 'processes', name)));
@@ -86,5 +88,5 @@ test('actual nested local Wrangler stops through repeated npm/PTY interruption',
   await portFree();
   assert.equal(sentinel.exitCode, null);
   process.kill(sentinel.pid, 0);
-  t.diagnostic(JSON.stringify({ localHealth: 200, registeredProcesses: owned.length, cleanup: 'disposed', loopbackPortReleased: true, unrelatedProcessPreserved: true }));
+  t.diagnostic(JSON.stringify({ interruption: 'completed', localHealth: 200, registeredProcesses: owned.length, cleanup: 'disposed', loopbackPortReleased: true, unrelatedProcessPreserved: true }));
 });

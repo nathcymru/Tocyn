@@ -45,10 +45,23 @@ export function assertCompatibleMigrations(candidateSource, knownGoodSource) {
   return candidate;
 }
 
+export class RuntimeSchemaIncompatibleError extends Error {
+  constructor(table) {
+    super(`Local same-state fallback rejected: local state lacks required table ${table}`);
+    this.name = 'RuntimeSchemaIncompatibleError';
+  }
+}
+
+/** Only a positively identified schema mismatch becomes an unavailable result. */
+export function runtimeSchemaUnavailableReceipt(error, revisions) {
+  if (!(error instanceof RuntimeSchemaIncompatibleError)) throw error;
+  return unavailableFallbackReceipt({ ...revisions, reason: 'runtime_schema_incompatible' });
+}
+
 export function assertRequiredSchemaTables(tables) {
   if (!Array.isArray(tables) || tables.some(table => typeof table !== 'string')) fail('schema table inventory must be a string array');
   const actual = new Set(tables);
-  for (const table of requiredTables) if (!actual.has(table)) fail(`local state lacks required table ${table}`);
+  for (const table of requiredTables) if (!actual.has(table)) throw new RuntimeSchemaIncompatibleError(table);
   return Object.freeze([...requiredTables]);
 }
 

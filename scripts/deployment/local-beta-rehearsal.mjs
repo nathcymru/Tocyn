@@ -1,6 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import registry from './rehearsal-process-registry.cjs';
+import { assertPythonPty } from './rehearsal-prerequisites.mjs';
 import { createServer } from 'node:net';
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -94,6 +95,32 @@ async function portFree(port) {
 const preload = fileURLToPath(new URL('./rehearsal-process-preload.cjs', import.meta.url));
 const delay = milliseconds => new Promise(resolvePromise => setTimeout(resolvePromise, milliseconds));
 
+// Receipt labels contain only known step names, never argv, paths, fixture code or values.
+export function receiptCommand(command, args) {
+  const executable = basename(command);
+  if (executable === 'npm' || executable === 'npm.cmd') {
+    const scripts = new Set(requiredAcceptanceCommands.filter(([tool, argv]) => tool === 'npm' && argv[0] === 'run').map(([, argv]) => argv[1]));
+    if (args[0] === 'run' && scripts.has(args[1])) return `npm run ${args[1]}`;
+    if (args[0] === 'ci') return 'npm ci';
+    if (args[0] === 'rebuild' && args[1] === 'better-sqlite3') return 'npm rebuild better-sqlite3';
+    return 'npm command';
+  }
+  if (executable === 'git' && args[0] === 'worktree' && args[1] === 'add') return 'git worktree add';
+  if (executable === 'node' || executable === 'node.exe') {
+    if (args.some(value => basename(value) === 'wrangler.js')) {
+      if (args.includes('deploy') && args.includes('--dry-run')) return 'wrangler deploy dry-run';
+      if (args.includes('dev') && args.includes('--local')) return 'wrangler dev local';
+      if (args.includes('migrations') && args.includes('--local')) return 'wrangler local migrations';
+      if (args.includes('execute') && args.includes('--local')) return 'wrangler local seed';
+    }
+    for (const name of ['isolated-release.mjs', 'verify-release-artifact.mjs', 'run-local-beta-operator.ts', 'local-beta-fallback-command.mjs']) {
+      if (args.some(value => basename(value) === name)) return `node ${name}`;
+    }
+    return args.includes('--test') ? 'node tests' : 'node fixture';
+  }
+  return 'local process';
+}
+
 export class RehearsalLifecycle {
   constructor(taskRoot, receipt) {
     assertRehearsalPlatform();
@@ -108,7 +135,7 @@ export class RehearsalLifecycle {
     if (this.scopes.size >= 128) fail('local rehearsal command limit exceeded');
     const directory = join(this.registryRoot, randomUUID());
     mkdirSync(directory, { mode: 0o700 });
-    const scope = { directory, started: Date.now(), command: [command, ...args].join(' '), child: undefined, stopped: false, stopPromise: undefined };
+    const scope = { directory, started: Date.now(), command: receiptCommand(command, args), child: undefined, stopped: false, stopPromise: undefined };
     // Register the scope before spawning; even a spawn/registration failure remains cleanup-owned.
     const handle = {
       get pid() { return scope.child?.pid; },
@@ -133,8 +160,8 @@ export class RehearsalLifecycle {
     // Leader exit never removes ownership. Finish all descendants before the next command.
     await this.stopScope(scope);
     const passed = code === 0 && !signal;
-    this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: passed ? 'passed' : 'failed' });
-    if (!passed) fail(`local command failed: ${command} ${args[0] || ''}`);
+    this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: passed ? 'passed' : 'failed', exitCode: code, signal });
+    if (!passed) fail(`local command failed: ${scope.command}`);
   }
 
   async stopService(handle) {
@@ -303,6 +330,7 @@ export async function runRehearsal({ revision, knownGood, receiptPath }) {
   const plan = rehearsalPlan(revision, knownGood);
   assertRehearsalPlatform();
   if (!process.versions.node.startsWith('22.')) fail('Node 22 is required for the local rehearsal');
+  assertPythonPty();
   assertCleanRevision(root, revision);
   if (!receiptPath || !isAbsolute(receiptPath) || basename(receiptPath) !== 'receipt.json') fail('receipt must be an absolute path named receipt.json');
   await assertAvailablePorts();

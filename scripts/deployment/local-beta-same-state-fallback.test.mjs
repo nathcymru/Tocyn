@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import test from 'node:test';
 import {
   assertCompatibleMigrations, assertPreservedFallbackState, assertRequiredSchemaTables,
-  canonicalDigest, migrationManifest, passedFallbackReceipt, unavailableFallbackReceipt,
+  canonicalDigest, migrationManifest, passedFallbackReceipt, unavailableFallbackReceipt, runtimeSchemaUnavailableReceipt,
 } from './local-beta-same-state-fallback.mjs';
 
 const candidate = 'a'.repeat(40);
@@ -62,4 +62,18 @@ test('fallback receipts contain hashes and counters, never raw auth or conversat
   assert.equal(JSON.stringify(receipt).includes('synthetic'), false);
   assert.deepEqual(unavailableFallbackReceipt({ candidate, knownGood, reason: 'migration_manifest_incompatible' }).fallback, 'unavailable');
   assert.throws(() => unavailableFallbackReceipt({ candidate, knownGood, reason: 'ignored' }), /not allowed/);
+});
+
+
+test('only a typed missing-table failure becomes schema unavailable; unrelated failures remain failures', () => {
+  let missing;
+  try { assertRequiredSchemaTables(coreTables.filter(table => table !== 'conversation_events')); }
+  catch (error) { missing = error; }
+  assert.deepEqual(runtimeSchemaUnavailableReceipt(missing, { candidate, knownGood }), {
+    mode: 'local-only-same-state', candidate, knownGood,
+    fallback: 'unavailable', reason: 'runtime_schema_incompatible',
+  });
+  for (const error of [new Error('HTTP failure'), new Error('canonical mismatch'), new Error('local state lacks required table conversation_events')]) {
+    assert.throws(() => runtimeSchemaUnavailableReceipt(error, { candidate, knownGood }), value => value === error);
+  }
 });

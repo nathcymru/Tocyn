@@ -2,14 +2,17 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import test from 'node:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { assertRehearsalPlatform, assertCleanRevision, compareArtifactFiles, localEnvironment, pinnedFrontendEnvironment, RehearsalLifecycle, rehearsalPlan } from './local-beta-rehearsal.mjs';
+import { fileURLToPath } from 'node:url';
+import { receiptCommand, assertRehearsalPlatform, assertCleanRevision, compareArtifactFiles, localEnvironment, pinnedFrontendEnvironment, RehearsalLifecycle, rehearsalPlan } from './local-beta-rehearsal.mjs';
+
+import { pythonPtyAvailable, assertPythonPty } from './rehearsal-prerequisites.mjs';
 
 const sha = 'a'.repeat(40);
 const unsupportedPlatform = !['darwin', 'linux'].includes(process.platform);
+const processFixture = fileURLToPath(new URL('./fixtures/rehearsal-process.mjs', import.meta.url));
 
 test('local-only rehearsal plan retains the protected-operation boundary', () => {
   const plan = rehearsalPlan(sha, 'b'.repeat(40));
@@ -65,6 +68,9 @@ test('owned child failure is redacted and cleanup terminates its process group',
   const failed = lifecycle.run(process.execPath, ['-e', 'process.exit(7)'], directory, { ...process.env, PRIVATE_SENTINEL: 'do-not-report' });
   await assert.rejects(failed, /local command failed/);
   assert.equal(JSON.stringify(receipt).includes('do-not-report'), false);
+  assert.equal(JSON.stringify(receipt).includes(directory), false);
+  assert.equal(JSON.stringify(receipt).includes(process.execPath), false);
+  assert.equal(receipt.commands[0].exitCode, 7);
   const running = lifecycle.run(process.execPath, ['-e', 'setInterval(() => {}, 1_000)'], directory, process.env);
   await new Promise(resolvePromise => setTimeout(resolvePromise, 30));
   await lifecycle.cleanup();
@@ -105,10 +111,9 @@ function processAlive(pid) {
   catch (error) { if (error.code === 'ESRCH') return false; throw error; }
 }
 
-test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrelated process', { skip: unsupportedPlatform }, async t => {
+test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrelated process', { skip: unsupportedPlatform ? 'POSIX process ownership is unsupported on this host' : !pythonPtyAvailable() ? 'python3/pty unavailable; optional PTY execution skipped' : false }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-signal-'));
   const task = join(directory, 'task'); const fixture = join(directory, 'fixture'); const receiptPath = join(directory, 'receipt.json');
-  const moduleUrl = pathToFileURL(fileURLToPath(new URL('./local-beta-rehearsal.mjs', import.meta.url))).href;
   let sentinel; let terminal;
   t.after(async () => {
     const registry = (await import('./rehearsal-process-registry.cjs')).default;
@@ -122,10 +127,9 @@ test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrela
   });
   mkdirSync(fixture);
   writeFileSync(join(fixture, 'package.json'), JSON.stringify({ private: true, scripts: { fixture: 'node fixture.mjs' } }));
-  writeFileSync(join(fixture, 'fixture.mjs'), `import { spawn } from 'node:child_process'; import { writeFileSync } from 'node:fs'; const nested = spawn(process.execPath, ['-e', 'process.on("SIGTERM",()=>{}); setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }); nested.unref(); writeFileSync(process.env.GRANDCHILD_PID, String(nested.pid)); process.on('SIGINT', () => {}); process.on('SIGTERM', () => {}); writeFileSync(process.env.READY, 'ready'); setInterval(() => {}, 1000);`);
-  const program = `import { mkdirSync } from 'node:fs'; import { RehearsalLifecycle, installSignalCleanup } from ${JSON.stringify(moduleUrl)}; const task=process.env.TASK; mkdirSync(task,{mode:0o700}); const receipt={commands:[],cleanup:'pending'}; const lifecycle=new RehearsalLifecycle(task,receipt); installSignalCleanup(lifecycle,receipt,process.env.RECEIPT); void lifecycle.run('npm',['run','fixture'],process.env.FIXTURE,{ ...process.env, GRANDCHILD_PID: process.env.GRANDCHILD_PID, READY: process.env.READY }).catch(() => {});`;
+  copyFileSync(processFixture, join(fixture, 'fixture.mjs'));
   sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
-  terminal = spawn('python3', ['-c', ptyBridge(), process.execPath, '--input-type=module', '-e', program], { env: { ...process.env, TASK: task, RECEIPT: receiptPath, FIXTURE: fixture, GRANDCHILD_PID: join(task, 'grandchild.pid'), READY: join(task, 'ready') }, stdio: ['pipe', 'pipe', 'pipe'] });
+  terminal = spawn('python3', ['-c', ptyBridge(), process.execPath, processFixture, 'controller', task, fixture, receiptPath], { env: { ...process.env, REHEARSAL_FIXTURE_MODE: 'npm-nested', GRANDCHILD_PID: join(task, 'grandchild.pid'), READY: join(task, 'ready') }, stdio: ['pipe', 'pipe', 'pipe'] });
   let output = ''; terminal.stdout.on('data', chunk => { output += chunk; });
   await waitFor(() => existsSync(join(task, 'ready')), 'nested fixture readiness');
   const grandchildPid = Number(readFileSync(join(task, 'grandchild.pid'), 'utf8'));
@@ -161,8 +165,7 @@ test('leader exit retains ownership of detached and same-group children', { skip
   const lifecycle = new RehearsalLifecycle(task, { commands: [] });
   t.after(async () => { await lifecycle.cleanup(); rmSync(directory, { recursive: true, force: true }); });
   const pids = join(directory, 'pids.json');
-  const program = `const {spawn}=require('node:child_process'); const children=[false,true].map(detached=>{const p=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached,stdio:'ignore',env:{PATH:process.env.PATH}});p.unref();return p.pid});require('node:fs').writeFileSync(${JSON.stringify(pids)},JSON.stringify(children));process.exit(0)`;
-  const service = lifecycle.startService(process.execPath, ['-e', program], directory, process.env);
+  const service = lifecycle.startService(process.execPath, [processFixture, 'leader', pids], directory, process.env);
   assert.equal((await service.exited).code, 0);
   const children = JSON.parse(readFileSync(pids, 'utf8'));
   await lifecycle.stopService(service);
@@ -179,8 +182,7 @@ test('closing rejects a late detached spawn before it can escape ownership', { s
   const lifecycle = new RehearsalLifecycle(task, { commands: [] });
   t.after(async () => { await lifecycle.cleanup(); rmSync(directory, { recursive: true, force: true }); });
   const ready = join(directory, 'ready'); const result = join(directory, 'result');
-  const program = `const {spawn}=require('node:child_process');const fs=require('node:fs');process.on('SIGTERM',()=>{try{spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'});fs.writeFileSync(${JSON.stringify(result)},'escaped')}catch{fs.writeFileSync(${JSON.stringify(result)},'rejected')}process.exit(0)});fs.writeFileSync(${JSON.stringify(ready)},'ready');setInterval(()=>{},1000)`;
-  const service = lifecycle.startService(process.execPath, ['-e', program], directory, process.env);
+  const service = lifecycle.startService(process.execPath, [processFixture, 'late', ready, result], directory, process.env);
   await waitFor(() => existsSync(ready), 'late-spawn fixture');
   await lifecycle.stopService(service);
   assert.equal(readFileSync(result, 'utf8'), 'rejected');
@@ -206,10 +208,7 @@ test('outer ownership survives an inner lifecycle leader and loader environment 
   const lifecycle = new RehearsalLifecycle(task, { commands: [] });
   t.after(async () => { await lifecycle.cleanup(); rmSync(directory, { recursive: true, force: true }); });
   const pids = join(directory, 'pids');
-  const moduleUrl = new URL('./local-beta-rehearsal.mjs', import.meta.url).href;
-  const childProgram = `const {spawn}=require('node:child_process');const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore',env:{PATH:process.env.PATH,NODE_OPTIONS:'--no-warnings'}});child.unref();require('node:fs').writeFileSync(${JSON.stringify(pids)},String(child.pid));setInterval(()=>{},1000)`;
-  const program = `import {RehearsalLifecycle} from ${JSON.stringify(moduleUrl)};const inner=new RehearsalLifecycle(${JSON.stringify(inner)},{commands:[]});inner.startService(process.execPath,['-e',${JSON.stringify(childProgram)}],${JSON.stringify(directory)},process.env);process.on('SIGTERM',()=>{});setInterval(()=>{},1000)`;
-  const outer = lifecycle.startService(process.execPath, ['--input-type=module', '-e', program], directory, process.env);
+  const outer = lifecycle.startService(process.execPath, [processFixture, 'inner', inner, directory, pids], directory, process.env);
   await waitFor(() => existsSync(pids), 'inner detached child');
   const nested = Number(readFileSync(pids, 'utf8'));
   await lifecycle.stopService(outer);
@@ -251,4 +250,16 @@ test('the runner deliberately refuses unsupported platforms without mutating hos
   for (const platform of ['darwin', 'linux']) assert.doesNotThrow(() => assertRehearsalPlatform(platform));
   for (const platform of ['win32', 'freebsd', 'unknown']) assert.throws(() => assertRehearsalPlatform(platform), /requires macOS or Linux/);
   if (unsupportedPlatform) assert.throws(() => assertRehearsalPlatform(), /requires macOS or Linux/);
+});
+
+
+test('receipts use known command labels and never serialize path or argument data', () => {
+  assert.equal(receiptCommand('/private/user/runtime/node', ['/private/task/wrangler.js', 'dev', '--local', '--config', '/private/task/config.json']), 'wrangler dev local');
+  assert.equal(receiptCommand('/private/user/runtime/node', ['-e', 'sensitive fixture code', '/private/task/value']), 'node fixture');
+  assert.equal(receiptCommand('/private/user/npm', ['run', 'secret-value']), 'npm command');
+});
+
+test('missing Python is unavailable to optional tests and rejects explicit acceptance', () => {
+  assert.equal(pythonPtyAvailable(''), false);
+  assert.throws(() => assertPythonPty(''), /requires python3.*acceptance has not run/);
 });

@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import {
   assertCompatibleMigrations, assertPreservedFallbackState, assertRequiredSchemaTables,
-  canonicalDigest, passedFallbackReceipt, unavailableFallbackReceipt,
+  canonicalDigest, passedFallbackReceipt, unavailableFallbackReceipt, runtimeSchemaUnavailableReceipt,
 } from './local-beta-same-state-fallback.mjs';
 
 type FallbackLifecycle = {
@@ -136,7 +136,18 @@ async function loadBootstrap(source: Source, encryptionKey: string): Promise<Boo
   return module.createLocalFixtureBootstrap({ MFA_ENCRYPTION_KEY: encryptionKey });
 }
 
+/** Inspect migrated, fixture-verified local state before serving or reading its routes. */
+export async function assertRuntimeSchema(source: Source, state: string): Promise<void> {
+  const module = await import(pathToFileURL(join(sourceServer(source), 'scripts/local-beta-state.ts')).href) as { openLocalBetaState: (directory: string) => { prepare: (sql: string) => { all: () => unknown[] }; close: () => void } };
+  const db = module.openLocalBetaState(state);
+  try {
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row => (row as { name?: unknown }).name);
+    assertRequiredSchemaTables(tables);
+  } finally { db.close(); }
+}
+
 async function stateSnapshot(source: Source, state: string, customerToken: string, staffToken: string, ticketId: string): Promise<RuntimeSnapshot> {
+  await assertRuntimeSchema(source, state);
   const detail = await request(`/api/v1/customer/tickets/${ticketId}`, { token: customerToken });
   responseStatus(detail, 200, 'authorized customer detail');
   const history = await request(`/api/tickets/${ticketId}/history`, { token: staffToken });
@@ -262,6 +273,7 @@ export async function runSameStateFallback({ candidate, knownGood, taskRoot, lif
   let candidateWorker: ManagedService | undefined;
   let knownGoodWorker: ManagedService | undefined;
   try {
+    await assertRuntimeSchema(candidate, state);
     candidateWorker = await startWorker(lifecycle, candidate, state, candidateConfig, taskRoot, env);
     const sessions = await issueSessionsAndMutate(bootstrap, candidate);
     const candidateSnapshot = await stateSnapshot(candidate, state, sessions.customerToken, sessions.staffToken, sessions.ticketId);
@@ -269,10 +281,13 @@ export async function runSameStateFallback({ candidate, knownGood, taskRoot, lif
     await lifecycle.stopService!(candidateWorker); candidateWorker = undefined;
     if (!await portAvailable()) fail('candidate Worker did not release the loopback port');
     const knownGoodConfig = localConfig(knownGood, taskRoot);
+    await assertRuntimeSchema(knownGood, state);
     knownGoodWorker = await startWorker(lifecycle, knownGood, state, knownGoodConfig, taskRoot, env);
     const knownGoodSnapshot = await stateSnapshot(knownGood, state, sessions.customerToken, sessions.staffToken, sessions.ticketId);
     const preserved = assertPreservedFallbackState(candidateSnapshot, knownGoodSnapshot);
     return passedFallbackReceipt({ candidate: candidate.revision, knownGood: knownGood.revision, migrations: migrations.digest, snapshot: preserved });
+  } catch (error) {
+    return runtimeSchemaUnavailableReceipt(error, { candidate: candidate.revision, knownGood: knownGood.revision });
   } finally {
     if (candidateWorker) await lifecycle.stopService!(candidateWorker);
     if (knownGoodWorker) await lifecycle.stopService!(knownGoodWorker);
