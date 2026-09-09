@@ -39,18 +39,18 @@ do not skip affected tests. Preserve CRLF in existing dashboard source files.
 
 ## Accepted main and remaining gates
 
-Accepted signed main: 018aff41cb55dbdf34bd6e60246827715fb00403 (PR120), signature
+Accepted signed main: 018aff41cb55dbdf34bd6e60246827715fb00403 (PR #120), signature
 verified by root. Required CI 34309984129/security 34309983146 passed, three analyses
 zero, automatic review complete without threads; root/Terra/exact browser review
 passed. Main security 34310386087 passed with three zero-result analyses; main CI
-34310386652 passed. Accepted tooling PR118 is signed
+34310386652 passed. Accepted tooling PR #118 is signed
 7d8187, with main CI 34309233371/security 34309232682 passed; #65 partial receipt 5595575218.
 
 Not beta-ready. Four issues remain open: #62, #21, #93 and #65.
 
 1. #62/#93 functional implementations are merged; their own actual-reader criteria
    remain open. Native keyboard/contrast evidence is in the subsystem receipts.
-2. The bounded residual #21 application correction is accepted in PR120. Actual
+2. The bounded residual #21 application correction is accepted in PR #120. Actual
    reader acceptance remains open for #21/#62/#93; functional/browser checks do
    not waive those criteria.
 3. The first full #65 technical attempt on accepted 018aff41 failed because its
@@ -86,16 +86,16 @@ The failed 018aff41 attempt receipt is retained privately at
 one failed server-lint command (exit 1), cleanup disposed and fallback not-run.
 The temporary candidate/comparison checkouts/state were removed. Correction proof
 passed the exact offline/no-install server ESLint command, server cwd/local tool
-resolution, all24 command/tool inventory checks and lifecycle19. Fresh ignore-scripts
-setup needed the routine Node22 better-sqlite3 rebuild before the loader test passed. Native 8787/5173/
-5174 bind probes passed and owned rehearsal task directories were zero. Ports were
+resolution, all 24 command/tool inventory checks and 19 lifecycle tests. Fresh ignore-scripts
+setup needed the routine Node 22 better-sqlite3 rebuild before the loader test
+passed. Native bind probes for ports 8787, 5173 and 5174 passed and owned rehearsal task directories were zero. Ports were
 explicitly returned to root; no #65 runtime or full rerun is active.
 
 ## Current evidence and unresolved implementation
 
 ### #61 accepted
 
-PR117 fixes stale portal bootstrap overwriting a verified session, SQLite UTC
+PR #117 fixes stale portal bootstrap overwriting a verified session, SQLite UTC
 formatting and strict guarded request-body behavior. Actual local issued A/B
 magic links and staff MFA exercise intake/history/follow-up, public/internal
 responses, capture outage preserving durable writes, challenge/session expiry,
@@ -139,7 +139,7 @@ was not claimed. The supported fixture itself had already disposed its state.
 
 ### #21 accepted functional evidence
 
-PR116 corrected mandatory MFA enrollment/confirmation and concurrency fencing.
+PR #116 corrected mandatory MFA enrollment/confirmation and concurrency fencing.
 Actual enrolled-A and unenrolled-B password/MFA journeys recovered from invalid
 codes and focused Workspace; setup-ready/key presentation and normal sign-out
 were observed. Corrected Wrangler regression: 84 requests, 4 starts, 9 selected D1
@@ -173,18 +173,19 @@ to schema unavailable. All 9 review threads resolved; fresh JS/Actions/Python
 CodeQL results zero and alerts 13–18 fixed without suppression/dismissal. Required
 CI 34307518283 passed. Focused checks: lifecycle 16, pure fallback 5, runtime 3, root 52.
 
-Fresh static fixture interruption passed 3.96s on macOS/Node 22: 1 completed/0 skipped,
+Fresh static fixture interruption passed 3.96 seconds on macOS/Node 22: 1 completed/0 skipped,
 health 200, 7 registered processes including workerd, repeated npm/PTY Ctrl-C, disposed
 state/tree, port reuse, unrelated sentinel preserved. Fixture SHA256
 3618e4d5985b6f93ba0fb68853dc8d13042f8271ae132322bbfc3c2f48a8f347 records exact program.
-Earlier 6.2s interruption remains historical evidence, not substituted for this run.
+The earlier interruption test took 6.2 seconds and remains historical evidence;
+it is not substituted for this run.
 The later bounded directory-error/ESRCH review correction passed lifecycle 18 and
-repeated actual interruption in 4.09s (1 completed, 0 skipped); independent 8787
+repeated actual interruption in 4.09 seconds (1 completed, 0 skipped); independent 8787
 bind passed and owned task directories were zero. Root accepted the correction
 semantics; first test run caught missing imports, fixed before both final passes.
 
-Focused same-state fallback passed 21.1s on clean 2314188a990265c98d67757048184d1815e3a3ec
-against signed 58feb5e4deef55670f635f099eb67c6bcfffae56:normal customer/MFA sessions,
+Focused same-state fallback passed 21.1 seconds on clean 2314188a990265c98d67757048184d1815e3a3ec
+against signed 58feb5e4deef55670f635f099eb67c6bcfffae56: normal customer/MFA sessions,
 1 ticket/4 articles/4 events, canonical digest and admission running/revision 1/
 tickets 1/mutations 4/uploads 0 preserved. Inner/outer cleanup disposed and 8787 reused.
 Private redacted receipt: /tmp/tocyn-65-focused-fallback-receipt.json. This is bounded
@@ -198,15 +199,15 @@ must be accepted before root dispatches the next full run.
 
 | Issue / PR | Signed merge / outcome |
 | --- | --- |
-| #20 /101 | 3fae282, contributor setup; Done 8 Sep, variance-2. |
-| #57 /102–105 | Source/local runtime/capture/CORS; Done 8 Sep, variance-12. Owner local-only authority supersedes historical remote demonstration. |
-| #58 /110 | 4bf6dc5, genuine issued two-tenant fixture; Done 8 Sep, variance-17. |
-| #19 /111 | 987218b, actual local isolation/realtime; Done 8 Sep, variance-24. AI/vector/workflow doubles remain explicitly identified. |
-| #106 /107 | 18a5ea7, Vitest/mocker4.1.11; alerts 99/100 fixed, not dismissed. |
-| #108 /109 | 80e23ba, Sharp0.35.4 narrow override; alert 101 fixed. Broader #12 remains open. |
-| #59 /112 | e0ce28b, canonical atomic intake; Done 9 Sep, variance-30; receipt 5593265051. |
-| #60 /113 | 646e1a9, scoped atomic retries; Done 9 Sep, variance-37; receipt 5593570669. |
-| #63 /114 | 6a0b3f2, attributable transactional events; Done 9 Sep, variance-44; receipt 5593851738. |
+| #20 /101 | 3fae282, contributor setup; Done 8 Sep, variance -2. |
+| #57 /102–105 | Source/local runtime/capture/CORS; Done 8 Sep, variance -12. Owner local-only authority supersedes historical remote demonstration. |
+| #58 /110 | 4bf6dc5, genuine issued two-tenant fixture; Done 8 Sep, variance -17. |
+| #19 /111 | 987218b, actual local isolation/realtime; Done 8 Sep, variance -24. AI/vector/workflow doubles remain explicitly identified. |
+| #106 /107 | 18a5ea7, Vitest/mocker 4.1.11; alerts 99/100 fixed, not dismissed. |
+| #108 /109 | 80e23ba, Sharp 0.35.4 narrow override; alert 101 fixed. Broader #12 remains open. |
+| #59 /112 | e0ce28b, canonical atomic intake; Done 9 Sep, variance -30; receipt 5593265051. |
+| #60 /113 | 646e1a9, scoped atomic retries; Done 9 Sep, variance -37; receipt 5593570669. |
+| #63 /114 | 6a0b3f2, attributable transactional events; Done 9 Sep, variance -44; receipt 5593851738. |
 | #93 /115 | c3a9db5, functional resource guardrails; main checks passed. OPEN for reader evidence; receipt 5594406704. |
 
 #60 keeps raw 64 KiB/derived 128 KiB/receipt 256 KiB bounds, 24-hour expiry, current auth and
@@ -232,11 +233,11 @@ Project 4 writes work. Preserve approved baselines and 3× effort. Applied forec
 source: private-beta-reforecast-after63-2026-09-09.json. Open forecasts remain #93
 12 Sep; #62 18 Sep; #21 19–24 Sep; #65 25 Sep–1 Oct; actual independent starts are 9 Sep.
 Reader/access uncertainty prevents a defensible earlier completion forecast despite
-early code readiness. Do not invent percentages.61 completed early as recorded above.
+early code readiness. Do not invent percentages. #61 completed early as recorded above.
 
 Operational update delivered 04:22 UTC; next due 04:52 UTC. Root owns updates.
-Use concise working commentary while active. Non-beta roadmap #50/#64/#90(full
-cost)/#91(journals)/#48/#66(redesign)/#42(production)/#18(native email) stays outside
+Use concise working commentary while active. Non-beta roadmap #50/#64/#90 (full
+cost)/#91 (journals)/#48/#66 (redesign)/#42 (production)/#18 (native email) stays outside
 critical-path scope except required correctness. Historical detailed checkpoints
 remain in Git history, linked issues and subsystem docs; they are not current gates.
 

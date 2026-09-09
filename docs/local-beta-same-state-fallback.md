@@ -62,8 +62,8 @@ native bind probe confirmed port 8787 was released.
 This receipt identifies the tested source commit. Later documentation or
 integration commits are not silently substituted for that candidate. The
 corrected accessibility/MFA source is integrated at signed
-`65ad06ee3e905acf9ec59d17bdd951993381e818`. The complete technical artifact and
-acceptance-matrix rehearsal has not completed successfully. The first accepted-source
+`65ad06ee3e905acf9ec59d17bdd951993381e818`. The final artifact build and acceptance-matrix rehearsal have not completed
+successfully. The first accepted-source
 attempt stopped before fallback at a runner command error, recorded in the
 [rehearsal evidence](./local-beta-rehearsal.md). After the narrow correction is
 accepted, the coordinator selects that exact signed revision as candidate and signed

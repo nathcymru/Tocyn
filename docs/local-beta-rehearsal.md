@@ -98,7 +98,7 @@ actual workerd process is registered, interrupts the npm/Node/Wrangler tree
 through a pseudo-terminal, and checks tree/state removal and port release while
 an unrelated sentinel survives. It does not seed remote or existing state.
 
-The bounded actual interruption check passed on macOS with Node 22 in 6.2s:
+The bounded actual interruption check passed on macOS with Node 22 in 6.2 seconds:
 local health returned 200, seven owned processes included the real workerd
 engine, repeated npm/PTY Ctrl-C disposed the tree and private state, port 8787
 was reusable, and an unrelated sentinel remained alive. This is lifecycle
@@ -123,12 +123,12 @@ processes including workerd, disposed state/tree, reusable port 8787, and the
 unrelated sentinel preserved. An independent bind probe passed and no owned
 Wrangler task directories remained. The tested static fixture SHA-256 is
 `3618e4d5985b6f93ba0fb68853dc8d13042f8271ae132322bbfc3c2f48a8f347`;
-the earlier 6.2s run remains separate historical evidence.
+the earlier run took 6.2 seconds and remains separate historical evidence.
 
 A later bounded review correction normalizes ownership-directory inspection
 errors and ignores only `ESRCH` when a test-owned process exits between identity
 inspection and teardown. The focused suite then passed 18 tests; actual Wrangler
-interruption was repeated in 4.09s with one completed/zero skipped, seven owned
+interruption was repeated in 4.09 seconds with one completed test and zero skipped, seven owned
 processes, full disposal, sentinel preservation and an independent port reuse
 probe. Other signal errors remain failures.
 
