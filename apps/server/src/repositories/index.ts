@@ -83,6 +83,9 @@ export class SqlUserRepository implements UserRepository {
   }
 
   async findCustomerAuthTokenUser(tokenHash: string, challengeId?: string): Promise<string | null> {
+    // OTP lookup identifies the challenge owner for invitation gating only.
+    // Verification below must count a wrong code before comparing its hash;
+    // prefiltering this lookup by hash would skip the durable attempt limit.
     const candidate = await this.db.prepare(`SELECT user_id FROM customer_auth_tokens
       WHERE tenant_id=? AND ${challengeId ? 'id=?' : 'token_hash=?'} LIMIT 1`)
       .bind(this.scope.tenantId, challengeId ?? tokenHash).first<{ user_id: string }>();

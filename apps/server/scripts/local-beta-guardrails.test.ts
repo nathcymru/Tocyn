@@ -18,6 +18,10 @@ async function initialize(f:LocalTenantFixture,apiKeyIds:{tenantId:string;id:str
   ]);
 }
 
+function differentOtp(code:string):string {
+  return String((Number(code)+1)%1_000_000).padStart(6,'0');
+}
+
 test('guarded local profile: explicit policy, real invited credentials, exact capture and default-denied optional features', async t=>{
   await withTwoTenantFixture(async f=>{
     const key=await f.createScopedApiKey('operatorA',['tickets:read','tickets:write']);
@@ -68,6 +72,42 @@ test('guarded local profile: explicit policy, real invited credentials, exact ca
     await assert.rejects(admission.authorize('create'),{code:'beta_intake_stopped'});
     assert.equal((await f.request('/api/v1/tickets/fixture-ticket',{apiKey:key.apiKey})).status,200,'Stopped conversations remain available');
     t.diagnostic(JSON.stringify({mode:'real-miniflare',principals:4,tenants:2,disabledOptionalRoutes:9,optionalProviderCalls:0,captureResetOnRestart:true}));
+  });
+});
+
+test('guarded OTP verification keeps durable guesses while enforcing challenge and current invitation', async t=>{
+  await withTwoTenantFixture(async f=>{
+    f.enableLocalBeta();
+    await initialize(f);
+    const a=f.principals.customerA,b=f.principals.customerB;
+    const requestOtp=async(customer:typeof a,ip:string)=>{
+      const response=await f.request('/api/v1/customer/auth/request',{method:'POST',body:{email:customer.email,type:'otp',widgetKey:customer.widgetKey},ip});
+      assert.equal(response.status,200);
+      const body=await response.json<{challengeId:string}>();
+      assert.match(body.challengeId,/^[0-9a-f-]{36}$/);
+      const messages=await (await f.request('/__local/auth-capture/messages')).json<{to:string;text:string}[]>();
+      const text=messages.find(message=>message.to===customer.email)?.text ?? '';
+      const code=text.match(/\b\d{6}\b/)?.[0];
+      assert.ok(code,'The local capture must contain the issued OTP without reporting it');
+      return {challengeId:body.challengeId,code};
+    };
+    const aOtp=await requestOtp(a,f.rateLimitIdentity+'-otp-a');
+    const bOtp=await requestOtp(b,f.rateLimitIdentity+'-otp-b');
+    const wrongA=differentOtp(aOtp.code);
+    const wrongB=differentOtp(bOtp.code);
+    for(let attempt=0;attempt<5;attempt++) {
+      const denied=await f.request('/api/v1/customer/auth/verify',{method:'POST',body:{token:wrongA,challengeId:aOtp.challengeId,widgetKey:a.widgetKey},ip:f.rateLimitIdentity+'-wrong-'+attempt});
+      assert.equal(denied.status,401);
+    }
+    assert.deepEqual(await f.db.prepare('SELECT attempts,used_at FROM customer_auth_tokens WHERE tenant_id=? AND id=?').bind(a.tenantId,aOtp.challengeId).first(),{attempts:5,used_at:null});
+    assert.equal((await f.request('/api/v1/customer/auth/verify',{method:'POST',body:{token:aOtp.code,challengeId:aOtp.challengeId,widgetKey:a.widgetKey},ip:f.rateLimitIdentity+'-exhausted'})).status,401);
+    assert.equal((await f.request('/api/v1/customer/auth/verify',{method:'POST',body:{token:bOtp.code,challengeId:bOtp.challengeId,widgetKey:a.widgetKey},ip:f.rateLimitIdentity+'-foreign'})).status,401);
+    assert.deepEqual(await f.db.prepare('SELECT attempts,used_at FROM customer_auth_tokens WHERE tenant_id=? AND id=?').bind(b.tenantId,bOtp.challengeId).first(),{attempts:0,used_at:null});
+    assert.equal((await f.request('/api/v1/customer/auth/verify',{method:'POST',body:{token:wrongB,challengeId:bOtp.challengeId,widgetKey:b.widgetKey},ip:f.rateLimitIdentity+'-mismatched'})).status,401);
+    assert.deepEqual(await f.db.prepare('SELECT attempts,used_at FROM customer_auth_tokens WHERE tenant_id=? AND id=?').bind(b.tenantId,bOtp.challengeId).first(),{attempts:1,used_at:null});
+    await f.db.prepare("DELETE FROM local_beta_invitations WHERE tenant_id=? AND principal_kind='customer' AND principal_id=?").bind(b.tenantId,b.localId).run();
+    assert.equal((await f.request('/api/v1/customer/auth/verify',{method:'POST',body:{token:bOtp.code,challengeId:bOtp.challengeId,widgetKey:b.widgetKey},ip:f.rateLimitIdentity+'-revoked'})).status,401);
+    assert.deepEqual(await f.db.prepare('SELECT attempts,used_at FROM customer_auth_tokens WHERE tenant_id=? AND id=?').bind(b.tenantId,bOtp.challengeId).first(),{attempts:1,used_at:null});
   });
 });
 

@@ -246,3 +246,40 @@ not a macOS permission denial; Codex native access remains previously denied.
 Read-only feasibility and exact next checks: /tmp/tocyn-21-acceptance-plan.md.
 Dependent #61/#62 may integrate against the accepted functional source while
 this explicit beta gate remains open. No acceptance criterion is waived.
+
+## Coordination checkpoint — 01:23 UTC 9 September
+
+Operational update delivered; next due01:53 UTC. PR115 final functional head
+faa1065 has all required CI/security passes. One automatic review comment is
+being independently assessed before integration, with a focused guarded OTP
+regression: preserve durable wrong-code attempt accounting rather than accepting
+a proposed prefilter blindly. No repeated Copilot review requested.
+
+#62 root browser subset found/fixed the actual loaded JS WebSocket proxy,
+missing live-event feed invalidation and null ticket-number display. Actual A/B
+MFA, create/search/session switch, connected live B arrival and UUID fallback
+were observed. Full detail/guarded/reader acceptance remains pending. Root tab5
+is closed; owner disposing exact processes/state/credential transfer file.
+
+#21 independent four-page login/MFA accessibility slice is in
+/tmp/tocyn-21-login-accessibility, codex/21-login-accessibility. New dashboard4
+and all portal17 tests pass; builds/lint finishing. Project In progress with
+Actual start Sep9, receipt5594277132; baseline/forecast unchanged. Agent allocation
+is existing Astra/high due authentication transitions; source ownership excludes
+all #61/#62 auth-shell/feed/detail changes. Actual VoiceOver authority/access
+question is pending; no OS preference or permission changes made.
+
+#93 partial receipt5594285526 explicitly preserves screen-reader gate and current
+percentage pending defensible weighting. #65 read-only preparation exists at
+/tmp/tocyn-65-rehearsal-plan.md; root rejected invented mandatory network-denial
+acceptance and any HOME repurposing. Local-only packaging must demonstrate its
+actual safety/limits, and parked artifacts cannot be claimed to serve auth.
+
+The guarded real-D1 OTP regression passes: five incorrect codes exhaust the
+persisted challenge allowance; foreign challenge access does not consume another
+tenant's attempts; current invitation removal denies a correct code. Internal
+review rejects the proposed hash prefilter because it would skip wrong-code
+attempt accounting. A comment explains that contract at the lookup. Four focused
+guardrail cases, dedicated types and file lint pass; final CI reruns on this
+bounded acceptance addition. #21 draftPR116 is now e4a69b5 with the pending-method
+race corrected; portal19/dashboard4 tests, lint and both builds pass.
