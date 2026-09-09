@@ -241,8 +241,9 @@ Main CI 34314352914 and security 34314352283 passed. Main security analyses
 1745690006 (JavaScript/TypeScript), 1745687668 (Python) and 1745687233 (Actions)
 returned zero results. The prior failed 018aff41 and 953af436 attempts remain
 historical failures; this successful run does not establish the cause of the
-original 953af436 runtime failure. Actual screen-reader acceptance remains a
-separate prerequisite for overall beta readiness.
+original 953af436 runtime failure. That rehearsal did not include actual screen-reader acceptance. The separate
+[Safari/VoiceOver acceptance](./login-accessibility.md) is now complete and is
+linked to the final accepted application source below.
 
 ## Final-source storage failure and verified recovery
 
