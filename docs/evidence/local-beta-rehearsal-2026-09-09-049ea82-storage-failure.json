@@ -1,0 +1,50 @@
+{
+  "recordType": "recovered-failure",
+  "candidate": "049ea82a02571681f834bcd87d43253603edf71f",
+  "knownGood": "58feb5e4deef55670f635f099eb67c6bcfffae56",
+  "startedAt": "2026-09-09T06:48:23.321345+00:00",
+  "recoveredAt": "2026-09-09T06:58:31.449Z",
+  "result": "failed",
+  "runnerReceipt": "unavailable: final write failed with ENOSPC",
+  "observedCommandScopes": 44,
+  "expectedFullCommandCount": 46,
+  "commandResultsAndDurations": "unavailable: in-memory receipt not persisted",
+  "lastObservedStep": {
+    "number": 44,
+    "operation": "known-good dependency installation",
+    "evidence": "task-specific npm debug log records ENOSPC; command exit code unavailable"
+  },
+  "fallback": {
+    "result": "not-run"
+  },
+  "artifact": {
+    "verification": "post-failure independent read-only verification",
+    "files": 40,
+    "bytes": 2316679,
+    "releaseDigest": "7afaa9a67aa52f22a6aeb5753059c3529291efd8de95493ab837c2ed268d536f",
+    "mode": "park"
+  },
+  "automaticCleanup": {
+    "result": "incomplete",
+    "closingMarkers": 43,
+    "scopes": 44,
+    "originalFailure": "unavailable: masked by final receipt write failure"
+  },
+  "recovery": {
+    "recordedProcessIdentities": 475,
+    "liveMatchingIdentities": 0,
+    "incompleteRegistries": 0,
+    "spawningLocks": 0,
+    "cleanup": "disposed after independent identity verification",
+    "portsReleased": [
+      8787,
+      5173,
+      5174
+    ],
+    "taskRootRemoved": true,
+    "completedAt": "2026-09-09T06:58:57.785Z"
+  },
+  "deployment": "not-run",
+  "providerReceipt": "absent",
+  "externalMail": "not-run"
+}

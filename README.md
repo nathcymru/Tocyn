@@ -95,7 +95,13 @@ The repository currently contains:
 - an injectable email transport with Resend configuration;
 - Phase 1 application-enforced tenant ownership/isolation changes in source.
 
-The first planned test outcome is a **human-led API/portal private beta**, forecast for **21 November 2026**, candidate `v0.4.0-beta.1`. That prerelease has not been created. Slack, support-email expansion and governed autonomous customer-backend actions follow in later roadmap work.
+The **human-led API/portal private beta is ready for the approved local-only
+synthetic testing boundary** as of 9 September 2026. See the [readiness report and
+accepted evidence](docs/private-beta-readiness.md). The original planning baseline
+of 21 November 2026 is preserved in the issue/Project history. Candidate
+`v0.4.0-beta.1` preparation is complete; no tag, prerelease or deployment has been
+created. Slack, support-email expansion and governed autonomous customer-backend
+actions remain later roadmap work.
 
 The approved roadmap distinguishes **implemented source**, **beta/environment validation**, and **production readiness**. A feature appearing in an issue or architecture document does not mean it is already deployed.
 

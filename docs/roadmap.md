@@ -23,9 +23,17 @@ The authoritative roadmap is maintained through GitHub architectural milestones,
 
 Architectural milestones describe capabilities. Git tags/releases describe tested software snapshots. They are deliberately independent.
 
-## Current approved forecasts
+## Accepted local beta outcome
 
-These are planning forecasts, not production commitments:
+The approved local-only human-led API/portal testing boundary was completed on
+9 September 2026. The [readiness report](private-beta-readiness.md) identifies the
+accepted application revision, full rehearsal, actual reader evidence and scope.
+No tag, public prerelease, remote environment or production deployment was created.
+
+## Preserved approved planning forecasts
+
+These original forecasts remain planning history, not production commitments.
+Current issue/Project actual and forecast fields take precedence for delivery status:
 
 - first human-led API/portal private beta: **21 November 2026**, candidate `v0.4.0-beta.1` (not yet created);
 - support-email readiness: **4 February 2027**;
