@@ -32,7 +32,9 @@
     "beta:operator": "tsx scripts/run-local-beta-operator.ts",
     "test:local-beta": "tsx --test scripts/local-beta-guardrails.test.ts scripts/local-beta-atomic.test.ts",
     "typecheck:local-beta": "tsc -p scripts/tsconfig.local-beta-guardrails.json",
-    "test:local-beta-runtime": "tsx --test scripts/local-beta-runtime.test.ts && tsx --test scripts/local-beta-launch.test.ts"
+    "test:local-beta-runtime": "tsx --test scripts/local-beta-runtime.test.ts && tsx --test scripts/local-beta-launch.test.ts",
+    "test:local-portal-workflow": "tsx --test scripts/local-portal-workflow.test.ts",
+    "typecheck:local-portal-workflow": "tsc -p scripts/tsconfig.local-portal-workflow.json"
   },
   "dependencies": {
     "@luminatick/shared": "*",

@@ -41,6 +41,7 @@ export class LocalAuthCaptureTransport implements EmailTransport {
     defaultFrom: 'local-auth-capture@localhost.invalid',
   };
   private messages: LocalAuthCaptureMessage[] = [];
+  private remainingFailures = 0;
 
   constructor(private readonly now: () => number = () => Date.now()) {}
 
@@ -54,6 +55,10 @@ export class LocalAuthCaptureTransport implements EmailTransport {
     const recipient = options.to.length === 1 ? options.to[0].trim().toLowerCase() : '';
     if (!LOCAL_AUTH_CAPTURE_RECIPIENT_SET.has(recipient)) {
       throw new Error(`Local auth capture accepts only ${LOCAL_AUTH_CAPTURE_RECIPIENTS.join(', ')}`);
+    }
+    if (this.remainingFailures > 0) {
+      this.remainingFailures--;
+      throw new Error('Local capture injected delivery failure');
     }
     const text = (options.text || '').slice(0, 4096);
     const candidate = text.match(/http:\/\/[^\s]+\/verify\?[^\s]+/)?.[0];
@@ -86,6 +91,12 @@ export class LocalAuthCaptureTransport implements EmailTransport {
 
   reset(): void {
     this.messages = [];
+  }
+
+  /** Test-only failure seam, configured when the local Worker is constructed. */
+  failNext(count: number): void {
+    if (!Number.isSafeInteger(count) || count < 0) throw new Error('Local capture failure count must be a non-negative integer');
+    this.remainingFailures = count;
   }
 }
 

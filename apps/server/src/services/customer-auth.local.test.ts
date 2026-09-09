@@ -10,7 +10,7 @@ const localEnv = {
   PORTAL_URL: 'http://localhost:5174',
 };
 
-function customerDeps(tenantId: string, tokenStore: { hash?: string }) {
+function customerDeps(tenantId: string, tokenStore: { hash?: string; expiresAt?: string }) {
   const user = { id: `${tenantId}-customer`, tenant_id: tenantId, email: LOCAL_AUTH_CAPTURE_RECIPIENT, full_name: 'Local capture', role: 'customer', session_version: 0 };
   return {
     scope: { tenantId },
@@ -18,7 +18,10 @@ function customerDeps(tenantId: string, tokenStore: { hash?: string }) {
       config: { get: async (key: string) => ({ PORTAL_URL: 'http://localhost:5174', 'widget.public_key': 'local-widget-key' }[key]) },
       users: {
         create: async () => user,
-        storeCustomerAuthToken: async (_userId: string, _tokenId: string, hash: string) => { tokenStore.hash = hash; },
+        storeCustomerAuthToken: async (_userId: string, _tokenId: string, hash: string, _type: string, expiresAt: string) => {
+          tokenStore.hash = hash;
+          tokenStore.expiresAt = expiresAt;
+        },
         verifyAndConsumeCustomerAuthToken: async (hash: string) => hash === tokenStore.hash ? user : null,
       },
       channels: { listSupportEmails: async () => [] },
@@ -57,5 +60,24 @@ describe('local customer auth capture', () => {
     });
     await expect(service.requestAuth(LOCAL_AUTH_CAPTURE_RECIPIENT)).rejects.toThrow('Invalid tenant context');
     expect(capture.list()).toEqual([]);
+  });
+
+  it('uses a construction-time local clock consistently for capture, stored challenge, and normal JWT claims', async () => {
+    const now = Date.UTC(2030, 0, 2, 3, 4, 5);
+    const tokens: { hash?: string; expiresAt?: string } = {};
+    const capture = new LocalAuthCaptureTransport(() => now);
+    const service = new CustomerAuthService(localEnv as any, customerDeps('tenant-a', tokens) as any, capture, {
+      resolveCredentialsByEmail: async () => null,
+    }, () => now);
+    await service.requestAuth(LOCAL_AUTH_CAPTURE_RECIPIENT);
+    const link = capture.list()[0]?.loginLink;
+    expect(tokens.expiresAt).toBe(new Date(now + 15 * 60 * 1000).toISOString());
+    expect(capture.list()[0]?.expiresAt).toBe(tokens.expiresAt);
+    const verified = await service.verifyAuth(new URL(link!).searchParams.get('token')!);
+    const payload = await jose.jwtVerify(verified!.token, new TextEncoder().encode(localEnv.JWT_SECRET), {
+      audience: 'widget', currentDate: new Date(now),
+    });
+    expect(payload.payload.iat).toBe(Math.floor(now / 1000));
+    expect(payload.payload.exp).toBe(Math.floor(now / 1000) + 7 * 24 * 60 * 60);
   });
 });

@@ -23,10 +23,16 @@ function response(body: BodyInit | null, init: ResponseInit = {}): Response {
   return new Response(body, { ...init, headers });
 }
 
+export type LocalRuntimeOptions = Readonly<{
+  now?: () => number;
+  capture?: LocalAuthCaptureTransport;
+}>;
+
 /** The local entrypoint is the only capability factory for captured mail. */
-export function createLocalRuntime() {
-  const capture = new LocalAuthCaptureTransport();
-  const diagnostics = new LocalBetaDiagnostics();
+export function createLocalRuntime(options: LocalRuntimeOptions = {}) {
+  const now = options.now ?? (() => Date.now());
+  const capture = options.capture ?? new LocalAuthCaptureTransport(now);
+  const diagnostics = new LocalBetaDiagnostics(now);
   return {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
       if (!localRequest(request)) return response('Local runtime only', { status: 403 });
@@ -39,7 +45,7 @@ export function createLocalRuntime() {
         capture.reset();
         return response(null, { status: 204 });
       }
-      return app.fetch(request, { ...env, emailTransport: capture, betaDiagnostics: diagnostics }, ctx);
+      return app.fetch(request, { ...env, emailTransport: capture, betaDiagnostics: diagnostics, localNow: now }, ctx);
     },
   };
 }
