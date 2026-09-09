@@ -192,7 +192,82 @@ it('keeps a committed select read-only until its detail refresh succeeds without
   expect(patches).toBe(1);
 });
 
-it('does not steal focus when the operator moves away during confirmation retry', async () => {
+it('keeps explicit confirmation recovery available after a successful background refresh', async () => {
+  let patches = 0;
+  let confirmationAvailable = false;
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      patches++;
+      Object.assign(ticket, JSON.parse(String(options.body)));
+      return json({ success: true });
+    }
+    return patches === 0 || confirmationAvailable ? json(ticket) : json({ error: 'Confirmation unavailable' }, 503);
+  });
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  const priority = screen.getByRole('combobox', { name: 'Priority' });
+  fireEvent.change(priority, { target: { value: 'high' } });
+  await screen.findByRole('alert');
+  const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
+  retry.focus();
+  confirmationAvailable = true;
+  await act(() => client.invalidateQueries({ queryKey: ['ticket', 'workflow-ticket'] }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'Retry loading ticket' })).toBe(retry);
+  expect(retry).toHaveFocus();
+  expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
+  expect(priority).toHaveValue('high');
+  expect(priority).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.change(priority, { target: { value: 'urgent' } });
+  expect(priority).toHaveValue('high');
+  expect(patches).toBe(1);
+  fireEvent.click(retry);
+  await waitFor(() => {
+    const refreshed = screen.getByRole('combobox', { name: 'Priority' });
+    expect(refreshed).not.toBe(priority);
+    expect(refreshed).toHaveAttribute('aria-disabled', 'false');
+    expect(refreshed).toHaveValue('high');
+    expect(refreshed).toHaveFocus();
+  });
+  expect(screen.queryByRole('button', { name: 'Retry loading ticket' })).not.toBeInTheDocument();
+  expect(screen.getByText('Ticket details saved.')).toHaveAttribute('role', 'status');
+  expect(patches).toBe(1);
+});
+
+it('advertises and guards the separate confirmation read after mutation pending ends', async () => {
+  let patches = 0;
+  let postPatchReads = 0;
+  const confirmation = deferred<Response>();
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      patches++;
+      Object.assign(ticket, JSON.parse(String(options.body)));
+      return json({ success: true });
+    }
+    if (patches && ++postPatchReads > 1) return confirmation.promise;
+    return json(ticket);
+  });
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  const priority = screen.getByRole('combobox', { name: 'Priority' });
+  priority.focus(); fireEvent.change(priority, { target: { value: 'high' } });
+  await waitFor(() => expect(postPatchReads).toBe(2));
+  for (const select of screen.getAllByRole('combobox')) expect(select).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
+  expect(priority).toHaveFocus();
+  fireEvent.change(priority, { target: { value: 'urgent' } });
+  expect(priority).toHaveValue('high');
+  expect(patches).toBe(1);
+  await act(async () => { confirmation.resolve(json(ticket)); });
+  await waitFor(() => {
+    const refreshed = screen.getByRole('combobox', { name: 'Priority' });
+    expect(refreshed).not.toBe(priority);
+    expect(refreshed).toHaveAttribute('aria-disabled', 'false');
+    expect(refreshed).toHaveValue('high');
+    expect(refreshed).toHaveFocus();
+  });
+  expect(patches).toBe(1);
+});
+
+it.each(['another control', 'document body'])('does not steal focus when the operator moves to %s during confirmation retry', async destination => {
   let patches = 0;
   let confirmationAvailable = false;
   const confirmationRead = deferred<Response>();
@@ -214,13 +289,17 @@ it('does not steal focus when the operator moves away during confirmation retry'
   fireEvent.change(priority, { target: { value: 'high' } });
   await screen.findByRole('alert');
   confirmationAvailable = true;
-  fireEvent.click(screen.getByRole('button', { name: 'Retry loading ticket' }));
+  const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
+  retry.focus(); fireEvent.click(retry);
   await confirmationStartedPromise;
   const status = screen.getByRole('combobox', { name: 'Status' });
-  status.focus();
+  if (destination === 'another control') status.focus();
+  else retry.blur();
+  const expectedFocus = destination === 'another control' ? status : document.body;
+  expect(document.activeElement).toBe(expectedFocus);
   await act(async () => { confirmationRead.resolve(json(ticket)); });
   await waitFor(() => expect(screen.getByRole('combobox', { name: 'Priority' })).not.toBe(priority));
-  expect(status).toHaveFocus();
+  expect(document.activeElement).toBe(expectedFocus);
   expect(patches).toBe(1);
 });
 

@@ -71,6 +71,7 @@ function TicketDetail({ id }: { id: string }) {
   });
   const pendingTicketSelectFocus = useRef<TicketSelectControl | null>(null);
   const [pendingTicketSelectRefresh, setPendingTicketSelectRefresh] = useState<TicketSelectControl | null>(null);
+  const [isConfirmingTicketSelect, setIsConfirmingTicketSelect] = useState(false);
 
   React.useLayoutEffect(() => {
     const control = pendingTicketSelectFocus.current;
@@ -90,6 +91,9 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   const retryTicketDetail = async (trigger?: HTMLElement) => {
+    if (changing.current) return;
+    changing.current = true;
+    setIsConfirmingTicketSelect(true);
     const retryOwnedFocus = trigger !== undefined && document.activeElement === trigger;
     try {
       await refetch({ throwOnError: true });
@@ -98,11 +102,15 @@ function TicketDetail({ id }: { id: string }) {
         setPendingTicketSelectRefresh(null);
         // The recovery control is removed after a successful read. Return focus
         // to the refreshed select only if the retry still owned it.
-        const restoreFocus = retryOwnedFocus && (document.activeElement === trigger || document.activeElement === document.body);
+        const restoreFocus = retryOwnedFocus && document.activeElement === trigger;
         refreshTicketSelect(control, restoreFocus);
+        setNotice('Ticket details saved.');
       }
     } catch {
-      // The query retains its explicit read-recovery alert and retry control.
+      // Keep recovery available even if a background read clears the query error.
+    } finally {
+      changing.current = false;
+      setIsConfirmingTicketSelect(false);
     }
   };
 
@@ -130,6 +138,7 @@ function TicketDetail({ id }: { id: string }) {
     try {
       await updateTicket.mutateAsync({ id, ...changes });
       if (control) {
+        setIsConfirmingTicketSelect(true);
         try {
           await refetch({ throwOnError: true });
           refreshTicketSelect(control);
@@ -137,6 +146,8 @@ function TicketDetail({ id }: { id: string }) {
           setPendingTicketSelectRefresh(control);
           setNotice('Ticket details saved. Refresh the ticket before making another change.');
           return;
+        } finally {
+          setIsConfirmingTicketSelect(false);
         }
       }
       setNotice('Ticket details saved.');
@@ -227,7 +238,7 @@ function TicketDetail({ id }: { id: string }) {
   if (isLoading) return <div className="p-8 text-center text-slate-500">Loading ticket...</div>;
   if (!ticket) return <div className="p-8 space-y-4 text-center text-slate-700">
     <p role="alert">{error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}</p>
-    <button type="button" onClick={(event) => void retryTicketDetail(event.currentTarget)} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</button>
+    <button type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</button>
     <Link to="/tickets" className="block underline">Back to Tickets</Link>
   </div>;
   const reference = ticketReference(ticket, ticketPrefix);
@@ -235,7 +246,10 @@ function TicketDetail({ id }: { id: string }) {
   return (
     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
       <div className="lg:col-span-3 xl:col-span-4 space-y-6">
-        {error && !isFetchNextPageError && <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">Could not refresh this ticket. Showing the last confirmed details. <button type="button" onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</button></div>}
+        {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="rounded border border-red-300 bg-red-50 p-3 text-red-900">
+          {error ? 'Could not refresh this ticket. Showing the last confirmed details. ' : 'Confirm the saved ticket details before making another change. '}
+          <button type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</button>
+        </div>}
         {changeError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{changeError}</p>}
         {notice && <p role="status" className="text-slate-700">{notice}</p>}
         <div className="flex items-center justify-between">
@@ -247,7 +261,7 @@ function TicketDetail({ id }: { id: string }) {
             <select
               key={`ticket-status-${ticketSelectVersions.status}`}
               ref={node => { ticketSelectRefs.current.status = node; }}
-              aria-label="Status" aria-disabled={updateTicket.isPending || Boolean(pendingTicketSelectRefresh)}
+              aria-label="Status" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
               value={ticket.status}
               onChange={(e) => {
                 if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
@@ -609,7 +623,7 @@ function TicketDetail({ id }: { id: string }) {
                 <select
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   ref={node => { ticketSelectRefs.current.priority = node; }}
-                  id="ticket-priority" aria-disabled={updateTicket.isPending || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-priority" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.priority}
                   onChange={(e) => {
                     if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.priority; return; }
@@ -630,7 +644,7 @@ function TicketDetail({ id }: { id: string }) {
                 <select
                   key={`ticket-assigned_to-${ticketSelectVersions.assigned_to}`}
                   ref={node => { ticketSelectRefs.current.assigned_to = node; }}
-                  id="ticket-assigned_to" aria-disabled={updateTicket.isPending || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-assigned_to" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.assigned_to || ''}
                   onChange={(e) => {
                     if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.assigned_to || ''; return; }
@@ -651,7 +665,7 @@ function TicketDetail({ id }: { id: string }) {
                 <select
                   key={`ticket-group_id-${ticketSelectVersions.group_id}`}
                   ref={node => { ticketSelectRefs.current.group_id = node; }}
-                  id="ticket-group_id" aria-disabled={updateTicket.isPending || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-group_id" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.group_id || ''}
                   onChange={(e) => {
                     if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.group_id || ''; return; }
