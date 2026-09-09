@@ -89,7 +89,7 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
   }
 
-  const authService = new CustomerAuthService(c.env, deps, c.env.emailTransport, resolvers.identity);
+  const authService = new CustomerAuthService(c.env, deps, c.env.emailTransport, resolvers.identity, c.env.localNow);
 
   try {
     const result = await authService.requestAuth(parsedAuth.data.email, parsedAuth.data.type);
@@ -119,7 +119,7 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
   const deps = createTenantRequestDeps(scope, c.env);
 
-  const authService = new CustomerAuthService(c.env, deps);
+  const authService = new CustomerAuthService(c.env, deps, undefined, undefined, c.env.localNow);
   if (typeof body.token !== 'string' || !body.token || body.token.length > 512) return c.json({ error: 'Invalid token' }, 400);
   if (body.challengeId !== undefined && typeof body.challengeId !== 'string') return c.json({ error: 'Invalid challenge' }, 400);
   const result = await authService.verifyAuth(body.token, body.challengeId);

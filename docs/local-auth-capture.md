@@ -171,3 +171,68 @@ Both server and dedicated fixture-script typechecks pass; focused fixture tests,
 server regressions and independent security review pass. Required CI now runs the
 fixture-script typecheck, redacted verifier and repeated-run/failure-cleanup tests.
 No browser authentication UI bypass, mail provider or remote resource was introduced.
+
+## #61 disposable portal workflow acceptance
+
+Run the end-to-end local Worker acceptance from the repository root only when
+port 8787 is free:
+
+```sh
+npm run typecheck:local-portal-workflow --workspace=apps/server
+npm run test:local-portal-workflow --workspace=apps/server
+```
+
+The runner creates a temporary Wrangler configuration, local D1/R2/DO state and
+synthetic principals, then removes all of them when it completes or fails. It
+enables the guarded local-beta profile and initializes its run-owned D1 state
+through the existing local operator command with exactly the two fixture tenants
+and their invited customer/staff principals; its mode-0600 policy file is then
+removed. It uses the existing three-address capture allowlist and a real
+magic-link request and redemption, rather than constructing a token. It verifies two tenant
+customers, foreign challenge/detail denial, redeemed-link replay denial,
+customer list and follow-up replies, MFA-authenticated operator replies,
+customer detail/history retrieval, internal-note filtering, and both failed and
+successful captured delivery. The failure occurs after its reply transaction
+commits; the successful delivery reaches only the owning approved capture
+recipient. No provider credentials are read and no external mail is sent.
+
+The runner restarts only its own loopback Worker with a construction-time local
+auth/capture/diagnostics clock. It proves the same clock is used for the captured
+link, stored challenge expiry, signed widget JWT, normal JWT verification and
+bounded local-beta diagnostics. This is not a global simulated clock: D1
+`unixepoch()` behavior and beta admission, replay, mutation, or retention clocks
+continue to use their normal local runtime semantics. It also
+proves an expired 15-minute challenge, a separately revoked session, and a
+seven-day expired widget session. The temporary clock and failure count exist
+only in the runner-owned Worker startup configuration; there is no HTTP control
+route or deployable binding for either capability.
+
+The earlier 9 September 2026 run recorded 42 requests.
+The follow-up absent-body regression run completed in 13.59 seconds and reported
+four Worker starts, 69 requests, nine selected D1 rows, five new articles and five
+new conversation events. After the final expiry restart zero captured messages
+remained; the earlier successful-delivery assertion checked one capture to the
+owner, while the injected failure checked that none was recorded. Those are
+disposal-run measurements, not capacity or production claims. The runner also
+reports `cleanup: disposed`; it does not inspect or reset a developer's existing
+state.
+
+The guarded JSON check now covers absent bodies as well as nonempty streams.
+The actual HTTP regression sends 26 absent-body requests across 13 required-body
+authentication, intake, reply and update routes: JSON media type returns controlled
+400, and missing media type returns 415. D1 rows, articles, audit events and capture
+remain unchanged. Only the explicit authenticated logout/MFA action allowlist
+permits a zero-byte body; whitespace, BOM, malformed JSON, arrays, non-JSON media
+types and oversized bodies retain their existing rejection coverage. The runner's
+shutdown uses process-group signals on POSIX and the existing child-termination
+pattern on Windows. POSIX restart/cleanup passed; Windows execution was not available.
+
+The final guarded browser check on `2add038` redeemed a locally captured link,
+loaded tickets, and used **Sign out all sessions**. It returned to login without
+a warning; a later navigation to tickets remained redirected to login. This
+confirms the normal portal sign-out request has an empty body, revokes the
+server session, and is not merely a local browser-token clear.
+
+This exercise proves the server workflow only. Portal keyboard, focus, labels,
+announcements and contrast remain owned by #21; it does not claim that broader
+UI accessibility acceptance or beta deployment evidence.

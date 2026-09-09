@@ -38,6 +38,7 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const requestAuthGeneration = useAuthStore.getState().authGeneration;
   const headers = new Headers(options.headers || {});
   const widgetKey = getWidgetKey();
   if (widgetKey) headers.set('X-Widget-Key', widgetKey);
@@ -58,9 +59,11 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   });
 
   if (response.status === 401) {
-    useAuthStore.getState().logout();
-    if (window.location.pathname !== '/login' && window.location.pathname !== '/verify') {
-      window.location.href = '/login';
+    if (useAuthStore.getState().authGeneration === requestAuthGeneration) {
+      useAuthStore.getState().logout();
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/verify') {
+        window.location.href = '/login';
+      }
     }
     throw new ApiError('Unauthorized', 401);
   }

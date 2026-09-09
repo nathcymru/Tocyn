@@ -29,4 +29,11 @@ describe('local-only capture entrypoint', () => {
   it('does not add capture routes to the shared application used by normal Worker entrypoints', async () => {
     expect((await app.request(new Request('http://localhost:8787/__local/auth-capture/messages'), undefined, localEnv)).status).toBe(404);
   });
+
+  it('rejects a non-local runtime even when a caller supplies an in-memory clock capability', async () => {
+    const result = await localWorker.fetch(new Request('http://localhost:8787/health?LOCAL_TEST_CLOCK_MS=0'), {
+      ENVIRONMENT: 'production', localNow: () => 0,
+    } as any, context);
+    expect(result.status).toBe(503);
+  });
 });

@@ -28,4 +28,6 @@ export interface Env {
   emailTransport?: EmailTransport;
   /** Per-local-runtime bounded metadata; never a provider binding. */
   betaDiagnostics?: LocalBetaDiagnostics;
+  /** Construction-time local clock; never a Worker binding, request control, or secret. */
+  localNow?: () => number;
 }

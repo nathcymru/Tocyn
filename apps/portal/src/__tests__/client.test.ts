@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAuthStore } from '../store/authStore';
 let portalApi: typeof import('../api/client').portalApi;
 
 describe('Customer routing contract', () => {
@@ -39,6 +40,16 @@ describe('Customer routing contract', () => {
     const call = vi.mocked(fetch).mock.calls[0];
     expect(new Headers(call[1]?.headers).get('X-Widget-Key')).toBe('configured-key');
     expect(call[1]?.credentials).toBe('include');
+  });
+
+  it('does not let an earlier 401 clear a session established while that request was in flight', async () => {
+    let resolveResponse: ((response: { ok: boolean; status: number }) => void) | undefined;
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { resolveResponse = resolve; }) as never);
+    const pending = portalApi.get('/auth/me');
+    useAuthStore.getState().login({ id: 'new-session', name: 'New session', email: 'customer@example.test' });
+    resolveResponse?.({ ok: false, status: 401 });
+    await expect(pending).rejects.toMatchObject({ status: 401 });
+    expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: true, user: { id: 'new-session' } });
   });
 
 });

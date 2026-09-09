@@ -283,3 +283,152 @@ attempt accounting. A comment explains that contract at the lookup. Four focused
 guardrail cases, dedicated types and file lint pass; final CI reruns on this
 bounded acceptance addition. #21 draftPR116 is now e4a69b5 with the pending-method
 race corrected; portal19/dashboard4 tests, lint and both builds pass.
+
+## Staged dependent implementation while final CI runs
+
+PR115 final reviewed source is4bc71827cbc0e3e0b0fd8b8bba74388502d7d63e;
+required final tests still running, no merge or dependency completion claimed.
+To remove administrative idle time, #61/#62 may prepare dependent changes in
+isolated temporary worktrees against this source, then move their bounded deltas
+to the exact signed main merge and rerun final validation before acceptance.
+
+#61: /tmp/tocyn-61-guarded-integration, codex/61-guarded-integration, sourcebase4bc7182,
+prepared commits4d7946e/562792b. Original b478209/080212a branch remains untouched.
+Its owner exclusively owns8787 for guarded real-Worker tests and will hand off.
+#62: /tmp/tocyn-62-guarded-integration, reviewed4bc7182base, original independent
+branch untouched; detail/unit work now active, live8787 waits #61release.
+#21: draftPR116 e4a69b5, safe independent login slice complete locally; broader
+work waits integrated61/62. Root native reader question remains pending.
+
+No branch head substitutes for accepted dependency evidence. Once115merges,
+refresh these deltas onto its signed SHA, keep required checks, and continue
+functional workflow acceptance while93's actual reader gate stays open.
+
+## PR115 accepted integration
+
+Merged01:31:46Z Sep9 as c3a9db5c31ae10d98bef62aaa7d01e3df04f34d6;
+GitHub signature valid. Final reviewed4bc7182 all required app15368 checks pass:
+CI34299240851 and security34299239301. Main CI34299561236/security34299562918
+running. Root main checkout fast-forwarded clean to this merge.
+#93 remains OPEN/In progress, first6 criteria evidenced; final actual reader
+criterion open, Actual completion unset, percentage/forecast unchanged.
+Merge receipt5594406704. #61/#62 owners instructed to refresh their staged deltas
+onto exact signed merge before final validation. Port8787 still #61-owned.
+
+Authoritative coordination state is now carried forward in the #61 guarded
+integration worktree for its next coherent PR; root owns this file there.
+Do not treat an old #93 branch snapshot as current after this handoff.
+
+## Current accepted baseline and final #61 validation
+
+PR115 main CI34299561236 and security34299562918 both pass. Late review followups
+from113/114 are addressed in this signed merge and threads resolved; receipts
+3963814503/3963814510. #93 remains partial for reader evidence only.
+
+Authoritative state moved with #61 delta to original final worktree
+/tmp/tocyn-61-local-portal-workflows, codex/61-local-portal-workflows. Its final
+CI-wired source is2ea47d1 on signed c3a9db5. Lint, complete dedicated types and
+all three builds pass. Root full required test chain running session54878,
+log/tmp/tocyn-61-required-test.log. Root owns8787 through this chain and brief
+exact-candidate guarded portal browser proof; #62 live fixture waits handoff.
+#61 real guarded workflow already passed:32requests,9selectedD1rows, article/
+event deltas5/5, fourstarts, disposedstate. #93suite11 pass. No staged checkpoint
+is substituted for accepted evidence. PR body/mapping are prepared in/tmp.
+
+#62 integration worktree now based exact c3a9db5, detail4+pagination tests/build
+pass; attachment recovery and scoped update notification proof active. Original
+independent worktree remains preserved. #21 draft116 continues only portal UI
+accessibility edits with explicit integration strategy: preserve #61 UTC lines,
+no auth-shell/store or #62 dashboard overlap. Actual reader question still awaits
+owner response; no native app or OS permission changes.
+
+## #61 browser found required sign-out gap
+
+Root full test chain initially failed because this original worktree lacked the
+native better-sqlite3 binding after ignore-scripts installation. Rebuilt that
+locked component with Node22; complete rerun session16291 exited0, log
+/tmp/tocyn-61-required-test-rebuilt.log. No application workaround or skippedtest.
+
+On exact candidate2ea47d1, supported guarded fixture plus portal browser proved
+captured-link verification reaches tickets, reload retains session, UI create
+and follow-up persist/display, and fresh list/detail timestamps are correct.
+Actual Sign out all sessions instead showed server-revocation-not-confirmed
+warning. Hold PR publication/acceptance. #61 owner investigates actual network
+bodyless POST versus strict JSON guard and must add real HTTP logout regression;
+clearing client state alone is insufficient. #62 notified for shared logout/MFA
+request semantics. No confirmed cause or waiver yet.
+
+Root tabs6/7 closed; fixture41839/portal95595 exit130. Exact owned fixture state
+absent;8787/5174 have no listeners and reusable bind probes succeed (initial
+non-reuse5174 bind hit TIME_WAIT). Credential output memory cleared. Port8787
+now owned by61 for reproduction. #62 final frozen source waits runtime handoff.
+#21 draft116 now6d30e13 on accepted c3a9db5: portal29/dashboard5 tests, lint and
+both builds pass. Broader integrated/browser/contrast/actual reader proof open.
+
+Operational update delivered about01:52 UTC; next due02:22 UTC. Immediate critical
+path is the real guarded sign-out gap under61, then61PR/integration and62guarded
+browser. #62 has completed its focus/upload/refresh race corrections and frozen
+source; real browser still pending. #21 root review identified stale error/busy
+races during polling/page refresh, partial-upload retry duplication and attachment-
+only invalid submission; its owner is correcting these together in existing116.
+All remain explicit required recovery/resource behavior, not waived criteria.
+No new owner action beyond the pending actual VoiceOver/native browser request.
+
+## #61 sign-out correction verified in browser
+
+Final shared correction2add038 permits only exactly zero-byte bodies for the
+explicit authenticated bodyless-action inventory. Bounded bytes are checked before
+text decoding; malformed/null/array/media/oversize and BOM-only negatives remain.
+Root final browser verified fresh captured login, successful sign-out without
+warning, and denied return to tickets. This clears the observed61browser blocker.
+Tab8 closed; fixture70882/portal80750 exit130; exact state absent and8787/5174
+reusable bind probes pass. Secret memory cleared. No reader claim.
+Root final required test chain session92080/log/tmp/tocyn-61-required-test-final.log
+running on2add038. Owner updates docs/PR mapping; source frozen unless newfailure.
+#62 may consume2add038 in staged base, but live8787 waits this finalchainhandoff.
+
+## Final portal validation and next integration
+
+Final required test chain92080 exited0 on executable2add038. Final actual portal
+receipt:42requests,9selectedD1rows,fourstarts,article/eventdeltas5/5,state disposed.
+Docs6489e05 plus receipt correction; root reviewed acceptance against current61.
+Publishing coherent61PR; no new interactive UI, broader21reader gate stays open.
+Port8787 handed to62 for final guarded browser journey. Its candidate consumes
+2add038 provisionally and must refresh from signed61merge before integration.
+21draft116head02996f8 has portal36tests and remains pending integrated/browser/reader.
+65 independent tooling began in /tmp/tocyn-65-local-rehearsal on c3a9db5, owner
+retry_acceptance Terra/high: release/state recovery warrants high effort. Bounded
+script/negative tests only until final approved dependency candidate is accepted;
+no remote resource/provider/tag/release activity. Root owns final candidate gates.
+
+## PR117 final review and operator browser evidence
+
+61PR117headdff6385 passed allrequiredmachinecontexts. Merge attempt rejected by
+unresolved review conversations, no bypass. Comments3964017141/3964017191 identify
+Windows worker process cleanup and absent-body required-route validation. Owner
+beta_guardrails_impl now fixes complete set on61branch; no extraCopilotrequested.
+62guardedbrowser completed bothintakehandling +actualstop/retry +publicprivacy.
+Receipt /tmp/tocyn-62-root-browser-receipt.md; counters2/20/0, fourpublicreads
+excludeinternalnotes. DashboardUTCgapcorrected, focused17tests/buildpass. Root
+tabclosed/secretscleared, ownercleanupthen8787handoffto61. Finalaccepted61base
+still required. 65startreceipt5594673912; independentreviewfound lifecycle and
+inheritedVITEbuildinput risks in67f321e, ownercorrecting beforeexecution.
+
+## PR117 review corrections and final verification
+
+The required-body guard now validates absent payloads before handlers while
+preserving the exact zero-byte authenticated action allowlist and all existing
+BOM/nonempty/oversize rejection coverage. Actual local HTTP added 26 negative
+requests across 13 required-body routes: controlled 400/415, unchanged D1 rows,
+articles/audit and zero captures. Corrected receipt: 69 requests, four Worker
+starts, nine selected D1 rows, article/event deltas 5/5, final zero captures and
+run-owned state disposed; 13.59 seconds. POSIX restart/cleanup passed. Windows
+shutdown mirrors the existing child.kill pattern; Windows execution is untested.
+
+Current-source full required verification passed: complete workflow/portal/server
+lint, all dedicated server types, three frontend builds, root tests, D1 smoke and
+integration, local auth/tenant/realtime, canonical/replay/audit, guarded beta and
+real runtime plus repeated PTY cleanup. The affected four suites ran first;
+remaining required checks ran sequentially without duplicating that runtime chain.
+No additional automated review requested. PR117 responses/resolution cite the
+correction and actual evidence; remote required checks must pass again before merge.

@@ -5,6 +5,7 @@ import { portalApi } from '../api/client';
 import type { Ticket, PaginatedResponse } from '../types';
 import { Loader2, Plus, MessageSquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { utcTimestamp } from '../utils/utcTimestamp';
 
 export function TicketListPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -180,7 +181,7 @@ export function TicketListPage() {
                     </span>
                   </div>
                   <div className="mt-2 text-sm text-gray-500 flex items-center gap-4">
-                    <span>Created {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}</span>
+                    <span>Created {formatDistanceToNow(utcTimestamp(ticket.created_at), { addSuffix: true })}</span>
                     <span>•</span>
                     <span className="capitalize text-gray-700 font-medium">Priority: {ticket.priority}</span>
                   </div>

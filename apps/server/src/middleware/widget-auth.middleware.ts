@@ -24,7 +24,8 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
     const { payload } = await jose.jwtVerify(token, secret, {
       algorithms: ['HS256'],
       requiredClaims: ['exp', 'iat', 'sub'],
-      audience: 'widget'
+      audience: 'widget',
+      ...(c.env.ENVIRONMENT === 'local' && c.env.localNow ? { currentDate: new Date(c.env.localNow()) } : {}),
     });
 
     if (typeof payload.tenant_id !== 'string' || !payload.tenant_id.trim() ||

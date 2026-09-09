@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "local-tenant-fixture.ts",
+    "local-portal-workflow-entry.ts",
+    "local-portal-workflow.test.ts"
+  ]
+}

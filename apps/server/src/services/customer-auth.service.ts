@@ -16,7 +16,8 @@ export class CustomerAuthService {
     private env: Env,
     private deps?: TenantRequestDeps,
     private transport?: EmailTransport,
-    private identityResolver?: Pick<UserAuthResolver, 'resolveCredentialsByEmail'>
+    private identityResolver?: Pick<UserAuthResolver, 'resolveCredentialsByEmail'>,
+    private now: () => number = () => Date.now(),
   ) {
     if (deps) {
       this.emailService = new EmailService(env, deps, transport);
@@ -95,7 +96,8 @@ export class CustomerAuthService {
     const plainToken = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
     const tokenHash = await this.hashToken(plainToken);
     const tokenId = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const requestedAt = this.now();
+    const expiresAt = new Date(requestedAt + 15 * 60 * 1000).toISOString();
 
     // 3. Store Token securely via repository
     if (type === 'magic_link') await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, tokenHash, type, expiresAt);
@@ -144,7 +146,8 @@ export class CustomerAuthService {
 
     if (challengeId ? !/^[0-9a-f-]{36}$/.test(challengeId) || !/^\d{6}$/.test(plainToken) : !/^[0-9a-f]{64}$/.test(plainToken)) return null;
     const tokenHash = await this.hashToken(challengeId ? `${challengeId}\0${plainToken}` : plainToken);
-    const now = new Date().toISOString();
+    const verifiedAt = this.now();
+    const now = new Date(verifiedAt).toISOString();
 
     if (localBetaEnabled(this.env)) {
       const candidateId = await this.deps.repositories.users.findCustomerAuthTokenUser(tokenHash, challengeId);
@@ -172,11 +175,12 @@ export class CustomerAuthService {
       role: 'customer',
       tenant_id: userTenantId,
     };
+    const issuedAt = Math.floor(verifiedAt / 1000);
     const jwt = await new jose.SignJWT(payload)
       .setProtectedHeader({ alg })
       .setAudience('widget')
-      .setIssuedAt()
-      .setExpirationTime('7d')
+      .setIssuedAt(issuedAt)
+      .setExpirationTime(issuedAt + 7 * 24 * 60 * 60)
       .sign(secretKey);
 
     return { token: jwt, user: { id: user.id, email: user.email, full_name: user.full_name, role: user.role, tenant_id: user.tenant_id } as User };

@@ -4,6 +4,7 @@ import { portalApi } from '../api/client';
 import type { Ticket, Article } from '../types';
 import { Loader2, ArrowLeft, Paperclip, Send, X } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+import { utcTimestamp } from '../utils/utcTimestamp';
 
 type DetailPage = { ticket: Ticket; articles: Article[]; pagination?: { next_cursor: string | null; has_more: boolean } };
 
@@ -216,7 +217,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
             </span>
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Ticket {ticketPrefix}{ticket.ticket_no} • Created {format(new Date(ticket.created_at), 'MMM d, yyyy h:mm a')}
+            Ticket {ticketPrefix}{ticket.ticket_no} • Created {format(utcTimestamp(ticket.created_at), 'MMM d, yyyy h:mm a')}
           </p>
         </div>
       </div>
@@ -233,7 +234,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                     {isCustomer ? 'You' : 'Support Team'}
                   </span>
                   <span className="text-xs text-gray-400">
-                    {formatDistanceToNow(new Date(article.created_at), { addSuffix: true })}
+                    {formatDistanceToNow(utcTimestamp(article.created_at), { addSuffix: true })}
                   </span>
                 </div>
                 <div 
