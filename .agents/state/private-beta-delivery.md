@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026 for the residual #21 correction checkpoint. This is the authoritative coordinator view.
+Updated 9 September 2026, 04:22 UTC. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -39,71 +39,63 @@ do not skip affected tests. Preserve CRLF in existing dashboard source files.
 
 ## Accepted main and remaining gates
 
-Accepted signed main: 7d8187ca4ae3bd0adeaa8c4e2dbd820e4bac90d5 (PR118), merged
-03:59:44 UTC with signature verified by root. Its tooling changes preserve the
-PR116 application source 65ad06e. PR116 required CI 34307583055 and security 34307580665
-passed; signed PR119 d394bd7 and PR117 58feb5e remain in history.
-Postmerge 7d8187 CI 34309233371 and security 34309232682 pass; root reports
-zero findings in all three actual analyses. #65 partial receipt: issue comment 5595575218.
+Accepted signed main: 018aff41cb55dbdf34bd6e60246827715fb00403 (PR #120), signature
+verified by root. Required CI 34309984129/security 34309983146 passed, three analyses
+zero, automatic review complete without threads; root/Terra/exact browser review
+passed. Main security 34310386087 passed with three zero-result analyses; main CI
+34310386652 passed. Accepted tooling PR #118 is signed
+7d8187, with main CI 34309233371/security 34309232682 passed; #65 partial receipt 5595575218.
 
 Not beta-ready. Four issues remain open: #62, #21, #93 and #65.
 
 1. #62/#93 functional implementations are merged; their own actual-reader criteria
    remain open. Native keyboard/contrast evidence is in the subsystem receipts.
-2. Residual #21 actual browser acceptance found rejected operator-login feedback,
-   native file-selection retention and displayed attachment-unit defects. Correction
-   source 7b3d49b on signed 7d8187 is isolated in codex/21-login-error-recovery, with
-   63 dashboard/59 portal tests, both frontend builds, portal/server lint, workflow
-   validation and both dependency audits passing. Root reviewed the bounded delta.
-   Corrected-source browser confirmation passed on exact 7b3d49b; coherent PR and
-   mandatory checks/acceptance merge are next.
-   Portal wrong-OTP correction, native Cancel/Close, UUID assignment/group keyboard
-   set/clear/reload, revoked-session reauthentication, attachment download and additional
-   computed contrast now have actual accepted-source browser evidence. No reader claim.
-3. #65 tooling PR118 is accepted. The residual application correction changes the
-   technical candidate: accept its source through required checks/signature, then
-   run/refresh the final immutable technical matrix/reproducibility/fallback receipt
-   against that accepted candidate. Root/#65 owner retain any prior measurements as
-   revision-qualified evidence. Reader authority is pending in parallel; technical
-   evidence alone cannot close #65 or beta readiness.
+2. The bounded residual #21 application correction is accepted in PR #120. Actual
+   reader acceptance remains open for #21/#62/#93; functional/browser checks do
+   not waive those criteria.
+3. The first full #65 technical attempt on accepted 018aff41 failed because its
+   matrix invoked a nonexistent server lint script. Cleanup completed; no artifact,
+   fallback or application/auth flow ran. A narrow command-parity correction now
+   uses the actual installed workspace ESLint command and checks every script/tool.
+   After its accepted merge, root dispatches the exact immutable corrected candidate
+   for a fresh full run, keeping signed 58feb5e4deef55670f635f099eb67c6bcfffae56 as
+   prior known-good and retaining the failed 018aff41 receipt separately.
 
-Critical path: internally reviewed/browser-confirmed #21 correction → mandatory
-PR checks/accepted signed application revision → #65 final technical receipt. Actual
-reader acceptance remains a separate required owner-access dependency for #21/#62/#93.
-No baseline date is changed by this checkpoint. Root owns Project receipts/forecasts.
+Critical path: #65 command-parity correction → required checks/accepted signed
+revision → full technical receipt. Reader acceptance remains a separate required
+owner-access dependency. No baseline, forecast or progress percentage is invented.
+Root owns Project/issue receipts and forecasts.
 
 No gate is waived or transferred merely to close its owning issue.
 
 ## Current ownership and branches
 
 Root owns acceptance, GitHub/Project truth and final browser review. Root delegated
-this exact coordinator checkpoint to the #65 owner in /tmp/tocyn-65-local-rehearsal,
-branch codex/65-local-rehearsal, existing PR118. Root alone decides its merge.
-Original recovery branches/stashes remain preserved.
+this correction checkpoint to release_packaging_escalation (Astra/high), worktree
+/tmp/tocyn-65-rehearsal-correction, branch codex/65-rehearsal-command-parity.
+Original recovery branches/stashes and the clean failed-run source are preserved.
+Root's codex/65-technical-rehearsal-evidence branch is reserved for final evidence.
 
-| Work | Agent / model / effort | Current state and reason |
-| --- | --- | --- |
-| #62 integration | Root; Astra/high | Functional PR119 accepted; issue stays open for reader evidence. |
-| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Functional PR116 accepted 65ad06e after exact-source browser, runtime, security and review evidence. Actual reader gate preserved. |
-| #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Existing PR118 source refreshed onto 65ad06e. Prior audit 8c91a6b required CI 34307518283 passed; fresh CodeQL analysis 1745369561 zero, alerts 13–18 fixed, all 9 threads resolved. Refreshed local tests pass: dashboard 48, portal 53, server 373, widget 3, root 52; runtime 3/types and workflow validation pass. Refreshed required CI 34308155782 and zero-result CodeQL passed. Three late review comments received one bounded cleanup correction; final checks pending. |
-| Independent review | retry_acceptance; Terra/high | Bounded lifecycle/fallback and frontend reviews complete; no blocking findings or reader claim. No redundant review loop. |
+#62/#21/#93 functional increments are accepted; their reader criteria remain open.
+The independent review agents completed their bounded work. No duplicate review
+or remote resources are authorised. #65 correction validation/PR is next; root
+alone accepts its merge and dispatches the next exact-source full rehearsal.
 
-All root browser windows/credential bindings, #21 fixtures/private downloads and #65
-interruption fixtures are disposed. Native 8787/5173/5174 reuse was verified by #21;
-#65's later independent 8787 probe also passed with zero owned Wrangler task dirs.
-No live fixture or remote service is owned by #65 now. Root has port ownership for
-residual accepted-source browser checks; final rehearsal waits its explicit handoff.
-
-Next: validate/publish refreshed PR118, inspect required CI/security and review state,
-and make it ready for root acceptance. After its signed merge, root dispatches the
-single full technical rehearsal. Keep #65 open; final receipt belongs in the issue
-and a dedicated evidence/state PR after that meaningful acceptance boundary.
+The failed 018aff41 attempt receipt is retained privately at
+/tmp/tocyn-65-final-rehearsal-018aff41/receipt.json. It records five passed commands,
+one failed server-lint command (exit 1), cleanup disposed and fallback not-run.
+The temporary candidate/comparison checkouts/state were removed. Correction proof
+passed the exact offline/no-install server ESLint command, server cwd/local tool
+resolution, all 24 command/tool inventory checks and 19 lifecycle tests. Fresh ignore-scripts
+setup needed the routine Node 22 better-sqlite3 rebuild before the loader test
+passed. Native bind probes for ports 8787, 5173 and 5174 passed and owned rehearsal task directories were zero. Ports were
+explicitly returned to root; no #65 runtime or full rerun is active.
 
 ## Current evidence and unresolved implementation
 
 ### #61 accepted
 
-PR117 fixes stale portal bootstrap overwriting a verified session, SQLite UTC
+PR #117 fixes stale portal bootstrap overwriting a verified session, SQLite UTC
 formatting and strict guarded request-body behavior. Actual local issued A/B
 magic links and staff MFA exercise intake/history/follow-up, public/internal
 responses, capture outage preserving durable writes, challenge/session expiry,
@@ -147,7 +139,7 @@ was not claimed. The supported fixture itself had already disposed its state.
 
 ### #21 accepted functional evidence
 
-PR116 corrected mandatory MFA enrollment/confirmation and concurrency fencing.
+PR #116 corrected mandatory MFA enrollment/confirmation and concurrency fencing.
 Actual enrolled-A and unenrolled-B password/MFA journeys recovered from invalid
 codes and focused Workspace; setup-ready/key presentation and normal sign-out
 were observed. Corrected Wrangler regression: 84 requests, 4 starts, 9 selected D1
@@ -181,39 +173,41 @@ to schema unavailable. All 9 review threads resolved; fresh JS/Actions/Python
 CodeQL results zero and alerts 13–18 fixed without suppression/dismissal. Required
 CI 34307518283 passed. Focused checks: lifecycle 16, pure fallback 5, runtime 3, root 52.
 
-Fresh static fixture interruption passed 3.96s on macOS/Node 22: 1 completed/0 skipped,
+Fresh static fixture interruption passed 3.96 seconds on macOS/Node 22: 1 completed/0 skipped,
 health 200, 7 registered processes including workerd, repeated npm/PTY Ctrl-C, disposed
 state/tree, port reuse, unrelated sentinel preserved. Fixture SHA256
 3618e4d5985b6f93ba0fb68853dc8d13042f8271ae132322bbfc3c2f48a8f347 records exact program.
-Earlier 6.2s interruption remains historical evidence, not substituted for this run.
+The earlier interruption test took 6.2 seconds and remains historical evidence;
+it is not substituted for this run.
 The later bounded directory-error/ESRCH review correction passed lifecycle 18 and
-repeated actual interruption in 4.09s (1 completed, 0 skipped); independent 8787
+repeated actual interruption in 4.09 seconds (1 completed, 0 skipped); independent 8787
 bind passed and owned task directories were zero. Root accepted the correction
 semantics; first test run caught missing imports, fixed before both final passes.
 
-Focused same-state fallback passed 21.1s on clean 2314188a990265c98d67757048184d1815e3a3ec
-against signed 58feb5e4deef55670f635f099eb67c6bcfffae56:normal customer/MFA sessions,
+Focused same-state fallback passed 21.1 seconds on clean 2314188a990265c98d67757048184d1815e3a3ec
+against signed 58feb5e4deef55670f635f099eb67c6bcfffae56: normal customer/MFA sessions,
 1 ticket/4 articles/4 events, canonical digest and admission running/revision 1/
 tickets 1/mutations 4/uploads 0 preserved. Inner/outer cleanup disposed and 8787 reused.
 Private redacted receipt: /tmp/tocyn-65-focused-fallback-receipt.json. This is bounded
 prior-source evidence, not the final accepted-source rehearsal. Exact migration
 compatibility and nonempty shared state remain mandatory; no reset/reverse
 migration/provider rollback claim. Full parked artifact/matrix/fallback evidence
-remains pending the accepted PR118 merge and explicit root dispatch.
+remains incomplete after the failed 018aff41 attempt; the corrected-command source
+must be accepted before root dispatches the next full run.
 
 ## Accepted earlier increments and important decisions
 
 | Issue / PR | Signed merge / outcome |
 | --- | --- |
-| #20 /101 | 3fae282, contributor setup; Done 8 Sep, variance-2. |
-| #57 /102–105 | Source/local runtime/capture/CORS; Done 8 Sep, variance-12. Owner local-only authority supersedes historical remote demonstration. |
-| #58 /110 | 4bf6dc5, genuine issued two-tenant fixture; Done 8 Sep, variance-17. |
-| #19 /111 | 987218b, actual local isolation/realtime; Done 8 Sep, variance-24. AI/vector/workflow doubles remain explicitly identified. |
-| #106 /107 | 18a5ea7, Vitest/mocker4.1.11; alerts 99/100 fixed, not dismissed. |
-| #108 /109 | 80e23ba, Sharp0.35.4 narrow override; alert 101 fixed. Broader #12 remains open. |
-| #59 /112 | e0ce28b, canonical atomic intake; Done 9 Sep, variance-30; receipt 5593265051. |
-| #60 /113 | 646e1a9, scoped atomic retries; Done 9 Sep, variance-37; receipt 5593570669. |
-| #63 /114 | 6a0b3f2, attributable transactional events; Done 9 Sep, variance-44; receipt 5593851738. |
+| #20 /101 | 3fae282, contributor setup; Done 8 Sep, variance -2. |
+| #57 /102–105 | Source/local runtime/capture/CORS; Done 8 Sep, variance -12. Owner local-only authority supersedes historical remote demonstration. |
+| #58 /110 | 4bf6dc5, genuine issued two-tenant fixture; Done 8 Sep, variance -17. |
+| #19 /111 | 987218b, actual local isolation/realtime; Done 8 Sep, variance -24. AI/vector/workflow doubles remain explicitly identified. |
+| #106 /107 | 18a5ea7, Vitest/mocker 4.1.11; alerts 99/100 fixed, not dismissed. |
+| #108 /109 | 80e23ba, Sharp 0.35.4 narrow override; alert 101 fixed. Broader #12 remains open. |
+| #59 /112 | e0ce28b, canonical atomic intake; Done 9 Sep, variance -30; receipt 5593265051. |
+| #60 /113 | 646e1a9, scoped atomic retries; Done 9 Sep, variance -37; receipt 5593570669. |
+| #63 /114 | 6a0b3f2, attributable transactional events; Done 9 Sep, variance -44; receipt 5593851738. |
 | #93 /115 | c3a9db5, functional resource guardrails; main checks passed. OPEN for reader evidence; receipt 5594406704. |
 
 #60 keeps raw 64 KiB/derived 128 KiB/receipt 256 KiB bounds, 24-hour expiry, current auth and
@@ -239,11 +233,11 @@ Project 4 writes work. Preserve approved baselines and 3× effort. Applied forec
 source: private-beta-reforecast-after63-2026-09-09.json. Open forecasts remain #93
 12 Sep; #62 18 Sep; #21 19–24 Sep; #65 25 Sep–1 Oct; actual independent starts are 9 Sep.
 Reader/access uncertainty prevents a defensible earlier completion forecast despite
-early code readiness. Do not invent percentages.61 completed early as recorded above.
+early code readiness. Do not invent percentages. #61 completed early as recorded above.
 
-Operational update delivered 03:52 UTC; next due 04:22 UTC. Root owns updates.
-Use concise working commentary while active. Non-beta roadmap #50/#64/#90(full
-cost)/#91(journals)/#48/#66(redesign)/#42(production)/#18(native email) stays outside
+Operational update delivered 04:22 UTC; next due 04:52 UTC. Root owns updates.
+Use concise working commentary while active. Non-beta roadmap #50/#64/#90 (full
+cost)/#91 (journals)/#48/#66 (redesign)/#42 (production)/#18 (native email) stays outside
 critical-path scope except required correctness. Historical detailed checkpoints
 remain in Git history, linked issues and subsystem docs; they are not current gates.
 

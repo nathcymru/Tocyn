@@ -98,13 +98,14 @@ actual workerd process is registered, interrupts the npm/Node/Wrangler tree
 through a pseudo-terminal, and checks tree/state removal and port release while
 an unrelated sentinel survives. It does not seed remote or existing state.
 
-The bounded actual interruption check passed on macOS with Node 22 in 6.2s:
+The bounded actual interruption check passed on macOS with Node 22 in 6.2 seconds:
 local health returned 200, seven owned processes included the real workerd
 engine, repeated npm/PTY Ctrl-C disposed the tree and private state, port 8787
 was reusable, and an unrelated sentinel remained alive. This is lifecycle
 evidence only. The [same-state runtime evidence](./local-beta-same-state-fallback.md)
 is recorded against its own clean candidate; the complete final two-artifact
-and acceptance-matrix rehearsal remains unrun.
+and acceptance-matrix rehearsal has not completed successfully; the failed first
+attempt is recorded below.
 
 POSIX lifecycle execution cases are skipped on unsupported test hosts, while
 the platform refusal contract remains tested without changing host identity.
@@ -122,11 +123,31 @@ processes including workerd, disposed state/tree, reusable port 8787, and the
 unrelated sentinel preserved. An independent bind probe passed and no owned
 Wrangler task directories remained. The tested static fixture SHA-256 is
 `3618e4d5985b6f93ba0fb68853dc8d13042f8271ae132322bbfc3c2f48a8f347`;
-the earlier 6.2s run remains separate historical evidence.
+the earlier run took 6.2 seconds and remains separate historical evidence.
 
 A later bounded review correction normalizes ownership-directory inspection
 errors and ignores only `ESRCH` when a test-owned process exits between identity
 inspection and teardown. The focused suite then passed 18 tests; actual Wrangler
-interruption was repeated in 4.09s with one completed/zero skipped, seven owned
+interruption was repeated in 4.09 seconds with one completed test and zero skipped, seven owned
 processes, full disposal, sentinel preservation and an independent port reuse
 probe. Other signal errors remain failures.
+
+
+The first complete technical attempt on signed candidate
+`018aff41cb55dbdf34bd6e60246827715fb00403`, with signed known-good
+`58feb5e4deef55670f635f099eb67c6bcfffae56`, failed at the second matrix entry:
+the runner requested a nonexistent server `lint` script. Five prior setup/check
+commands passed; that lint command exited 1. No artifact, fallback, application
+HTTP flow or auth mail ran. The retained redacted receipt reports `cleanup: disposed`
+and fallback `not-run`; all three local port probes passed and no owned rehearsal
+task directory remained. This failed attempt is not acceptance evidence.
+
+The corrected entry invokes installed ESLint from the server workspace with
+`npm exec --offline --no --workspace=apps/server -- eslint .`, matching CI's
+`cd apps/server && npx eslint .` semantics while refusing installation/network
+fallback. Its receipt label is the fixed `server ESLint`. The exact command and
+workspace/local-package resolution passed locally. A regression checks every
+matrix script against its workspace package and verifies the installed/local tool
+entrypoints. The other 23 matrix entries existed; no acceptance check was removed.
+A fresh full run must use the correction's accepted immutable revision and retain
+the earlier failed receipt separately.

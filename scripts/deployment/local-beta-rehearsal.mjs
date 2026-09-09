@@ -13,7 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const inheritedEnvironment = new Set(['HOME', 'PATH', 'LANG', 'TERM', 'USER', 'LOGNAME', 'SHELL', 'SYSTEMROOT', 'SystemRoot', 'WINDIR', 'ComSpec', 'PATHEXT']);
 const requiredAcceptanceCommands = [
   ['npm', ['run', 'typecheck', '--workspace=apps/server']],
-  ['npm', ['run', 'lint', '--workspace=apps/server']],
+  ['npm', ['exec', '--offline', '--no', '--workspace=apps/server', '--', 'eslint', '.']],
   ['npm', ['run', 'typecheck:local-tenants', '--workspace=apps/server']],
   ['npm', ['run', 'typecheck:local-beta', '--workspace=apps/server']],
   ['npm', ['run', 'typecheck:local-portal-workflow', '--workspace=apps/server']],
@@ -101,6 +101,7 @@ export function receiptCommand(command, args) {
   if (executable === 'npm' || executable === 'npm.cmd') {
     const scripts = new Set(requiredAcceptanceCommands.filter(([tool, argv]) => tool === 'npm' && argv[0] === 'run').map(([, argv]) => argv[1]));
     if (args[0] === 'run' && scripts.has(args[1])) return `npm run ${args[1]}`;
+    if (JSON.stringify(args) === JSON.stringify(['exec', '--offline', '--no', '--workspace=apps/server', '--', 'eslint', '.'])) return 'server ESLint';
     if (args[0] === 'ci') return 'npm ci';
     if (args[0] === 'rebuild' && args[1] === 'better-sqlite3') return 'npm rebuild better-sqlite3';
     return 'npm command';
