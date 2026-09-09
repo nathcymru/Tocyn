@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,8 +36,12 @@ function git(cwd, args) { return execFileSync('git', args, { cwd, encoding: 'utf
 export function localEnvironment(base, taskRoot) {
   if (!isAbsolute(taskRoot)) fail('task root must be absolute');
   const env = { ...base, WRANGLER_SEND_METRICS: 'false', TMPDIR: join(taskRoot, 'tmp'), XDG_CONFIG_HOME: join(taskRoot, 'config'), XDG_CACHE_HOME: join(taskRoot, 'cache') };
-  for (const name of Object.keys(env)) if (providerVariable.test(name)) delete env[name];
+  for (const name of Object.keys(env)) if (providerVariable.test(name) || name.startsWith('VITE_')) delete env[name];
   return env;
+}
+
+export function pinnedFrontendEnvironment(env) {
+  return { ...env, VITE_API_URL: 'https://api.beta.local.invalid', VITE_WIDGET_KEY: 'local-rehearsal-widget-key' };
 }
 
 export function assertCleanRevision(source, revision) {
@@ -76,20 +81,79 @@ async function portFree(port) {
   });
 }
 
-function run(command, args, cwd, env, receipt) {
-  const started = Date.now();
-  try {
-    execFileSync(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 10 * 1024 * 1024 });
-    receipt.commands.push({ command: [command, ...args].join(' '), durationMs: Date.now() - started, result: 'passed' });
-  } catch {
-    receipt.commands.push({ command: [command, ...args].join(' '), durationMs: Date.now() - started, result: 'failed' });
-    fail(`local command failed: ${command} ${args[0] || ''}`);
+export class RehearsalLifecycle {
+  constructor(taskRoot, receipt) { this.taskRoot = taskRoot; this.receipt = receipt; this.children = new Set(); this.interrupted = false; this.cleanupPromise = undefined; }
+
+  async run(command, args, cwd, env) {
+    if (this.interrupted) fail('local rehearsal interrupted');
+    const started = Date.now();
+    const display = [command, ...args].join(' ');
+    const child = spawn(command, args, { cwd, env, stdio: 'ignore', detached: process.platform !== 'win32' });
+    this.children.add(child);
+    try {
+      const [code, signal] = await once(child, 'exit');
+      if (code === 0 && !signal) this.receipt.commands.push({ command: display, durationMs: Date.now() - started, result: 'passed' });
+      else {
+        this.receipt.commands.push({ command: display, durationMs: Date.now() - started, result: 'failed' });
+        fail(`local command failed: ${command} ${args[0] || ''}`);
+      }
+    } finally {
+      this.children.delete(child);
+    }
   }
+
+  async stop(child) {
+    const running = () => !!child.pid && child.exitCode === null && child.signalCode === null;
+    const signal = value => {
+      try { if (process.platform !== 'win32') process.kill(-child.pid, value); else child.kill(value); }
+      catch (error) { if (error.code !== 'ESRCH') throw error; }
+    };
+    const waitExit = async () => {
+      let timer;
+      try { await Promise.race([once(child, 'exit'), new Promise(resolvePromise => { timer = setTimeout(resolvePromise, 1_500); })]); }
+      finally { clearTimeout(timer); }
+    };
+    if (running()) { signal('SIGTERM'); if (running()) await waitExit(); }
+    if (running()) { signal('SIGKILL'); if (running()) await waitExit(); }
+    this.children.delete(child);
+  }
+
+  cleanup() {
+    if (!this.cleanupPromise) this.cleanupPromise = (async () => {
+      await Promise.allSettled([...this.children].map(child => this.stop(child)));
+      for (const name of ['candidate', 'comparison']) {
+        const worktree = join(this.taskRoot, name);
+        if (statExists(worktree)) {
+          try { execFileSync('git', ['worktree', 'remove', '--force', worktree], { cwd: root, stdio: 'ignore' }); } catch { /* rmSync below removes runner-owned paths. */ }
+        }
+      }
+      rmSync(this.taskRoot, { recursive: true, force: true });
+    })();
+    return this.cleanupPromise;
+  }
+}
+
+export function installSignalCleanup(lifecycle, receipt, receiptPath) {
+  let handling = false;
+  const onSignal = (signal, code) => {
+    if (handling) return;
+    handling = true;
+    lifecycle.interrupted = true;
+    receipt.interrupted = signal;
+    void lifecycle.cleanup().finally(() => {
+      receipt.cleanup = 'disposed';
+      writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+      process.exit(code);
+    });
+  };
+  const sigint = () => onSignal('SIGINT', 130); const sigterm = () => onSignal('SIGTERM', 143);
+  process.on('SIGINT', sigint); process.on('SIGTERM', sigterm);
+  return () => { process.removeListener('SIGINT', sigint); process.removeListener('SIGTERM', sigterm); };
 }
 
 function syntheticPackagingEnvironment(env, worktree) {
   const manifest = JSON.parse(execFileSync(process.execPath, ['-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1]))', join(worktree, 'deployment/beta.json')]));
-  return {
+  return pinnedFrontendEnvironment({
     ...env,
     TOCYN_D1_DATABASE_ID: '11111111-1111-4111-8111-111111111111',
     TOCYN_D1_DATABASE_NAME: manifest.resources.d1Database,
@@ -97,26 +161,26 @@ function syntheticPackagingEnvironment(env, worktree) {
     TOCYN_PORTAL_ORIGIN: 'https://portal.beta.local.invalid',
     TOCYN_DASHBOARD_ORIGIN: 'https://dashboard.beta.local.invalid',
     TOCYN_API_ORIGIN: 'https://api.beta.local.invalid',
-  };
+  });
 }
 
 async function assertAvailablePorts() { await portFree(8787); await portFree(5174); }
 
-async function buildParkArtifact(worktree, revision, taskRoot, label, receipt) {
+async function buildParkArtifact(worktree, revision, taskRoot, label, lifecycle) {
   const release = join(taskRoot, `${label}-release`);
   const env = syntheticPackagingEnvironment(localEnvironment(process.env, taskRoot), worktree);
-  run('npm', ['ci', '--ignore-scripts', '--offline'], worktree, env, receipt);
-  run('npm', ['rebuild', 'better-sqlite3', '--workspace=apps/server'], worktree, env, receipt);
+  await lifecycle.run('npm', ['ci', '--ignore-scripts', '--offline'], worktree, env);
+  await lifecycle.run('npm', ['rebuild', 'better-sqlite3', '--workspace=apps/server'], worktree, env);
   for (const [command, args] of requiredAcceptanceCommands) {
     await assertAvailablePorts();
-    run(command, args, worktree, env, receipt);
+    await lifecycle.run(command, args, worktree, env);
     await assertAvailablePorts();
   }
-  run('node', ['scripts/deployment/isolated-release.mjs', 'prepare', '--target', 'beta', '--revision', revision, '--mode', 'park', '--output', release], worktree, env, receipt);
-  run(process.execPath, [join(worktree, 'node_modules/wrangler/bin/wrangler.js'), 'deploy', '--dry-run', '--outdir', join(release, 'worker'), '--metafile', join(release, 'worker-meta.json'), '--config', join(release, 'wrangler.source.json')], worktree, env, receipt);
-  run('node', ['scripts/deployment/isolated-release.mjs', 'package', '--target', 'beta', '--revision', revision, '--mode', 'park', '--output', release], worktree, env, receipt);
-  run('node', ['scripts/deployment/verify-release-artifact.mjs', release, 'beta'], worktree, env, receipt);
-  run(process.execPath, [join(worktree, 'node_modules/wrangler/bin/wrangler.js'), 'deploy', '--dry-run', '--no-bundle', '--config', join(release, 'wrangler.deploy.json')], worktree, env, receipt);
+  await lifecycle.run('node', ['scripts/deployment/isolated-release.mjs', 'prepare', '--target', 'beta', '--revision', revision, '--mode', 'park', '--output', release], worktree, env);
+  await lifecycle.run(process.execPath, [join(worktree, 'node_modules/wrangler/bin/wrangler.js'), 'deploy', '--dry-run', '--outdir', join(release, 'worker'), '--metafile', join(release, 'worker-meta.json'), '--config', join(release, 'wrangler.source.json')], worktree, env);
+  await lifecycle.run('node', ['scripts/deployment/isolated-release.mjs', 'package', '--target', 'beta', '--revision', revision, '--mode', 'park', '--output', release], worktree, env);
+  await lifecycle.run('node', ['scripts/deployment/verify-release-artifact.mjs', release, 'beta'], worktree, env);
+  await lifecycle.run(process.execPath, [join(worktree, 'node_modules/wrangler/bin/wrangler.js'), 'deploy', '--dry-run', '--no-bundle', '--config', join(release, 'wrangler.deploy.json')], worktree, env);
   return release;
 }
 
@@ -144,24 +208,25 @@ export async function runRehearsal({ revision, knownGood, receiptPath }) {
     mkdirSync(path, { mode: 0o700 });
     chmodSync(path, 0o700);
   }
-  const receipt = { mode: plan.mode, candidate: revision, knownGood, providerReceipt: 'absent', deployment: 'not-run', mail: 'local-capture', commands: [], cleanup: 'pending' };
+  const receipt = {
+    mode: plan.mode, candidate: revision, knownGood, providerReceipt: 'absent', deployment: 'not-run', mail: 'local-capture',
+    frontendInputs: { apiUrl: 'https://api.beta.local.invalid', widgetKey: 'local-rehearsal-widget-key' },
+    fallback: { result: 'not-run', reason: 'same-state local runtime fallback is not implemented in this tooling increment' }, commands: [], cleanup: 'pending',
+  };
+  const lifecycle = new RehearsalLifecycle(taskRoot, receipt);
+  const removeSignalHandlers = installSignalCleanup(lifecycle, receipt, receiptPath);
   try {
     const candidate = join(taskRoot, 'candidate'); const comparison = join(taskRoot, 'comparison');
-    run('git', ['worktree', 'add', '--detach', candidate, revision], root, localEnvironment(process.env, taskRoot), receipt);
-    run('git', ['worktree', 'add', '--detach', comparison, revision], root, localEnvironment(process.env, taskRoot), receipt);
-    const first = await buildParkArtifact(candidate, revision, taskRoot, 'candidate', receipt);
-    const second = await buildParkArtifact(comparison, revision, taskRoot, 'comparison', receipt);
+    await lifecycle.run('git', ['worktree', 'add', '--detach', candidate, revision], root, localEnvironment(process.env, taskRoot));
+    await lifecycle.run('git', ['worktree', 'add', '--detach', comparison, revision], root, localEnvironment(process.env, taskRoot));
+    const first = await buildParkArtifact(candidate, revision, taskRoot, 'candidate', lifecycle);
+    const second = await buildParkArtifact(comparison, revision, taskRoot, 'comparison', lifecycle);
     const comparisonReceipt = compareArtifactFiles(first, second);
     const verified = verifyReleaseArtifact(first, 'beta');
-    Object.assign(receipt, { artifact: { ...comparisonReceipt, releaseDigest: verified.provenance.releaseDigest, mode: verified.provenance.mode }, fallback: plan.fallback });
+    Object.assign(receipt, { artifact: { ...comparisonReceipt, releaseDigest: verified.provenance.releaseDigest, mode: verified.provenance.mode } });
   } finally {
-    for (const name of ['candidate', 'comparison']) {
-      const worktree = join(taskRoot, name);
-      if (statExists(worktree)) {
-        try { execFileSync('git', ['worktree', 'remove', '--force', worktree], { cwd: root, stdio: 'ignore' }); } catch { /* rmSync below removes runner-owned paths. */ }
-      }
-    }
-    rmSync(taskRoot, { recursive: true, force: true });
+    removeSignalHandlers();
+    await lifecycle.cleanup();
     receipt.cleanup = 'disposed';
     writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`, { mode: 0o600 });
   }
