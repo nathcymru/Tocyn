@@ -34,7 +34,7 @@ export function useUpdateTicket() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: TicketChanges & { id: string }) =>
-      dashboardApi.patch<Ticket>(`/tickets/${id}`, data),
+      dashboardApi.patch<{ success: true }>(`/tickets/${id}`, data),
     onSuccess: (_, variables) => {
       return Promise.all([
         queryClient.invalidateQueries({ queryKey: ['tickets'] }),
