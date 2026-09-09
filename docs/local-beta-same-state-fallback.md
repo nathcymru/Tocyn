@@ -27,3 +27,10 @@ match the candidate canonical digest and durable counters. The runner then
 removes its local state. This proves only compatible local code fallback; it is
 not provider rollback, backup/restore, reverse migration, deployment, or
 production evidence.
+
+The orchestration helper accepts explicit clean candidate and known-good
+worktree paths and their immutable revisions. It uses the rehearsal lifecycle's
+managed-service API for each local Worker, so stopping the candidate preserves
+the shared local state while verifying its owned process scope before the
+known-good Worker starts. It does not read the lifecycle process registry or
+create another process ownership mechanism.
