@@ -103,15 +103,125 @@ it('persists explicit assignment clearing and exposes pending/rejected state cha
   fireEvent.change(screen.getByRole('combobox',{name:'Group'}),{target:{value:''}});
   await waitFor(()=>expect(patches).toContainEqual({group_id:null}));
   await waitFor(()=>expect(screen.getByRole('combobox',{name:'Group'})).toHaveValue(''));
-  hold=true;screen.getByRole('combobox',{name:'Status'}).focus();fireEvent.change(screen.getByRole('combobox',{name:'Status'}),{target:{value:'closed'}});
+  hold=true;const pendingStatus=screen.getByRole('combobox',{name:'Status'});pendingStatus.focus();fireEvent.change(pendingStatus,{target:{value:'closed'}});
   await waitFor(()=>expect(screen.getByRole('combobox',{name:'Status'})).toHaveAttribute('aria-disabled','true'));
   expect(document.activeElement).toBe(screen.getByRole('combobox',{name:'Status'}));
   fireEvent.change(screen.getByRole('combobox',{name:'Status'}),{target:{value:'resolved'}});
   expect(patches.filter(patch=>'status' in patch)).toHaveLength(1);
   pending.resolve(json({error:'State change rejected'},403));
   expect(await screen.findByRole('alert')).toHaveTextContent('State change rejected');
-  expect(screen.getByRole('combobox',{name:'Status'})).toHaveValue('open');
-  expect(screen.getByRole('combobox',{name:'Status'})).toHaveAttribute('aria-disabled','false');
+  expect(screen.getByRole('combobox',{name:'Status'})).toBe(pendingStatus);
+  expect(pendingStatus).toHaveValue('open');
+  expect(pendingStatus).toHaveAttribute('aria-disabled','false');
+  expect(pendingStatus).toHaveFocus();
+});
+
+it.each([
+  ['Status', { status: 'pending' }, 'pending'],
+  ['Priority', { priority: 'high' }, 'high'],
+  ['Assigned To', { assigned_to: null }, ''],
+  ['Group', { group_id: null }, ''],
+] as const)('refreshes the native %s control after its authoritative update without losing focus', async (name, change, expected) => {
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      Object.assign(ticket, JSON.parse(String(options.body)));
+      return json({ success: true });
+    }
+    return json(ticket);
+  });
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  const previous = screen.getByRole('combobox', { name });
+  previous.focus(); fireEvent.change(previous, { target: { value: expected } });
+  await waitFor(() => {
+    const refreshed = screen.getByRole('combobox', { name });
+    expect(refreshed).not.toBe(previous);
+    expect(refreshed).toHaveValue(expected);
+    expect(refreshed).toHaveFocus();
+  });
+  expect(ticket).toMatchObject(change);
+});
+
+it('does not steal focus after a confirmed select update when the operator moves elsewhere', async () => {
+  const pending = deferred<Response>();
+  transport((_path, options) => {
+    if (options.method === 'PATCH') return pending.promise;
+    return json(ticket);
+  });
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  const priority = screen.getByRole('combobox', { name: 'Priority' });
+  priority.focus(); fireEvent.change(priority, { target: { value: 'high' } });
+  const status = screen.getByRole('combobox', { name: 'Status' });
+  status.focus();
+  Object.assign(ticket, { priority: 'high' });
+  await act(async () => { pending.resolve(json({ success: true })); });
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Priority' })).not.toBe(priority));
+  expect(status).toHaveFocus();
+});
+
+it('keeps a committed select read-only until its detail refresh succeeds without repeating the PATCH', async () => {
+  let patches = 0;
+  let confirmationAvailable = false;
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      patches++;
+      Object.assign(ticket, JSON.parse(String(options.body)));
+      return json({ success: true });
+    }
+    return patches === 0 || confirmationAvailable ? json(ticket) : json({ error: 'Confirmation unavailable' }, 503);
+  });
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  const priority = screen.getByRole('combobox', { name: 'Priority' });
+  priority.focus(); fireEvent.change(priority, { target: { value: 'high' } });
+  await screen.findByRole('alert');
+  expect(screen.getByText('Ticket details saved. Refresh the ticket before making another change.')).toHaveAttribute('role', 'status');
+  expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
+  expect(priority).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.change(priority, { target: { value: 'urgent' } });
+  expect(priority).toHaveValue('normal');
+  expect(patches).toBe(1);
+  confirmationAvailable = true;
+  const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
+  retry.focus(); fireEvent.click(retry);
+  await waitFor(() => {
+    const refreshed = screen.getByRole('combobox', { name: 'Priority' });
+    expect(refreshed).not.toBe(priority);
+    expect(refreshed).toHaveValue('high');
+    expect(refreshed).toHaveAttribute('aria-disabled', 'false');
+    expect(refreshed).toHaveFocus();
+  });
+  expect(patches).toBe(1);
+});
+
+it('does not steal focus when the operator moves away during confirmation retry', async () => {
+  let patches = 0;
+  let confirmationAvailable = false;
+  const confirmationRead = deferred<Response>();
+  let confirmationStarted!: () => void;
+  const confirmationStartedPromise = new Promise<void>(resolve => { confirmationStarted = resolve; });
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      patches++;
+      Object.assign(ticket, JSON.parse(String(options.body)));
+      return json({ success: true });
+    }
+    if (patches === 0) return json(ticket);
+    if (!confirmationAvailable) return json({ error: 'Confirmation unavailable' }, 503);
+    confirmationStarted();
+    return confirmationRead.promise;
+  });
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  const priority = screen.getByRole('combobox', { name: 'Priority' });
+  fireEvent.change(priority, { target: { value: 'high' } });
+  await screen.findByRole('alert');
+  confirmationAvailable = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading ticket' }));
+  await confirmationStartedPromise;
+  const status = screen.getByRole('combobox', { name: 'Status' });
+  status.focus();
+  await act(async () => { confirmationRead.resolve(json(ticket)); });
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Priority' })).not.toBe(priority));
+  expect(status).toHaveFocus();
+  expect(patches).toBe(1);
 });
 
 it('preserves a rejected reply draft and recovers once, refreshing both detail and feed after commit',async()=>{
