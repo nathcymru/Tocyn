@@ -196,3 +196,14 @@ survived, and the interrupted command's private tail was retained then removed b
 the test teardown. Independent bind probes verified ports 8787, 5173 and 5174
 were free; no owned interruption directory remained. This is bounded lifecycle
 evidence, not a successful full technical rehearsal or actual reader acceptance.
+
+The final review batch rejects ownership without a diagnostic destination and
+preserves the original process-verification failure if retaining output also
+fails. Cleanup attempts every owned scope, records only a constant diagnostics
+`unavailable` marker, and retains incomplete recovery state. Regressions include
+a failed service write and a simultaneous registration/output failure with a
+sibling process. All 25 lifecycle tests and the runtime typecheck passed. The
+capture-enabled real interruption then passed again in 3.84 seconds, one completed
+test and zero skipped, with seven registered processes, disposed state, retained
+then test-disposed private output, sentinel preservation and independently verified
+release of all three local ports. No owned interruption directory remained.

@@ -130,6 +130,7 @@ export class RehearsalLifecycle {
   constructor(taskRoot, receipt, { failedOutputDirectory, ownsFailedOutputDirectory = false } = {}) {
     assertRehearsalPlatform();
     registry.checkDirectory(taskRoot);
+    if (ownsFailedOutputDirectory && !failedOutputDirectory) fail('owned failed-output directory requires a destination');
     this.taskRoot = taskRoot; this.receipt = receipt; this.scopes = new Map(); this.interrupted = false; this.cleanupPromise = undefined;
     if (failedOutputDirectory) registry.checkDirectory(failedOutputDirectory);
     this.failedOutputDirectory = failedOutputDirectory;
@@ -178,11 +179,19 @@ export class RehearsalLifecycle {
       await this.stopScope(scope);
       diagnostics = await this.finishOutput(scope, !passed);
     } catch (error) {
-      scope.output?.finish(true);
+      this.retainOutputAfterFailure(scope);
       throw error;
     }
     this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: passed ? 'passed' : 'failed', exitCode: code, signal, ...(diagnostics ? { diagnostics } : {}) });
     if (!passed) fail(`local command failed: ${scope.command}`);
+  }
+
+  retainOutputAfterFailure(scope) {
+    try {
+      scope.output?.finish(true);
+      if (scope.output?.unavailable) this.receipt.diagnostics = 'unavailable';
+    }
+    catch { this.receipt.diagnostics = 'unavailable'; }
   }
 
   async stopService(handle) {
@@ -279,12 +288,18 @@ export class RehearsalLifecycle {
       const stopped = await Promise.allSettled([...this.scopes.values()].map(scope => this.stopScope(scope)));
       const failure = stopped.find(result => result.status === 'rejected');
       // A command interrupted before its caller can finish still leaves private evidence.
-      for (const scope of this.scopes.values()) if (scope.output && !scope.output.finished) {
-        if (failure) scope.output.finish(true);
+      const outputs = await Promise.allSettled([...this.scopes.values()].filter(scope => scope.output && !scope.output.finished).map(async scope => {
+        if (failure) this.retainOutputAfterFailure(scope);
         else await this.finishOutput(scope, true);
-      }
+      }));
+      const outputFailure = outputs.find(result => result.status === 'rejected');
+      if (outputFailure || [...this.scopes.values()].some(scope => scope.output?.unavailable)) this.receipt.diagnostics = 'unavailable';
       if (failure?.status === 'rejected') throw failure.reason;
-      if (this.ownsFailedOutputDirectory && !readdirSync(this.failedOutputDirectory).length) rmSync(this.failedOutputDirectory, { recursive: true });
+      if (outputFailure?.status === 'rejected') throw outputFailure.reason;
+      if (this.ownsFailedOutputDirectory) {
+        try { if (!readdirSync(this.failedOutputDirectory).length) rmSync(this.failedOutputDirectory, { recursive: true }); }
+        catch { this.receipt.diagnostics = 'unavailable'; fail('private diagnostics cleanup could not be completed'); }
+      }
       for (const name of ['candidate', 'comparison', 'known-good']) {
         const worktree = join(this.taskRoot, name);
         if (statExists(worktree)) {

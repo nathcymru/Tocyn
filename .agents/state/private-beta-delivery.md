@@ -123,6 +123,18 @@ Native bind probes passed for 8787/5173/5174; owned interruption directories wer
 zero. Ports were explicitly returned to root. Root reviewed the code with no
 blocking finding; coherent PR publication and final required checks are next.
 
+PR #122 was published at 95afb56 with empty closingIssuesReferences. Initial CI
+34313360403 and security 34313359029 passed; all three fresh analyses returned zero.
+Automatic review identified missing diagnostic ownership-option validation and
+two error-precedence paths. The consolidated correction preserves original process
+errors and sibling cleanup while recording unavailable service diagnostics. Root
+reviewed the final delta; 25 lifecycle tests and runtime types passed. Actual
+capture-enabled interruption then passed again in 3.84 seconds, one completed and
+zero skipped, with seven registered processes, disposed state/tree, preserved
+sentinel and private output retained then test-disposed. Independent binds for
+8787/5173/5174 passed and owned interruption directories were zero. Ports were
+returned to root. Final corrected-head required checks remain pending.
+
 Governance discovery: GitHub auto-closed #93 at PR #116 and #65 at PR #118 because
 negated prose still contained closing keywords. Root edited both bodies and
 verified empty closing references, reopened both issues, and confirmed Project

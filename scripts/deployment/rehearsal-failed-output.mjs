@@ -44,6 +44,7 @@ export class FailedCommandOutput {
       }
       return this.result;
     } catch {
+      this.unavailable = true;
       throw new Error('Private command diagnostics could not be retained');
     } finally {
       for (const stream of Object.values(this.streams)) {

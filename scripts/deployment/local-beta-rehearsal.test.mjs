@@ -385,3 +385,51 @@ test('successful lifecycle erases its private diagnostic directory and rejects s
   await lifecycle.cleanup();
   assert.equal(existsSync(output), false);
 });
+
+test('an owned diagnostic directory requires a destination before lifecycle setup', { skip: unsupportedPlatform }, t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-output-option-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  assert.throws(() => new RehearsalLifecycle(directory, { commands: [] }, { ownsFailedOutputDirectory: true }), /requires a destination/);
+  assert.equal(existsSync(join(directory, 'processes')), false);
+});
+
+test('diagnostic failure preserves the original registration failure while other owned scopes stop', { skip: unsupportedPlatform }, async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-output-double-failure-'));
+  const task = join(directory, 'task'); const output = join(directory, 'output');
+  for (const path of [task, output]) mkdirSync(path, { mode: 0o700 });
+  const receipt = { commands: [] };
+  const lifecycle = new RehearsalLifecycle(task, receipt, { failedOutputDirectory: output, ownsFailedOutputDirectory: true });
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const sibling = lifecycle.startService(process.execPath, [processFixture, 'idle'], directory, process.env);
+  await waitFor(() => registry.snapshot().some(info => info.pid === sibling.pid), 'sibling registration');
+  const running = lifecycle.run(process.execPath, [processFixture, 'output', '7'], directory, process.env);
+  const failedScope = [...lifecycle.scopes.values()].at(-1);
+  writeFileSync(join(failedScope.directory, 'failed'), 'synthetic registration failure', { mode: 0o600 });
+  rmSync(output, { recursive: true });
+  await assert.rejects(running, /registration incomplete/);
+  await assert.rejects(lifecycle.cleanup(), /registration incomplete/);
+  assert.equal(receipt.diagnostics, 'unavailable');
+  assert.equal(existsSync(task), true, 'failed process verification must preserve recovery state');
+  assert.equal(processAlive(sibling.pid), false, 'another scope still receives verified cleanup');
+  assert.equal(JSON.stringify(receipt).includes(directory), false);
+});
+
+test('a failed service diagnostic is reflected in later cleanup without exposing its destination', { skip: unsupportedPlatform }, async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-service-output-failure-'));
+  const task = join(directory, 'task'); const output = join(directory, 'output');
+  for (const path of [task, output]) mkdirSync(path, { mode: 0o700 });
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const receipt = { commands: [] };
+  const lifecycle = new RehearsalLifecycle(task, receipt, { failedOutputDirectory: output, ownsFailedOutputDirectory: true });
+  const handle = lifecycle.startService(process.execPath, [processFixture, 'output', '7'], directory, process.env);
+  await handle.exited;
+  rmSync(output, { recursive: true });
+  await assert.rejects(lifecycle.stopService(handle), /Private command diagnostics could not be retained/);
+  await assert.rejects(lifecycle.cleanup(), error => {
+    assert.equal(error.message, 'Local beta rehearsal rejected: private diagnostics cleanup could not be completed');
+    return true;
+  });
+  assert.equal(receipt.diagnostics, 'unavailable');
+  assert.equal(JSON.stringify(receipt).includes(directory), false);
+  assert.equal(existsSync(task), true);
+});
