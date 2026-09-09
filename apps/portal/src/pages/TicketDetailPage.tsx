@@ -29,12 +29,31 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [replyStatus, setReplyStatus] = useState('');
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadStatus, setDownloadStatus] = useState('');
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const attachButton = useRef<HTMLButtonElement>(null);
+  const conversationHeading = useRef<HTMLHeadingElement>(null);
+  const messagesRegion = useRef<HTMLDivElement>(null);
+  const recovering = useRef(false);
+
+  useEffect(() => {
+    if (!loading && !error && recovering.current) {
+      conversationHeading.current?.focus();
+      recovering.current = false;
+    }
+  }, [loading, error]);
   
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchTicket = useCallback(async (silent = false) => {
     const generation = ++requestGeneration.current;
+    setRefreshing(true);
     try {
       if (!silent) setLoading(true);
       let data = await portalApi.get<DetailPage>(`/tickets/${id}`);
@@ -46,13 +65,20 @@ function TicketDetail({ id }: { id: string | undefined }) {
       if (generation !== requestGeneration.current) return;
       data = { ...data, articles: accumulated };
       setTicket(data.ticket);
+      setError(null);
+      setRefreshError(null);
       setArticles(data.articles);
       setNextCursor(data.pagination?.next_cursor ?? null);
       setPaginationVisible(Boolean(data.pagination));
       setPageStatus(`Showing ${data.articles.length} messages.${data.pagination?.has_more ? ' More messages are available.' : ''}`);
+      return true;
     } catch (err: unknown) {
-      if (!silent) setError(err instanceof Error ? err.message : 'Failed to load ticket details');
+      const message = err instanceof Error ? err.message : 'Failed to load ticket details';
+      if (!silent) setError(message);
+      else setRefreshError(message);
+      return false;
     } finally {
+      setRefreshing(false);
       if (!silent) setLoading(false);
     }
   }, [id]);
@@ -130,9 +156,11 @@ function TicketDetail({ id }: { id: string | undefined }) {
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (sending) return;
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
       setAttachments(prev => [...prev, ...newFiles]);
+      setReplyStatus(`${newFiles.length} attachment${newFiles.length === 1 ? '' : 's'} added.`);
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -140,12 +168,17 @@ function TicketDetail({ id }: { id: string | undefined }) {
   };
 
   const removeAttachment = (index: number) => {
+    if (sending) return;
     setAttachments(prev => prev.filter((_, i) => i !== index));
+    setReplyStatus('Attachment removed.');
+    attachButton.current?.focus();
   };
 
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() && attachments.length === 0) return;
+    if (sending || (!newMessage.trim() && attachments.length === 0)) return;
+    setReplyError(null);
+    setReplyStatus('Sending reply…');
 
     setSending(true);
     try {
@@ -175,12 +208,28 @@ function TicketDetail({ id }: { id: string | undefined }) {
       // 3. Reset form and refresh ticket
       setNewMessage('');
       setAttachments([]);
-      await fetchTicket();
+      const refreshed = await fetchTicket(true);
+      setReplyStatus(refreshed ? 'Reply sent.' : 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to send reply');
+      setReplyStatus('');
+      setReplyError(err instanceof Error ? err.message : 'Failed to send reply');
     } finally {
       setSending(false);
     }
+  };
+
+  const downloadAttachment = async (attachmentId: string, filename: string) => {
+    if (downloading) return;
+    setDownloading(attachmentId);
+    setDownloadError(null);
+    setDownloadStatus('Preparing attachment download…');
+    try {
+      await portalApi.download(`/attachments/${attachmentId}/download`, filename);
+      setDownloadStatus('Attachment download started.');
+    } catch (err: unknown) {
+      setDownloadStatus('');
+      setDownloadError(err instanceof Error ? err.message : 'Could not download attachment. Try again.');
+    } finally { setDownloading(null); }
   };
 
   const statusColors = {
@@ -191,13 +240,14 @@ function TicketDetail({ id }: { id: string | undefined }) {
   };
 
   if (loading) {
-    return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
+    return <div role="status" className="flex justify-center py-12"><Loader2 aria-hidden="true" className="w-8 h-8 animate-spin text-brand-600" /><span className="sr-only">Loading conversation…</span></div>;
   }
 
   if (error || !ticket) {
     return (
-      <div className="bg-red-50 text-red-600 p-4 rounded-lg">
-        {error || 'Ticket not found'}
+      <div className="bg-red-50 text-red-700 p-4 rounded-lg">
+        <p role="alert">{error || 'Ticket not found'}</p>
+        <button type="button" onClick={() => { recovering.current = true; void fetchTicket(); }} className="mt-3 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2">Retry loading conversation</button>
         <Link to="/tickets" className="block mt-4 text-brand-600 hover:underline">Back to Tickets</Link>
       </div>
     );
@@ -206,11 +256,11 @@ function TicketDetail({ id }: { id: string | undefined }) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/tickets" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+        <Link to="/tickets" aria-label="Back to Tickets" className="p-2 hover:bg-gray-100 rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+          <h1 ref={conversationHeading} tabIndex={-1} className="text-2xl font-bold text-gray-900 flex items-center gap-3">
             {ticket.subject}
             <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[ticket.status]}`}>
               {ticket.status}
@@ -222,9 +272,15 @@ function TicketDetail({ id }: { id: string | undefined }) {
         </div>
       </div>
 
+      {refreshError && <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700">
+        <p role="alert">Could not refresh messages: {refreshError}</p>
+        <button type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket(true)) messagesRegion.current?.focus(); }} className="mt-2 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2">Refresh messages</button>
+      </div>}
+      {downloadError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{downloadError}</p>}
+      <p role="status" aria-label="Attachment download status" className="text-sm text-gray-700">{downloadStatus}</p>
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         {/* Messages List */}
-        <div id="conversation-messages" className="flex-1 overflow-y-auto p-6 space-y-6 max-h-[600px] bg-gray-50">
+        <div ref={messagesRegion} id="conversation-messages" role="region" aria-label="Conversation messages" tabIndex={0} className="flex-1 overflow-y-auto p-6 space-y-6 max-h-[600px] bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">
           {articles.map((article) => {
             const isCustomer = article.sender_type === 'customer';
             return (
@@ -250,9 +306,12 @@ function TicketDetail({ id }: { id: string | undefined }) {
                     <div className="mt-3 space-y-2">
                       {article.attachments.map((att) => (
                         <button 
-                          key={att.id} 
-                          onClick={(e) => { e.preventDefault(); portalApi.download(`/attachments/${att.id}/download`, att.filename); }}
-                          className={`flex w-full cursor-pointer hover:opacity-80 items-center gap-2 p-2 rounded-lg text-sm ${
+                          key={att.id}
+                          type="button"
+                          aria-label={`Download ${att.filename || 'attachment'}`}
+                          aria-disabled={Boolean(downloading)}
+                          onClick={() => downloadAttachment(att.id, att.filename)}
+                          className={`flex w-full cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 items-center gap-2 p-2 rounded-lg text-sm ${
                             isCustomer ? 'bg-brand-700/50 text-white' : 'bg-gray-50 text-gray-700 border border-gray-100'
                           }`}
                         >
@@ -275,16 +334,22 @@ function TicketDetail({ id }: { id: string | undefined }) {
             className="rounded-md border border-gray-400 bg-white px-4 py-2 text-sm font-medium text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
             {loadingMore ? 'Loading messages…' : nextCursor ? 'Load more messages' : 'All messages loaded'}
           </button>
-          <p role="status" aria-live="polite" className="text-sm text-gray-700">{pageStatus}</p>
+          <p role="status" aria-label="Message pagination" aria-live="polite" className="text-sm text-gray-700">{pageStatus}</p>
         </div>}
 
         {/* Reply Area */}
         {(ticket.status === 'open' || ticket.status === 'pending') && (
           <div className="p-4 bg-white border-t border-gray-200">
-            <form onSubmit={handleReply} className="flex flex-col gap-3">
+            <form aria-busy={sending} onSubmit={handleReply} className="flex flex-col gap-3">
+              <label htmlFor="reply-message" className="text-sm font-medium text-gray-700">Reply</label>
+              {replyError && <p id="reply-error" role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{replyError}</p>}
+              <p role="status" aria-label="Reply status" className="text-sm text-gray-700">{replyStatus}</p>
               <textarea
+                id="reply-message"
+                readOnly={sending}
+                aria-describedby={replyError ? 'reply-error' : undefined}
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
+                onChange={(e) => { if (!sending) setNewMessage(e.target.value); }}
                 placeholder="Type your reply here..."
                 className="w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 resize-none"
                 rows={3}
@@ -299,8 +364,10 @@ function TicketDetail({ id }: { id: string | undefined }) {
                       <span className="max-w-[150px] truncate">{file.name}</span>
                       <button
                         type="button"
+                        aria-label={`Remove ${file.name}`}
+                        aria-disabled={sending}
                         onClick={() => removeAttachment(idx)}
-                        className="text-gray-400 hover:text-red-500 focus:outline-none"
+                        className="rounded text-gray-700 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -313,6 +380,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                 <div>
                   <input
                     type="file"
+                    aria-label="Choose reply attachments"
                     multiple
                     className="hidden"
                     ref={fileInputRef}
@@ -320,9 +388,10 @@ function TicketDetail({ id }: { id: string | undefined }) {
                   />
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-2 text-gray-500 hover:text-brand-600 transition-colors px-2 py-1"
-                    disabled={sending}
+                    ref={attachButton}
+                    onClick={() => { if (!sending) fileInputRef.current?.click(); }}
+                    className="flex items-center gap-2 rounded text-gray-700 hover:text-brand-600 transition-colors px-2 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700"
+                    aria-disabled={sending}
                   >
                     <Paperclip className="w-5 h-5" />
                     <span className="text-sm font-medium">Attach Files</span>
@@ -331,8 +400,8 @@ function TicketDetail({ id }: { id: string | undefined }) {
                 
                 <button
                   type="submit"
-                  disabled={sending || (!newMessage.trim() && attachments.length === 0)}
-                  className="flex items-center gap-2 bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  aria-disabled={sending || (!newMessage.trim() && attachments.length === 0)}
+                  className="flex items-center gap-2 bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 transition-colors aria-disabled:bg-brand-700 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 font-medium"
                 >
                   {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                   Send Reply
