@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true
+  },
+  "include": [
+    "../../../scripts/deployment/local-beta-same-state-runtime.ts",
+    "../../../scripts/deployment/local-beta-same-state-runtime.test.ts"
+  ]
+}

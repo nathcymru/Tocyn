@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 03:32 UTC. This is the authoritative coordinator view.
+Updated 9 September 2026, 03:53 UTC. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -39,47 +39,52 @@ do not skip affected tests. Preserve CRLF in existing dashboard source files.
 
 ## Accepted main and remaining gates
 
-Accepted signed main: d394bd71d020204f75999cf1f21ad6022f478787 (PR119), merged
-02:45:32 UTC. All required PR checks passed and GitHub signature is valid.
-Postmerge security 34304488185 and main CI 34304488433 both passed.
-Root /Users/ty/Documents/Tocyn is clean at this main revision.
+Accepted signed main: 65ad06ee3e905acf9ec59d17bdd951993381e818 (PR116), merged
+03:38:58 UTC. Root verified the GitHub signature. Required PR CI 34307583055 and
+security 34307580665 passed. Earlier signed PR119 d394bd7 and PR117 58feb5e are
+preserved in history; postmerge PR116 main checks remain separately tracked by root.
 
 Not beta-ready. Four issues remain open: #62, #21, #93 and #65.
 
-1. #62 functional implementation is merged; actual reader/UI acceptance remains.
-2. #21 has corrected the browser-discovered mandatory MFA enrollment blocker and
-   passed both MFA browser journeys; final PR checks and manual UI evidence remain. Its reader evidence also supports #62/#93.
-3. #65 lifecycle and focused same-state proof pass. Final accepted-source technical
-   matrix and parked artifact reproducibility follow corrected #21 integration.
-   These may run while reader evidence is pending, but cannot close readiness.
-   A later reader-driven source change invalidates the technical candidate.
+1. #62 and #93 functional implementations are merged; actual reader acceptance
+   remains in their own criteria.
+2. #21 corrected source is merged, including mandatory MFA enrollment, guarded
+   downloads, polling ownership, named controls and responsive navigation.
+   Actual reader and remaining complete journey/focus-cycle evidence remain open.
+3. #65 tooling is being refreshed onto accepted PR116. After required checks and root
+   acceptance merge PR118, run one full technical matrix/reproducibility/fallback
+   rehearsal against that signed immutable merge in a clean checkout, using signed
+   58feb5e4deef55670f635f099eb67c6bcfffae56 as the prior known-good application. No provisional
+   full run is needed solely to repeat it for a squash SHA. Technical evidence may
+   proceed with reader evidence pending, but cannot close #65/readiness. A later
+   reader-driven source change invalidates the technical candidate.
 
-#93 functional guardrails are merged; its reader criterion remains open.
 No gate is waived or transferred merely to close its owning issue.
 
 ## Current ownership and branches
 
-Root owns this file, acceptance, GitHub/Project truth and final browser review.
-Authoritative correction worktree: /tmp/tocyn-21-login-accessibility,
-branch codex/21-login-accessibility. Original and temporary integration recovery
-refs are preserved; the temporary integrated worktree remains at d89ef59.
+Root owns acceptance, GitHub/Project truth and final browser review. Root delegated
+this exact coordinator checkpoint to the #65 owner in /tmp/tocyn-65-local-rehearsal,
+branch codex/65-local-rehearsal, existing PR118. Root alone decides its merge.
+Original recovery branches/stashes remain preserved.
 
 | Work | Agent / model / effort | Current state and reason |
 | --- | --- | --- |
-| #62 integration | Root; Astra/high | Complete functional PR119; issue stays open for reader/UI evidence. Final original branch721ae6f and recovery stash preserved. |
-| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Consolidated correction 6dfd26a passes 53 portal tests/lint/build and root internal review. Exact-source responsive/attachment browser acceptance passed; final docs/state and required CI/security precede integration. Signed #119, original recovery refs and open reader gate are preserved. |
-| #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Owner of /tmp/tocyn-65-local-rehearsal and PR118. Final 0c0d080 CI/security are green; unchanged actual interruption/fallback evidence is tied to2314188. Final technical matrix awaits accepted #21. |
-| Independent review | retry_acceptance; Terra/high | Bounded lifecycle/fallback and frontend reviews complete, no blocking findings. Actual screen-reader/mobile evidence not claimed. Currently idle; no redundant review loop. |
+| #62 integration | Root; Astra/high | Functional PR119 accepted; issue stays open for reader evidence. |
+| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Functional PR116 accepted 65ad06e after exact-source browser, runtime, security and review evidence. Actual reader gate preserved. |
+| #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Existing PR118 source refreshed onto 65ad06e. Prior audit 8c91a6b required CI 34307518283 passed; fresh CodeQL analysis 1745369561 zero, alerts 13–18 fixed, all 9 threads resolved. Refreshed local tests pass: dashboard 48, portal 53, server 373, widget 3, root 52; runtime 3/types and workflow validation pass. Refreshed required CI 34308155782 and zero-result CodeQL passed. Three late review comments received one bounded cleanup correction; final checks pending. |
+| Independent review | retry_acceptance; Terra/high | Bounded lifecycle/fallback and frontend reviews complete; no blocking findings or reader claim. No redundant review loop. |
 
-#21 browser fixture has been disposed. #65 interruption/fallback fixture also
-fully disposed and returned8787 to #21 for corrected runtime tests. Root browser
-windows closed and credential memory cleared. No remote services used.
+All root browser windows/credential bindings, #21 fixtures/private downloads and #65
+interruption fixtures are disposed. Native 8787/5173/5174 reuse was verified by #21;
+#65's later independent 8787 probe also passed with zero owned Wrangler task dirs.
+No live fixture or remote service is owned by #65 now. Root has port ownership for
+residual accepted-source browser checks; final rehearsal waits its explicit handoff.
 
-Next: final documentation/state checkpoint on corrected #21, one near-final
-reviewable transition of existing PR116 and all required checks before integration. Preserve reader
-acceptance as open. #65 prepares existing draft118 in parallel and then runs the
-technical rehearsal on the accepted corrected source. Final readiness awaits
-complete acceptance, not merely passing machine checks.
+Next: validate/publish refreshed PR118, inspect required CI/security and review state,
+and make it ready for root acceptance. After its signed merge, root dispatches the
+single full technical rehearsal. Keep #65 open; final receipt belongs in the issue
+and a dedicated evidence/state PR after that meaningful acceptance boundary.
 
 ## Current evidence and unresolved implementation
 
@@ -127,42 +132,61 @@ removed, ports confirmed free before final tests. Auxiliary private PTY wrapper
 needed explicit cleanup after its fallback killpg error; automatic wrapper cleanup
 was not claimed. The supported fixture itself had already disposed its state.
 
-### #21 preparation
+### #21 accepted functional evidence
 
-Original draft 116 at 02996f8 has portal 36/dashboard 5 tests and both builds passing.
-Login/MFA labels/method/pending feedback, portal named native dialog, history/reply/
-attachment controls, latest-read ownership and partial-upload reuse are included.
-Combined baseline: 40 portal/34 dashboard tests pass. Current temporary integration
-adds bounded header/mobile/row names, disclosure
-state/Escape focus, feed/create pending focus and required MFA setup failure retry.
-See /tmp/tocyn-21-next-review.md. Preserve #61 UTC and #62 auth/query/realtime changes.
-Do not broaden into disabled future provider/settings features. Final integrated
-keyboard/native-dialog, contrast and actual screen-reader evidence remain required.
+PR116 corrected mandatory MFA enrollment/confirmation and concurrency fencing.
+Actual enrolled-A and unenrolled-B password/MFA journeys recovered from invalid
+codes and focused Workspace; setup-ready/key presentation and normal sign-out
+were observed. Corrected Wrangler regression: 84 requests, 4 starts, 9 selected D1
+rows, 5 article/event pairs, 0 final captures, disposed cleanup. Exact final source
+also passed 390×844 navigation open/Close focus/Escape/trigger and destination focus;
+portal native chooser remove/blank-reply guard and 62-byte send/download size/hash
+were verified. Browser chrome/BODY could receive Tab-boundary focus while the
+background stayed inert; no complete in-document cycle or reader claim.
 
-### #65 unresolved lifecycle and fallback
+Polling/download corrections have deferred-response/fake-timer and credential/
+session-generation regressions. Final portal 53 checks, dashboard 48, builds and
+required CI/security passed. All 10 review threads were individually resolved.
+Browser source 6dfd26a, final reviewed PR head 279f938, signed merge 65ad06e are distinct.
+Private evidence: /tmp/tocyn-21-root-browser-receipt.md; public progress receipt
+https://github.com/nathcymru/Tocyn/issues/21#issuecomment-5595420514.
 
-Draft 118 is partial. a6bd66d pins frontend inputs, uses a minimal environment,
-marks fallback not-run, and tests controlled PTY/npm interruption. Specialist
-reproduced a detached descendant surviving leader death while cleanup incorrectly
-claimed disposed. Review child was explicitly terminated and verified. Do not
-repeat the direct-child-only assumption or claim that a fast cooperative fixture
-proves actual nested Wrangler cleanup.
+### #65 implemented tooling and remaining rehearsal
 
-Approved correction: runner-only opt-in Node ownership registry under task mode-0700
-root, private bounded records of owned PID/group/start identity, retained after
-leader exit. Verify all owned processes stopped, preserve recoverable state and
-report incomplete on failure; never signal a reused/unrelated PID. Keep handlers
-through cleanup and cover late spawns. No application/bundle/auth changes. Explicit
-POSIX-only support is acceptable until other platforms have process-tree evidence.
-Actual nested Wrangler interruption requires root's exclusive port handoff.
+The old cooperative-only/direct-child cleanup defect is fixed. Runner-only Node
+preload retains bounded private PID/group/start-identity ownership through leader
+exit, closes spawning scopes, handles nested loaders/detached tools and verifies
+bounded TERM/KILL disposal. Failed verification retains recoverable private state
+and reports incomplete. No application imports or provider behavior changed.
+macOS/Linux only; macOS start identity has second-level precision. No Windows
+runtime claim. Python/pty is optional only for the generic unit case (explicit
+skip); actual interruption/full rehearsal refuse its absence before task state.
 
-Fallback helper uses one nonempty persistent synthetic state and private fixture
-secrets across candidate then known-good 58feb5e code. Require exact migration
-manifest compatibility; normal issued customer/MFA requests create conversation,
-reply and audit/admission state. Authorized reads and bounded counters must match
-under known-good code. No reset/reverse migration/provider rollback claim. Pure
-comparisons alone do not complete this runtime proof. Park artifact validation and
-actual runtime evidence remain separate. Final candidate waits all beta gates.
+Audit 8c91a6b removes raw argv/path receipts and generated fixture source, preserves
+suppressed credential-bearing child output, and maps only verified missing tables
+to schema unavailable. All 9 review threads resolved; fresh JS/Actions/Python
+CodeQL results zero and alerts 13–18 fixed without suppression/dismissal. Required
+CI 34307518283 passed. Focused checks: lifecycle 16, pure fallback 5, runtime 3, root 52.
+
+Fresh static fixture interruption passed 3.96s on macOS/Node 22: 1 completed/0 skipped,
+health 200, 7 registered processes including workerd, repeated npm/PTY Ctrl-C, disposed
+state/tree, port reuse, unrelated sentinel preserved. Fixture SHA256
+3618e4d5985b6f93ba0fb68853dc8d13042f8271ae132322bbfc3c2f48a8f347 records exact program.
+Earlier 6.2s interruption remains historical evidence, not substituted for this run.
+The later bounded directory-error/ESRCH review correction passed lifecycle 18 and
+repeated actual interruption in 4.09s (1 completed, 0 skipped); independent 8787
+bind passed and owned task directories were zero. Root accepted the correction
+semantics; first test run caught missing imports, fixed before both final passes.
+
+Focused same-state fallback passed 21.1s on clean 2314188a990265c98d67757048184d1815e3a3ec
+against signed 58feb5e4deef55670f635f099eb67c6bcfffae56:normal customer/MFA sessions,
+1 ticket/4 articles/4 events, canonical digest and admission running/revision 1/
+tickets 1/mutations 4/uploads 0 preserved. Inner/outer cleanup disposed and 8787 reused.
+Private redacted receipt: /tmp/tocyn-65-focused-fallback-receipt.json. This is bounded
+prior-source evidence, not the final accepted-source rehearsal. Exact migration
+compatibility and nonempty shared state remain mandatory; no reset/reverse
+migration/provider rollback claim. Full parked artifact/matrix/fallback evidence
+remains pending the accepted PR118 merge and explicit root dispatch.
 
 ## Accepted earlier increments and important decisions
 
@@ -204,91 +228,8 @@ source: private-beta-reforecast-after63-2026-09-09.json. Open forecasts remain #
 Reader/access uncertainty prevents a defensible earlier completion forecast despite
 early code readiness. Do not invent percentages.61 completed early as recorded above.
 
-Thirty-minute operational update sent 02:22 UTC; next due 02:52 UTC. Also give concise
-working commentary at least every 60 seconds. Updates are informational, not approval
-gates. Use followup_task to wake idle agents; send_message alone does not wake them.
-Non-beta roadmap #50/#64/#90(full cost)/#91 (journals)/#48/#66 (redesign)/#42 (production)/#18
-(native email) stays out of critical-path capacity except required correctness.
-
-## Coordinator update — 2026-09-09 02:52 UTC
-
-PR #119 merged at 02:45:32 UTC as signed d394bd71d020204f75999cf1f21ad6022f478787. Required PR checks and internal review passed; main CI 34304488433 and security 34304488185 passed. Issue #62 remains open for reader/UI acceptance; partial receipt 5594997825 records the boundary. Root main is clean at that revision.
-
-Four beta blockers remain open: #62, #21, #93 and #65. No readiness declaration. #21 owns local ports 8787/5173/5174 with isolated synthetic fixtures. Its temporary candidate b2bc593 includes portal reference fallback and initial browser evidence. Browser portal login, create, reply, dialog initial/Escape focus passed. Full focus-cycle and actual screen-reader acceptance are not claimed. Fifty historical synthetic articles were added solely to exercise pagination; they are not admitted writes or fabricated audit receipts.
-
-Normal unenrolled operator login exposed an MFA enrollment blocker. The #21 owner is implementing the narrow login/session correction and negative regressions; sensitive diagnosis stays private. Original PR #116 remains recoverable. Final source must refresh from accepted #119 before integration.
-
-#65 owner release_packaging_escalation (Astra/high) has lifecycle 13, pure fallback 4 and runtime/bootstrap 2 checks passing. Root and targeted Terra/high internal review precede the actual repeated-PTY Wrangler interruption test. No live recovery/fallback proof yet; wait for explicit #21 port release. Same-state fallback implementation is integrated, and unavailable fallback remains a failed rehearsal. Final complete rehearsal waits for all prerequisite acceptance.
-
-Owner permits all three example.invalid local test recipients and standing PR-only approving-review exceptions after mandatory checks and internal review pass. No remote Cloudflare or external mail action is allowed. Safari/VoiceOver approval question remains pending; no OS permission change or actual reader proof. Work execution remains unavailable/unconfirmed; do not report that pool as used.
-
-Next: finish and independently review MFA correction; resume exact-candidate browser/reader acceptance; release local ports for #65 interruption and same-state proof; integrate #21 after all required checks; close #62/#93 only against complete acceptance; run final #65 candidate rehearsal. Operational update delivered 02:52 UTC; next due 03:22 UTC while active.
-
-### Local test handoff — 02:58 UTC
-
-#21 browser windows closed and tool-local credentials cleared. Owner disposed API/Vite fixtures, verified private handoff removal and bind reuse on 8787/5173/5174. #65 now owns the local port for interruption and focused same-state proof. #21 correction is isolated in /tmp/tocyn-21-mfa-correction, preserving the browser candidate; initial server 370 tests pass, conditional enrollment race protection is under review before final runtime validation. Partial root browser receipt is /tmp/tocyn-21-root-browser-receipt.md; actual screen reader remains pending.
-
-#21 partial browser progress receipt: https://github.com/nathcymru/Tocyn/issues/21#issuecomment-5595086687. #65 actual interruption passed in 6.2 seconds: local health 200, seven recorded processes including workerd, repeated real npm/PTY Ctrl-C, complete disposal and port release, unrelated sentinel preserved. Same-state fallback proof is next and still unproved.
-
-#65 focused same-state proof passed on clean 2314188a990265c98d67757048184d1815e3a3ec against signed 58feb5e4deef55670f635f099eb67c6bcfffae56. 21.1 seconds; one ticket, four articles, four audit events and authorised canonical digest preserved; admission running/revision 1/tickets 1/mutations 4/uploads 0 unchanged. Inner/outer cleanup disposed and 8787 reusable. Root inspected redacted receipt /tmp/tocyn-65-focused-fallback-receipt.json. Port returned to #21 for corrected runtime/browser checks. Final artifact rehearsal remains pending prerequisites.
-
-Independent internal review: Terra/high found no actionable frontend delta defect through b2bc593, with actual reader/mobile containment explicitly unproved. Root reviewed MFA audience delegation and conditional setup/confirm writes; no remaining blocking finding after stale enrollment write correction. Final tests and exact-source integration remain required. #65 owner preparing coherent update to existing draft #118, with Progresses #65 only.
-
-## Exact-source MFA browser acceptance — 03:09 UTC
-
-On d8dadfefb2ac5c40851c9996bb80d67d79d22b62, root completed normal unenrolled-B password login, setup-ready status, code initial focus and named QR/text-key presentation. A deliberately invalid code produced an associated inline error while preserving setup; a corrected current issued-key code completed enrollment and focused Workspace. Normally issued enrolled-A password/MFA also recovered from an invalid code and focused Workspace after correction. Normal sign-out returned login. Manual typed-code retention was not established; no digits/key/link are recorded.
-
-Corrected actual Wrangler regression: 84 requests, four starts, nine selected D1 rows, five article/event pairs, zero final captures and disposed cleanup (13.36 seconds). Refreshed frontend checks: dashboard48/portal42 and both builds pass. Internal auth, tenant, concurrency and frontend review found no remaining blocking defect.
-
-Root closed the browser and cleared credentials. Owner disposed both frontends/API, verified private handoff removal, zero interactive fixture directories and 8787/5173/5174 bind reuse. PR116 remains Progresses21, with actual reader/responsive-navigation and other unperformed manual acceptance explicit. Source is frozen; final documentation/CI checks precede integration.
-
-PR118 prior head95d4cf3 passed full required CI34305592423/security. Its owner pushed final portability batch0c0d080 (POSIX execution tests skipped off macOS/Linux with a pure refusal contract test); root49/49 focused tests pass and updated CI is pending. Unchanged actual interruption/fallback evidence remains tied to2314188. No full final technical artifact rehearsal yet.
-
-
-## PR116 consolidated review correction
-
-The 03:13 review found a background polling/pagination announcement defect and a
-portal download credential/session-generation gap. PR116 returned to draft for
-one correction batch, with no readiness claim. Background reads now defer to
-interactive read ownership and keep live feedback stable; explicit recovery
-retains accepted-reply semantics. Download credential and session-boundary
-handling is corrected with synthetic deferred response/blob and auth-failure
-regressions. Optional storage failures cannot prevent the existing in-memory
-logout/generation transition. OTP input accepts six ASCII digits.
-
-The previous sentinel comment was already semantically addressed by !==false;
-explicit outcomes preserve it. Native open-attribute fallback was rejected because
-it loses modality. Root reviewed the bounded batch without a remaining blocker.
-All 53 portal tests, lint and build pass; application source is ready for a fresh
-browser checkpoint, not yet accepted. Supported CUA documentation now exposes
-viewport.set/reset and filechooser.setFiles, so responsive/attachment observations
-are actionable. Actual reader acceptance remains separate and open. No new review
-request, authorization change or allowlist expansion is introduced.
-
-
-## Exact correction browser and review disposition
-
-Application 6dfd26a passed actual 390×844 responsive native navigation: Close initial
-focus, Escape/trigger return and destination/Workspace focus. Browser chrome/BODY
-can receive Tab-boundary focus while background controls stay inert; no complete
-in-document cycle or reader claim. Portal viewport was explicitly set separately.
-Native chooser selection/removal and blank-reply refusal preserved named controls,
-status and focus. Pre-send counters were tickets1/mutations1/uploads0, with
-one article/no attachment. Actual text+62-byte note send/download passed, with
-matching saved-file size/hash; event wait timed out but the actual artifact was
-verified and removed. Final counters tickets1/mutations2/uploads1, rows one ticket,
-two articles/one attachment. Polling is automated fake-timer/deferred proof only.
-Both sign-outs returned login; viewport reset, tabs/credentials cleared, fixtures,
-source/downloaded attachment and private handoff disposed; all three ports reusable.
-#65 subsequently confirmed its own fresh interruption proof disposed and returned
-8787 to root coordination.
-
-All ten PR116 review threads are resolved with individual reasons. Six historical
-threads were already resolved. Final replies: OTP3964345282, native modal fallback
-rejection3964345451, polling3964345630, download3964345799. No blanket resolution or
-extra Copilot request. Browser source remains 6dfd26a; final changes are evidence only.
-Actual reader and remaining complete journey/focus-cycle acceptance stay open.
-
-Last operational update delivered 03:22 UTC; next due 03:52 UTC. PR118 final 0c0d080
-CI/security are green; final technical matrix awaits accepted #21. No beta-ready,
-issue-complete or acceptance-waiver claim is made.
+Operational update delivered 03:52 UTC; next due 04:22 UTC. Root owns updates.
+Use concise working commentary while active. Non-beta roadmap #50/#64/#90(full
+cost)/#91(journals)/#48/#66(redesign)/#42(production)/#18(native email) stays outside
+critical-path scope except required correctness. Historical detailed checkpoints
+remain in Git history, linked issues and subsystem docs; they are not current gates.

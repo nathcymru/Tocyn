@@ -16,7 +16,11 @@
     "deploy:widget": "npm run build --workspace=apps/widget && npx wrangler r2 object put luminatick-widget/lumina-widget.js --file apps/widget/dist/lumina-widget.js",
     "secrets:prod": "node scripts/secrets.js",
     "seed:prod": "npx tsx apps/server/src/scripts/seed.ts --file apps/server/seed.sql && cd apps/server && npx wrangler d1 execute luminatick-db --remote --file=seed.sql && node -e \"const fs=require('fs'); if(fs.existsSync('seed.sql')) fs.unlinkSync('seed.sql')\"",
-    "test": "npm run test --workspaces --if-present && node --test scripts/reset-admin.test.cjs scripts/deployment/isolated-release.test.mjs scripts/deployment/workflow.test.mjs scripts/deployment/provider-preflight.test.mjs scripts/deployment/restricted-ingress.test.mjs tools/agent-context/index.test.mjs"
+    "test": "npm run test --workspaces --if-present && node --test scripts/reset-admin.test.cjs scripts/deployment/isolated-release.test.mjs scripts/deployment/workflow.test.mjs scripts/deployment/provider-preflight.test.mjs scripts/deployment/restricted-ingress.test.mjs scripts/deployment/local-beta-rehearsal.test.mjs scripts/deployment/local-beta-same-state-fallback.test.mjs tools/agent-context/index.test.mjs",
+    "rehearse:local-beta": "node scripts/deployment/local-beta-rehearsal.mjs run",
+    "test:rehearsal-runtime": "node --import tsx --test scripts/deployment/local-beta-same-state-runtime.test.ts",
+    "test:rehearsal-interruption": "TOCYN_REHEARSAL_WRANGLER_TEST=1 node --test scripts/deployment/local-beta-rehearsal-wrangler.test.mjs",
+    "typecheck:rehearsal-runtime": "tsc -p apps/server/scripts/tsconfig.local-rehearsal.json"
   },
   "workspaces": [
     "apps/*",
