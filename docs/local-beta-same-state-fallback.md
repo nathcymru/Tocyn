@@ -41,3 +41,25 @@ process. Its TypeScript loader and nested Worker processes remain covered by
 the outer ownership scope. Source/fixture tests are not a final candidate
 rehearsal receipt; actual scoped runtime and full rehearsal evidence are
 recorded separately.
+
+## Bounded runtime evidence
+
+A Node 22/macOS run passed against clean candidate
+`2314188a990265c98d67757048184d1815e3a3ec` and signed known-good
+`58feb5e4deef55670f635f099eb67c6bcfffae56`. Including the clean known-good
+checkout, locked offline install and native rebuild, it took 21.1 seconds.
+Normal captured customer authentication and staff password/MFA authentication
+created one ticket, four articles and four audit events. Restarting the
+known-good code against that same state preserved the authorized canonical
+digest and admission state: running, revision 1, one ticket, four mutations,
+zero upload attempts. The inner and outer task cleanup both completed, and a
+native bind probe confirmed port 8787 was released.
+
+This receipt identifies the tested source commit. Later documentation or
+integration commits are not silently substituted for that candidate. The
+complete technical artifact and acceptance-matrix rehearsal remains unrun
+until the corrected accessibility/MFA source is integrated. That technical run
+may proceed while owner-dependent screen-reader evidence is pending, but cannot
+close #65 or claim readiness. Any later reader-driven source fix changes the
+candidate and requires affected checks again. This bounded runtime check does
+not claim production readiness.

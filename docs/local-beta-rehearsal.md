@@ -102,5 +102,6 @@ The bounded actual interruption check passed on macOS with Node 22 in 6.2s:
 local health returned 200, seven owned processes included the real workerd
 engine, repeated npm/PTY Ctrl-C disposed the tree and private state, port 8787
 was reusable, and an unrelated sentinel remained alive. This is lifecycle
-evidence only; two-artifact reproduction and same-state fallback still require
-their own recorded candidate runs.
+evidence only. The [same-state runtime evidence](./local-beta-same-state-fallback.md)
+is recorded against its own clean candidate; the complete final two-artifact
+and acceptance-matrix rehearsal remains unrun.
