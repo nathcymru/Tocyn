@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "local-tenant-fixture.ts",
+    "local-beta-guardrails.test.ts",
+    "local-beta-operator.ts",
+    "run-local-beta-operator.ts",
+    "local-beta-runtime.test.ts",
+    "local-beta-launch.test.ts",
+    "local-beta-atomic.test.ts"
+  ]
+}

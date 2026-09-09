@@ -1,4 +1,8 @@
+import { BetaAdmissionError } from './types/local-beta';
+import { ConversationReadError } from './services/conversation-read-bounds';
 import { Hono } from 'hono';
+import { localBetaGuard } from './middleware/local-beta';
+import { authenticateRealtimeToken } from './middleware/auth.middleware';
 import { apiCors } from './middleware/cors-policy';
 import { Env } from './bindings';
 import auth from './handlers/auth.handler';
@@ -10,23 +14,26 @@ import permissions from './handlers/permissions.handler';
 import v1 from './handlers/v1.handler';
 import widget from './handlers/widget.handler';
 import customerHandler from './handlers/customer.handler';
-import { AuthService } from './services/auth/auth.service';
 import { environmentGuard } from './middleware/environment-guard';
 import { AppVariables } from './types';
 
 export const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+app.onError((error,c) => {
+  if (error instanceof BetaAdmissionError || error instanceof ConversationReadError) return c.json({code:error.code,error:error.message},error.status);
+  if (c.env.LOCAL_BETA_ENABLED === 'true') return c.json({error:'Local beta request failed',code:'beta_request_failed'},500);
+  console.error(error);
+  return c.text('Internal Server Error',500);
+});
 app.use('*', environmentGuard);
+app.use('*', localBetaGuard);
 
 app.get('/api/realtime', async (c) => {
   const upgradeHeader = c.req.header('Upgrade');
   if (!upgradeHeader || upgradeHeader !== 'websocket') return c.json({ error: 'Expected Upgrade: websocket' }, 426);
   const token = c.req.query('token');
   if (!token) return c.json({ error: 'Unauthorized' }, 401);
-  let user = null;
-  try {
-    user = await new AuthService(c.env).verifyToken(token);
-    if (!user || !['agent', 'admin'].includes(user.role)) return c.json({ error: 'Unauthorized' }, 401);
-  } catch { return c.json({ error: 'Unauthorized' }, 401); }
+  const user = await authenticateRealtimeToken(c.env, token);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
   const internalUrl = new URL(c.req.raw.url); internalUrl.search = '';
   const newReq = new Request(internalUrl, c.req.raw);
   newReq.headers.set('X-User-ID', user.id);

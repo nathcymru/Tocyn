@@ -11,6 +11,7 @@ export interface UserRepository {
   update(id: string, data: Partial<User>): Promise<void>;
   delete(id: string): Promise<void>;
   storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string): Promise<void>;
+  findCustomerAuthTokenUser(tokenHash: string, challengeId?: string): Promise<string | null>;
   verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string): Promise<User | null>;
 }
 

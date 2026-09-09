@@ -1,3 +1,5 @@
+import { BetaAdmissionError } from '../types/local-beta';
+import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
 import type { ConversationActor } from '../types/conversation-audit';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
@@ -29,7 +31,7 @@ export type MutationCandidate = {
 
 /** Only fixed ticket mutations; all SQL authority comes from the verified scope. */
 export class TicketMutationReplayRepository {
-  constructor(private db: D1Database, private scope: VerifiedTenantScope) {}
+  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository) {}
 
   private namespaceValues(ns: MutationNamespace) {
     return [this.scope.tenantId, ns.principalKind, ns.principalId, ns.operation, ns.keyHash];
@@ -69,7 +71,8 @@ export class TicketMutationReplayRepository {
   }
 
   async commit(candidate: MutationCandidate, ns?: MutationNamespace): Promise<string> {
-    const statements: D1PreparedStatement[] = [];
+    const operation=candidate.ticket?'create':'conversation';
+    const statements: D1PreparedStatement[] = [...(this.admission?.statements(operation)??[])];
     if (ns) {
       // Exact expired-key reuse and at most 99 other expired rows: bounded 100.
       statements.push(this.db.prepare(`DELETE FROM ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at <= unixepoch()`)
@@ -130,7 +133,12 @@ export class TicketMutationReplayRepository {
     } else {
       statements.push(this.db.prepare(`SELECT ${snapshot} AS response_snapshot`).bind(...snapshotValues));
     }
-    const results = await this.db.batch<{ response_snapshot: string }>(statements);
+    let results;
+    try { results = await this.db.batch<{ response_snapshot: string }>(statements); }
+    catch(error) {
+      if (!ns && this.admission) { await this.admission.authorize(operation); throw new BetaAdmissionError('beta_admission_unavailable',503); }
+      throw error;
+    }
     const value = results[results.length - 1].results[0]?.response_snapshot;
     if (!value) throw new Error('Mutation result unavailable');
     return value;

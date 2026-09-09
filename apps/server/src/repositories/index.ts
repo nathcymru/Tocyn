@@ -1,3 +1,5 @@
+import { TicketMutationReplayRepository } from './ticket-mutation-replay.repository';
+import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
 import { normalizeSupportEmail } from '../utils/email-normalize';
 import { VerifiedTenantScope } from '../types/tenant';
@@ -80,6 +82,16 @@ export class SqlUserRepository implements UserRepository {
     } else await insert.run();
   }
 
+  async findCustomerAuthTokenUser(tokenHash: string, challengeId?: string): Promise<string | null> {
+    // OTP lookup identifies the challenge owner for invitation gating only.
+    // Verification below must count a wrong code before comparing its hash;
+    // prefiltering this lookup by hash would skip the durable attempt limit.
+    const candidate = await this.db.prepare(`SELECT user_id FROM customer_auth_tokens
+      WHERE tenant_id=? AND ${challengeId ? 'id=?' : 'token_hash=?'} LIMIT 1`)
+      .bind(this.scope.tenantId, challengeId ?? tokenHash).first<{ user_id: string }>();
+    return candidate?.user_id ?? null;
+  }
+
   async verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string): Promise<User | null> {
     if (challengeId) {
       // Claim one of five attempts atomically before comparing the code.
@@ -154,7 +166,7 @@ export class SqlTicketRepository implements TicketRepository {
     return results[3].meta.changes > 0;
   }
 
-  constructor(private scope: VerifiedTenantScope, private db: D1Database) {}
+  constructor(private scope: VerifiedTenantScope, private db: D1Database, private betaAdmission?: LocalBetaAdmissionRepository) {}
 
   async list(
     options: {
@@ -350,6 +362,11 @@ export class SqlTicketRepository implements TicketRepository {
     const ticketId = crypto.randomUUID();
     const articleId = crypto.randomUUID();
     const { ticket, article } = data;
+    if (this.betaAdmission) {
+      const raw=await new TicketMutationReplayRepository(this.db,this.scope,this.betaAdmission).commit({ticketId,articleId,ticket,article,audit:data.audit,attachments:[]});
+      const snapshot=JSON.parse(raw) as {ticket:Ticket;article:Article};
+      return {ticket:snapshot.ticket,article:{...snapshot.article,is_internal:Boolean(snapshot.article.is_internal)}};
+    }
     // D1 executes the batch as one transaction. A failed article insert rolls
     // back the ticket too; neither tenant nor parent IDs come from the input.
     const results = await this.db.batch<Ticket | Article>([
@@ -898,12 +915,12 @@ export class SqlRequestLimitRepository {
   }
 }
 
-export function createRepositories(scope: VerifiedTenantScope, db: D1Database): Repositories {
+export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository): Repositories {
   return {
     requestLimits: new SqlRequestLimitRepository(scope, db),
     knowledge: new SqlKnowledgeRepository(scope, db),
     users: new SqlUserRepository(scope, db),
-    tickets: new SqlTicketRepository(scope, db),
+    tickets: new SqlTicketRepository(scope, db, betaAdmission),
     articles: new SqlArticleRepository(scope, db),
     attachments: new SqlAttachmentRepository(scope, db),
     channels: new SqlChannelsRepository(scope, db),

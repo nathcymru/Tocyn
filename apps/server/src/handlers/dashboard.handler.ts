@@ -1,3 +1,5 @@
+import { BetaAdmissionError } from '../types/local-beta';
+import { assertConversationResponseBounds } from '../services/conversation-read-bounds';
 import { conversationHistory } from './conversation-history';
 import { validateAttachmentReferences } from '../services/attachment-references';
 import { EmailService } from '../services/email/outbound.service';
@@ -49,6 +51,10 @@ const updateTicketSchema = z.object({
   group_id: z.string().uuid().nullable().optional(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
 });
+
+function displayUser(user: {id:string;full_name?:string|null;email:string;role:string}|null) {
+  return user ? {id:user.id,full_name:user.full_name??null,email:user.email,role:user.role} : null;
+}
 
 const dashboard = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -203,7 +209,12 @@ dashboard.delete("/api-keys/:id", permissionGuard("api_keys"), async (c) => {
  */
 dashboard.post("/tickets", async (c) => {
   const body = await c.req.json();
-  const result = createTicketSchema.safeParse(body);
+  const schema = c.env.LOCAL_BETA_ENABLED === 'true' ? createTicketSchema.extend({
+    subject: z.string().min(1).max(300),
+    body: z.string().min(1).max(16000),
+    customer_email: z.string().email().max(254),
+  }) : createTicketSchema;
+  const result = schema.safeParse(body);
 
   if (!result.success) {
     return c.json({
@@ -239,7 +250,8 @@ dashboard.post("/tickets", async (c) => {
     } catch { console.error('Initial ticket email delivery failed'); }
     return c.json(ticket, 201);
   } catch (error: any) {
-    console.error("Dashboard Create Ticket Error:", error);
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (c.env.LOCAL_BETA_ENABLED!=='true') console.error("Dashboard Create Ticket Error:", error);
     return c.json({ error: "Failed to create ticket" }, 500);
   }
 });
@@ -270,6 +282,25 @@ dashboard.get("/tickets/:id", async (c) => {
   const ticket = await d.repositories.tickets.get(id);
   if (!ticket) {
     return c.json({ error: "Ticket not found" }, 404);
+  }
+
+  if (d.boundedConversationRead) {
+    const page=await d.boundedConversationRead.page(id,{limit:c.req.query('article_limit'),cursor:c.req.query('article_cursor')});
+    const articles = page.articles.map(({ attachments, ...article }) => ({
+      ...article,
+      attachments: attachments.map(a => ({
+        id: a.id, filename: a.file_name, size: a.file_size,
+        contentType: a.content_type, storageKey: a.r2_key,
+      })),
+    }));
+    const response = {
+      ...ticket, articles,
+      customer: ticket.customer_id ? displayUser(await d.repositories.users.get(ticket.customer_id)) : null,
+      assignee: ticket.assigned_to ? displayUser(await d.repositories.users.get(ticket.assigned_to)) : null,
+      pagination: page.pagination,
+    };
+    assertConversationResponseBounds(response);
+    return c.json(response);
   }
 
   const articles = await d.repositories.articles.listByTicket(id);
@@ -303,8 +334,8 @@ dashboard.get("/tickets/:id", async (c) => {
   return c.json({
     ...ticket,
     articles: articlesWithAttachments,
-    customer,
-    assignee,
+    customer:displayUser(customer),
+    assignee:displayUser(assignee),
   });
 });
 
@@ -316,6 +347,14 @@ dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
   const ticketId = c.req.param("id");
   if (!ticketId) return c.json({ error: 'Missing ID' }, 400);
   const payloadBody = await c.req.json();
+  if (c.env.LOCAL_BETA_ENABLED === 'true') {
+    const boundedReply = z.object({
+      body: z.string().min(1).max(16000),
+      is_internal: z.boolean().optional(),
+      attachments: z.array(z.unknown()).max(10).optional(),
+    });
+    if (!boundedReply.safeParse(payloadBody).success) return c.json({ error: 'Invalid bounded reply' }, 400);
+  }
   const { body: articleBody, is_internal, attachments: bodyAttachments } = payloadBody;
   const agent = c.get("jwtPayload") as JWTPayload;
   const d = c.get('tenantDeps') as TenantRequestDeps;
@@ -339,6 +378,7 @@ dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
 
   const ticketService = new TenantTicketService(d);
 
+  await d.betaAdmission?.authorize('conversation');
   let verifiedAttachments;
   try { verifiedAttachments = await validateAttachmentReferences(d, `agent-attachments/${agent.sub}/`, bodyAttachments); }
   catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
@@ -597,6 +637,7 @@ dashboard.post('/attachments/upload', async (c) => {
   }
 
   const formData = await c.req.formData();
+  if(c.env.LOCAL_BETA_ENABLED==='true' && formData.getAll('file').length!==1) return c.json({error:'A single file is required'},400);
   const fileRaw = formData.get('file');
 
   if (!fileRaw || typeof fileRaw === 'string') {
@@ -614,17 +655,19 @@ dashboard.post('/attachments/upload', async (c) => {
     return c.json({ error: 'Unsupported file type. Please upload images, PDFs, or text files.' }, 415);
   }
 
+  if(c.env.LOCAL_BETA_ENABLED==='true' && (!file.name.trim() || file.name.length>255))return c.json({error:'Invalid attachment filename'},400);
   const fileExt = file.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '');
   const extPart = fileExt ? `.${fileExt}` : '';
   const logicalKey = `agent-attachments/${payload.sub}/${crypto.randomUUID()}${extPart}`;
 
   try {
-    await d.attachmentStorage.putAttachment(logicalKey, file.stream(), {
+    await d.attachmentStorage.putAttachment(logicalKey, c.env.LOCAL_BETA_ENABLED==='true' ? await file.arrayBuffer() : file.stream(), {
       httpMetadata: { contentType: file.type || 'application/octet-stream' },
     });
     return c.json({ key: logicalKey });
   } catch (error: any) {
-    console.error('Error uploading file:', error);
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (c.env.LOCAL_BETA_ENABLED!=='true') console.error('Error uploading file:', error);
     return c.json({ error: 'Failed to upload file to storage' }, 500);
   }
 });

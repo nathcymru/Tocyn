@@ -1,3 +1,4 @@
+import { BetaAdmissionError } from '../types/local-beta';
 import { Context, Next } from "hono";
 import { Env } from "../bindings";
 import { ApiAuthResolver } from "../auth/api-key-resolver";
@@ -17,7 +18,9 @@ export const apiAuthMiddleware = async (c: Context<{ Bindings: Env; Variables: A
 
   if (!c.env.DB) return c.json({ error: 'Authentication unavailable' }, 503);
   const resolver = new ApiAuthResolver(c.env.DB);
-  const result = await resolveApiKeyRequestDeps(resolver, apiKey, c.env);
+  let result;
+  try { result = await resolveApiKeyRequestDeps(resolver, apiKey, c.env); }
+  catch (error) { if (error instanceof BetaAdmissionError) return c.json({code:error.code,error:error.message},error.status); throw error; }
 
   if (!result) {
     return c.json({ error: "Invalid or inactive API Key" }, 401);

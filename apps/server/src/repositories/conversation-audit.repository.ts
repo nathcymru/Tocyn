@@ -1,3 +1,5 @@
+import { BetaAdmissionError } from '../types/local-beta';
+import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { Ticket } from '../types';
@@ -22,7 +24,7 @@ export function conversationMutationEvent(db: D1Database, scope: VerifiedTenantS
 }
 
 export class ConversationAuditRepository {
-  constructor(private db: D1Database, private scope: VerifiedTenantScope) {}
+  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository) {}
 
   async history(ticketId: string, publicOnly: boolean, limit: number, cursor?: string) {
     const visible = publicOnly ? `AND e.visibility='public' AND e.kind IN ('ticket.intake','message.reply')
@@ -44,15 +46,24 @@ export class ConversationAuditRepository {
     return { rows, nextCursor: more ? rows[rows.length-1].id : null };
   }
 
-  async references(ticketId: string) {
+  async references(ticketId: string, articleIds?: readonly string[]) {
+    if (articleIds && articleIds.length > 50) throw new Error('Bounded reference page required');
+    // Intake belongs to the conversation, even when its initial message is on another page.
+    const visibleIntake = `(kind='ticket.intake' AND (article_id IS NULL OR EXISTS (
+      SELECT 1 FROM articles a WHERE a.tenant_id=conversation_events.tenant_id
+      AND a.ticket_id=conversation_events.ticket_id AND a.id=conversation_events.article_id AND a.is_internal=0)))`;
+    const selectedArticles = articleIds?.length ? ` OR article_id IN (${articleIds.map(() => '?').join(',')})` : '';
+    const boundedReferences = articleIds ? `AND (${visibleIntake}${selectedArticles})` : '';
     const result = await this.db.prepare(`SELECT id,article_id,kind FROM conversation_events
-      WHERE tenant_id=? AND ticket_id=? AND kind IN ('ticket.intake','message.reply') AND visibility='public' ORDER BY sequence`)
-      .bind(this.scope.tenantId,ticketId).all<Pick<ConversationEvent,'id'|'article_id'|'kind'>>();
+      WHERE tenant_id=? AND ticket_id=? AND kind IN ('ticket.intake','message.reply') AND visibility='public'
+      ${boundedReferences} ORDER BY sequence ${articleIds ? 'LIMIT 51' : ''}`)
+      .bind(this.scope.tenantId, ticketId, ...(articleIds ?? []))
+      .all<Pick<ConversationEvent, 'id' | 'article_id' | 'kind'>>();
     return result.results;
   }
 
   async updateWithEvents(id: string, data: AuditedTicketUpdate, actor: ConversationActor, retainSystemNote = false): Promise<Ticket | null> {
-    const statements: D1PreparedStatement[] = [];
+    const statements: D1PreparedStatement[] = [...(this.admission?.ticketChangeStatements(id,data)??[])];
     const eventIds: string[] = [];
     const allKeys = ['status','priority','assigned_to','group_id','custom_fields'] as const;
     const supplied = allKeys.filter(key => data[key] !== undefined);
@@ -99,7 +110,9 @@ export class ConversationAuditRepository {
         .bind(...supplied.map(value),this.scope.tenantId,id,...supplied.map(value)));
     }
     statements.push(this.db.prepare('SELECT * FROM tickets WHERE tenant_id=? AND id=?').bind(this.scope.tenantId,id));
-    const result = await this.db.batch<Ticket>(statements);
+    let result;
+    try { result = await this.db.batch<Ticket>(statements); }
+    catch(error) { if(this.admission) { await this.admission.authorize('conversation'); throw new BetaAdmissionError('beta_admission_unavailable',503); } throw error; }
     return result[result.length-1].results[0] ?? null;
   }
 }

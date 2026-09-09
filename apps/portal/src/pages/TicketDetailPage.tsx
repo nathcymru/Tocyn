@@ -5,6 +5,8 @@ import type { Ticket, Article } from '../types';
 import { Loader2, ArrowLeft, Paperclip, Send, X } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 
+type DetailPage = { ticket: Ticket; articles: Article[]; pagination?: { next_cursor: string | null; has_more: boolean } };
+
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   return <TicketDetail key={id} id={id} />;
@@ -17,6 +19,13 @@ function TicketDetail({ id }: { id: string | undefined }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [paginationVisible, setPaginationVisible] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pageStatus, setPageStatus] = useState('');
+  const loadedPages = useRef(1);
+  const requestGeneration = useRef(0);
+
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   
@@ -24,11 +33,22 @@ function TicketDetail({ id }: { id: string | undefined }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchTicket = useCallback(async (silent = false) => {
+    const generation = ++requestGeneration.current;
     try {
       if (!silent) setLoading(true);
-      const data = await portalApi.get<{ ticket: Ticket; articles: Article[] }>(`/tickets/${id}`);
+      let data = await portalApi.get<DetailPage>(`/tickets/${id}`);
+      const accumulated = [...data.articles];
+      for (let page = 1; page < loadedPages.current && data.pagination?.next_cursor; page++) {
+        data = await portalApi.get<DetailPage>(`/tickets/${id}?article_cursor=${encodeURIComponent(data.pagination.next_cursor)}`);
+        accumulated.push(...data.articles);
+      }
+      if (generation !== requestGeneration.current) return;
+      data = { ...data, articles: accumulated };
       setTicket(data.ticket);
       setArticles(data.articles);
+      setNextCursor(data.pagination?.next_cursor ?? null);
+      setPaginationVisible(Boolean(data.pagination));
+      setPageStatus(`Showing ${data.articles.length} messages.${data.pagination?.has_more ? ' More messages are available.' : ''}`);
     } catch (err: unknown) {
       if (!silent) setError(err instanceof Error ? err.message : 'Failed to load ticket details');
     } finally {
@@ -41,11 +61,14 @@ function TicketDetail({ id }: { id: string | undefined }) {
     portalApi.get<{ TICKET_PREFIX: string }>('/config')
       .then(res => { if (active) setTicketPrefix(res.TICKET_PREFIX); })
       .catch(err => console.error('Failed to fetch config', err));
-    portalApi.get<{ ticket: Ticket; articles: Article[] }>(`/tickets/${id}`)
+    portalApi.get<DetailPage>(`/tickets/${id}`)
       .then(data => {
         if (active) {
           setTicket(data.ticket);
           setArticles(data.articles);
+          setNextCursor(data.pagination?.next_cursor ?? null);
+          setPaginationVisible(Boolean(data.pagination));
+              setPageStatus(`Showing ${data.articles.length} messages.${data.pagination?.has_more ? ' More messages are available.' : ''}`);
           setError(null);
         }
       })
@@ -87,6 +110,23 @@ function TicketDetail({ id }: { id: string | undefined }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [id, fetchTicket]);
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    const generation = ++requestGeneration.current;
+    setLoadingMore(true);
+    setPageStatus('Loading more messages…');
+    try {
+      const data = await portalApi.get<DetailPage>(`/tickets/${id}?article_cursor=${encodeURIComponent(nextCursor)}`);
+      if (generation !== requestGeneration.current) return;
+      loadedPages.current++;
+      setArticles(previous => [...previous, ...data.articles.filter(article => !previous.some(old => old.id === article.id))]);
+      setNextCursor(data.pagination?.next_cursor ?? null);
+      setPageStatus(`Loaded ${data.articles.length} more messages.${data.pagination?.has_more ? ' More messages are available.' : ' All messages are loaded.'}`);
+    } catch (err: unknown) {
+      setPageStatus(err instanceof Error ? err.message : 'Could not load more messages. Try again.');
+    } finally { setLoadingMore(false); }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -183,7 +223,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         {/* Messages List */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 max-h-[600px] bg-gray-50">
+        <div id="conversation-messages" className="flex-1 overflow-y-auto p-6 space-y-6 max-h-[600px] bg-gray-50">
           {articles.map((article) => {
             const isCustomer = article.sender_type === 'customer';
             return (
@@ -228,6 +268,14 @@ function TicketDetail({ id }: { id: string | undefined }) {
             );
           })}
         </div>
+        {paginationVisible && <div className="border-t border-gray-200 bg-white p-4 space-y-2">
+          <button type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore}
+            aria-controls="conversation-messages" aria-busy={loadingMore}
+            className="rounded-md border border-gray-400 bg-white px-4 py-2 text-sm font-medium text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
+            {loadingMore ? 'Loading messages…' : nextCursor ? 'Load more messages' : 'All messages loaded'}
+          </button>
+          <p role="status" aria-live="polite" className="text-sm text-gray-700">{pageStatus}</p>
+        </div>}
 
         {/* Reply Area */}
         {(ticket.status === 'open' || ticket.status === 'pending') && (

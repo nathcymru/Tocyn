@@ -1,3 +1,5 @@
+import { BetaAdmissionError } from '../types/local-beta';
+import { assertConversationResponseBounds } from '../services/conversation-read-bounds';
 import { conversationHistory } from './conversation-history';
 import { Hono } from "hono";
 import { z } from "zod";
@@ -41,6 +43,7 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   let body: unknown; let key: string | undefined;
   try { body = await readMutationJson(c); key = readIdempotencyKey(c); } catch (error) {
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status); throw error;
   }
   const result = apiTicketCreateSchema.safeParse(body);
@@ -56,8 +59,9 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
     return c.json(outcome.body, outcome.status);
   } catch (error) {
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
-    console.error("API Create Ticket Error:", error);
+    if (c.env.LOCAL_BETA_ENABLED!=='true') console.error("API Create Ticket Error:", error);
     return c.json({ error: "Failed to create ticket" }, 500);
   }
 });
@@ -80,6 +84,18 @@ v1.get("/tickets/:id", async (c) => {
   const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
     return c.json({ error: "Ticket not found" }, 404);
+  }
+
+  if (deps.boundedConversationRead) {
+    const page=await deps.boundedConversationRead.page(id,{publicOnly:true,limit:c.req.query('article_limit'),cursor:c.req.query('article_cursor')});
+    const response = {
+      ...ticket,
+      articles: page.articles.map(({ attachments, ...article }) => article),
+      canonical: await ticketService.projectAuditedConversation(ticket, page.articles),
+      pagination: page.pagination,
+    };
+    assertConversationResponseBounds(response);
+    return c.json(response);
   }
 
   const articles = (await deps.repositories.articles.listByTicket(id)).filter(article => !article.is_internal);
@@ -125,8 +141,9 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
     return c.json(outcome.body, outcome.status);
   } catch (error) {
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
-    console.error("API Add Article Error:", error);
+    if (c.env.LOCAL_BETA_ENABLED!=='true') console.error("API Add Article Error:", error);
     return c.json({ error: "Failed to add article" }, 500);
   }
 });
@@ -155,6 +172,7 @@ v1.patch("/tickets/:id", async (c) => {
     return c.json({ error: "Validation failed", details: result.error.flatten().fieldErrors }, 400);
   }
   const validData = result.data;
+  if (deps.betaAdmission) assertConversationResponseBounds({...ticket,...validData});
 
   const updateData: Record<string, any> = {};
   for (const [key, value] of Object.entries(validData)) {
@@ -175,7 +193,8 @@ v1.patch("/tickets/:id", async (c) => {
     const updatedTicket = await deps.conversationAudit.updateWithEvents(id, updateData, {kind:'api-key',id:resolution!.apiKeyId,source:'api'});
     return c.json(updatedTicket);
   } catch (error) {
-    console.error("API Update Ticket Error:", error);
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (c.env.LOCAL_BETA_ENABLED!=='true') console.error("API Update Ticket Error:", error);
     return c.json({ error: "Failed to update ticket" }, 500);
   }
 });

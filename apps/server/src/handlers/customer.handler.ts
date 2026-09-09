@@ -1,3 +1,7 @@
+import { localBetaEnabled, authorizeLocalBeta } from '../middleware/local-beta';
+import { LOCAL_AUTH_CAPTURE_RECIPIENTS } from '../services/email/transport';
+import { BetaAdmissionError } from '../types/local-beta';
+import { assertConversationResponseBounds } from '../services/conversation-read-bounds';
 import { conversationHistory } from './conversation-history';
 import { z } from 'zod';
 import { validateAttachmentReferences } from '../services/attachment-references';
@@ -63,6 +67,14 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
 
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
   const deps = createTenantRequestDeps(scope, c.env);
+
+  if (localBetaEnabled(c.env)) {
+    const generic=()=>c.json({success:true,...(parsedAuth.data.type==='otp'?{challengeId:crypto.randomUUID()}: {})});
+    const user=await resolvers.identity.resolveCredentialsByEmail(parsedAuth.data.email.toLowerCase());
+    if(!user || user.tenantId!==tenantId || user.role!=='customer' || !LOCAL_AUTH_CAPTURE_RECIPIENTS.includes(parsedAuth.data.email.toLowerCase()))return generic();
+    try {await authorizeLocalBeta(c.env,scope,{kind:'customer',id:user.userId});}
+    catch(error) {if(error instanceof BetaAdmissionError && error.code==='beta_not_invited')return generic();throw error;}
+  }
 
   // Turnstile verification bound to resolved tenant
   try {
@@ -182,6 +194,7 @@ app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddle
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
     return c.json(outcome.body, outcome.status);
   } catch (error) {
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
     if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
     throw error;
@@ -197,6 +210,24 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
 
   if (!ticket || ticket.customer_email !== payload.email) {
     return c.json({ error: 'Not found' }, 404);
+  }
+
+  if (deps.boundedConversationRead) {
+    const page=await deps.boundedConversationRead.page(ticketId,{customerEmail:payload.email,limit:c.req.query('article_limit'),cursor:c.req.query('article_cursor')});
+    const articles = page.articles.map(({ attachments, ...article }) => ({
+      ...article,
+      attachments: attachments.map(a => ({
+        id: a.id, filename: a.file_name, size: a.file_size,
+        contentType: a.content_type, storageKey: a.r2_key,
+      })),
+    }));
+    const response = {
+      ticket, articles,
+      canonical: await ticketService.projectAuditedConversation(ticket, page.articles),
+      pagination: page.pagination,
+    };
+    assertConversationResponseBounds(response);
+    return c.json(response);
   }
 
   // Exclude internal notes
@@ -266,6 +297,7 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
     return c.json(outcome.body, outcome.status);
   } catch (error) {
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
     if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
     throw error;
@@ -308,9 +340,10 @@ app.post('/attachments/upload', widgetAuthMiddleware, roleGuard(['customer']), t
     return c.json({ error: 'Payload too large. File must be under 10MB' }, 413);
   }
 
-  const body = await c.req.parseBody();
+  const body = await c.req.parseBody(c.env.LOCAL_BETA_ENABLED==='true'?{all:true}:{});
   const file = body['file'] as File;
 
+  if (c.env.LOCAL_BETA_ENABLED==='true' && (Array.isArray(file) || typeof file==='string')) return c.json({error:'A single file is required'},400);
   if (!file) {
     return c.json({ error: 'File is required' }, 400);
   }
@@ -325,6 +358,7 @@ app.post('/attachments/upload', widgetAuthMiddleware, roleGuard(['customer']), t
     return c.json({ error: 'File exceeds maximum allowed size of 10MB' }, 413);
   }
 
+  if (c.env.LOCAL_BETA_ENABLED==='true' && (!file.name?.trim() || file.name.length>255)) return c.json({error:'Invalid attachment filename'},400);
   const fileName = file.name || '';
   const lastDotIndex = fileName.lastIndexOf('.');
   const hasExtension = lastDotIndex !== -1 && lastDotIndex < fileName.length - 1;
@@ -335,12 +369,13 @@ app.post('/attachments/upload', widgetAuthMiddleware, roleGuard(['customer']), t
   const key = `customer-attachments/${payload.sub}/${crypto.randomUUID()}${extPart}`;
 
   try {
-    await deps.attachmentStorage.putAttachment(key, file.stream(), {
+    await deps.attachmentStorage.putAttachment(key, c.env.LOCAL_BETA_ENABLED==='true' ? await file.arrayBuffer() : file.stream(), {
       httpMetadata: { contentType: file.type || 'application/octet-stream' }
     });
     return c.json({ key });
   } catch (error: any) {
-    console.error('Error uploading file:', error);
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (c.env.LOCAL_BETA_ENABLED!=='true') console.error('Error uploading file:', error);
     return c.json({ error: 'Failed to upload file' }, 500);
   }
 });
