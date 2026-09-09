@@ -143,7 +143,7 @@ export function MfaPage() {
           <button
             type="submit"
             aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
-            className="btn btn-primary w-full h-11 text-base font-medium"
+            className="btn btn-primary w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11 text-base font-medium"
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </button>

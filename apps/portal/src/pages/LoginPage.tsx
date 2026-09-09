@@ -122,10 +122,10 @@ export function LoginPage() {
                   aria-describedby={error ? "portal-login-error" : undefined}
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { if (!loading && !success) setEmail(e.target.value); }}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
                   placeholder="you@example.com"
-                  disabled={loading || success}
+                  readOnly={loading || success}
                 />
               </div>
             </div>
@@ -135,27 +135,27 @@ export function LoginPage() {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   type="button"
-                  onClick={() => setType('magic_link')}
+                  onClick={() => { if (!loading && !success) setType('magic_link'); }}
                   aria-pressed={type === 'magic_link'}
-                  className={`px-4 py-2 text-sm font-medium rounded-md border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${
+                  className={`px-4 py-2 text-sm font-medium rounded-md border aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${
                     type === 'magic_link' 
                       ? 'border-brand-500 bg-brand-50 text-brand-700' 
                       : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
-                  disabled={loading || success}
+                  aria-disabled={loading || success}
                 >
                   Magic Link
                 </button>
                 <button
                   type="button"
-                  onClick={() => setType('otp')}
+                  onClick={() => { if (!loading && !success) setType('otp'); }}
                   aria-pressed={type === 'otp'}
-                  className={`px-4 py-2 text-sm font-medium rounded-md border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${
+                  className={`px-4 py-2 text-sm font-medium rounded-md border aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${
                     type === 'otp' 
                       ? 'border-brand-500 bg-brand-50 text-brand-700' 
                       : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
-                  disabled={loading || success}
+                  aria-disabled={loading || success}
                 >
                   Code (OTP)
                 </button>
@@ -178,7 +178,7 @@ export function LoginPage() {
               <button
                 type="submit"
                 aria-disabled={loading || success || !email || (!!siteKey && !turnstileToken)}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed items-center gap-2"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 aria-disabled:bg-brand-700 aria-disabled:cursor-default items-center gap-2"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
                 {loading ? 'Sending...' : `Send ${type === 'magic_link' ? 'Magic Link' : 'Code'}`}

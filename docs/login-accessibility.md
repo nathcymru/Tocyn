@@ -3,7 +3,8 @@
 This slice covers the existing dashboard password/MFA pages and portal login/code
 verification pages. It adds associated labels, selected login-method state, input
 completion hints, inline error associations and live progress/status semantics.
-The portal moves focus to its success heading when the request form is replaced.
+Pending portal requests retain their submitted email and login method: the email
+is read-only and method controls remain focusable with guarded handlers. The portal moves focus to its success heading when the request form is replaced.
 Submit controls stay native and focusable while unavailable; matching handler
 guards prevent invalid or repeated pending requests. Styling remains static CSS.
 
@@ -24,8 +25,8 @@ npm run build --workspace=apps/dashboard
 npm run build --workspace=apps/portal
 ```
 
-At this source checkpoint, four new dashboard cases and all 18 portal cases pass,
-including five new portal accessibility cases and existing real-router magic-link,
+At this source checkpoint, four new dashboard cases and all 19 portal cases pass,
+including six new portal accessibility cases and existing real-router magic-link,
 OTP and login regressions. Both frontend builds and portal lint pass. Component
 checks assert accessible names, selected states, associated errors, pending status,
 focusable submit controls, retained form data and one request while pending. They

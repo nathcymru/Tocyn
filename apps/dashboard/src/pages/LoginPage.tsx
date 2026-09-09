@@ -88,7 +88,7 @@ export function LoginPage() {
           <button
             type="submit"
             aria-disabled={loading}
-            className="btn btn-primary w-full h-11"
+            className="btn btn-primary w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>

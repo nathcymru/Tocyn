@@ -42,6 +42,33 @@ describe('customer login accessibility', () => {
     expect(document.activeElement).toBe(button);
   });
 
+  it('retains the submitted identity and method despite attempted changes while pending', async () => {
+    vi.mocked(portalApi.get).mockResolvedValue({});
+    let resolveRequest!: (result: object) => void;
+    vi.mocked(portalApi.post).mockImplementation(() => new Promise(resolve => { resolveRequest = resolve; }));
+    mount(LoginPage);
+    const email = screen.getByLabelText('Email address') as HTMLInputElement;
+    fireEvent.change(email, { target: { value: 'submitted@example.invalid' } });
+    const submit = screen.getByRole('button', { name: 'Send Magic Link' });
+    submit.focus(); fireEvent.click(submit);
+    const otp = screen.getByRole('button', { name: 'Code (OTP)' });
+    expect(email.readOnly).toBe(true);
+    expect(email.disabled).toBe(false);
+    expect(otp.hasAttribute('disabled')).toBe(false);
+    expect(otp.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(otp);
+    fireEvent.change(email, { target: { value: 'attempted-change@example.invalid' } });
+    expect(email.value).toBe('submitted@example.invalid');
+    expect(screen.getByRole('button', { name: 'Magic Link' }).getAttribute('aria-pressed')).toBe('true');
+    expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/auth/request', expect.objectContaining({
+      email: 'submitted@example.invalid', type: 'magic_link',
+    }));
+    resolveRequest({});
+    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBe(document.activeElement);
+    expect(screen.getByText('submitted@example.invalid')).toBeTruthy();
+    expect(screen.queryByText(/OTP sent/)).toBeNull();
+  });
+
   it('moves focus to the success heading when the request form is replaced', async () => {
     vi.mocked(portalApi.get).mockResolvedValue({});
     vi.mocked(portalApi.post).mockResolvedValue({});
