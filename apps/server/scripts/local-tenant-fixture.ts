@@ -63,10 +63,15 @@ export type FixtureResponse = Response & {
 export type FixtureR2 = Readonly<{
   bucket: R2Bucket;
   operationCounts: () => R2OperationCounts;
+  /** Synthetic R2 failure; uncertain mode stores the object before reporting failure. */
+  failNextPut: (uncertain?: boolean) => void;
 }>;
 
 export type LocalTenantFixture = Readonly<{
   principals: Readonly<Record<PrincipalName, FixturePrincipal>>;
+  /** Enable guarded requests only after explicit local operator policy setup; no automatic invitations. */
+  enableLocalBeta: () => void;
+  restartLocalRuntime: () => void;
   db: D1Database;
   r2: FixtureR2;
   rateLimitIdentity: string;
@@ -269,12 +274,17 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
 
 function countedR2Bucket(bucket: R2Bucket): FixtureR2 {
   const counts = { get: 0, put: 0, delete: 0, list: 0 };
+  let nextPutFailure: boolean | undefined;
   const counted = new Proxy(bucket, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver);
       if (typeof value !== 'function' || !['get', 'put', 'delete', 'list'].includes(String(property))) return value;
       return (...args: unknown[]) => {
         counts[property as keyof typeof counts]++;
+        if (property === 'put' && nextPutFailure !== undefined) {
+          const uncertain = nextPutFailure; nextPutFailure = undefined;
+          return (async () => { if (uncertain) await value.apply(target,args); throw new Error('Synthetic local storage failure'); })();
+        }
         return value.apply(target, args);
       };
     },
@@ -282,6 +292,7 @@ function countedR2Bucket(bucket: R2Bucket): FixtureR2 {
   return Object.freeze({
     bucket: counted,
     operationCounts: () => Object.freeze({ ...counts }),
+    failNextPut: (uncertain = false) => { nextPutFailure = uncertain; },
   });
 }
 
@@ -321,9 +332,9 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
         },
       }),
     } as unknown as DurableObjectNamespace;
-    const env = { ...localEnv(db, r2.bucket), NOTIFICATION_DO: notificationDo };
+    const env: Env = { ...localEnv(db, r2.bucket), NOTIFICATION_DO: notificationDo };
     const privatePrincipals = generatedPrincipals();
-    const localRuntime = createLocalRuntime();
+    let localRuntime = createLocalRuntime();
     const requestIp = `fixture-run-${++fixtureRun}`;
     let routeRequests = 0;
     await applyMigrations(db);
@@ -352,6 +363,8 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
     };
 
     const fixture: LocalTenantFixture = Object.freeze({
+      enableLocalBeta: () => { env.LOCAL_BETA_ENABLED = 'true'; },
+      restartLocalRuntime: () => { localRuntime = createLocalRuntime(); },
       principals: Object.freeze(Object.fromEntries(principalNames.map(name => [name, publicPrincipal(name, privatePrincipals[name])])) as Record<PrincipalName, FixturePrincipal>),
       db,
       r2,

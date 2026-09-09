@@ -13,7 +13,7 @@ export class EmailHandler {
     try {
       // The deployment owner must first verify gateway authentication and header
       // sanitization in isolated staging; message headers cannot enable this gate.
-      if (this.env.INBOUND_EMAIL_AUTH_VERIFIED !== 'true') {
+      if ((this.env.LOCAL_BETA_ENABLED !== undefined && this.env.LOCAL_BETA_ENABLED !== 'false') || this.env.INBOUND_EMAIL_AUTH_VERIFIED !== 'true') {
         message.setReject('Inbound email is not enabled');
         return;
       }

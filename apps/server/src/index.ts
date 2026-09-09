@@ -13,12 +13,13 @@ export default {
   },
 
   async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (env.LOCAL_BETA_ENABLED !== undefined && env.LOCAL_BETA_ENABLED !== 'false') { message.setReject('Inbound email is disabled in the local beta'); return; }
     const handler = new EmailHandler(env);
     await handler.handleEmail(message, ctx);
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (env.ENVIRONMENT === 'preview' || env.ENVIRONMENT === 'beta') {
+    if (env.LOCAL_BETA_ENABLED !== undefined && env.LOCAL_BETA_ENABLED !== 'false' || env.ENVIRONMENT === 'preview' || env.ENVIRONMENT === 'beta') {
       console.warn('Scheduled work is disabled for isolated preview and beta environments');
       return;
     }

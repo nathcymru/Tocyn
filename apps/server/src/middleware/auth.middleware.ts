@@ -1,3 +1,5 @@
+import { authorizeLocalBeta } from './local-beta';
+import { BetaAdmissionError } from '../types/local-beta';
 import { Context, Next } from "hono";
 import { Env } from "../bindings";
 import * as jose from "jose";
@@ -56,6 +58,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
 
     const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
+    await authorizeLocalBeta(c.env, scope);
     c.set("tenantScope", scope as any);
 
     const deps = createTenantRequestDeps(scope, c.env);
@@ -63,6 +66,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
 
     await next();
   } catch (error) {
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     return c.json({ error: "Unauthorized: Invalid or expired token" }, 401);
   }
 };
@@ -113,6 +117,7 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
 
     const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
+    await authorizeLocalBeta(c.env, scope);
     c.set("tenantScope", scope as any);
 
     const deps = createTenantRequestDeps(scope, c.env);
@@ -120,6 +125,7 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
 
     await next();
   } catch (error) {
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     return c.json({ error: "Unauthorized: Invalid or expired MFA challenge token" }, 401);
   }
 };
@@ -134,6 +140,14 @@ export const loginAuthResolverMiddleware = async (c: Context, next: Next) => {
     authUser = await resolver.resolveCredentialsByEmail(body.email);
   }
 
+  if (authUser) {
+    try { await authorizeLocalBeta(c.env, createVerifiedTenantScope(authUser.tenantId, authUser.userId, [authUser.role], 1)); }
+    catch (error) {
+      if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') authUser = null;
+      else if (error instanceof BetaAdmissionError) return c.json({code:error.code,error:error.message},error.status);
+      else throw error;
+    }
+  }
   c.set("loginBody" as any, body);
   c.set("resolvedUser" as any, authUser);
   await next();

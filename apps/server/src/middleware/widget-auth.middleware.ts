@@ -1,3 +1,5 @@
+import { authorizeLocalBeta } from './local-beta';
+import { BetaAdmissionError } from '../types/local-beta';
 import { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
 import * as jose from 'jose';
@@ -61,6 +63,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
       1
     );
 
+    await authorizeLocalBeta(c.env, scope);
     const deps = createTenantRequestDeps(scope, c.env);
     c.set('tenantScope', scope);
     c.set('tenantDeps', deps);
@@ -75,6 +78,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
 
     await next();
   } catch (err: any) {
+    if (err instanceof BetaAdmissionError) return c.json({ code: err.code, error: err.message }, err.status);
     return c.json({ error: "Unauthorized" }, 401);
   }
 };

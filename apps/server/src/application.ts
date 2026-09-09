@@ -1,4 +1,8 @@
+import { BetaAdmissionError } from './types/local-beta';
+import { ConversationReadError } from './services/conversation-read-bounds';
 import { Hono } from 'hono';
+import { localBetaGuard, authorizeLocalBeta } from './middleware/local-beta';
+import { createVerifiedTenantScope } from './auth/scope';
 import { apiCors } from './middleware/cors-policy';
 import { Env } from './bindings';
 import auth from './handlers/auth.handler';
@@ -15,7 +19,14 @@ import { environmentGuard } from './middleware/environment-guard';
 import { AppVariables } from './types';
 
 export const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+app.onError((error,c) => {
+  if (error instanceof BetaAdmissionError || error instanceof ConversationReadError) return c.json({code:error.code,error:error.message},error.status);
+  if (c.env.LOCAL_BETA_ENABLED === 'true') return c.json({error:'Local beta request failed',code:'beta_request_failed'},500);
+  console.error(error);
+  return c.text('Internal Server Error',500);
+});
 app.use('*', environmentGuard);
+app.use('*', localBetaGuard);
 
 app.get('/api/realtime', async (c) => {
   const upgradeHeader = c.req.header('Upgrade');
@@ -27,6 +38,7 @@ app.get('/api/realtime', async (c) => {
     user = await new AuthService(c.env).verifyToken(token);
     if (!user || !['agent', 'admin'].includes(user.role)) return c.json({ error: 'Unauthorized' }, 401);
   } catch { return c.json({ error: 'Unauthorized' }, 401); }
+  await authorizeLocalBeta(c.env, createVerifiedTenantScope(user.tenant_id!, user.id, [user.role], 1));
   const internalUrl = new URL(c.req.raw.url); internalUrl.search = '';
   const newReq = new Request(internalUrl, c.req.raw);
   newReq.headers.set('X-User-ID', user.id);

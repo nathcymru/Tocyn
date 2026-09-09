@@ -1,3 +1,4 @@
+import { authorizeLocalBeta } from '../middleware/local-beta';
 import { Env } from '../bindings';
 import { TenantRequestDeps, createTenantRequestDeps } from '../middleware/tenant.middleware';
 import { ApiAuthResolver, ApiKeyResolution } from './api-key-resolver';
@@ -27,6 +28,7 @@ export async function resolveApiKeyRequestDeps(
     1
   );
 
+  await authorizeLocalBeta(env, scope, { kind: 'api-key', id: resolution.apiKeyId });
   const deps = createTenantRequestDeps(scope, env);
   // Usage metadata is not authentication authority. Record it only after scoped composition.
   try { await deps.repositories.apiKeys.recordUsage(resolution.apiKeyId); }

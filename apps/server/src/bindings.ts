@@ -1,3 +1,4 @@
+import type { LocalBetaDiagnostics } from './services/local-beta-diagnostics';
 import type { EmailTransport } from './services/email/transport';
 
 export interface Env {
@@ -15,6 +16,8 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   ENVIRONMENT?: string;
+  /** Explicit guarded local-only beta profile; malformed values fail closed. */
+  LOCAL_BETA_ENABLED?: string;
   INBOUND_EMAIL_AUTH_VERIFIED?: string;
   PORTAL_URL?: string;
   DASHBOARD_URL?: string;
@@ -23,4 +26,6 @@ export interface Env {
   OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST?: string;
   /** Injected solely by src/local-index.ts; never a Worker binding or secret. */
   emailTransport?: EmailTransport;
+  /** Per-local-runtime bounded metadata; never a provider binding. */
+  betaDiagnostics?: LocalBetaDiagnostics;
 }

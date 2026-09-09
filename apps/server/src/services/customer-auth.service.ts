@@ -1,3 +1,6 @@
+import { localBetaEnabled, authorizeLocalBeta } from '../middleware/local-beta';
+import { BetaAdmissionError } from '../types/local-beta';
+import { LOCAL_AUTH_CAPTURE_RECIPIENTS } from './email/transport';
 import { Env } from '../bindings';
 import { User } from '../types';
 import { EmailService } from './email/outbound.service';
@@ -54,6 +57,13 @@ export class CustomerAuthService {
     // 1. Authoritative identity resolution & tenant boundary check
     if (!this.identityResolver) throw new Error('Identity resolver required');
     const existingUser = await this.identityResolver.resolveCredentialsByEmail(lowerEmail);
+
+    if (localBetaEnabled(this.env)) {
+      const generic = { challengeId: type === 'otp' ? crypto.randomUUID() : undefined };
+      if (!existingUser || existingUser.tenantId !== this.deps.scope.tenantId || existingUser.role !== 'customer' || !LOCAL_AUTH_CAPTURE_RECIPIENTS.includes(lowerEmail)) return generic;
+      try { await authorizeLocalBeta(this.env, this.deps.scope, { kind: 'customer', id: existingUser.userId }); }
+      catch (error) { if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') return generic; throw error; }
+    }
 
     let userId: string;
 
@@ -136,6 +146,13 @@ export class CustomerAuthService {
     const tokenHash = await this.hashToken(challengeId ? `${challengeId}\0${plainToken}` : plainToken);
     const now = new Date().toISOString();
 
+    if (localBetaEnabled(this.env)) {
+      const candidate = await this.env.DB.prepare(`SELECT user_id FROM customer_auth_tokens WHERE tenant_id=? AND ${challengeId ? 'id=?' : 'token_hash=?'} LIMIT 1`)
+        .bind(this.deps.scope.tenantId, challengeId ?? tokenHash).first<{user_id:string}>();
+      if (!candidate) return null;
+      try { await authorizeLocalBeta(this.env, this.deps.scope, { kind:'customer', id:candidate.user_id }); }
+      catch (error) { if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') return null; throw error; }
+    }
     // Use isolated verification
     const user = await this.deps.repositories.users.verifyAndConsumeCustomerAuthToken(tokenHash, now, challengeId);
 

@@ -15,6 +15,7 @@ export type VectorizeJob = {
 /** Workflow events originate from trusted server-side bindings, never public JSON. */
 export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
   async run(event: WorkflowEvent<VectorizeJob>, step: WorkflowStep) {
+    if (this.env.LOCAL_BETA_ENABLED !== undefined && this.env.LOCAL_BETA_ENABLED !== 'false') throw new Error('Vector workflows are disabled in the local beta');
     const { tenantId, action, documentId, qaType } = event.payload;
     if (typeof tenantId !== 'string' || !tenantId.trim() || typeof documentId !== 'string' || !documentId.trim()) {
       throw new Error('Scoped workflow identity required; legacy jobs require an explicit migration');

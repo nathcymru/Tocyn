@@ -1,3 +1,7 @@
+import { openLocalBetaState } from './local-beta-state';
+import { LocalBetaOperator } from './local-beta-operator';
+import { createRepositories } from '../src/repositories';
+import { createSystemTenantScope } from '../src/auth/scope';
 import assert from 'node:assert/strict';
 import { ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
@@ -24,8 +28,10 @@ function localSecret(): string {
   return randomBytes(32).toString('hex');
 }
 
+const localBeta = process.argv.includes('--local-beta');
+
 function interactiveAllowed(): boolean {
-  return process.argv.slice(2).join(' ') === '--interactive-credentials'
+  return process.argv.slice(2).join(' ') === (localBeta ? '--interactive-credentials --local-beta' : '--interactive-credentials')
     && process.stdin.isTTY === true
     && process.stdout.isTTY === true
     && process.stderr.isTTY === true
@@ -124,6 +130,7 @@ async function main(): Promise<void> {
   assert.equal(config.vars?.ENVIRONMENT, 'local');
   assert.ok(config.d1_databases?.every((binding: { remote?: boolean }) => binding.remote === false));
   assert.ok(config.r2_buckets?.every((binding: { remote?: boolean }) => binding.remote === false));
+  if (localBeta) config.vars.LOCAL_BETA_ENABLED = 'true';
   config.main = join(serverRoot, 'src/local-index.ts');
   config.d1_databases[0].migrations_dir = join(serverRoot, 'migrations');
   writeFileSync(configPath, JSON.stringify(config), { mode: 0o600 });
@@ -137,18 +144,40 @@ async function main(): Promise<void> {
   localWrangler(['d1', 'execute', 'tocyn-local', '--local', '--persist-to', state, '--file', fixtureSql]);
   rmSync(fixtureSql, { force: true });
 
+  let betaApiKeys: { tenantId: string; apiKey: string }[] = [];
+  if (localBeta) {
+    const db = openLocalBetaState(state);
+    try {
+      const invitations: {tenantId:string;kind:'customer'|'staff'|'api-key';id:string}[] = [];
+      for (const tenantId of ['fixture-tenant-a','fixture-tenant-b']) {
+        invitations.push({tenantId,kind:'customer',id:'fixture-customer'},{tenantId,kind:'staff',id:'fixture-operator'});
+        const adapter = { prepare: (sql:string) => ({ bind: (...args:unknown[]) => ({ run: async () => db.prepare(sql).run(...args) }) }) } as unknown as D1Database;
+        const key = await createRepositories(createSystemTenantScope({tenantId,actor:'local-beta-operator'}),adapter).apiKeys.create('local-beta-fixture',['tickets:read','tickets:write']);
+        invitations.push({tenantId,kind:'api-key',id:key.id});
+        betaApiKeys.push({tenantId,apiKey:key.apiKey});
+      }
+      new LocalBetaOperator(db).initialize({runId:'local-beta-'+randomBytes(8).toString('hex'),tenants:['fixture-tenant-a','fixture-tenant-b'],invitations},0);
+    } finally { db.close(); }
+  }
+
   workerLog = openSync(join(temporary, 'runtime.log'), 'w', 0o600);
   child = spawn(process.execPath, [wrangler, 'dev', '--local', '--ip', '127.0.0.1', '--port', '8787', '--persist-to', state, '--config', configPath], {
     cwd: temporary, env: localEnvironment(), stdio: ['ignore', workerLog, workerLog], detached: process.platform !== 'win32',
   });
   await waitForHealth();
   process.stdout.write('\nSynthetic local fixture is ready at http://localhost:8787 (bound to 127.0.0.1).\n');
-  process.stdout.write('Passwords and operator enrollment URIs appear once below. They are synthetic, terminal-only values; no API key is printed.\n\n');
+  process.stdout.write('Passwords and operator enrollment URIs appear once below. They are synthetic, terminal-only values.\n\n');
   for (const credential of bootstrap.credentials) {
     process.stdout.write(`Email: ${credential.email}\nPassword: ${credential.password}\n`);
     if (credential.portalLoginUrl) process.stdout.write(`Portal login URL: ${credential.portalLoginUrl}\n`);
     if (credential.provisioningUri) process.stdout.write(`Operator TOTP enrollment URI: ${credential.provisioningUri}\n`);
     process.stdout.write('\n');
+  }
+  if (localBeta) {
+    process.stdout.write('Guarded local beta is enabled with exactly two tenants and explicit invitations.\n');
+    process.stdout.write(`Local operator state: ${state}\n`);
+    for (const key of betaApiKeys) process.stdout.write(`Synthetic local API key (${key.tenantId}): ${key.apiKey}\n`);
+    betaApiKeys = [];
   }
   process.stdout.write('Use the existing API/portal/dashboard routes. Stop this command to erase its run-owned state.\n');
   await once(child, 'exit');

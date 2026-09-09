@@ -26,7 +26,7 @@ import { clsx } from 'clsx';
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const { data: ticket, isLoading, error } = useTicket(id!);
+  const { data: ticket, isLoading, error, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError } = useTicket(id!);
   const { data: groups } = useGroups();
   const { data: agents } = useAgents();
   const { data: settings } = useSettings();
@@ -208,7 +208,7 @@ export function TicketDetailPage() {
             </div>
           </div>
 
-          <div className="p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
+          <div id="conversation-messages" className="p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
             {ticket.articles.map((article) => (
               <div 
                 key={article.id} 
@@ -302,6 +302,16 @@ export function TicketDetailPage() {
             ))}
           </div>
 
+          {ticket.pagination && <div className="border-t border-slate-200 bg-white p-4 space-y-2">
+            <button type="button" onClick={() => { if (hasNextPage) void fetchNextPage(); }} disabled={isFetchingNextPage} aria-disabled={!hasNextPage || isFetchingNextPage}
+              aria-controls="conversation-messages" aria-busy={isFetchingNextPage}
+              className="rounded-md border border-slate-400 bg-white px-4 py-2 text-sm font-medium text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-60">
+              {isFetchingNextPage ? 'Loading messages…' : hasNextPage ? 'Load more messages' : 'All messages loaded'}
+            </button>
+            <p role="status" aria-live="polite" className="text-sm text-slate-700">
+              {isFetchNextPageError ? 'Could not load more messages. Try again.' : isFetchingNextPage ? 'Loading more messages…' : `Showing ${ticket.articles.length} messages.${hasNextPage ? ' More messages are available.' : ' All messages are loaded.'}`}
+            </p>
+          </div>}
           <div className="p-6 border-t border-slate-200 bg-white">
             <form onSubmit={handleSubmitReply} className="space-y-4">
               <div className="flex items-center justify-between">
