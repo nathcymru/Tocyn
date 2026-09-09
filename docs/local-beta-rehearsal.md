@@ -46,9 +46,9 @@ empty application is not rollback or data recovery evidence.
 The runner prepares a third clean known-good checkout and its locked local
 dependencies, then invokes the [same-state local-runtime probe](./local-beta-same-state-fallback.md)
 as an owned child. It fails if the probe is unavailable or cannot preserve the
-authorized canonical history and durable counters. This implemented path still
-requires an actual accepted-candidate rehearsal; source tests alone do not
-claim final candidate acceptance.
+authorized canonical history and durable counters. This path requires an actual
+accepted-candidate rehearsal; source tests alone do not claim final acceptance.
+The successful accepted-source run is recorded below.
 
 The receipt is redacted and records only revisions, command names/results,
 durations, exit codes/signals, artifact manifest totals/digest, the local-only mode, and cleanup. Command labels come from fixed known step names; raw arguments and absolute checkout/tool paths are never serialized.
@@ -117,9 +117,9 @@ local health returned 200, seven owned processes included the real workerd
 engine, repeated npm/PTY Ctrl-C disposed the tree and private state, port 8787
 was reusable, and an unrelated sentinel remained alive. This is lifecycle
 evidence only. The [same-state runtime evidence](./local-beta-same-state-fallback.md)
-is recorded against its own clean candidate; the complete final two-artifact
-and acceptance-matrix rehearsal has not completed successfully; the failed first
-attempt is recorded below.
+is recorded against its own clean candidate. At that checkpoint, the complete
+two-artifact and acceptance-matrix rehearsal had not succeeded. Both failed
+attempts and the later accepted-source success are recorded below.
 
 POSIX lifecycle execution cases are skipped on unsupported test hosts, while
 the platform refusal contract remains tested without changing host identity.
@@ -207,3 +207,39 @@ capture-enabled real interruption then passed again in 3.84 seconds, one complet
 test and zero skipped, with seven registered processes, disposed state, retained
 then test-disposed private output, sentinel preservation and independently verified
 release of all three local ports. No owned interruption directory remained.
+
+## Successful accepted-source technical rehearsal
+
+The full local rehearsal on 9 September 2026 passed against signed accepted
+`39b32b87339a4b2b85b1064b576bb559e90fece8` (PR #122), with signed
+`58feb5e4deef55670f635f099eb67c6bcfffae56` as known-good. The
+[redacted command receipt](evidence/local-beta-rehearsal-2026-09-09.json) records
+all 46 commands, each exiting zero without a signal. Its order matches the
+accepted runner plan: 22 once-only matrix commands, two independent frontend
+builds and five artifact preparation/verification steps per checkout, setup,
+and the same-state fallback. Recorded command durations total 194,847 ms.
+
+Both parked artifacts matched byte-for-byte: 40 files, 2,314,872 bytes, release
+digest `ae998a526d1cf5e11bd36cd5fed587d463da7c48fd10408e845b30d383acc0f6`.
+These parked artifacts contain no enabled application route and were disposed
+with the run. They prove repeatable source packaging; they are not a deployed
+test environment or a published release.
+
+The separate actual local fallback preserved one ticket, four articles and four
+events. Admission remained running, revision 1, with one ticket, four mutations
+and zero upload attempts. The canonical digest and compatible migration manifest
+are recorded in the receipt. Its wrapper took 19,727 ms, including the actual
+candidate/known-good runtime journey. This is compatible same-state local
+fallback, not migration reversal or provider rollback.
+
+Inner and outer cleanup were disposed. Independent native bind probes verified
+8787/5173/5174 reusable, with zero owned rehearsal directories and zero retained
+diagnostic directories. The original private receipt had mode 0600; no raw logs,
+credentials or private paths are in the linked shareable receipt.
+
+Main CI 34314352914 and security 34314352283 passed. Main security analyses
+1745690006 (JavaScript/TypeScript), 1745687668 (Python) and 1745687233 (Actions)
+returned zero results. The prior failed 018aff41 and 953af436 attempts remain
+historical failures; this successful run does not establish the cause of the
+original 953af436 runtime failure. Actual screen-reader acceptance remains a
+separate prerequisite for overall beta readiness.

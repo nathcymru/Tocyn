@@ -361,3 +361,32 @@ state and exposed no credentials before the successful fixture run.
 
 This correction progresses #21/#62. Required PR checks and accepted merge remain
 separate delivery gates; actual-reader acceptance stays open on all three UI issues.
+## Complete native dialog traversal on accepted PR121
+
+On clean accepted `953af436fdb1cb2517e85cac103e48fe9e53da85`, a disposable
+guarded Wrangler fixture and both local Vite frontends received an additional
+native keyboard check. Operator authentication used its issued password and MFA;
+portal authentication used a normally issued, locally captured magic link.
+
+Operator Create New Ticket initially focused Subject. Forward Tab traversal
+visited Customer Email, Priority, Group, Assignee, Initial Message, Cancel,
+Create Ticket, the browser-chrome boundary, Close new ticket and Subject.
+Shift-Tab traversed these controls in reverse. Portal traversal visited Subject,
+Message, Cancel and Create Ticket in both directions. At each browser-chrome
+boundary, DOM focus reported BODY; no actionable background application control
+received focus. This is native dialog behavior, not a synthetic focus trap.
+Both dialogs closed on Escape and returned focus to New Ticket. A separate
+explicit opening of each dialog followed by native Tab to Cancel and Return also
+closed and restored its opener.
+
+An initial operator re-open attempt after changing tabs did not establish opener
+focus and reached navigation controls; it is excluded from the Cancel evidence.
+The explicit observed New Ticket opening above is the successful check.
+
+Final admission counters were zero tickets, zero mutations and zero upload
+attempts. Both ordinary sign-outs returned login; all created tabs closed and
+credential/capture bindings were cleared. The API wrapper and both Vite sessions
+exited, the private handoff was absent, and native bind probes verified
+8787/5173/5174 reusable. Vite emitted a WebSocket EPIPE during session
+navigation/teardown, without an observed UI failure or conversation write.
+Actual screen-reader output remains required for #21, #62 and #93.
