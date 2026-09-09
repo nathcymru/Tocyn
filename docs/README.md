@@ -21,6 +21,7 @@ This directory contains the version-controlled implementation, architecture, pri
 - [Security implementation material](security/)
 - [Current tenant-isolation acceptance matrix](security/tenant-isolation-acceptance.md)
 - [Deployment guide](deployment.md) — inherited/operational material; current issue/release gates control remote actions.
+- [Local private-beta rehearsal](local-beta-rehearsal.md) — reproducible parked artifacts, bounded process ownership, and compatible same-state code fallback; final candidate execution remains a separate gate.
 - [Isolated preview and beta release preparation](isolated-environments.md) — #57 source controls, owner operation choices, and unrun remote acceptance contract.
 - [Agent development tooling](agent-development.md)
 - [Repository structure](repository-structure.md)

@@ -13,7 +13,7 @@ const sha = 'a'.repeat(40);
 test('local-only rehearsal plan retains the protected-operation boundary', () => {
   const plan = rehearsalPlan(sha, 'b'.repeat(40));
   assert.equal(plan.mode, 'local-only-park');
-  assert.ok(plan.acceptanceCommands.some(command => command.includes('test:local-portal-workflow')));
+  for (const required of ['test:local-portal-workflow', 'typecheck:operator-workflow', 'test:operator-workflow', 'test:tenant-isolation-core', 'test:tenant-isolation-storage-background']) assert.ok(plan.acceptanceCommands.some(command => command.includes(required)));
   for (const forbidden of ['--remote', 'finalize', 'verify-provider-resources', 'verify-rollback', 'publish-pages']) assert.ok(plan.forbidden.includes(forbidden));
   assert.match(plan.fallback, /nonempty compatible synthetic conversation state/);
 });
@@ -108,17 +108,23 @@ test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrela
   const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-signal-'));
   const task = join(directory, 'task'); const fixture = join(directory, 'fixture'); const receiptPath = join(directory, 'receipt.json');
   const moduleUrl = pathToFileURL(fileURLToPath(new URL('./local-beta-rehearsal.mjs', import.meta.url))).href;
-  let sentinel;
-  t.after(() => {
+  let sentinel; let terminal;
+  t.after(async () => {
+    const registry = (await import('./rehearsal-process-registry.cjs')).default;
+    const { readdirSync } = await import('node:fs');
+    const records = existsSync(join(task, 'processes')) ? readdirSync(join(task, 'processes')).flatMap(name => registry.read(join(task, 'processes', name))) : [];
+    for (const record of records) if (registry.snapshot().some(info => info.pid === record.pid && info.start === record.start && !info.zombie)) process.kill(record.pid, 'SIGKILL');
+    if (terminal?.exitCode === null) terminal.kill('SIGKILL');
     if (sentinel?.exitCode === null) sentinel.kill('SIGKILL');
+    await waitFor(() => !registry.snapshot().some(info => !info.zombie && records.some(record => record.pid === info.pid && record.start === info.start)), 'test recovery termination');
     rmSync(directory, { recursive: true, force: true });
   });
   mkdirSync(fixture);
   writeFileSync(join(fixture, 'package.json'), JSON.stringify({ private: true, scripts: { fixture: 'node fixture.mjs' } }));
-  writeFileSync(join(fixture, 'fixture.mjs'), `import { spawn } from 'node:child_process'; import { writeFileSync } from 'node:fs'; const nested = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }); nested.unref(); writeFileSync(process.env.GRANDCHILD_PID, String(nested.pid)); const stop = () => { try { process.kill(-nested.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; } setTimeout(() => process.exit(0), 25); }; process.on('SIGINT', stop); process.on('SIGTERM', stop); writeFileSync(process.env.READY, 'ready'); setInterval(() => {}, 1000);`);
-  const program = `import { mkdirSync } from 'node:fs'; import { RehearsalLifecycle, installSignalCleanup } from ${JSON.stringify(moduleUrl)}; const task=process.env.TASK; mkdirSync(task); const receipt={commands:[],cleanup:'pending'}; const lifecycle=new RehearsalLifecycle(task,receipt); installSignalCleanup(lifecycle,receipt,process.env.RECEIPT); void lifecycle.run('npm',['run','fixture'],process.env.FIXTURE,{ ...process.env, GRANDCHILD_PID: process.env.GRANDCHILD_PID, READY: process.env.READY });`;
+  writeFileSync(join(fixture, 'fixture.mjs'), `import { spawn } from 'node:child_process'; import { writeFileSync } from 'node:fs'; const nested = spawn(process.execPath, ['-e', 'process.on("SIGTERM",()=>{}); setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }); nested.unref(); writeFileSync(process.env.GRANDCHILD_PID, String(nested.pid)); process.on('SIGINT', () => {}); process.on('SIGTERM', () => {}); writeFileSync(process.env.READY, 'ready'); setInterval(() => {}, 1000);`);
+  const program = `import { mkdirSync } from 'node:fs'; import { RehearsalLifecycle, installSignalCleanup } from ${JSON.stringify(moduleUrl)}; const task=process.env.TASK; mkdirSync(task,{mode:0o700}); const receipt={commands:[],cleanup:'pending'}; const lifecycle=new RehearsalLifecycle(task,receipt); installSignalCleanup(lifecycle,receipt,process.env.RECEIPT); void lifecycle.run('npm',['run','fixture'],process.env.FIXTURE,{ ...process.env, GRANDCHILD_PID: process.env.GRANDCHILD_PID, READY: process.env.READY }).catch(() => {});`;
   sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
-  const terminal = spawn('python3', ['-c', ptyBridge(), process.execPath, '--input-type=module', '-e', program], { env: { ...process.env, TASK: task, RECEIPT: receiptPath, FIXTURE: fixture, GRANDCHILD_PID: join(task, 'grandchild.pid'), READY: join(task, 'ready') }, stdio: ['pipe', 'pipe', 'pipe'] });
+  terminal = spawn('python3', ['-c', ptyBridge(), process.execPath, '--input-type=module', '-e', program], { env: { ...process.env, TASK: task, RECEIPT: receiptPath, FIXTURE: fixture, GRANDCHILD_PID: join(task, 'grandchild.pid'), READY: join(task, 'ready') }, stdio: ['pipe', 'pipe', 'pipe'] });
   let output = ''; terminal.stdout.on('data', chunk => { output += chunk; });
   await waitFor(() => existsSync(join(task, 'ready')), 'nested fixture readiness');
   const grandchildPid = Number(readFileSync(join(task, 'grandchild.pid'), 'utf8'));
@@ -146,4 +152,95 @@ test('artifact comparison requires byte-identical manifests and contents', t => 
   assert.throws(() => compareArtifactFiles(first, second), /park artifact differs/);
   writeFileSync(join(second, 'extra.txt'), 'extra\n');
   assert.throws(() => compareArtifactFiles(first, second), /same file manifest/);
+});
+
+test('leader exit retains ownership of detached and same-group children', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-leader-'));
+  const task = join(directory, 'task'); mkdirSync(task, { mode: 0o700 });
+  const lifecycle = new RehearsalLifecycle(task, { commands: [] });
+  t.after(async () => { await lifecycle.cleanup(); rmSync(directory, { recursive: true, force: true }); });
+  const pids = join(directory, 'pids.json');
+  const program = `const {spawn}=require('node:child_process'); const children=[false,true].map(detached=>{const p=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached,stdio:'ignore',env:{PATH:process.env.PATH}});p.unref();return p.pid});require('node:fs').writeFileSync(${JSON.stringify(pids)},JSON.stringify(children));process.exit(0)`;
+  const service = lifecycle.startService(process.execPath, ['-e', program], directory, process.env);
+  assert.equal((await service.exited).code, 0);
+  const children = JSON.parse(readFileSync(pids, 'utf8'));
+  await lifecycle.stopService(service);
+  for (const pid of children) await waitFor(() => !processAlive(pid), 'orphan child exit');
+  assert.equal(existsSync(task), true, 'service stop preserves shared state');
+  const second = lifecycle.startService(process.execPath, ['-e', 'setInterval(()=>{},1000)'], directory, process.env);
+  await lifecycle.stopService(second);
+  assert.equal(lifecycle.receipt.commands.filter(value => value.result === 'stopped').length, 2);
+});
+
+test('closing rejects a late detached spawn before it can escape ownership', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-late-'));
+  const task = join(directory, 'task'); mkdirSync(task, { mode: 0o700 });
+  const lifecycle = new RehearsalLifecycle(task, { commands: [] });
+  t.after(async () => { await lifecycle.cleanup(); rmSync(directory, { recursive: true, force: true }); });
+  const ready = join(directory, 'ready'); const result = join(directory, 'result');
+  const program = `const {spawn}=require('node:child_process');const fs=require('node:fs');process.on('SIGTERM',()=>{try{spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'});fs.writeFileSync(${JSON.stringify(result)},'escaped')}catch{fs.writeFileSync(${JSON.stringify(result)},'rejected')}process.exit(0)});fs.writeFileSync(${JSON.stringify(ready)},'ready');setInterval(()=>{},1000)`;
+  const service = lifecycle.startService(process.execPath, ['-e', program], directory, process.env);
+  await waitFor(() => existsSync(ready), 'late-spawn fixture');
+  await lifecycle.stopService(service);
+  assert.equal(readFileSync(result, 'utf8'), 'rejected');
+});
+
+test('incomplete registration preserves task state and does not claim disposal', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-incomplete-'));
+  const lifecycle = new RehearsalLifecycle(directory, { commands: [] });
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const handle = lifecycle.startService(process.execPath, ['-e', 'process.exit(0)'], directory, process.env);
+  await handle.exited;
+  const { readdirSync } = await import('node:fs');
+  const scope = join(directory, 'processes', readdirSync(join(directory, 'processes'))[0]);
+  writeFileSync(join(scope, 'failed'), 'synthetic registration failure', { mode: 0o600 });
+  await assert.rejects(lifecycle.cleanup(), /registration incomplete/);
+  assert.equal(existsSync(directory), true);
+});
+
+test('outer ownership survives an inner lifecycle leader and loader environment changes', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-inner-'));
+  const task = join(directory, 'task'); mkdirSync(task, { mode: 0o700 });
+  const inner = join(task, 'inner'); mkdirSync(inner, { mode: 0o700 });
+  const lifecycle = new RehearsalLifecycle(task, { commands: [] });
+  t.after(async () => { await lifecycle.cleanup(); rmSync(directory, { recursive: true, force: true }); });
+  const pids = join(directory, 'pids');
+  const moduleUrl = new URL('./local-beta-rehearsal.mjs', import.meta.url).href;
+  const childProgram = `const {spawn}=require('node:child_process');const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore',env:{PATH:process.env.PATH,NODE_OPTIONS:'--no-warnings'}});child.unref();require('node:fs').writeFileSync(${JSON.stringify(pids)},String(child.pid));setInterval(()=>{},1000)`;
+  const program = `import {RehearsalLifecycle} from ${JSON.stringify(moduleUrl)};const inner=new RehearsalLifecycle(${JSON.stringify(inner)},{commands:[]});inner.startService(process.execPath,['-e',${JSON.stringify(childProgram)}],${JSON.stringify(directory)},process.env);process.on('SIGTERM',()=>{});setInterval(()=>{},1000)`;
+  const outer = lifecycle.startService(process.execPath, ['--input-type=module', '-e', program], directory, process.env);
+  await waitFor(() => existsSync(pids), 'inner detached child');
+  const nested = Number(readFileSync(pids, 'utf8'));
+  await lifecycle.stopService(outer);
+  await waitFor(() => !processAlive(nested), 'outer-owned inner child exit');
+});
+
+test('a PID whose recorded start identity no longer matches is never signaled', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-identity-'));
+  const lifecycle = new RehearsalLifecycle(directory, { commands: [] });
+  const sentinel = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
+  t.after(async () => { sentinel.kill('SIGKILL'); await lifecycle.cleanup(); });
+  const service = lifecycle.startService(process.execPath, ['-e', 'process.exit(0)'], directory, process.env);
+  await service.exited;
+  const registry = (await import('./rehearsal-process-registry.cjs')).default;
+  const { readdirSync } = await import('node:fs');
+  const scope = join(directory, 'processes', readdirSync(join(directory, 'processes'))[0]);
+  registry.record(scope, { ...registry.snapshot().find(info => info.pid === sentinel.pid), start: 'synthetic-former-process-start' });
+  await lifecycle.cleanup();
+  assert.equal(processAlive(sentinel.pid), true);
+});
+
+test('the owned TypeScript loader preserves real fixture tests and releases its native children', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tocyn-rehearsal-loader-'));
+  for (const name of ['tmp', 'config', 'cache']) mkdirSync(join(directory, name), { mode: 0o700 });
+  const lifecycle = new RehearsalLifecycle(directory, { commands: [] });
+  t.after(() => lifecycle.cleanup());
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  await lifecycle.run(process.execPath, ['--import', 'tsx', '--test', 'scripts/deployment/local-beta-same-state-runtime.test.ts'], root, localEnvironment(process.env, directory));
+  assert.equal(lifecycle.receipt.commands[0].result, 'passed');
+  const registry = (await import('./rehearsal-process-registry.cjs')).default;
+  const { readdirSync } = await import('node:fs');
+  const records = readdirSync(join(directory, 'processes')).flatMap(name => registry.read(join(directory, 'processes', name)));
+  assert.ok(records.length >= 2, 'loader/test child processes must be registered');
+  assert.equal(registry.snapshot().some(info => !info.zombie && records.some(record => record.pid === info.pid && record.start === info.start)), false);
 });

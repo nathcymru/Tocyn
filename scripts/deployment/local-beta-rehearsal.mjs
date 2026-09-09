@@ -1,7 +1,8 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { once } from 'node:events';
+import { randomUUID } from 'node:crypto';
+import registry from './rehearsal-process-registry.cjs';
 import { createServer } from 'node:net';
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,9 +16,15 @@ const requiredAcceptanceCommands = [
   ['npm', ['run', 'typecheck:local-tenants', '--workspace=apps/server']],
   ['npm', ['run', 'typecheck:local-beta', '--workspace=apps/server']],
   ['npm', ['run', 'typecheck:local-portal-workflow', '--workspace=apps/server']],
+  ['npm', ['run', 'typecheck:operator-workflow', '--workspace=apps/server']],
+  ['npm', ['run', 'typecheck:tenant-isolation-core', '--workspace=apps/server']],
+  ['npm', ['run', 'typecheck:tenant-isolation-storage-background', '--workspace=apps/server']],
   ['npm', ['run', 'test:local-auth', '--workspace=apps/server']],
   ['npm', ['run', 'test:local-portal-workflow', '--workspace=apps/server']],
   ['npm', ['run', 'test:local-tenants', '--workspace=apps/server']],
+  ['npm', ['run', 'test:operator-workflow', '--workspace=apps/server']],
+  ['npm', ['run', 'test:tenant-isolation-core', '--workspace=apps/server']],
+  ['npm', ['run', 'test:tenant-isolation-storage-background', '--workspace=apps/server']],
   ['npm', ['run', 'test:local-tenant-realtime', '--workspace=apps/server']],
   ['npm', ['run', 'test:canonical-conversation-atomic', '--workspace=apps/server']],
   ['npm', ['run', 'test:ticket-mutation-replay', '--workspace=apps/server']],
@@ -81,50 +88,133 @@ async function portFree(port) {
   });
 }
 
+const preload = fileURLToPath(new URL('./rehearsal-process-preload.cjs', import.meta.url));
+const delay = milliseconds => new Promise(resolvePromise => setTimeout(resolvePromise, milliseconds));
+
 export class RehearsalLifecycle {
-  constructor(taskRoot, receipt) { this.taskRoot = taskRoot; this.receipt = receipt; this.children = new Set(); this.interrupted = false; this.cleanupPromise = undefined; }
+  constructor(taskRoot, receipt) {
+    if (!['darwin', 'linux'].includes(process.platform)) fail('local rehearsal process ownership requires macOS or Linux');
+    registry.checkDirectory(taskRoot);
+    this.taskRoot = taskRoot; this.receipt = receipt; this.scopes = new Map(); this.interrupted = false; this.cleanupPromise = undefined;
+    this.registryRoot = join(taskRoot, 'processes');
+    mkdirSync(this.registryRoot, { mode: 0o700 });
+  }
+
+  startService(command, args, cwd, env) {
+    if (this.interrupted || this.cleanupPromise) fail('local rehearsal is closing');
+    if (this.scopes.size >= 128) fail('local rehearsal command limit exceeded');
+    const directory = join(this.registryRoot, randomUUID());
+    mkdirSync(directory, { mode: 0o700 });
+    const scope = { directory, started: Date.now(), command: [command, ...args].join(' '), child: undefined, stopped: false, stopPromise: undefined };
+    // Register the scope before spawning; even a spawn/registration failure remains cleanup-owned.
+    const handle = {
+      get pid() { return scope.child?.pid; },
+      get exitCode() { return scope.child?.exitCode ?? null; },
+      get signalCode() { return scope.child?.signalCode ?? null; },
+    };
+    this.scopes.set(handle, scope);
+    scope.child = spawn(command, args, { cwd, env: { ...env, TOCYN_REHEARSAL_PROCESS_REGISTRY: directory, TOCYN_REHEARSAL_ANCESTOR_REGISTRIES: '[]', NODE_OPTIONS: `--require=${JSON.stringify(preload)}` }, stdio: 'ignore', detached: true });
+    handle.exited = new Promise(resolvePromise => {
+      scope.child.once('error', () => resolvePromise({ code: null, signal: null }));
+      scope.child.once('exit', (code, signal) => resolvePromise({ code, signal }));
+    });
+    try { if (scope.child.pid) registry.register(directory, scope.child.pid); }
+    catch (error) { registry.markFailed(directory); throw error; }
+    return handle;
+  }
 
   async run(command, args, cwd, env) {
-    if (this.interrupted) fail('local rehearsal interrupted');
-    const started = Date.now();
-    const display = [command, ...args].join(' ');
-    const child = spawn(command, args, { cwd, env, stdio: 'ignore', detached: process.platform !== 'win32' });
-    this.children.add(child);
-    try {
-      const [code, signal] = await once(child, 'exit');
-      if (code === 0 && !signal) this.receipt.commands.push({ command: display, durationMs: Date.now() - started, result: 'passed' });
-      else {
-        this.receipt.commands.push({ command: display, durationMs: Date.now() - started, result: 'failed' });
-        fail(`local command failed: ${command} ${args[0] || ''}`);
-      }
-    } finally {
-      this.children.delete(child);
+    const handle = this.startService(command, args, cwd, env);
+    const scope = this.scopes.get(handle);
+    const { code, signal } = await handle.exited;
+    // Leader exit never removes ownership. Finish all descendants before the next command.
+    await this.stopScope(scope);
+    const passed = code === 0 && !signal;
+    this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: passed ? 'passed' : 'failed' });
+    if (!passed) fail(`local command failed: ${command} ${args[0] || ''}`);
+  }
+
+  async stopService(handle) {
+    const scope = this.scopes.get(handle);
+    if (!scope) fail('service does not belong to this rehearsal');
+    await this.stopScope(scope);
+    if (!scope.reportedStop) {
+      this.receipt.commands.push({ command: scope.command, durationMs: Date.now() - scope.started, result: 'stopped' });
+      scope.reportedStop = true;
     }
   }
 
-  async stop(child) {
-    const running = () => !!child.pid && child.exitCode === null && child.signalCode === null;
-    const signal = value => {
-      try { if (process.platform !== 'win32') process.kill(-child.pid, value); else child.kill(value); }
-      catch (error) { if (error.code !== 'ESRCH') throw error; }
+  stopScope(scope) {
+    if (!scope.stopPromise) scope.stopPromise = this.closeScope(scope);
+    return scope.stopPromise;
+  }
+
+  async closeScope(scope) {
+    const hardDeadline = Date.now() + 10000;
+    const checkDeadline = () => { if (Date.now() >= hardDeadline) fail('owned process verification timed out'); };
+    registry.privateWrite(join(scope.directory, 'closing'), 'closing');
+    // No new instrumented spawn may begin after closing. An in-progress registration
+    // must finish before TERM, otherwise we retain the registry and report incomplete.
+    const unlockedAt = Date.now() + 2000;
+    while (readdirSync(scope.directory).some(name => name.startsWith('spawning-'))) {
+      if (Date.now() >= unlockedAt) fail('owned process registration did not settle');
+      await delay(25);
+    }
+    const owned = new Map();
+    const liveOwned = () => {
+      checkDeadline();
+      const processes = registry.snapshot();
+      for (const record of registry.read(scope.directory)) owned.set(`${record.pid}:${record.start}`, record);
+      const known = processes.filter(info => owned.has(`${info.pid}:${info.start}`));
+      // Capture non-Node leaves while their verified parent/group is still present.
+      // Signal individual identities, never an unverified recycled process-group ID.
+      const groups = new Set(known.map(info => info.pgid));
+      const parents = new Set(known.map(info => info.pid));
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const info of processes) if (!owned.has(`${info.pid}:${info.start}`) && (parents.has(info.ppid) || groups.has(info.pgid))) {
+          registry.record(scope.directory, info); owned.set(`${info.pid}:${info.start}`, info); parents.add(info.pid); changed = true;
+        }
+      }
+      return processes.filter(info => !info.zombie && owned.has(`${info.pid}:${info.start}`));
     };
-    const waitExit = async () => {
-      let timer;
-      try { await Promise.race([once(child, 'exit'), new Promise(resolvePromise => { timer = setTimeout(resolvePromise, 1_500); })]); }
-      finally { clearTimeout(timer); }
+    const signalKnown = (records, signal) => {
+      // Recheck immediately before each signal; only matching OS start identities qualify.
+      for (const record of records) {
+        checkDeadline();
+        const current = registry.snapshot().find(info => info.pid === record.pid);
+        if (!current || current.start !== record.start || current.zombie) continue;
+        try { process.kill(record.pid, signal); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      }
     };
-    if (running()) { signal('SIGTERM'); if (running()) await waitExit(); }
-    if (running()) { signal('SIGKILL'); if (running()) await waitExit(); }
-    if (running()) fail('owned child process did not terminate');
-    this.children.delete(child);
+    for (const signal of ['SIGTERM', 'SIGKILL']) {
+      const deadline = Date.now() + 2000;
+      let sent = new Set();
+      do {
+        const living = liveOwned();
+        if (!living.length) {
+          // Preloads register before main; repeated scans also catch delayed startup.
+          await delay(50);
+          if (!liveOwned().length) { scope.stopped = true; return; }
+        }
+        const fresh = living.filter(info => !sent.has(`${info.pid}:${info.start}`));
+        signalKnown(fresh, signal);
+        sent = new Set([...sent, ...fresh.map(info => `${info.pid}:${info.start}`)]);
+        await delay(25);
+      } while (Date.now() < deadline);
+    }
+    if (liveOwned().length) fail('owned process tree did not terminate');
+    scope.stopped = true;
   }
 
   cleanup() {
+    this.interrupted = true;
     if (!this.cleanupPromise) this.cleanupPromise = (async () => {
-      const stopped = await Promise.allSettled([...this.children].map(child => this.stop(child)));
+      const stopped = await Promise.allSettled([...this.scopes.values()].map(scope => this.stopScope(scope)));
       const failure = stopped.find(result => result.status === 'rejected');
       if (failure?.status === 'rejected') throw failure.reason;
-      for (const name of ['candidate', 'comparison']) {
+      for (const name of ['candidate', 'comparison', 'known-good']) {
         const worktree = join(this.taskRoot, name);
         if (statExists(worktree)) {
           try { execFileSync('git', ['worktree', 'remove', '--force', worktree], { cwd: root, stdio: 'ignore' }); } catch { /* rmSync below removes runner-owned paths. */ }
@@ -208,6 +298,7 @@ function parseArguments(argv) {
 
 export async function runRehearsal({ revision, knownGood, receiptPath }) {
   const plan = rehearsalPlan(revision, knownGood);
+  if (!['darwin', 'linux'].includes(process.platform)) fail('local rehearsal process ownership requires macOS or Linux');
   if (!process.versions.node.startsWith('22.')) fail('Node 22 is required for the local rehearsal');
   assertCleanRevision(root, revision);
   if (!receiptPath || !isAbsolute(receiptPath) || basename(receiptPath) !== 'receipt.json') fail('receipt must be an absolute path named receipt.json');
@@ -222,7 +313,7 @@ export async function runRehearsal({ revision, knownGood, receiptPath }) {
   const receipt = {
     mode: plan.mode, candidate: revision, knownGood, providerReceipt: 'absent', deployment: 'not-run', mail: 'local-capture',
     frontendInputs: { apiUrl: 'https://api.beta.local.invalid', widgetKey: 'local-rehearsal-widget-key' },
-    fallback: { result: 'not-run', reason: 'same-state local runtime fallback is not implemented in this tooling increment' }, commands: [], cleanup: 'pending',
+    fallback: { result: 'not-run', reason: 'local fallback has not run' }, commands: [], cleanup: 'pending',
   };
   const lifecycle = new RehearsalLifecycle(taskRoot, receipt);
   const removeSignalHandlers = installSignalCleanup(lifecycle, receipt, receiptPath);
@@ -235,6 +326,26 @@ export async function runRehearsal({ revision, knownGood, receiptPath }) {
     const comparisonReceipt = compareArtifactFiles(first, second);
     const verified = verifyReleaseArtifact(first, 'beta');
     Object.assign(receipt, { artifact: { ...comparisonReceipt, releaseDigest: verified.provenance.releaseDigest, mode: verified.provenance.mode } });
+    const knownGoodSource = join(taskRoot, 'known-good');
+    const env = localEnvironment(process.env, taskRoot);
+    await lifecycle.run('git', ['worktree', 'add', '--detach', knownGoodSource, knownGood], root, env);
+    await lifecycle.run('npm', ['ci', '--ignore-scripts', '--offline'], knownGoodSource, env);
+    await lifecycle.run('npm', ['rebuild', 'better-sqlite3', '--workspace=apps/server'], knownGoodSource, env);
+    const fallbackRequest = join(taskRoot, 'fallback-request.json');
+    const fallbackReceipt = join(taskRoot, 'fallback-receipt.json');
+    writeFileSync(fallbackRequest, JSON.stringify({ taskRoot, receiptPath: fallbackReceipt,
+      candidate: { source: candidate, revision }, knownGood: { source: knownGoodSource, revision: knownGood },
+    }), { mode: 0o600 });
+    try {
+      await lifecycle.run(process.execPath, ['--import', 'tsx', join(root, 'scripts/deployment/local-beta-fallback-command.mjs'), fallbackRequest], root, env);
+    } finally {
+      if (statExists(fallbackReceipt)) {
+        const fallback = JSON.parse(readFileSync(fallbackReceipt, 'utf8'));
+        receipt.fallback = fallback.result || { result: 'failed', reason: 'local_runtime_failed' };
+        receipt.fallbackCleanup = fallback.cleanup;
+      }
+    }
+
   } finally {
     try {
       await lifecycle.cleanup();

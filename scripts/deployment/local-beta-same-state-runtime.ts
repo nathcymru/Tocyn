@@ -3,9 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import * as OTPAuth from 'otpauth';
+import { isAbsolute, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import {
   assertCompatibleMigrations, assertPreservedFallbackState, assertRequiredSchemaTables,
   canonicalDigest, passedFallbackReceipt, unavailableFallbackReceipt,
@@ -124,7 +124,8 @@ async function postJson<T>(path: string, body: unknown, token?: string): Promise
   return { response, body: await response.json() as T };
 }
 
-function totp(uri: string): string {
+function totp(uri: string, source: Source): string {
+  const OTPAuth = createRequire(join(sourceServer(source), 'package.json'))('otpauth') as { URI: { parse: (uri: string) => { generate: () => string } }; TOTP: new (...args: never[]) => { generate: () => string } };
   const parsed = OTPAuth.URI.parse(uri);
   assert.ok(parsed instanceof OTPAuth.TOTP, 'fixture MFA provisioning URI must contain a TOTP secret');
   return parsed.generate();
@@ -199,7 +200,7 @@ async function runSeed(lifecycle: FallbackLifecycle, source: Source, state: stri
   await initializePolicy(lifecycle, source, state, taskRoot, env);
 }
 
-async function issueSessionsAndMutate(bootstrap: Bootstrap): Promise<{ customerToken: string; staffToken: string; ticketId: string }> {
+async function issueSessionsAndMutate(bootstrap: Bootstrap, source: Source): Promise<{ customerToken: string; staffToken: string; ticketId: string }> {
   const customer = bootstrap.credentials.find(credential => credential.email === 'tocyn-auth-test-a@example.invalid');
   const operator = bootstrap.credentials.find(credential => credential.email === 'fixture.operator.a@example.test');
   if (!customer || !operator?.provisioningUri || bootstrap.credentials.length !== fixturePrincipals.size || bootstrap.credentials.some(credential => !fixturePrincipals.has(credential.email))) fail('the supported four-principal local fixture is unavailable');
@@ -224,7 +225,7 @@ async function issueSessionsAndMutate(bootstrap: Bootstrap): Promise<{ customerT
   const login = await postJson<{ token?: string; mfa_required?: boolean }>('/api/auth/login', { email: operator.email, password: operator.password });
   responseStatus(login.response, 200, 'staff password login');
   if (!login.body.token || login.body.mfa_required !== true) fail('staff login did not issue an MFA challenge');
-  const mfa = await postJson<{ token?: string }>('/api/auth/mfa/verify', { code: totp(operator.provisioningUri) }, login.body.token);
+  const mfa = await postJson<{ token?: string }>('/api/auth/mfa/verify', { code: totp(operator.provisioningUri, source) }, login.body.token);
   responseStatus(mfa.response, 200, 'staff MFA verification');
   if (!mfa.body.token) fail('staff MFA verification did not issue a session');
   const reply = await postJson<{ id?: string }>(`/api/tickets/${ticketId}/articles`, { body: 'Synthetic staff reply.', is_internal: false }, mfa.body.token);
@@ -262,7 +263,7 @@ export async function runSameStateFallback({ candidate, knownGood, taskRoot, lif
   let knownGoodWorker: ManagedService | undefined;
   try {
     candidateWorker = await startWorker(lifecycle, candidate, state, candidateConfig, taskRoot, env);
-    const sessions = await issueSessionsAndMutate(bootstrap);
+    const sessions = await issueSessionsAndMutate(bootstrap, candidate);
     const candidateSnapshot = await stateSnapshot(candidate, state, sessions.customerToken, sessions.staffToken, sessions.ticketId);
     assert.ok(candidateSnapshot.articles >= 3 && candidateSnapshot.events >= 4 && candidateSnapshot.admission.mutations >= 4, 'candidate must persist the expected canonical/audit/admission state');
     await lifecycle.stopService!(candidateWorker); candidateWorker = undefined;
