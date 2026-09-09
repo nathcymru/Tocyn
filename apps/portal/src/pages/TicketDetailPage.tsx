@@ -29,6 +29,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
   const [pageStatus, setPageStatus] = useState('');
   const loadedPages = useRef(1);
   const requestGeneration = useRef(0);
+  const interactiveRead = useRef<number | null>(null);
 
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -55,41 +56,51 @@ function TicketDetail({ id }: { id: string | undefined }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const completedUploads = useRef(new Map<File, UploadedAttachment>());
 
-  const fetchTicket = useCallback(async (silent = false) => {
+  const fetchTicket = useCallback(async (mode: 'initial' | 'interactive' | 'background' = 'initial') => {
+    const background = mode === 'background';
+    // Polling must not replace an interactive page/read or its live feedback.
+    if (background && interactiveRead.current !== null) return 'skipped';
     const generation = ++requestGeneration.current;
-    // The newest read owns both its result and the visible busy indicators.
-    setRefreshing(true);
-    setLoadingMore(false);
-    setPageStatus('Refreshing messages…');
+    if (!background) {
+      interactiveRead.current = generation;
+      setRefreshing(true);
+      setLoadingMore(false);
+      setPageStatus('Refreshing messages…');
+      if (mode === 'initial') setLoading(true);
+    }
     try {
-      if (!silent) setLoading(true);
       let data = await portalApi.get<DetailPage>(`/tickets/${id}`);
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current) return 'superseded';
       const accumulated = [...data.articles];
       for (let page = 1; page < loadedPages.current && data.pagination?.next_cursor; page++) {
         data = await portalApi.get<DetailPage>(`/tickets/${id}?article_cursor=${encodeURIComponent(data.pagination.next_cursor)}`);
-        if (generation !== requestGeneration.current) return;
+        if (generation !== requestGeneration.current) return 'superseded';
         accumulated.push(...data.articles);
       }
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current) return 'superseded';
       data = { ...data, articles: accumulated };
       setTicket(data.ticket);
-      setError(null);
-      setRefreshError(null);
+      if (!background) {
+        setError(null);
+        setRefreshError(null);
+      }
       setArticles(data.articles);
       setNextCursor(data.pagination?.next_cursor ?? null);
       setPaginationVisible(Boolean(data.pagination));
-      setPageStatus(`Showing ${data.articles.length} messages.${data.pagination?.has_more ? ' More messages are available.' : ''}`);
-      return true;
+      if (!background) setPageStatus(`Showing ${data.articles.length} messages.${data.pagination?.has_more ? ' More messages are available.' : ''}`);
+      return 'updated';
     } catch (err: unknown) {
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current) return 'superseded';
       const message = err instanceof Error ? err.message : 'Failed to load ticket details';
-      if (!silent) setError(message);
-      else setRefreshError(message);
-      setPageStatus('Could not refresh messages. Try again.');
-      return false;
+      if (!background) {
+        if (mode === 'initial') setError(message);
+        else setRefreshError(message);
+        setPageStatus('Could not refresh messages. Try again.');
+      }
+      return 'failed';
     } finally {
-      if (generation === requestGeneration.current) {
+      if (!background && generation === requestGeneration.current) {
+        interactiveRead.current = null;
         setRefreshing(false);
         setLoading(false);
       }
@@ -101,6 +112,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
   useEffect(() => {
     let active = true;
     const generation = ++requestGeneration.current;
+    interactiveRead.current = generation;
     portalApi.get<{ TICKET_PREFIX: string }>('/config')
       .then(res => { if (active) setTicketPrefix(res.TICKET_PREFIX); })
       .catch(err => console.error('Failed to fetch config', err));
@@ -121,7 +133,10 @@ function TicketDetail({ id }: { id: string | undefined }) {
         }
       })
       .finally(() => {
-        if (active && generation === requestGeneration.current) setLoading(false);
+        if (active && generation === requestGeneration.current) {
+          interactiveRead.current = null;
+          setLoading(false);
+        }
       });
 
     let pollInterval: ReturnType<typeof setInterval>;
@@ -129,7 +144,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
     const startPolling = () => {
       clearInterval(pollInterval);
       pollInterval = setInterval(() => {
-        fetchTicket(true);
+        fetchTicket('background');
       }, 60000);
     };
 
@@ -139,7 +154,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchTicket(true);
+        fetchTicket('background');
         startPolling();
       } else {
         stopPolling();
@@ -161,23 +176,27 @@ function TicketDetail({ id }: { id: string | undefined }) {
   }, [id, fetchTicket, invalidateReads]);
 
   const loadMore = async () => {
-    if (!nextCursor || loadingMore) return;
+    if (!nextCursor || loadingMore || interactiveRead.current !== null) return;
     const generation = ++requestGeneration.current;
+    interactiveRead.current = generation;
     setLoadingMore(true);
     setRefreshing(false);
     setPageStatus('Loading more messages…');
     try {
       const data = await portalApi.get<DetailPage>(`/tickets/${id}?article_cursor=${encodeURIComponent(nextCursor)}`);
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current) return 'superseded';
       loadedPages.current++;
       setArticles(previous => [...previous, ...data.articles.filter(article => !previous.some(old => old.id === article.id))]);
       setNextCursor(data.pagination?.next_cursor ?? null);
       setPageStatus(`Loaded ${data.articles.length} more messages.${data.pagination?.has_more ? ' More messages are available.' : ' All messages are loaded.'}`);
     } catch (err: unknown) {
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current) return 'superseded';
       setPageStatus(err instanceof Error ? err.message : 'Could not load more messages. Try again.');
     } finally {
-      if (generation === requestGeneration.current) setLoadingMore(false);
+      if (generation === requestGeneration.current) {
+        interactiveRead.current = null;
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -243,8 +262,8 @@ function TicketDetail({ id }: { id: string | undefined }) {
       setNewMessage('');
       setAttachments([]);
       completedUploads.current.clear();
-      const refreshed = await fetchTicket(true);
-      setReplyStatus(refreshed !== false ? 'Reply sent.' : 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.');
+      const refreshed = await fetchTicket('interactive');
+      setReplyStatus(refreshed !== 'failed' ? 'Reply sent.' : 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.');
     } catch (err: unknown) {
       setReplyStatus('');
       setReplyError(err instanceof Error ? err.message : 'Failed to send reply');
@@ -309,7 +328,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
       {refreshError && <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700">
         <p role="alert">Could not refresh messages: {refreshError}</p>
-        <button type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket(true)) messagesRegion.current?.focus(); }} className="mt-2 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2">Refresh messages</button>
+        <button type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket('interactive') === 'updated') messagesRegion.current?.focus(); }} className="mt-2 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2">Refresh messages</button>
       </div>}
       {downloadError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{downloadError}</p>}
       <p role="status" aria-label="Attachment download status" className="text-sm text-gray-700">{downloadStatus}</p>
@@ -364,7 +383,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
           })}
         </div>
         {paginationVisible && <div className="border-t border-gray-200 bg-white p-4 space-y-2">
-          <button type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore}
+          <button type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore || refreshing}
             aria-controls="conversation-messages" aria-busy={loadingMore}
             className="rounded-md border border-gray-400 bg-white px-4 py-2 text-sm font-medium text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
             {loadingMore ? 'Loading messages…' : nextCursor ? 'Load more messages' : 'All messages loaded'}

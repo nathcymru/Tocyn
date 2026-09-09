@@ -23,7 +23,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   authGeneration: 0,
   login: (user) => set((state) => ({ user, isAuthenticated: true, isLoading: false, authGeneration: state.authGeneration + 1 })),
   logout: () => {
-    localStorage.removeItem('lumina_customer_token');
+    try { localStorage.removeItem('lumina_customer_token'); } catch { /* Storage is optional; always clear the active session. */ }
     set((state) => ({ user: null, isAuthenticated: false, isLoading: false, authGeneration: state.authGeneration + 1 }));
   },
   setLoading: (loading) => set({ isLoading: loading }),

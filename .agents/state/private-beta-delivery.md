@@ -1,6 +1,6 @@
 # Private-beta delivery coordination
 
-Updated 9 September 2026, 03:09 UTC. This is the authoritative coordinator view.
+Updated 9 September 2026, 03:21 UTC. This is the authoritative coordinator view.
 GitHub issues and Project 4 remain the acceptance/schedule records. Historical
 checkpoints and receipts remain in Git history, linked issues and subsystem docs.
 
@@ -60,23 +60,23 @@ No gate is waived or transferred merely to close its owning issue.
 ## Current ownership and branches
 
 Root owns this file, acceptance, GitHub/Project truth and final browser review.
-Authoritative state worktree: /tmp/tocyn-21-integrated-accessibility,
-branch codex/21-integrated-accessibility. The issue owner will include this state
-in the next coherent checkpoint and preserve the original PR116 recovery ref.
+Authoritative correction worktree: /tmp/tocyn-21-login-accessibility,
+branch codex/21-login-accessibility. Original and temporary integration recovery
+refs are preserved; the temporary integrated worktree remains at d89ef59.
 
 | Work | Agent / model / effort | Current state and reason |
 | --- | --- | --- |
 | #62 integration | Root; Astra/high | Complete functional PR119; issue stays open for reader/UI evidence. Final original branch721ae6f and recovery stash preserved. |
-| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | Published candidate d8dadfefb2ac5c40851c9996bb80d67d79d22b62 on signed119; original and temporary recovery branches preserved. Security/session and enrollment race boundaries justify high effort. Existing PR116 is receiving one final documentation checkpoint and required checks. |
-| #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Owner of /tmp/tocyn-65-local-rehearsal and draft118. Clean2314188 has real interruption and same-state proof; preparing evidence/CI update. |
+| #21 accessibility and MFA | beta_guardrails_impl; Astra/high | PR116 returned to draft after the 03:13 review discovered polling and download-boundary defects. One consolidated correction now passes 53 portal tests/lint/build and root internal review. Fresh responsive/attachment/browser checks and final CI precede readiness; signed #119 integration is preserved. |
+| #65 lifecycle and fallback | release_packaging_escalation; Astra/high | Owner of /tmp/tocyn-65-local-rehearsal and PR118. Final 0c0d080 CI/security are green; unchanged actual interruption/fallback evidence is tied to2314188. Final technical matrix awaits accepted #21. |
 | Independent review | retry_acceptance; Terra/high | Bounded lifecycle/fallback and frontend reviews complete, no blocking findings. Actual screen-reader/mobile evidence not claimed. Currently idle; no redundant review loop. |
 
 #21 browser fixture has been disposed. #65 interruption/fallback fixture also
 fully disposed and returned8787 to #21 for corrected runtime tests. Root browser
 windows closed and credential memory cleared. No remote services used.
 
-Next: corrected MFA runtime proof, clean #21 integration refresh and final browser
-checks; update existing draft116 and pass all required checks. Preserve reader
+Next: fresh responsive/attachment/polling browser checks on the consolidated
+#21 correction; update existing draft116 and pass all required checks. Preserve reader
 acceptance as open. #65 prepares existing draft118 in parallel and then runs the
 technical rehearsal on the accepted corrected source. Final readiness awaits
 complete acceptance, not merely passing machine checks.
@@ -243,3 +243,24 @@ Corrected actual Wrangler regression: 84 requests, four starts, nine selected D1
 Root closed the browser and cleared credentials. Owner disposed both frontends/API, verified private handoff removal, zero interactive fixture directories and 8787/5173/5174 bind reuse. PR116 remains Progresses21, with actual reader/responsive-navigation and other unperformed manual acceptance explicit. Source is frozen; final documentation/CI checks precede integration.
 
 PR118 prior head95d4cf3 passed full required CI34305592423/security. Its owner pushed final portability batch0c0d080 (POSIX execution tests skipped off macOS/Linux with a pure refusal contract test); root49/49 focused tests pass and updated CI is pending. Unchanged actual interruption/fallback evidence remains tied to2314188. No full final technical artifact rehearsal yet.
+
+
+## PR116 consolidated review correction
+
+The 03:13 review found a background polling/pagination announcement defect and a
+portal download credential/session-generation gap. PR116 returned to draft for
+one correction batch, with no readiness claim. Background reads now defer to
+interactive read ownership and keep live feedback stable; explicit recovery
+retains accepted-reply semantics. Download credential and session-boundary
+handling is corrected with synthetic deferred response/blob and auth-failure
+regressions. Optional storage failures cannot prevent the existing in-memory
+logout/generation transition. OTP input accepts six ASCII digits.
+
+The previous sentinel comment was already semantically addressed by !==false;
+explicit outcomes preserve it. Native open-attribute fallback was rejected because
+it loses modality. Root reviewed the bounded batch without a remaining blocker.
+All 53 portal tests, lint and build pass; application source is ready for a fresh
+browser checkpoint, not yet accepted. Supported CUA documentation now exposes
+viewport.set/reset and filechooser.setFiles, so responsive/attachment observations
+are actionable. Actual reader acceptance remains separate and open. No new review
+request, authorization change or allowlist expansion is introduced.

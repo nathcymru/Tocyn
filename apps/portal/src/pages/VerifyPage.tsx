@@ -123,7 +123,7 @@ export function VerifyPage() {
                   type="text"
                   required
                   value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-brand-500 focus:border-brand-500 text-center text-2xl tracking-widest uppercase font-mono"
                   placeholder="123456"
                   maxLength={6}

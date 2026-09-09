@@ -5,7 +5,7 @@ import { TicketDetailPage } from '../pages/TicketDetailPage';
 import { portalApi } from '../api/client';
 
 vi.mock('../api/client', () => ({ portalApi: { get: vi.fn(), post: vi.fn(), postForm: vi.fn(), download: vi.fn() } }));
-afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); vi.useRealTimers(); });
 const ticket = { id: 'ticket', subject: 'Conversation', status: 'open', priority: 'normal', ticket_no: 1, created_at: '2026-09-09 00:00:00' };
 const page = (id: string, next = 'cursor') => ({
   ticket,
@@ -25,8 +25,53 @@ async function mount() {
   await screen.findByText('Initial message');
 }
 function refresh() { fireEvent(document, new Event('visibilitychange')); }
+function sendReply() {
+  vi.mocked(portalApi.post).mockResolvedValueOnce({});
+  fireEvent.change(screen.getByLabelText('Reply'), { target: { value: 'Accepted reply' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
+}
 
 describe('conversation read ownership during overlapping refresh and pagination', () => {
+  it('skips interval and visibility polling while pagination owns the read and its status', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    await mount();
+    const pending = deferred();
+    vi.mocked(portalApi.get).mockImplementationOnce(() => pending.promise as never);
+    const button = screen.getByRole('button', { name: 'Load more messages' });
+    button.focus(); fireEvent.click(button);
+    const status = screen.getByRole('status', { name: 'Message pagination' });
+    const text = status.textContent;
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    refresh();
+    expect(portalApi.get).toHaveBeenCalledTimes(3);
+    expect(status.textContent).toBe(text);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(button);
+    await act(async () => { pending.resolve(page('Next message', '')); });
+    expect(screen.getByText('Next message')).toBeTruthy();
+    expect(button.textContent).toBe('All messages loaded');
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('updates background data without publishing polling progress, success or failure to live feedback', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    await mount();
+    const status = screen.getByRole('status', { name: 'Message pagination' });
+    const initialStatus = status.textContent;
+    const pending = deferred();
+    vi.mocked(portalApi.get).mockImplementationOnce(() => pending.promise as never);
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(status.textContent).toBe(initialStatus);
+    expect(screen.getByRole('button', { name: 'Load more messages' }).getAttribute('aria-disabled')).toBe('false');
+    await act(async () => { pending.resolve(page('Background update')); });
+    expect(screen.getByText('Background update')).toBeTruthy();
+    expect(status.textContent).toBe(initialStatus);
+    vi.mocked(portalApi.get).mockRejectedValueOnce(new Error('Unattended refresh failure'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(status.textContent).toBe(initialStatus);
+  });
+
   it('ignores an older refresh error after the newer refresh succeeds', async () => {
     await mount();
     const old = deferred();
@@ -65,7 +110,7 @@ describe('conversation read ownership during overlapping refresh and pagination'
     vi.mocked(portalApi.get).mockImplementationOnce(() => oldPage.promise as never);
     fireEvent.click(screen.getByRole('button', { name: 'Load more messages' }));
     vi.mocked(portalApi.get).mockRejectedValueOnce(new Error('Current refresh failed'));
-    refresh();
+    sendReply();
     await screen.findByRole('alert');
     expect(screen.getByRole('status', { name: 'Message pagination' }).textContent).toContain('Could not refresh');
     expect(screen.getByRole('button', { name: 'Load more messages' }).getAttribute('aria-disabled')).toBe('false');
@@ -86,7 +131,7 @@ describe('conversation read ownership during overlapping refresh and pagination'
     vi.mocked(portalApi.get).mockImplementationOnce(() => oldPage.promise as never);
     fireEvent.click(screen.getByRole('button', { name: 'Load more messages' }));
     vi.mocked(portalApi.get).mockResolvedValueOnce(page('Refreshed first page', 'new-cursor'));
-    refresh();
+    sendReply();
     await screen.findByText('Refreshed first page');
     const currentPage = deferred();
     vi.mocked(portalApi.get).mockImplementationOnce(() => currentPage.promise as never);

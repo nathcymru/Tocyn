@@ -12,6 +12,26 @@ function mount(Page: typeof LoginPage, path = '/') {
 }
 
 describe('customer login accessibility', () => {
+  it('accepts only six ASCII OTP digits and never submits alphabetic or incomplete codes', async () => {
+    mount(VerifyPage, '/verify');
+    const code = screen.getByLabelText('Authentication Code') as HTMLInputElement;
+    const submit = screen.getByRole('button', { name: 'Verify Code' });
+    fireEvent.change(code, { target: { value: 'ABCDEF' } });
+    fireEvent.click(submit);
+    expect(code.value).toBe('');
+    expect(portalApi.post).not.toHaveBeenCalled();
+    fireEvent.change(code, { target: { value: '12-x' } });
+    fireEvent.click(submit);
+    expect(code.value).toBe('12');
+    expect(portalApi.post).not.toHaveBeenCalled();
+    vi.mocked(portalApi.post).mockRejectedValueOnce(new Error('Synthetic invalid code'));
+    fireEvent.change(code, { target: { value: 'ab12-34 56x7' } });
+    expect(code.value).toBe('123456');
+    fireEvent.click(submit);
+    await screen.findByRole('alert');
+    expect(portalApi.post).toHaveBeenCalledWith('/auth/verify', { token: '123456', challengeId: undefined });
+  });
+
   it('names the login-method group and exposes which native button is selected', () => {
     vi.mocked(portalApi.get).mockResolvedValue({});
     mount(LoginPage);

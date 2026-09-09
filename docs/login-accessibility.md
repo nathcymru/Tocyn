@@ -50,7 +50,7 @@ npm run build --workspace=apps/dashboard
 npm run build --workspace=apps/portal
 ```
 
-On the signed dependency integration, all 48 dashboard cases and all 42 portal
+On the signed dependency integration, all 48 dashboard cases and all 53 portal
 cases pass, with both frontend builds and portal lint. The initial combined
 baseline had 34 dashboard and 40 portal cases; subsequent additions cover
 operator controls, actual-client mandatory MFA recovery and truthful portal
@@ -221,8 +221,28 @@ for this MFA-specific browser pass.
 This completes the discovered mandatory-configuration implementation blocker.
 Actual screen-reader output, responsive/mobile navigation interaction and the
 remaining manual attachment/focus-containment acceptance stay open under #21.
-The authorized browser surface exposed no viewport/zoom control; no media-query
-simulation or OS setting change substitutes for that missing observation.
+Initial tool discovery did not expose viewport/file controls. The subsequently
+recovered supported browser documentation provides viewport and file-chooser
+operations; their actual responsive/attachment observations are now queued. No
+OS setting change or simulated media query substitutes for that evidence.
 #62/#93 reader requirements also remain open. The coherent functional increment
 is reviewable with `Progresses #21`; it does not claim issue completion or beta
 readiness.
+
+
+## Consolidated review follow-up
+
+Background polling and visibility reads now defer while initial loading or user
+pagination owns the read. They update data without replacing live progress,
+success or error feedback. Explicit reply refresh and read recovery retain their
+visible outcomes and distinguish superseded requests from failures. Fake-timer
+and deferred-read regressions cover a pending page during polling, silent data
+updates, background failure and the existing accepted-reply recovery.
+
+OTP entry filters to six ASCII digits while preserving the separate URL magic-link
+path. Downloads use the normal credential/routing context and current-session
+checks before response handling and blob effects. Synthetic tests cover cookie-only
+requests, auth failure, deferred responses/blobs and optional-storage logout.
+All 53 portal tests, lint and build pass after this batch. These corrections keep
+PR116 in draft until the fresh browser and required checks complete; actual
+reader acceptance remains open.
