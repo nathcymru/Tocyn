@@ -288,3 +288,76 @@ suggested native-dialog attribute fallback was explicitly rejected because it
 loses modality. No repeated review request was made. The functional increment is
 reviewable with `Progresses #21`, while actual reader and any remaining complete
 journey/focus-cycle acceptance remain open on the eventual accepted revision.
+
+
+## Residual keyboard acceptance and correction
+
+After signed PR116, a real guarded browser pass on application 65ad06e completed
+portal OTP selection, wrong-code correction, native create Cancel focus return,
+operator native Cancel/Close, and keyboard status/priority/assignment/group changes.
+The auth fixture's collision operator ID is deliberately non-UUID; a separate
+synthetic UUID assignment target/group enabled the supported UUID API contract.
+Original identities/invitations and admission counters were unchanged by that
+fixture setup. Set/clear values persisted through reload with focus retained.
+Normal sign-out-all from a second portal view caused a protected read in the first
+view to return login; its email field remained keyboard reachable. An operator
+keyboard download saved the exact fresh 62-byte synthetic attachment, then the
+reviewer removed the matching file.
+
+This pass discovered three included-workflow defects: rejected operator password
+login lost its local feedback, the native operator file chooser lost selected
+files, and attachment byte counts displayed misleading units. Correction source
+7b3d49b preserves the signed-out login form on its exact rejected login request;
+protected-session failures and session-generation fences remain. Portal actual
+client/router regressions establish its existing wrong-OTP and login-request error
+recovery without changing that client's production logic. The file chooser now
+snapshots selected files before resetting the input, announces selection/removal
+and returns Attach focus after removal. Both attachment views display byte/KB/MB
+units, including small and zero-byte sizes and the dashboard legacy field.
+
+The wrong-password actual-client/router test failed before correction, as did a
+native FileList-clear model with a deferred React state update. All 63 dashboard
+and 59 portal tests pass afterward, along with both frontend types/builds,
+portal/server lint and workflow validation. Both dependency audits report zero
+advisories. The unchanged dashboard build retains its existing large-chunk warning.
+Corrected-source browser observations and cleanup are recorded below; these
+automated results do not claim actual speech or issue completion.
+
+Additional accepted-source computed contrast samples: selector text 17.85:1;
+inactive navigation 6.96:1; active navigation 14.63:1; Close outline 17.85:1;
+Open navigation focus 5.98:1; normal login button 4.77:1; focused native assignment
+ring 4.77:1. The 390×844 view had 375px document width without horizontal overflow.
+These are state-specific samples. Forced read-outage/capture-failure browser cases
+are unavailable through the supported interactive launcher, whose child exit
+intentionally disposes state; runtime/deferred failure evidence stays separate.
+Actual-reader acceptance remains required by #21, #62 and #93.
+
+
+On exact correction source `7b3d49b`, the normal operator wrong-password browser
+request retained `Invalid credentials`, associated with both fields, and Sign In
+focus. Changing only the password then completed normal MFA and reached Dashboard.
+The real operator chooser retained the selected 62-byte file and selection status;
+native Shift-Tab from Attach reached Remove, and Return removed the chip, showed
+removal status and restored Attach focus. Both actual attachment views displayed
+`62 B`. This is native keyboard/DOM feedback evidence, not screen-reader speech.
+
+Admission counters before and after the corrected pass stayed one ticket, eight
+mutations and one upload attempt; persisted rows stayed one ticket, eight articles
+and one attachment. The article count includes normal operator change notes;
+there was no historical message seed. Corrected file selection/removal and login
+recovery added zero conversation writes or upload attempts. Original two-tenant
+identities/invitations remained unchanged throughout.
+
+Both normal sign-outs returned login, all created tabs closed, viewports reset and
+credential/OTP memory cleared. The owned API/Vite sessions exited; the supported
+launcher removed its fixture, private handoff and source attachment. The matching
+fresh download was already verified and removed. No owned runtime processes or
+fixture directories remained, and native Node loopback binds confirmed ports
+8787/5173/5174 reusable. An initial Python bind without address reuse returned
+EADDRINUSE before those successful native bind probes; it is not represented as a
+successful first probe. The first launch on accepted main also needed its existing
+native SQLite dependency rebuilt under Node 22; that failed attempt removed its
+state and exposed no credentials before the successful fixture run.
+
+This correction progresses #21/#62. Required PR checks and accepted merge remain
+separate delivery gates; actual-reader acceptance stays open on all three UI issues.
