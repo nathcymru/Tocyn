@@ -103,13 +103,30 @@ class LocalPortalWorkflow {
   }
 
   private async stopWorker(): Promise<void> {
-    if (!this.worker?.pid || this.worker.exitCode !== null || this.worker.signalCode !== null) return;
-    const running = () => !!this.worker?.pid && this.worker.exitCode === null && this.worker.signalCode === null;
-    try { process.kill(-this.worker.pid, 'SIGTERM'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error; }
-    if (running()) await Promise.race([once(this.worker, 'exit'), new Promise(resolvePromise => setTimeout(resolvePromise, 1_500))]);
+    const worker = this.worker;
+    if (!worker?.pid || worker.exitCode !== null || worker.signalCode !== null) return;
+    const running = () => worker.exitCode === null && worker.signalCode === null;
+    const signal = (value: NodeJS.Signals) => {
+      try {
+        if (process.platform === 'win32') worker.kill(value);
+        else process.kill(-worker.pid!, value);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+      }
+    };
+    signal('SIGTERM');
     if (running()) {
-      try { process.kill(-this.worker.pid!, 'SIGKILL'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error; }
-      if (running()) await once(this.worker, 'exit');
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          once(worker, 'exit'),
+          new Promise(resolvePromise => { timer = setTimeout(resolvePromise, 1_500); }),
+        ]);
+      } finally { clearTimeout(timer); }
+    }
+    if (running()) {
+      signal('SIGKILL');
+      if (running()) await once(worker, 'exit');
     }
   }
 
@@ -237,6 +254,37 @@ test('localhost Wrangler proves portal login, tenant isolation, delivery recover
       'bootstrap must retain only the approved customer recipients and one synthetic operator');
     const operatorProvisioningUri = operatorA.provisioningUri;
     const baseline = await workflow.conversationCounts();
+
+    const rowsBeforeEmptyRequests = await workflow.d1Rows();
+    for (const [method, path] of [
+      ['POST', '/api/auth/login'],
+      ['POST', '/api/auth/mfa/verify'],
+      ['POST', '/api/auth/mfa/confirm'],
+      ['POST', '/api/v1/customer/auth/request'],
+      ['POST', '/api/v1/customer/auth/verify'],
+      ['POST', '/api/tickets'],
+      ['POST', '/api/v1/tickets'],
+      ['POST', '/api/v1/customer/tickets'],
+      ['POST', '/api/tickets/fixture-ticket/articles'],
+      ['POST', '/api/v1/tickets/fixture-ticket/articles'],
+      ['POST', '/api/v1/customer/tickets/fixture-ticket/messages'],
+      ['PATCH', '/api/tickets/fixture-ticket'],
+      ['PATCH', '/api/v1/tickets/fixture-ticket'],
+    ] as const) {
+      for (const contentType of [undefined, 'application/json']) {
+        const response = await workflow.request(path, {
+          method,
+          ...(contentType ? { headers: { 'Content-Type': contentType } } : {}),
+          // Deliberately omit body: exercise real HTTP requests with no payload.
+        });
+        assertStatus(response, contentType ? 400 : 415, `${method} ${path} must reject an absent required body`);
+        const error = await response.json() as { code?: string };
+        assert.equal(error.code, contentType ? 'invalid_json' : 'unsupported_media_type');
+      }
+    }
+    assert.equal(await workflow.d1Rows(), rowsBeforeEmptyRequests, 'absent required bodies must not create durable rows');
+    assert.deepEqual(await workflow.conversationCounts(), baseline, 'absent required bodies must not mutate the conversation or audit');
+    assert.equal((await workflow.captured()).length, 0, 'absent auth bodies must not produce mail');
 
     const requestLink = async (email: string, key: string) => {
       const result = await workflow.json<{ success: boolean }>('/api/v1/customer/auth/request', { email, type: 'magic_link', widgetKey: key });

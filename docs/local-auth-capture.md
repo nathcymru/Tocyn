@@ -207,14 +207,25 @@ seven-day expired widget session. The temporary clock and failure count exist
 only in the runner-owned Worker startup configuration; there is no HTTP control
 route or deployable binding for either capability.
 
-The 9 September 2026 run completed in 11.58 seconds and reported four Worker
-starts, 42 requests, nine selected D1 rows, five new articles and five new
-conversation events. After the final expiry restart zero captured messages
+The earlier 9 September 2026 run recorded 42 requests.
+The follow-up absent-body regression run completed in 13.59 seconds and reported
+four Worker starts, 69 requests, nine selected D1 rows, five new articles and five
+new conversation events. After the final expiry restart zero captured messages
 remained; the earlier successful-delivery assertion checked one capture to the
 owner, while the injected failure checked that none was recorded. Those are
 disposal-run measurements, not capacity or production claims. The runner also
 reports `cleanup: disposed`; it does not inspect or reset a developer's existing
 state.
+
+The guarded JSON check now covers absent bodies as well as nonempty streams.
+The actual HTTP regression sends 26 absent-body requests across 13 required-body
+authentication, intake, reply and update routes: JSON media type returns controlled
+400, and missing media type returns 415. D1 rows, articles, audit events and capture
+remain unchanged. Only the explicit authenticated logout/MFA action allowlist
+permits a zero-byte body; whitespace, BOM, malformed JSON, arrays, non-JSON media
+types and oversized bodies retain their existing rejection coverage. The runner's
+shutdown uses process-group signals on POSIX and the existing child-termination
+pattern on Windows. POSIX restart/cleanup passed; Windows execution was not available.
 
 The final guarded browser check on `2add038` redeemed a locally captured link,
 loaded tickets, and used **Sign out all sessions**. It returned to login without

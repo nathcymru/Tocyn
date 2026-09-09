@@ -400,3 +400,35 @@ Port8787 handed to62 for final guarded browser journey. Its candidate consumes
 retry_acceptance Terra/high: release/state recovery warrants high effort. Bounded
 script/negative tests only until final approved dependency candidate is accepted;
 no remote resource/provider/tag/release activity. Root owns final candidate gates.
+
+## PR117 final review and operator browser evidence
+
+61PR117headdff6385 passed allrequiredmachinecontexts. Merge attempt rejected by
+unresolved review conversations, no bypass. Comments3964017141/3964017191 identify
+Windows worker process cleanup and absent-body required-route validation. Owner
+beta_guardrails_impl now fixes complete set on61branch; no extraCopilotrequested.
+62guardedbrowser completed bothintakehandling +actualstop/retry +publicprivacy.
+Receipt /tmp/tocyn-62-root-browser-receipt.md; counters2/20/0, fourpublicreads
+excludeinternalnotes. DashboardUTCgapcorrected, focused17tests/buildpass. Root
+tabclosed/secretscleared, ownercleanupthen8787handoffto61. Finalaccepted61base
+still required. 65startreceipt5594673912; independentreviewfound lifecycle and
+inheritedVITEbuildinput risks in67f321e, ownercorrecting beforeexecution.
+
+## PR117 review corrections and final verification
+
+The required-body guard now validates absent payloads before handlers while
+preserving the exact zero-byte authenticated action allowlist and all existing
+BOM/nonempty/oversize rejection coverage. Actual local HTTP added 26 negative
+requests across 13 required-body routes: controlled 400/415, unchanged D1 rows,
+articles/audit and zero captures. Corrected receipt: 69 requests, four Worker
+starts, nine selected D1 rows, article/event deltas 5/5, final zero captures and
+run-owned state disposed; 13.59 seconds. POSIX restart/cleanup passed. Windows
+shutdown mirrors the existing child.kill pattern; Windows execution is untested.
+
+Current-source full required verification passed: complete workflow/portal/server
+lint, all dedicated server types, three frontend builds, root tests, D1 smoke and
+integration, local auth/tenant/realtime, canonical/replay/audit, guarded beta and
+real runtime plus repeated PTY cleanup. The affected four suites ran first;
+remaining required checks ran sequentially without duplicating that runtime chain.
+No additional automated review requested. PR117 responses/resolution cite the
+correction and actual evidence; remote required checks must pass again before merge.

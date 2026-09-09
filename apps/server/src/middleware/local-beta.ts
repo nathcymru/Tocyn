@@ -88,7 +88,7 @@ export const localBetaGuard: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
   }
   const requestLimit = route === 'upload' ? 10 * 1024 * 1024 + 50000 : 64 * 1024;
   return requestBounds(requestLimit)(c, async () => {
-    if (['POST', 'PATCH', 'PUT'].includes(c.req.method) && route !== 'upload' && c.req.raw.body) {
+    if (['POST', 'PATCH', 'PUT'].includes(c.req.method) && route !== 'upload') {
       const rawBody = await c.req.raw.clone().arrayBuffer();
       if (!(permitsEmptyAuthAction(c.req.method, c.req.path) && rawBody.byteLength === 0)) {
         if (!/^application\/json(?:\s*;|$)/i.test(c.req.header('Content-Type') || '')) {
