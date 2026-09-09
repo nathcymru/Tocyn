@@ -166,3 +166,25 @@ resource receipt remains nine selected D1 rows, five added articles/five events,
 zero final captured messages, and disposed temporary state. Auth configuration
 writes are separate from those conversation counts. No external mail/provider was
 used. This automated runtime result does not close browser or reader acceptance.
+
+## Browser checkpoint and accepted dependency integration
+
+Temporary #21 candidate b2bc593; source is not yet final signed #119 integration. Synthetic local fixture only, no external mail or Cloudflare resources. No credentials, login links, QR data or message bodies retained.
+
+Portal: genuine capture login, create and reply passed. Native create dialog has named controls and Subject initial focus; Escape returns New Ticket focus. Tab boundary may leave document for browser chrome; no background interactive control was observed, and complete focus-cycle containment is not claimed. Actual create/reply statuses appeared, reply cleared only after success. UUID fallback renders a nonempty ticket reference.
+
+Portal pagination: two admitted messages plus fifty historical fixture rows, with no fabricated admission/audit evidence. Enter on Load more changed 50 to 52 visible messages. Status announced text “Loaded 2 more messages. All messages are loaded.” Focus remained on All messages loaded (aria-disabled true; native disabled false). This is DOM/keyboard evidence, not actual spoken output.
+
+Enrolled operator: normally issued password and current MFA code succeeded; MFA code field initially focused, then Workspace focused after success. Account disclosure opens expanded via Enter; Tab reaches Security Profile; Escape returns Account options and collapses it. Connection disclosure Tab reaches Force Reconnect; Enter reconnects and returns focus to collapsed Real-time trigger. Named global search Enter navigates to matching ticket results and focuses Workspace. Ticket actions Escape collapses and returns trigger focus. Copy action reports “Ticket reference copied.” Native New Ticket dialog initially focuses Subject, exposes named fields, and Escape returns New Ticket focus.
+
+Unenrolled operator mandatory setup remains blocked pending a narrow correction and independent review. Actual screen-reader output, mobile viewport interaction, attachment selection/removal, and final exact-source regression remain pending.
+
+Rendered portal contrast samples, calculated from computed browser colors: pagination #111827/white 17.74:1; attachment text #374151/white 10.31:1; unavailable reply control white/#2c4db8 7.34:1; focus outline #1d4ed8/white 6.70:1. These are sampled states, not a whole-UI contrast declaration. Browser windows closed and tool-local credential/OTP memory cleared before fixture teardown.
+
+The subsequent corrected candidate is rebased onto signed #119 merge
+`d394bd71d020204f75999cf1f21ad6022f478787`, which includes accepted #61. It
+preserves the final operator PATCH response type, auth/query/realtime controls,
+portal UTC formatting and bounded message pagination. Mandatory enrollment now
+passes the automated runtime and actual client/router recovery regressions above;
+its fresh browser wrong-code/correct-code acceptance is still pending. No earlier
+provisional browser observation is represented as a final source or reader proof.
