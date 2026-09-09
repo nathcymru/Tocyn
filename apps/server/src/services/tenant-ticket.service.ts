@@ -1,3 +1,5 @@
+import type { ConversationActor } from '../types/conversation-audit';
+import type { VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { Ticket, Article, Attachment } from '../types';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
@@ -43,9 +45,10 @@ export class TenantTicketService {
     });
   }
 
-  async createTicketWithArticle(data: InitialConversationInput): Promise<{ ticket: Ticket, article: Article }> {
+  async createTicketWithArticle(data: InitialConversationInput, actor?: ConversationActor): Promise<{ ticket: Ticket, article: Article }> {
     const observedAt = new Date().toISOString();
     return this.deps.repositories.tickets.createWithInitialArticle({
+      ...(actor ? {audit:actor} : {}),
       ticket: {
         subject: data.subject,
         customer_email: data.customer_email,
@@ -70,6 +73,17 @@ export class TenantTicketService {
         processed_at: observedAt,
       },
     });
+  }
+
+  async createAuditedReply(ticketId: string, body: string, internal: boolean, actor: ConversationActor, attachments: VerifiedMutationAttachment[]) {
+    const now = new Date().toISOString();
+    const raw = await this.deps.ticketMutations.commit({
+      ticketId,articleId:crypto.randomUUID(),audit:actor,
+      article:{sender_id:actor.id,sender_type:'agent',body,is_internal:internal,intake_source:actor.source,received_at:now,processed_at:now},
+      attachments:attachments.map(attachment => ({...attachment,id:crypto.randomUUID()})),
+    });
+    const result = JSON.parse(raw) as {article:Article;attachments:Attachment[]};
+    return {article:{...result.article,is_internal:Boolean(result.article.is_internal)},attachments:result.attachments};
   }
 
   async getTicketArticles(ticketId: string): Promise<Article[]> {
@@ -112,6 +126,24 @@ export class TenantTicketService {
     articles: ArticleWithCanonicalAttachments[],
   ): CanonicalConversation {
     return project(ticket, articles);
+  }
+
+  async projectAuditedConversation(ticket: Ticket, articles: ArticleWithCanonicalAttachments[]): Promise<CanonicalConversation> {
+    const canonical = project(ticket,articles);
+    const references = await this.deps.conversationAudit.references(ticket.id);
+    const visible = new Set(articles.map(article => article.id));
+    const byArticle = new Map<string,typeof references[number]>();
+    for (const event of references) {
+      if (event.article_id && !byArticle.has(event.article_id)) byArticle.set(event.article_id,event);
+    }
+    const intake = references.find(event => event.kind === 'ticket.intake' && (!event.article_id || visible.has(event.article_id)));
+    return {...canonical,
+      conversation:{...canonical.conversation,...(intake ? {audit:{status:'known' as const,value:{eventId:intake.id}}} : {})},
+      messages:canonical.messages.map(message => {
+        const event = byArticle.get(message.id);
+        return event ? {...message,audit:{status:'known' as const,value:{eventId:event.id}}} : message;
+      }),
+    };
   }
 
   async addAttachment(data: Omit<Attachment, 'id' | 'created_at'>): Promise<Attachment> {

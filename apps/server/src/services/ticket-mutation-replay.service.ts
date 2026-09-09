@@ -1,3 +1,4 @@
+import type { ConversationAuditReference } from '../types/conversation-audit';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { MutationNamespace, MutationOutcome, MutationPrincipal, MutationReceipt, MutationSnapshotV1,
@@ -56,6 +57,26 @@ export function renderMutationSnapshotV1(raw: string, operation: TicketMutationI
     };
   }
   return { status: 201, body, replayed, keyed, ticketId: ticket.id, ...(article ? { articleId: article.id } : {}) };
+}
+
+/** V2 adds only immutable local event references; V1 rendering remains frozen. */
+export function renderMutationSnapshotV2(raw: string, operation: TicketMutationInput['operation'], replayed: boolean, keyed: boolean): MutationOutcome {
+  const snapshot = JSON.parse(raw) as Omit<MutationSnapshotV1,'version'> & {version:2;audit:ConversationAuditReference[]};
+  if (snapshot.version !== 2 || !Array.isArray(snapshot.audit) || snapshot.audit.length !== 1 || !snapshot.audit[0].eventId) throw unavailable();
+  const result = renderMutationSnapshotV1(JSON.stringify({...snapshot,version:1}),operation,replayed,keyed);
+  const reference = {status:'known',value:{eventId:snapshot.audit[0].eventId}};
+  if (operation.endsWith('.create')) {
+    const canonical = result.body.canonical as ReturnType<typeof projectCanonicalConversation>;
+    result.body.canonical = {...canonical, conversation:{...canonical.conversation,audit:reference},
+      messages:canonical.messages.map(message => ({...message,audit:reference}))};
+  } else result.body.audit = reference;
+  return result;
+}
+function renderMutationSnapshot(raw: string, operation: TicketMutationInput['operation'], replayed: boolean, keyed: boolean) {
+  const version = (JSON.parse(raw) as {version:number}).version;
+  if (version === 1) return renderMutationSnapshotV1(raw,operation,replayed,keyed);
+  if (version === 2) return renderMutationSnapshotV2(raw,operation,replayed,keyed);
+  throw unavailable();
 }
 
 export class TicketMutationReplayService {
@@ -139,13 +160,13 @@ export class TicketMutationReplayService {
     const email = await this.authorize();
     if (receipt.payload_hash !== ns.payloadHash) throw new TicketMutationError(409, 'idempotency_conflict', 'Idempotency key was already used with a different payload');
     if (receipt.lifecycle === 'gone') throw new TicketMutationError(410, 'idempotency_result_gone', 'The original mutation result is no longer available');
-    if (receipt.response_version !== 1 || receipt.fingerprint_version !== 1 || !receipt.result_ticket_id || !receipt.response_snapshot) throw unavailable();
+    if (![1,2].includes(receipt.response_version) || receipt.fingerprint_version !== 1 || !receipt.result_ticket_id || !receipt.response_snapshot) throw unavailable();
     await this.authorizeTicket(receipt.result_ticket_id, email);
     if (receipt.result_article_id) {
       const article = await this.repository.articleVisibility(receipt.result_article_id, receipt.result_ticket_id);
       if (!article || (this.principal.kind === 'customer' && article.is_internal)) throw notFound();
     }
-    return renderMutationSnapshotV1(receipt.response_snapshot, ns.operation, true, true);
+    return renderMutationSnapshot(receipt.response_snapshot, ns.operation, true, true);
   }
 
   async prepareMutation(input: TicketMutationInput, rawIdempotencyKey?: string): Promise<PreparedTicketMutation> {
@@ -192,7 +213,7 @@ export class TicketMutationReplayService {
       const observedAt = new Date().toISOString();
       const portal = input.operation.startsWith('portal.');
       const source = portal ? 'portal' : 'api';
-      const candidate: MutationCandidate = { ticketId: 'ticketId' in input ? input.ticketId : crypto.randomUUID(), attachments: [] };
+      const candidate: MutationCandidate = { audit:{kind:this.principal.kind,id:this.principal.id,source}, ticketId: 'ticketId' in input ? input.ticketId : crypto.randomUUID(), attachments: [] };
       if (!('ticketId' in input)) {
         if (portal && input.data.customer_email !== email) throw unauthorized();
         candidate.ticket = {
@@ -223,7 +244,7 @@ export class TicketMutationReplayService {
       if (candidate.article) candidate.articleId = crypto.randomUUID();
       try {
         const snapshot = await this.repository.commit(candidate, attempt.namespace);
-        return renderMutationSnapshotV1(snapshot, input.operation, false, Boolean(attempt.namespace));
+        return renderMutationSnapshot(snapshot, input.operation, false, Boolean(attempt.namespace));
       } catch {
         // A unique receipt collision rolls back all losing writes. Only an
         // authoritative committed receipt can establish a replay/conflict.

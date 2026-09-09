@@ -9,6 +9,7 @@ const mockDB = {
   all: vi.fn(),
   first: vi.fn(),
   run: vi.fn(),
+  batch: vi.fn(),
 };
 
 const mockNotificationsDO = {
@@ -34,6 +35,7 @@ describe("Ticket Detail Fixes Verification", () => {
       return {};
     });
     mockDB.run.mockResolvedValue({ success: true });
+    mockDB.batch.mockResolvedValue([{results:[{id:'t-1'}]}]);
 
     const mockUser = {
       id: "agent-1",
@@ -97,6 +99,8 @@ describe("Ticket Detail Fixes Verification", () => {
     expect(await res.json()).toEqual({ success: true });
 
     // Verify ticket update query includes all fields
-    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET priority = ?, assigned_to = ?, group_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?"));
-    expect(mockDB.bind).toHaveBeenCalledWith("urgent", validAgentUuid, validGroupUuid, "default-tenant", "t-1");
+    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET priority=?,assigned_to=?,group_id=?,updated_at=CURRENT_TIMESTAMP"));
+    expect(mockDB.bind).toHaveBeenCalledWith("urgent", validAgentUuid, validGroupUuid, "default-tenant", "t-1", "urgent", validAgentUuid, validGroupUuid);
+    expect(mockDB.batch).toHaveBeenCalledTimes(1);
+    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO conversation_events"));
   });});

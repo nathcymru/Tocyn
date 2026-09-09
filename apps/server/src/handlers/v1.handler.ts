@@ -1,3 +1,4 @@
+import { conversationHistory } from './conversation-history';
 import { Hono } from "hono";
 import { z } from "zod";
 import { Env } from "../bindings";
@@ -90,7 +91,7 @@ v1.get("/tickets/:id", async (c) => {
   return c.json({
     ...ticket,
     articles,
-    canonical: ticketService.projectCanonicalConversation(ticket, canonicalArticles),
+    canonical: await ticketService.projectAuditedConversation(ticket, canonicalArticles),
   });
 });
 
@@ -171,14 +172,14 @@ v1.patch("/tickets/:id", async (c) => {
   }
 
   try {
-    await deps.repositories.tickets.update(id, updateData);
-    await deps.repositories.tickets.touch(id);
-    const updatedTicket = await deps.repositories.tickets.get(id);
+    const updatedTicket = await deps.conversationAudit.updateWithEvents(id, updateData, {kind:'api-key',id:resolution!.apiKeyId,source:'api'});
     return c.json(updatedTicket);
   } catch (error) {
     console.error("API Update Ticket Error:", error);
     return c.json({ error: "Failed to update ticket" }, 500);
   }
 });
+
+v1.get('/tickets/:id/history', c => conversationHistory(c,'api'));
 
 export default v1;

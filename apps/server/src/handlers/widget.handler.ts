@@ -130,7 +130,7 @@ widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, tenantRate
       sender_type: 'customer',
       sender_id: c.get('user').id,
       customer_id: c.get('user').id,
-    });
+    }, {kind:'customer',id:c.get('user').id,source:'widget'});
 
     return c.json(ticket, 201);
   } catch (error) {

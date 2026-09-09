@@ -21,7 +21,8 @@ stored or evidenced is represented by a typed field status: `unknown`,
 | Message | Article ID/parent correlation, stored sender type/ID, visibility, safe content reference, raw-email compatibility ID where present, and attachment metadata | `raw_email_id` remains email compatibility data. It is not a provider-neutral identifier. R2 keys are never emitted in `canonical`. |
 | Message intake | `articles.intake_source`, `received_at`, and `processed_at` record the explicit route/service path and observed service clocks for new messages. | A later message never inherits the ticket's source. Legacy/direct repository rows stay `not-recorded`. |
 | Direction and delivery | Customer messages created through explicit API, portal, or widget intake are inbound. Internal messages and non-customer/legacy messages keep unknown direction. Internal and inbound messages are non-delivery; other public agent/system messages have delivery `not-recorded`. | An agent/system label, persistence, or public visibility does not prove outbound provider delivery. |
-| External, audit and occurrence facts | Typed absence fields make the boundary visible. | Provider IDs, provider correlation/reply IDs, external occurrence/acknowledgement, delivery receipts, and audit events are not invented from Tocyn local fields. |
+| Audit | New mutation and live detail projections reference persisted, visible conversation events; see [Conversation audit](conversation-audit.md). | Legacy missing events remain `not-recorded`; v1 replay snapshots retain their original absent facts. |
+| External and occurrence facts | Typed absence fields make the boundary visible. | Provider IDs, provider correlation/reply IDs, external occurrence/acknowledgement and delivery receipts are not invented from Tocyn local fields. |
 
 The message `state.persistence` is `persisted` only because the corresponding
 article record exists. It is independent of visibility and delivery.
@@ -46,8 +47,7 @@ The current proof covers local API and portal records. It does not claim an
 enabled email, Slack, Teams, WhatsApp, Telegram, webhook, or outbound channel.
 These explicit handoffs remain separate work:
 
-- #60 owns idempotency, replay, and conflict semantics.
-- #63 owns audit events.
+- [Retry safety](../phase-1.4-api-spec.md#optional-retry-safety-for-mutations) and [conversation audit](conversation-audit.md) are implemented locally; provider delivery remains separate.
 - #87 owns provider normalisation.
 - #88 owns outbound dispatch and delivery state.
 - #91 owns durable ingestion and journal infrastructure.
@@ -66,7 +66,7 @@ npm run test:canonical-conversation-atomic --workspace=apps/server
 ```
 
 These tests initialise a disposable local D1/R2 fixture and apply the complete
-checked-in migration chain through `0024_canonical_intake_facts.sql`. They do
+checked-in migration chain. The original #59 evidence used `0024_canonical_intake_facts.sql`. They do
 not connect to a Cloudflare account or provider. The route proof uses two
 synthetic tenants, route-issued customer credentials, and scoped API keys. It
 records one synthetic attachment object, checks the local D1/R2 counters, and

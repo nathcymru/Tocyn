@@ -125,7 +125,11 @@ remain supported. The database clock fixes a 24-hour window without extending it
 on replay. Successful mutations atomically commit their rows and a versioned raw
 snapshot receipt (maximum 256 KiB); concurrent losing batches roll back. The v1
 response renderer and canonical projector must retain compatible behavior for all
-live v1 receipts; response changes require a new response version.
+live v1 receipts. New audited mutations use response version 2 with immutable local
+event references; they do not change live v1 responses. The 64 KiB raw input bound
+is distinct from the 128 KiB normalized semantic fingerprint bound, which includes
+derived fields. See [Conversation audit](architecture/conversation-audit.md) for
+authorized history, actor attribution and lifecycle rules.
 
 Portal reply commits its article, attachments and ticket timestamp together.
 Existing R2 objects are checked only for new mutations; saved replies do not reread

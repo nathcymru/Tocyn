@@ -25,7 +25,9 @@
     "test:canonical-conversation-atomic": "tsx --test scripts/canonical-conversation-atomic.test.ts",
     "typecheck:canonical-conversation-atomic": "tsc -p scripts/tsconfig.canonical-conversation-atomic.json",
     "test:ticket-mutation-replay": "tsx --test scripts/ticket-mutation-replay.test.ts",
-    "typecheck:ticket-mutation-replay": "tsc -p scripts/tsconfig.ticket-mutation-replay.json"
+    "typecheck:ticket-mutation-replay": "tsc -p scripts/tsconfig.ticket-mutation-replay.json",
+    "test:conversation-audit": "tsx --test scripts/conversation-audit.test.ts",
+    "typecheck:conversation-audit": "tsc -p scripts/tsconfig.conversation-audit.json"
   },
   "dependencies": {
     "@luminatick/shared": "*",

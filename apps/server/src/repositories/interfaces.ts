@@ -1,3 +1,4 @@
+import type { ConversationActor } from '../types/conversation-audit';
 import { SqlKnowledgeRepository } from './knowledge.repository';
 import { User, Ticket, Article, Attachment } from '../types';
 
@@ -14,6 +15,7 @@ export interface UserRepository {
 }
 
 export type InitialTicketArticleData = {
+  audit?: ConversationActor;
   ticket: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'ticket_no' | 'tenant_id'> & {
     intake_received_at: string;
     intake_processed_at: string;

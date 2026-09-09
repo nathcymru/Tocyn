@@ -1,3 +1,4 @@
+import { conversationHistory } from './conversation-history';
 import { z } from 'zod';
 import { validateAttachmentReferences } from '../services/attachment-references';
 import { requestBounds } from '../middleware/request-bounds';
@@ -217,7 +218,7 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
   return c.json({
     ticket,
     articles: articlesWithAttachments.map(article => article.response),
-    canonical: ticketService.projectCanonicalConversation(
+    canonical: await ticketService.projectAuditedConversation(
       ticket,
       articlesWithAttachments.map(article => article.canonical),
     ),
@@ -343,5 +344,7 @@ app.post('/attachments/upload', widgetAuthMiddleware, roleGuard(['customer']), t
     return c.json({ error: 'Failed to upload file' }, 500);
   }
 });
+
+app.get('/tickets/:id/history', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, c => conversationHistory(c,'customer'));
 
 export default app;

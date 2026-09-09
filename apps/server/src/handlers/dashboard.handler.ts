@@ -1,3 +1,4 @@
+import { conversationHistory } from './conversation-history';
 import { validateAttachmentReferences } from '../services/attachment-references';
 import { EmailService } from '../services/email/outbound.service';
 import { BroadcastService } from '../services/broadcast.service';
@@ -230,7 +231,7 @@ dashboard.post("/tickets", async (c) => {
       body: articleBody,
       sender_id: customer?.id,
       sender_type: "customer",
-    });
+    }, {kind:'staff',id:agent.sub,source:'dashboard'});
 
     await new BroadcastService(c.env,d.scope).notifyTicketCreated(ticket);
     try {
@@ -342,55 +343,9 @@ dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
   try { verifiedAttachments = await validateAttachmentReferences(d, `agent-attachments/${agent.sub}/`, bodyAttachments); }
   catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
 
-  const article = await d.repositories.articles.create({
-    ticket_id: ticketId,
-    sender_id: agent.sub,
-    sender_type: "agent",
-    body: articleBody,
-    is_internal: is_internal ? true : false,
-  });
-
-  const attachments: any[] = [];
-  if (Array.isArray(verifiedAttachments)) {
-    for (const att of verifiedAttachments) {
-      const storageKey = att.storageKey;
-
-      if (!storageKey || typeof storageKey !== 'string' || !storageKey.startsWith(`agent-attachments/${agent.sub}/`)) {
-        return c.json({ error: "Invalid attachment storage key or unauthorized access" }, 403);
-      }
-
-      if (!att.filename || typeof att.filename !== 'string') {
-        return c.json({ error: "Invalid attachment filename" }, 400);
-      }
-      const sanitizedFilename = att.filename.replace(/^.*[\\/]/, '').replace(/[\r\n]/g, '');
-
-      if (typeof att.size !== 'number' || att.size < 0 || att.size > 10 * 1024 * 1024) {
-        return c.json({ error: "Invalid attachment size" }, 400);
-      }
-
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/csv'];
-      if (!allowedTypes.includes(att.contentType)) {
-        return c.json({ error: "Unsupported attachment content type" }, 415);
-      }
-
-      const added = await ticketService.addAttachment({
-        article_id: article.id,
-        file_name: sanitizedFilename,
-        file_size: att.size,
-        content_type: att.contentType,
-        r2_key: storageKey
-      });
-      attachments.push({
-        id: added?.id || crypto.randomUUID(),
-        filename: added?.file_name || sanitizedFilename,
-        size: added?.file_size || att.size,
-        contentType: added?.content_type || att.contentType,
-        storageKey: added?.r2_key || storageKey
-      });
-    }
-  }
-
-  await d.repositories.tickets.touch(ticketId);
+  const {article,attachments:savedAttachments} = await ticketService.createAuditedReply(
+    ticketId,articleBody,Boolean(is_internal),{kind:'staff',id:agent.sub,source:'dashboard'},verifiedAttachments);
+  const attachments = savedAttachments.map(a => ({id:a.id,filename:a.file_name,size:a.file_size,contentType:a.content_type,storageKey:a.r2_key}));
 
   if (!article.is_internal) {
     try {
@@ -433,46 +388,10 @@ dashboard.patch("/tickets/:id", async (c) => {
     return c.json({ error: "No valid fields to update" }, 400);
   }
 
-  await d.repositories.tickets.update(id, updateFields);
-  await d.repositories.tickets.touch(id);
-
-  // Create a system note for the update
-  const updater = await d.repositories.users.get(agent.sub);
-  const updaterName = updater?.full_name || agent.email;
-
-  const updatesText: string[] = [];
-  for (const [k, val] of Object.entries(validData)) {
-    if (val === undefined) continue;
-    if (k === 'assigned_to') {
-      if (!val) {
-        updatesText.push(`assignee set to Unassigned`);
-      } else {
-        const assignee = await d.repositories.users.get(val as string);
-        updatesText.push(`assignee set to ${assignee?.full_name || assignee?.email || val}`);
-      }
-    } else if (k === 'group_id') {
-      if (!val) {
-        updatesText.push(`group set to Unassigned`);
-      } else {
-        const group = await d.repositories.groups.get(val as string);
-        updatesText.push(`group set to ${group?.name || val}`);
-      }
-    } else if (k === 'custom_fields') {
-      updatesText.push(`custom fields updated`);
-    } else {
-      updatesText.push(`${k} set to ${val}`);
-    }
-  }
-
-  const noteBody = `Ticket updated by ${updaterName}: ${updatesText.join(", ")}`;
-
-  await d.repositories.articles.create({
-    ticket_id: id,
-    sender_id: agent.sub,
-    sender_type: "system",
-    body: noteBody,
-    is_internal: true,
-  });
+  const ticket = await d.repositories.tickets.get(id);
+  if (!ticket) return c.json({error:'Ticket not found'},404);
+  if (agent.role === 'agent' && ticket.group_id && !await d.repositories.groups.isMember(ticket.group_id,agent.sub)) return c.json({error:'Forbidden'},403);
+  await d.conversationAudit.updateWithEvents(id,updateFields,{kind:'staff',id:agent.sub,source:'dashboard'},true);
 
   return c.json({ success: true });
 });
@@ -709,5 +628,7 @@ dashboard.post('/attachments/upload', async (c) => {
     return c.json({ error: 'Failed to upload file to storage' }, 500);
   }
 });
+
+dashboard.get('/tickets/:id/history', c => conversationHistory(c,'staff'));
 
 export default dashboard;

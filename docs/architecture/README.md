@@ -8,6 +8,7 @@ This directory is the repository-backed technical architecture reference for Toc
 - [Data and tenant boundaries](data-and-tenant-boundaries.md) — tenant authority, D1/R2/Vectorize ownership and isolation invariants.
 - [Channel adapter architecture](channel-adapters.md) — canonical conversation boundary and external-channel model.
 - [Canonical conversation contract](canonical-conversation-contract.md) — implemented API/portal projection and local verification evidence.
+- [Conversation audit](conversation-audit.md) — atomic attributable events, authorized history and replay compatibility.
 - [AI and autonomous operations](ai-and-autonomous-operations.md) — current advisory AI and planned policy-gated execution.
 - [Multitenancy evidence](multitenancy/) — Phase 1 implementation/review artefacts retained for provenance.
 

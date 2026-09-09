@@ -50,6 +50,7 @@ vi.mock("../../services/tenant-ticket.service", () => {
         findTickets: mockFindTickets,
         createTicketWithArticle: mockCreateTicketWithArticle,
         projectCanonicalConversation: mockProjectCanonicalConversation,
+        projectAuditedConversation: mockProjectCanonicalConversation,
         findTicketById: mockFindTicketById,
         createArticle: mockCreateArticle,
         addAttachment: mockAddAttachment,

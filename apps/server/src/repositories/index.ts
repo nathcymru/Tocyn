@@ -1,3 +1,4 @@
+import { conversationMutationEvent } from './conversation-audit.repository';
 import { normalizeSupportEmail } from '../utils/email-normalize';
 import { VerifiedTenantScope } from '../types/tenant';
 import { UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
@@ -369,6 +370,7 @@ export class SqlTicketRepository implements TicketRepository {
         article.raw_email_id || null, article.qa_type || null, article.is_internal ? 1 : 0,
         article.intake_source, article.received_at, article.processed_at,
       ),
+      ...(data.audit ? [conversationMutationEvent(this.db,this.scope,{id:crypto.randomUUID(),ticketId,articleId,actor:data.audit,intake:true,internal:false})] : []),
     ]);
     const createdTicket = results[0].results[0] as Ticket | undefined;
     const createdArticle = results[1].results[0] as Article | undefined;
