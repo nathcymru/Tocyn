@@ -42,7 +42,7 @@ mandatory MFA setup, create/history/reply, attachments, both pagination controls
 selected ticket values, stopped-write recovery and narrow navigation were tested.
 Deferred pending and injected failure tests are labelled separately.
 
-The reader fixture ended at 2 tickets, 13 admitted mutations and 1 upload. Rejected
+The reader fixture ended at 2 tickets, 13 admitted mutations and 1 upload attempt. Rejected
 writes did not increment its counters. Explicit synthetic historical rows were
 not represented as admitted events. Private fixture state and test files were
 removed, sessions revoked, original accessibility settings restored and local

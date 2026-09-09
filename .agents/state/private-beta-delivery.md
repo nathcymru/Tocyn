@@ -87,7 +87,7 @@ native-select stale spoken value defect was corrected and all four controls
 verified without reload. Deferred pending/fault tests remain distinct from manual
 observations. Independent acceptance review found no mandatory workflow gap.
 
-Reader fixture final state: 2 tickets/13 admitted mutations/1 upload; stored rows
+Reader fixture final state: 2 tickets/13 admitted mutations/1 upload attempt; stored rows
 2 tickets/64 articles/1 attachment/13 events/5 users/1 group/1 membership. Historical
 articles/selector targets were explicitly synthetic setup, not admission evidence.
 Rejected writes left counters unchanged. Normal session revocation, created-tab

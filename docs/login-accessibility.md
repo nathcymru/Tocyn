@@ -445,7 +445,7 @@ control retained focus. This directly corrects the stale-value finding above.
 
 A supported operator pause then rejected Pending → Resolved with the spoken stop
 message, preserving Pending and focus. The rejection left admission counts at
-2 tickets, 11 mutations and 1 upload. Resume used the exact expected revision;
+2 tickets, 11 mutations and 1 upload attempt. Resume used the exact expected revision;
 retry succeeded and the closed control spoke `Resolved Status`. The operator's
 public-reply guidance was read, a named synthetic attachment was removed with
 Attach files focus restored, and status navigation read `Attachment removed.`
