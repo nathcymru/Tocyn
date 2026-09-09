@@ -40,6 +40,7 @@ export function MfaPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || code.length !== 6 || (!user?.mfa_enabled && !setupData)) return;
     setError('');
     setLoading(true);
 
@@ -90,7 +91,7 @@ export function MfaPage() {
           <h1 className="text-2xl font-bold text-slate-900">
             {isSetupMode ? 'Set up Two-Factor Authentication' : 'Two-Factor Authentication'}
           </h1>
-          <p className="text-slate-500 mt-2">
+          <p id="mfa-instructions" className="text-slate-600 mt-2">
             {isSetupMode 
               ? 'Your account requires an additional layer of security. Please scan the QR code with your authenticator app.'
               : 'Enter the 6-digit code from your authenticator app'}
@@ -98,7 +99,7 @@ export function MfaPage() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 text-red-700 text-sm rounded-r-md flex items-start">
+          <div id="mfa-error" role="alert" aria-atomic="true" className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 text-red-700 text-sm rounded-r-md flex items-start">
             <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
             <p>{error}</p>
           </div>
@@ -107,9 +108,9 @@ export function MfaPage() {
         {isSetupMode && setupData && (
           <div className="mb-6 text-center">
             <div className="bg-white p-4 rounded-lg inline-block shadow-sm border border-gray-100 mb-4">
-              <QRCodeSVG value={setupData.provisioning_uri} size={180} />
+              <QRCodeSVG role="img" aria-label="Authenticator setup QR code; a text key follows" value={setupData.provisioning_uri} size={180} />
             </div>
-            <p className="text-xs text-gray-500 max-w-[250px] mx-auto">
+            <p className="text-xs text-gray-700 max-w-[250px] mx-auto">
               If you can't scan the QR code, manually enter this secret key:<br/>
               <code className="bg-gray-100 px-2 py-1 rounded mt-2 inline-block font-mono text-sm break-all">
                 {getSecretFromUri(setupData.provisioning_uri)}
@@ -118,12 +119,17 @@ export function MfaPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form aria-busy={loading} onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2 text-center">
+            <label htmlFor="mfa-code" className="block text-sm font-medium text-slate-700 mb-2 text-center">
               Authentication Code
             </label>
             <input
+              id="mfa-code"
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              aria-describedby={error ? "mfa-instructions mfa-error" : "mfa-instructions"}
               type="text"
               required
               maxLength={6}
@@ -136,12 +142,13 @@ export function MfaPage() {
           </div>
           <button
             type="submit"
-            disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
+            aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
             className="btn btn-primary w-full h-11 text-base font-medium"
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </button>
         </form>
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : ''}</p>
       </div>
     </div>
   );
