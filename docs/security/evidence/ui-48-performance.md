@@ -109,3 +109,8 @@ Required CI run [34524932528](https://github.com/nathcymru/Tocyn/actions/runs/34
 ## Built widget timing
 
 `ui-48-widget-timing-19b9bbd.json` records 40 samples plus two excluded warmups against a fresh production build, with exact source/artifact hashes and dirty-worktree metadata for the new harness. AI-on/off p95 respectively: startup66.3/64.6ms, opening39.4/41.8ms, failed-submit recovery48.2/48.9ms. Each sample also passes keyboard tabs where enabled, draft retention, retry and focus assertions. These are local synthetic two-frame observations, not production targets. No valid pre-fix widget startup comparison exists because that artifact failed before launch. Widget numeric timing limits and authenticated workspace timing remain separate work; existing widget byte ceilings continue to apply in CI.
+
+
+## Widget regression ceilings
+
+The required build job now also evaluates the repeated built-widget scenario: p95 startup1500ms, opening100ms and failed-submit recovery150ms in each AI mode. Startup/recovery reuse the standalone absolute ceilings; opening has a separate100ms guard, over twice the observed local41.8ms tail to allow shared-runner variation while detecting material interaction regressions. These are engineering regression limits for this synthetic, reduced-motion, two-frame harness, not a global service promise. There is no valid old-widget relative baseline. Investigate failures rather than automatically increasing limits. The verifier recomputes tails from20–50raw samples/mode, rejects missing/duplicate/failed samples and dirty tracked source, and never trusts a supplied percentile summary. The untracked CI baseline checkout is not candidate application source. Runner evidence is pending for the new gate.
