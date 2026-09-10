@@ -305,7 +305,7 @@
       "number": 79,
       "alias": "#79",
       "title": "Enforce granular human and agent capabilities",
-      "done": false,
+      "done": true,
       "effort": 24.0,
       "dependencies": [
         19,
@@ -313,8 +313,8 @@
       ],
       "baselineStart": "2027-04-09",
       "baselineTarget": "2027-04-21",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualCompletion": "2026-09-10",
+      "progress": 100,
       "milestone": 23,
       "new": false,
       "actualStart": "2026-09-10"

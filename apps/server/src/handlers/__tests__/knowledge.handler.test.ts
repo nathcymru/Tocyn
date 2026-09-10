@@ -64,6 +64,12 @@ describe("Knowledge Handler Integration Tests", () => {
     );
   };
 
+  const rawRequest = async (body: string) => knowledgeHandler.request(
+    "/articles/art-1/qa",
+    { method: "POST", headers: { Authorization: `Bearer ${validToken}`, "Content-Type": "application/json" }, body },
+    { DB: mockDB as any, JWT_SECRET }
+  );
+
   describe("Categories", () => {
     it("should get categories", async () => {
       vi.spyOn(TenantKnowledgeService.prototype, 'getCategories').mockResolvedValue([{ id: "cat-1", name: "General", created_at: "", updated_at: "" }] as any);
@@ -138,6 +144,41 @@ describe("Knowledge Handler Integration Tests", () => {
       expect(res.status).toBe(404);
       const data: any = await res.json();
       expect(data.error).toBe("Article not found");
+    });
+
+    it.each([
+      ['unsupported string', { type: 'question' }],
+      ['unknown string', { type: 'invalid' }],
+      ['missing type', {}],
+      ['null body', null],
+      ['array body', []],
+      ['non-string type', { type: 1 }],
+    ])('rejects %s without mutation', async (_label, body) => {
+      const mark = vi.spyOn(TenantKnowledgeService.prototype, 'markArticleAsQA').mockResolvedValue(undefined);
+      const res = await request('/articles/art-1/qa', 'POST', body);
+      expect(res.status).toBe(400);
+      expect(mark).not.toHaveBeenCalled();
+    });
+
+    it('rejects malformed JSON without mutation', async () => {
+      const mark = vi.spyOn(TenantKnowledgeService.prototype, 'markArticleAsQA').mockResolvedValue(undefined);
+      const res = await rawRequest('{"type":');
+      expect(res.status).toBe(400);
+      expect(mark).not.toHaveBeenCalled();
+    });
+
+    it('accepts null to unmark an article', async () => {
+      const mark = vi.spyOn(TenantKnowledgeService.prototype, 'markArticleAsQA').mockResolvedValue(undefined);
+      const res = await request('/articles/art-1/qa', 'POST', { type: null });
+      expect(res.status).toBe(200);
+      expect(mark).toHaveBeenCalledWith('art-1', null);
+    });
+
+    it.each(['answer', 'sop'])('accepts the tenant QA marker %s', async (type) => {
+      const mark = vi.spyOn(TenantKnowledgeService.prototype, 'markArticleAsQA').mockResolvedValue(undefined);
+      const res = await request('/articles/art-1/qa', 'POST', { type });
+      expect(res.status).toBe(200);
+      expect(mark).toHaveBeenCalledWith('art-1', type);
     });
   });
   it('returns a controlled error when knowledge tag stripping rejects excessive depth', async () => {
