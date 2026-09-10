@@ -1,3 +1,10 @@
+# #79 accepted completion
+
+PR169merged12f4a5bc96eac85043b756898681a74f9848f416 at2026-09-10T15:52:47Z. Valid GitHub signature and exact reviewed tree5ba20f03a6d5977d867b6f86926b7efaf4d4208c verified. AllrequiredCI/security checks passed. OwnerPR-onlyreview bypass used, zeroCopilot. Issue/ProjectClosed/Done/100 and actualcompletion2026-09-10 verified. [Acceptance receipt](https://github.com/nathcymru/Tocyn/issues/79#issuecomment-5621537019). Future UI adoption belongs to48; governed executor80/81remain separate. Earlier pending checks below are historical and resolved by this receipt.
+
+<details>
+<summary>Historical implementation and validation checkpoints</summary>
+
 # #79 implementation checkpoint
 
 Owning issue79 / draft PR169, branch codex/79-resource-permissions, isolated worktree /private/tmp/tocyn-beta2-79. Coordinator owns acceptance; this record complements beta2-delivery.md and does not declare completion.
@@ -31,3 +38,5 @@ Post-correction server ESLint passed. The real two-tenant fixture passed42reques
 After owner confirmed VoiceOver and scripting enabled, real Safari at127.0.0.1:5189/settings/agent-permissions exposed the local synthetic fixture. CUAactivated General settings; actual VoiceOver last-phrase output read via the authorized AppleScript interface announced its name, settings/manage/privileged-write description, ticked state, tickbox role and Workspace main landmark. Restoring the toggle announced unticked state/name/description/role. Saving unchanged restrictions announced exactly: Permissions saved. Agent sessions have been revoked. This supplements the separately evidenced native-keyboard Space/Enter and focus/contrast tests; no claim that AppleScript VoiceOver navigation worked (its command name was rejected). No broader permission grant was persisted.
 
 VoiceOver Utility read-back confirmed Allow VoiceOver to be controlled with AppleScript changed from1to0 after the test. The earlier timeout/unknown-setting blocker is resolved. Coordinator still must perform final complete acceptance mapping and exact-head CI/rules/signature verification before merging79.
+
+</details>

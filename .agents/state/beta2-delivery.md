@@ -1,5 +1,35 @@
 # Beta.2 coordinated delivery
 
+Active goal: full #140 acceptance, including SLA/ownership/routing, durability, accessibility and tenant isolation. This current section supersedes the historical checkpoints below. Approved scope: [master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
+
+## Accepted and active work — 10 September 2026
+
+- #127 interaction contract / PR164, #50 cost contract / PR165, #160 residency foundation / PR166 are accepted; PR168 synchronized their forecast and Wiki evidence.
+- #79 permissions / PR169 accepted at12f4a5bc96eac85043b756898681a74f9848f416 (15:52:47UTC). Reviewed heade952013 and merge tree5ba20f03a6d5977d867b6f86926b7efaf4d4208c match; GitHub signature valid; all required CI/security checks passed; owner PR-only review bypass used, zero Copilot reviews. Issue/Project Closed/Done/100, actual completion10September verified. [Receipt](https://github.com/nathcymru/Tocyn/issues/79#issuecomment-5621537019).
+- #48 remains draft PR167, codex/48-headless-primitives at/private/tmp/tocyn-beta2-48. Shared native controls and two complex dialogs adopted; remaining complex controls, accepted79page migration, full browser/performance/parity acceptance remain. Refresh from current main before further integration.
+- #159 remains draft PR170, codex/159-operational-observability at/private/tmp/tocyn-beta2-159. Privacy/failure envelope repaired; bounded local performance harness and CI checks implemented, clean synthetic receipt recorded. Rebased onto accepted79main. SLI/resource instrumentation, alert/configuration evidence and final validation remain; see scoped observability-159.md.
+
+## Allocation and critical path
+
+Coordinator continues available work. Native workers are stopped at their execution/thread limits; no running worker or separate Work allowance is claimed. Work/Chat delegation remains unavailable. Dedicated Codex subscription route only; no API billing, purchases, resets or overages. Actual task-specific consumption is unknown. Do not repeatedly retry exhausted workers.
+
+Accepted79 unlocks its #129/#136 dependencies. Continue48workspace foundations; preserve full #73 SLA and #137 ownership/routing gate, #162metrics dependency and #128integration. #159/#64/#91 can proceed from accepted50 without reducing beta-critical capacity. Preserve all graph edges and scope.
+
+Recalculated reference beta.2 forecast: **22January2027**; expanded scope **21January2028**, pending this receipt PR's acceptance/publication. Only79completion changed since acceptedPR168inputs; two8-hour Monday–Saturday lanes and3× allowance unchanged. Baselines, effort and dependencies are preserved. Published forecast remains9February2027 until coordinated read-back completes.
+
+## Exact next actions
+
+1. Validate/merge this delivery-state PR and publish/read back affected issue/Project/milestone/Wiki forecasts; preserve historical dates and receipts.
+2. Rebase48onaccepted79, adopt permission-page native primitives without losing new recovery/accessibility behavior, then remaining complex controls and browser/performance acceptance.
+3. Continue159from its scoped handover; do not treat the three-scenario local harness as complete resource/SLO acceptance.
+4. No production/provider operations. Zero routine Copilot reviews; exact-head substantive CI/signing/review-thread checks remain mandatory before authorized review bypass.
+5. Report human status and evidence-based estimate every30minutes. Beta.2 is not ready until full140scope is accepted.
+
+<details>
+<summary>Historical coordination checkpoints — superseded by current state above</summary>
+
+# Beta.2 coordinated delivery
+
 Active goal: complete #140 beta.2 acceptance, including full SLA/ownership/routing, durability, accessibility and tenant isolation. Alignment #126 is accepted; its historical pause is superseded. Approved scope remains in [the master package](../../docs/planning/post-beta-2026-09-10/README.md). One coordinator owns acceptance, integration and planning publication.
 
 ## Accepted work
@@ -43,3 +73,5 @@ PR #166 merged at `7a53308394f2db5093ffdc377fa1792e440a737e`, 14:46:28 UTC. All 
 #79 worker repaired a genuine recheck-to-write race with SQL predicates inside mutations; full server362tests and D1 integration passed on its earlier revision. Coordinator rebased onto accepted main and requested fail-closed handling of missing mutation metadata rather than accommodating test doubles, plus batch atomicity inspection. Dedicated Codex Terra/high remains active. No acceptance yet.
 
 Forecast synchronization is in draft PR #168. Accepted #50 removal recalculates beta.2 to9February2027; publication pending final consistency checks and #160 acceptance. Preserve every baseline. The coordinator corrected the input and generated tables; expanded forecast is27January2028. No scope cut or arbitrary progress percentage is authorized.
+
+</details>
