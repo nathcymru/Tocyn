@@ -1,8 +1,10 @@
 # Operator draft and workspace storage contract
 
-Status: #129 implementation in progress, based on accepted main `9cee350`. This server increment does not complete #129 or enable beta.2. The [operator workspace contract](operator-workspace-interaction-contract.md) remains product authority.
+Status: #129 implementation in progress in PR #173, based on accepted main `32fba86`. Server storage, composer integration, list preferences and Draft indicators are implemented on the issue branch; selected-ticket/panel interactions and retention remain pending. This increment does not complete #129 or enable beta.2. The [operator workspace contract](operator-workspace-interaction-contract.md) remains product authority.
 
 All routes are under `/api/workspace` and inherit current dashboard authentication, session-version checks, MFA, staff role and tenant scope. Tenant and operator come from verified scope, never request fields. Ticket access is rechecked, including agent group membership. Workspace responses are marked `Cache-Control: private, no-store`. Responses containing a draft or saved selection do not grant access to the underlying ticket.
+
+The authentication user response includes the server-verified `tenant_id` needed to partition transient client controllers. Existing browser sessions created before this response correction need a fresh sign-in; automatic refresh of older persisted profile payloads is not implemented by this increment. A client tenant field never authorizes a server request.
 
 | Operation | Contract |
 |---|---|
@@ -22,7 +24,13 @@ Mutation bodies use the existing 64 KiB streaming limit and safe JSON parser. In
 
 Retention duration remains an owner decision. The server has an explicit injected policy/clock seam; no production expiry duration, scheduler or cleanup activation is assumed. Cleanup is bounded and actor-scoped; cross-operator cleanup requires explicit system scope. No remote migration, database seeding or provider activation is authorized by this implementation.
 
-Remaining full-issue acceptance: dashboard autosave/restore across navigation and reload, visible unsaved/conflict states, Drafts indicator/query, attachment and mode restoration, authority-change clearing, confirmed-send conditional cleanup, approved retention activation and complete end-to-end evidence. Existing UI and server tests do not substitute for those integrations.
+PR #173 integrates the composer and a body-free Draft indicator, with server-backed list search/filter/page preferences. Selected-ticket, panel and future view/sort fields are preserved by the preference contract; preserving fields is not evidence that every corresponding workspace interaction is implemented. Full Drafts-view predicates and layout remain #130 ownership.
+
+The [local browser receipt](../evidence/operator-drafts-local-2026-09-11.tap) covers body/internal-mode/attachment restoration after reload and ticket navigation, visible save failure, blocked navigation and retry, plus wrong-tenant absence through the application routes. The harness runs the application in Node with real locally issued MFA sessions and disposable Miniflare D1/R2 resources; it is not a workerd-hosted application or deployed-runtime test. It initializes the guarded local-beta policy with exactly two tenants, four invitations and bounded ticket/mutation/upload limits. Save failures are explicitly injected at the loopback forwarding boundary. The receipt preserves its actual dirty-source revision and built artifact hash; required CI reruns this harness against the submitted revision.
+
+The local-beta profile admits only the specified workspace route/method combinations. Successful draft/state CAS writes and versioned deletes use atomic admission and mutation-budget statements. Same-content saves advance revision and therefore charge; stale CAS attempts do not write or charge. Stopped writes remain denied. This does not activate an external environment or remove other beta restrictions.
+
+After an acknowledged article creation, a failed draft deletion offers a cleanup-only retry and prevents a second send from that mounted composer. It does not provide durable article idempotency across reload or resolve an uncertain article response; collision/retry work remains required under #131. Conditional cleanup cannot erase a newer draft. Remaining full-issue acceptance includes complete preference interactions, final candidate browser/CI evidence and the explicit retention decision/activation. No retention default is assumed.
 
 
 ## Drafts-view query input

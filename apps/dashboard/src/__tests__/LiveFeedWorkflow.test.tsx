@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Layout } from '../components/layout/Layout';
 import { TicketListPage } from '../pages/TicketListPage';
@@ -20,6 +20,10 @@ beforeEach(()=>{
   useAuthStore.getState().setAuth('synthetic-live-session',{id:'operator',full_name:'Operator',email:'operator@example.invalid',role:'admin',mfa_enabled:true});
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
+function renderFeed() {
+  const router = createMemoryRouter([{ path: '/', element: <Layout/>, children: [{ path: 'tickets', element: <TicketListPage/> }] }], { initialEntries: ['/tickets'] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
+}
 
 it.each(['ticket.created','ticket.updated','article.created'])('reloads authoritative feed data for %s without trusting event contents',async type=>{
   let arrived=false;let reads=0;
@@ -28,7 +32,7 @@ it.each(['ticket.created','ticket.updated','article.created'])('reloads authorit
     if(url.startsWith('/api/tickets?')){reads++;return json({data:arrived?[ticket]:[],meta:{page:1,limit:20,total:arrived?1:0,total_pages:1}});}
     return json(url==='/api/settings'?{}:[]);
   }));
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets']}><Routes><Route element={<Layout/>}><Route path="/tickets" element={<TicketListPage/>}/></Route></Routes></MemoryRouter></QueryClientProvider>);
+  renderFeed();
   await screen.findByText('No tickets found.');const previous=reads;arrived=true;
   act(()=>Socket.latest.emit({type,payload:type==='article.created'?{ticket_id:ticket.id,article_id:'new-message'}:{id:ticket.id,subject:'Untrusted event display hint'}}));
   await screen.findByRole('link',{name:ticket.subject});
@@ -49,7 +53,7 @@ it('replaces a pending old feed read when a committed arrival is announced',asyn
     }
     return json(url==='/api/settings'?{}:[]);
   }));
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets']}><Routes><Route element={<Layout/>}><Route path="/tickets" element={<TicketListPage/>}/></Route></Routes></MemoryRouter></QueryClientProvider>);
+  renderFeed();
   await screen.findByText('No tickets found.');
   let pending:Promise<void>;act(()=>{pending=client.invalidateQueries({queryKey:['tickets']});});
   await waitFor(()=>expect(reads).toBe(2));arrived=true;

@@ -4,10 +4,9 @@ import { dashboardApi, ApiError } from '../api/client';
 import { CreditCard, Database, HardDrive, Cpu, Activity, AlertCircle, ExternalLink, RefreshCw, Zap } from 'lucide-react';
 import { UsageStats } from '@luminatick/shared';
 import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: any[]) {
-  return twMerge(clsx(inputs));
+  return clsx(inputs);
 }
 
 

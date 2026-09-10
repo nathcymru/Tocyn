@@ -8,7 +8,7 @@ import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
 import { useRealtime } from '../hooks/useRealtime';
 import { useTicketFields } from '../hooks/useTicketFields';
-import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue } from '../hooks/useOperatorDraft';
+import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue, type OperatorDraftVersion } from '../hooks/useOperatorDraft';
 import { useAuthStore } from '../store/authStore';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { ApiError, dashboardApi } from '../api/client';
@@ -62,6 +62,7 @@ function TicketDetail({ id }: { id: string }) {
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const [pendingAttachments, setPendingAttachments] = React.useState<readonly PendingAttachment[]>([]);
+  const [sentDraftVersion, setSentDraftVersion] = useState<OperatorDraftVersion | null>(null);
   const pendingAttachmentIds = useRef(0);
   const activeUploads = useRef(new Set<string>());
   useEffect(() => () => { activeUploads.current.clear(); }, [sessionGeneration]);
@@ -276,6 +277,7 @@ function TicketDetail({ id }: { id: string }) {
     setPendingAttachments(current => current.map(attachment => ({ ...attachment, status: 'error' })));
     const result = await draft.discard();
     if (result === 'cleared') {
+      setSentDraftVersion(null);
       setPendingAttachments(current => current.filter(attachment => attachment.sessionGeneration !== sessionGeneration));
       setSuggestion(null);
       setNotice('Draft discarded.');
@@ -289,9 +291,21 @@ function TicketDetail({ id }: { id: string }) {
   const draftNavigationPending = isSubmitting || visiblePendingAttachments.length > 0 ||
     draft.status === 'unsaved' || draft.status === 'saving' || draft.status === 'error' || draft.status === 'conflict';
 
+  const retrySentDraftCleanup = async () => {
+    if (!sentDraftVersion || submission.current) return;
+    submission.current = true;
+    setIsSubmitting(true);
+    try {
+      if (await draft.cleanupAfterConfirmedSend(sentDraftVersion) === 'cleared') {
+        setSentDraftVersion(null);
+        setNotice('Sent draft cleared.');
+      }
+    } finally { submission.current = false; setIsSubmitting(false); }
+  };
+
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reply.trim() || submission.current) return;
+    if (!reply.trim() || submission.current || sentDraftVersion) return;
     if (visiblePendingAttachments.some(attachment => attachment.status === 'uploading')) return;
     const failedAttachments = visiblePendingAttachments.filter(attachment => attachment.status === 'error');
     if (failedAttachments.length) {
@@ -317,7 +331,9 @@ function TicketDetail({ id }: { id: string }) {
         attachments: sendingDraft.attachments
       });
       if (!article?.id) throw new Error('The reply was not confirmed.');
+      setSentDraftVersion(sendingDraft.version);
       const cleanup = await draft.cleanupAfterConfirmedSend(sendingDraft.version);
+      if (cleanup === 'cleared') setSentDraftVersion(null);
       setNotice(cleanup === 'cleared'
         ? isInternal ? 'Internal note added.' : 'Public reply added to the conversation.'
         : `${isInternal ? 'Internal note added.' : 'Public reply added to the conversation.'} Draft cleanup could not be confirmed; the draft is retained.`);
@@ -569,6 +585,7 @@ function TicketDetail({ id }: { id: string }) {
               </span>
             </div>}
             <form onSubmit={handleSubmitReply} className="space-y-4">
+              {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()} className="underline">Retry sent-draft cleanup</TocynButton></p>}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <TocynButton
@@ -737,7 +754,7 @@ function TicketDetail({ id }: { id: string }) {
                   </TocynButton>
                   <TocynButton
                     type="submit"
-                    aria-disabled={!reply.trim() || isSubmitting || visiblePendingAttachments.length > 0}
+                    aria-disabled={!reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion)}
                     className={clsx(
                       "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
                       isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"

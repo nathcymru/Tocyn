@@ -1009,6 +1009,6 @@ export function createRepositories(scope: VerifiedTenantScope, db: D1Database, b
     ticketFields: new SqlTicketFieldRepository(scope, db),
     groups: new SqlGroupRepository(scope, db),
     ticketFilters: new SqlFilterRepository(scope, db),
-    operatorWorkspace: new OperatorWorkspaceRepository(scope, db)
+    operatorWorkspace: new OperatorWorkspaceRepository(scope, db, betaAdmission)
   };
 }

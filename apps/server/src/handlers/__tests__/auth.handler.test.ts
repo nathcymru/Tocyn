@@ -50,6 +50,7 @@ describe("Auth Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.mfa_required).toBe(false);
+      expect(body.user.tenant_id).toBe(mockUser.tenant_id);
       expect(body.token).toBeDefined();
       expect(body.user.email).toBe(mockUser.email);
       expect(body.user.mfa_enabled).toBe(false);
@@ -83,6 +84,7 @@ describe("Auth Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.mfa_required).toBe(true);
+      expect(body.user.tenant_id).toBe(mockUser.tenant_id);
       expect(body.token).toBeDefined();
       expect(body.user.mfa_enabled).toBe(true);
 
@@ -181,6 +183,7 @@ describe("Auth Handler Integration Tests", () => {
       expect(body.token).toBeDefined();
 
       // Verify token has mfa_verified = true
+      expect(body.user.tenant_id).toBe(mockUser.tenant_id);
       const secretKey = new TextEncoder().encode(JWT_SECRET);
       const { payload } = await jose.jwtVerify(body.token, secretKey);
       expect(payload.mfa_verified).toBe(true);
@@ -455,6 +458,7 @@ describe("Auth Handler Integration Tests", () => {
       const body = await res.json();
       expect(body.user.email).toBe(mockUser.email);
       expect(body.user.mfa_enabled).toBe(true);
+      expect(body.user.tenant_id).toBe(mockUser.tenant_id);
     });
 
     it("should return the current user profile with mfa_enabled status false", async () => {
@@ -484,6 +488,7 @@ describe("Auth Handler Integration Tests", () => {
       const body = await res.json();
       expect(body.user.email).toBe(mockUser.email);
       expect(body.user.mfa_enabled).toBe(false);
+      expect(body.user.tenant_id).toBe(mockUser.tenant_id);
     });
   });
 });

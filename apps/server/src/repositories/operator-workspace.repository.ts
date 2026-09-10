@@ -1,5 +1,7 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
+import { BetaAdmissionError } from '../types/local-beta';
+import { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import type {
   OperatorDraft, OperatorDraftAttachment, OperatorDraftMode, OperatorWorkspaceFilters,
   OperatorWorkspaceSort, OperatorWorkspaceState, OperatorWorkspaceView,
@@ -39,10 +41,28 @@ export type WorkspaceStateSaveInput = Readonly<{
   expectedRevision: number; view: OperatorWorkspaceView; sort: OperatorWorkspaceSort;
   filters: OperatorWorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: 'conversation' | 'details';
 }>;
+type MutationCondition = Readonly<{ sql: string; values: unknown[] }>;
 
 /** D1 persistence only; caller supplies trusted actor and ticket authorization. */
 export class OperatorWorkspaceRepository {
-  constructor(private readonly scope: VerifiedTenantScope, private readonly db: D1Database) {}
+  constructor(
+    private readonly scope: VerifiedTenantScope,
+    private readonly db: D1Database,
+    private readonly betaAdmission?: LocalBetaAdmissionRepository,
+  ) {}
+
+  /** A local-beta assertion and counter share the same D1 batch as the CAS mutation. */
+  private async runWorkspaceMutation<T>(statement: D1PreparedStatement, condition: MutationCondition): Promise<T | null> {
+    if (!this.betaAdmission) return statement.first<T>();
+    try {
+      const results = await this.db.batch([...this.betaAdmission.conditionalConversationStatements(condition), statement]);
+      return (results[results.length - 1]?.results?.[0] as T | undefined) ?? null;
+    } catch {
+      // Keep the externally visible local-beta failure classification, never turn an admission fault into a successful save.
+      await this.betaAdmission.authorize('conversation');
+      throw new BetaAdmissionError('beta_admission_unavailable', 503);
+    }
+  }
 
   async getDraft(ticketId: string): Promise<OperatorDraft | null> {
     const row = await this.db.prepare(`SELECT ${draftColumns} FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=?`)
@@ -69,7 +89,8 @@ export class OperatorWorkspaceRepository {
   /** A returned row is the only completed save signal. Generation prevents delete/recreate ABA. */
   async saveDraft(input: DraftSaveInput): Promise<OperatorDraft | null> {
     const generation = crypto.randomUUID();
-    const row = await this.db.prepare(`INSERT INTO operator_drafts
+    const attachments = JSON.stringify(input.attachments);
+    const statement = this.db.prepare(`INSERT INTO operator_drafts
       (tenant_id,user_id,ticket_id,generation,revision,mode,body,attachments,base_conversation_revision,expires_at,created_at,updated_at)
       SELECT ?,?,?,?,1,?,?,?,COALESCE((SELECT MAX(sequence) FROM conversation_events
         WHERE tenant_id=? AND ticket_id=?),0),?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
@@ -81,19 +102,36 @@ export class OperatorWorkspaceRepository {
       WHERE operator_drafts.revision=? AND operator_drafts.generation IS ?
       RETURNING ${draftColumns}`)
       .bind(
-        this.scope.tenantId, this.scope.actorId, input.ticketId, generation, input.mode, input.body, JSON.stringify(input.attachments),
+        this.scope.tenantId, this.scope.actorId, input.ticketId, generation, input.mode, input.body, attachments,
         this.scope.tenantId, input.ticketId, input.expiresAt, this.scope.tenantId, input.ticketId,
         input.expectedRevision, input.expectedGeneration, this.scope.tenantId, this.scope.actorId, input.ticketId,
         input.expectedRevision, input.expectedGeneration,
-      ).first<DraftRow>();
+      );
+    const condition: MutationCondition = {
+      sql: `EXISTS (SELECT 1 FROM tickets WHERE tenant_id=? AND id=?) AND (
+        (?=0 AND ? IS NULL AND NOT EXISTS (SELECT 1 FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=?))
+        OR EXISTS (SELECT 1 FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=?
+          AND revision=? AND generation IS ?)
+      )`,
+      values: [
+        this.scope.tenantId, input.ticketId,
+        input.expectedRevision, input.expectedGeneration, this.scope.tenantId, this.scope.actorId, input.ticketId,
+        this.scope.tenantId, this.scope.actorId, input.ticketId, input.expectedRevision, input.expectedGeneration,
+      ],
+    };
+    const row = await this.runWorkspaceMutation<DraftRow>(statement, condition);
     return row ? draftFromRow(row) : null;
   }
 
   /** Deletes only the draft instance and revision named by a confirmed canonical sender or explicit discard. */
   async deleteDraftIfVersion(ticketId: string, generation: string, revision: number): Promise<boolean> {
-    const row = await this.db.prepare(`DELETE FROM operator_drafts
+    const statement = this.db.prepare(`DELETE FROM operator_drafts
       WHERE tenant_id=? AND user_id=? AND ticket_id=? AND generation=? AND revision=? RETURNING revision`)
-      .bind(this.scope.tenantId, this.scope.actorId, ticketId, generation, revision).first<{ revision: number }>();
+      .bind(this.scope.tenantId, this.scope.actorId, ticketId, generation, revision);
+    const row = await this.runWorkspaceMutation<{ revision: number }>(statement, {
+      sql: 'EXISTS (SELECT 1 FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=? AND generation=? AND revision=?)',
+      values: [this.scope.tenantId, this.scope.actorId, ticketId, generation, revision],
+    });
     return row !== null;
   }
 
@@ -124,7 +162,8 @@ export class OperatorWorkspaceRepository {
   }
 
   async saveWorkspaceState(input: WorkspaceStateSaveInput): Promise<OperatorWorkspaceState | null> {
-    const row = await this.db.prepare(`INSERT INTO operator_workspace_state
+    const serializedFilters = JSON.stringify(input.filters);
+    const statement = this.db.prepare(`INSERT INTO operator_workspace_state
       (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,created_at,updated_at)
       SELECT ?,?,1,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
       WHERE ?=0 OR EXISTS (SELECT 1 FROM operator_workspace_state WHERE tenant_id=? AND user_id=?)
@@ -134,9 +173,19 @@ export class OperatorWorkspaceRepository {
       WHERE operator_workspace_state.revision=?
       RETURNING ${stateColumns}`)
       .bind(
-        this.scope.tenantId, this.scope.actorId, input.view, input.sort, JSON.stringify(input.filters), input.listQuery, input.listAnchor,
+        this.scope.tenantId, this.scope.actorId, input.view, input.sort, serializedFilters, input.listQuery, input.listAnchor,
         input.selectedTicketId, input.panel, input.expectedRevision, this.scope.tenantId, this.scope.actorId, input.expectedRevision,
-      ).first<StateRow>();
+      );
+    const condition: MutationCondition = {
+      sql: `(?=0 AND NOT EXISTS (SELECT 1 FROM operator_workspace_state WHERE tenant_id=? AND user_id=?))
+        OR EXISTS (SELECT 1 FROM operator_workspace_state WHERE tenant_id=? AND user_id=? AND revision=?
+        )`,
+      values: [
+        input.expectedRevision, this.scope.tenantId, this.scope.actorId,
+        this.scope.tenantId, this.scope.actorId, input.expectedRevision,
+      ],
+    };
+    const row = await this.runWorkspaceMutation<StateRow>(statement, condition);
     return row ? stateFromRow(row) : null;
   }
 

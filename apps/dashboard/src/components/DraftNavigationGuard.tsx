@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 
 /** Keep SPA navigation on the current ticket until its draft has durable acknowledgement. */
-export function DraftNavigationGuard({ pending, flush }: { pending: boolean; flush: () => Promise<boolean> }) {
+export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your draft is not saved. Stay on this ticket, retry saving, then navigate again.' }: {
+  pending: boolean; flush: () => Promise<boolean>; failureMessage?: string;
+}) {
   const blocker = useBlocker(pending);
   const flushRef = useRef(flush);
   flushRef.current = flush;
@@ -26,5 +28,5 @@ export function DraftNavigationGuard({ pending, flush }: { pending: boolean; flu
     });
     return () => { current = false; };
   }, [blocker]);
-  return failed ? <p role="alert">Your draft is not saved. Stay on this ticket, retry saving, then navigate again.</p> : null;
+  return failed ? <p role="alert">{failureMessage}</p> : null;
 }

@@ -18,10 +18,11 @@ function deferred<T>() {let resolve!:(value:T)=>void;const promise=new Promise<T
 let client:QueryClient;
 let ticket:ReturnType<typeof initialTicket>;
 function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'assigned-agent' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
-function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = []) {
+function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
     if(path.startsWith('/api/workspace/drafts')) {
+      const override = workspace?.(options); if (override) return override;
       if(options.method === 'GET' || !options.method) return new Response(null,{status:204});
       if(options.method === 'DELETE') return new Response(null,{status:204});
       const body=JSON.parse(String(options.body));
@@ -379,6 +380,25 @@ it('preserves both attachments when two uploads complete in the same turn', asyn
   expect(screen.queryByText('Uploading…')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Remove one.txt' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Remove two.txt' })).toBeInTheDocument();
+});
+
+it('retries acknowledged-send cleanup without sending the article again', async () => {
+  let posts=0; let deletes=0;
+  transport((_path, options) => {
+    if(options.method==='POST') { posts++; return json({id:'confirmed-article'},201); }
+    return json(ticket);
+  }, [], options => options.method==='DELETE' && ++deletes===1 ? json({error:'Cleanup unavailable'},503) : undefined);
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Only send once'}});
+  fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
+  const retry=await screen.findByRole('button',{name:'Retry sent-draft cleanup'});
+  await waitFor(()=>expect(retry).toHaveAttribute('aria-disabled','false'));
+  fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
+  expect(posts).toBe(1);
+  fireEvent.click(retry);
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'Retry sent-draft cleanup'})).not.toBeInTheDocument());
+  expect(posts).toBe(1); expect(deletes).toBe(2);
+  expect(screen.getByRole('textbox',{name:'Reply message'})).toHaveValue('');
 });
 
 

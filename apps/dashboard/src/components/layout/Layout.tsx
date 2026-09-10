@@ -28,10 +28,9 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useRealtime } from '../../hooks/useRealtime';
 import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: any[]) {
-  return twMerge(clsx(inputs));
+  return clsx(inputs);
 }
 
 interface Toast {

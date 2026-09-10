@@ -75,6 +75,7 @@ auth.post("/login", rateLimiter(5, 60000), loginAuthResolverMiddleware, async (c
       token: preMfaToken,
       user: {
         id: authUser.userId,
+        tenant_id: authUser.tenantId,
         email: email.toLowerCase().trim(),
         role: authUser.role,
         mfa_enabled: !!authUser.mfaEnabled,
@@ -97,6 +98,7 @@ auth.post("/login", rateLimiter(5, 60000), loginAuthResolverMiddleware, async (c
     token: fullToken,
     user: {
       id: authUser.userId,
+      tenant_id: authUser.tenantId,
       email: email.toLowerCase().trim(),
       role: authUser.role,
       mfa_enabled: !!authUser.mfaEnabled,
@@ -179,6 +181,7 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
     token: fullToken,
     user: {
       id: user.id,
+      tenant_id: d.scope.tenantId,
       email: user.email,
       full_name: user.full_name,
       role: user.role,
@@ -279,6 +282,7 @@ auth.post("/mfa/confirm", mfaEnrollmentMiddleware, tenantMiddleware, async (c) =
     token: fullToken,
     user: {
       id: user.id,
+      tenant_id: d.scope.tenantId,
       email: user.email,
       full_name: user.full_name,
       role: user.role,
@@ -313,6 +317,7 @@ auth.post("/mfa/disable", authMiddleware, tenantMiddleware, async (c) => {
       full_name: user.full_name,
       role: user.role,
       mfa_enabled: false,
+      tenant_id: d.scope.tenantId,
     },
   });
 });
@@ -342,6 +347,7 @@ auth.get("/me", authMiddleware, tenantMiddleware, async (c) => {
       full_name: user.full_name,
       role: user.role,
       mfa_enabled: !!user.mfa_enabled,
+      tenant_id: d.scope.tenantId,
     },
   });
 });

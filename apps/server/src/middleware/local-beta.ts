@@ -24,12 +24,15 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
   if (method === 'GET' && path === '/api/v1/customer/config') return 'configuration';
   if (method === 'GET' && /^\/api(?:\/v1(?:\/customer)?)?\/tickets(?:\/[^/]+(?:\/history)?)?$/.test(path)) return 'conversation-read';
   if (method === 'GET' && /^\/api\/(stats|ticket-fields|users\/agents|groups|settings(?:\/filters(?:\/[^/]+)?)?\/?|permissions\/?|realtime)$/.test(path)) return 'conversation-read';
+  if (method === 'GET' && (path === '/api/workspace/state' || path === '/api/workspace/drafts' || /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) return 'conversation-read';
   if (method === 'GET' && /^\/api(?:\/v1\/customer)?\/attachments\/[^/]+\/download$/.test(path)) return 'attachment';
   if (method === 'POST' && /^\/api(?:\/v1\/customer)?\/attachments\/upload$/.test(path)) return 'upload';
   if ((method === 'POST' && /^\/api(?:\/v1(?:\/customer)?)?\/tickets$/.test(path)) ||
     (method === 'POST' && /^\/api(?:\/v1)?\/tickets\/[^/]+\/articles$/.test(path)) ||
     (method === 'POST' && /^\/api\/v1\/customer\/tickets\/[^/]+\/messages$/.test(path)) ||
-    (method === 'PATCH' && /^\/api(?:\/v1)?\/tickets\/[^/]+$/.test(path))) return 'conversation-write';
+    (method === 'PATCH' && /^\/api(?:\/v1)?\/tickets\/[^/]+$/.test(path)) ||
+    (method === 'PUT' && (path === '/api/workspace/state' || /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) ||
+    (method === 'DELETE' && /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) return 'conversation-write';
   return 'disabled';
 }
 
