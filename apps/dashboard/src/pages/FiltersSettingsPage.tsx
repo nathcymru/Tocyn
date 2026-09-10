@@ -1,3 +1,4 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
@@ -26,6 +27,13 @@ export function FiltersSettingsPage() {
   const deleteFilter = useDeleteFilter();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const savingGuard = React.useRef(false);
+  const opener = React.useRef<HTMLElement | null>(null);
+  const nameInput = React.useRef<HTMLInputElement>(null);
+  const titleId = React.useId();
+  const nameId = React.useId();
   const [editingFilter, setEditingFilter] = useState<TicketFilter | null>(null);
 
   const [formData, setFormData] = useState<{ name: string; conditions: FilterCondition[] }>({
@@ -33,7 +41,9 @@ export function FiltersSettingsPage() {
     conditions: [],
   });
 
-  const handleOpenModal = (filter?: TicketFilter) => {
+  const handleOpenModal = (filter?: TicketFilter, trigger?: HTMLElement) => {
+    opener.current = trigger ?? null;
+    setSaveError('');
     if (filter) {
       setEditingFilter(filter);
       setFormData({
@@ -47,14 +57,20 @@ export function FiltersSettingsPage() {
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
+  const resetModal = () => {
     setIsModalOpen(false);
     setEditingFilter(null);
     setFormData({ name: '', conditions: [] });
   };
 
+  const handleCloseModal = () => { if (!savingGuard.current) resetModal(); };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingGuard.current) return;
+    savingGuard.current = true;
+    setSaving(true);
+    setSaveError('');
     try {
       if (editingFilter) {
         await updateFilter.mutateAsync({
@@ -68,9 +84,12 @@ export function FiltersSettingsPage() {
           conditions: formData.conditions,
         });
       }
-      handleCloseModal();
-    } catch (err) {
-      console.error('Failed to save filter:', err);
+      resetModal();
+    } catch {
+      setSaveError('Filter could not be saved. Your changes have been kept; try again.');
+    } finally {
+      savingGuard.current = false;
+      setSaving(false);
     }
   };
 
@@ -116,7 +135,7 @@ export function FiltersSettingsPage() {
           <p className="text-slate-500 text-sm">Create and manage ticket filters for your team.</p>
         </div>
         <TocynButton
-          onClick={() => handleOpenModal()}
+          onClick={event => handleOpenModal(undefined, event.currentTarget)}
           className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors text-sm"
         >
           <Plus className="w-4 h-4" />
@@ -156,7 +175,7 @@ export function FiltersSettingsPage() {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <TocynButton
-                        onClick={() => handleOpenModal(filter)}
+                        onClick={event => handleOpenModal(filter, event.currentTarget)}
                         className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
                         title="Edit Filter"
                       >
@@ -180,21 +199,23 @@ export function FiltersSettingsPage() {
         </table>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <TocynDialog open={isModalOpen} busy={saving} onOpenChange={open => { if (!open) handleCloseModal(); }}
+        labelledBy={titleId} initialFocusEl={() => nameInput.current} finalFocusEl={() => opener.current}>
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">
+              <h2 id={titleId} className="text-xl font-bold text-slate-900">
                 {editingFilter ? 'Edit Filter' : 'Create Filter'}
               </h2>
-              <TocynButton onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
+              <TocynButton type="button" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </TocynButton>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} aria-labelledby={titleId} className="p-6">
+              {saveError && <p role="alert" className="mb-4 text-red-700">{saveError}</p>}
+              <fieldset disabled={saving} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Filter Name</label>
-                <TocynInput
+                <label htmlFor={nameId} className="block text-sm font-medium text-slate-700 mb-1">Filter Name</label>
+                <TocynInput id={nameId} ref={nameInput}
                   type="text"
                   required
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm"
@@ -221,14 +242,14 @@ export function FiltersSettingsPage() {
                     <div key={idx} className="flex gap-3 items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
                       <TocynSelect
                         className="flex-1 px-3 py-1.5 border border-slate-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        value={cond.field}
+                        aria-label={`Condition ${idx + 1} field`} value={cond.field}
                         onChange={e => changeCondition(idx, 'field', e.target.value)}
                       >
                         {FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                       </TocynSelect>
                       <TocynSelect
                         className="w-40 px-3 py-1.5 border border-slate-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        value={cond.operator}
+                        aria-label={`Condition ${idx + 1} operator`} value={cond.operator}
                         onChange={e => changeCondition(idx, 'operator', e.target.value)}
                       >
                         {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -237,12 +258,12 @@ export function FiltersSettingsPage() {
                         type="text"
                         className="flex-[2] px-3 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         placeholder="Value..."
-                        value={cond.value}
+                        aria-label={`Condition ${idx + 1} value`} value={cond.value}
                         onChange={e => changeCondition(idx, 'value', e.target.value)}
                       />
                       <TocynButton
                         type="button"
-                        onClick={() => removeCondition(idx)}
+                        aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}
                         className="text-slate-400 hover:text-red-500 p-1"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -268,16 +289,16 @@ export function FiltersSettingsPage() {
                 </TocynButton>
                 <TocynButton
                   type="submit"
-                  disabled={createFilter.isPending || updateFilter.isPending}
+                  disabled={saving || createFilter.isPending || updateFilter.isPending}
                   className="px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50"
                 >
                   {editingFilter ? 'Save Changes' : 'Create Filter'}
                 </TocynButton>
               </div>
+              </fieldset>
             </form>
           </div>
-        </div>
-      )}
+      </TocynDialog>
     </div>
   );
 }
