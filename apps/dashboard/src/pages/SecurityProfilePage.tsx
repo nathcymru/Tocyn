@@ -137,7 +137,7 @@ export function SecurityProfilePage() {
           <div className="mt-5">
             {user.mfa_enabled ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-green-600 font-medium">
+                <div className="flex items-center gap-2 text-green-700 font-medium">
                   <Shield className="h-5 w-5" />
                   2FA is currently enabled
                 </div>

@@ -89,7 +89,7 @@ export function SettingsLayout() {
 
           {filteredChannelsNav.length > 0 && (
             <>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-8 mb-3 px-2">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-3 px-2">
                 Channels
               </h3>
               <nav className="space-y-1">

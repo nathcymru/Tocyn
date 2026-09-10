@@ -286,7 +286,7 @@ export function FiltersSettingsPage() {
                   ))}
 
                   {formData.conditions.length === 0 && (
-                    <p className="text-sm text-slate-400 italic bg-slate-50 p-4 rounded-lg border border-dashed border-slate-300 text-center">
+                    <p className="text-sm text-slate-500 italic bg-slate-50 p-4 rounded-lg border border-dashed border-slate-300 text-center">
                       No conditions. This filter will match all tickets.
                     </p>
                   )}

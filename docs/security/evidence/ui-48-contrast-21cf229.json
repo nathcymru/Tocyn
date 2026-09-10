@@ -1,0 +1,39 @@
+{
+  "revision": "21cf229d002677d7a61f0ad8a59a1e67200bdf56",
+  "recordedAt": "2026-09-10T19:23:37.882Z",
+  "node": "v22.19.0",
+  "browser": "151.0.7922.34",
+  "sourceHashes": {
+    "apps/dashboard/src/pages/FiltersSettingsPage.tsx": "66286dbfea6d297e3eb312667ad01e7cebbbb4a53ea7bee98e1bc6ecbf46fb0d",
+    "apps/dashboard/src/pages/SecurityProfilePage.tsx": "83ec4f47db965f65d61009a11fa04948036c7529e4aaf475d3bf8aacdd389af3",
+    "apps/dashboard/src/components/layout/SettingsLayout.tsx": "a380677ffd0f74c4e24ac0ffe9f8523385f4a4417c16495bc779948a6df3268c"
+  },
+  "rows": [
+    {
+      "path": "/settings/filters",
+      "open": "Create Filter",
+      "text": "No conditions. This filter will match all tickets.",
+      "foreground": "rgb(100, 116, 139)",
+      "background": "rgb(248, 250, 252)",
+      "ratio": 4.548363604249587,
+      "minimum": 4.5
+    },
+    {
+      "path": "/settings/ticket-fields",
+      "text": "Channels",
+      "foreground": "rgb(100, 116, 139)",
+      "background": "rgb(255, 255, 255)",
+      "ratio": 4.758842787868666,
+      "minimum": 4.5
+    },
+    {
+      "path": "/profile/security",
+      "text": "2FA is currently enabled",
+      "foreground": "rgb(21, 128, 61)",
+      "background": "rgb(255, 255, 255)",
+      "ratio": 5.0155974781114745,
+      "minimum": 4.5
+    }
+  ],
+  "limitation": "Three opaque default text pairs in an existing local synthetic operator fixture. Not a whole-page, icon, focus-ring, hover, placeholder or theme contrast audit."
+}
