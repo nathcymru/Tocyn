@@ -2,11 +2,17 @@
 
 ## Current next actions (supersedes earlier queues below)
 
-Draft PR170 remains partial. Exact clean07c2e0333fb1cf8b21998da44a9c207a0d25e0a7 receipt is retained under docs/security/evidence/:60expected measured outcomes,0unexpected/transport failures,65total requests, disposed local fixture. Authenticated-metadata p95 in this run is132.476ms; this is a local concurrent observation, not a deployed Worker threshold or a regression claim against differently loaded runs. CI on07c2e03 passed all required checks.
+Owning issue #159 / draft PR #170, branch `codex/159-operational-observability`. Coordinator owns integration and acceptance. Latest implementation `277cb3a` includes fixed HTTP/resource envelopes, local collector/configuration, cost bounds, credential decisions and canonical mutation summaries. All later sections are chronological evidence, not competing ready queues. No worker remains active on #159 at this checkpoint.
 
-Sampler failure handling now drains started requests and stops new scheduling before returning a clock error; five sampler tests and its TypeScript check pass. Initial SLI denominators/numerators/windows, collector status and alert/runbook conditions are specified in the operational-observability contract. Unratified thresholds remain explicit and no collector or production configuration is inferred from the document.
+Current verified evidence: root512server tests/58files; real two-tenant credential3tests; prior local D1/R2/DO/Workflow demonstrations with their stated limits; local load receipt65requests/60measured outcomes and source/tool/config metadata. All277cb3a required CI/security checks pass. Documentation synchronization follows and requires its own exact-head checks. Production telemetry stays disabled under #42.
 
-Next: active resource instrumentation and environment Logs/Tracing configuration, cost event-volume accounting, then exact-revision full validation and broader failure/tenant evidence. Canonical-write/D1-operation/R2/DO/Workflow/AI/pipeline measurements remain required. No acceptance closure or100percent claim.
+Next required work, in order:
+
+1. Audit active resource reachability against the contract table: pre-tenant D1/legacy R2/legacy and background DO calls, explicit result failures, complete active-path denominators. Existing invocation timing must not be called transaction, workflow completion or billing accounting.
+2. Cover material gaps with bounded local/synthetic failure and tenant tests. Real realtime smoke cannot currently use8787 because the owner fixture occupies it; do not stop that fixture or claim placeholder DO evidence as WebSocket runtime proof.
+3. Reconcile the acceptance map, privacy/event-cost assumptions and exact-revision checks before issue completion. This foundation is eligible for a partial integration after exact-head validation; #159 must remain open. Future Queue/journal/outbox work is an extension contract owned by #51/#91/#87/#88, not implemented by this PR.
+
+No acceptance closure,100percent, production enablement or forecast change. Shared Codex capacity most recently5%remaining, reset15September02:24BST; preserve capacity for integration. No Copilot requests or purchases.
 
 ## Historical checkpoints
 
