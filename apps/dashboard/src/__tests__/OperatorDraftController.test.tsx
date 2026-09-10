@@ -317,3 +317,33 @@ it('does not acknowledge a second distinct cleanup while a delete is in flight',
   expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
   await act(async () => { deletion.resolve(new Response(null, { status: 204 })); expect(await discarded).toBe('cleared'); });
 });
+
+
+it('flushes a newer edit after an existing PUT before allowing navigation', async () => {
+  const first = deferred<Response>();
+  const second = deferred<Response>();
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(stored('before', 3)))
+    .mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise));
+  await mountWithTimers();
+  act(() => controller.update(edited('first')));
+  await advanceAutosave();
+  act(() => controller.update(edited('latest')));
+  let result: boolean | undefined;
+  let pending!: Promise<void>;
+  act(() => { pending = controller.flushBeforeNavigation().then(value => { result = value; }); });
+  await act(async () => { first.resolve(json(stored('first', 4))); });
+  expect(result).toBeUndefined();
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[2][1]?.body))).toMatchObject({ expectedRevision: 4, body: 'latest' });
+  await act(async () => { second.resolve(json(stored('latest', 5))); await pending; });
+  expect(result).toBe(true);
+  expect(current()).toMatchObject({ status: 'saved', body: 'latest' });
+});
+
+it('does not permit navigation after an unacknowledged save', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(stored('before', 3)))
+    .mockResolvedValueOnce(json({ error: 'Unavailable' }, 503)));
+  await mountWithTimers();
+  act(() => controller.update(edited('keep me')));
+  await act(async () => { expect(await controller.flushBeforeNavigation()).toBe(false); });
+  expect(current()).toMatchObject({ status: 'error', body: 'keep me' });
+});

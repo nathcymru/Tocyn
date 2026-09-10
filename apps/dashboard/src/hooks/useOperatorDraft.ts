@@ -125,6 +125,20 @@ function createController(identity: string | null, ticketId: string | null) {
     return saving;
   };
 
+  // Navigation must remain on the current ticket unless every current edit is acknowledged.
+  // Drain at most an existing PUT plus one subsequent snapshot; continuous editing returns false.
+  const flushBeforeNavigation = async (): Promise<boolean> => {
+    const requestEpoch = epoch;
+    const failed = () => state.status === 'error' || state.status === 'conflict';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (!isCurrent(requestEpoch) || !known || restoring || deleting || state.status === 'conflict' || !withinBounds(state)) return false;
+      if (!dirty && !saving) return true;
+      await saveNow();
+      if (!isCurrent(requestEpoch) || failed()) return false;
+    }
+    return isCurrent(requestEpoch) && known && !dirty && !saving && !deleting;
+  };
+
   const update = (next: OperatorDraftValue) => {
     if (!isCurrent()) return;
     edit++;
@@ -190,7 +204,7 @@ function createController(identity: string | null, ticketId: string | null) {
       return () => { active = false; epoch++; cancelTimer(); };
     },
     setDebounce: (value: number) => { debounceMs = value; },
-    update, saveNow,
+    update, saveNow, flushBeforeNavigation,
     retrySave: () => { void saveNow(); },
     retryRestore: () => { if (!known) void restore(); },
     discard: () => remove(),
@@ -211,5 +225,5 @@ export function useOperatorDraft(ticketId: string | null, options: Readonly<{ de
   const debounceMs = Math.max(100, Math.min(2_000, options.debounceMs ?? 500));
   useLayoutEffect(() => { controller.setDebounce(debounceMs); }, [controller, debounceMs]);
   return { ...state, update: controller.update, retrySave: controller.retrySave, retryRestore: controller.retryRestore,
-    discard: controller.discard, saveNow: controller.saveNow, cleanupAfterConfirmedSend: controller.cleanupAfterConfirmedSend };
+    discard: controller.discard, saveNow: controller.saveNow, flushBeforeNavigation: controller.flushBeforeNavigation, cleanupAfterConfirmedSend: controller.cleanupAfterConfirmedSend };
 }
