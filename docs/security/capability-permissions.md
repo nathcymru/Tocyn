@@ -21,6 +21,8 @@ Deployment-owner ceiling and role-grant changes are an owner-only operational co
 
 A tenant policy update uses an optimistic revision. A stale browser save returns `409` and must reload the policy before retrying. A successful update increments all affected tenant agent session versions, so their next authenticated request is rejected and an in-flight mutation fails its boundary revalidation when its original policy/session fingerprint no longer matches.
 
+The D1 write predicate also compares the captured policy generation: owner revision, role revision, delegated tenant revision, ordered group IDs/revisions and session version. Re-enabling a policy at a newer revision does not revive the older in-flight write; a fresh authorization is required. Group order is explicitly deterministic in both reads and the SQL predicate. Owner-managed policy changes must preserve monotonically increasing revisions; deleting/recreating policy history or changing membership outside supported application operations requires session invalidation as part of the owner operation.
+
 This cannot recall an external action that completed before revocation. Future governed tools must use the same revalidation fence at dispatch and a durable execution generation before any resumable side effect, as required by ADR-0010.
 
 The existing Agent Permissions page exposes the tenant's delegated agent policy. Disabled controls identify capabilities that the deployment owner or role has not delegated. Its native checkbox controls retain keyboard focus, screen-reader labels, and visible focus styling through the existing static CSS utility classes; it does not use runtime CSS-in-JS or enter Worker bundles.

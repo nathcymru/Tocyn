@@ -59,7 +59,7 @@ export type CapabilityDecision = {
  * read: the SQL predicate is evaluated in the same statement/transaction as
  * the mutation, so revocation cannot land between a check and the write.
  */
-export type CapabilityWriteFence = CapabilityPrincipal & { capability: string };
+export type CapabilityWriteFence = CapabilityPrincipal & { capability: string; policyFingerprint: string };
 
 export class CapabilityFenceError extends Error {
   constructor() {
@@ -83,6 +83,17 @@ export function capabilityWriteConstraint(fence?: CapabilityWriteFence): { sql: 
         AND tenant_policy.capability = owner.capability
       WHERE actor.tenant_id = ? AND actor.id = ? AND actor.role = ? AND actor.session_version = ?
         AND (? <> 'agent' OR tenant_policy.enabled = 1)
+        AND json_array(owner.revision, role_grant.revision,
+          CASE WHEN actor.role = 'agent' THEN tenant_policy.revision ELSE NULL END,
+          json((SELECT json_group_array(json_array(group_id, revision)) FROM (
+            SELECT constraint_row.group_id, constraint_row.revision
+            FROM tenant_group_capability_constraints constraint_row
+            JOIN user_groups member
+              ON member.tenant_id = constraint_row.tenant_id AND member.group_id = constraint_row.group_id
+            WHERE constraint_row.tenant_id = actor.tenant_id AND member.user_id = actor.id
+              AND constraint_row.capability = owner.capability
+            ORDER BY constraint_row.group_id COLLATE BINARY
+          ))), actor.session_version) = ?
         AND NOT EXISTS (
           SELECT 1
           FROM tenant_group_capability_constraints group_constraint
@@ -94,7 +105,7 @@ export function capabilityWriteConstraint(fence?: CapabilityWriteFence): { sql: 
     )`,
     values: [
       fence.capability, fence.role,
-      fence.tenantId, fence.actorId, fence.role, fence.sessionVersion, fence.role,
+      fence.tenantId, fence.actorId, fence.role, fence.sessionVersion, fence.role, fence.policyFingerprint ?? null,
     ],
   };
 }

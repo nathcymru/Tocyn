@@ -45,7 +45,7 @@ function appWithPrincipal(state: PolicyState) {
 
 describe("permissionGuard", () => {
   it("fails closed when a guarded D1 mutation does not provide write evidence", () => {
-    const fence = { tenantId: "tenant-a", actorId: "agent-1", role: "agent", sessionVersion: 0, capability: "settings.general.manage" } as const;
+    const fence = { tenantId: "tenant-a", actorId: "agent-1", role: "agent", sessionVersion: 0, capability: "settings.general.manage", policyFingerprint: "[1,1,1,[],0]" } as const;
     expect(() => requireCapabilityWrite(undefined, fence)).toThrow(CapabilityFenceError);
     expect(() => requireCapabilityWrite({ meta: { changes: 0 } }, fence)).toThrow(CapabilityFenceError);
   });

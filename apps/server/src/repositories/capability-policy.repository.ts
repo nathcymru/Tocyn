@@ -55,11 +55,11 @@ export class CapabilityPolicyService {
 
       // Group rows can only add denials to the already-authorised role policy;
       // they never grant a capability that the owner or role did not grant.
-      const groupConstraints = await this.db.prepare(`SELECT c.enabled, c.revision
+      const groupConstraints = await this.db.prepare(`SELECT c.enabled, c.revision, c.group_id
         FROM tenant_group_capability_constraints c
         JOIN user_groups ug ON ug.tenant_id = c.tenant_id AND ug.group_id = c.group_id
-        WHERE c.tenant_id = ? AND ug.user_id = ? AND c.capability = ?`,
-      ).bind(principal.tenantId, principal.actorId, capability.id).all<PolicyRow>();
+        WHERE c.tenant_id = ? AND ug.user_id = ? AND c.capability = ? ORDER BY c.group_id COLLATE BINARY`,
+      ).bind(principal.tenantId, principal.actorId, capability.id).all<PolicyRow & { group_id: string }>();
       const groups = groupConstraints.results ?? [];
       if (groups.some(row => row.enabled === false || row.enabled === 0)) {
         return this.denied("group_policy", capability.id, owner, roleGrant, tenant, ...groups.map(row => row.revision));
@@ -69,7 +69,7 @@ export class CapabilityPolicyService {
         allowed: true,
         reason: "allowed",
         capability: capability.id,
-        policyFingerprint: fingerprint([owner?.revision, roleGrant?.revision, tenant?.revision, ...groups.map(row => row.revision), principal.sessionVersion]),
+        policyFingerprint: JSON.stringify([owner?.revision ?? null, roleGrant?.revision ?? null, tenant?.revision ?? null, groups.map(row => [row.group_id, row.revision]), principal.sessionVersion]),
       };
     } catch {
       return { allowed: false, reason: "policy_unavailable", capability: capability.id, policyFingerprint: "unavailable" };

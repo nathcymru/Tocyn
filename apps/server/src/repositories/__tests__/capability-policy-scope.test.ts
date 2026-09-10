@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CapabilityPolicyService } from '../capability-policy.repository';
 import { createVerifiedTenantScope } from '../../auth/scope';
-const principal = { tenantId:'tenant-a', actorId:'admin-a', role:'admin', sessionVersion:0 };
+const principal = { tenantId:'tenant-a', actorId:'admin-a', role:'admin', sessionVersion:0, policyFingerprint:'[1,1,null,[],0]' };
 describe('capability repository authority boundary', () => {
   it.each([
     {...principal, tenantId:'tenant-b'},

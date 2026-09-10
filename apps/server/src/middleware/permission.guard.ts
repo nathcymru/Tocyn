@@ -63,5 +63,5 @@ export function permissionWriteFence(
   if (!principal || !capability || !c.get("permissionFences")?.[capability.id]) {
     throw new CapabilityFenceError();
   }
-  return { ...principal, capability: capability.id };
+  return { ...principal, capability: capability.id, policyFingerprint: c.get("permissionFences")![capability.id].policyFingerprint };
 }

@@ -41,7 +41,7 @@ describe('Real Phase 1 migration chain', () => {
       // actual side effect. The SQL predicate is created from that request.
       const guard = capabilityWriteConstraint({
         tenantId: 'fence-tenant', actorId: 'fence-agent', role: 'agent', sessionVersion: 0,
-        capability: 'settings.general.manage',
+        capability: 'settings.general.manage', policyFingerprint: '[1,1,1,[],0]',
       });
       const write = db.prepare(`INSERT INTO tenant_config (tenant_id, key, value)
         SELECT ?, ?, ? WHERE ${guard.sql}`);

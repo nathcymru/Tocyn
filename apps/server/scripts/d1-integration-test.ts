@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { InMemoryEmailTransport } from '../src/services/email/transport';
+import { CapabilityPolicyService } from '../src/repositories/capability-policy.repository';
 import { capabilityWriteConstraint } from '../src/auth/capability-policy';
 
 async function run() {
@@ -57,7 +58,14 @@ async function run() {
       db.prepare("INSERT INTO tenant_role_capability_policies (tenant_id, role, capability, enabled) VALUES ('fence-tenant', 'agent', 'settings.general.manage', 1)"),
       db.prepare("INSERT INTO tenant_config (tenant_id, key, value) VALUES ('fence-tenant', 'existing', 'before')"),
     ]);
-    const writeFence = capabilityWriteConstraint({ tenantId: 'fence-tenant', actorId: 'fence-agent', role: 'agent', sessionVersion: 0, capability: 'settings.general.manage' });
+    const fencePrincipal = { tenantId: 'fence-tenant', actorId: 'fence-agent', role: 'agent', sessionVersion: 0 };
+    const fencePolicy = new CapabilityPolicyService(db as unknown as ConstructorParameters<typeof CapabilityPolicyService>[0], createVerifiedTenantScope('fence-tenant', 'fence-agent', ['agent'], 1));
+    const captureFence = async () => {
+      const decision = await fencePolicy.authorize(fencePrincipal, 'settings.general.manage');
+      assert.strictEqual(decision.allowed, true);
+      return capabilityWriteConstraint({ ...fencePrincipal, capability: decision.capability, policyFingerprint: decision.policyFingerprint });
+    };
+    let writeFence = await captureFence();
     // Exercise the live owner/role/group intersections using real D1, not
     // mocked authorization decisions. The captured request remains unchanged.
     const probeWrite = async (key: string) => db.prepare(`INSERT INTO tenant_config (tenant_id, key, value)
@@ -69,6 +77,9 @@ async function run() {
       assert.strictEqual((await probeWrite(`blocked-${table}`)).meta.changes, 0);
       assert.strictEqual(await db.prepare('SELECT value FROM tenant_config WHERE tenant_id = ? AND key = ?').bind('fence-tenant', `blocked-${table}`).first(), null);
       await db.prepare(`UPDATE ${table} SET enabled = 1, revision = revision + 1 WHERE capability = 'settings.general.manage'${roleFilter}`).run();
+      assert.strictEqual((await probeWrite(`stale-after-regrant-${table}`)).meta.changes, 0);
+      writeFence = await captureFence();
+      assert.strictEqual((await probeWrite(`fresh-after-regrant-${table}`)).meta.changes, 1);
     }
     await db.batch([
       db.prepare("INSERT INTO groups (tenant_id, id, name) VALUES ('fence-tenant', 'fence-group', 'Synthetic permission group')"),
@@ -80,6 +91,9 @@ async function run() {
     assert.strictEqual((await probeWrite('blocked-own-group')).meta.changes, 0);
     assert.strictEqual(await db.prepare("SELECT value FROM tenant_config WHERE tenant_id = 'fence-tenant' AND key = 'blocked-own-group'").first(), null);
     await db.prepare("UPDATE tenant_group_capability_constraints SET enabled = 1, revision = revision + 1 WHERE tenant_id = 'fence-tenant' AND group_id = 'fence-group'").run();
+    assert.strictEqual((await probeWrite('stale-after-group-regrant')).meta.changes, 0);
+    writeFence = await captureFence();
+    assert.strictEqual((await probeWrite('fresh-after-group-regrant')).meta.changes, 1);
     console.log('SUCCESS: Real D1 owner, role and tenant-qualified group restrictions deny protected writes.');
     await db.prepare("UPDATE tenant_role_capability_policies SET enabled = 0 WHERE tenant_id = 'fence-tenant' AND capability = 'settings.general.manage'").run();
     const policyRevokedBatch = await db.batch([
