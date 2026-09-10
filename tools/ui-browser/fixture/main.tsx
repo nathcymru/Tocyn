@@ -4,13 +4,16 @@ import { TocynButton, TocynInput, TocynSelect, TocynTextarea } from '../../../pa
 import { WorkspaceShell } from '../../../packages/ui/src/workspace';
 import { composeEventHandlers } from '../../../packages/ui/src/types';
 import { TocynConfirmDialog } from '../../../packages/ui/src/dialog';
-import { Tabs, Listbox, Popover, createListCollection } from '../../../packages/ui/src/ark';
+import { Tabs, Listbox, Popover, Combobox, Splitter, createListCollection } from '../../../packages/ui/src/ark';
 
 const mode=new URLSearchParams(location.search).get('style');
 if(mode==='none')document.querySelector('#tocyn-style')?.remove();
 if(mode==='radical'){const link=document.createElement('link');link.rel='stylesheet';link.href='/radical.css';document.head.append(link);}
 const collection=createListCollection({items:['Mine','Needs Action']});
+const panels=[{id:'navigation',minSize:20},{id:'conversation',minSize:20}];
+const initialSizes=[40,60];
 function Fixture(){
+ const [choice,setChoice]=React.useState('');const [sizes,setSizes]=React.useState<number[]>([]);
  const [form,setForm]=React.useState('');const [selected,setSelected]=React.useState('');const [tab,setTab]=React.useState('first');
  const [open,setOpen]=React.useState(false);const [busy,setBusy]=React.useState(false);const [error,setError]=React.useState('');
  const [calls,setCalls]=React.useState(0);const [cancelled,setCancelled]=React.useState(0);const pending=React.useRef(false);const opener=React.useRef<HTMLButtonElement>(null);
@@ -35,6 +38,13 @@ function Fixture(){
   <Listbox.Root collection={collection} onValueChange={details=>setSelected(details.value.join(','))}>
    <Listbox.Label>Views</Listbox.Label><Listbox.Content>{collection.items.map(item=><Listbox.Item key={item} item={item}><Listbox.ItemText>{item}</Listbox.ItemText></Listbox.Item>)}</Listbox.Content>
   </Listbox.Root><output aria-label="Selected view">{selected}</output>
+  <Combobox.Root collection={collection} onValueChange={details=>setChoice(details.value.join(','))}>
+   <Combobox.Label>Find view</Combobox.Label><Combobox.Control><Combobox.Input asChild><TocynInput /></Combobox.Input><Combobox.Trigger asChild aria-label="Show views"><TocynButton>Show views</TocynButton></Combobox.Trigger></Combobox.Control>
+   <Combobox.Positioner><Combobox.Content>{collection.items.map(item=><Combobox.Item item={item} key={item}><Combobox.ItemText>{item}</Combobox.ItemText></Combobox.Item>)}</Combobox.Content></Combobox.Positioner>
+  </Combobox.Root><output aria-label="Chosen view">{choice}</output>
+  <Splitter.Root keyboardResizeBy={10} panels={panels} defaultSize={initialSizes} onResize={details=>setSizes(details.size)} style={{width:600,height:120}}>
+   <Splitter.Panel id="navigation">Navigation content</Splitter.Panel><Splitter.ResizeTrigger id="navigation:conversation" aria-label="Resize navigation" /><Splitter.Panel id="conversation">Conversation content</Splitter.Panel>
+  </Splitter.Root><output aria-label="Panel sizes">{JSON.stringify(sizes)}</output>
   <Popover.Root><Popover.Trigger asChild><TocynButton>Open details</TocynButton></Popover.Trigger><Popover.Positioner><Popover.Content aria-label="Details"><Popover.Title>Details</Popover.Title><Popover.CloseTrigger asChild aria-label="Close details"><TocynButton>Close details</TocynButton></Popover.CloseTrigger></Popover.Content></Popover.Positioner></Popover.Root>
  </WorkspaceShell>;
 }
