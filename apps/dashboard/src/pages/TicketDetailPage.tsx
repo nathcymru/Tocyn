@@ -53,6 +53,8 @@ function TicketDetail({ id }: { id: string }) {
   const [replyError, setReplyError] = useState<string | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const qaChanging = useRef(false);
+  const [qaPending, setQaPending] = useState(false);
   const submission = useRef(false);
   const changing = useRef(false);
   const uploads = useRef(new Map<File, { filename: string; contentType: string; size: number; storageKey: string }>());
@@ -160,13 +162,15 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   const handleToggleQa = async (articleId: string, type: 'question' | 'answer' | null) => {
+    if (qaChanging.current) return;
+    qaChanging.current = true; setQaPending(true); setChangeError(null); setNotice('');
     try {
       await dashboardApi.post(`/knowledge/articles/${articleId}/qa`, { type });
-      // Invalidate query to refresh article state
-      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
-    } catch (err: any) {
-      alert('Failed to mark as QA: ' + err.message);
-    }
+      setNotice('QA marking saved.');
+      await queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+    } catch {
+      setChangeError('QA marking could not be confirmed. Refresh the ticket before retrying.');
+    } finally { qaChanging.current = false; setQaPending(false); }
   };
 
   const handleGetAiSuggestion = async () => {
@@ -313,7 +317,7 @@ function TicketDetail({ id }: { id: string }) {
               <div className="flex flex-col items-end gap-2">
                 {viewers.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center -space-x-2">
+                    <div aria-hidden="true" className="flex items-center -space-x-2">
                       {viewers.slice(0, 3).map((viewer, i) => (
                         <div
                           key={i}
@@ -329,8 +333,9 @@ function TicketDetail({ id }: { id: string }) {
                         </div>
                       )}
                     </div>
+                    <span className="sr-only">Viewing this ticket: {viewers.map(viewer => viewer.name).join(', ')}</span>
                     <span className="text-[10px] font-bold text-brand-600 uppercase tracking-tighter flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse" />
+                      <span className="w-1.5 h-1.5 bg-brand-500 rounded-full" />
                       Live Viewers
                     </span>
                   </div>
@@ -400,31 +405,33 @@ function TicketDetail({ id }: { id: string }) {
                   )}
 
                   {/* QA Toggle Buttons */}
-                  <div className="mt-3 pt-3 border-t border-white/20 flex items-center justify-between gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="mt-3 p-2 rounded bg-white text-slate-900 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <TocynButton
+                        aria-label="Mark as question" aria-pressed={article.qa_type === 'question'} disabled={qaPending}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'question' ? null : 'question')}
                         className={clsx(
-                          "text-[9px] font-bold uppercase px-2 py-0.5 rounded border transition-colors",
-                          article.qa_type === 'question' ? "bg-white text-brand-600 border-white" : "text-white/70 border-white/20 hover:border-white/50"
+                          "min-h-11 text-xs font-semibold px-3 py-2 rounded border transition-colors",
+                          article.qa_type === 'question' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 border-slate-400 hover:bg-slate-100"
                         )}
                       >
                         {article.qa_type === 'question' ? '✓ Question' : 'Mark as Question'}
                       </TocynButton>
                       <TocynButton
+                        aria-label="Mark as answer" aria-pressed={article.qa_type === 'answer'} disabled={qaPending}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'answer' ? null : 'answer')}
                         className={clsx(
-                          "text-[9px] font-bold uppercase px-2 py-0.5 rounded border transition-colors",
-                          article.qa_type === 'answer' ? "bg-white text-brand-600 border-white" : "text-white/70 border-white/20 hover:border-white/50"
+                          "min-h-11 text-xs font-semibold px-3 py-2 rounded border transition-colors",
+                          article.qa_type === 'answer' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 border-slate-400 hover:bg-slate-100"
                         )}
                       >
                         {article.qa_type === 'answer' ? '✓ Answer' : 'Mark as Answer'}
                       </TocynButton>
                     </div>
                     {article.qa_type && (
-                      <span className="flex items-center gap-1 text-[9px] font-bold text-white/90 bg-white/10 px-2 py-0.5 rounded-full border border-white/20">
+                      <span className="flex items-center gap-1 text-xs font-semibold text-slate-700 px-2 py-1">
                         <ShieldCheck className="w-3 h-3" />
-                        INDEXED
+                        QA marked
                       </span>
                     )}
                   </div>
