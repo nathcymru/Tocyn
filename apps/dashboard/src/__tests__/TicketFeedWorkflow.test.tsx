@@ -20,6 +20,7 @@ function showFeed() {
   render(<QueryClientProvider client={client}><MemoryRouter><TicketListPage/></MemoryRouter></QueryClientProvider>);
 }
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   // JSDOM has no layout; browser focus containment remains a separate gate.
   vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function(this: HTMLElement) {
     return (this.isConnected && !this.closest('[hidden]') && this.getAttribute('type') !== 'hidden'
@@ -175,8 +176,8 @@ it('names ticket actions and restores trigger focus when the disclosure is dismi
   const trigger = await screen.findByRole('button', { name: 'Actions for #1' });
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
   fireEvent.click(trigger);
-  expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  const action = screen.getByRole('link', { name: 'View Ticket' });
+  await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+  const action = await screen.findByRole('link', { name: 'View Ticket' });
   action.focus(); fireEvent.keyDown(action, { key: 'Escape' });
   await waitFor(() => expect(trigger).toHaveFocus()); expect(trigger).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('link', { name: 'View Ticket' })).not.toBeInTheDocument();

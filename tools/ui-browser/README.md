@@ -19,3 +19,7 @@ These normal text pairs use the4.5:1 threshold in [WCAG2.2 Contrast Minimum](htt
 Run `npm run build --workspace=apps/widget`, then `node tools/ui-browser/widget-check.mjs` from the root using the same Node/Playwright prerequisites. The script serves the actual IIFE build in an ephemeral loopback page, intercepts only synthetic local configuration/session/ticket responses, blocks other origins and disposes browser/server. It verifies the real legacy ShadowRoot bootstrap, open/close focus, manual keyboard tabs, preserved drafts, failed submission/retry and AI-off ticket use. Source and artifact hashes accompany results.
 
 The negative control without EnvironmentProvider times out on ArrowRight navigation. The original library build fails before launch with an undefined Node process reference. Tests now exercise those actual browser boundaries; no Node shim is injected. This does not accept #67’s future custom-element lifecycle, styling isolation or multi-instance contract, and does not prove screen-reader/visual or backend authentication behavior.
+
+## Ticket action compatibility popup
+
+With the existing synthetic dashboard fixture on127.0.0.1:5190, run `node tools/ui-browser/ticket-actions-check.cjs`. It intercepts one synthetic list row, preserves the existing test-session entrypoint, blocks other origins and makes no mutation. Real Chromium checks initial link focus, the retained navigation destination, Escape return focus and outside-click dismissal. This is not backend ticket/tenant evidence or full workspace acceptance.

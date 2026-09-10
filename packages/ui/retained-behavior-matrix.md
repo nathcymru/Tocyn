@@ -12,6 +12,27 @@ Native controls and retained complex-control migrations are implemented in draft
 - Remaining acceptance: full affected application/ShadowRoot browser and assistive-technology coverage, contrast/visual checks, justified final performance budgets and exact integrated-revision validation. No issue closure or beta.2 readiness is inferred.
 - Workspace state/navigation semantics, full SLA/ownership, theme persistence (#66) and wrapper lifecycle (#67) retain their separate ownership and gates.
 
+## Retained composition inventory
+
+These rows supplement the native-control inventory below. “Implemented” means draft source and scoped regression evidence, not final acceptance. Browser/AT, visual and final performance gates above remain open.
+
+| Source / behavior family | Disposition | Current implementation / evidence |
+|---|---|---|
+| Dashboard Layout: mobile navigation, account actions, connection details | retain/migrate | Shared dialog/popovers; LayoutAccessibility tests and selected Safari receipt. |
+| TicketListPage: row action disclosure | compatibility-only/retire with #128 table replacement | Shared Popover preserves View Ticket link and Escape/outside dismissal; TicketFeedWorkflow and actual Chromium check. No new primary-table architecture. |
+| TicketListPage: search, feed, pagination, create dialog | retain/migrate behavior; replace primary composition under #128 | Shared native/dialog controls; TicketFeedWorkflow/LiveFeedWorkflow recovery tests. |
+| TicketDetailPage: reply/internal marker, attachments, history pagination | retain/migrate behavior; replace composition under workspace issues | Shared native controls; TicketDetailWorkflow and TicketDetailPagination. Domain durability and tenant authorization are separate server contracts. |
+| UsersPage / GroupsPage: details, membership, create/delete | retain/migrate | Shared dialogs, pending guards, failure/retry and focus; UserDetailsDialog, GroupMembersDialog, SettingsDeleteDialog. |
+| FiltersSettingsPage / TicketFieldsPage / AutomationPage: editors and deletion | retain/migrate | Shared dialog/confirmation controls and named native form fields; FilterEditorDialog, TicketFieldDialog, SettingsDeleteDialog. |
+| KnowledgePage: nested category disclosure/selection and deletion | retain/migrate | Named shared buttons with expanded/pressed state; shared deletion dialog and KnowledgeDeleteDialog. It is a nested button/disclosure composition, not an ARIA tree claiming roving-tree keyboard behavior. |
+| KnowledgeEditorPage: rich content editing | retain/migrate surrounding controls | Existing editor retained; shared surrounding native controls. Full editor browser/AT parity remains to verify. |
+| ApiKeyPage: create, one-time copy, revoke and uncertain-result recovery | retain/migrate | Shared dialogs and status/alert feedback; ApiKeyRevokeDialog. |
+| EmailChannelPage / WidgetChannelPage: setup, save/remove/copy feedback | retain/migrate | Shared controls/confirmation and guarded drafts; EmailSettingsAccessibility, EmailRemoveDialog, WidgetSettings. No provider activation claim. |
+| Login / MFA / SecurityProfile / AgentPermissions | retain/migrate | Shared native controls retain authentication states; LoginAccessibility, MfaSetupAccessibility, SecurityProfileAccessibility, AgentPermissionsWorkflow. |
+| Portal login/verify/local mail capture/conversation | retain/migrate | Native/shared dialog adoption; portal LoginAccessibility, VerifyPage, LocalAuthCapturePage, ConversationAccessibility/read recovery/pagination tests. |
+| Widget launcher/tabs/chat/ticket/error-retry | retain/migrate | Shared primitives/Tabs and real ShadowRoot environment; widget App/AiChat/TicketForm tests plus built Chromium AI-on/off check. |
+| Widget packaging, CSS globals, lifecycle and multiple instances | compatibility-only/retire under #67 | Existing IIFE remains; production startup fixed. Custom-element/style-isolation acceptance belongs to #67 and is not claimed here. |
+
 ## Migration mapping and historical receipts
 
 | Existing behavior | Shared primitive target | Migration disposition |

@@ -1,3 +1,4 @@
+import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { utcTimestamp } from '../utils/utcTimestamp';
@@ -349,37 +350,21 @@ export function TicketListPage() {
                           {utcTimestamp(ticket.updated_at).toLocaleDateString()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right relative" onKeyDown={(event) => {
-                        if (event.key === 'Escape' && openMenuId === ticket.id) {
-                          event.preventDefault();
-                          setOpenMenuId(null);
-                          event.currentTarget.querySelector<HTMLButtonElement>('button[data-row-action]')?.focus();
-                        }
-                      }}>
-                        <TocynButton
-                          type="button"
-                          data-row-action
-                          aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`}
-                          aria-expanded={openMenuId === ticket.id}
-                          aria-controls={`ticket-actions-${ticket.id}`}
-                          onClick={() => setOpenMenuId(openMenuId === ticket.id ? null : ticket.id)}
-                          className="p-1 text-slate-600 hover:text-slate-900 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700 relative z-10"
-                        >
-                          <MoreVertical className="w-5 h-5" />
-                        </TocynButton>
-                        {openMenuId === ticket.id && (
-                          <>
-                            <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                            <div id={`ticket-actions-${ticket.id}`} role="group" aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="absolute right-6 top-10 w-36 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1 overflow-hidden">
-                              <Link
-                                to={`/tickets/${ticket.id}`}
-                                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 text-left w-full"
-                              >
+                      <td className="px-6 py-4 text-right relative">
+                        <Popover.Root open={openMenuId === ticket.id} onOpenChange={({open}) => setOpenMenuId(current => open ? ticket.id : current === ticket.id ? null : current)} positioning={{placement:'bottom-end',strategy:'fixed'}} lazyMount unmountOnExit>
+                          <Popover.Trigger asChild>
+                            <TocynButton type="button" aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="p-1 text-slate-600 hover:text-slate-900 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700">
+                              <MoreVertical className="w-5 h-5" />
+                            </TocynButton>
+                          </Popover.Trigger>
+                          <Popover.Positioner className="z-20">
+                            <Popover.Content aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1 overflow-hidden">
+                              <Link to={`/tickets/${ticket.id}`} onClick={() => setOpenMenuId(null)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 text-left w-full">
                                 View Ticket
                               </Link>
-                            </div>
-                          </>
-                        )}
+                            </Popover.Content>
+                          </Popover.Positioner>
+                        </Popover.Root>
                       </td>
                     </tr>
                   ))
