@@ -4,6 +4,7 @@ import { createSystemTenantScope } from '../auth/scope';
 import { createTenantRequestDeps } from '../middleware/tenant.middleware';
 import { TenantKnowledgeService } from '../services/tenant-knowledge.service';
 import { StatelessAiService } from '../services/ai.service';
+import { measureResourceOperation } from '../observability/resource-operation';
 
 export type VectorizeJob = {
   tenantId: string;
@@ -23,8 +24,10 @@ export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
     if (!['create', 'update', 'qa_mark'].includes(action)) throw new Error('Invalid workflow action');
     const scope = createSystemTenantScope({ tenantId, actor: 'vectorize-workflow' });
     const deps = createTenantRequestDeps(scope, this.env);
-    const service = new TenantKnowledgeService(deps, new StatelessAiService(this.env.AI));
-    await step.do('apply_scoped_vectorization', async () => {
+    const service = new TenantKnowledgeService(deps, new StatelessAiService(this.env.AI, deps.emitResourceOperation));
+    // This records the Workflow step invocation. A cached Workflow step can complete
+    // without running this callback, so its latency is not callback execution time.
+    await measureResourceOperation({ resource: 'workflow', operation: 'run', emit: deps.emitResourceOperation, execute: () => step.do('apply_scoped_vectorization', async () => {
       if (action === 'qa_mark') {
         if (qaType != null && qaType !== 'answer' && qaType !== 'sop') throw new Error('Invalid QA type');
         await service.markArticleAsQA(documentId, qaType ?? null);
@@ -34,6 +37,6 @@ export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
         // A background retry must never republish a document withdrawn by an editor.
         if (doc.status === 'published') await service.publishDocument(documentId);
       }
-    });
+    }) });
   }
 }

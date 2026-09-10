@@ -71,6 +71,8 @@ export type LocalTenantFixture = Readonly<{
   principals: Readonly<Record<PrincipalName, FixturePrincipal>>;
   /** Enable guarded requests only after explicit local operator policy setup; no automatic invitations. */
   enableLocalBeta: () => void;
+  /** Enables only the existing synthetic isolated-evidence gate for this disposable fixture. */
+  enableIsolatedObservability: () => void;
   restartLocalRuntime: () => void;
   db: D1Database;
   r2: FixtureR2;
@@ -364,6 +366,7 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
 
     const fixture: LocalTenantFixture = Object.freeze({
       enableLocalBeta: () => { env.LOCAL_BETA_ENABLED = 'true'; },
+      enableIsolatedObservability: () => { env.OBSERVABILITY_MODE = 'isolated-evidence'; },
       restartLocalRuntime: () => { localRuntime = createLocalRuntime(); },
       principals: Object.freeze(Object.fromEntries(principalNames.map(name => [name, publicPrincipal(name, privatePrincipals[name])])) as Record<PrincipalName, FixturePrincipal>),
       db,

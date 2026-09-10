@@ -16,6 +16,7 @@ import v1 from './handlers/v1.handler';
 import widget from './handlers/widget.handler';
 import customerHandler from './handlers/customer.handler';
 import { environmentGuard } from './middleware/environment-guard';
+import { operationalObservability } from './middleware/operational-observability';
 import { AppVariables } from './types';
 
 export const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
@@ -28,13 +29,17 @@ app.onError((error,c) => {
 });
 app.use('*', environmentGuard);
 app.use('*', localBetaGuard);
+app.use('*', operationalObservability);
 
 app.get('/api/realtime', async (c) => {
   const upgradeHeader = c.req.header('Upgrade');
   if (!upgradeHeader || upgradeHeader !== 'websocket') return c.json({ error: 'Expected Upgrade: websocket' }, 426);
   const token = c.req.query('token');
-  if (!token) return c.json({ error: 'Unauthorized' }, 401);
-  const user = await authenticateRealtimeToken(c.env, token);
+  if (!token) {
+    try { c.get('requestAuthSli')?.record('denied'); } catch { /* Evidence cannot affect authentication. */ }
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  const user = await authenticateRealtimeToken(c.env, token, decision => c.get('requestAuthSli')?.record(decision));
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
   const internalUrl = new URL(c.req.raw.url); internalUrl.search = '';
   const newReq = new Request(internalUrl, c.req.raw);

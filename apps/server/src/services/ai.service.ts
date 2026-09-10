@@ -1,4 +1,5 @@
 import { Env } from '../bindings';
+import { measureResourceOperation, type ResourceOperationEmitter } from '../observability/resource-operation';
 
 // Provider messages, custom names and stacks can contain prompts or credentials.
 function errorCategory(error: unknown): string {
@@ -15,23 +16,30 @@ export interface SuggestionParams {
 }
 
 export class StatelessAiService {
-  constructor(private ai: any) {}
+  constructor(private ai: any, private emit?: ResourceOperationEmitter) {}
 
   async generateEmbeddings(text: string): Promise<number[]> {
     try {
-      const result = await this.ai.run('@cf/baai/bge-large-en-v1.5', {
-        text: [text],
-      });
-      if (!result.data || result.data.length === 0) {
-        throw new Error('No embeddings returned from AI model');
-      }
-      // Depending on the Cloudflare AI runtime, data can be a flat array or an array of arrays
-      const rawVector = Array.isArray(result.data[0]) ? result.data[0] : result.data;
-      return Array.from(rawVector);
+      return await measureResourceOperation({ resource: 'ai', operation: 'embed', emit: this.emit, execute: async () => {
+        const result = await this.ai.run('@cf/baai/bge-large-en-v1.5', {
+          text: [text],
+        });
+        if (!result.data || result.data.length === 0) {
+          throw new Error('No embeddings returned from AI model');
+        }
+        // Depending on the Cloudflare AI runtime, data can be a flat array or an array of arrays
+        const rawVector = Array.isArray(result.data[0]) ? result.data[0] : result.data;
+        return Array.from(rawVector);
+      } });
     } catch (error) {
       console.error('AI Embedding error:', { category: errorCategory(error) });
       throw new Error('Failed to generate embeddings');
     }
+  }
+
+  /** Records deterministic fallback selection, never its text or a model invocation. */
+  private fallback(response: string): Promise<string> {
+    return measureResourceOperation({ resource: 'ai', operation: 'fallback', emit: this.emit, execute: () => response });
   }
 
   private sanitizeInput(text: string | null | undefined): string {
@@ -67,22 +75,24 @@ ${sanitizedInput}
 
 Please provide a suggested response:`;
 
-      const result = await this.ai.run('@cf/meta/llama-3-8b-instruct', {
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        max_tokens: 1024,
-      });
+      return await measureResourceOperation({ resource: 'ai', operation: 'run', emit: this.emit, execute: async () => {
+        const result = await this.ai.run('@cf/meta/llama-3-8b-instruct', {
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: 1024,
+        });
 
-      if (!result.response) {
-        throw new Error('No response returned from AI model');
-      }
+        if (!result.response) {
+          throw new Error('No response returned from AI model');
+        }
 
-      return result.response;
+        return result.response;
+      } });
     } catch (error) {
       console.error('AI Suggestion error:', { category: errorCategory(error) });
-      return "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
+      return this.fallback("I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.");
     }
   }
 
@@ -108,15 +118,15 @@ IMPORTANT RULES:
         { role: 'user', content: userMessage }
       ];
 
-      const result = await this.ai.run('@cf/meta/llama-3-8b-instruct', {
+      const result = await measureResourceOperation({ resource: 'ai', operation: 'run', emit: this.emit, execute: () => this.ai.run('@cf/meta/llama-3-8b-instruct', {
         messages: messages as any,
         max_tokens: 512,
-      });
+      }) });
 
-      return result.response || "I'm sorry, I couldn't generate a response.";
+      return result.response || this.fallback("I'm sorry, I couldn't generate a response.");
     } catch (error) {
       console.error('AI Response error:', { category: errorCategory(error) });
-      return "I'm having trouble connecting to my brain. Please try again later.";
+      return this.fallback("I'm having trouble connecting to my brain. Please try again later.");
     }
   }
 }

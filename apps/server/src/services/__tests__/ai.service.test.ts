@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AiService } from '../ai.service';
+import { AiService, StatelessAiService } from '../ai.service';
 import { Env } from '../../bindings';
 
 describe('AiService', () => {
@@ -35,6 +35,52 @@ describe('AiService', () => {
   });
 
   describe('generateEmbeddings', () => {
+    it('measures a successful provider call without copying prompt text or vector output into the event', async () => {
+      const emit = vi.fn();
+      const service = new StatelessAiService(mockEnv.AI, emit);
+      (mockEnv.AI.run as any).mockResolvedValue({ data: [[0.91, 0.82]] });
+
+      await expect(service.generateEmbeddings('private prompt text')).resolves.toEqual([0.91, 0.82]);
+
+      expect(emit).toHaveBeenCalledWith(expect.objectContaining({ resource: 'ai', operation: 'embed', outcome: 'success' }));
+      expect(JSON.stringify(emit.mock.calls)).not.toMatch(/private prompt text|0\.91|0\.82/);
+    });
+
+    it('measures provider and malformed-result failures while retaining the sanitized public error', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const emit = vi.fn();
+      const service = new StatelessAiService(mockEnv.AI, emit);
+      const providerError = new TypeError('private prompt and provider output');
+      try {
+        (mockEnv.AI.run as any).mockRejectedValueOnce(providerError).mockResolvedValueOnce({ data: [] });
+        await expect(service.generateEmbeddings('private prompt text')).rejects.toThrow('Failed to generate embeddings');
+        await expect(service.generateEmbeddings('private prompt text')).rejects.toThrow('Failed to generate embeddings');
+
+        expect(emit.mock.calls.map(([event]) => event)).toEqual([
+          expect.objectContaining({ resource: 'ai', operation: 'embed', outcome: 'failure' }),
+          expect.objectContaining({ resource: 'ai', operation: 'embed', outcome: 'failure' }),
+        ]);
+        expect(JSON.stringify(emit.mock.calls)).not.toMatch(/private prompt text|provider output/);
+        expect(log.mock.calls).toEqual([
+          ['AI Embedding error:', { category: 'TypeError' }],
+          ['AI Embedding error:', { category: 'Error' }],
+        ]);
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it('does not let a diagnostic sink failure alter a successful provider result', async () => {
+      const emit = vi.fn(() => { throw new Error('private telemetry sink failure'); });
+      const service = new StatelessAiService(mockEnv.AI, emit);
+      (mockEnv.AI.run as any).mockResolvedValue({ data: [[0.1, 0.2]] });
+
+      await expect(service.generateEmbeddings('private prompt text')).resolves.toEqual([0.1, 0.2]);
+      expect(mockEnv.AI.run).toHaveBeenCalledTimes(1);
+      expect(emit).toHaveBeenCalledWith(expect.objectContaining({ resource: 'ai', operation: 'embed', outcome: 'success' }));
+      expect(JSON.stringify(emit.mock.calls)).not.toContain('private prompt text');
+    });
+
     it('should generate embeddings for given text', async () => {
       const mockResult = {
         data: [[0.1, 0.2, 0.3]],

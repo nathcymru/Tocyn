@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { withTwoTenantFixture, type FixturePrincipal, type FixtureResponse, type LocalTenantFixture } from './local-tenant-fixture';
+import { initializeLocalBetaFixture } from './local-beta-fixture';
+
+type CredentialSliEvent = {
+  version: 1;
+  type: 'auth.sli.request';
+  scope: 'credential';
+  complete: boolean;
+  counts: { attempted: number; accepted: number; denied: number; unavailable: number; challenge: number };
+};
 
 function tokenFrom(value: unknown): string {
   const token = (value as { token?: unknown }).token;
@@ -12,6 +21,20 @@ async function expectStatus(response: FixtureResponse, expected: number, reason:
   if (response.status === expected) return;
   await response.body?.cancel();
   assert.fail(`${reason}: received ${response.status}`);
+}
+
+async function captureCredentialSli<T>(run: () => Promise<T>): Promise<{ result: T; events: CredentialSliEvent[] }> {
+  const events: CredentialSliEvent[] = [];
+  const log = console.log;
+  console.log = (value?: unknown) => {
+    if (typeof value !== 'string') return;
+    try {
+      const event = JSON.parse(value) as { type?: unknown };
+      if (event.type === 'auth.sli.request') events.push(event as CredentialSliEvent);
+    } catch { /* Other diagnostics are outside this bounded assertion. */ }
+  };
+  try { return { result: await run(), events }; }
+  finally { console.log = log; }
 }
 
 function unsignedTenantClaimTamper(token: string, tenantId: string): string {
@@ -171,5 +194,94 @@ test('two issued tenant identities stay scoped across API and customer portal ro
       'Owning operator may revoke its own integration key');
     await expectStatus(await fixture.request('/api/v1/tickets/fixture-ticket', { apiKey: writeA.apiKey }), 401,
       'Revoked integration key must deny access');
+  });
+});
+
+test('credential SLI records current API-key and widget decisions without treating a foreign resource denial as failed authentication', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const keyA = await fixture.createScopedApiKey('operatorA', ['tickets:read']);
+    const keyB = await fixture.createScopedApiKey('operatorB', ['tickets:read']);
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'credential-sli-evidence',
+      tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
+      invitations: [
+        ...Object.values(fixture.principals).map(principal => ({
+          tenantId: principal.tenantId, id: principal.localId,
+          kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+        })),
+        { tenantId: fixture.principals.customerA.tenantId, id: keyA.id, kind: 'api-key' as const },
+        { tenantId: fixture.principals.customerB.tenantId, id: keyB.id, kind: 'api-key' as const },
+      ],
+    });
+    const widgetA = await customerWidgetToken(fixture, fixture.principals.customerA);
+    fixture.enableIsolatedObservability();
+    const privateValue = 'synthetic-credential-sli-private-value';
+    const captured = await captureCredentialSli(async () => {
+      await expectStatus(await fixture.request('/api/v1/tickets/fixture-ticket', { apiKey: keyA.apiKey }), 200, 'Current API key accepts tenant A');
+      await expectStatus(await fixture.request('/api/v1/customer/tickets/fixture-b-only', { token: widgetA }), 404, 'Current tenant A widget credential cannot read tenant B resource');
+      await fixture.db.prepare('UPDATE api_keys SET is_active = 0 WHERE tenant_id = ? AND id = ?')
+        .bind(fixture.principals.customerA.tenantId, keyA.id).run();
+      await expectStatus(await fixture.request('/api/v1/tickets/fixture-ticket', { apiKey: keyA.apiKey }), 401, 'Revoked API key is denied');
+      await fixture.revokePrincipalSessions('customerA');
+      await expectStatus(await fixture.request('/api/v1/customer/tickets', { token: widgetA }), 401, 'Revoked widget session is denied');
+      return privateValue;
+    });
+    assert.equal(captured.result, privateValue);
+    assert.deepEqual(captured.events, [
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 0, denied: 1, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 0, denied: 1, unavailable: 0, challenge: 0 } },
+    ]);
+    assert.equal(JSON.stringify(captured.events).includes(privateValue), false, 'Credential summaries omit request content');
+    assert.equal(JSON.stringify(captured.events).includes(fixture.principals.customerA.tenantId), false, 'Credential summaries omit tenant IDs');
+
+    const log = console.log;
+    console.log = (value?: unknown) => {
+      if (typeof value === 'string' && JSON.parse(value).type === 'auth.sli.request') throw new Error('synthetic observer fault');
+    };
+    try {
+      await expectStatus(await fixture.request('/api/v1/tickets/fixture-ticket', { apiKey: keyB.apiKey }), 200, 'Observer failure cannot reject an accepted API credential');
+    } finally { console.log = log; }
+  });
+});
+
+test('credential SLI observes password step-up, MFA completion, revoked challenge, and opaque customer verification without treating an auth request acknowledgement as acceptance', async () => {
+  await withTwoTenantFixture(async fixture => {
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'credential-sli-password-mfa-evidence',
+      tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
+      invitations: Object.values(fixture.principals).map(principal => ({
+        tenantId: principal.tenantId,
+        id: principal.localId,
+        kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+      })),
+    });
+    fixture.enableIsolatedObservability();
+    const captured = await captureCredentialSli(async () => {
+      const operator = await operatorAppToken(fixture, 'operatorA');
+      await fixture.revokePrincipalSessions('operatorA');
+      await expectStatus(await fixture.request('/api/auth/mfa/verify', {
+        method: 'POST', token: operator.challenge, body: { code: fixture.currentMfaCode('operatorA') },
+      }), 401, 'Revoked MFA challenge must not complete authentication');
+      return customerWidgetToken(fixture, fixture.principals.customerB);
+    });
+    assert.equal(typeof captured.result, 'string');
+    assert.deepEqual(captured.events, [
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 0, denied: 0, unavailable: 0, challenge: 1 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 0, denied: 1, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
+    ]);
+    assert.equal(captured.events.length, 4, 'Customer auth request acknowledgement emits no credential decision');
+    assert.equal(JSON.stringify(captured.events).includes(fixture.principals.customerB.tenantId), false, 'Credential summaries omit tenant IDs');
   });
 });

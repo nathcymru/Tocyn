@@ -3,6 +3,7 @@ import { Env } from '../bindings';
 import { TenantRequestDeps, createTenantRequestDeps } from '../middleware/tenant.middleware';
 import { ApiAuthResolver, ApiKeyResolution } from './api-key-resolver';
 import { createVerifiedTenantScope } from './scope';
+import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 
 /**
  * Trusted API-auth composition boundary.
@@ -12,13 +13,24 @@ import { createVerifiedTenantScope } from './scope';
 export async function resolveApiKeyRequestDeps(
   resolver: ApiAuthResolver,
   apiKeyRaw: string,
-  env: Env
+  env: Env,
+  canonicalMutationSli?: RequestCanonicalMutationSli,
 ): Promise<{ deps: TenantRequestDeps; resolution: ApiKeyResolution } | null> {
   const resolution = await resolver.resolveKey(apiKeyRaw);
 
   if (!resolution) {
     return null;
   }
+
+  return composeApiKeyRequestDeps(resolution, env, canonicalMutationSli);
+}
+
+/** Builds trusted dependencies only after API-key credential resolution. */
+export async function composeApiKeyRequestDeps(
+  resolution: ApiKeyResolution,
+  env: Env,
+  canonicalMutationSli?: RequestCanonicalMutationSli,
+): Promise<{ deps: TenantRequestDeps; resolution: ApiKeyResolution }> {
 
   // Integration principal — NOT createSystemTenantScope
   const scope = createVerifiedTenantScope(
@@ -29,7 +41,7 @@ export async function resolveApiKeyRequestDeps(
   );
 
   await authorizeLocalBeta(env, scope, { kind: 'api-key', id: resolution.apiKeyId });
-  const deps = createTenantRequestDeps(scope, env);
+  const deps = createTenantRequestDeps(scope, env, undefined, canonicalMutationSli);
   // Usage metadata is not authentication authority. Record it only after scoped composition.
   try { await deps.repositories.apiKeys.recordUsage(resolution.apiKeyId); }
   catch { /* Best-effort telemetry must not reject an already validated key. */ }

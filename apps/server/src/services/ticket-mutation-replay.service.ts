@@ -6,6 +6,7 @@ import type { VerifiedTenantScope } from '../types/tenant';
 import type { MutationNamespace, MutationOutcome, MutationPrincipal, MutationReceipt, MutationSnapshotV1,
   PreparedTicketMutation, TicketMutationInput, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import { TicketMutationReplayRepository, type MutationCandidate } from '../repositories/ticket-mutation-replay.repository';
+import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import { projectCanonicalConversation } from './canonical-conversation.service';
 
 export type { MutationOperation, MutationOutcome, MutationPrincipal, PreparedTicketMutation, TicketMutationInput,
@@ -101,8 +102,16 @@ export class TicketMutationReplayService {
   private readonly repository: TicketMutationReplayRepository;
   private readonly attempts = new WeakMap<PreparedTicketMutation, Attempt>();
 
-  constructor(db: D1Database, private scope: VerifiedTenantScope, private principal: MutationPrincipal, private admission?: LocalBetaAdmissionRepository) {
-    this.repository = new TicketMutationReplayRepository(db, scope, admission);
+  constructor(db: D1Database, private scope: VerifiedTenantScope, private principal: MutationPrincipal, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {
+    this.repository = new TicketMutationReplayRepository(db, scope, admission, canonicalMutationSli);
+  }
+
+  private recordDenied(error: unknown): void {
+    // Once D1 batch execution has begun, later authorization recovery cannot
+    // turn a potentially committed mutation into a known denial.
+    if (this.canonicalMutationSli?.hasAttempt()) return;
+    if (error instanceof TicketMutationError && [401, 403, 404].includes(error.status)) this.canonicalMutationSli?.recordDenied();
+    else if (error instanceof BetaAdmissionError && error.status >= 400 && error.status < 500) this.canonicalMutationSli?.recordDenied();
   }
 
   private async authorize(): Promise<string | undefined> {
@@ -175,7 +184,7 @@ export class TicketMutationReplayService {
     };
   }
 
-  private async replay(receipt: MutationReceipt, ns: MutationNamespace): Promise<MutationOutcome> {
+  private async replay(receipt: MutationReceipt, ns: MutationNamespace, record: 'new' | 'existing' | 'none' = 'new'): Promise<MutationOutcome> {
     const email = await this.authorize();
     if (receipt.payload_hash !== ns.payloadHash) throw new TicketMutationError(409, 'idempotency_conflict', 'Idempotency key was already used with a different payload');
     if (receipt.lifecycle === 'gone') throw new TicketMutationError(410, 'idempotency_result_gone', 'The original mutation result is no longer available');
@@ -185,7 +194,10 @@ export class TicketMutationReplayService {
       const article = await this.repository.articleVisibility(receipt.result_article_id, receipt.result_ticket_id);
       if (!article || (this.principal.kind === 'customer' && article.is_internal)) throw notFound();
     }
-    return renderMutationSnapshot(receipt.response_snapshot, ns.operation, true, true);
+    const replayed = renderMutationSnapshot(receipt.response_snapshot, ns.operation, true, true);
+    if (record === 'new') this.canonicalMutationSli?.recordAttempt();
+    if (record !== 'none') this.canonicalMutationSli?.recordReplayed();
+    return replayed;
   }
 
   async prepareMutation(input: TicketMutationInput, rawIdempotencyKey?: string): Promise<PreparedTicketMutation> {
@@ -216,7 +228,11 @@ export class TicketMutationReplayService {
       // Hold an owned copy: validated request objects cannot drift after hashing.
       this.attempts.set(prepared, { input: JSON.parse(serialized) as TicketMutationInput, namespace });
       return prepared;
-    } catch (error) { if (error instanceof TicketMutationError || error instanceof BetaAdmissionError) throw error; throw unavailable(); }
+    } catch (error) {
+      this.recordDenied(error);
+      if (error instanceof TicketMutationError || error instanceof BetaAdmissionError) throw error;
+      throw unavailable();
+    }
   }
 
   async commit(prepared: PreparedTicketMutation, verifiedAttachments: VerifiedMutationAttachment[] = []): Promise<MutationOutcome> {
@@ -226,7 +242,7 @@ export class TicketMutationReplayService {
       // Even a caller that invokes commit after lookup must recheck authority.
       const current = attempt.namespace ? await this.repository.findActive(attempt.namespace) : null;
       if (!current || !attempt.namespace) throw unavailable();
-      return this.replay(current, attempt.namespace);
+      return this.replay(current, attempt.namespace, 'none');
     }
     try {
       const email = await this.authorize();
@@ -235,7 +251,9 @@ export class TicketMutationReplayService {
       // Another request may have completed while CAPTCHA/R2 guards ran.
       if (attempt.namespace) {
         const current = await this.repository.findActive(attempt.namespace);
-        if (current) return await this.replay(current, attempt.namespace);
+        if (current) {
+          return await this.replay(current, attempt.namespace);
+        }
       }
       const observedAt = new Date().toISOString();
       const portal = input.operation.startsWith('portal.');
@@ -277,10 +295,15 @@ export class TicketMutationReplayService {
         // authoritative committed receipt can establish a replay/conflict.
         await this.authorize();
         const winner = attempt.namespace ? await this.repository.findActive(attempt.namespace) : null;
-        if (winner && attempt.namespace) return await this.replay(winner, attempt.namespace);
+        if (winner && attempt.namespace) return await this.replay(winner, attempt.namespace, 'existing');
         await this.admission?.authorize(candidate.ticket?'create':'conversation');
+        this.canonicalMutationSli?.recordUncertain();
         throw unavailable();
       }
-    } catch (error) { if (error instanceof TicketMutationError || error instanceof BetaAdmissionError) throw error; throw unavailable(); }
+    } catch (error) {
+      this.recordDenied(error);
+      if (error instanceof TicketMutationError || error instanceof BetaAdmissionError) throw error;
+      throw unavailable();
+    }
   }
 }

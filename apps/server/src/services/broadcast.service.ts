@@ -1,8 +1,9 @@
 import { VerifiedTenantScope } from '../types/tenant';
 import { Env } from '../bindings';
+import { measureResourceOperation, ResourceOperationEmitter } from '../observability/resource-operation';
 
 export class BroadcastService {
-  constructor(private env: Env, private scope?: VerifiedTenantScope) {}
+  constructor(private env: Env, private scope?: VerifiedTenantScope, private emit?: ResourceOperationEmitter) {}
 
   async broadcast(type: string, payload: any, retries = 2): Promise<void> {
     if (!this.env.NOTIFICATION_DO) {
@@ -14,11 +15,11 @@ export class BroadcastService {
       const id = this.env.NOTIFICATION_DO.idFromName(`tenant:${this.scope.tenantId}`);
       const obj = this.env.NOTIFICATION_DO.get(id);
 
-      await obj.fetch('http://do/broadcast', {
+      await measureResourceOperation({ resource: 'durable_object', operation: 'invoke', emit: this.emit, execute: () => obj.fetch('http://do/broadcast', {
         method: 'POST',
         body: JSON.stringify({ type, payload }),
         headers: { 'Content-Type': 'application/json' },
-      });
+      }) });
     } catch (err) {
       console.error('Broadcast failed');
       if (retries > 0) {

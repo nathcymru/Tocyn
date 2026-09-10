@@ -131,6 +131,9 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
 
   const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
+    // This tenant-scoped lookup is the authoritative pre-mutation denial;
+    // no D1 mutation batch is attempted on this path.
+    deps.canonicalMutationSli?.recordDenied();
     return c.json({ error: "Ticket not found" }, 404);
   }
 
@@ -190,8 +193,8 @@ v1.patch("/tickets/:id", async (c) => {
   }
 
   try {
-    const updatedTicket = await deps.conversationAudit.updateWithEvents(id, updateData, {kind:'api-key',id:resolution!.apiKeyId,source:'api'});
-    return c.json(updatedTicket);
+    const outcome = await deps.conversationAudit.updateWithEvents(id, updateData, {kind:'api-key',id:resolution!.apiKeyId,source:'api'});
+    return c.json(outcome.ticket);
   } catch (error) {
     if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     if (c.env.LOCAL_BETA_ENABLED!=='true') console.error("API Update Ticket Error:", error);

@@ -6,6 +6,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { InitialTicketArticleData } from './interfaces';
 import type { MutationNamespace, MutationReceipt, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
+import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 
 // Fixed raw-row projections are response-version 1, not a second canonical mapper.
 const ticketJson = `json_object('tenant_id',t.tenant_id,'id',t.id,'subject',t.subject,'status',t.status,
@@ -31,7 +32,7 @@ export type MutationCandidate = {
 
 /** Only fixed ticket mutations; all SQL authority comes from the verified scope. */
 export class TicketMutationReplayRepository {
-  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository) {}
+  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {}
 
   private namespaceValues(ns: MutationNamespace) {
     return [this.scope.tenantId, ns.principalKind, ns.principalId, ns.operation, ns.keyHash];
@@ -71,6 +72,9 @@ export class TicketMutationReplayRepository {
   }
 
   async commit(candidate: MutationCandidate, ns?: MutationNamespace): Promise<string> {
+    // This is after caller authorization/admission preparation and before
+    // constructing the authoritative D1 batch. No HTTP response establishes this.
+    this.canonicalMutationSli?.recordAttempt();
     const operation=candidate.ticket?'create':'conversation';
     const statements: D1PreparedStatement[] = [...(this.admission?.statements(operation)??[])];
     if (ns) {
@@ -141,6 +145,8 @@ export class TicketMutationReplayRepository {
     }
     const value = results[results.length - 1].results[0]?.response_snapshot;
     if (!value) throw new Error('Mutation result unavailable');
+    // The full tenant-scoped batch committed and returned its durable receipt.
+    this.canonicalMutationSli?.recordDurablyCompleted();
     return value;
   }
 }

@@ -4,6 +4,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { Ticket } from '../types';
 import type { AuditedTicketUpdate, ConversationActor, ConversationEvent } from '../types/conversation-audit';
+import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 
 const provenance = (actor: ConversationActor) => actor.kind === 'staff' ? 'mfa-staff' : actor.kind === 'customer' ? 'authenticated-customer' : 'api-key';
 const sequence = '(SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=t.tenant_id AND e.ticket_id=t.id)';
@@ -23,8 +24,10 @@ export function conversationMutationEvent(db: D1Database, scope: VerifiedTenantS
       input.actor.kind,input.actor.id,provenance(input.actor),input.actor.source,input.internal ? 'internal' : 'public',scope.tenantId,input.ticketId);
 }
 
+export type AuditedTicketUpdateOutcome = Readonly<{ ticket: Ticket | null; changed: boolean }>;
+
 export class ConversationAuditRepository {
-  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository) {}
+  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {}
 
   async history(ticketId: string, publicOnly: boolean, limit: number, cursor?: string) {
     const visible = publicOnly ? `AND e.visibility='public' AND e.kind IN ('ticket.intake','message.reply')
@@ -62,7 +65,7 @@ export class ConversationAuditRepository {
     return result.results;
   }
 
-  async updateWithEvents(id: string, data: AuditedTicketUpdate, actor: ConversationActor, retainSystemNote = false): Promise<Ticket | null> {
+  async updateWithEvents(id: string, data: AuditedTicketUpdate, actor: ConversationActor, retainSystemNote = false): Promise<AuditedTicketUpdateOutcome> {
     const statements: D1PreparedStatement[] = [...(this.admission?.ticketChangeStatements(id,data)??[])];
     const eventIds: string[] = [];
     const allKeys = ['status','priority','assigned_to','group_id','custom_fields'] as const;
@@ -104,15 +107,27 @@ export class ConversationAuditRepository {
         WHERE tenant_id=? AND id=? AND custom_fields IS NOT ?`)
         .bind(crypto.randomUUID(),actor.id,this.scope.tenantId,id,value('custom_fields')));
     }
-    if (supplied.length) {
+    const updateIndex = supplied.length ? statements.length : undefined;
+    if (updateIndex !== undefined) {
       statements.push(this.db.prepare(`UPDATE tickets SET ${supplied.map(key => `${key}=?`).join(',')},updated_at=CURRENT_TIMESTAMP
-        WHERE tenant_id=? AND id=? AND (${supplied.map(key => `${key} IS NOT ?`).join(' OR ')})`)
+        WHERE tenant_id=? AND id=? AND (${supplied.map(key => `${key} IS NOT ?`).join(' OR ')}) RETURNING id`)
         .bind(...supplied.map(value),this.scope.tenantId,id,...supplied.map(value)));
     }
     statements.push(this.db.prepare('SELECT * FROM tickets WHERE tenant_id=? AND id=?').bind(this.scope.tenantId,id));
     let result;
+    this.canonicalMutationSli?.recordAttempt();
     try { result = await this.db.batch<Ticket>(statements); }
-    catch(error) { if(this.admission) { await this.admission.authorize('conversation'); throw new BetaAdmissionError('beta_admission_unavailable',503); } throw error; }
-    return result[result.length-1].results[0] ?? null;
+    catch(error) {
+      this.canonicalMutationSli?.recordUncertain();
+      if(this.admission) { await this.admission.authorize('conversation'); throw new BetaAdmissionError('beta_admission_unavailable',503); }
+      throw error;
+    }
+    if (result.length !== statements.length || !Array.isArray(result[result.length - 1]?.results) || (updateIndex !== undefined && !Array.isArray(result[updateIndex]?.results))) {
+      this.canonicalMutationSli?.recordUncertain();
+      throw new Error('Audited mutation result unavailable');
+    }
+    const changed = updateIndex !== undefined && Boolean(result[updateIndex]?.results[0]);
+    changed ? this.canonicalMutationSli?.recordDurablyCompleted() : this.canonicalMutationSli?.recordNoOp();
+    return { ticket: result[result.length-1]?.results[0] ?? null, changed };
   }
 }

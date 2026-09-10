@@ -44,6 +44,21 @@ describe('BroadcastService', () => {
     expect(mockDO.fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('measures each fetch attempt without exposing payloads and preserves failures', async () => {
+    const emit = vi.fn();
+    mockDO.fetch.mockRejectedValue(new Error('private failure'));
+    await new BroadcastService(mockEnv, createVerifiedTenantScope('tenant-A','agent',['agent'],1), emit).broadcast('private.event', { tenantId: 'secret', body: 'secret' }, 1);
+    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit.mock.calls.every(([event]) => event.resource === 'durable_object' && event.operation === 'invoke')).toBe(true);
+    expect(JSON.stringify(emit.mock.calls)).not.toContain('secret');
+  });
+
+  it('does not retry a successful broadcast when the diagnostic sink throws', async () => {
+    mockDO.fetch.mockResolvedValue(new Response('ok'));
+    await new BroadcastService(mockEnv, createVerifiedTenantScope('tenant-A','agent',['agent'],1), () => { throw new Error('sink unavailable'); }).broadcast('ticket.updated', {}, 2);
+    expect(mockDO.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('should notify when ticket is created', async () => {
     const ticket = { id: '123', subject: 'Test Ticket', status: 'open', priority: 'normal' };
     await service.notifyTicketCreated(ticket);

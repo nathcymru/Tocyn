@@ -2,13 +2,21 @@ import { VerifiedTenantScope } from '../types/tenant';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { ApiKeyResolution } from '../auth/api-key-resolver';
 import type { CapabilityDecision } from '../auth/capability-policy';
+import type { RequestAuthSli } from '../observability/request-auth-sli';
+import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 export interface AppVariables {
   tenantScope?: VerifiedTenantScope;
   tenantDeps?: TenantRequestDeps;
   jwtPayload: JWTPayload;
   mfaPending?: boolean; // If MFA is required but not yet verified
+  /** Private local-beta admission state for the password handler only. */
+  loginAdmissionSuppressed?: boolean;
   apiKeyResolution?: ApiKeyResolution;
   permissionFences?: Record<string, CapabilityDecision>;
+  /** Request-owned, isolated-evidence authentication SLI only. */
+  requestAuthSli?: RequestAuthSli;
+  /** Request-owned, isolated-evidence canonical mutation SLI only. */
+  requestCanonicalMutationSli?: RequestCanonicalMutationSli;
 }
 
 export interface Ticket {

@@ -5,6 +5,8 @@
   },
   "include": [
     "local-tenant-fixture.ts",
-    "tenant-isolation-storage-background.test.ts"
+    "tenant-isolation-storage-background.test.ts",
+    "durable-object-resource-runtime.test.ts",
+    "vectorize-workflow-runtime.test.ts"
   ]
 }
