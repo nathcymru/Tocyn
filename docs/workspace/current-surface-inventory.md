@@ -1,6 +1,6 @@
 # Current beta surface inventory
 
-This inventory is based on the current dashboard implementation. “Migrate” means preserve the underlying capability while changing its workspace location or interaction. “Replace” means the current composition is not the target. “Context” means it remains available behind an explicit contextual surface. “Retire” is after compatibility and acceptance parity.
+This inventory is based on the dashboard implementation at inspected revision `4c11e110f96df30192bd97546d05b90facf8953c` (the pre-contract source revision). Evidence paths are [`Layout.tsx`](../../apps/dashboard/src/components/layout/Layout.tsx), [`TicketListPage.tsx`](../../apps/dashboard/src/pages/TicketListPage.tsx), [`TicketDetailPage.tsx`](../../apps/dashboard/src/pages/TicketDetailPage.tsx) and [`DashboardPage.tsx`](../../apps/dashboard/src/pages/DashboardPage.tsx); focused evidence also includes [`LayoutAccessibility.test.tsx`](../../apps/dashboard/src/__tests__/LayoutAccessibility.test.tsx), [`TicketFeedWorkflow.test.tsx`](../../apps/dashboard/src/__tests__/TicketFeedWorkflow.test.tsx), [`TicketDetailWorkflow.test.tsx`](../../apps/dashboard/src/__tests__/TicketDetailWorkflow.test.tsx) and [`AuthNavigation.test.tsx`](../../apps/dashboard/src/__tests__/AuthNavigation.test.tsx). Source findings are preserved in the [UX source archive](../planning/post-beta-2026-09-10/sources/tocyn-post-beta-ux-update-2026-09-10.zip). “Migrate” means preserve the underlying capability while changing its workspace location or interaction. “Replace” means the current composition is not the target. “Context” means it remains available behind an explicit contextual surface. “Retire” is after compatibility and acceptance parity.
 
 | Current evidence | Disposition | Target contract / owner |
 |---|---|---|
@@ -20,5 +20,15 @@ This inventory is based on the current dashboard implementation. “Migrate” m
 | `DashboardPage.tsx`: “Welcome back to Luminatick” and pulsing Operational status | Replace/move | Tocyn workspace orientation and operator work/attention links; technical health belongs in diagnostics; #128/#133/#85. |
 | `TicketDetailPage.tsx`: status `Pending` | Migrate terminology | Stable lifecycle plus explicit waiting reason, due/SLA and responsible handler; #136/#73/#137. |
 | Existing error alerts, retry controls, public/internal distinction, attachment and audit paths | Retain | Required positive/negative recovery and tenant/actor isolation evidence; #60/#63/#70/#140. |
+
+## Ancillary surfaces and relationship
+
+| Surface | Relationship to #127 |
+|---|---|
+| `KnowledgePage.tsx` and `KnowledgeEditorPage.tsx` | Retain as a global destination. #127 defines the contextual knowledge entry point and return-to-workspace behavior; #134/#68 own inline search/preview/insert. Knowledge administration remains a separate authorized route. |
+| `SettingsLayout.tsx` and settings pages | Retain as global administration. Workspace preferences (density, labels, motion, focus, panel defaults and shortcuts) are reached from Settings and may be surfaced contextually; settings are never required to complete an ordinary conversation. #132 owns preference persistence. |
+| `LoginPage.tsx` and `MfaPage.tsx` | Retain authentication boundary. Deep-link restoration occurs only after authentication, MFA and tenant/actor authorization; unauthenticated routes never reveal workspace or search state. |
+| `DashboardPage.tsx` | Inventory above classifies its current greeting/health pulse; it remains a global landing destination until #128/#85 define operator work links and health diagnostics. |
+| `UsagePage.tsx` and other administration pages | Out of the primary operator workspace. They retain global navigation access and must not introduce a parallel conversation list or alter workspace authority. |
 
 Migration rule: compatibility routes may remain until workspace parity, deep-link/back, draft, focus and failure evidence pass. No source surface is deleted as a shortcut for missing acceptance.

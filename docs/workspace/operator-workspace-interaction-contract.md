@@ -22,7 +22,7 @@ The principal object is a conversation in a work view. Ticket metadata, collabor
 
 ### State ownership
 
-Canonical conversation state remains server-authoritative. Additive operator work state is per authenticated user and tenant: `viewId`, safe view query/filter, sort, selected conversation, list anchor, panel state, draft revision/mode/attachments, snooze/next-action/waiting reason, activity read state and presentation preferences. Transient focus and pending request state may be local. Authority, tenant or session change clears or revalidates restored work state before display. Sensitive draft content uses authenticated scoped storage; long-lived browser storage is not canonical.
+Canonical conversation state remains server-authoritative. Shared tenant/conversation work state is also server-authoritative and audited where it changes work: lifecycle, ownership, priority, SLA, snooze, next action and waiting reason. Per authenticated operator state is separate: draft revision/mode/attachments, selected view, list query/sort/anchor, panel preference, activity read state and presentation preferences. A shared snooze or waiting state is visible consistently to authorized operators; an operator's draft or read state is not silently presented as another operator's. Transient focus and pending request state may be local. Authority, tenant or session change clears or revalidates restored work state before display. Sensitive draft content uses authenticated scoped storage; long-lived browser storage is not canonical.
 
 ## 3. Responsive composition
 
@@ -44,7 +44,7 @@ Canonical routes are:
 /inbox/:viewId/:conversationId
 ```
 
-Only opaque identifiers and safe presentation query values may appear in URLs. Customer content, draft bodies, credentials and tenant-sensitive payloads never appear in URLs. `/tickets` and `/tickets/:id` remain compatibility routes during migration and resolve into the workspace with the best authorized view context.
+Only opaque identifiers and an allowlist of nonsensitive presentation values may appear in URLs. Customer names, email addresses, message text, arbitrary/free-text search terms, draft bodies, credentials and tenant-sensitive payloads are prohibited in URLs. If a search term is needed, keep it in authenticated in-memory/server state or use a non-content query token whose server-side meaning is separately authorized. `/tickets` and `/tickets/:id` remain compatibility routes during migration and resolve into the workspace with the best authorized view context.
 
 Deep-link behavior:
 
@@ -55,9 +55,9 @@ Deep-link behavior:
 
 History behavior:
 
-- Opening a conversation from the list adds a history entry containing the view and conversation identity.
-- Browser Back from a conversation returns to the exact list state; on mobile it returns to the previous pane with the same state.
-- Replacing the active selection from keyboard next/previous does not create a history entry for every row; a deliberate deep link does.
+- The first deliberate conversation activation from a list adds one history entry containing the view and conversation identity. Subsequent deliberate selections in that same workspace replace the active-conversation URL/state, so Back returns to the list rather than stepping through every row. A deliberate deep link or explicit open in a new navigation context adds its own entry.
+- Browser Back from a conversation returns to the exact list state; on mobile it returns to the previous pane with the same state. Forward returns to the last active conversation when that entry exists.
+- Resolve/snooze-and-advance replaces the active selection while retaining the current workspace history entry; it does not make Back replay each automatic advance.
 - Resolve/snooze-and-advance updates the list and moves to the configured next item, with a stable completion/status announcement and an undo/reopen path where supported.
 - Reload restores the last authorized work view and presentation state, then rehydrates the selected conversation and draft by revision.
 
@@ -76,7 +76,7 @@ There are two explicit concepts:
 - **Search everywhere** (global command/search, `Ctrl/Cmd+K` and a discoverable labelled control): searches authorized conversations, customers, knowledge and navigation targets; results identify type and destination. It may open a result as a deep link while preserving the originating work view in history.
 - **Filter this view** (inside the work-view/list surface): narrows only the selected view using documented fields and keeps view identity, query and pagination/anchor in state. It is never labelled “Search all tickets.”
 
-Empty, loading, partial-result, unauthorized and network-failure states say which scope applies and provide retry/clear actions. Clearing the filter restores the selected view. Search results are bounded, tenant/actor-authorized and safe to expose in URL query parameters.
+Empty, loading, partial-result, unauthorized and network-failure states say which scope applies and provide retry/clear actions. Clearing the filter restores the selected view. Search results are bounded and tenant/actor-authorized. Search text and customer/free-text terms are never exposed in URL query parameters; only allowlisted nonsensitive filters and opaque identifiers may be URL state.
 
 ## 7. Salience, attention and progressive disclosure
 
@@ -90,9 +90,9 @@ The active conversation shows requester, concise subject/summary, reason it need
 
 The workspace exposes landmarks in this order: `Application navigation`, `Work views`, `Conversations`, `Active conversation`, `Work actions`, `Composer`, `Context`, `Activity`. On entry, focus moves to the page heading or the deep-linked conversation heading; after a list selection it moves to the active conversation heading; after opening a panel it moves to the panel heading; after closing it returns to its trigger.
 
-Required keyboard destinations include: open/close navigation; move between work views; focus filter; move/select conversations; focus conversation heading; next/previous conversation; open work actions; choose public reply/internal note; focus composer; attach files; send; open/close context and activity; retry failures; and return to the prior pane. A visible shortcut/help surface is provided by #71, and all actions retain pointer/AT paths.
+Required keyboard destinations include: open/close navigation; move between work views; focus filter; move through conversations; activate a conversation; focus conversation heading; next/previous conversation; open work actions; choose public reply/internal note; focus composer; attach files; send; open/close context and activity; retry failures; and return to the prior pane. The conversation list uses roving focus: arrow keys move the focused row without activating it, while Enter/Space or an explicit activation command selects it and moves focus to the active conversation heading. A visible shortcut/help surface is provided by #71, and all actions retain pointer/AT paths.
 
-Loading preserves the prior focus context where safe. Errors focus the alert or retry action. Mutation completion returns focus to the stable next action and announces the result. Focus indicators meet the approved WCAG/target-size contract; preferences do not weaken contrast, focus or target protections.
+Loading preserves the prior focus context where safe. Asynchronous errors are announced in the relevant live region and do not steal focus; focus moves only when the operator initiated an operation whose documented recovery destination is the error/retry control, and remains where it was for background refresh failures. Mutation completion returns focus to the stable next action and announces the result. Focus indicators meet the approved WCAG/target-size contract; preferences do not weaken contrast, focus or target protections.
 
 ## 9. Acceptance map and dependencies
 
