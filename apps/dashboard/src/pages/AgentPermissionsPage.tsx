@@ -30,14 +30,18 @@ export function AgentPermissionsPage() {
     try {
       setLoading(true);
       setError(null);
+      setStatus('');
       const data = await dashboardApi.get('/permissions') as PermissionResponse;
       setRevision(data.revision);
       setCapabilities(data.capabilities);
       setPolicies(Object.fromEntries(data.capabilities
         .filter(capability => capability.key !== capability.capability)
         .map(capability => [capability.key, capability.tenantAllowed])));
+      return true;
     } catch (err: any) {
+      setRevision(null);
       setError(err.message || 'Failed to load permissions');
+      return false;
     } finally {
       setLoading(false);
     }
@@ -46,7 +50,7 @@ export function AgentPermissionsPage() {
   useEffect(() => { void loadPermissions(); }, []);
 
   const handleToggle = (capability: Capability) => {
-    if (savingGuard.current || loading || !capability.ownerAllowed || !capability.roleAllowed || capability.key === capability.capability) return;
+    if (savingGuard.current || loading || revision === null || !capability.ownerAllowed || !capability.roleAllowed || capability.key === capability.capability) return;
     setPolicies(current => ({ ...current, [capability.key]: !current[capability.key] }));
   };
 
@@ -58,8 +62,10 @@ export function AgentPermissionsPage() {
       setStatus("Saving permissions…");
       setError(null);
       await dashboardApi.put('/permissions', { revision, policies });
-      await loadPermissions();
-      setStatus("Permissions saved. Agent sessions have been revoked.");
+      const refreshed = await loadPermissions();
+      setStatus(refreshed
+        ? "Permissions saved. Agent sessions have been revoked."
+        : "Permissions saved, but the current policy could not be loaded. Reload permissions before making further changes.");
     } catch (err: any) {
       setError(err.message || 'Failed to save permissions');
       setStatus('Permissions were not saved. Reload the current policy before retrying a conflict.');
@@ -101,7 +107,7 @@ export function AgentPermissionsPage() {
               </div>
               <label className={`relative inline-flex min-h-11 min-w-11 items-center ${available ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                 <span className="sr-only">Allow agents to use {capability.label}</span>
-                <input type="checkbox" className="sr-only peer" checked={checked} disabled={!available} aria-disabled={!available || saving || loading} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
+                <input type="checkbox" className="sr-only peer" checked={checked} disabled={!available} aria-disabled={!available || saving || loading || revision === null} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
                 <span aria-hidden="true" className="relative block w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
               </label>
             </div>

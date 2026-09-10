@@ -37,4 +37,28 @@ describe('permission administration recovery', () => {
     await waitFor(()=>expect(toggle).not.toBeChecked());
     expect(dashboardApi.put).toHaveBeenCalledTimes(1);
   });
+  it('blocks stale saves when the write succeeds but refreshing fails, then recovers on explicit reload', async () => {
+    vi.mocked(dashboardApi.get).mockResolvedValueOnce(policy)
+      .mockRejectedValueOnce(new Error('Policy temporarily unavailable'))
+      .mockResolvedValueOnce({...policy, revision: 5});
+    vi.mocked(dashboardApi.put).mockResolvedValue({});
+    render(<AgentPermissionsPage />);
+    const toggle = await screen.findByRole('checkbox', {name:'Allow agents to use General settings'});
+    fireEvent.click(toggle);
+    const save = screen.getByRole('button', {name:'Save changes'});
+    save.focus(); fireEvent.click(save);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Permissions saved, but the current policy could not be loaded'));
+    expect(save).toHaveFocus();
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(save); fireEvent.click(toggle);
+    expect(dashboardApi.put).toHaveBeenCalledTimes(1);
+    expect(toggle).toBeChecked();
+    fireEvent.click(screen.getByRole('button', {name:'Reload permissions'}));
+    await waitFor(() => expect(save).toHaveAttribute('aria-disabled', 'false'));
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    fireEvent.click(save);
+    expect(dashboardApi.put).toHaveBeenLastCalledWith('/permissions', {revision:5, policies:{general:false}});
+  });
+
 });
