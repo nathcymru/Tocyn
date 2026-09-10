@@ -53,3 +53,11 @@ Native evidence_copyedit implemented optional broadcast measurement and trusted 
 ## Actual DO runtime proof — 10 September20:01BST
 
 New durable-object-resource-runtime.test.ts bundles actual NotificationDO in memory, registers Miniflare namespace, invokes BroadcastService with actual local emitter and verifies fixed event/privacy. Production-mode real invocation suppresses output. Runtime disposed/log capture restored. Added to existing storage-background command and its TypeScript include;8tests and expanded typecheck pass. No sessions/recipient delivery/hibernation claim. Native evidence_copyedit authored; coordinator inspected/fixed harness coverage/cleanup requirements. Full159 remains incomplete; no forecast change.
+
+## Workflow/AI increment —10September20:12BST
+
+Explicit ENVIRONMENT=test + isolated-evidence opt-in permits synthetic diagnostics independently of LOCAL_BETA_ENABLED; production stilloff, original localbeta rule unchanged. Workflowlocalbeta rejection preserved. Full AIinstance optionalemitter records embedding operation/resultvalidation; workflowstep.do wrapper records invocation includingcachedsteps, notcallbackexecution. No prompts/results/identities/errors logged.
+
+Initial nativeworker proposal discarded asunreachable (localbeta requiredemission butforbidsworkflow) and typeunsoundpartialAIcast. Escalated boundedvalidation to actual nativeworkflow_validation agent, Terra/high via exposedspawncontrols. Agentadded directmockedrun/AInegativecases; rootreviewed and full473tests/52files+focusedESLint pass; agentTypeScriptpass. Future work returns to lowestadequate configuration. No recursive/duplicateCopilotreviews.
+
+Remaining: actual disposableWorkflowruntime proof, completeSLI/costcounts, AI fallback/suggestion, journal/Queue/outboxcontracts, configuration/retention/loadandalertacceptance. Full159open, mainunchanged, draft170retained. Account13%weeklyCodexremaining observed20:09BST; reset15September02:24BST. Task-specificusageunknown; no credit/reset/overage/APIspend. SharedWork/Codexallowance remainscountedonce. Forecast22January2027beta.2 unchanged.

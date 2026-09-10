@@ -1,4 +1,5 @@
 import { Env } from '../bindings';
+import { measureResourceOperation, type ResourceOperationEmitter } from '../observability/resource-operation';
 
 // Provider messages, custom names and stacks can contain prompts or credentials.
 function errorCategory(error: unknown): string {
@@ -15,19 +16,21 @@ export interface SuggestionParams {
 }
 
 export class StatelessAiService {
-  constructor(private ai: any) {}
+  constructor(private ai: any, private emit?: ResourceOperationEmitter) {}
 
   async generateEmbeddings(text: string): Promise<number[]> {
     try {
-      const result = await this.ai.run('@cf/baai/bge-large-en-v1.5', {
-        text: [text],
-      });
-      if (!result.data || result.data.length === 0) {
-        throw new Error('No embeddings returned from AI model');
-      }
-      // Depending on the Cloudflare AI runtime, data can be a flat array or an array of arrays
-      const rawVector = Array.isArray(result.data[0]) ? result.data[0] : result.data;
-      return Array.from(rawVector);
+      return await measureResourceOperation({ resource: 'ai', operation: 'embed', emit: this.emit, execute: async () => {
+        const result = await this.ai.run('@cf/baai/bge-large-en-v1.5', {
+          text: [text],
+        });
+        if (!result.data || result.data.length === 0) {
+          throw new Error('No embeddings returned from AI model');
+        }
+        // Depending on the Cloudflare AI runtime, data can be a flat array or an array of arrays
+        const rawVector = Array.isArray(result.data[0]) ? result.data[0] : result.data;
+        return Array.from(rawVector);
+      } });
     } catch (error) {
       console.error('AI Embedding error:', { category: errorCategory(error) });
       throw new Error('Failed to generate embeddings');

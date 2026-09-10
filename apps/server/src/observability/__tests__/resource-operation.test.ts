@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { measureResourceOperation, resourceOperationEvent } from '../resource-operation';
+import { observabilityEnabled } from '../operational-events';
 
 describe('resource operation observability', () => {
+  it('requires explicit test opt-in independently of local-beta workflow gating', () => {
+    expect(observabilityEnabled({ ENVIRONMENT: 'test', OBSERVABILITY_MODE: 'isolated-evidence' })).toBe(true);
+    expect(observabilityEnabled({ ENVIRONMENT: 'test', OBSERVABILITY_MODE: 'off' })).toBe(false);
+    expect(observabilityEnabled({ ENVIRONMENT: 'preview', LOCAL_BETA_ENABLED: 'true', OBSERVABILITY_MODE: 'isolated-evidence' })).toBe(true);
+    expect(observabilityEnabled({ ENVIRONMENT: 'preview', LOCAL_BETA_ENABLED: 'false', OBSERVABILITY_MODE: 'isolated-evidence' })).toBe(false);
+    expect(observabilityEnabled({ ENVIRONMENT: 'production', LOCAL_BETA_ENABLED: 'true', OBSERVABILITY_MODE: 'isolated-evidence' })).toBe(false);
+  });
   it('emits one allowlisted success event and returns the result', async () => {
     const emit = vi.fn(); let tick = 10;
     await expect(measureResourceOperation({ resource: 'd1', operation: 'read', execute: () => 'ok', now: () => tick++, emit })).resolves.toBe('ok');

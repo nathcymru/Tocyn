@@ -34,5 +34,6 @@ export function operationalEvent(input: Omit<OperationalEvent, 'version' | 'type
 }
 
 export function observabilityEnabled(env: { ENVIRONMENT?: string; LOCAL_BETA_ENABLED?: string; OBSERVABILITY_MODE?: string }): boolean {
-  return env.ENVIRONMENT !== 'production' && env.LOCAL_BETA_ENABLED === 'true' && env.OBSERVABILITY_MODE === 'isolated-evidence';
+  return env.ENVIRONMENT !== 'production' && env.OBSERVABILITY_MODE === 'isolated-evidence'
+    && (env.LOCAL_BETA_ENABLED === 'true' || env.ENVIRONMENT === 'test');
 }
