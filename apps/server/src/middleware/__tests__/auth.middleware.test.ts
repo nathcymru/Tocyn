@@ -2,6 +2,10 @@ import { tenantMiddleware } from '../tenant.middleware';
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { authMiddleware } from "../auth.middleware";
+import { operationalObservability } from '../operational-observability';
+import type { Env } from '../../bindings';
+import type { AppVariables } from '../../types';
+import type { RequestAuthSliSnapshot } from '../../observability/request-auth-sli';
 import * as jose from "jose";
 
 const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
@@ -261,5 +265,77 @@ describe("Auth & Tenant Middleware Chain Integration", () => {
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.error).toContain("User role changed");
+  });
+});
+
+describe('isolated request app-session SLI integration', () => {
+  const secret = new TextEncoder().encode(JWT_SECRET);
+  const enabled = { JWT_SECRET, ENVIRONMENT: 'test', LOCAL_BETA_ENABLED: 'false', OBSERVABILITY_MODE: 'isolated-evidence' } as Env;
+
+  const token = (claims: Record<string, unknown>) => new jose.SignJWT({
+    sub: 'staff-1', tenant_id: 'tenant-A', email: 'staff@example.invalid', role: 'admin', ...claims,
+  }).setProtectedHeader({ alg: 'HS256' }).setAudience('app').setIssuedAt().setExpirationTime('2h').sign(secret);
+
+  const database = (first: () => unknown | Promise<unknown>) => ({
+    prepare: () => ({ bind: () => ({ first, all: async () => ({ results: [] }) }) }),
+  });
+
+  it('records trusted app-session outcomes independently of the HTTP response status', async () => {
+    const signals: RequestAuthSliSnapshot[] = [];
+    const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+    app.use('*', (c, next) => operationalObservability(c, next, () => {}, event => { signals.push(event); }));
+    app.use('*', authMiddleware);
+    app.get('/protected', c => c.text('OK'));
+
+    const accepted = await app.request('/protected', { headers: { Authorization: `Bearer ${await token({ mfa_verified: true, session_version: 0 })}` } }, {
+      ...enabled, DB: database(async () => ({ tenant_id: 'tenant-A', id: 'staff-1', role: 'admin', session_version: 0 })),
+    });
+    expect(accepted.status).toBe(200);
+
+    const challenge = await app.request('/protected', { headers: { Authorization: `Bearer ${await token({ mfa_verified: false, session_version: 0 })}` } }, {
+      ...enabled, DB: database(async () => ({ tenant_id: 'tenant-A', id: 'staff-1', role: 'admin', session_version: 0 })),
+    });
+    expect(challenge.status).toBe(200);
+
+    const unavailable = await app.request('/protected', { headers: { Authorization: `Bearer ${await token({ mfa_verified: true, session_version: 0 })}` } }, {
+      ...enabled, DB: database(() => { throw new Error('synthetic database fault'); }),
+    });
+    expect(unavailable.status).toBe(401);
+
+    expect(signals).toEqual([
+      { version: 1, type: 'auth.sli.request', scope: 'app-session', complete: true, counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'app-session', complete: true, counts: { attempted: 1, accepted: 0, denied: 0, unavailable: 0, challenge: 1 } },
+      { version: 1, type: 'auth.sli.request', scope: 'app-session', complete: true, counts: { attempted: 1, accepted: 0, denied: 0, unavailable: 1, challenge: 0 } },
+    ]);
+    expect(JSON.stringify(signals)).not.toContain('staff-1');
+  });
+
+  it('treats an explicitly disallowed signing algorithm as credential denial, not service unavailability', async () => {
+    const signals: RequestAuthSliSnapshot[] = [];
+    const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+    app.use('*', (c, next) => operationalObservability(c, next, () => {}, event => { signals.push(event); }));
+    app.use('*', authMiddleware);
+    app.get('/protected', c => c.text('OK'));
+    const unsupported = await new jose.SignJWT({ sub: 'staff-1', tenant_id: 'tenant-A', role: 'admin' })
+      .setProtectedHeader({ alg: 'HS384' }).setAudience('app').setIssuedAt().setExpirationTime('2h').sign(secret);
+    const response = await app.request('/protected', { headers: { Authorization: `Bearer ${unsupported}` } }, enabled);
+    expect(response.status).toBe(401);
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toMatchObject({ complete: true, counts: { attempted: 1, denied: 1, unavailable: 0 } });
+  });
+
+  it('keeps an app-session denial and response intact when its optional observer rejects', async () => {
+    let captured: AppVariables['requestAuthSli'];
+    const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+    app.use('*', (c, next) => operationalObservability(c, next, () => {}, async () => { throw new Error('synthetic observer fault'); }));
+    app.use('*', async (c, next) => { captured = c.get('requestAuthSli'); await next(); });
+    app.use('*', authMiddleware);
+    app.get('/protected', c => c.text('OK'));
+
+    const response = await app.request('/protected', { headers: { Authorization: 'Bearer malformed' } }, { ...enabled, DB: database(async () => null) });
+    expect(response.status).toBe(401);
+    await new Promise(resolve => setImmediate(resolve));
+    expect(captured).toBeDefined();
+    expect(captured!.snapshot()).toMatchObject({ complete: false, counts: { attempted: 1, denied: 1 } });
   });
 });

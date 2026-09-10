@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Hono } from 'hono';
 import type { Env } from '../src/bindings';
+import type { AppVariables } from '../src/types';
 import { operationalObservability } from '../src/middleware/operational-observability';
 import { createLocalObservabilityCollector } from '../src/observability/local-collector';
 
 test('a synthetic local HTTP flow exports bounded allowlisted evidence without changing its response', async () => {
   const collector = createLocalObservabilityCollector({ maxEvents: 2, maxBytes: 2_048 });
-  const app = new Hono<{ Bindings: Env }>();
+  const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
   app.use('*', (context, next) => operationalObservability(context, next, collector.record));
   app.get('/health', context => context.text('ok'));
   const env = { ENVIRONMENT: 'test', OBSERVABILITY_MODE: 'isolated-evidence' } as Env;

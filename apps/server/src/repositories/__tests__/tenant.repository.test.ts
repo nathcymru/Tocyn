@@ -14,6 +14,8 @@ import { join } from 'path';
 import { createVerifiedTenantScope } from '../../auth/scope';
 import { createRepositories } from '../index';
 import { D1Database } from '@cloudflare/workers-types';
+import { operationalObservability } from '../../middleware/operational-observability';
+import type { RequestAuthSliSnapshot } from '../../observability/request-auth-sli';
 
 // Simple D1 Mock backed by better-sqlite3
 class D1Mock implements D1Database {
@@ -156,17 +158,28 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
   it('revokes copied staff and widget tokens through the real logout routes while preserving another tenant', async () => {
     const secret = 'synthetic-revocation-secret';
     const env = { DB: d1, JWT_SECRET: secret } as any;
+    const observedEnv = { ...env, ENVIRONMENT: 'test', LOCAL_BETA_ENABLED: 'false', OBSERVABILITY_MODE: 'isolated-evidence' } as any;
     const service = new AuthService(env);
     const a = await reposA.users.create({ email: 'a@revocation.test', role: 'agent', mfa_enabled: true } as any);
     const b = await reposB.users.create({ email: 'b@revocation.test', role: 'agent', mfa_enabled: true } as any);
     const token = await service.generateToken(a, secret, true);
     const other = await service.generateToken(b, secret, true);
-    const app = new Hono().route('/auth', authHandler).route('/customer', customerHandler);
-    expect((await app.request('/auth/me', { headers: { Authorization: `Bearer ${token}` } }, env)).status).toBe(200);
-    expect((await app.request('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }, env)).status).toBe(200);
-    expect((await app.request('/auth/me', { headers: { Authorization: `Bearer ${token}` } }, env)).status).toBe(401);
+    const authSignals: RequestAuthSliSnapshot[] = [];
+    const app = new Hono();
+    app.use('*', (c, next) => operationalObservability(c as any, next, () => {}, event => { authSignals.push(event); }));
+    app.route('/auth', authHandler).route('/customer', customerHandler);
+    expect((await app.request('/auth/me', { headers: { Authorization: `Bearer ${token}` } }, observedEnv)).status).toBe(200);
+    expect((await app.request('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }, observedEnv)).status).toBe(200);
+    expect((await app.request('/auth/me', { headers: { Authorization: `Bearer ${token}` } }, observedEnv)).status).toBe(401);
     expect(await service.verifyToken(token)).toBeNull();
     expect(await service.verifyToken(other)).not.toBeNull();
+    expect((await app.request('/auth/me', { headers: { Authorization: `Bearer ${other}` } }, observedEnv)).status).toBe(200);
+    expect(authSignals.map(event => event.counts)).toEqual([
+      { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 },
+      { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 },
+      { attempted: 1, accepted: 0, denied: 1, unavailable: 0, challenge: 0 },
+      { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 },
+    ]);
     const fresh = await service.generateToken((await reposA.users.get(a.id))!, secret, true);
     expect(await service.verifyToken(fresh)).not.toBeNull();
     const customer = await reposA.users.create({ email: 'customer@revocation.test', role: 'customer', mfa_enabled: false } as any);

@@ -6,11 +6,14 @@ import { MAX_RESOURCE_EVENTS_PER_COMPOSITION } from './resource-operation';
 export interface DiagnosticWorkloadBounds {
   httpRequests: number;
   resourceCompositions: number;
+  /** Defaults to every HTTP request; lower only for a proven route composition. */
+  appSessionAuthRequests?: number;
 }
 
 /**
  * Conservative planning input to #50/#64 for the current JSON-console emitters.
- * One HTTP completion envelope per request and the existing per-composition
+ * One HTTP completion envelope plus at most one app-session SLI summary per
+ * request, and the existing per-composition
  * resource ceiling. These are potential log events, not provider usage or a
  * durable grant. Sampling and observer failure cannot reduce this reservation
  * estimate. Platform invocation logs, other application logs, export/retry and
@@ -20,7 +23,9 @@ export function estimateDiagnosticEnvelope(bounds: DiagnosticWorkloadBounds): Re
   for (const value of [bounds.httpRequests, bounds.resourceCompositions]) {
     if (!Number.isSafeInteger(value) || value < 0) throw new Error('Invalid diagnostic workload bounds');
   }
+  const authRequests = bounds.appSessionAuthRequests ?? bounds.httpRequests;
+  if (!Number.isSafeInteger(authRequests) || authRequests < 0 || authRequests > bounds.httpRequests) throw new Error('Invalid app-session diagnostic bounds');
   const resourceEvents = bounds.resourceCompositions * MAX_RESOURCE_EVENTS_PER_COMPOSITION;
   if (!Number.isSafeInteger(resourceEvents)) throw new Error('Diagnostic workload exceeds safe accounting range');
-  return sumResourceEnvelopes({ logEvents: bounds.httpRequests, traceEvents: 0 }, { logEvents: resourceEvents });
+  return sumResourceEnvelopes({ logEvents: bounds.httpRequests, traceEvents: 0 }, { logEvents: resourceEvents }, { logEvents: authRequests });
 }

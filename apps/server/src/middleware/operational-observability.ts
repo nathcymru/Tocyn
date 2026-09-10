@@ -1,8 +1,11 @@
 import type { Context, Next } from 'hono';
 import type { Env } from '../bindings';
 import { observabilityEnabled, operationalEvent, type OperationalEvent } from '../observability/operational-events';
+import { createRequestAuthSli, type RequestAuthSliSnapshot } from '../observability/request-auth-sli';
+import type { AppVariables } from '../types';
 
 export type OperationalEventSink = (event: OperationalEvent) => void | Promise<void>;
+export type RequestAuthSliSink = (snapshot: RequestAuthSliSnapshot) => void | Promise<void>;
 
 function safeRoute(path: string): string {
   if (path === '/health') return '/health';
@@ -12,10 +15,15 @@ function safeRoute(path: string): string {
   return path.startsWith('/api/') ? '/api/other' : '/other';
 }
 
-export async function operationalObservability(c: Context<{ Bindings: Env }>, next: Next, sink?: OperationalEventSink): Promise<void> {
+export async function operationalObservability(c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next, sink?: OperationalEventSink, authSliSink?: RequestAuthSliSink): Promise<void> {
   let measurement: { correlationId: string; started: number } | undefined;
+  let requestAuthSli: AppVariables['requestAuthSli'];
   try {
-    if (observabilityEnabled(c.env)) measurement = { correlationId: crypto.randomUUID(), started: Date.now() };
+    if (observabilityEnabled(c.env)) {
+      measurement = { correlationId: crypto.randomUUID(), started: Date.now() };
+      requestAuthSli = createRequestAuthSli();
+      c.set('requestAuthSli', requestAuthSli);
+    }
   } catch { /* Diagnostic initialization cannot prevent the request. */ }
   let failed = false;
   try {
@@ -38,5 +46,12 @@ export async function operationalObservability(c: Context<{ Bindings: Env }>, ne
         } else console.log(JSON.stringify(event));
       }
     } catch { /* Telemetry cannot affect authorization, isolation, or request recovery. */ }
+    if (requestAuthSli?.hasDecision()) {
+      try {
+        const snapshot = requestAuthSli.snapshot();
+        const pending = authSliSink ? authSliSink(snapshot) : console.log(JSON.stringify(snapshot));
+        if (pending) void Promise.resolve(pending).catch(() => requestAuthSli?.markObserverFault());
+      } catch { requestAuthSli.markObserverFault(); }
+    }
   }
 }

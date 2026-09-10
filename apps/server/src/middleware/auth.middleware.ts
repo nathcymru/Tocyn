@@ -9,8 +9,15 @@ import { getCookie } from "hono/cookie";
 import { createVerifiedTenantScope } from "../auth/scope";
 import { createTenantRequestDeps } from "./tenant.middleware";
 import { UserAuthResolver, UserAuthResolution } from "../auth/user-auth-resolver";
+import type { AppSessionAuthDecision } from '../observability/request-auth-sli';
 
 export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next) => {
+  let recorded = false;
+  const record = (decision: AppSessionAuthDecision) => {
+    if (recorded) return;
+    recorded = true;
+    try { c.get('requestAuthSli')?.record(decision); } catch { /* Evidence cannot affect authentication. */ }
+  };
   const authHeader = c.req.header("Authorization");
   const cookieToken = getCookie(c, "lumina_customer_token");
 
@@ -18,47 +25,73 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
   if (authHeader && authHeader.startsWith("Bearer ")) token = authHeader.substring(7);
   else if (cookieToken) token = cookieToken;
 
-  if (!token) return c.json({ error: "Unauthorized: Missing or invalid token format" }, 401);
+  if (!token) {
+    record('denied');
+    return c.json({ error: "Unauthorized: Missing or invalid token format" }, 401);
+  }
 
+  let payload: jose.JWTPayload;
   try {
-    const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET), {
+    ({ payload } = await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET), {
       algorithms: ['HS256'],
       requiredClaims: ['exp', 'iat', 'sub'],
       audience: "app",
-    });
+    }));
+  } catch (error) {
+    // Only jose's explicit credential-validation failures are trustworthy
+    // denials. Other verifier/runtime failures retain the existing 401
+    // response but are unavailable SLI evidence, never inferred rejection.
+    const denied = error instanceof jose.errors.JOSEAlgNotAllowed
+      || error instanceof jose.errors.JWSInvalid
+      || error instanceof jose.errors.JWSSignatureVerificationFailed
+      || error instanceof jose.errors.JWTClaimValidationFailed
+      || error instanceof jose.errors.JWTExpired
+      || error instanceof jose.errors.JWTInvalid;
+    record(denied ? 'denied' : 'unavailable');
+    return c.json({ error: "Unauthorized: Invalid or expired token" }, 401);
+  }
 
+  try {
     const tenantId = (payload as any).tenant_id;
     const sub = payload.sub as string;
 
     if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
+      record('denied');
       return c.json({ error: "Unauthorized: Missing or invalid tenant context" }, 401);
     }
 
     if (!sub || typeof sub !== "string" || !sub.trim()) {
+      record('denied');
       return c.json({ error: "Unauthorized: Missing or invalid subject claim" }, 401);
     }
 
     let activeRole = payload.role as string;
     if (!c.env.DB) {
+      record('unavailable');
       return c.json({ error: "Unauthorized: Database unavailable" }, 401);
     }
 
     const resolver = new UserAuthResolver(c.env.DB);
     const userRes = await resolver.resolveUserById(tenantId, sub);
     if (userRes && (!Number.isSafeInteger(payload.session_version ?? 0) || (payload.session_version ?? 0) !== userRes.sessionVersion)) {
+      record('denied');
       return c.json({ error: "Unauthorized: Session revoked" }, 401);
     }
     if (!userRes) {
+      record('denied');
       return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
     }
     if (userRes.role !== payload.role) {
+      record('denied');
       return c.json({ error: "Unauthorized: User role changed" }, 401);
     }
     activeRole = userRes.role;
 
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
-
     const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
+    // Live identity, role, session, and tenant scope are authoritative here.
+    // Admission and MFA remain separate gates; HTTP status is not consulted.
+    record(payload.mfa_verified === true ? 'accepted' : 'challenge');
     await authorizeLocalBeta(c.env, scope);
     c.set("tenantScope", scope as any);
 
@@ -68,6 +101,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
     await next();
   } catch (error) {
     if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
+    record('unavailable');
     return c.json({ error: "Unauthorized: Invalid or expired token" }, 401);
   }
 };
@@ -117,6 +151,7 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
 
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
 
+    c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
     const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
     await authorizeLocalBeta(c.env, scope);
     c.set("tenantScope", scope as any);
