@@ -7,3 +7,4 @@ export { Listbox, createListCollection, type ListboxValueChangeDetails } from '@
 export { Combobox, type ComboboxInputValueChangeDetails } from '@ark-ui/react/combobox';
 export { Popover } from '@ark-ui/react/popover';
 export { Splitter } from '@ark-ui/react/splitter';
+export { Tabs } from '@ark-ui/react/tabs';
