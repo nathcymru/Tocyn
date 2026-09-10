@@ -1,3 +1,5 @@
+import userEvent from '@testing-library/user-event';
+import { dashboardApi } from '../api/client';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -17,6 +19,8 @@ function tree() {
   </Routes></MemoryRouter></QueryClientProvider>;
 }
 beforeEach(() => {
+  // JSDOM lacks resize observation; browser positioning remains separately verified.
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   useAuthStore.getState().setAuth('synthetic-session', { id: 'operator', email: 'operator@example.invalid', full_name: 'Operator', role: 'agent', mfa_enabled: true });
   vi.mocked(useRealtime).mockReturnValue(realtime as ReturnType<typeof useRealtime>);
@@ -27,7 +31,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup(); client.clear(); useAuthStore.getState().logout(); vi.clearAllMocks();
-  vi.restoreAllMocks();
+  vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
 
 it('names global search and shared navigation, focuses its close control and returns focus on Escape', async () => {
@@ -48,20 +52,20 @@ it('names global search and shared navigation, focuses its close control and ret
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });
 
-it('names account/connection disclosures and restores focus when their child actions close', () => {
+it('names account/connection disclosures and restores focus when their child actions close', async () => {
   render(tree());
   const account = screen.getByRole('button', { name: 'Account options' });
-  fireEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
-  const security = screen.getByRole('link', { name: 'Security Profile' });
-  security.focus(); fireEvent.keyDown(security, { key: 'Escape' });
-  expect(account).toHaveFocus(); expect(account).toHaveAttribute('aria-expanded', 'false');
+  await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
+  const security = await screen.findByRole('link', { name: 'Security Profile' });
+  await waitFor(() => expect(security).toHaveFocus()); await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(account).toHaveFocus()); expect(account).toHaveAttribute('aria-expanded', 'false');
   const connection = screen.getByRole('button', { name: 'Real-time' });
-  fireEvent.click(connection); expect(connection).toHaveAttribute('aria-expanded', 'true');
-  const reconnect = screen.getByRole('button', { name: 'Force Reconnect' });
-  reconnect.focus(); fireEvent.keyDown(reconnect, { key: 'Escape' });
-  expect(connection).toHaveFocus(); expect(connection).toHaveAttribute('aria-expanded', 'false');
-  fireEvent.click(connection); fireEvent.click(screen.getByRole('button', { name: 'Force Reconnect' }));
-  expect(realtime.manualReconnect).toHaveBeenCalledTimes(1); expect(connection).toHaveFocus();
+  await userEvent.click(connection); expect(connection).toHaveAttribute('aria-expanded', 'true');
+  const reconnect = await screen.findByRole('button', { name: 'Force Reconnect' });
+  await waitFor(() => expect(reconnect).toHaveFocus()); await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(connection).toHaveFocus()); expect(connection).toHaveAttribute('aria-expanded', 'false');
+  await userEvent.click(connection); fireEvent.click(screen.getByRole('button', { name: 'Force Reconnect' }));
+  expect(realtime.manualReconnect).toHaveBeenCalledTimes(1); await waitFor(() => expect(connection).toHaveFocus());
 });
 
 it('closes mobile navigation after a selected destination and focuses the workspace', async () => {
@@ -98,4 +102,25 @@ it('keeps a focused notification available and returns focus when it is dismisse
     expect(screen.queryByRole('button', { name: 'Dismiss ticket notification' })).not.toBeInTheDocument();
     expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   } finally { vi.useRealTimers(); }
+});
+
+it('navigates from the account popover without stealing destination focus', async () => {
+  render(tree()); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
+  const destination = await screen.findByRole('link', { name: 'Security Profile' });
+  await userEvent.click(destination);
+  await waitFor(() => expect(screen.getByRole('heading')).toHaveTextContent('/profile/security'));
+  await waitFor(() => expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus());
+});
+
+it('guards overlapping sign-outs and still clears local authentication when server sign-out fails', async () => {
+  const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  let reject!: (error: Error) => void;
+  vi.mocked(dashboardApi.post).mockImplementationOnce(() => new Promise((_resolve, failure) => { reject = failure; }));
+  render(tree()); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
+  const signOut = await screen.findByRole('button', { name: 'Sign out of all sessions' });
+  fireEvent.click(signOut); fireEvent.click(signOut); expect(dashboardApi.post).toHaveBeenCalledTimes(1);
+  await act(async () => reject(new Error('Synthetic failure')));
+  expect(useAuthStore.getState().user).toBeNull();
+  expect(screen.getByRole('heading')).toHaveTextContent('/login');
+  expect(alert).toHaveBeenCalledWith(expect.stringContaining('Server sign-out could not be confirmed'));
 });

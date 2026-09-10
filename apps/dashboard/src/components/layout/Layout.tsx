@@ -1,3 +1,4 @@
+import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
@@ -41,25 +42,21 @@ interface Toast {
   ticketId?: string;
 }
 
-function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
+interface SidebarProps { onNavigate?: () => void; navigationFocus: () => HTMLElement | null; }
+
+function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const restoreAccountFocus = useRef(true);
+  const loggingOut = useRef(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const disclosureId = React.useId();
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const handleLogout = async () => {
+    if (loggingOut.current) return;
+    loggingOut.current = true;
+    restoreAccountFocus.current = false;
     let confirmed = false;
     try { await dashboardApi.post('/auth/logout'); confirmed = true; }
     catch { /* Local sign-out must still complete. */ }
@@ -68,34 +65,30 @@ function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
   };
 
   return (
-    <div className="relative mt-2" ref={menuRef} onKeyDown={event => {
-      if (event.key === 'Escape' && isOpen) {
-        event.preventDefault(); event.stopPropagation();
-        setIsOpen(false); trigger.current?.focus();
-      }
-    }}>
+    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start'}} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
+    <div className="relative mt-2">
+      <Popover.Trigger asChild>
       <TocynButton
         type="button"
         ref={trigger}
         aria-label="Account options"
         aria-expanded={isOpen}
         aria-controls={disclosureId}
-        onClick={() => setIsOpen(!isOpen)}
         title={user?.full_name || 'User'}
         className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold border border-slate-600 hover:ring-2 hover:ring-brand-500 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         {user?.full_name?.[0] || 'A'}
-      </TocynButton>
+      </TocynButton></Popover.Trigger>
 
-      {isOpen && (
-        <div id={disclosureId} className="absolute bottom-full left-0 mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
+      <Popover.Positioner>
+        <Popover.Content aria-label="Account options" className=" w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
           <div className="px-4 py-2 border-b border-slate-700">
             <p className="text-sm font-medium text-white truncate">{user?.full_name}</p>
             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
           </div>
           <Link
             to="/profile/security"
-            onClick={() => { setIsOpen(false); onNavigate?.(); }}
+            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); }}
             className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
           >
             <Key className="w-4 h-4" />
@@ -108,13 +101,14 @@ function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
             <LogOut className="w-4 h-4" />
             Sign out of all sessions
           </TocynButton>
-        </div>
-      )}
+        </Popover.Content>
+      </Popover.Positioner>
     </div>
+    </Popover.Root>
   );
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   const location = useLocation();
   return (
         <div className="flex flex-col h-full items-center py-4">
@@ -162,7 +156,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <Settings className="w-6 h-6" />
             </Link>
 
-            <UserMenu onNavigate={onNavigate} />
+            <UserMenu onNavigate={onNavigate} navigationFocus={navigationFocus} />
           </div>
         </div>
   );
@@ -177,7 +171,6 @@ export function Layout() {
   const { isConnected, lastMessage, connectionDetails, manualReconnect } = useRealtime();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showConnDetails, setShowConnDetails] = useState(false);
-  const connDetailsRef = useRef<HTMLDivElement>(null);
   const connectionTrigger = useRef<HTMLButtonElement>(null);
   const connectionId = React.useId();
   const navigationClose = useRef<HTMLButtonElement>(null);
@@ -198,17 +191,6 @@ export function Layout() {
       setSearchInput('');
     }
   }, [location.pathname, location.search]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (connDetailsRef.current && !connDetailsRef.current.contains(event.target as Node)) {
-        setShowConnDetails(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -287,7 +269,7 @@ export function Layout() {
       </div>
 
       <aside className="hidden lg:block w-16 shrink-0 bg-slate-900 border-r border-slate-800">
-        <SidebarContent />
+        <SidebarContent navigationFocus={() => main.current} />
       </aside>
         <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
           labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
@@ -297,7 +279,7 @@ export function Layout() {
           <h2 id={`${mobileDialogId}-title`} className="sr-only">Navigation</h2>
           <TocynButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
             className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X aria-hidden="true" /></TocynButton>
-          <div className="h-[calc(100dvh-4rem)]"><SidebarContent onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
+          <div className="h-[calc(100dvh-4rem)]"><SidebarContent navigationFocus={() => main.current} onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
         </TocynDialog>
 
       {/* Main content */}
@@ -338,18 +320,14 @@ export function Layout() {
             />
           </div>
 
-          <div className="flex items-center gap-4 relative" ref={connDetailsRef} onKeyDown={event => {
-            if (event.key === 'Escape' && showConnDetails) {
-              event.preventDefault();
-              setShowConnDetails(false); connectionTrigger.current?.focus();
-            }
-          }}>
+          <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
+          <div className="flex items-center gap-4 relative">
+            <Popover.Trigger asChild>
             <TocynButton
               type="button"
               ref={connectionTrigger}
               aria-expanded={showConnDetails}
               aria-controls={connectionId}
-              onClick={() => setShowConnDetails(!showConnDetails)}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
                 isConnected
@@ -360,10 +338,10 @@ export function Layout() {
               {isConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
               <span>{isConnected ? 'Real-time' : 'Disconnected'}</span>
               <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showConnDetails && "rotate-180")} />
-            </TocynButton>
+            </TocynButton></Popover.Trigger>
 
-            {showConnDetails && (
-              <div id={connectionId} className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
+            <Popover.Positioner>
+              <Popover.Content aria-label="Connection Status" className=" w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-bold text-slate-900">Connection Status</h3>
                   <div className={cn(
@@ -400,9 +378,10 @@ export function Layout() {
                     Force Reconnect
                   </TocynButton>
                 </div>
-              </div>
-            )}
+              </Popover.Content>
+            </Popover.Positioner>
           </div>
+          </Popover.Root>
         </header>
 
         <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn("flex-1 overflow-auto", !location.pathname.startsWith('/settings') && "p-4 lg:p-8")}>
