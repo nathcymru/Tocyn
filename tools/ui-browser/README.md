@@ -48,3 +48,8 @@ It records20samples per client with browser DOM-click timestamps, loaded detail 
 ## Security enrollment and retry UI
 
 `node tools/ui-browser/security-recovery.mjs` exercises Security Profile confirmation and MFA setup retry through the full local dashboard. `TOCYN_SECURITY_ORIGIN` permits only a loopback HTTP origin. All API requests are intercepted or blocked; synthetic credentials never reach the backend. The receipt records duplicate-request guards, rejected-code retention, replacement-session success announcement/heading focus and retry-created code focus. It includes source hashes and does not claim real enrollment, token validity or tenant isolation. Session announcements remain nonpersisted and scoped to the replacement session; cache invalidation is preserved.
+
+
+## Built widget visual regression
+
+`node tools/ui-browser/widget-visual.mjs` serves the real built IIFE on a disposable loopback server. Six synthetic AI-on/off cases cover desktop,320px and320×480viewports. Required CI build now runs it and retains its JSON/screenshots for3days. It rejects missing/unsupported text contrast, missing visible keyboard outlines, poor focus contrast, undersized controls, panel overflow and inaccessible SendMessage in the short viewport. Placeholder/footer colors are measured too. All writes/outside origins are blocked; no customer credentials or provider calls. This covers the default retained widget, not arbitrary themes or #67 wrapper lifecycle. Widget CSS is compiled into the shadow tree rather than emitted as a required host stylesheet.

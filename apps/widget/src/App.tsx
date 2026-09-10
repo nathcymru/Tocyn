@@ -42,10 +42,10 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col items-end">
       <div hidden={!isOpen}>
-        <div id={`${widgetId}-panel`} role="region" aria-labelledby={`${widgetId}-title`} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeWidget(); } }} className="mb-4 w-80 sm:w-96 bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[600px]">
+        <div id={`${widgetId}-panel`} role="region" aria-labelledby={`${widgetId}-title`} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeWidget(); } }} className="mb-4 w-[calc(100vw-2.5rem)] sm:w-96 bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[min(600px,calc(100dvh-7.5rem))]">
           <div className="p-4 text-white flex justify-between items-center" style={{ backgroundColor: config.primaryColor }}>
             <h2 id={`${widgetId}-title`} className="font-bold text-lg">{config.title}</h2>
-            <TocynButton ref={closeButton} aria-label="Close support" onClick={closeWidget} className="hover:bg-white/10 rounded p-1 transition-colors">
+            <TocynButton ref={closeButton} aria-label="Close support" onClick={closeWidget} className="hover:bg-white/10 rounded min-w-11 min-h-11 flex items-center justify-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
               <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -77,7 +77,7 @@ const App: React.FC = () => {
           </div>
 
           </Tabs.Root>
-          <div className="p-2 text-center text-[10px] text-gray-400 border-t border-gray-100">
+          <div className="p-2 text-center text-[10px] text-gray-600 border-t border-gray-100">
             Powered by Luminatick
           </div>
         </div>
@@ -86,7 +86,7 @@ const App: React.FC = () => {
       <TocynButton
         ref={launcher} aria-label={isOpen ? 'Close support' : 'Open support'} aria-expanded={isOpen} aria-controls={`${widgetId}-panel`}
         onClick={toggleWidget}
-        className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95"
+        className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
         style={{ backgroundColor: config.primaryColor }}
       >
         {isOpen ? (
