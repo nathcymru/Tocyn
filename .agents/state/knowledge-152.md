@@ -26,3 +26,6 @@ A preliminary worker claim that SOP required a migration was incorrect:0001/0009
 ## Delivery state
 
 Project152 In progress, Actualstart2026-09-10 verified; Progress remains0pendingaccepted evidence. Baselines unchanged. No full-scope forecast movement inferred from this compatibility slice; account for accepted correction at integration without double-counting151/152work. ZeroCopilotrequests, no bypass/merge yet. Remaining: exact-head CI, bounded server acceptance/integration,48UI integration and full approved152capabilities.
+
+
+Accepted compatibility receipt:172merged10September18:28:48UTC, signed4fce7b6654db924d818d2ee2ad77d3c855ee9d46. Verified GitHubsignature and exact reviewedtree528d88f49a34fc3c888274357937b1eb8d5644d1; all9c46requiredCI/CodeQL passed, no reviewthreads/findings. Owner PR-only approving-review bypass used; not independentapproval. ZeroCopilot. Full152remainsInprogress; nofullassistantacceptance or forecastchange.48refreshed from thismain, resolving only duplicated trailing blank lines in the approved152issue source. Earlier premergepending state is historical.
