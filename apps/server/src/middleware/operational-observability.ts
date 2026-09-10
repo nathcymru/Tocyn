@@ -1,6 +1,8 @@
 import type { Context, Next } from 'hono';
 import type { Env } from '../bindings';
-import { observabilityEnabled, operationalEvent } from '../observability/operational-events';
+import { observabilityEnabled, operationalEvent, type OperationalEvent } from '../observability/operational-events';
+
+export type OperationalEventSink = (event: OperationalEvent) => void | Promise<void>;
 
 function safeRoute(path: string): string {
   if (path === '/health') return '/health';
@@ -10,7 +12,7 @@ function safeRoute(path: string): string {
   return path.startsWith('/api/') ? '/api/other' : '/other';
 }
 
-export async function operationalObservability(c: Context<{ Bindings: Env }>, next: Next): Promise<void> {
+export async function operationalObservability(c: Context<{ Bindings: Env }>, next: Next, sink?: OperationalEventSink): Promise<void> {
   let measurement: { correlationId: string; started: number } | undefined;
   try {
     if (observabilityEnabled(c.env)) measurement = { correlationId: crypto.randomUUID(), started: Date.now() };
@@ -29,7 +31,11 @@ export async function operationalObservability(c: Context<{ Bindings: Env }>, ne
         const { correlationId, started } = measurement;
         const status = failed ? 500 : c.res.status;
         const outcome = status >= 500 ? 'server_error' : status >= 400 ? 'client_error' : 'success';
-        console.log(JSON.stringify(operationalEvent({ correlationId, route: safeRoute(c.req.path), method: c.req.method, outcome, status, latencyMs: Date.now() - started })));
+        const event = operationalEvent({ correlationId, route: safeRoute(c.req.path), method: c.req.method, outcome, status, latencyMs: Date.now() - started });
+        if (sink) {
+          const pending = sink(event);
+          if (pending) void Promise.resolve(pending).catch(() => {});
+        } else console.log(JSON.stringify(event));
       }
     } catch { /* Telemetry cannot affect authorization, isolation, or request recovery. */ }
   }

@@ -26,6 +26,24 @@ describe('optional diagnostics preserve request behavior', () => {
     expect(c.res.status).toBe(403);
     expect(log).toHaveBeenCalledOnce();
   });
+  it('preserves a successful response when an injected sink throws', async () => {
+    const c = context(enabled);
+    c.res = new Response(null, { status: 200 });
+    await expect(operationalObservability(c, async () => {}, () => { throw new Error('sink unavailable'); })).resolves.toBeUndefined();
+    expect(c.res.status).toBe(200);
+  });
+  it('preserves a denied response when an injected sink rejects', async () => {
+    const c = context(enabled);
+    await expect(operationalObservability(c, async () => {}, async () => { throw new Error('sink unavailable'); })).resolves.toBeUndefined();
+    expect(c.res.status).toBe(403);
+    await new Promise(resolve => setImmediate(resolve));
+  });
+  it('preserves a failed response when an injected sink rejects', async () => {
+    const c = context(enabled);
+    const original = new Error('application failure');
+    await expect(operationalObservability(c, async () => { throw original; }, async () => { throw new Error('sink unavailable'); })).rejects.toBe(original);
+    await new Promise(resolve => setImmediate(resolve));
+  });
   it('emits no diagnostic record when telemetry is off', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     await operationalObservability(context({}), async () => {});
