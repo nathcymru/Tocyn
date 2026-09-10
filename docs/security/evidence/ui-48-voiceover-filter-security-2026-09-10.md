@@ -1,6 +1,6 @@
 # Filter and mandatory-MFA VoiceOver evidence
 
-Observed10September2026 at20:14–20:17BST in Safari27/macOS27 using native VoiceOver cursor navigation and spoken-output reading. Local candidate127.0.0.1:5190, synthetic fixture8899; no external providers. Source blobs: FiltersSettingsPage.tsx33e8e3926f7d63731d528fc4bb286f02c62385a0; SecurityProfilePage.tsxef6a311f8f718d7e919e4b12c1b6fb08b2783c42.
+Observed10September2026 in Safari27/macOS27 using native VoiceOver cursor navigation and spoken-output reading. Local candidate127.0.0.1:5190, synthetic fixture8899; no external providers. Source blobs: FiltersSettingsPage.tsx33e8e3926f7d63731d528fc4bb286f02c62385a0; SecurityProfilePage.tsxef6a311f8f718d7e919e4b12c1b6fb08b2783c42.
 
 ## Filter editor
 
