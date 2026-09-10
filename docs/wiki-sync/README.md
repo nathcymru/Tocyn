@@ -23,6 +23,7 @@ For pages in this directory:
 - `Architecture-and-tenant-isolation.md`
 - `Channels-and-conversation-model.md`
 - `AI-and-autonomous-operations.md`
+- `Knowledge-marker-contract.md` (accepted source: `docs/security/knowledge-marker-contract.md`, PR172)
 - `PRIVACY_ARCHITECTURE.md`
 - `GDPR_COMPLIANCE_USER_GUIDE.md`
 - `Roadmap-and-releases.md`
