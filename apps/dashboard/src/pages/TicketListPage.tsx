@@ -1,3 +1,4 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
@@ -62,19 +63,8 @@ export function TicketListPage() {
   }, [searchParams]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const createDialog = React.useRef<HTMLDialogElement>(null);
+  const createSubject = React.useRef<HTMLInputElement>(null);
   const createTrigger = React.useRef<HTMLButtonElement>(null);
-  React.useEffect(() => {
-    if (!isModalOpen) return;
-    const previousFocus = createTrigger.current;
-    const dialog = createDialog.current;
-    dialog?.showModal();
-    dialog?.querySelector<HTMLInputElement>('#create-ticket-subject')?.focus();
-    return () => {
-      if (dialog?.open) dialog.close();
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, [isModalOpen]);
   const heading = React.useRef<HTMLHeadingElement>(null);
   const retryButton = React.useRef<HTMLButtonElement>(null);
   const paging = React.useRef(false);
@@ -428,10 +418,9 @@ export function TicketListPage() {
       </div>
 
       {/* New Ticket Modal */}
-      {isModalOpen && (
-        <dialog ref={createDialog} aria-labelledby="create-ticket-heading"
-          onCancel={(event) => { event.preventDefault(); if (!createTicket.isPending) setIsModalOpen(false); }}
-          className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none z-50 open:flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <TocynDialog open={isModalOpen} onOpenChange={setIsModalOpen} busy={createTicket.isPending}
+          labelledBy="create-ticket-heading" initialFocusEl={() => createSubject.current} finalFocusEl={() => createTrigger.current}
+          className="w-full max-w-2xl">
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h2 id="create-ticket-heading" className="text-xl font-bold text-slate-900">Create New Ticket</h2>
@@ -450,6 +439,7 @@ export function TicketListPage() {
                     required
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                     id="create-ticket-subject"
+                    ref={createSubject}
                     readOnly={createTicket.isPending}
                     aria-describedby={createError ? "create-ticket-error" : undefined}
                     value={formData.subject}
@@ -547,8 +537,7 @@ export function TicketListPage() {
               </div>
             </form>
           </div>
-        </dialog>
-      )}
+      </TocynDialog>
     </div>
   );
 }

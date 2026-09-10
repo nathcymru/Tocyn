@@ -20,13 +20,15 @@ function showFeed() {
   render(<QueryClientProvider client={client}><MemoryRouter><TicketListPage/></MemoryRouter></QueryClientProvider>);
 }
 beforeEach(() => {
-  // jsdom has no browser dialog top layer; the actual browser checks cover native focus containment.
-  Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value:function(this:HTMLDialogElement){this.setAttribute('open','');}});
-  Object.defineProperty(HTMLDialogElement.prototype,'close',{configurable:true,value:function(this:HTMLDialogElement){this.removeAttribute('open');}});
+  // JSDOM has no layout; browser focus containment remains a separate gate.
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function(this: HTMLElement) {
+    return (this.isConnected && !this.closest('[hidden]') && this.getAttribute('type') !== 'hidden'
+      ? [new DOMRect(0,0,100,30)] : []) as unknown as DOMRectList;
+  });
   client = new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
   useAuthStore.getState().setAuth('synthetic-session',{id:'operator',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
 });
-afterEach(() => {cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.restoreAllMocks();vi.unstubAllGlobals();Reflect.deleteProperty(HTMLDialogElement.prototype,'showModal');Reflect.deleteProperty(HTMLDialogElement.prototype,'close');});
+afterEach(() => {cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.restoreAllMocks();vi.unstubAllGlobals();});
 
 it('distinguishes a failed feed from an empty feed and lets the operator retry', async () => {
   let fails=true;
@@ -61,7 +63,9 @@ it('preserves the creation draft on rejection and displays successful recovery i
   });
   showFeed();await screen.findByText('No tickets found.');
   fireEvent.click(screen.getByRole('button',{name:'New Ticket'}));
-  fireEvent.change(screen.getByRole('textbox',{name:'Subject'}),{target:{value:'Operator-created follow-up'}});
+  const draftSubject = await screen.findByRole('textbox',{name:'Subject'});
+  await waitFor(() => expect(draftSubject).toHaveFocus());
+  fireEvent.change(draftSubject,{target:{value:'Operator-created follow-up'}});
   fireEvent.change(screen.getByRole('textbox',{name:'Customer Email'}),{target:{value:'customer@example.invalid'}});
   fireEvent.change(screen.getByRole('textbox',{name:'Initial Message'}),{target:{value:'Synthetic operator message'}});
   fireEvent.click(screen.getByRole('button',{name:'Create Ticket'}));
@@ -73,15 +77,15 @@ it('preserves the creation draft on rejection and displays successful recovery i
   expect(posts).toBe(2);
 });
 
-it('names the native create dialog, focuses its first field, and returns focus on cancellation', async () => {
+it('names the shared create dialog, focuses its first field, and returns focus on cancellation', async () => {
   transport(()=>page());showFeed();await screen.findByRole('link',{name:ticket.subject});
   const trigger=screen.getByRole('button',{name:'New Ticket'});
   trigger.focus();fireEvent.click(trigger);
-  const dialog=screen.getByRole('dialog',{name:'Create New Ticket'});
-  expect(screen.getByRole('textbox',{name:'Subject'})).toHaveFocus();
-  fireEvent(dialog,new Event('cancel',{bubbles:false,cancelable:true}));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  expect(trigger).toHaveFocus();
+  await screen.findByRole('dialog',{name:'Create New Ticket'});
+  await waitFor(() => expect(screen.getByRole('textbox',{name:'Subject'})).toHaveFocus());
+  fireEvent.keyDown(document.activeElement!, {key:'Escape',code:'Escape'});
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(trigger).toHaveFocus());
 });
 
 it('uses the requested page, search, and saved filter when loading the feed', async () => {
@@ -141,7 +145,8 @@ it('keeps the pending creation draft and native controls focused until its failu
   transport(options => options.method === 'POST' ? (posts++, new Promise(resolve => { finish = resolve; })) : page());
   showFeed(); await screen.findByRole('link', { name: ticket.subject });
   fireEvent.click(screen.getByRole('button', { name: 'New Ticket' }));
-  const subject = screen.getByRole('textbox', { name: 'Subject' });
+  const subject = await screen.findByRole('textbox', { name: 'Subject' });
+  await waitFor(() => expect(subject).toHaveFocus());
   fireEvent.change(subject, { target: { value: 'Submitted subject' } });
   fireEvent.change(screen.getByRole('textbox', { name: 'Customer Email' }), { target: { value: ticket.customer_email } });
   fireEvent.change(screen.getByRole('textbox', { name: 'Initial Message' }), { target: { value: 'Submitted message' } });
@@ -153,7 +158,7 @@ it('keeps the pending creation draft and native controls focused until its failu
   fireEvent.change(screen.getByRole('combobox', { name: 'Priority' }), { target: { value: 'urgent' } });
   fireEvent.click(submit);
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
+  fireEvent.keyDown(document.activeElement!, {key:'Escape',code:'Escape'});
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(subject).toHaveValue('Submitted subject');
   expect(screen.getByRole('combobox', { name: 'Priority' })).toHaveValue('normal');
@@ -173,7 +178,7 @@ it('names ticket actions and restores trigger focus when the disclosure is dismi
   expect(trigger).toHaveAttribute('aria-expanded', 'true');
   const action = screen.getByRole('link', { name: 'View Ticket' });
   action.focus(); fireEvent.keyDown(action, { key: 'Escape' });
-  expect(trigger).toHaveFocus(); expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await waitFor(() => expect(trigger).toHaveFocus()); expect(trigger).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('link', { name: 'View Ticket' })).not.toBeInTheDocument();
 });
 
