@@ -11,26 +11,26 @@ export type OperationalEvent = Readonly<{
   latencyMs: number;
 }>;
 
-const SENSITIVE_KEY = /authorization|cookie|token|otp|magic|api.?key|secret|password|credential|body|content|prompt|output|attachment/i;
+const ROUTES = new Set(['/health', '/api/auth', '/api/settings', '/api/channels', '/api/permissions', '/api/v1', '/api/realtime', '/api/other', '/other']);
+const METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Runtime diagnostics accept only their explicit envelope; arbitrary request data is never serialized. */
 export function operationalEvent(input: Omit<OperationalEvent, 'version' | 'type'>): OperationalEvent {
+  if (typeof input.correlationId !== 'string' || !UUID.test(input.correlationId) || !Number.isInteger(input.status) || input.status < 100 || input.status > 599
+    || !Number.isFinite(input.latencyMs) || input.latencyMs < 0) {
+    throw new Error('Invalid operational event envelope');
+  }
   return Object.freeze({
     version: OPERATIONAL_EVENT_VERSION,
     type: 'http.request',
     correlationId: input.correlationId,
-    route: input.route,
-    method: input.method,
-    outcome: input.outcome,
+    route: ROUTES.has(input.route) ? input.route : '/other',
+    method: METHODS.has(input.method) ? input.method : 'OTHER',
+    outcome: input.status >= 500 ? 'server_error' : input.status >= 400 ? 'client_error' : 'success',
     status: input.status,
     latencyMs: input.latencyMs,
   });
-}
-
-export function redactOperationalValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactOperationalValue);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, SENSITIVE_KEY.test(key) ? '[REDACTED]' : redactOperationalValue(entry)]));
 }
 
 export function observabilityEnabled(env: { ENVIRONMENT?: string; LOCAL_BETA_ENABLED?: string; OBSERVABILITY_MODE?: string }): boolean {

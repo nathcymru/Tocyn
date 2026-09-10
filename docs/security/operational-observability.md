@@ -1,6 +1,6 @@
 # Operational observability contract
 
-Issue #159 adds a versioned, allowlisted runtime event envelope for active HTTP paths. It records a correlation ID, normalized route, method, outcome, status and latency only. It does not accept arbitrary attributes and must never include authentication headers, cookies, OTP or magic-link material, API keys, channel credentials, provider payloads, ticket/article/attachment content, or AI prompts/outputs.
+Issue #159 adds a versioned, allowlisted runtime event envelope for active HTTP paths. It records a correlation ID, normalized route, method, outcome, status and latency only. The serialization boundary normalizes unknown routes/methods, validates UUID correlation IDs and finite nonnegative latency, derives outcome from a valid HTTP status, and drops every extra property. It does not accept arbitrary attributes and must never include authentication headers, cookies, OTP or magic-link material, API keys, channel credentials, provider payloads, ticket/article/attachment content, or AI prompts/outputs.
 
 Canonical D1 audit remains the non-sampled evidence owned by #63. This diagnostic envelope is separate, can be sampled only under a later approved retention policy, and does not provide tenant analytics (#85) or customer diagnostic context (#92).
 

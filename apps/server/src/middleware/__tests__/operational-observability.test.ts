@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Context } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { Env } from '../../bindings';
 import { operationalObservability } from '../operational-observability';
 
@@ -43,6 +43,23 @@ describe('optional diagnostics preserve request behavior', () => {
     const next = vi.fn(async () => {});
     await expect(operationalObservability(context(enabled), next)).resolves.toBeUndefined();
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('never logs request credentials, attacker correlation or body through the HTTP middleware', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const app = new Hono<{Bindings: Env}>();
+    app.use('*', operationalObservability);
+    app.post('/api/auth/*', c => c.json({error:'Denied'},403));
+    const secret = 'synthetic-private-http-data';
+    const response = await app.request(`/api/auth/${secret}?token=${secret}`, {
+      method:'POST', headers:{authorization:`Bearer ${secret}`,cookie:`session=${secret}`,'x-request-id':secret,'x-correlation-id':secret,'content-type':'application/json'},
+      body:JSON.stringify({ticketBody:secret,providerPayload:secret,aiPrompt:secret}),
+    }, enabled as Env);
+    expect(response.status).toBe(403);
+    expect(log).toHaveBeenCalledOnce();
+    const serialized = log.mock.calls[0][0] as string;
+    expect(serialized).not.toContain(secret);
+    expect(JSON.parse(serialized)).toMatchObject({route:'/api/auth',method:'POST',status:403,outcome:'client_error'});
   });
 
 });
