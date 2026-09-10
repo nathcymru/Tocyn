@@ -1,3 +1,4 @@
+import { observeD1 } from '../repositories/observed-d1';
 import { createResourceOperationEmitter } from '../observability/resource-operation';
 import { CapabilityPolicyService } from '../repositories/capability-policy.repository';
 import { localBetaEnabled, type BetaPrincipal } from '../types/local-beta';
@@ -48,14 +49,15 @@ export const tenantMiddleware = async (c: Context, next: Next) => {
 
 
 export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, credential?: BetaCredential): TenantRequestDeps {
+  const emitResourceOperation = createResourceOperationEmitter(env);
+  const db = observeD1(env.DB, emitResourceOperation);
   const guarded = localBetaEnabled(env);
   const kind = scope.roles.includes('integration') ? 'api-key'
     : scope.roles.includes('customer') ? 'customer' : 'staff';
   const betaAdmission = guarded
-    ? new LocalBetaAdmissionRepository(env.DB, scope, { kind, id: scope.actorId }, credential)
+    ? new LocalBetaAdmissionRepository(db, scope, { kind, id: scope.actorId }, credential)
     : undefined;
-  const repositories = createRepositories(scope, env.DB, betaAdmission);
-  const emitResourceOperation = createResourceOperationEmitter(env);
+  const repositories = createRepositories(scope, db, betaAdmission);
   const attachmentStorage = betaAdmission
     ? new LocalBetaAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, betaAdmission, emitResourceOperation)
     : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation);
@@ -64,11 +66,11 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
 
   return {
     scope,
-    capabilityPolicy: new CapabilityPolicyService(env.DB, scope),
+    capabilityPolicy: new CapabilityPolicyService(db, scope),
     betaAdmission,
-    boundedConversationRead: betaAdmission ? new BoundedConversationReadRepository(env.DB, scope) : undefined,
-    conversationAudit: new ConversationAuditRepository(env.DB, scope, betaAdmission),
-    ticketMutations: new TicketMutationReplayRepository(env.DB, scope, betaAdmission),
+    boundedConversationRead: betaAdmission ? new BoundedConversationReadRepository(db, scope) : undefined,
+    conversationAudit: new ConversationAuditRepository(db, scope, betaAdmission),
+    ticketMutations: new TicketMutationReplayRepository(db, scope, betaAdmission),
     repositories,
     attachmentStorage,
     legacyArticleStorage,
@@ -77,8 +79,8 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
       const replayCredential = principal.kind === 'customer'
         ? { sessionVersion: principal.sessionVersion, expiresAt: principal.expiresAt } : undefined;
       const admission = guarded
-        ? new LocalBetaAdmissionRepository(env.DB, scope, principal, replayCredential) : undefined;
-      return new TicketMutationReplayService(env.DB, scope, principal, admission);
+        ? new LocalBetaAdmissionRepository(db, scope, principal, replayCredential) : undefined;
+      return new TicketMutationReplayService(db, scope, principal, admission);
     },
   };
 }

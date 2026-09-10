@@ -1,3 +1,4 @@
+import { observeD1 } from '../src/repositories/observed-d1';
 import { TenantR2Adapter } from '../src/storage/adapters';
 import { createResourceOperationEmitter } from '../src/observability/resource-operation';
 import assert from 'node:assert/strict';
@@ -267,5 +268,47 @@ test('local R2 measurements preserve colliding tenant objects and emit only boun
     assert.ok(!messages.join('').includes('synthetic-private'));
     assert.ok(!messages.join('').includes('measured-shared-object'));
     assert.ok(!messages.join('').includes(a));assert.ok(!messages.join('').includes(b));
+  });
+});
+
+
+test('observed native D1 batches retain atomicity and omit data from diagnostics', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const events: unknown[] = [];
+    const observed = observeD1(fixture.db, event => { events.push(event); });
+    await fixture.db.prepare('CREATE TABLE diagnostic_atomicity (id TEXT PRIMARY KEY, value TEXT NOT NULL)').run();
+    await observed.batch([
+      observed.prepare('INSERT INTO diagnostic_atomicity VALUES (?, ?)').bind('first', 'private synthetic value'),
+      observed.prepare('INSERT INTO diagnostic_atomicity VALUES (?, ?)').bind('second', 'another private value'),
+    ]);
+    assert.equal(events.length, 1);
+    await assert.rejects(observed.batch([
+      observed.prepare('INSERT INTO diagnostic_atomicity VALUES (?, ?)').bind('rolled-back', 'private rollback'),
+      observed.prepare('INSERT INTO diagnostic_atomicity VALUES (?, ?)').bind('first', 'duplicate'),
+    ]));
+    assert.equal(await observed.prepare('SELECT id FROM diagnostic_atomicity WHERE id = ?').bind('rolled-back').first(), null);
+    assert.deepEqual(await observed.prepare('SELECT id FROM diagnostic_atomicity ORDER BY id').raw(), [['first'],['second']]);
+    assert.deepEqual(events.map(event => (event as {outcome:string}).outcome), ['success','failure','success','success']);
+    const encoded = JSON.stringify(events);
+    for(const forbidden of ['private','INSERT','SELECT','diagnostic_atomicity','rolled-back','duplicate']) assert.equal(encoded.includes(forbidden), false);
+  });
+});
+
+test('trusted tenant composition enables only bounded local D1 diagnostics', async context => {
+  await withTwoTenantFixture(async fixture => {
+    const emitted: string[] = [];
+    context.mock.method(console, 'log', (message: string) => { emitted.push(message); });
+    const deps = scopedDeps(fixture, fixture.principals.customerA.tenantId, {
+      LOCAL_BETA_ENABLED: 'true', OBSERVABILITY_MODE: 'isolated-evidence', ENVIRONMENT: 'preview',
+    });
+    assert.equal(await deps.repositories.articles.get('synthetic-missing-article'), null);
+    assert.equal(emitted.length, 1);
+    assert.equal(JSON.parse(emitted[0]).resource, 'd1');
+    assert.equal(emitted[0].includes('synthetic-missing-article'), false);
+    const production = scopedDeps(fixture, fixture.principals.customerA.tenantId, {
+      LOCAL_BETA_ENABLED: 'true', OBSERVABILITY_MODE: 'isolated-evidence', ENVIRONMENT: 'production',
+    });
+    assert.equal(await production.repositories.articles.get('synthetic-missing-article'), null);
+    assert.equal(emitted.length, 1);
   });
 });
