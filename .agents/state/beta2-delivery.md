@@ -74,4 +74,10 @@ PR #166 merged at `7a53308394f2db5093ffdc377fa1792e440a737e`, 14:46:28 UTC. All 
 
 Forecast synchronization is in draft PR #168. Accepted #50 removal recalculates beta.2 to9February2027; publication pending final consistency checks and #160 acceptance. Preserve every baseline. The coordinator corrected the input and generated tables; expanded forecast is27January2028. No scope cut or arbitrary progress percentage is authorized.
 
+## 15:05 UTC integration receipt
+
+PR168 required checks passed and signed squash `3d17a03c992c51945a8a5d401f696735e0886160` has reviewed tree `35f236315342c06972cafeb56df662f3099c9351`. Owner PR-only review bypass used; no independent approval claimed. Both Wiki forecast pages read back byte-identically at `eca8876`.39milestone current forecast descriptions/due dates updated without modifying their historical description sections. Issue/Project batch93906 completed with100processed and zeroerrors. Independent Project read-back proves all100forecast field sets match, allbaseline/status/progress/other actuals unchanged, and50/160accepted actual completion dates present. Results/readback paths `/tmp/tocyn-alignment/forecast-168-publication.json` and `project-after-168.json` were checked. Missing Actualcompletion50/160 from the worker's earlier reported sync were detected and explicitly written on read-back; their values are verified in the final Project snapshot.
+
+Shared UI candidate2283cac: all three native-control builds/tests passed, then shared portal and operator dialogs passed portal59/dashboard73 workflow tests and builds. JSDOM nonzero layout fixture is explicit; actual browser focus/visibility evidence remains required. Preserve all remaining48acceptance.159worker hit execution-time limit; repeated follow-up is not a useful strategy. No paid capacity was used.
+
 </details>
