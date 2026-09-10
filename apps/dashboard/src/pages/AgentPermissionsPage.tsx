@@ -102,7 +102,7 @@ export function AgentPermissionsPage() {
               <label className={`relative inline-flex min-h-11 min-w-11 items-center ${available ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                 <span className="sr-only">Allow agents to use {capability.label}</span>
                 <input type="checkbox" className="sr-only peer" checked={checked} disabled={!available} aria-disabled={!available || saving || loading} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
-                <span aria-hidden="true" className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
+                <span aria-hidden="true" className="relative block w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
               </label>
             </div>
           );
