@@ -61,3 +61,7 @@ Source archive: `tocyn-post-beta-ux-update-2026-09-10.zip`; original path: `tocy
 Delivery owners: [#127](https://github.com/nathcymru/Tocyn/issues/127), [#128](https://github.com/nathcymru/Tocyn/issues/128).
 
 The [approved master decisions](../planning/post-beta-2026-09-10/decisions.md) supersede any conflicting source sequencing or release assumption: beta.1 was accepted 9 September and published 10 September 2026 at `049ea82a02571681f834bcd87d43253603edf71f`; beta.2 requires full SLA clocks/calendars/pause/resume/waiting treatment and responsible-handler ownership/routing. Independent workspace and hardening foundations proceed in parallel. Existing historical baselines are preserved; milestone taxonomy may evolve to represent dependencies. This ADR grants no remote provisioning, provider activation or customer-traffic authority.
+
+## Interaction contract evidence
+
+Issue #127 supplies the inspectable [workspace interaction contract](https://github.com/nathcymru/Tocyn/blob/main/docs/workspace/README.md), current-surface inventory and complete Critical-finding map. These define routes/history, state ownership, responsive composition, search privacy and focus behavior. Application implementation and beta.2 acceptance remain with the linked successor issues; this contract does not claim the workspace already exists.
