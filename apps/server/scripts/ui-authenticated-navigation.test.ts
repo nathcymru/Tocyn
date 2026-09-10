@@ -9,5 +9,7 @@ test('measures real fixture-authenticated dashboard and portal ticket list-to-de
   assert.equal(receipt.measurements.length, receipt.configuration.samplesPerClient * 2);
   assert.deepEqual([...new Set(receipt.measurements.map(measurement => measurement.client))].sort(), ['dashboard', 'portal']);
   assert.ok(receipt.measurements.every(measurement => Number.isFinite(measurement.timing.listToDetailMs) && measurement.timing.listToDetailMs >= 0));
+  assert.deepEqual(receipt.recovery.map(measurement => measurement.client), ['dashboard', 'portal']);
+  assert.ok(receipt.recovery.every(measurement => Number.isFinite(measurement.timing.failedDetailRetryMs) && measurement.timing.failedDetailRetryMs >= 0));
   process.stdout.write(`${JSON.stringify(receipt)}\n`);
 });

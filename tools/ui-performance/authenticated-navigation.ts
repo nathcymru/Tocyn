@@ -15,6 +15,7 @@ const maximumBodyBytes = 1024 * 1024;
 type Client = 'dashboard' | 'portal';
 type Timing = Readonly<{ listToDetailMs: number }>;
 type Sample = Readonly<{ client: Client; sample: number; timing: Timing }>;
+type RecoverySample = Readonly<{ client: Client; timing: Readonly<{ failedDetailRetryMs: number }> }>;
 type Sessions = Readonly<{ dashboard: Readonly<{ token: string; user: unknown }>; portal: Readonly<{ token: string }> }>;
 
 export type AuthenticatedNavigationReceipt = Readonly<{
@@ -28,6 +29,7 @@ export type AuthenticatedNavigationReceipt = Readonly<{
   artifacts: Readonly<Record<Client, string>>;
   sourceHashes: Readonly<Record<string, string>>;
   measurements: readonly Sample[];
+  recovery: readonly RecoverySample[];
   limitations: readonly string[];
 }>;
 
@@ -91,12 +93,18 @@ async function staticResponse(root: string, pathname: string, response: ServerRe
   } catch { response.writeHead(404).end(); }
 }
 
-async function startServer(fixture: LocalTenantFixture, client: Client): Promise<{ origin: string; close: () => Promise<void> }> {
+async function startServer(fixture: LocalTenantFixture, client: Client): Promise<{ origin: string; failTicketDetailReads: (count: number) => void; close: () => Promise<void> }> {
   const root = resolve(repositoryRoot, 'apps', client, 'dist');
+  let failedDetailReadsRemaining = 0;
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? '/', 'http://localhost');
       if (!url.pathname.startsWith('/api/')) return await staticResponse(root, url.pathname, response);
+      if (failedDetailReadsRemaining > 0 && request.method === 'GET' && /\/tickets\/fixture-ticket$/.test(url.pathname)) {
+        failedDetailReadsRemaining--;
+        response.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end('{"error":"Synthetic local detail read failure"}');
+        return;
+      }
       const body = await requestBody(request);
       const fixtureResponse = await fixture.request(`${url.pathname}${url.search}`, {
         method: request.method,
@@ -111,7 +119,10 @@ async function startServer(fixture: LocalTenantFixture, client: Client): Promise
     } catch { response.writeHead(502, { 'Content-Type': 'application/json' }).end('{"error":"Local fixture forwarding failed"}'); }
   });
   await new Promise<void>((resolvePromise, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolvePromise); });
-  return { origin: `http://127.0.0.1:${(server.address() as { port: number }).port}`, close: () => new Promise(resolvePromise => server.close(() => resolvePromise())) };
+  return { origin: `http://127.0.0.1:${(server.address() as { port: number }).port}`, failTicketDetailReads: (count: number) => {
+    assert.ok(Number.isInteger(count) && count >= 1 && count <= 4, 'Synthetic detail fault count must stay bounded');
+    failedDetailReadsRemaining = count;
+  }, close: () => new Promise(resolvePromise => server.close(() => resolvePromise())) };
 }
 
 async function operatorToken(fixture: LocalTenantFixture, operator: 'operatorA' | 'operatorB' = 'operatorA'): Promise<{ token: string; user: unknown }> {
@@ -145,8 +156,11 @@ async function customerToken(fixture: LocalTenantFixture, customer: 'customerA' 
   return completed.token!;
 }
 
-async function measure(client: Client, origin: string, browser: Browser, fixture: LocalTenantFixture, sessions: Sessions, sample: number): Promise<Sample> {
+async function measure(client: Client, origin: string, browser: Browser, fixture: LocalTenantFixture, sessions: Sessions, sample: number, injectDetailFault?: () => void): Promise<number> {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+  let pageRoute = '';
+  const apiResponses: Array<{ path: string; status: number }> = [];
+  const pageErrorNames: string[] = [];
   try {
     let external = 0;
     await context.route('**/*', (route: Route) => {
@@ -154,10 +168,23 @@ async function measure(client: Client, origin: string, browser: Browser, fixture
       return route.continue();
     });
     const page = await context.newPage();
+    page.on('response', response => {
+      const url = new URL(response.url());
+      if (url.origin === origin && url.pathname.startsWith('/api/')) {
+        apiResponses.push({ path: url.pathname, status: response.status() });
+        if (apiResponses.length > 12) apiResponses.shift();
+      }
+    });
+    page.on('pageerror', error => {
+      pageErrorNames.push(error.name);
+      if (pageErrorNames.length > 4) pageErrorNames.shift();
+    });
     page.setDefaultTimeout(10_000);
     await page.addInitScript(`document.addEventListener('click', event => {
-      const target = event.target instanceof Element ? event.target.closest('a[href="/tickets/fixture-ticket"]') : null;
-      if (target) window.__tocynTicketNavigationStart = performance.now();
+      const target = event.target instanceof Element ? event.target.closest('a[href="/tickets/fixture-ticket"], button') : null;
+      if (!target) return;
+      if (target.matches('a[href="/tickets/fixture-ticket"]')) window.__tocynTicketNavigationStart = performance.now();
+      if (/^Retry loading (ticket|conversation)$/.test(target.textContent.trim())) window.__tocynTicketRetryStart = performance.now();
     }, true);`);
     if (client === 'dashboard') {
       const session = sessions.dashboard;
@@ -173,19 +200,37 @@ async function measure(client: Client, origin: string, browser: Browser, fixture
     const subject = 'Fixture ticket A';
     const link = page.getByRole('link', { name: new RegExp(subject) }).first();
     await link.waitFor({ state: 'visible' });
+    injectDetailFault?.();
     await link.click();
     await page.waitForURL(/\/tickets\/fixture-ticket/);
-    await page.getByRole('heading', { name: subject, exact: true }).waitFor({ state: 'visible' });
+    pageRoute = new URL(page.url()).pathname;
+    if (injectDetailFault) {
+      const retryName = client === 'dashboard' ? 'Retry loading ticket' : 'Retry loading conversation';
+      await page.getByRole('alert').waitFor({ state: 'visible' });
+      const retry = page.getByRole('button', { name: retryName, exact: true });
+      await retry.waitFor({ state: 'visible' });
+      await retry.click();
+    }
+    // The portal heading also includes its visible status; requiring a heading prevents a stale list link from satisfying recovery.
+    const detailHeading = page.getByRole('heading', { name: subject });
+    await detailHeading.waitFor({ state: 'visible' });
+    if (injectDetailFault && client === 'portal') {
+      assert.equal(await detailHeading.evaluate(heading => (heading as unknown as { ownerDocument: { activeElement: unknown } }).ownerDocument.activeElement === heading), true, 'Portal retry must focus its recovered conversation heading');
+    }
     const observed = await page.evaluate(`(async () => {
-      const started = window.__tocynTicketNavigationStart;
+      const started = window.${injectDetailFault ? '__tocynTicketRetryStart' : '__tocynTicketNavigationStart'};
       if (!Number.isFinite(started)) throw new Error('Browser click timestamp was not recorded');
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       return performance.now() - started;
     })()`);
     if (typeof observed !== 'number' || !Number.isFinite(observed) || observed < 0) throw new Error('Browser navigation timing was invalid');
-    const listToDetailMs = observed;
+    const elapsed = observed;
     assert.equal(external, 0, 'Authenticated navigation must not request external origins');
-    return Object.freeze({ client, sample, timing: Object.freeze({ listToDetailMs }) });
+    return elapsed;
+  } catch (error) {
+    // Keep CI diagnostics bounded and token-free: only local path/status and error class.
+    const diagnostic = JSON.stringify({ client, sample, route: pageRoute, apiResponses, pageErrorNames });
+    throw new Error(`Authenticated navigation did not reach its detail readiness target: ${diagnostic}`, { cause: error });
   } finally { await context.close(); }
 }
 
@@ -198,6 +243,8 @@ export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, sa
   try {
     dashboardServer = await startServer(fixture, 'dashboard');
     portalServer = await startServer(fixture, 'portal');
+    const dashboard = dashboardServer;
+    const portal = portalServer;
     const sessions: Sessions = Object.freeze({ dashboard: await operatorToken(fixture), portal: Object.freeze({ token: await customerToken(fixture) }) });
     const dashboardForeign = await fixture.request('/api/tickets/fixture-b-only', { token: sessions.dashboard.token });
     const portalForeign = await fixture.request('/api/v1/customer/tickets/fixture-b-only', { token: sessions.portal.token, headers: { 'X-Widget-Key': fixture.principals.customerA.widgetKey } });
@@ -211,9 +258,12 @@ export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, sa
     assert.equal((await fixture.request('/api/v1/customer/auth/me', { token: sessions.portal.token, headers: { 'X-Widget-Key': fixture.principals.customerA.widgetKey } })).status, 200, 'Fixture customer session must resolve its identity');
     const measurements: Sample[] = [];
     for (let sample = 0; sample < samples; sample++) {
-      measurements.push(await measure('dashboard', dashboardServer.origin, browser, fixture, sessions, sample));
-      measurements.push(await measure('portal', portalServer.origin, browser, fixture, sessions, sample));
+      measurements.push(Object.freeze({ client: 'dashboard', sample, timing: Object.freeze({ listToDetailMs: await measure('dashboard', dashboard.origin, browser, fixture, sessions, sample) }) }));
+      measurements.push(Object.freeze({ client: 'portal', sample, timing: Object.freeze({ listToDetailMs: await measure('portal', portal.origin, browser, fixture, sessions, sample) }) }));
     }
+    const recovery: RecoverySample[] = [];
+    recovery.push(Object.freeze({ client: 'dashboard', timing: Object.freeze({ failedDetailRetryMs: await measure('dashboard', dashboard.origin, browser, fixture, sessions, samples, () => dashboard.failTicketDetailReads(2)) }) }));
+    recovery.push(Object.freeze({ client: 'portal', timing: Object.freeze({ failedDetailRetryMs: await measure('portal', portal.origin, browser, fixture, sessions, samples, () => portal.failTicketDetailReads(1)) }) }));
     const source = revision();
     return Object.freeze({
       version: 1, kind: 'tocyn-local-authenticated-ticket-navigation', revision: source.revision, dirty: source.dirty,
@@ -223,7 +273,8 @@ export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, sa
       artifacts: Object.freeze({ dashboard: await digestDirectory(resolve(repositoryRoot, 'apps/dashboard/dist')), portal: await digestDirectory(resolve(repositoryRoot, 'apps/portal/dist')) }),
       sourceHashes: Object.freeze(await sourceHashes()),
       measurements: Object.freeze(measurements),
-      limitations: Object.freeze(['Local disposable Miniflare fixture and loopback static servers only; not deployed-worker or provider timing.', 'Fixture-issued sessions prove only this synthetic tenant/auth flow; no production authentication or customer data.', 'No numeric threshold is evaluated and explicit failed-read/retry timing remains separate evidence.']),
+      recovery: Object.freeze(recovery),
+      limitations: Object.freeze(['Local disposable Miniflare fixture and loopback static servers only; not deployed-worker or provider timing.', 'Fixture-issued sessions prove only this synthetic tenant/auth flow; no production authentication or customer data.', 'Synthetic 503 detail faults are injected only by this loopback forwarding boundary; initial authentication and recovered reads use the real fixture.', 'No numeric threshold is evaluated.']),
     });
   } finally { await portalServer?.close(); await dashboardServer?.close(); await browser.close(); }
 }
