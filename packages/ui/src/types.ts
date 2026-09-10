@@ -1,4 +1,4 @@
-import type { AriaAttributes, CSSProperties, ComponentPropsWithoutRef, ReactNode, Ref, SyntheticEvent } from 'react';
+import type { AriaAttributes, CSSProperties, ComponentPropsWithoutRef, ReactNode, Ref } from 'react';
 
 /** Public contract shared by every named Tocyn primitive. */
 export interface PrimitiveProps {
@@ -19,15 +19,19 @@ export interface ComposableState<TState extends string = string> {
   loading?: boolean;
 }
 
-export interface InteractionHandlers<TEvent = SyntheticEvent> {
-  /** Called first for pointer/interaction start. Calling preventDefault cancels native handling. */
-  onInteractionStart?: (event: TEvent) => void;
-  /** Called after a non-cancelled interaction completes. */
-  onInteractionEnd?: (event: TEvent) => void;
+/** Compose native handlers; a consumer can prevent the internal behavior explicitly. */
+export function composeEventHandlers<TEvent extends { defaultPrevented: boolean }>(
+  consumer: ((event: TEvent) => void) | undefined,
+  internal: (event: TEvent) => void,
+): (event: TEvent) => void {
+  return event => {
+    consumer?.(event);
+    if (!event.defaultPrevented) internal(event);
+  };
 }
 
 export interface ExtendablePrimitiveProps<TElement extends HTMLElement, TState extends string = string>
-  extends PrimitiveProps, ComposableState<TState>, InteractionHandlers {
+  extends PrimitiveProps, ComposableState<TState> {
   ref?: Ref<TElement>;
   children?: ReactNode;
 }

@@ -1,40 +1,33 @@
 import * as React from 'react';
-import type { ComposableState, InteractionHandlers, PrimitiveProps } from './types';
+import type { ComposableState, PrimitiveProps } from './types';
 
-export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, PrimitiveProps, ComposableState<'idle' | 'loading' | 'disabled'>, InteractionHandlers<React.PointerEvent<HTMLButtonElement>> {
+export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, PrimitiveProps, ComposableState<'idle' | 'loading' | 'disabled'> {
   ref?: React.Ref<HTMLButtonElement>;
 }
 export const TocynButton = React.forwardRef<HTMLButtonElement, TocynButtonProps>(function TocynButton(
-  { children, className, disabled, loading, state, onInteractionStart, onInteractionEnd, onPointerDown, onPointerUp, onClick, ...props }, ref,
+  { children, className, disabled, loading, state, ...props }, ref,
 ) {
-  return <button {...props} ref={ref} disabled={disabled || loading || state === 'disabled'} className={className} aria-busy={loading || undefined}
-    onPointerDown={event => { onInteractionStart?.(event); if (!event.defaultPrevented) onPointerDown?.(event); }}
-    onPointerUp={event => { if (!event.defaultPrevented) { onInteractionEnd?.(event); if (!event.defaultPrevented) onPointerUp?.(event); } }}
-    onClick={event => { if (!event.defaultPrevented) onClick?.(event); }}>
+  return <button {...props} ref={ref} data-tocyn-primitive="button" disabled={disabled || loading || state === 'loading' || state === 'disabled'} className={className} aria-busy={loading || state === 'loading' || undefined}>
     {children}
   </button>;
 });
 
-export interface TocynInputProps extends React.InputHTMLAttributes<HTMLInputElement>, PrimitiveProps, ComposableState<'idle' | 'error' | 'success'>, InteractionHandlers<React.SyntheticEvent<HTMLInputElement>> {
+export interface TocynInputProps extends React.InputHTMLAttributes<HTMLInputElement>, PrimitiveProps, ComposableState<'idle' | 'error' | 'success'> {
   ref?: React.Ref<HTMLInputElement>;
 }
 export const TocynInput = React.forwardRef<HTMLInputElement, TocynInputProps>(function TocynInput(
-  { className, disabled, loading, state, onInteractionStart, onInteractionEnd, onPointerDown, onPointerUp, ...props }, ref,
+  { className, disabled, loading, state, ...props }, ref,
 ) {
-  return <input {...props} ref={ref} disabled={disabled || loading} className={className} aria-busy={loading || undefined} data-state={state}
-    onPointerDown={event => { onInteractionStart?.(event); if (!event.defaultPrevented) onPointerDown?.(event); }}
-    onPointerUp={event => { if (!event.defaultPrevented) { onInteractionEnd?.(event); if (!event.defaultPrevented) onPointerUp?.(event); } }} />;
+  return <input {...props} data-tocyn-primitive="input" ref={ref} disabled={disabled || loading} className={className} aria-busy={loading || undefined} data-state={state} />;
 });
 
-export interface TocynPanelProps extends React.HTMLAttributes<HTMLElement>, PrimitiveProps, ComposableState<'open' | 'closed'>, InteractionHandlers<React.SyntheticEvent<HTMLElement>> {
+export interface TocynPanelProps extends React.HTMLAttributes<HTMLElement>, PrimitiveProps, ComposableState<'open' | 'closed'> {
   ref?: React.Ref<HTMLElement>;
 }
 export const TocynPanel = React.forwardRef<HTMLElement, TocynPanelProps>(function TocynPanel(
-  { className, children, state, loading: _loading, disabled: _disabled, onInteractionStart, onInteractionEnd, onPointerDown, onPointerUp, ...props }, ref,
+  { className, children, state, loading: _loading, disabled: _disabled, ...props }, ref,
 ) {
-  return <section {...props} ref={ref} className={className} data-state={state}
-    onPointerDown={event => { onInteractionStart?.(event); if (!event.defaultPrevented) onPointerDown?.(event); }}
-    onPointerUp={event => { if (!event.defaultPrevented) { onInteractionEnd?.(event); if (!event.defaultPrevented) onPointerUp?.(event); } }}>{children}</section>;
+  return <section {...props} data-tocyn-primitive="panel" ref={ref} className={className} data-state={state}>{children}</section>;
 });
 
 export interface WorkspaceRegionProps extends React.HTMLAttributes<HTMLElement> {

@@ -1,4 +1,4 @@
-:root {
+:root, :host {
   --tocyn-motion-duration-fast: 120ms;
   --tocyn-motion-duration-normal: 180ms;
   --tocyn-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -10,10 +10,12 @@
 }
 
 [data-tocyn-workspace] { color: var(--tocyn-color-text); background: var(--tocyn-color-surface); }
+[data-tocyn-primitive]:focus-visible,
 [data-tocyn-workspace] :where(button, a, input, select, textarea):focus-visible {
   outline: 2px solid var(--tocyn-color-focus);
   outline-offset: 2px;
 }
+[data-tocyn-primitive="button"], [data-tocyn-primitive="input"],
 [data-tocyn-workspace] :where(button, [role="button"], a) { min-block-size: var(--tocyn-target-min); }
 @media (prefers-reduced-motion: reduce) {
   [data-tocyn-workspace] *, [data-tocyn-workspace] *::before, [data-tocyn-workspace] *::after {
