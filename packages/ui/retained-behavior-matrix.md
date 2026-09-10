@@ -52,3 +52,7 @@ Remaining: Ark complex-control adoption and behavior parity, complete browser ac
 | `apps/widget/src/App.tsx` | 4 | 0 |
 | `apps/widget/src/components/AiChat.tsx` | 2 | 0 |
 | `apps/widget/src/components/TicketForm.tsx` | 6 | 0 |
+
+### First complex-control adoption
+
+The portal create-ticket modal now uses shared Ark dialog focus trapping, Escape handling and focus return. Submission locks dismissal while preserving draft/error recovery. Portal59tests, UItypecheck, portal lint/build passed. JSDOM requires a documented nonzero-layout fixture for Ark focusability; this does not claim actual browser visibility/focus containment. Remaining dashboard dialogs/menus and browser validation stay open. Portal candidate build after this adoption: JavaScript308.86kB (gzip98.21kB), CSS22.14kB (gzip5.31kB); these are build measurements, not startup latency or a complete baseline comparison.

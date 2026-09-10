@@ -1,3 +1,4 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
@@ -24,7 +25,6 @@ export function TicketListPage() {
   const [creatingTicket, setCreatingTicket] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createStatus, setCreateStatus] = useState('');
-  const createDialog = useRef<HTMLDialogElement>(null);
   const createButton = useRef<HTMLButtonElement>(null);
   const subjectInput = useRef<HTMLInputElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
@@ -36,18 +36,6 @@ export function TicketListPage() {
       recovering.current = false;
     }
   }, [loading, error]);
-
-  useEffect(() => {
-    if (!isCreating) return;
-    const dialog = createDialog.current;
-    const opener = createButton.current;
-    dialog?.showModal();
-    subjectInput.current?.focus();
-    return () => {
-      if (dialog?.open) dialog.close();
-      if (opener?.isConnected) opener.focus();
-    };
-  }, [isCreating]);
 
   const retryTickets = async () => {
     if (loading) return;
@@ -149,9 +137,8 @@ export function TicketListPage() {
       </div>
 
       <p role="status" aria-live="polite" className="text-sm text-gray-700">{createStatus}</p>
-      {isCreating && (
-        <dialog ref={createDialog} aria-labelledby="create-ticket-heading"
-          onCancel={(event) => { event.preventDefault(); if (!creatingTicket) setIsCreating(false); }}
+      <TocynDialog open={isCreating} onOpenChange={setIsCreating} busy={creatingTicket}
+          labelledBy="create-ticket-heading" initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
           className="w-full max-w-lg rounded-lg border border-gray-300 bg-white p-6 shadow-xl backdrop:bg-gray-900/40">
           <h2 id="create-ticket-heading" className="text-lg font-semibold mb-4">Create New Ticket</h2>
           {createError && <p id="create-ticket-error" role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">{createError}</p>}
@@ -218,8 +205,7 @@ export function TicketListPage() {
               </TocynButton>
             </div>
           </form>
-        </dialog>
-      )}
+      </TocynDialog>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {tickets.length === 0 ? (
