@@ -1,5 +1,6 @@
 import { BetaAdmissionError } from './types/local-beta';
 import { ConversationReadError } from './services/conversation-read-bounds';
+import { CapabilityFenceError } from './auth/capability-policy';
 import { Hono } from 'hono';
 import { localBetaGuard } from './middleware/local-beta';
 import { authenticateRealtimeToken } from './middleware/auth.middleware';
@@ -20,6 +21,7 @@ import { AppVariables } from './types';
 export const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 app.onError((error,c) => {
   if (error instanceof BetaAdmissionError || error instanceof ConversationReadError) return c.json({code:error.code,error:error.message},error.status);
+  if (error instanceof CapabilityFenceError) return c.json({ error: 'Forbidden', message: error.message }, 403);
   if (c.env.LOCAL_BETA_ENABLED === 'true') return c.json({error:'Local beta request failed',code:'beta_request_failed'},500);
   console.error(error);
   return c.text('Internal Server Error',500);

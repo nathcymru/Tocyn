@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Env } from "../bindings";
 import { roleGuard } from "../middleware/role.guard";
-import { permissionGuard } from "../middleware/permission.guard";
+import { permissionGuard, permissionWriteFence, revalidatePermission } from "../middleware/permission.guard";
 import { AppVariables } from "../types";
 import { z } from "zod";
 import { TenantRequestDeps } from "../middleware/tenant.middleware";
@@ -33,7 +33,7 @@ filters.get("/", roleGuard(["agent", "admin"]), async (c) => {
  * POST /api/settings/filters
  * Create a new filter (Admins only)
  */
-filters.post("/", roleGuard(["admin"]), async (c) => {
+filters.post("/", roleGuard(["admin"]), permissionGuard("filters"), async (c) => {
   const body = await c.req.json();
   const result = filterSchema.safeParse(body);
   if (!result.success) {
@@ -41,7 +41,9 @@ filters.post("/", roleGuard(["admin"]), async (c) => {
   }
 
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  const filter = await d.repositories.ticketFilters.create(result.data);
+  const revalidationFailure = await revalidatePermission(c, "filters");
+  if (revalidationFailure) return revalidationFailure;
+  const filter = await d.repositories.ticketFilters.create(result.data, permissionWriteFence(c, "filters"));
   return c.json(filter, 201);
 });
 
@@ -75,9 +77,11 @@ filters.put("/:id", roleGuard(["admin", "agent"]), permissionGuard("filters"), a
   }
 
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const revalidationFailure = await revalidatePermission(c, "filters");
+  if (revalidationFailure) return revalidationFailure;
 
   try {
-    const updated = await d.repositories.ticketFilters.update(id, result.data);
+    const updated = await d.repositories.ticketFilters.update(id, result.data, permissionWriteFence(c, "filters"));
     if (!updated) {
       return c.json({ error: "Filter not found" }, 404);
     }
@@ -94,7 +98,7 @@ filters.put("/:id", roleGuard(["admin", "agent"]), permissionGuard("filters"), a
  * DELETE /api/settings/filters/:id
  * Delete a filter (Admins only)
  */
-filters.delete("/:id", roleGuard(["admin"]), async (c) => {
+filters.delete("/:id", roleGuard(["admin"]), permissionGuard("filters"), async (c) => {
   const { id } = c.req.param();
   const d = c.get('tenantDeps') as TenantRequestDeps;
 
@@ -103,8 +107,11 @@ filters.delete("/:id", roleGuard(["admin"]), async (c) => {
     return c.json({ error: "Filter not found" }, 404);
   }
 
+  const revalidationFailure = await revalidatePermission(c, "filters");
+  if (revalidationFailure) return revalidationFailure;
+
   try {
-    await d.repositories.ticketFilters.delete(id);
+    await d.repositories.ticketFilters.delete(id, permissionWriteFence(c, "filters"));
     return c.json({ success: true });
   } catch (err: any) {
     if (err.message === "Cannot delete system filters") {

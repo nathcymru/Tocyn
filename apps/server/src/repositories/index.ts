@@ -2,6 +2,7 @@ import { TicketMutationReplayRepository } from './ticket-mutation-replay.reposit
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
 import { normalizeSupportEmail } from '../utils/email-normalize';
+import { CapabilityFenceError, capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
 import { VerifiedTenantScope } from '../types/tenant';
 import { UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
 import { D1Database } from '@cloudflare/workers-types';
@@ -583,26 +584,33 @@ export class SqlChannelsRepository implements ChannelsRepository {
     return this.db.prepare("SELECT * FROM support_emails WHERE tenant_id = ? ORDER BY created_at ASC").bind(this.scope.tenantId).all().then(r => r.results);
   }
 
-  async createSupportEmail(data: { id: string, email_address: string, name?: string, group_id?: string, is_default: boolean }): Promise<any> {
+  async createSupportEmail(data: { id: string, email_address: string, name?: string, group_id?: string, is_default: boolean }, fence?: CapabilityWriteFence): Promise<any> {
     const { normalizeSupportEmail } = require('../utils/email-normalize');
     const normalized_email = normalizeSupportEmail(data.email_address);
+    const guard = capabilityWriteConstraint(fence);
     if (data.is_default) {
-      await this.db.batch([
-        this.db.prepare("UPDATE support_emails SET is_default = 0 WHERE tenant_id = ?").bind(this.scope.tenantId),
+      const results = await this.db.batch([
+        this.db.prepare(`UPDATE support_emails SET is_default = 0 WHERE tenant_id = ? AND ${guard.sql}`).bind(this.scope.tenantId, ...guard.values),
         this.db.prepare(
-          "INSERT INTO support_emails (tenant_id, id, email_address, normalized_email, name, group_id, is_default) VALUES (?, ?, ?, ?, ?, ?, ?)"
-        ).bind(this.scope.tenantId, data.id, data.email_address, normalized_email, data.name || null, data.group_id || null, 1)
+          `INSERT INTO support_emails (tenant_id, id, email_address, normalized_email, name, group_id, is_default)
+           SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${guard.sql}`
+        ).bind(this.scope.tenantId, data.id, data.email_address, normalized_email, data.name || null, data.group_id || null, 1, ...guard.values)
       ]);
+      requireCapabilityWrite(results[1], fence);
     } else {
-      await this.db.prepare(
-        "INSERT INTO support_emails (tenant_id, id, email_address, normalized_email, name, group_id, is_default) VALUES (?, ?, ?, ?, ?, ?, ?)"
-      ).bind(this.scope.tenantId, data.id, data.email_address, normalized_email, data.name || null, data.group_id || null, 0).run();
+      const result = await this.db.prepare(
+        `INSERT INTO support_emails (tenant_id, id, email_address, normalized_email, name, group_id, is_default)
+         SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${guard.sql}`
+      ).bind(this.scope.tenantId, data.id, data.email_address, normalized_email, data.name || null, data.group_id || null, 0, ...guard.values).run();
+      requireCapabilityWrite(result, fence);
     }
     return this.getSupportEmail(data.id);
   }
 
-  async deleteSupportEmail(id: string): Promise<void> {
-    await this.db.prepare("DELETE FROM support_emails WHERE tenant_id = ? AND id = ?").bind(this.scope.tenantId, id).run();
+  async deleteSupportEmail(id: string, fence?: CapabilityWriteFence): Promise<void> {
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(`DELETE FROM support_emails WHERE tenant_id = ? AND id = ? AND ${guard.sql}`).bind(this.scope.tenantId, id, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
   }
 
   async getSupportEmail(id: string): Promise<any> {
@@ -624,8 +632,13 @@ export class SqlConfigRepository implements ConfigRepository {
     return result ? result.value : null;
   }
 
-  async set(key: string, value: string): Promise<void> {
-    await this.db.prepare("INSERT INTO tenant_config (tenant_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(this.scope.tenantId, key, value).run();
+  async set(key: string, value: string, fence?: CapabilityWriteFence): Promise<void> {
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(`INSERT INTO tenant_config (tenant_id, key, value, updated_at)
+      SELECT ?, ?, ?, CURRENT_TIMESTAMP WHERE ${guard.sql}
+      ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`)
+      .bind(this.scope.tenantId, key, value, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
   }
 }
 
@@ -647,7 +660,7 @@ export class SqlApiKeyRepository implements ApiKeyRepository {
     return results;
   }
 
-  async create(name: string, permissionsList: string[] = ['tickets:read']): Promise<{ apiKey: string; id: string; name: string; prefix: string; permissions: string[] }> {
+  async create(name: string, permissionsList: string[] = ['tickets:read'], fence?: CapabilityWriteFence): Promise<{ apiKey: string; id: string; name: string; prefix: string; permissions: string[] }> {
     const id = crypto.randomUUID();
     const prefix = this.generateRandomString(8);
     const secret = this.generateRandomString(32);
@@ -656,9 +669,12 @@ export class SqlApiKeyRepository implements ApiKeyRepository {
     const now = new Date().toISOString();
     const permissionsStr = permissionsList.join(',');
 
-    await this.db.prepare(
-      "INSERT INTO api_keys (tenant_id, id, name, key_hash, prefix, permissions, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)"
-    ).bind(this.scope.tenantId, id, name, keyHash, prefix, permissionsStr, now).run();
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `INSERT INTO api_keys (tenant_id, id, name, key_hash, prefix, permissions, is_active, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, 1, ? WHERE ${guard.sql}`
+    ).bind(this.scope.tenantId, id, name, keyHash, prefix, permissionsStr, now, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
 
     return { apiKey, id, name, prefix, permissions: permissionsList };
   }
@@ -669,10 +685,22 @@ export class SqlApiKeyRepository implements ApiKeyRepository {
     ).bind(this.scope.tenantId, id).first();
   }
 
-  async delete(id: string): Promise<void> {
-    await this.db.prepare(
-      "DELETE FROM api_keys WHERE tenant_id = ? AND id = ?"
-    ).bind(this.scope.tenantId, id).run();
+  async delete(id: string, fence?: CapabilityWriteFence): Promise<void> {
+    const guard = capabilityWriteConstraint(fence);
+    const deletion = this.db.prepare(
+      `DELETE FROM api_keys WHERE tenant_id = ? AND id = ? AND ${guard.sql}`
+    ).bind(this.scope.tenantId, id, ...guard.values);
+    if (!fence) { await deletion.run(); return; }
+    // Both statements observe one atomic batch: distinguish denied authority
+    // from an authorized idempotent deletion without a read/write race.
+    const [authorization, result] = await this.db.batch<{ allowed: number }>([
+      this.db.prepare(`SELECT (${guard.sql}) AS allowed`).bind(...guard.values),
+      deletion,
+    ]);
+    const changes = result?.meta?.changes;
+    if (authorization?.results?.[0]?.allowed !== 1 || !Number.isInteger(changes) || changes < 0) {
+      throw new CapabilityFenceError();
+    }
   }
 
   private async hashKey(apiKey: string): Promise<string> {
@@ -706,20 +734,23 @@ export class SqlAutomationRepository implements AutomationRepository {
     ).bind(this.scope.tenantId, id).first();
   }
 
-  async create(data: { name: string; event_type: string; conditions?: string; action_type: string; action_config?: string; is_active: boolean }): Promise<any> {
+  async create(data: { name: string; event_type: string; conditions?: string; action_type: string; action_config?: string; is_active: boolean }, fence?: CapabilityWriteFence): Promise<any> {
     const id = crypto.randomUUID();
-    await this.db.prepare(
-      "INSERT INTO automation_rules (tenant_id, id, name, event_type, conditions, action_type, action_config, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `INSERT INTO automation_rules (tenant_id, id, name, event_type, conditions, action_type, action_config, is_active)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE ${guard.sql}`
     ).bind(
       this.scope.tenantId, id, data.name, data.event_type,
       data.conditions || null, data.action_type, data.action_config || null,
       data.is_active ? 1 : 0
-    ).run();
+    , ...guard.values).run();
+    requireCapabilityWrite(result, fence);
 
     return this.get(id);
   }
 
-  async update(id: string, data: Record<string, any>): Promise<any | null> {
+  async update(id: string, data: Record<string, any>, fence?: CapabilityWriteFence): Promise<any | null> {
     const allowedFields = ['name', 'event_type', 'conditions', 'action_type', 'action_config', 'is_active'];
     const updates: string[] = [];
     const params: any[] = [];
@@ -738,17 +769,21 @@ export class SqlAutomationRepository implements AutomationRepository {
     if (updates.length === 0) return this.get(id);
 
     params.push(this.scope.tenantId, id);
-    await this.db.prepare(
-      `UPDATE automation_rules SET ${updates.join(', ')} WHERE tenant_id = ? AND id = ?`
-    ).bind(...params).run();
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `UPDATE automation_rules SET ${updates.join(', ')} WHERE tenant_id = ? AND id = ? AND ${guard.sql}`
+    ).bind(...params, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
 
     return this.get(id);
   }
 
-  async delete(id: string): Promise<void> {
-    await this.db.prepare(
-      "DELETE FROM automation_rules WHERE tenant_id = ? AND id = ?"
-    ).bind(this.scope.tenantId, id).run();
+  async delete(id: string, fence?: CapabilityWriteFence): Promise<void> {
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `DELETE FROM automation_rules WHERE tenant_id = ? AND id = ? AND ${guard.sql}`
+    ).bind(this.scope.tenantId, id, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
   }
 
   async getActiveRules(eventType: string): Promise<any[]> {
@@ -769,11 +804,14 @@ export class SqlTicketFieldRepository implements TicketFieldRepository {
     return results;
   }
 
-  async create(data: { name: string; label: string; field_type: string; options?: string | null; is_active: boolean }): Promise<any> {
+  async create(data: { name: string; label: string; field_type: string; options?: string | null; is_active: boolean }, fence?: CapabilityWriteFence): Promise<any> {
     const id = crypto.randomUUID();
-    await this.db.prepare(
-      "INSERT INTO ticket_fields (tenant_id, id, name, label, field_type, options, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).bind(this.scope.tenantId, id, data.name, data.label, data.field_type, data.options || null, data.is_active ? 1 : 0).run();
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `INSERT INTO ticket_fields (tenant_id, id, name, label, field_type, options, is_active)
+       SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${guard.sql}`
+    ).bind(this.scope.tenantId, id, data.name, data.label, data.field_type, data.options || null, data.is_active ? 1 : 0, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
 
     return this.db.prepare(
       "SELECT * FROM ticket_fields WHERE tenant_id = ? AND id = ?"
@@ -797,20 +835,24 @@ export class SqlGroupRepository implements GroupRepository {
     ).bind(this.scope.tenantId, id).first();
   }
 
-  async create(data: { name: string; description?: string | null }): Promise<any> {
+  async create(data: { name: string; description?: string | null }, fence?: CapabilityWriteFence): Promise<any> {
     const id = crypto.randomUUID();
-    await this.db.prepare(
-      "INSERT INTO groups (tenant_id, id, name, description) VALUES (?, ?, ?, ?)"
-    ).bind(this.scope.tenantId, id, data.name, data.description || null).run();
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `INSERT INTO groups (tenant_id, id, name, description) SELECT ?, ?, ?, ? WHERE ${guard.sql}`
+    ).bind(this.scope.tenantId, id, data.name, data.description || null, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
 
     return this.get(id);
   }
 
-  async delete(id: string): Promise<void> {
-    await this.db.batch([
-      this.db.prepare("DELETE FROM user_groups WHERE tenant_id = ? AND group_id = ?").bind(this.scope.tenantId, id),
-      this.db.prepare("DELETE FROM groups WHERE tenant_id = ? AND id = ?").bind(this.scope.tenantId, id)
+  async delete(id: string, fence?: CapabilityWriteFence): Promise<void> {
+    const guard = capabilityWriteConstraint(fence);
+    const results = await this.db.batch([
+      this.db.prepare(`DELETE FROM user_groups WHERE tenant_id = ? AND group_id = ? AND ${guard.sql}`).bind(this.scope.tenantId, id, ...guard.values),
+      this.db.prepare(`DELETE FROM groups WHERE tenant_id = ? AND id = ? AND ${guard.sql}`).bind(this.scope.tenantId, id, ...guard.values)
     ]);
+    requireCapabilityWrite(results[1], fence);
   }
 
   async getMembers(groupId: string): Promise<any[]> {
@@ -830,16 +872,20 @@ export class SqlGroupRepository implements GroupRepository {
     return !!result;
   }
 
-  async addMember(groupId: string, userId: string): Promise<void> {
-    await this.db.prepare(
-      "INSERT INTO user_groups (tenant_id, user_id, group_id) VALUES (?, ?, ?)"
-    ).bind(this.scope.tenantId, userId, groupId).run();
+  async addMember(groupId: string, userId: string, fence?: CapabilityWriteFence): Promise<void> {
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `INSERT INTO user_groups (tenant_id, user_id, group_id) SELECT ?, ?, ? WHERE ${guard.sql}`
+    ).bind(this.scope.tenantId, userId, groupId, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
   }
 
-  async removeMember(groupId: string, userId: string): Promise<void> {
-    await this.db.prepare(
-      "DELETE FROM user_groups WHERE tenant_id = ? AND user_id = ? AND group_id = ?"
-    ).bind(this.scope.tenantId, userId, groupId).run();
+  async removeMember(groupId: string, userId: string, fence?: CapabilityWriteFence): Promise<void> {
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `DELETE FROM user_groups WHERE tenant_id = ? AND user_id = ? AND group_id = ? AND ${guard.sql}`
+    ).bind(this.scope.tenantId, userId, groupId, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
   }
 
   async hasTickets(groupId: string): Promise<boolean> {
@@ -876,19 +922,22 @@ export class SqlFilterRepository implements FilterRepository {
     };
   }
 
-  async create(data: { name: string; conditions: any }): Promise<any> {
+  async create(data: { name: string; conditions: any }, fence?: CapabilityWriteFence): Promise<any> {
     const id = `filter_${crypto.randomUUID()}`;
     const conditionsStr = typeof data.conditions === 'string' ? data.conditions : JSON.stringify(data.conditions);
     const now = new Date().toISOString();
 
-    await this.db.prepare(
-      "INSERT INTO ticket_filters (tenant_id, id, name, conditions, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)"
-    ).bind(this.scope.tenantId, id, data.name, conditionsStr, now, now).run();
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `INSERT INTO ticket_filters (tenant_id, id, name, conditions, is_system, created_at, updated_at)
+       SELECT ?, ?, ?, ?, 0, ?, ? WHERE ${guard.sql}`
+    ).bind(this.scope.tenantId, id, data.name, conditionsStr, now, now, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
 
     return this.get(id);
   }
 
-  async update(id: string, data: { name: string; conditions: any }): Promise<any | null> {
+  async update(id: string, data: { name: string; conditions: any }, fence?: CapabilityWriteFence): Promise<any | null> {
     const existing = await this.get(id);
     if (!existing) return null;
     if (existing.is_system) {
@@ -898,23 +947,27 @@ export class SqlFilterRepository implements FilterRepository {
     const conditionsStr = typeof data.conditions === 'string' ? data.conditions : JSON.stringify(data.conditions);
     const now = new Date().toISOString();
 
-    await this.db.prepare(
-      "UPDATE ticket_filters SET name = ?, conditions = ?, updated_at = ? WHERE tenant_id = ? AND id = ?"
-    ).bind(data.name, conditionsStr, now, this.scope.tenantId, id).run();
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `UPDATE ticket_filters SET name = ?, conditions = ?, updated_at = ? WHERE tenant_id = ? AND id = ? AND ${guard.sql}`
+    ).bind(data.name, conditionsStr, now, this.scope.tenantId, id, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
 
     return this.get(id);
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, fence?: CapabilityWriteFence): Promise<void> {
     const existing = await this.get(id);
     if (!existing) return;
     if (existing.is_system) {
       throw new Error("Cannot delete system filters");
     }
 
-    await this.db.prepare(
-      "DELETE FROM ticket_filters WHERE tenant_id = ? AND id = ?"
-    ).bind(this.scope.tenantId, id).run();
+    const guard = capabilityWriteConstraint(fence);
+    const result = await this.db.prepare(
+      `DELETE FROM ticket_filters WHERE tenant_id = ? AND id = ? AND ${guard.sql}`
+    ).bind(this.scope.tenantId, id, ...guard.values).run();
+    requireCapabilityWrite(result, fence);
   }
 }
 

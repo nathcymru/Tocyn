@@ -37,9 +37,13 @@ describe("Settings Handler Integration Tests", () => {
     vi.clearAllMocks();
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
+    mockDB.all.mockResolvedValue({ results: [] });
+    mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
     mockDB.first.mockImplementation(async () => {
       const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
       const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
       if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
         return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
       }
@@ -59,6 +63,8 @@ describe("Settings Handler Integration Tests", () => {
       mockDB.first.mockImplementation(async () => {
         const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
         const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+        if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
         if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
           return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
         }
@@ -95,6 +101,8 @@ describe("Settings Handler Integration Tests", () => {
       mockDB.first.mockImplementation(async () => {
         const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
         const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+        if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
         if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
           return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
         }
@@ -139,7 +147,7 @@ describe("Settings Handler Integration Tests", () => {
     });
 
     it("should update settings and encrypt sensitive values", async () => {
-      mockDB.run.mockResolvedValue({ success: true });
+      mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
       const token = await generateAdminToken();
 
       const payload = {
@@ -168,7 +176,7 @@ describe("Settings Handler Integration Tests", () => {
 
       // Check that DB.bind was called with default-tenant, key, and encrypted value
       const configBindCalls = vi.mocked(mockDB.bind).mock.calls.filter(c => c[1] === "APP_NAME" || c[1] === "RESEND_API_KEY");
-      expect(configBindCalls[0]).toEqual(["default-tenant", "APP_NAME", "New Luminatick"]);
+      expect(configBindCalls[0]?.slice(0, 3)).toEqual(["default-tenant", "APP_NAME", "New Luminatick"]);
 
       const resendBindCall = configBindCalls[1];
       expect(resendBindCall[0]).toBe("default-tenant");
@@ -181,7 +189,7 @@ describe("Settings Handler Integration Tests", () => {
     });
 
     it("should skip updating sensitive settings if value is ••••••••", async () => {
-      mockDB.run.mockResolvedValue({ success: true });
+      mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
       const token = await generateAdminToken();
 
       const payload = {
@@ -207,7 +215,8 @@ describe("Settings Handler Integration Tests", () => {
       // Check that tenant_config prepare was called only once (for APP_NAME)
       const configPrepCalls = vi.mocked(mockDB.prepare).mock.calls.filter(c => typeof c[0] === "string" && c[0].includes("tenant_config"));
       expect(configPrepCalls.length).toBe(1);
-      expect(mockDB.bind).toHaveBeenCalledWith("default-tenant", "APP_NAME", "Updated Name");
+      const configBind = vi.mocked(mockDB.bind).mock.calls.find(call => call[1] === "APP_NAME");
+      expect(configBind?.slice(0, 3)).toEqual(["default-tenant", "APP_NAME", "Updated Name"]);
       expect(mockDB.run).toHaveBeenCalledTimes(1);
     });
 

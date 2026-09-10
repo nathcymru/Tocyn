@@ -39,13 +39,20 @@ describe("Dashboard Handler Integration Tests", () => {
     vi.clearAllMocks();
     firstQueue = [];
     mockDB.all.mockResolvedValue({ results: [] });
-    mockDB.run.mockResolvedValue({ success: true });
+    mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
     mockDB.batch.mockResolvedValue([{results:[{id:'t-1'}]}]);
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
     mockDB.first.mockImplementation(async () => {
       const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
       const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
+      if (typeof lastQuery === "string" && lastQuery.includes("tenant_role_capability_policies")) {
+        const bindCalls = vi.mocked(mockDB.bind).mock.calls;
+        const capability = bindCalls.at(-1)?.[2];
+        return { enabled: capability === "api-keys.manage" ? 1 : 0, revision: 1 };
+      }
       if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
         const bindCalls = vi.mocked(mockDB.bind).mock.calls;
         const sub = bindCalls.length > 0 ? bindCalls[bindCalls.length - 1][1] : "agent-1";
@@ -193,7 +200,7 @@ describe("Dashboard Handler Integration Tests", () => {
 
   describe("PATCH /tickets/:id", () => {
     it("should update ticket and create a system note", async () => {
-      mockDB.run.mockResolvedValue({ success: true });
+      mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
 
       const validUuid = "123e4567-e89b-12d3-a456-426614174000";
 
@@ -282,7 +289,7 @@ describe("Dashboard Handler Integration Tests", () => {
   describe("API Key Management", () => {
     it("should list API keys", async () => {
       const mockKeys = [{ id: "key-1", name: "Production" }];
-      mockDB.all.mockResolvedValueOnce({ results: mockKeys });
+      mockDB.all.mockResolvedValueOnce({ results: [] }).mockResolvedValueOnce({ results: mockKeys });
 
       const res = await dashboard.request(
         "/api-keys",
@@ -298,7 +305,7 @@ describe("Dashboard Handler Integration Tests", () => {
     });
 
     it("should create a new API key", async () => {
-      mockDB.run.mockResolvedValueOnce({ success: true });
+      mockDB.run.mockResolvedValueOnce({ success: true, meta: { changes: 1 } });
 
       const res = await dashboard.request(
         "/api-keys",
@@ -320,7 +327,8 @@ describe("Dashboard Handler Integration Tests", () => {
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO api_keys (tenant_id, id, name, key_hash, prefix, permissions, is_active, created_at)"));
     });
 
-    it("should delete an API key", async () => {
+    it.each([0, 1])("returns idempotent success for an authorized key deletion with %s changed rows", async changes => {
+      mockDB.batch.mockResolvedValueOnce([{results:[{allowed:1}],meta:{changes:0}}, {results:[],meta:{changes}}]);
       const res = await dashboard.request(
         "/api-keys/key-1",
         {

@@ -4,7 +4,7 @@ import { authMiddleware } from "../middleware/auth.middleware";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { mfaGuard } from "../middleware/mfa.guard";
 import { roleGuard } from "../middleware/role.guard";
-import { permissionGuard } from "../middleware/permission.guard";
+import { permissionGuard, permissionWriteFence, revalidatePermission } from "../middleware/permission.guard";
 import { AppVariables } from "../types";
 import { z } from "zod";
 
@@ -39,6 +39,8 @@ channels.post("/emails", async (c) => {
     return c.json({ error: "Group not found in this tenant" }, 400);
   }
   const id = crypto.randomUUID();
+  const revalidationFailure = await revalidatePermission(c, "channels_email");
+  if (revalidationFailure) return revalidationFailure;
 
   try {
     const email = await deps.repositories.channels.createSupportEmail({
@@ -47,7 +49,7 @@ channels.post("/emails", async (c) => {
       name,
       group_id: group_id || undefined,
       is_default
-    });
+    }, permissionWriteFence(c, "channels_email"));
     return c.json(email, 201);
   } catch (error: any) {
     if (error.message.includes("UNIQUE constraint failed")) {
@@ -67,7 +69,10 @@ channels.delete("/emails/:id", async (c) => {
     return c.json({ error: "Invalid ID format" }, 400);
   }
 
-  await deps.repositories.channels.deleteSupportEmail(id);
+  const revalidationFailure = await revalidatePermission(c, "channels_email");
+  if (revalidationFailure) return revalidationFailure;
+
+  await deps.repositories.channels.deleteSupportEmail(id, permissionWriteFence(c, "channels_email"));
   return c.json({ success: true });
 });
 

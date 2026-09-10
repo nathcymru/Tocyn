@@ -3,7 +3,7 @@ import { Env } from "../bindings";
 import { authMiddleware } from "../middleware/auth.middleware";
 import { mfaGuard } from "../middleware/mfa.guard";
 import { roleGuard } from "../middleware/role.guard";
-import { permissionGuard } from "../middleware/permission.guard";
+import { permissionGuard, permissionWriteFence, revalidatePermission } from "../middleware/permission.guard";
 import { AppVariables } from "../types";
 import { z } from "zod";
 import filters from "./filters.handler";
@@ -69,7 +69,7 @@ function isSensitiveKey(key: string): boolean {
  * GET /api/settings/usage
  * Fetch usage stats from Cloudflare GraphQL Analytics API
  */
-settings.get("/usage", roleGuard(["admin"]), async (c) => {
+settings.get("/usage", roleGuard(["admin"]), permissionGuard("usage"), async (c) => {
   try {
     const cfService = new CloudflareService(c.env, c.get('tenantDeps') as TenantRequestDeps);
     const stats = await cfService.getUsageStats();
@@ -133,6 +133,9 @@ settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
     if (!ALLOWED_SETTINGS_KEYS.has(key)) return c.json({ error: `Setting key '${key}' is not permitted` }, 400);
   }
 
+  const revalidationFailure = await revalidatePermission(c, "general");
+  if (revalidationFailure) return revalidationFailure;
+
   for (let [key, value] of Object.entries(updates)) {
     if (key === 'agent_settings_permissions') {
       return c.json({ error: "Cannot modify agent permissions via this endpoint" }, 403);
@@ -153,7 +156,7 @@ settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
       value = await encryptString(value, c.env.APP_MASTER_KEY);
     }
 
-    await d.repositories.config.set(key, value);
+    await d.repositories.config.set(key, value, permissionWriteFence(c, "general"));
   }
 
   return c.json({ success: true });
