@@ -29,3 +29,5 @@
 [data-tocyn-dialog-backdrop] { position: fixed; inset: 0; z-index: 1000; background: rgb(15 23 42 / 40%); }
 [data-tocyn-dialog-positioner] { position: fixed; inset: 0; z-index: 1001; display: flex; align-items: center; justify-content: center; padding: 1rem; overflow: auto; }
 [data-tocyn-dialog-positioner] > [role="dialog"] { max-block-size: calc(100dvh - 2rem); overflow: auto; }
+
+[data-tocyn-dialog-positioner] > [data-tocyn-dialog-edge] { max-block-size: 100dvh; }

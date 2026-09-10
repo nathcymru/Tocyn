@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -20,16 +20,17 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   useAuthStore.getState().setAuth('synthetic-session', { id: 'operator', email: 'operator@example.invalid', full_name: 'Operator', role: 'agent', mfa_enabled: true });
   vi.mocked(useRealtime).mockReturnValue(realtime as ReturnType<typeof useRealtime>);
-  // These shims exercise open/close callbacks only; native focus containment needs browser acceptance.
-  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.setAttribute('open', ''); } });
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value(this: HTMLDialogElement) { this.removeAttribute('open'); } });
+  // JSDOM has no layout; supply visible rectangles so Ark can discover focusable controls.
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function(this:HTMLElement) {
+    return (this.isConnected && !this.closest('[hidden]') ? [new DOMRect(0,0,100,44)] : []) as unknown as DOMRectList;
+  });
 });
 afterEach(() => {
   cleanup(); client.clear(); useAuthStore.getState().logout(); vi.clearAllMocks();
-  Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal'); Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
+  vi.restoreAllMocks();
 });
 
-it('names global search and native navigation, focuses its close control and returns focus on cancel', () => {
+it('names global search and shared navigation, focuses its close control and returns focus on Escape', async () => {
   render(tree());
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   const search = screen.getByRole('textbox', { name: 'Search all tickets' });
@@ -37,12 +38,13 @@ it('names global search and native navigation, focuses its close control and ret
   expect(screen.getByRole('heading')).toHaveTextContent('/tickets?search=Follow%20up');
   const trigger = screen.getByRole('button', { name: 'Open navigation' });
   trigger.focus(); fireEvent.click(trigger);
-  const dialog = screen.getByRole('dialog', { name: 'Navigation' });
-  expect(dialog.tagName).toBe('DIALOG'); expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  expect(within(dialog).getByRole('button', { name: 'Close navigation' })).toHaveFocus();
+  const dialog = await screen.findByRole('dialog', { name: 'Navigation' });
+  expect(dialog).toHaveAttribute('aria-modal', 'true'); expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await waitFor(()=>expect(within(dialog).getByRole('button', { name: 'Close navigation' })).toHaveFocus());
+  expect(trigger).toHaveAttribute('aria-controls',dialog.id);
   expect(within(dialog).getByRole('link', { name: 'Filters' })).toHaveAttribute('aria-current', 'page');
-  fireEvent(dialog, new Event('cancel', { cancelable: true }));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(trigger).toHaveFocus();
+  fireEvent.keyDown(document.activeElement!, {key:'Escape'});
+  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument()); await waitFor(()=>expect(trigger).toHaveFocus());
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });
 
@@ -62,10 +64,10 @@ it('names account/connection disclosures and restores focus when their child act
   expect(realtime.manualReconnect).toHaveBeenCalledTimes(1); expect(connection).toHaveFocus();
 });
 
-it('closes mobile navigation after a selected destination and focuses the workspace', () => {
+it('closes mobile navigation after a selected destination and focuses the workspace', async () => {
   render(tree()); fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
-  fireEvent.click(within(screen.getByRole('dialog', { name: 'Navigation' })).getByRole('link', { name: 'Dashboard home' }));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(within(await screen.findByRole('dialog', { name: 'Navigation' })).getByRole('link', { name: 'Dashboard home' }));
+  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   expect(screen.getByRole('heading')).toHaveTextContent('Route /');
 });

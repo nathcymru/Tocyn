@@ -1,3 +1,4 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
@@ -179,26 +180,13 @@ export function Layout() {
   const connDetailsRef = useRef<HTMLDivElement>(null);
   const connectionTrigger = useRef<HTMLButtonElement>(null);
   const connectionId = React.useId();
-  const mobileDialog = useRef<HTMLDialogElement>(null);
+  const navigationClose = useRef<HTMLButtonElement>(null);
   const mobileDialogId = React.useId();
   const navigationTrigger = useRef<HTMLButtonElement>(null);
   const restoreNavigationFocus = useRef(true);
   const main = useRef<HTMLElement>(null);
 
   useEffect(() => { main.current?.focus(); }, [location.pathname]);
-  useEffect(() => {
-    if (!isSidebarOpen) return;
-    restoreNavigationFocus.current = true;
-    const dialog = mobileDialog.current;
-    const opener = navigationTrigger.current;
-    dialog?.showModal();
-    dialog?.querySelector<HTMLButtonElement>('button')?.focus();
-    return () => {
-      if (dialog?.open) dialog.close();
-      if (restoreNavigationFocus.current && opener?.isConnected) opener.focus();
-      else main.current?.focus();
-    };
-  }, [isSidebarOpen]);
   const [searchInput, setSearchInput] = useState('');
 
   useEffect(() => {
@@ -301,14 +289,16 @@ export function Layout() {
       <aside className="hidden lg:block w-16 shrink-0 bg-slate-900 border-r border-slate-800">
         <SidebarContent />
       </aside>
-      {isSidebarOpen && (
-        <dialog id={mobileDialogId} ref={mobileDialog} aria-label="Navigation" onCancel={() => setIsSidebarOpen(false)}
+        <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
+          labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
+          finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
+          data-tocyn-dialog-edge=""
           className="fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none w-20 overflow-visible border-0 bg-slate-900 text-white p-2 backdrop:bg-slate-900/50">
-          <TocynButton type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
+          <h2 id={`${mobileDialogId}-title`} className="sr-only">Navigation</h2>
+          <TocynButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
             className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X aria-hidden="true" /></TocynButton>
           <div className="h-[calc(100dvh-4rem)]"><SidebarContent onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
-        </dialog>
-      )}
+        </TocynDialog>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -321,7 +311,7 @@ export function Layout() {
             aria-expanded={isSidebarOpen}
             aria-controls={mobileDialogId}
             className="lg:hidden rounded p-2 text-slate-600 focus-visible:outline focus-visible:outline-2"
-            onClick={() => setIsSidebarOpen(true)}
+            onClick={() => { restoreNavigationFocus.current = true; setIsSidebarOpen(true); }}
           >
             <Menu className="w-6 h-6" />
           </TocynButton>
