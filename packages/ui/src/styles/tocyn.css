@@ -15,7 +15,8 @@
   outline: 2px solid var(--tocyn-color-focus);
   outline-offset: 2px;
 }
-[data-tocyn-primitive="button"], [data-tocyn-primitive="input"],
+[data-tocyn-primitive="button"],
+[data-tocyn-primitive="input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
 [data-tocyn-workspace] :where(button, [role="button"], a) { min-block-size: var(--tocyn-target-min); }
 @media (prefers-reduced-motion: reduce) {
   [data-tocyn-workspace] *, [data-tocyn-workspace] *::before, [data-tocyn-workspace] *::after {
