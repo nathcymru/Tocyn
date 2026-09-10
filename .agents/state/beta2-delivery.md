@@ -87,3 +87,9 @@ PR168 required checks passed and signed squash `3d17a03c992c51945a8a5d401f696735
 Shared UI candidate2283cac: all three native-control builds/tests passed, then shared portal and operator dialogs passed portal59/dashboard73 workflow tests and builds. JSDOM nonzero layout fixture is explicit; actual browser focus/visibility evidence remains required. Preserve all remaining48acceptance.159worker hit execution-time limit; repeated follow-up is not a useful strategy. No paid capacity was used.
 
 </details>
+
+## Coordinator update10September20:07BST
+
+Progress since19:37: #48 Chromium default/radical/noCSS controls including Combobox/Splitter pass; target-height fix and actual Worker runtime8799 evidence pushed. #159 D1/R2 plus realDO invocation evidence pushed;8storage/background tests. #152server compatibility alreadyacceptedmain4fce; UIawaits48. VoiceOver ticket-field naming/traversal/cancel-return now evidenced; fullATstillopen. Draft48head195b943,159headb5a8489; latestCIrunning, no merges/closures/forecastchange. Wiki acceptedmain remains unchanged until integration; issue progress receipts published.
+
+Native evidence_copyedit active159: explicit test-only evidence opt-in and reachableWorkflow/AI hook with fullclasscontract; prior discarded proposal was unreachable because localbeta prohibitedworkflow but requiredtelemetry. Rootowns48/AT/integration. Sharedallowance/modelcontrol limits unchanged; zeroCopilot. Forecast22January2027beta.2 (~4months),21January2028expanded. Nextoperationalupdate20:37BST. Preserve full140SLA/ownership/workspace gate.
