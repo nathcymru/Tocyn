@@ -1,0 +1,709 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-10T18:11:39.716Z",
+  "environment": {
+    "node": "v22.19.0",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "playwright": "1.62.1",
+    "browser": "151.0.7922.34",
+    "headless": true,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "reducedMotion": "reduce"
+  },
+  "scenario": "Production login route: navigation time origin to usable submit observed after two animation frames; native submit click to synthetic denial rendered after two animation frames.",
+  "baseline": {
+    "revision": "1c684300154187ccf8af5cd6dfcb06afe031ba6b",
+    "tree": "66fa3650113b6302d8bdc49b83615e6598e1c445",
+    "trackedDirty": false,
+    "lockSha256": "68556248212a835cdb249231f91f18b0b494bf955583f942a9e114f982249801",
+    "vite": "8.2.2",
+    "artifacts": {
+      "dashboard": {
+        "assets": [
+          {
+            "path": "assets/index-CmW5lPQ2.css",
+            "kind": "css",
+            "bytes": 81318,
+            "gzipBytes": 13236,
+            "sha256": "8cc8791c7d43a8016c62f6b3fed94519e02d05ff76983a98101681e12b11be2b"
+          },
+          {
+            "path": "assets/index-CsL8Jdiy.js",
+            "kind": "js",
+            "bytes": 1514219,
+            "gzipBytes": 486232,
+            "sha256": "b1ba329a260b1b674da2fa0da777c0ef92f0322f759fe5c64e0b172d9900126c"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 1514219,
+            "gzipBytes": 486232
+          },
+          "css": {
+            "bytes": 81318,
+            "gzipBytes": 13236
+          }
+        },
+        "initial": {
+          "files": [
+            "assets/index-CmW5lPQ2.css",
+            "assets/index-CsL8Jdiy.js"
+          ],
+          "totals": {
+            "js": {
+              "bytes": 1514219,
+              "gzipBytes": 486232
+            },
+            "css": {
+              "bytes": 81318,
+              "gzipBytes": 13236
+            }
+          }
+        }
+      },
+      "portal": {
+        "assets": [
+          {
+            "path": "assets/index-Bwv1n-1B.css",
+            "kind": "css",
+            "bytes": 20897,
+            "gzipBytes": 4916,
+            "sha256": "af4237c92ead1060aba9555b73aee212748a479887a908055b69ea0546b78135"
+          },
+          {
+            "path": "assets/index-DdGLzXjl.js",
+            "kind": "js",
+            "bytes": 248673,
+            "gzipBytes": 77808,
+            "sha256": "121de8d0d7afc3aa34830772387d2ce87d16cf8713f856892d0fd86212af230f"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 248673,
+            "gzipBytes": 77808
+          },
+          "css": {
+            "bytes": 20897,
+            "gzipBytes": 4916
+          }
+        },
+        "initial": {
+          "files": [
+            "assets/index-Bwv1n-1B.css",
+            "assets/index-DdGLzXjl.js"
+          ],
+          "totals": {
+            "js": {
+              "bytes": 248673,
+              "gzipBytes": 77808
+            },
+            "css": {
+              "bytes": 20897,
+              "gzipBytes": 4916
+            }
+          }
+        }
+      },
+      "widget": {
+        "assets": [
+          {
+            "path": "lumina-widget.js",
+            "kind": "js",
+            "bytes": 470547,
+            "gzipBytes": 143978,
+            "sha256": "49dd1b56eb2649b582ef1174cbc66348332fdef12ada331af067b3fa4d2681e4"
+          },
+          {
+            "path": "widget.css",
+            "kind": "css",
+            "bytes": 10819,
+            "gzipBytes": 3069,
+            "sha256": "59e6e3ae3f978ff8213cde44b0dec8ddbd27227b472a293f1ad794353407c253"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 470547,
+            "gzipBytes": 143978
+          },
+          "css": {
+            "bytes": 10819,
+            "gzipBytes": 3069
+          }
+        },
+        "initial": {
+          "files": [
+            "lumina-widget.js"
+          ],
+          "totals": {
+            "js": {
+              "bytes": 470547,
+              "gzipBytes": 143978
+            },
+            "css": {
+              "bytes": 0,
+              "gzipBytes": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "candidate": {
+    "revision": "3e08914899783bdc718cbad9186610ff18fe518b",
+    "tree": "f33940d8d607dc1309870e73f1a6a754addd1ec1",
+    "trackedDirty": false,
+    "lockSha256": "df0f44153bebcee82671330da2de4431796a32b374eb221c38386cd9acf67120",
+    "vite": "8.2.2",
+    "artifacts": {
+      "dashboard": {
+        "assets": [
+          {
+            "path": "assets/index-BUET_HBl.css",
+            "kind": "css",
+            "bytes": 81407,
+            "gzipBytes": 13588,
+            "sha256": "639d127ca3f5e7633aacefc966f252b1b2ebb5b0a4964030a71e22ea5bcd6d8d"
+          },
+          {
+            "path": "assets/index-CJgFZQua.js",
+            "kind": "js",
+            "bytes": 1625468,
+            "gzipBytes": 522941,
+            "sha256": "ab19dda75f9f850595c9b61b8984507ebf8ba7a7ea160bf0a8de389c1e8732f8"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 1625468,
+            "gzipBytes": 522941
+          },
+          "css": {
+            "bytes": 81407,
+            "gzipBytes": 13588
+          }
+        },
+        "initial": {
+          "files": [
+            "assets/index-BUET_HBl.css",
+            "assets/index-CJgFZQua.js"
+          ],
+          "totals": {
+            "js": {
+              "bytes": 1625468,
+              "gzipBytes": 522941
+            },
+            "css": {
+              "bytes": 81407,
+              "gzipBytes": 13588
+            }
+          }
+        }
+      },
+      "portal": {
+        "assets": [
+          {
+            "path": "assets/TicketDetailPage-xyNv1-Bj.js",
+            "kind": "js",
+            "bytes": 25380,
+            "gzipBytes": 7522,
+            "sha256": "02cfb3690b9399c4c3e7813f668cb0f07c6efc0db0dd99618ada7ba60efa0c83"
+          },
+          {
+            "path": "assets/TicketListPage-C__-BChp.js",
+            "kind": "js",
+            "bytes": 67183,
+            "gzipBytes": 21366,
+            "sha256": "8ff13c5298d08f09d5bfc7466c4c4acad936a140f8ac25b40a53bad33160a9d2"
+          },
+          {
+            "path": "assets/index-BxhW1jlB.js",
+            "kind": "js",
+            "bytes": 208761,
+            "gzipBytes": 67502,
+            "sha256": "3fda6d34972eec09ed0b87b042b6786835d773fbdeb3cdf91e0a8b75931bad09"
+          },
+          {
+            "path": "assets/index-C8XSikil.css",
+            "kind": "css",
+            "bytes": 22980,
+            "gzipBytes": 5459,
+            "sha256": "cd49c0195b82019e9a47a37a7f03f54c68f123e781c03d011c4c8c40e0aaaa10"
+          },
+          {
+            "path": "assets/ticket-reference-C45l61zU.js",
+            "kind": "js",
+            "bytes": 9887,
+            "gzipBytes": 3440,
+            "sha256": "1b0108a9216b03459811ad09a59e4acb081c40ef9c204534c80e9f790237c527"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 311211,
+            "gzipBytes": 99830
+          },
+          "css": {
+            "bytes": 22980,
+            "gzipBytes": 5459
+          }
+        },
+        "initial": {
+          "files": [
+            "assets/index-BxhW1jlB.js",
+            "assets/index-C8XSikil.css"
+          ],
+          "totals": {
+            "js": {
+              "bytes": 208761,
+              "gzipBytes": 67502
+            },
+            "css": {
+              "bytes": 22980,
+              "gzipBytes": 5459
+            }
+          }
+        }
+      },
+      "widget": {
+        "assets": [
+          {
+            "path": "lumina-widget.js",
+            "kind": "js",
+            "bytes": 510497,
+            "gzipBytes": 157150,
+            "sha256": "2b8564a21abbc920fc8f064bb3611e573fad89a376e8f8b880b9df6ea9447042"
+          },
+          {
+            "path": "widget.css",
+            "kind": "css",
+            "bytes": 10811,
+            "gzipBytes": 3048,
+            "sha256": "2e7c5c3e85b0f026569425ca8b03618742cf634f9ef871f48d9fa1268fa8f587"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 510497,
+            "gzipBytes": 157150
+          },
+          "css": {
+            "bytes": 10811,
+            "gzipBytes": 3048
+          }
+        },
+        "initial": {
+          "files": [
+            "lumina-widget.js"
+          ],
+          "totals": {
+            "js": {
+              "bytes": 510497,
+              "gzipBytes": 157150
+            },
+            "css": {
+              "bytes": 0,
+              "gzipBytes": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "clients": {
+    "dashboard": {
+      "baseline": {
+        "samples": [
+          {
+            "startupMs": 147.5,
+            "recoveryMs": 48.200000047683716
+          },
+          {
+            "startupMs": 157.10000014305115,
+            "recoveryMs": 47.200000047683716
+          },
+          {
+            "startupMs": 157.09999990463257,
+            "recoveryMs": 47.69999980926514
+          },
+          {
+            "startupMs": 163.09999990463257,
+            "recoveryMs": 48
+          },
+          {
+            "startupMs": 146.69999980926514,
+            "recoveryMs": 47.40000009536743
+          },
+          {
+            "startupMs": 163.89999985694885,
+            "recoveryMs": 48.299999952316284
+          },
+          {
+            "startupMs": 162.29999995231628,
+            "recoveryMs": 47.90000009536743
+          },
+          {
+            "startupMs": 156.60000014305115,
+            "recoveryMs": 47.80000019073486
+          },
+          {
+            "startupMs": 157.60000014305115,
+            "recoveryMs": 48
+          },
+          {
+            "startupMs": 161.20000004768372,
+            "recoveryMs": 48.30000019073486
+          },
+          {
+            "startupMs": 162.09999990463257,
+            "recoveryMs": 48.299999952316284
+          },
+          {
+            "startupMs": 156,
+            "recoveryMs": 48.30000019073486
+          },
+          {
+            "startupMs": 163.90000009536743,
+            "recoveryMs": 48.19999980926514
+          },
+          {
+            "startupMs": 159.29999995231628,
+            "recoveryMs": 47.200000047683716
+          },
+          {
+            "startupMs": 157.59999990463257,
+            "recoveryMs": 47.59999990463257
+          },
+          {
+            "startupMs": 147.70000004768372,
+            "recoveryMs": 48.200000047683716
+          },
+          {
+            "startupMs": 147.60000014305115,
+            "recoveryMs": 48
+          },
+          {
+            "startupMs": 162.79999995231628,
+            "recoveryMs": 48.5
+          },
+          {
+            "startupMs": 160.60000014305115,
+            "recoveryMs": 48.200000047683716
+          },
+          {
+            "startupMs": 160.79999995231628,
+            "recoveryMs": 47.89999985694885
+          }
+        ],
+        "startupMs": {
+          "p50": 157.60000014305115,
+          "p95": 163.89999985694885,
+          "p99": 163.90000009536743
+        },
+        "recoveryMs": {
+          "p50": 48,
+          "p95": 48.30000019073486,
+          "p99": 48.5
+        }
+      },
+      "candidate": {
+        "samples": [
+          {
+            "startupMs": 161.10000014305115,
+            "recoveryMs": 47.799999952316284
+          },
+          {
+            "startupMs": 157.70000004768372,
+            "recoveryMs": 47.40000009536743
+          },
+          {
+            "startupMs": 163.29999995231628,
+            "recoveryMs": 48.39999985694885
+          },
+          {
+            "startupMs": 163.60000014305115,
+            "recoveryMs": 48.10000014305115
+          },
+          {
+            "startupMs": 161.40000009536743,
+            "recoveryMs": 48
+          },
+          {
+            "startupMs": 163.40000009536743,
+            "recoveryMs": 48.10000014305115
+          },
+          {
+            "startupMs": 157.70000004768372,
+            "recoveryMs": 48.30000019073486
+          },
+          {
+            "startupMs": 161.20000004768372,
+            "recoveryMs": 47.90000009536743
+          },
+          {
+            "startupMs": 162.40000009536743,
+            "recoveryMs": 48.299999952316284
+          },
+          {
+            "startupMs": 163.79999995231628,
+            "recoveryMs": 48.200000047683716
+          },
+          {
+            "startupMs": 164.90000009536743,
+            "recoveryMs": 48.299999952316284
+          },
+          {
+            "startupMs": 182.89999985694885,
+            "recoveryMs": 47.299999952316284
+          },
+          {
+            "startupMs": 160.89999985694885,
+            "recoveryMs": 47.5
+          },
+          {
+            "startupMs": 163.89999985694885,
+            "recoveryMs": 48.200000047683716
+          },
+          {
+            "startupMs": 174.79999995231628,
+            "recoveryMs": 48
+          },
+          {
+            "startupMs": 160.59999990463257,
+            "recoveryMs": 48
+          },
+          {
+            "startupMs": 161.90000009536743,
+            "recoveryMs": 48.200000047683716
+          },
+          {
+            "startupMs": 149.70000004768372,
+            "recoveryMs": 48.30000019073486
+          },
+          {
+            "startupMs": 162,
+            "recoveryMs": 48.80000019073486
+          },
+          {
+            "startupMs": 163,
+            "recoveryMs": 48.5
+          }
+        ],
+        "startupMs": {
+          "p50": 162,
+          "p95": 174.79999995231628,
+          "p99": 182.89999985694885
+        },
+        "recoveryMs": {
+          "p50": 48.10000014305115,
+          "p95": 48.5,
+          "p99": 48.80000019073486
+        }
+      }
+    },
+    "portal": {
+      "baseline": {
+        "samples": [
+          {
+            "startupMs": 59.80000019073486,
+            "recoveryMs": 64
+          },
+          {
+            "startupMs": 59,
+            "recoveryMs": 64.79999995231628
+          },
+          {
+            "startupMs": 61.30000019073486,
+            "recoveryMs": 64.60000014305115
+          },
+          {
+            "startupMs": 61.10000014305115,
+            "recoveryMs": 64.70000004768372
+          },
+          {
+            "startupMs": 61.799999952316284,
+            "recoveryMs": 64.59999990463257
+          },
+          {
+            "startupMs": 61.09999990463257,
+            "recoveryMs": 64.69999980926514
+          },
+          {
+            "startupMs": 63,
+            "recoveryMs": 64.70000004768372
+          },
+          {
+            "startupMs": 53.40000009536743,
+            "recoveryMs": 65
+          },
+          {
+            "startupMs": 58.90000009536743,
+            "recoveryMs": 64
+          },
+          {
+            "startupMs": 59.30000019073486,
+            "recoveryMs": 64.29999995231628
+          },
+          {
+            "startupMs": 60.69999980926514,
+            "recoveryMs": 64.5
+          },
+          {
+            "startupMs": 65.5,
+            "recoveryMs": 64.70000004768372
+          },
+          {
+            "startupMs": 54,
+            "recoveryMs": 64.80000019073486
+          },
+          {
+            "startupMs": 60.5,
+            "recoveryMs": 65.40000009536743
+          },
+          {
+            "startupMs": 60.69999980926514,
+            "recoveryMs": 64.59999990463257
+          },
+          {
+            "startupMs": 62.69999980926514,
+            "recoveryMs": 64.79999995231628
+          },
+          {
+            "startupMs": 61.40000009536743,
+            "recoveryMs": 64.70000004768372
+          },
+          {
+            "startupMs": 59.09999990463257,
+            "recoveryMs": 64.20000004768372
+          },
+          {
+            "startupMs": 64.29999995231628,
+            "recoveryMs": 64.40000009536743
+          },
+          {
+            "startupMs": 61.299999952316284,
+            "recoveryMs": 64.09999990463257
+          }
+        ],
+        "startupMs": {
+          "p50": 60.69999980926514,
+          "p95": 64.29999995231628,
+          "p99": 65.5
+        },
+        "recoveryMs": {
+          "p50": 64.60000014305115,
+          "p95": 65,
+          "p99": 65.40000009536743
+        }
+      },
+      "candidate": {
+        "samples": [
+          {
+            "startupMs": 59.5,
+            "recoveryMs": 64.79999995231628
+          },
+          {
+            "startupMs": 60.59999990463257,
+            "recoveryMs": 64
+          },
+          {
+            "startupMs": 62.69999980926514,
+            "recoveryMs": 64.70000004768372
+          },
+          {
+            "startupMs": 61.40000009536743,
+            "recoveryMs": 64.79999995231628
+          },
+          {
+            "startupMs": 60.10000014305115,
+            "recoveryMs": 64.40000009536743
+          },
+          {
+            "startupMs": 60.80000019073486,
+            "recoveryMs": 64.80000019073486
+          },
+          {
+            "startupMs": 62.200000047683716,
+            "recoveryMs": 63.799999952316284
+          },
+          {
+            "startupMs": 62.89999985694885,
+            "recoveryMs": 63.90000009536743
+          },
+          {
+            "startupMs": 57.89999985694885,
+            "recoveryMs": 64
+          },
+          {
+            "startupMs": 60,
+            "recoveryMs": 64.10000014305115
+          },
+          {
+            "startupMs": 61,
+            "recoveryMs": 63.799999952316284
+          },
+          {
+            "startupMs": 60.30000019073486,
+            "recoveryMs": 64.5
+          },
+          {
+            "startupMs": 61.90000009536743,
+            "recoveryMs": 64.69999980926514
+          },
+          {
+            "startupMs": 58.299999952316284,
+            "recoveryMs": 64.60000014305115
+          },
+          {
+            "startupMs": 59.700000047683716,
+            "recoveryMs": 64.79999995231628
+          },
+          {
+            "startupMs": 60.700000047683716,
+            "recoveryMs": 64.90000009536743
+          },
+          {
+            "startupMs": 61.200000047683716,
+            "recoveryMs": 63.80000019073486
+          },
+          {
+            "startupMs": 60.299999952316284,
+            "recoveryMs": 64.10000014305115
+          },
+          {
+            "startupMs": 58.90000009536743,
+            "recoveryMs": 64.29999995231628
+          },
+          {
+            "startupMs": 59.59999990463257,
+            "recoveryMs": 64.60000014305115
+          }
+        ],
+        "startupMs": {
+          "p50": 60.30000019073486,
+          "p95": 62.69999980926514,
+          "p99": 62.89999985694885
+        },
+        "recoveryMs": {
+          "p50": 64.40000009536743,
+          "p95": 64.80000019073486,
+          "p99": 64.90000009536743
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Fresh contexts and no-store responses; browser process and OS caches are warm. No cold-process or production-network claim.",
+    "Local static assets, no compression, no throttling, serial alternating samples; shared machine load is uncontrolled.",
+    "Authentication responses are fixed local denials; no real authentication, provider, delivery or backend performance acceptance.",
+    "Startup includes automation observation latency. Recovery starts at DOM click; two animation frames approximate rendering, not a compositor paint proof.",
+    "Only login startup/recovery is measured. Authenticated workspace, widget, full-motion interactions and numeric CI budgets remain required.",
+    "Caller must freshly build the supplied trees; artifact hashes are captured but build provenance is not independently attested."
+  ]
+}

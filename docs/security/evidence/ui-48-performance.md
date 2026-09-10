@@ -62,3 +62,16 @@ node --test tools/ui-performance/browser-evidence.test.mjs
 ```
 
 Limits: warm browser/OS caches, fresh browser contexts, no-store uncompressed assets, no throttling, shared machine load, reduced motion, startup observation overhead and two-animation-frame rendering approximation. This is a login-only performance scenario, not cold-start, backend authentication, authenticated workspace, widget or full accessibility acceptance. Numeric CI budgets remain open until the measured regression profile is assessed; the harness does not declare a performance pass.
+
+## Chromium login measurement — candidate3e08914
+
+Fresh production manifest builds for all three clients on both clean source trees passed. Twenty recorded samples per side/client (80 total), after one warmup per side, are in `ui-48-browser-3e08914.json`. Baseline remains1c684300, tree-equivalent to accepted main6299bfef. Playwright1.62.1, Chromium151.0.7922.34, Node22.19.0, macOS arm64.
+
+| Scenario (milliseconds) | Baseline p50 / p95 / p99 | Candidate p50 / p95 / p99 |
+|---|---:|---:|
+| dashboard startupMs | 157.6 / 163.9 / 163.9 | 162.0 / 174.8 / 182.9 |
+| dashboard recoveryMs | 48.0 / 48.3 / 48.5 | 48.1 / 48.5 / 48.8 |
+| portal startupMs | 60.7 / 64.3 / 65.5 | 60.3 / 62.7 / 62.9 |
+| portal recoveryMs | 64.6 / 65.0 / 65.4 | 64.4 / 64.8 / 64.9 |
+
+No large login timing regression appeared in this local sample; differences of a few milliseconds are not evidence of a general speedup. The portal route split's byte reduction is stronger evidence than a small timing difference in this unthrottled warm-process environment. The stated limits and outstanding authenticated/workspace/widget/numeric-budget gates remain unchanged.
