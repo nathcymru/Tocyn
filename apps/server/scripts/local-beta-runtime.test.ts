@@ -1,3 +1,4 @@
+import { request as httpRequest } from 'node:http';
 import { createRepositories } from '../src/repositories';
 import { createSystemTenantScope } from '../src/auth/scope';
 import assert from 'node:assert/strict';
@@ -15,11 +16,12 @@ import { LocalBetaOperator } from './local-beta-operator';
 
 const serverRoot=resolve(import.meta.dirname,'..');
 const wrangler=resolve(serverRoot,'../../node_modules/wrangler/bin/wrangler.js');
+const port=(()=>{const value=process.env.TOCYN_RUNTIME_TEST_PORT;if(value===undefined)return 8787;if(!/^\d+$/.test(value))throw new Error('TOCYN_RUNTIME_TEST_PORT must be numeric');const parsed=Number(value);if(!Number.isInteger(parsed)||parsed<1024||parsed>65535)throw new Error('TOCYN_RUNTIME_TEST_PORT must be between 1024 and 65535');return parsed;})();
 const origin='http://localhost:8787';
 
 /** Separate real local Worker test: never fallback to another port, remote D1 or production bindings. */
 test('real local Wrangler observes operator revisions on warm connections and retains stop/counters across restart',async t=>{
-  const probe=createServer();await new Promise<void>((ok,fail)=>{probe.once('error',fail);probe.listen(8787,'127.0.0.1',ok);});await new Promise<void>(ok=>probe.close(()=>ok()));
+  const probe=createServer();await new Promise<void>((ok,fail)=>{probe.once('error',fail);probe.listen(port,'127.0.0.1',ok);});await new Promise<void>(ok=>probe.close(()=>ok()));
   const directory=mkdtempSync(join(tmpdir(),'tocyn-beta-runtime-'));
   const state=join(directory,'state'),configFile=join(directory,'wrangler.json');
   const env:NodeJS.ProcessEnv={...process.env,WRANGLER_SEND_METRICS:'false'};
@@ -33,9 +35,29 @@ test('real local Wrangler observes operator revisions on warm connections and re
     const result=spawnSync(process.execPath,[wrangler,...args,'--config',configFile],{cwd:directory,env,encoding:'utf8',maxBuffer:10*1024*1024});
     assert.equal(result.status,0,'Local Wrangler setup must complete; raw logs stay private');
   };
-  const request=async(path:string,options:RequestInit={})=>fetch(origin+path,{...options,redirect:'error',signal:AbortSignal.timeout(5000)});
+  // An explicitly selected spare TCP port still tests the canonical logical origin.
+  // Node fetch normalizes Host to its URL, so use the HTTP transport only for this override.
+  const request=async(path:string,options:RequestInit={}):Promise<Response>=>{
+    if(port===8787)return fetch(origin+path,{...options,redirect:'error',signal:AbortSignal.timeout(5000)});
+    if(options.body!==undefined && typeof options.body!=='string')throw new Error('Unsupported runtime-test request body');
+    const headers=new Headers(options.headers);headers.set('Host','localhost:8787');
+    return new Promise((resolve,reject)=>{
+      const outgoing=httpRequest({hostname:'127.0.0.1',port,path,method:options.method??'GET',headers:Object.fromEntries(headers),signal:AbortSignal.timeout(5000)}, incoming=>{
+        const chunks:Buffer[]=[];let bytes=0;
+        incoming.on('error',reject);
+        incoming.on('data',(chunk:Buffer)=>{bytes+=chunk.length;if(bytes>1024*1024){incoming.destroy(new Error('Runtime-test response exceeded limit'));return;}chunks.push(chunk);});
+        incoming.on('end',()=>{
+          const status=incoming.statusCode??500;
+          if(status>=300 && status<400){reject(new Error('Unexpected runtime-test redirect'));return;}
+          const responseHeaders=new Headers();for(let i=0;i<incoming.rawHeaders.length;i+=2)responseHeaders.append(incoming.rawHeaders[i],incoming.rawHeaders[i+1]);
+          resolve(new Response([204,205,304].includes(status)?null:Buffer.concat(chunks),{status,headers:responseHeaders}));
+        });
+      });
+      outgoing.on('error',reject);outgoing.end(options.body);
+    });
+  };
   const start=async()=>{
-    worker=spawn(process.execPath,[wrangler,'dev','--local','--ip','127.0.0.1','--port','8787','--persist-to',state,'--config',configFile],{cwd:directory,env,stdio:['ignore',log!,log!]});
+    worker=spawn(process.execPath,[wrangler,'dev','--local','--ip','127.0.0.1','--port',String(port),'--persist-to',state,'--config',configFile],{cwd:directory,env,stdio:['ignore',log!,log!]});
     for(let attempt=0;attempt<100;attempt++){
       try{const res=await request('/health');await res.body?.cancel();if(res.status===200)return;}catch{/* Local startup only. */}
       await new Promise(ok=>setTimeout(ok,100));
