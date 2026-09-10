@@ -58,6 +58,29 @@ async function run() {
       db.prepare("INSERT INTO tenant_config (tenant_id, key, value) VALUES ('fence-tenant', 'existing', 'before')"),
     ]);
     const writeFence = capabilityWriteConstraint({ tenantId: 'fence-tenant', actorId: 'fence-agent', role: 'agent', sessionVersion: 0, capability: 'settings.general.manage' });
+    // Exercise the live owner/role/group intersections using real D1, not
+    // mocked authorization decisions. The captured request remains unchanged.
+    const probeWrite = async (key: string) => db.prepare(`INSERT INTO tenant_config (tenant_id, key, value)
+      SELECT 'fence-tenant', ?, 'probe' WHERE ${writeFence.sql}`).bind(key, ...writeFence.values).run();
+    assert.strictEqual((await probeWrite('allowed-before-revocation')).meta.changes, 1);
+    for (const table of ['deployment_capability_ceiling', 'deployment_role_capability_grants']) {
+      const roleFilter = table === 'deployment_role_capability_grants' ? " AND role = 'agent'" : '';
+      await db.prepare(`UPDATE ${table} SET enabled = 0, revision = revision + 1 WHERE capability = 'settings.general.manage'${roleFilter}`).run();
+      assert.strictEqual((await probeWrite(`blocked-${table}`)).meta.changes, 0);
+      assert.strictEqual(await db.prepare('SELECT value FROM tenant_config WHERE tenant_id = ? AND key = ?').bind('fence-tenant', `blocked-${table}`).first(), null);
+      await db.prepare(`UPDATE ${table} SET enabled = 1, revision = revision + 1 WHERE capability = 'settings.general.manage'${roleFilter}`).run();
+    }
+    await db.batch([
+      db.prepare("INSERT INTO groups (tenant_id, id, name) VALUES ('fence-tenant', 'fence-group', 'Synthetic permission group')"),
+      db.prepare("INSERT INTO user_groups (tenant_id, user_id, group_id) VALUES ('fence-tenant', 'fence-agent', 'fence-group')"),
+      db.prepare("INSERT INTO tenant_group_capability_constraints (tenant_id, group_id, capability, enabled) VALUES ('other-fence-tenant', 'fence-group', 'settings.general.manage', 0)"),
+    ]);
+    assert.strictEqual((await probeWrite('foreign-group-denial-isolated')).meta.changes, 1);
+    await db.prepare("INSERT INTO tenant_group_capability_constraints (tenant_id, group_id, capability, enabled) VALUES ('fence-tenant', 'fence-group', 'settings.general.manage', 0)").run();
+    assert.strictEqual((await probeWrite('blocked-own-group')).meta.changes, 0);
+    assert.strictEqual(await db.prepare("SELECT value FROM tenant_config WHERE tenant_id = 'fence-tenant' AND key = 'blocked-own-group'").first(), null);
+    await db.prepare("UPDATE tenant_group_capability_constraints SET enabled = 1, revision = revision + 1 WHERE tenant_id = 'fence-tenant' AND group_id = 'fence-group'").run();
+    console.log('SUCCESS: Real D1 owner, role and tenant-qualified group restrictions deny protected writes.');
     await db.prepare("UPDATE tenant_role_capability_policies SET enabled = 0 WHERE tenant_id = 'fence-tenant' AND capability = 'settings.general.manage'").run();
     const policyRevokedBatch = await db.batch([
       db.prepare(`UPDATE tenant_config SET value = 'after' WHERE tenant_id = ? AND key = 'existing' AND ${writeFence.sql}`).bind('fence-tenant', ...writeFence.values),
