@@ -95,7 +95,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
     await authorizeLocalBeta(c.env, scope);
     c.set("tenantScope", scope as any);
 
-    const deps = createTenantRequestDeps(scope, c.env);
+    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'));
     c.set("tenantDeps", deps as any);
 
     await next();

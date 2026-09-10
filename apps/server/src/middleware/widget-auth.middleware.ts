@@ -65,7 +65,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
     );
 
     await authorizeLocalBeta(c.env, scope);
-    const deps = createTenantRequestDeps(scope, c.env);
+    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'));
     c.set('tenantScope', scope);
     c.set('tenantDeps', deps);
     c.set('jwtPayload', payload);

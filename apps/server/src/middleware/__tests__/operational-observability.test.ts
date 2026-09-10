@@ -44,6 +44,18 @@ describe('optional diagnostics preserve request behavior', () => {
     await expect(operationalObservability(c, async () => { throw original; }, async () => { throw new Error('sink unavailable'); })).rejects.toBe(original);
     await new Promise(resolve => setImmediate(resolve));
   });
+  it('does not replace a completed canonical mutation response when its isolated observer rejects', async () => {
+    const app = new Hono<{Bindings: Env; Variables: import('../../types').AppVariables}>();
+    app.use('*', (c, next) => operationalObservability(c, next, () => {}, undefined, async () => { throw new Error('synthetic canonical observer fault'); }));
+    app.post('/api/other', c => {
+      c.get('requestCanonicalMutationSli')?.recordAttempt();
+      c.get('requestCanonicalMutationSli')?.recordDurablyCompleted();
+      return c.text('created', 201);
+    });
+    const response = await app.request('/api/other', { method: 'POST' }, enabled as Env);
+    expect(response.status).toBe(201);
+    await new Promise(resolve => setImmediate(resolve));
+  });
   it('emits no diagnostic record when telemetry is off', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     await operationalObservability(context({}), async () => {});

@@ -16,9 +16,11 @@ import { VerifiedTenantScope } from '../types/tenant';
 import { Repositories } from '../repositories/interfaces';
 import { createRepositories } from '../repositories';
 import { TenantAttachmentStorage, LegacyArticleBodyStorage, TenantVectorStorage } from '../storage/adapters';
+import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 
 export type TenantRequestDeps = {
   emitResourceOperation?: ResourceOperationEmitter;
+  canonicalMutationSli?: RequestCanonicalMutationSli;
   scope: VerifiedTenantScope;
   capabilityPolicy: CapabilityPolicyService;
   betaAdmission?: LocalBetaAdmissionRepository;
@@ -42,14 +44,14 @@ export const tenantMiddleware = async (c: Context, next: Next) => {
   // Trusted composition boundary
   const payload = c.get('jwtPayload') as { session_version?: number; exp?: number ;} | undefined;
   const credential = payload?.exp ? { sessionVersion: payload.session_version ?? 0, expiresAt: payload.exp } : undefined;
-  const deps = createTenantRequestDeps(scope, c.env, credential);
+  const deps = createTenantRequestDeps(scope, c.env, credential, c.get('requestCanonicalMutationSli'));
 
   c.set('tenantDeps', deps);
   await next();
 };
 
 
-export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, credential?: BetaCredential): TenantRequestDeps {
+export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, credential?: BetaCredential, canonicalMutationSli?: RequestCanonicalMutationSli): TenantRequestDeps {
   const emitResourceOperation = createResourceOperationEmitter(env);
   const db = observeD1(env.DB, emitResourceOperation);
   const guarded = localBetaEnabled(env);
@@ -72,7 +74,8 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     betaAdmission,
     boundedConversationRead: betaAdmission ? new BoundedConversationReadRepository(db, scope) : undefined,
     conversationAudit: new ConversationAuditRepository(db, scope, betaAdmission),
-    ticketMutations: new TicketMutationReplayRepository(db, scope, betaAdmission),
+    canonicalMutationSli,
+    ticketMutations: new TicketMutationReplayRepository(db, scope, betaAdmission, canonicalMutationSli),
     repositories,
     attachmentStorage,
     legacyArticleStorage,
@@ -82,7 +85,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
         ? { sessionVersion: principal.sessionVersion, expiresAt: principal.expiresAt } : undefined;
       const admission = guarded
         ? new LocalBetaAdmissionRepository(db, scope, principal, replayCredential) : undefined;
-      return new TicketMutationReplayService(db, scope, principal, admission);
+      return new TicketMutationReplayService(db, scope, principal, admission, canonicalMutationSli);
     },
   };
 }

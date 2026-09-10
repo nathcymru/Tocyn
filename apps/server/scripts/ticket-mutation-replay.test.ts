@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { withTwoTenantFixture, type FixtureResponse, type LocalTenantFixture } from './local-tenant-fixture';
-import { createSystemTenantScope } from '../src/auth/scope';
+import { createSystemTenantScope, createVerifiedTenantScope } from '../src/auth/scope';
 import { TicketMutationReplayRepository } from '../src/repositories/ticket-mutation-replay.repository';
+import { TicketMutationError, TicketMutationReplayService } from '../src/services/ticket-mutation-replay.service';
+import { createRequestCanonicalMutationSli, type RequestCanonicalMutationSliSnapshot } from '../src/observability/request-canonical-mutation-sli';
+import { initializeLocalBetaFixture } from './local-beta-fixture';
 
 type Json = Record<string, unknown>;
+type CanonicalMutationSliEvent = {
+  version: 1;
+  type: 'canonical_mutation.sli.request';
+  scope: 'request';
+  complete: boolean;
+  counts: { attempted: number; durablyCompleted: number; replayed: number; denied: number; uncertain: number };
+};
 type Receipt = {
   tenant_id: string;
   principal_kind: 'api-key' | 'customer';
@@ -103,6 +113,20 @@ function articleId(body: Json): string {
   return id;
 }
 
+async function captureCanonicalMutationSli<T>(run: () => Promise<T>): Promise<{ result: T; events: CanonicalMutationSliEvent[] }> {
+  const events: CanonicalMutationSliEvent[] = [];
+  const log = console.log;
+  console.log = (value?: unknown) => {
+    if (typeof value !== 'string') return;
+    try {
+      const parsed = JSON.parse(value) as { type?: unknown };
+      if (parsed.type === 'canonical_mutation.sli.request') events.push(parsed as CanonicalMutationSliEvent);
+    } catch { /* Other application diagnostics are outside this bounded assertion. */ }
+  };
+  try { return { result: await run(), events }; }
+  finally { console.log = log; }
+}
+
 test('retry-safe mutations: absent key remains compatible while malformed, non-JSON, malformed JSON, and oversized input leave no receipt or mutation', async t => {
   await withTwoTenantFixture(async fixture => {
     const key = await apiKey(fixture);
@@ -170,6 +194,90 @@ test('retry-safe API create: same key and semantic payload replay an immutable o
     t.diagnostic(JSON.stringify({ receiptBytes: Buffer.byteLength(stored[0].response_snapshot!), ticketRows: afterFirst.tickets, articleRows: afterFirst.articles, notificationAttempts: fixture.notificationAttempts() }));
   });
 });
+
+test('canonical mutation SLI: real tenant-scoped D1 receipts, replay, denial and an unacknowledged batch failure remain distinct', async t => {
+  await withTwoTenantFixture(async fixture => {
+    const a = await fixture.createScopedApiKey('operatorA', ['tickets:write']);
+    const b = await fixture.createScopedApiKey('operatorB', ['tickets:write']);
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'canonical-sli-evidence',
+      tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
+      invitations: [
+        ...Object.values(fixture.principals).map(principal => ({
+          tenantId: principal.tenantId, id: principal.localId,
+          kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+        })),
+        { tenantId: fixture.principals.customerA.tenantId, id: a.id, kind: 'api-key' as const },
+        { tenantId: fixture.principals.customerB.tenantId, id: b.id, kind: 'api-key' as const },
+      ],
+    });
+    fixture.enableIsolatedObservability();
+    const privateBody = 'synthetic-canonical-sli-private-body';
+    const captured = await captureCanonicalMutationSli(async () => {
+      const first = await apiCreate(fixture, a.apiKey, 'canonical-sli-replay', {
+        subject: 'canonical SLI receipt', customer_email: fixture.principals.customerA.email, body: privateBody,
+      }, 'canonical-sli-first');
+      await expectStatus(first, 201, 'Durable receipt winner');
+      const created = ticketId(await first.json<Json>());
+      const replay = await apiCreate(fixture, a.apiKey, 'canonical-sli-replay', {
+        body: privateBody, customer_email: fixture.principals.customerA.email, subject: 'canonical SLI receipt',
+      }, 'canonical-sli-replay');
+      await expectStatus(replay, 201, 'Receipt replay');
+      await expectStatus(await apiReply(fixture, b.apiKey, created, undefined, { body: privateBody }, 'canonical-sli-denied'), 404, 'Tenant B cannot mutate tenant A ticket');
+
+      await fixture.db.prepare(`CREATE TRIGGER fail_canonical_sli_receipt BEFORE INSERT ON ticket_mutation_receipts
+        BEGIN SELECT RAISE(ABORT, 'synthetic canonical SLI receipt failure'); END`).run();
+      const failed = await apiCreate(fixture, a.apiKey, 'canonical-sli-uncertain', {
+        subject: 'unacknowledged batch', customer_email: fixture.principals.customerA.email, body: privateBody,
+      }, 'canonical-sli-uncertain');
+      assert.notEqual(failed.status, 201, 'A failed D1 batch cannot report durable completion');
+      await fixture.db.prepare('DROP TRIGGER fail_canonical_sli_receipt').run();
+      return created;
+    });
+    assert.equal(typeof captured.result, 'string');
+    assert.deepEqual(captured.events, [
+      { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
+        counts: { attempted: 1, durablyCompleted: 1, replayed: 0, denied: 0, uncertain: 0 } },
+      { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
+        counts: { attempted: 1, durablyCompleted: 0, replayed: 1, denied: 0, uncertain: 0 } },
+      { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
+        counts: { attempted: 0, durablyCompleted: 0, replayed: 0, denied: 1, uncertain: 0 } },
+      { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
+        counts: { attempted: 1, durablyCompleted: 0, replayed: 0, denied: 0, uncertain: 1 } },
+    ]);
+    assert.equal(JSON.stringify(captured.events).includes(privateBody), false, 'SLI summaries never serialize mutation content');
+    assert.equal(JSON.stringify(captured.events).includes(fixture.principals.customerA.tenantId), false, 'SLI summaries never serialize tenant identifiers');
+    t.diagnostic(JSON.stringify({ fixture: 'real-miniflare-two-tenant', durableReceipts: 1, replays: 1, knownDenials: 1, unacknowledgedBatches: 1 }));
+  });
+});
+
+test('canonical mutation SLI records an observed receipt replay, not a later caller authorization result', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const key = await fixture.createScopedApiKey('operatorA', ['tickets:write']);
+    const original = await apiCreate(fixture, key.apiKey, 'canonical-sli-revoked-replay', {
+      subject: 'replay authority boundary', customer_email: fixture.principals.customerA.email, body: 'synthetic stored response',
+    }, 'canonical-sli-revoked-original');
+    await expectStatus(original, 201, 'Original durable receipt');
+    const scope = createVerifiedTenantScope(fixture.principals.customerA.tenantId, key.id, ['integration'], 1);
+    const sli = createRequestCanonicalMutationSli();
+    const mutation = new TicketMutationReplayService(fixture.db, scope, { kind: 'api-key', id: key.id }, undefined, sli);
+    const prepared = await mutation.prepareMutation({ operation: 'api.ticket.create', data: {
+      subject: 'replay authority boundary', customer_email: fixture.principals.customerA.email, body: 'synthetic stored response',
+    } }, 'canonical-sli-revoked-replay');
+    assert.ok(prepared.replay, 'Preparation observes and renders the current durable receipt');
+    await fixture.db.prepare('UPDATE api_keys SET is_active = 0 WHERE tenant_id = ? AND id = ?')
+      .bind(fixture.principals.customerA.tenantId, key.id).run();
+    await assert.rejects(mutation.commit(prepared), (error: unknown) => error instanceof TicketMutationError && error.status === 401);
+    expectReplayObservation(sli.snapshot());
+  });
+});
+
+function expectReplayObservation(snapshot: RequestCanonicalMutationSliSnapshot): void {
+  assert.deepEqual(snapshot, {
+    version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
+    counts: { attempted: 1, durablyCompleted: 0, replayed: 1, denied: 0, uncertain: 0 },
+  }, 'The SLI establishes only that a durable receipt was observed before revocation, never that a later caller returned it');
+}
 
 test('retry-safe API mutations: concurrent matching retries elect one durable winner; meaningful reuse conflicts without cross-tenant leakage', async t => {
   await withTwoTenantFixture(async fixture => {

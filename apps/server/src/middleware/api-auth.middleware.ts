@@ -19,7 +19,7 @@ export const apiAuthMiddleware = async (c: Context<{ Bindings: Env; Variables: A
   if (!c.env.DB) return c.json({ error: 'Authentication unavailable' }, 503);
   const resolver = new ApiAuthResolver(c.env.DB);
   let result;
-  try { result = await resolveApiKeyRequestDeps(resolver, apiKey, c.env); }
+  try { result = await resolveApiKeyRequestDeps(resolver, apiKey, c.env, c.get('requestCanonicalMutationSli')); }
   catch (error) { if (error instanceof BetaAdmissionError) return c.json({code:error.code,error:error.message},error.status); throw error; }
 
   if (!result) {

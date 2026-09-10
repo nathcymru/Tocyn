@@ -99,3 +99,12 @@ Native auth_sli_159 (Terra/high, security boundary) implemented bounded per-requ
 Cost contract now adds one possible SLI output per auth-gate request: H+A+64C, A defaults to H. Prior H+64C checkpoint is historical and superseded for current planning. Full499tests/56files, server and collector/performance script TypeScript, collector harness pass. Worker initially incorrectly reported Node22missing; explicit supplied executable v22.19.0 worked and real28tenant tests passed without installs/rebuild. Do not repeat that environment assumption.
 
 Remaining159: canonical durable completion/replay/uncertainty, widget/API-key/MFA issuance SLIs, active-path gaps, complete collection/aggregate coverage and full observer-failure acceptance. Use existing actual Miniflare ticket-mutation/canonical scripts when planning, not only mocked handlers. #64 durable budgeting and #42 production export remain their owners. Worker complete; root owns integration; no Copilot/provider/paid action or forecast change.
+
+
+## Canonical durability diagnostics — 10 September 21:50 BST
+
+Native auth_sli_159 Terra/high implemented request-owned unsampled canonical counters through trusted API/portal/staff composition. Durable completion is recorded only after the real tenant-scoped D1 batch returns its nonempty response snapshot; replays observe existing receipts; denials before an attempt remain distinct from conservative uncertainty. A replay observation is not proof a later caller remained authorized: real revocation-between-prepare/commit test rejects the later commit. Legacy dashboard creation/PATCH/system paths remain outside this bounded increment. No canonical audit or behavior replaced.
+
+Worker reports12real Miniflare replay tests,2canonical atomic tests,28focusedtests and corresponding scriptTypeScript checks passing. Root inspected service/repository boundaries and corrected a material accounting error in the handoff: H+A+M+64C is bounded by3H+64C, not2H. Costhelper/catalogue now independently reserve auth and canonical summaries, both defaultH, with invalid/overflow regressions. Full505server tests/57files, serverTypeScript and focusedESLint pass (existingmodulewarning only). No provider/resources/Copilot used.
+
+Current worker complete; root ownsintegration/exactheadCI. Remaining159includes current legacycreate/PATCH and otherauthpaths, completeactivepath/observerfailureacceptance and finalintegration. #64durablebudgeting/#42productiontelemetry retainownership. No issueclosure, forecastchange or productionclaim.

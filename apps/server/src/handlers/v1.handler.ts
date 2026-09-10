@@ -131,6 +131,9 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
 
   const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
+    // This tenant-scoped lookup is the authoritative pre-mutation denial;
+    // no D1 mutation batch is attempted on this path.
+    deps.canonicalMutationSli?.recordDenied();
     return c.json({ error: "Ticket not found" }, 404);
   }
 

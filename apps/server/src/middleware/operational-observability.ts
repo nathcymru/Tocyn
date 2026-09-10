@@ -2,10 +2,12 @@ import type { Context, Next } from 'hono';
 import type { Env } from '../bindings';
 import { observabilityEnabled, operationalEvent, type OperationalEvent } from '../observability/operational-events';
 import { createRequestAuthSli, type RequestAuthSliSnapshot } from '../observability/request-auth-sli';
+import { createRequestCanonicalMutationSli, type RequestCanonicalMutationSliSnapshot } from '../observability/request-canonical-mutation-sli';
 import type { AppVariables } from '../types';
 
 export type OperationalEventSink = (event: OperationalEvent) => void | Promise<void>;
 export type RequestAuthSliSink = (snapshot: RequestAuthSliSnapshot) => void | Promise<void>;
+export type RequestCanonicalMutationSliSink = (snapshot: RequestCanonicalMutationSliSnapshot) => void | Promise<void>;
 
 function safeRoute(path: string): string {
   if (path === '/health') return '/health';
@@ -15,14 +17,17 @@ function safeRoute(path: string): string {
   return path.startsWith('/api/') ? '/api/other' : '/other';
 }
 
-export async function operationalObservability(c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next, sink?: OperationalEventSink, authSliSink?: RequestAuthSliSink): Promise<void> {
+export async function operationalObservability(c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next, sink?: OperationalEventSink, authSliSink?: RequestAuthSliSink, canonicalMutationSliSink?: RequestCanonicalMutationSliSink): Promise<void> {
   let measurement: { correlationId: string; started: number } | undefined;
   let requestAuthSli: AppVariables['requestAuthSli'];
+  let requestCanonicalMutationSli: AppVariables['requestCanonicalMutationSli'];
   try {
     if (observabilityEnabled(c.env)) {
       measurement = { correlationId: crypto.randomUUID(), started: Date.now() };
       requestAuthSli = createRequestAuthSli();
       c.set('requestAuthSli', requestAuthSli);
+      requestCanonicalMutationSli = createRequestCanonicalMutationSli();
+      c.set('requestCanonicalMutationSli', requestCanonicalMutationSli);
     }
   } catch { /* Diagnostic initialization cannot prevent the request. */ }
   let failed = false;
@@ -52,6 +57,13 @@ export async function operationalObservability(c: Context<{ Bindings: Env; Varia
         const pending = authSliSink ? authSliSink(snapshot) : console.log(JSON.stringify(snapshot));
         if (pending) void Promise.resolve(pending).catch(() => requestAuthSli?.markObserverFault());
       } catch { requestAuthSli.markObserverFault(); }
+    }
+    if (requestCanonicalMutationSli?.hasDecision()) {
+      try {
+        const snapshot = requestCanonicalMutationSli.snapshot();
+        const pending = canonicalMutationSliSink ? canonicalMutationSliSink(snapshot) : console.log(JSON.stringify(snapshot));
+        if (pending) void Promise.resolve(pending).catch(() => requestCanonicalMutationSli?.markObserverFault());
+      } catch { requestCanonicalMutationSli.markObserverFault(); }
     }
   }
 }
