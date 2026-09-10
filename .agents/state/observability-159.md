@@ -2,9 +2,9 @@
 
 ## Current next actions (supersedes earlier queues below)
 
-Owning issue #159 / draft PR #170, branch `codex/159-operational-observability`. Coordinator owns integration and acceptance. Latest implementation `277cb3a` includes fixed HTTP/resource envelopes, local collector/configuration, cost bounds, credential decisions and canonical mutation summaries. All later sections are chronological evidence, not competing ready queues. No worker remains active on #159 at this checkpoint.
+Owning issue #159; foundation PR #170 merged at `9cee350c36f49b9459fad3db42aadc8d25de848b`, with valid GitHub signature and exact reviewed tree. Coordinator owns integration and acceptance; continue remaining work from current main in a new bounded issue branch. Latest implementation `277cb3a` includes fixed HTTP/resource envelopes, local collector/configuration, cost bounds, credential decisions and canonical mutation summaries. All later sections are chronological evidence, not competing ready queues. No worker remains active on #159 at this checkpoint.
 
-Current verified evidence: root512server tests/58files; real two-tenant credential3tests; prior local D1/R2/DO/Workflow demonstrations with their stated limits; local load receipt65requests/60measured outcomes and source/tool/config metadata. All277cb3a required CI/security checks pass. Documentation synchronization follows and requires its own exact-head checks. Production telemetry stays disabled under #42.
+Current verified evidence: root512server tests/58files; real two-tenant credential3tests; prior local D1/R2/DO/Workflow demonstrations with their stated limits; local load receipt65requests/60measured outcomes and source/tool/config metadata. All final6d3ce48 required CI/security checks passed before the review-only owner bypass. No unresolved review threads or Copilot requests. #159 remains open / Project In progress. Production telemetry stays disabled under #42.
 
 Next required work, in order:
 

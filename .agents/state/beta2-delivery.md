@@ -1,5 +1,34 @@
 # Beta.2 coordinated delivery
 
+Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
+
+## Current state — 10 September 2026, 22:43 BST
+
+Accepted main: `9cee350c36f49b9459fad3db42aadc8d25de848b` (partial PR #170 integration, 21:40 UTC). Its valid GitHub signature and tree `42aaa36c9d0b0bd94d44abd2e52831365370f902` match reviewed head `6d3ce483248bc87c6b673f066f15fcc1c7c522be`. All required checks passed, no review threads, standing review-only owner bypass used, zero Copilot reviews. #159 remains OPEN / Project In progress; no 100% or actual-completion claim.
+
+Earlier accepted #127/#50/#160/#79 and bounded #152 compatibility correction remain unchanged. Full #152 remains open.
+
+- **#48 / draft #167:** `/private/tmp/tocyn-beta2-48`, `codex/48-headless-primitives`, rebased on accepted main. Current retained controls, security recovery and built-widget shadow styles are implemented. Combined suites: dashboard136, portal61, server512, widget11, sharedUI7; all three fresh builds pass. Default widget visual checks cover desktop/320px/short viewports, required text and focus contrast, targets and keyboard scrolling; spoken controls rechecked. Clean numeric receipts and refreshed-head CI remain required. Complete the retained-behavior audit and remaining viewer-presence spoken evidence before closing #48.
+- **#159 / merged #170:** foundation accepted; full issue remains incomplete. Fixed privacy-safe HTTP/resource events, credential/canonical summaries, bounded local collector/configuration and cost reservation are on main. Pre-tenant/legacy resource coverage, explicit result classification and complete acceptance remain; fixed-port real realtime proof is unavailable while the owner fixture uses8787. Continue from current main in a new bounded issue branch, not the merged branch. See `observability-159.md` for specific remaining work.
+
+## Allocation and capacity
+
+Actual dedicated Codex workers this interval: `auth_sli_159` Terra/high for credential/security boundaries; `local_collection_159` Terra/medium for security UI and built-widget visual recovery. Both completed. Root owns integration and remaining checks. Resume has no model/effort override; no switch is claimed. Work/normal Chat delegation is unavailable here; verified Work/Codex allowance is shared and subscription-backed. Latest observed Codex capacity5%, reset15September02:24BST. No purchases, API billing, reset redemption or Copilot reviews.
+
+## Critical path and next actions
+
+1. Finish #48 exact integrated validation, resolve material findings and integrate only after full scoped acceptance. Do not include obsolete ticket-table composition or #67 wrapper lifecycle in its scope.
+2. Proceed with #128 workspace and #129 durable state / #136 waiting semantics under accepted #79 permissions; preserve #162 metrics → full #73 SLA / #137 ownership and #140 acceptance.
+3. Independent hardening: #64 budgets / #91 journals use accepted #50; remaining #159 active-resource coverage stays tracked. Preserve #50→#64/#91→#51→#87→#88. Full #152 still depends on #151.
+4. Publish reviewed Wiki snapshot and update issue receipts at integration boundaries. Keep existing owner servers and historical worktrees intact.
+
+Reference forecast remains **22 January 2027** for beta.2 and **21 January 2028** for expanded scope. Two lanes, eight hours Monday–Saturday, threefold allowance; baselines unchanged. Partial #170 does not imply an effort reduction or new forecast. Last human operational update22:38BST; next23:08BST while active. Beta.2 is not ready.
+
+<details>
+<summary>Historical coordination checkpoints — superseded by current state above</summary>
+
+# Beta.2 coordinated delivery
+
 Active goal: full #140 acceptance, including complete SLA/ownership/routing, durability, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
 ## Current delivery state — 10 September 2026, 19:37 BST
@@ -31,8 +60,7 @@ Reference beta.2 forecast remains **22 January 2027**; expanded scope **21 Janua
 3. Continue159's uninstrumented DO/Workflow/AI boundaries, bounded aggregate operational evidence and configuration, preserving privacy and resource ceilings.
 4. Keep the dependency-cleared queue prepared without overlapping writes. Update accepted issue/Project/Wiki state at coherent integration boundaries; do not relabel incomplete beta gates.
 
-<details>
-<summary>Historical coordination checkpoints — superseded by current state above</summary>
+
 
 # Beta.2 coordinated delivery
 
