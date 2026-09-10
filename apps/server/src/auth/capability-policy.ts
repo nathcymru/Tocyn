@@ -1,4 +1,3 @@
-import type { D1Database } from "@cloudflare/workers-types";
 
 export type CapabilityRisk = "READ_ONLY" | "LOW_RISK_WRITE" | "PRIVILEGED_WRITE" | "DESTRUCTIVE";
 
@@ -107,85 +106,5 @@ export function requireCapabilityWrite(result: { meta?: { changes?: number } } |
   const changes = result?.meta?.changes;
   if (fence && (typeof changes !== "number" || !Number.isInteger(changes) || changes < 1)) {
     throw new CapabilityFenceError();
-  }
-}
-
-type PolicyRow = { enabled: number | boolean; revision?: number | null };
-
-function enabled(row: PolicyRow | null | undefined): boolean {
-  return row?.enabled === 1 || row?.enabled === true;
-}
-
-function fingerprint(parts: Array<string | number | boolean | null | undefined>): string {
-  return parts.map(part => String(part ?? "missing")).join(":");
-}
-
-/**
- * The tables consulted here are intentionally not exposed through tenant APIs.
- * A tenant may narrow its delegated agent policy, but the deployment-owned
- * capability ceiling and role grant always remain the upper bound.
- */
-export class CapabilityPolicyService {
-  constructor(private readonly db: D1Database) {}
-
-  async authorize(principal: CapabilityPrincipal, capabilityOrLegacyKey: string): Promise<CapabilityDecision> {
-    const capability = resolveCapability(capabilityOrLegacyKey);
-    if (!capability) return { allowed: false, reason: "unknown_capability", capability: capabilityOrLegacyKey, policyFingerprint: "unknown" };
-
-    try {
-      const owner = await this.db.prepare(
-        "SELECT enabled, revision FROM deployment_capability_ceiling WHERE capability = ?",
-      ).bind(capability.id).first<PolicyRow>();
-      if (!enabled(owner)) return this.denied("owner_ceiling", capability.id, owner);
-
-      const roleGrant = await this.db.prepare(
-        "SELECT enabled, revision FROM deployment_role_capability_grants WHERE role = ? AND capability = ?",
-      ).bind(principal.role, capability.id).first<PolicyRow>();
-      if (!enabled(roleGrant)) return this.denied("role_grant", capability.id, owner, roleGrant);
-
-      const currentUser = await this.db.prepare(
-        "SELECT role, session_version FROM users WHERE tenant_id = ? AND id = ?",
-      ).bind(principal.tenantId, principal.actorId).first<{ role: string; session_version: number }>();
-      const currentSessionVersion = currentUser?.session_version ?? 0;
-      if (!currentUser || currentUser.role !== principal.role || currentSessionVersion !== principal.sessionVersion) {
-        return this.denied("session_revoked", capability.id, owner, roleGrant, currentSessionVersion);
-      }
-
-      // Tenant policy is a restriction on delegated agents. Administrators have
-      // a deployment-owned role grant and cannot be widened by a tenant row.
-      let tenant: PolicyRow | null = null;
-      if (principal.role === "agent") {
-        tenant = await this.db.prepare(
-          "SELECT enabled, revision FROM tenant_role_capability_policies WHERE tenant_id = ? AND role = ? AND capability = ?",
-        ).bind(principal.tenantId, principal.role, capability.id).first<PolicyRow>();
-        if (!enabled(tenant)) return this.denied("tenant_policy", capability.id, owner, roleGrant, tenant);
-      }
-
-      // Group rows can only add denials to the already-authorised role policy;
-      // they never grant a capability that the owner or role did not grant.
-      const groupConstraints = await this.db.prepare(`SELECT c.enabled, c.revision
-        FROM tenant_group_capability_constraints c
-        JOIN user_groups ug ON ug.tenant_id = c.tenant_id AND ug.group_id = c.group_id
-        WHERE c.tenant_id = ? AND ug.user_id = ? AND c.capability = ?`,
-      ).bind(principal.tenantId, principal.actorId, capability.id).all<PolicyRow>();
-      const groups = groupConstraints.results ?? [];
-      if (groups.some(row => row.enabled === false || row.enabled === 0)) {
-        return this.denied("group_policy", capability.id, owner, roleGrant, tenant, ...groups.map(row => row.revision));
-      }
-
-      return {
-        allowed: true,
-        reason: "allowed",
-        capability: capability.id,
-        policyFingerprint: fingerprint([owner?.revision, roleGrant?.revision, tenant?.revision, ...groups.map(row => row.revision), principal.sessionVersion]),
-      };
-    } catch {
-      return { allowed: false, reason: "policy_unavailable", capability: capability.id, policyFingerprint: "unavailable" };
-    }
-  }
-
-  private denied(reason: CapabilityDecision["reason"], capability: string, ...rows: Array<PolicyRow | number | undefined | null>): CapabilityDecision {
-    const revisions = rows.flatMap(row => typeof row === "object" && row !== null ? [row.revision] : [row]);
-    return { allowed: false, reason, capability, policyFingerprint: fingerprint(revisions) };
   }
 }

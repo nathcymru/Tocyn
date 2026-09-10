@@ -1,0 +1,11 @@
+# #79 implementation checkpoint
+
+Owning issue79 / draft PR169, branch codex/79-resource-permissions, isolated worktree /private/tmp/tocyn-beta2-79. Coordinator owns acceptance; this record complements beta2-delivery.md and does not declare completion.
+
+Worker Terra/high implemented initial permissions and mutation fences; coordinator integrated repository-boundary and interaction corrections after CI failure. Policy SQL now resides in tenant-scoped capability-policy.repository.ts, composed at the existing trusted tenant boundary. Tenant/actor/role mismatch and unrelated permission-management fences deny. API-key deletion observes authorization and deletion atomically, preserving idempotent responses for absent/foreign IDs and concurrent repeated owner deletion. No lint/security rule was relaxed.
+
+Permission UI retains controls/focus during saving/refresh, prevents duplicate save/toggle interactions, announces outcomes and exposes conflict reload. Static CSS retained; two focused UI tests passed. Actual browser/screen-reader/contrast evidence remains pending.
+
+Pre-rebase validation:404server tests/46files passed, server typecheck/lint passed; D1 integration passed; disposable two-tenant fixture passed with42requests, zero cross-tenant metadata writes/FK violations/remote bindings, concurrent revocation and cleanup verified. Dashboard build and2new interaction tests passed. Branch rebased on accepted PR168main; final exact-revision CI still required. No Copilot review requested; no deployment/provider operations.
+
+Next: inspect final CI (previous failures corrected rather than bypassed), complete authorization-generation/failure review and browser accessibility evidence, then coordinator maps complete issue acceptance. Do not mark79Done100 or close it merely for passing local tests. Coordinate AgentPermissionsPage adoption with48after accepted integration.

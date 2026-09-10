@@ -559,7 +559,8 @@ export async function verifyTwoTenantFixture(): Promise<FixtureReport> {
     assert.equal(ticketRowsAfter?.count, ticketRowsBefore?.count, 'Denied key requests must not write tickets');
 
     await fixture.assertStoredCredentialProtection(aKey.apiKey);
-    await assertStatus(await fixture.request(`/api/api-keys/${aKey.id}`, { method: 'DELETE', token: aToken }), 200, 'Owner may revoke own key');
+    const duplicateRevocations = await Promise.all([0, 1].map(() => fixture.request(`/api/api-keys/${aKey.id}`, { method: 'DELETE', token: aToken })));
+    for (const response of duplicateRevocations) await assertStatus(response, 200, 'Concurrent owner key revocation is idempotent');
     await assertStatus(await fixture.request('/api/v1/tickets/not-a-ticket', { apiKey: aKey.apiKey }), 401, 'Revoked key must be denied');
 
     await fixture.db.prepare('UPDATE users SET role = ? WHERE tenant_id = ? AND id = ?')

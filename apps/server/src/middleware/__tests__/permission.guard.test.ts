@@ -1,3 +1,4 @@
+import { CapabilityPolicyService } from '../../repositories/capability-policy.repository';
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { permissionGuard, revalidatePermission } from "../permission.guard";
@@ -33,6 +34,7 @@ function policyDb(state: PolicyState) {
 function appWithPrincipal(state: PolicyState) {
   const app = new Hono();
   app.use("*", async (c, next) => {
+    c.set("tenantDeps", {capabilityPolicy: new CapabilityPolicyService(policyDb(state) as any, {tenantId: 'tenant-a', actorId: 'agent-1', roles: ['agent']} as any)});
     c.set("jwtPayload", { sub: "agent-1", tenant_id: "tenant-a", role: "agent", session_version: 0, mfa_verified: true });
     await next();
   });
@@ -63,7 +65,8 @@ describe("permissionGuard", () => {
     const state = { owner: true, role: true, tenant: true, sessionVersion: 0, groupEnabled: [] };
     const app = new Hono();
     app.use("*", async (c, next) => {
-      c.set("jwtPayload", { sub: "admin-1", tenant_id: "tenant-a", role: "admin", session_version: 0, mfa_verified: true });
+      c.set("tenantDeps", {capabilityPolicy: new CapabilityPolicyService(policyDb(state) as any, {tenantId: 'tenant-a', actorId: 'agent-1', roles: ['agent']} as any)});
+    c.set("jwtPayload", { sub: "admin-1", tenant_id: "tenant-a", role: "admin", session_version: 0, mfa_verified: true });
       await next();
     });
     app.use("*", permissionGuard("not.in.the.catalog"));
@@ -86,7 +89,8 @@ describe("permissionGuard", () => {
     let commits = 0;
     const app = new Hono();
     app.use("*", async (c, next) => {
-      c.set("jwtPayload", { sub: "agent-1", tenant_id: "tenant-a", role: "agent", session_version: 0, mfa_verified: true });
+      c.set("tenantDeps", {capabilityPolicy: new CapabilityPolicyService(policyDb(state) as any, {tenantId: 'tenant-a', actorId: 'agent-1', roles: ['agent']} as any)});
+    c.set("jwtPayload", { sub: "agent-1", tenant_id: "tenant-a", role: "agent", session_version: 0, mfa_verified: true });
       await next();
     });
     app.use("*", permissionGuard("general"));

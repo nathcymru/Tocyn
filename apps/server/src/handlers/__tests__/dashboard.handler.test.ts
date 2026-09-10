@@ -327,7 +327,8 @@ describe("Dashboard Handler Integration Tests", () => {
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO api_keys (tenant_id, id, name, key_hash, prefix, permissions, is_active, created_at)"));
     });
 
-    it("should delete an API key", async () => {
+    it.each([0, 1])("returns idempotent success for an authorized key deletion with %s changed rows", async changes => {
+      mockDB.batch.mockResolvedValueOnce([{results:[{allowed:1}],meta:{changes:0}}, {results:[],meta:{changes}}]);
       const res = await dashboard.request(
         "/api-keys/key-1",
         {

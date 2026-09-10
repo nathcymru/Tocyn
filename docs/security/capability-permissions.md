@@ -42,3 +42,11 @@ The permission tests demonstrate owner/role/tenant intersection, group denial, t
 ## Limitations
 
 Current route coverage is the pre-existing settings, channels, groups, ticket fields, automations, API-key, filter, and usage surfaces. Resource scopes such as existing group membership and ungrouped-ticket behavior retain their current route-specific semantics. #80/#81 remain responsible for tool schema validation, approvals, dispatch/retry reconciliation, and external-effect verification.
+
+## Repository and interaction integration
+
+Policy SQL, policy reads and version-fenced transactions live in the tenant-scoped capability repository, composed only at the trusted tenant boundary. Principal tenant, actor and role must match that scope. A different capability fence cannot administer policy. No lint restriction was relaxed.
+
+API-key revocation preserves its idempotent response for absent/foreign IDs and concurrent repeated deletion. Authorization evidence and deletion execute in one D1 batch; absence is not mistaken for denied authority, and missing authorization/mutation evidence fails closed. The real two-tenant fixture covers foreign deletion and concurrent owner deletion without modifying another tenant's key.
+
+Permission administration keeps controls mounted/focused during save and refresh, prevents duplicate saves and toggle changes while pending, announces state, and exposes an explicit conflict-reload action. Dashboard regression tests cover these flows; browser/screen-reader/contrast acceptance remains to be recorded before issue completion.

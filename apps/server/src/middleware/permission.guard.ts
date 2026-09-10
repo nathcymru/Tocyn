@@ -1,7 +1,7 @@
 import { Context, Next } from "hono";
 import { Env } from "../bindings";
 import { AppVariables } from "../types";
-import { CapabilityFenceError, CapabilityPolicyService, resolveCapability, type CapabilityDecision, type CapabilityWriteFence } from "../auth/capability-policy";
+import { CapabilityFenceError, resolveCapability, type CapabilityDecision, type CapabilityWriteFence } from "../auth/capability-policy";
 
 function principalFromContext(c: Context<{ Bindings: Env; Variables: AppVariables }>) {
   const payload = c.get("jwtPayload");
@@ -22,7 +22,9 @@ export const permissionGuard = (settingKey: string) => {
     if (!principal) {
       return c.json({ error: "Unauthorized", message: "No session found" }, 401);
     }
-    const decision = await new CapabilityPolicyService(c.env.DB).authorize(principal, settingKey);
+    const policy = c.get("tenantDeps")?.capabilityPolicy;
+    if (!policy) return c.json({ error: "Unauthorized: Missing tenant policy scope" }, 401);
+    const decision = await policy.authorize(principal, settingKey);
     if (!decision.allowed) return forbidden(c, decision);
     c.set("permissionFences", { ...(c.get("permissionFences") ?? {}), [decision.capability]: decision });
     try {
@@ -43,7 +45,9 @@ export async function revalidatePermission(
 ): Promise<Response | null> {
   const principal = principalFromContext(c);
   if (!principal) return c.json({ error: "Unauthorized", message: "No session found" }, 401);
-  const current = await new CapabilityPolicyService(c.env.DB).authorize(principal, settingKey);
+  const policy = c.get("tenantDeps")?.capabilityPolicy;
+  if (!policy) return c.json({ error: "Unauthorized: Missing tenant policy scope" }, 401);
+  const current = await policy.authorize(principal, settingKey);
   const prior = c.get("permissionFences")?.[current.capability];
   if (!current.allowed || !prior || prior.policyFingerprint !== current.policyFingerprint) return forbidden(c, current);
   return null;

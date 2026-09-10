@@ -2,7 +2,7 @@ import { TicketMutationReplayRepository } from './ticket-mutation-replay.reposit
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
 import { normalizeSupportEmail } from '../utils/email-normalize';
-import { capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
+import { CapabilityFenceError, capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
 import { VerifiedTenantScope } from '../types/tenant';
 import { UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
 import { D1Database } from '@cloudflare/workers-types';
@@ -687,10 +687,20 @@ export class SqlApiKeyRepository implements ApiKeyRepository {
 
   async delete(id: string, fence?: CapabilityWriteFence): Promise<void> {
     const guard = capabilityWriteConstraint(fence);
-    const result = await this.db.prepare(
+    const deletion = this.db.prepare(
       `DELETE FROM api_keys WHERE tenant_id = ? AND id = ? AND ${guard.sql}`
-    ).bind(this.scope.tenantId, id, ...guard.values).run();
-    requireCapabilityWrite(result, fence);
+    ).bind(this.scope.tenantId, id, ...guard.values);
+    if (!fence) { await deletion.run(); return; }
+    // Both statements observe one atomic batch: distinguish denied authority
+    // from an authorized idempotent deletion without a read/write race.
+    const [authorization, result] = await this.db.batch<{ allowed: number }>([
+      this.db.prepare(`SELECT (${guard.sql}) AS allowed`).bind(...guard.values),
+      deletion,
+    ]);
+    const changes = result?.meta?.changes;
+    if (authorization?.results?.[0]?.allowed !== 1 || !Number.isInteger(changes) || changes < 0) {
+      throw new CapabilityFenceError();
+    }
   }
 
   private async hashKey(apiKey: string): Promise<string> {

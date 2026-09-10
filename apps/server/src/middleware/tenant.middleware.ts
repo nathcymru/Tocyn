@@ -1,3 +1,4 @@
+import { CapabilityPolicyService } from '../repositories/capability-policy.repository';
 import { localBetaEnabled, type BetaPrincipal } from '../types/local-beta';
 import { LocalBetaRuntimeRepository } from '../repositories/local-beta-runtime.repository';
 import type { Env } from '../bindings';
@@ -16,6 +17,7 @@ import { TenantAttachmentStorage, LegacyArticleBodyStorage, TenantVectorStorage 
 
 export type TenantRequestDeps = {
   scope: VerifiedTenantScope;
+  capabilityPolicy: CapabilityPolicyService;
   betaAdmission?: LocalBetaAdmissionRepository;
   boundedConversationRead?: BoundedConversationReadRepository;
   conversationAudit: ConversationAuditRepository;
@@ -60,6 +62,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
 
   return {
     scope,
+    capabilityPolicy: new CapabilityPolicyService(env.DB, scope),
     betaAdmission,
     boundedConversationRead: betaAdmission ? new BoundedConversationReadRepository(env.DB, scope) : undefined,
     conversationAudit: new ConversationAuditRepository(env.DB, scope, betaAdmission),
