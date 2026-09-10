@@ -1,3 +1,4 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import {
@@ -36,6 +37,8 @@ export const GroupsPage: React.FC = () => {
   const [newGroupDescription, setNewGroupDescription] = useState('');
 
   const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const membersOpener = React.useRef<HTMLButtonElement | null>(null);
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,7 +166,7 @@ export const GroupsPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <TocynButton
-                      onClick={() => setManagingGroupId(group.id)}
+                      onClick={event => { membersOpener.current = event.currentTarget; setManagingGroupId(group.id); setMembersOpen(true); }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-600 hover:bg-brand-50 rounded-lg transition-colors border border-brand-200"
                     >
                       <Users className="w-3.5 h-3.5" />
@@ -188,8 +191,8 @@ export const GroupsPage: React.FC = () => {
 
       {managingGroupId && managingGroup && (
         <ManageMembersModal
-          group={managingGroup}
-          onClose={() => setManagingGroupId(null)}
+          group={managingGroup} open={membersOpen} finalFocusEl={() => membersOpener.current}
+          onClose={() => setMembersOpen(false)}
           isAdmin={isAdmin}
         />
       )}
@@ -199,33 +202,42 @@ export const GroupsPage: React.FC = () => {
 
 interface ManageMembersModalProps {
   group: Group;
+  open: boolean;
+  finalFocusEl: () => HTMLElement | null;
   onClose: () => void;
   isAdmin: boolean;
 }
 
-const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, onClose, isAdmin }) => {
-  const { data: members, isLoading: isLoadingMembers } = useGroupMembers(group.id);
-  const { data: agents } = useAgents();
+const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, finalFocusEl, onClose, isAdmin }) => {
+  const { data: members, isLoading: isLoadingMembers, isError: membersError } = useGroupMembers(group.id);
+  const { data: agents, isLoading: agentsLoading, isError: agentsError } = useAgents();
   const addMemberMutation = useAddMember();
   const removeMemberMutation = useRemoveMember();
 
   const [searchTerm, setSearchTerm] = useState('');
-
-  const handleAddMember = async (userId: string) => {
+  const titleId = React.useId();
+  const closeButton = React.useRef<HTMLButtonElement>(null);
+  const confirmRemovalButton = React.useRef<HTMLButtonElement>(null);
+  const pendingGuard = React.useRef(false);
+  const [pending, setPending] = useState(false);
+  const [operationError, setOperationError] = useState('');
+  const [status, setStatus] = useState('');
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  React.useEffect(() => {
+    if (!open) { setSearchTerm(''); setOperationError(''); setStatus(''); setRemovingId(null); }
+  }, [open]);
+  React.useEffect(() => { if (removingId) confirmRemovalButton.current?.focus(); }, [removingId]);
+  React.useEffect(() => { if (!pending && status) closeButton.current?.focus(); }, [pending, status]);
+  const close = () => { if (!pendingGuard.current) onClose(); };
+  const changeMember = async (userId: string, remove: boolean) => {
+    if (!isAdmin || pendingGuard.current || isLoadingMembers || membersError || (!remove && (agentsLoading || agentsError))) return;
+    pendingGuard.current = true; setPending(true); setOperationError(''); setStatus('');
     try {
-      await addMemberMutation.mutateAsync({ groupId: group.id, userId });
-    } catch (error: any) {
-      alert(error.message || 'Failed to add member');
-    }
-  };
-
-  const handleRemoveMember = async (userId: string) => {
-    if (!confirm('Remove this member from the group?')) return;
-    try {
-      await removeMemberMutation.mutateAsync({ groupId: group.id, userId });
-    } catch (error: any) {
-      alert(error.message || 'Failed to remove member');
-    }
+      await (remove ? removeMemberMutation : addMemberMutation).mutateAsync({groupId: group.id, userId});
+      setRemovingId(null); setStatus(remove ? 'Member removed.' : 'Member added.');
+    } catch {
+      setOperationError(remove ? 'Member could not be removed. Try again.' : 'Member could not be added. Try again.');
+    } finally { pendingGuard.current = false; setPending(false); }
   };
 
   const availableAgents = agents?.filter(agent =>
@@ -235,19 +247,27 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, onClose,
   );
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+    <TocynDialog open={open} busy={pending} labelledBy={titleId} initialFocusEl={() => closeButton.current} finalFocusEl={finalFocusEl} onOpenChange={next => { if (!next) close(); }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Manage Members: {group.name}</h2>
+            <h2 id={titleId} className="text-xl font-bold text-slate-900">Manage Members: {group.name}</h2>
             <p className="text-sm text-slate-500">Add or remove agents from this group.</p>
           </div>
-          <TocynButton onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all">
+          <TocynButton ref={closeButton} disabled={pending} aria-label="Close group members" onClick={close} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all">
             <X size={24} />
           </TocynButton>
         </div>
 
         <div className="flex-1 overflow-auto p-6 space-y-6">
+          {operationError && <p role="alert" className="text-red-700">{operationError}</p>}
+          {status && <p role="status">{status}</p>}
+          {membersError && <p role="alert">Group members could not be loaded. Reopen this page to retry.</p>}
+          {removingId && <div role="group" aria-label="Confirm member removal" className="rounded-lg border p-4 space-y-3">
+            <p>Remove {members?.find(member => member.id === removingId)?.full_name || members?.find(member => member.id === removingId)?.email || 'this member'} from the group?</p>
+            <TocynButton ref={confirmRemovalButton} disabled={pending} onClick={() => changeMember(removingId, true)}>Remove member</TocynButton>
+            <TocynButton disabled={pending} onClick={() => { setRemovingId(null); closeButton.current?.focus(); }}>Cancel removal</TocynButton>
+          </div>}
           {/* Current Members Section */}
           <div>
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Current Members ({members?.length || 0})</h3>
@@ -278,8 +298,8 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, onClose,
                     </div>
                     {isAdmin && (
                       <TocynButton
-                        onClick={() => handleRemoveMember(member.id)}
-                        className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        disabled={pending} aria-label={`Remove ${member.full_name || member.email}`} onClick={() => setRemovingId(member.id)}
+                        className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                         title="Remove member"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -299,7 +319,7 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, onClose,
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <TocynInput
                   type="text"
-                  placeholder="Search agents by name or email..."
+                  aria-label="Search agents" disabled={pending} placeholder="Search agents by name or email..."
                   className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-brand-500 transition-all focus:bg-white border-transparent"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
@@ -307,10 +327,12 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, onClose,
               </div>
 
               <div className="max-h-60 overflow-auto space-y-1 pr-1">
+                {agentsError && <p role="alert">Agents could not be loaded. Reopen this page to retry.</p>}
+                {agentsLoading && <p role="status">Loading agents...</p>}
                 {availableAgents?.map(agent => (
                   <TocynButton
                     key={agent.id}
-                    onClick={() => handleAddMember(agent.id)}
+                    disabled={pending || isLoadingMembers || membersError || agentsLoading || agentsError} aria-label={`Add ${agent.full_name || agent.email}`} onClick={() => changeMember(agent.id, false)}
                     className="w-full flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors group text-left"
                   >
                     <div className="flex items-center gap-3">
@@ -338,13 +360,13 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, onClose,
 
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
           <TocynButton
-            onClick={onClose}
+            disabled={pending} onClick={close}
             className="px-6 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-all shadow-sm active:scale-95"
           >
             Done
           </TocynButton>
         </div>
       </div>
-    </div>
+    </TocynDialog>
   );
 };
