@@ -102,6 +102,11 @@ export class LocalBetaAdmissionRepository {
     return this.buildStatements('conversation', change);
   }
 
+  /** Trusted repositories supply a batch-local predicate so stale CAS writes never consume capacity. */
+  conditionalConversationStatements(change: Readonly<ChangePredicate>): readonly D1PreparedStatement[] {
+    return this.buildStatements('conversation', { sql: change.sql, values: [...change.values] });
+  }
+
   private buildStatements(operation: BetaOperation, change?: ChangePredicate): readonly D1PreparedStatement[] {
     if (this.scope.actorId !== this.principal.id) throw new BetaAdmissionError('beta_not_invited', 403);
     const live = this.livePrincipal(true);

@@ -4,6 +4,7 @@ import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fi
 import { BoundedConversationReadRepository } from '../src/repositories/bounded-conversation-read.repository';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-admission.repository';
+import { localBetaRoute } from '../src/middleware/local-beta';
 import { parseListPage, decodeArticleCursor } from '../src/services/conversation-read-bounds';
 import { LocalBetaDiagnostics } from '../src/services/local-beta-diagnostics';
 import type { D1Database as CloudflareD1 } from '@cloudflare/workers-types';
@@ -34,6 +35,33 @@ test('guarded local profile: explicit policy, real invited credentials, exact ca
     assert.equal((await f.request('/health')).status,200);
     for (const p of ['customerA','customerB','operatorA','operatorB'] as const) assert.equal((await f.login(p)).status,200,`Invited ${p} authenticates`);
     assert.equal((await f.request('/api/auth/me',{token:staff.token})).status,200);
+    const mutations = async () => (await f.db.prepare("SELECT mutations FROM local_beta_runs WHERE run_id='guarded-fixture'").first<{mutations:number}>())!.mutations;
+    assert.equal(await mutations(),0);
+    const savedState=await f.request('/api/workspace/state',{method:'PUT',token:staff.token,body:{
+      expectedRevision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',
+    }});
+    assert.equal(savedState.status,200);
+    const state=await savedState.json<{revision:number}>();assert.equal(state.revision,1);assert.equal(await mutations(),1);
+    const sameContentState=await f.request('/api/workspace/state',{method:'PUT',token:staff.token,body:{
+      expectedRevision:state.revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',
+    }});
+    assert.equal(sameContentState.status,200);
+    const currentState=await sameContentState.json<{revision:number}>();assert.equal(currentState.revision,2);assert.equal(await mutations(),2,'revision-changing state saves consume mutation capacity');
+    const staleState=await f.request('/api/workspace/state',{method:'PUT',token:staff.token,body:{
+      expectedRevision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:2',selectedTicketId:null,panel:'conversation',
+    }});
+    assert.equal(staleState.status,409);assert.equal(await mutations(),2,'stale workspace CAS does not consume mutation capacity');
+    const savedDraft=await f.request('/api/workspace/drafts/fixture-ticket',{method:'PUT',token:staff.token,body:{
+      expectedGeneration:null,expectedRevision:0,mode:'internal',body:'guarded local draft',attachments:[],
+    }});
+    assert.equal(savedDraft.status,200);
+    const draft=await savedDraft.json<{generation:string;revision:number}>();assert.equal(draft.revision,1);assert.equal(await mutations(),3);
+    const staleDraft=await f.request('/api/workspace/drafts/fixture-ticket',{method:'PUT',token:staff.token,body:{
+      expectedGeneration:null,expectedRevision:0,mode:'internal',body:'stale local draft',attachments:[],
+    }});
+    assert.equal(staleDraft.status,409);assert.equal(await mutations(),3,'stale draft CAS does not consume mutation capacity');
+    const discarded=await f.request(`/api/workspace/drafts/fixture-ticket?generation=${draft.generation}&revision=${draft.revision}`,{method:'DELETE',token:staff.token});
+    assert.equal(discarded.status,204);assert.equal(await mutations(),4);
     assert.equal((await f.request('/api/v1/tickets/fixture-ticket',{apiKey:key.apiKey})).status,200);
     const nonInvited=await f.request('/api/v1/tickets/fixture-ticket',{apiKey:nonInvitedKey.apiKey});
     assert.equal(nonInvited.status,403);assert.equal((await nonInvited.json<{code:string}>()).code,'beta_not_invited');
@@ -42,6 +70,8 @@ test('guarded local profile: explicit policy, real invited credentials, exact ca
       ['/api/v1/widget/chat','POST'],['/api/v1/widget/tickets','POST'],['/api/knowledge/tickets/fixture-ticket/ai-suggest','GET'],
       ['/api/knowledge/documents','POST'],['/api/automations','POST'],['/api/api-keys','POST'],['/api/settings','PUT'],['/api/groups','POST'],
       ['/api/unclassified-future-route','POST'],
+      ['/api/workspace/state','PATCH'],['/api/workspace/state','DELETE'],['/api/workspace/drafts','POST'],
+      ['/api/workspace/drafts/fixture-ticket','PATCH'],['/api/workspace/drafts/fixture-ticket/extra','GET'],
     ]) {
       const response=await f.request(path,{method,token:staff.token,body:method==='GET'?undefined:{}});
       assert.equal(response.status,503,path);assert.equal((await response.json<{code:string}>()).code,'feature_disabled');
@@ -66,13 +96,29 @@ test('guarded local profile: explicit policy, real invited credentials, exact ca
     assert.equal((await f.request('/api/tickets',{method:'POST',token:staff.token,rawBody:'{'})).status,400);
     assert.equal((await f.request('/api/tickets',{method:'POST',token:staff.token,body:{body:'x'.repeat(65536)}})).status,413);
     await f.db.prepare("UPDATE local_beta_policy SET state='writes_stopped',revision=revision+1 WHERE singleton=1").run();
+    const stoppedWorkspaceWrite=await f.request('/api/workspace/state',{method:'PUT',token:staff.token,body:{
+      expectedRevision:currentState.revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',
+    }});
+    assert.equal(stoppedWorkspaceWrite.status,503);assert.equal((await stoppedWorkspaceWrite.json<{code:string}>()).code,'beta_intake_stopped');
+    assert.equal(await mutations(),4,'a stopped workspace write rolls back without charging capacity');
+    assert.deepEqual(await f.db.prepare('SELECT revision FROM operator_workspace_state WHERE tenant_id=? AND user_id=?').bind(f.principals.operatorA.tenantId,f.principals.operatorA.localId).first(),{revision:currentState.revision});
     f.restartLocalRuntime();
     assert.deepEqual(await (await f.request('/__local/auth-capture/messages')).json(),[]);
     const admission=new LocalBetaAdmissionRepository(f.db as unknown as CloudflareD1,createVerifiedTenantScope(customer.tenantId,customer.localId,['customer'],1),{kind:'customer',id:customer.localId});
     await assert.rejects(admission.authorize('create'),{code:'beta_intake_stopped'});
     assert.equal((await f.request('/api/v1/tickets/fixture-ticket',{apiKey:key.apiKey})).status,200,'Stopped conversations remain available');
-    t.diagnostic(JSON.stringify({mode:'real-miniflare',principals:4,tenants:2,disabledOptionalRoutes:9,optionalProviderCalls:0,captureResetOnRestart:true}));
+    t.diagnostic(JSON.stringify({mode:'real-miniflare',principals:4,tenants:2,disabledOptionalRoutes:14,optionalProviderCalls:0,captureResetOnRestart:true}));
   });
+});
+
+test('guarded local profile classifies only the approved workspace method and path inventory',()=>{
+  for (const [method,path,route] of [
+    ['GET','/api/workspace/state','conversation-read'],['PUT','/api/workspace/state','conversation-write'],
+    ['GET','/api/workspace/drafts','conversation-read'],['GET','/api/workspace/drafts/ticket-1','conversation-read'],
+    ['PUT','/api/workspace/drafts/ticket-1','conversation-write'],['DELETE','/api/workspace/drafts/ticket-1','conversation-write'],
+    ['POST','/api/workspace/state','disabled'],['PATCH','/api/workspace/state','disabled'],['DELETE','/api/workspace/state','disabled'],
+    ['POST','/api/workspace/drafts','disabled'],['PATCH','/api/workspace/drafts/ticket-1','disabled'],['GET','/api/workspace/drafts/ticket-1/extra','disabled'],
+  ] as const) assert.equal(localBetaRoute(method,path),route,`${method} ${path}`);
 });
 
 test('guarded OTP verification keeps durable guesses while enforcing challenge and current invitation', async t=>{

@@ -1,10 +1,17 @@
-import { lazy } from 'react';
+import { lazy, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { RouteContent } from '../components/RouteContent';
 import { useAuthStore } from '../store/authStore';
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
+it('preserves a loaded workspace layout when its child route changes', async () => {
+  function Layout() { const [value,setValue]=useState(''); return <><input aria-label="Workspace search" value={value} onChange={event=>setValue(event.target.value)}/><Link to="/other">Next route</Link></>; }
+  render(<MemoryRouter><RouteContent persistent><Layout/></RouteContent></MemoryRouter>);
+  fireEvent.change(screen.getByRole('textbox',{name:'Workspace search'}),{target:{value:'retained'}});
+  fireEvent.click(screen.getByRole('link',{name:'Next route'}));
+  expect(screen.getByRole('textbox',{name:'Workspace search'})).toHaveValue('retained');
+});
 it('announces pending route code and then renders it',async()=>{
   let finish!:(module:{default:()=>React.JSX.Element})=>void;
   const Page=lazy(()=>new Promise<{default:()=>React.JSX.Element}>(resolve=>{finish=resolve;}));

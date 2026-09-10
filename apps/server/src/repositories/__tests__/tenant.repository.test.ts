@@ -6,6 +6,7 @@ import authHandler from '../../handlers/auth.handler';
 import customerHandler from '../../handlers/customer.handler';
 import { AuthService } from '../../services/auth/auth.service';
 import { TenantAutomationService } from '../../services/tenant-automation.service';
+import { OperatorWorkspaceError, OperatorWorkspaceService } from '../../services/operator-workspace.service';
 import { splitSql } from '../../../scripts/split-sql';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
@@ -136,6 +137,85 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     const sibling = await reposB.users.get('user-A');
     expect(sibling?.mfa_enabled).toBe(0);
     expect(sibling?.mfa_secret).toBeNull();
+  });
+
+  it('lists only current actor drafts on accessible tickets without exposing bodies or other tenants', async () => {
+    for (const tenant of ['tenant-A', 'tenant-B']) {
+      for (const actor of ['user-A', 'user-B']) sqlite.prepare('INSERT INTO users(tenant_id,id,email,role) VALUES (?,?,?,?)')
+        .run(tenant, actor, `${tenant}-${actor}@example.invalid`, 'agent');
+      sqlite.prepare('INSERT INTO groups(tenant_id,id,name) VALUES (?,?,?)').run(tenant, 'restricted', 'Restricted');
+      for (const id of ['a', 'b', 'c']) sqlite.prepare('INSERT INTO tickets(tenant_id,id,subject,customer_email,source,group_id) VALUES (?,?,?,?,?,?)')
+        .run(tenant, id, 'Synthetic', 'customer@example.invalid', 'dashboard', id === 'b' ? 'restricted' : null);
+    }
+    const sameActorB = createRepositories(createVerifiedTenantScope('tenant-B', 'user-A', ['agent'], 1), d1);
+    const otherActorA = createRepositories(createVerifiedTenantScope('tenant-A', 'user-B', ['agent'], 1), d1);
+    for (const repos of [reposA, sameActorB, otherActorA]) for (const ticketId of ['a', 'b', 'c']) {
+      await repos.operatorWorkspace.saveDraft({ ticketId, expectedGeneration: null, expectedRevision: 0,
+        mode: 'internal', body: 'private synthetic body', attachments: [], expiresAt: null });
+    }
+    const first = await reposA.operatorWorkspace.listDrafts('', 1);
+    expect(first.items.map(item => item.ticketId)).toEqual(['a']);
+    expect(first.next).toBe('a');
+    expect(Object.keys(first.items[0]).sort()).toEqual(['ticketId', 'updatedAt']);
+    const second = await reposA.operatorWorkspace.listDrafts(first.next!, 1);
+    expect(second.items.map(item => item.ticketId)).toEqual(['c']);
+    expect(second.next).toBeNull();
+    sqlite.prepare('INSERT INTO user_groups(tenant_id,user_id,group_id) VALUES (?,?,?)').run('tenant-A', 'user-A', 'restricted');
+    expect((await reposA.operatorWorkspace.listDrafts()).items.map(item => item.ticketId)).toEqual(['a', 'b', 'c']);
+    sqlite.prepare('DELETE FROM user_groups WHERE tenant_id=? AND user_id=?').run('tenant-A', 'user-A');
+    expect((await reposA.operatorWorkspace.listDrafts()).items.map(item => item.ticketId)).toEqual(['a', 'c']);
+    sqlite.prepare('DELETE FROM operator_drafts WHERE tenant_id=? AND user_id=?').run('tenant-A', 'user-A');
+    expect((await reposA.operatorWorkspace.listDrafts()).items).toEqual([]);
+    expect((await sameActorB.operatorWorkspace.listDrafts()).items).toHaveLength(2);
+    expect((await otherActorA.operatorWorkspace.listDrafts()).items).toHaveLength(2);
+    await expect(reposA.operatorWorkspace.listDrafts('', 51)).rejects.toThrow('Invalid draft page');
+  });
+
+  it('keeps draft retention disabled without an injected policy and enforces the scoped group gate', async () => {
+    sqlite.prepare('INSERT INTO users(tenant_id,id,email,role,mfa_enabled) VALUES (?,?,?,?,?)')
+      .run('tenant-A', 'user-A', 'operator-a@example.test', 'agent', 1);
+    sqlite.prepare('INSERT INTO groups (tenant_id,id,name) VALUES (?,?,?)').run('tenant-A', 'restricted-group', 'Restricted');
+    sqlite.prepare(`INSERT INTO tickets (tenant_id,id,subject,customer_email,source,group_id)
+      VALUES (?,?,?,?,?,?)`).run('tenant-A', 'restricted-ticket', 'Restricted', 'customer@example.test', 'dashboard', 'restricted-group');
+    const deps = { scope: scopeA, repositories: reposA, attachmentStorage: { getAttachment: async () => null } } as any;
+    const denied = new OperatorWorkspaceService(deps);
+    await expect(denied.saveDraft({ ticketId: 'restricted-ticket', expectedGeneration: null, expectedRevision: 0, mode: 'public', body: '', attachments: [] }))
+      .rejects.toMatchObject({ status: 403 } satisfies Partial<OperatorWorkspaceError>);
+    expect(await reposA.operatorWorkspace.getDraft('restricted-ticket')).toBeNull();
+    await expect(denied.purgeExpired()).rejects.toThrow('not configured');
+
+    sqlite.prepare('INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES (?,?,?,?,?)')
+      .run('tenant-A', 'retention-ticket', 'Retention', 'customer@example.test', 'dashboard');
+    let now = new Date('2040-01-01T00:00:00.000Z');
+    const retained = new OperatorWorkspaceService(deps, {
+      now: () => now,
+      retention: { expiresAt: date => new Date(date.getTime() + 60_000).toISOString() },
+    });
+    const saved = await retained.saveDraft({ ticketId: 'retention-ticket', expectedGeneration: null, expectedRevision: 0, mode: 'public', body: '', attachments: [] });
+    expect(saved.expiresAt).toBe('2040-01-01T00:01:00.000Z');
+    expect(await retained.purgeExpired()).toBe(0);
+    now = new Date('2040-01-01T00:01:00.000Z');
+    expect(await retained.purgeExpired()).toBe(1);
+    await expect(reposA.operatorWorkspace.purgeExpiredForActor(now.toISOString(), 0)).rejects.toThrow('Invalid operator draft cleanup limit');
+    await expect(reposA.operatorWorkspace.purgeExpiredForSystem(now.toISOString())).rejects.toThrow('System scope required');
+    expect(await reposA.operatorWorkspace.getDraft('retention-ticket')).toBeNull();
+  });
+
+  it('returns no stale workspace row when selection cleanup loses a concurrent state save', async () => {
+    sqlite.prepare('INSERT INTO users(tenant_id,id,email,role,mfa_enabled) VALUES (?,?,?,?,?)')
+      .run('tenant-A', 'user-A', 'workspace-a@example.test', 'agent', 1);
+    const first = await reposA.operatorWorkspace.saveWorkspaceState({
+      expectedRevision: 0, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'one',
+      selectedTicketId: 'gone-ticket', panel: 'conversation',
+    });
+    expect(first?.revision).toBe(1);
+    const concurrent = await reposA.operatorWorkspace.saveWorkspaceState({
+      expectedRevision: 1, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'two',
+      selectedTicketId: null, panel: 'conversation',
+    });
+    expect(concurrent?.revision).toBe(2);
+    expect(await reposA.operatorWorkspace.clearSelectedTicketIfVersion('gone-ticket', 1)).toBeNull();
+    expect(await reposA.operatorWorkspace.getWorkspaceState()).toMatchObject({ revision: 2, listAnchor: 'two', selectedTicketId: null });
   });
 
   it('enforces request limits across fresh repositories while isolating tenants', async () => {

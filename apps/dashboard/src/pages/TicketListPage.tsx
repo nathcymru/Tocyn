@@ -9,6 +9,9 @@ import { useTickets, useCreateTicket } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useFilters } from '../hooks/useFilters';
 import { useSettings } from '../hooks/useSettings';
+import { useOperatorDraftIndicators, useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
+import { useAuthStore } from '../store/authStore';
+import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import {
   Plus,
   Filter,
@@ -24,10 +27,9 @@ import {
   Check
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: any[]) {
-  return twMerge(clsx(inputs));
+  return clsx(inputs);
 }
 
 const statusColors = {
@@ -44,24 +46,38 @@ const priorityColors = {
   urgent: 'text-red-500',
 };
 
+function pageFromAnchor(anchor: string) {
+  const match = /^page:([1-9]\d*)$/.exec(anchor);
+  const page = match ? Number(match[1]) : 1;
+  return Number.isSafeInteger(page) ? page : 1;
+}
+function pageAnchor(page: number) { return `page:${Math.max(1, Math.floor(page))}`; }
+
 export function TicketListPage() {
-  const [activeFilterId, setActiveFilterId] = useState<string>('');
-  const [page, setPage] = useState(1);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const sessionGeneration = useAuthStore(state => state.sessionGeneration);
   const initialSearch = searchParams.get('search') || '';
   const [searchInput, setSearchInput] = useState(initialSearch);
-  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const appliedLegacySearch = React.useRef<string | null>(null);
+  const workspace = useOperatorWorkspaceState();
+  const draftIndicators = useOperatorDraftIndicators();
+  const activeFilterId = workspace.filters.filterId || '';
+  const page = pageFromAnchor(workspace.listAnchor);
+  const searchQuery = workspace.listQuery;
 
   React.useEffect(() => {
+    setSearchInput(searchQuery);
+  }, [searchQuery]);
+  React.useEffect(() => {
     const urlSearch = searchParams.get('search') || '';
-    setSearchInput(urlSearch);
-    setSearchQuery((prev) => {
-      if (prev !== urlSearch) {
-        setPage(1);
-      }
-      return urlSearch;
-    });
-  }, [searchParams]);
+    // Read legacy URLs for compatibility, but keep new free-text state out of URLs.
+    const legacyKey = `${sessionGeneration}:${searchParams.toString()}`;
+    if (workspace.status === 'loading' || appliedLegacySearch.current === legacyKey) return;
+    appliedLegacySearch.current = legacyKey;
+    if (urlSearch && urlSearch !== workspace.listQuery) {
+      workspace.update({ listQuery: urlSearch, listAnchor: pageAnchor(1) });
+    }
+  }, [searchParams, sessionGeneration, workspace.listQuery, workspace.status, workspace.update]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const createSubject = React.useRef<HTMLInputElement>(null);
@@ -152,12 +168,13 @@ export function TicketListPage() {
   };
 
   const handleFilterClick = (filterId: string) => {
-    setActiveFilterId(filterId);
-    setPage(1); // Reset page on filter change
+    workspace.update({ filters: { ...workspace.filters, filterId: filterId || null }, listAnchor: pageAnchor(1) });
   };
 
   return (
     <div className="flex h-full gap-6">
+      <DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
+        failureMessage="Workspace preferences are not saved. Stay on this list, retry saving, then navigate again." />
       {/* Left Sidebar: Filters */}
       <div className="w-64 flex flex-col gap-2 shrink-0">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Filters</h2>
@@ -219,6 +236,22 @@ export function TicketListPage() {
         </div>
 
         <p role="status" aria-label="Ticket list status" className="text-sm text-slate-700">{isPlaceholderData ? 'Loading tickets. Previous results remain visible.' : feedStatus}</p>
+        <p role="status" aria-label="Workspace preference status" className="text-sm text-slate-700">
+          {workspace.status === 'loading' ? 'Restoring workspace preferences…' : workspace.status === 'saving' ? 'Saving workspace preferences…' : workspace.status === 'saved' ? 'Workspace preferences saved.' : ''}
+        </p>
+        {draftIndicators.status === 'partial' && <p role="status" aria-label="Draft indicator status" className="text-sm text-amber-800">Draft indicators are incomplete. Only the first 200 drafts were checked.</p>}
+        {workspace.status === 'error' && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+            <p>{workspace.error}</p>
+            <TocynButton type="button" onClick={workspace.retrySave} className="mt-2 rounded border border-red-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">Retry workspace preferences</TocynButton>
+          </div>
+        )}
+        {workspace.status === 'conflict' && (
+          <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <p>{workspace.error}</p>
+            <TocynButton type="button" onClick={workspace.restoreServerState} className="mt-2 rounded border border-amber-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">Restore server preferences</TocynButton>
+          </div>
+        )}
         {clipboardError && <p role="alert" className="text-sm text-red-800">{clipboardError}</p>}
         {(ticketsError || retryingFeed) && (
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
@@ -242,16 +275,10 @@ export function TicketListPage() {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    setSearchQuery(searchInput);
-                    setPage(1);
-                    if (searchInput.trim()) {
-                      setSearchParams({ search: searchInput.trim() });
-                    } else {
-                      setSearchParams({});
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                    workspace.update({ listQuery: searchInput.trim(), listAnchor: pageAnchor(1) });
                     }
-                  }
                 }}
               />
             </div>
@@ -318,6 +345,7 @@ export function TicketListPage() {
                         <Link to={`/tickets/${ticket.id}`} className="block font-medium text-slate-900 hover:text-brand-600">
                           {ticket.subject}
                         </Link>
+                        {draftIndicators.ticketIds.has(ticket.id) && <span className="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" aria-label="Draft available">Draft</span>}
                         {ticket.snippet && (
                           <div className="text-xs text-slate-500 truncate max-w-sm mt-1" title={ticket.snippet}>
                             {ticket.snippet}
@@ -381,7 +409,7 @@ export function TicketListPage() {
               </span>
               <div className="flex gap-2">
                 <TocynButton
-                  onClick={() => { if (!isFetching && page > 1) { paging.current = true; setPage(p => p - 1); } }}
+                  onClick={() => { if (!isFetching && page > 1) { paging.current = true; workspace.update({ listAnchor: pageAnchor(page - 1) }); } }}
                   aria-disabled={isFetching || page === 1}
                   className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 hover:bg-white aria-disabled:bg-slate-100 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 flex items-center gap-1 bg-white shadow-sm transition-colors"
                 >
@@ -389,7 +417,7 @@ export function TicketListPage() {
                   Previous
                 </TocynButton>
                 <TocynButton
-                  onClick={() => { if (!isFetching && page < meta.total_pages) { paging.current = true; setPage(p => p + 1); } }}
+                  onClick={() => { if (!isFetching && page < meta.total_pages) { paging.current = true; workspace.update({ listAnchor: pageAnchor(page + 1) }); } }}
                   aria-disabled={isFetching || page >= meta.total_pages}
                   className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 hover:bg-white aria-disabled:bg-slate-100 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 flex items-center gap-1 bg-white shadow-sm transition-colors"
                 >

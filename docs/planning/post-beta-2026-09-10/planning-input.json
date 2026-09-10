@@ -830,15 +830,15 @@
       "number": 48,
       "alias": "#48",
       "title": "Establish shared headless primitives for standalone Tocyn",
-      "done": false,
+      "done": true,
       "effort": 40.0,
       "dependencies": [
         127
       ],
       "baselineStart": "2026-12-03",
       "baselineTarget": "2026-12-23",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualCompletion": "2026-09-10",
+      "progress": 100,
       "milestone": 16,
       "new": false,
       "actualStart": "2026-09-10"

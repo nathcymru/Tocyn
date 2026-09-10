@@ -8,6 +8,9 @@ import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
 import { useRealtime } from '../hooks/useRealtime';
 import { useTicketFields } from '../hooks/useTicketFields';
+import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue, type OperatorDraftVersion } from '../hooks/useOperatorDraft';
+import { useAuthStore } from '../store/authStore';
+import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { ApiError, dashboardApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -27,9 +30,17 @@ import {
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
 
+type PendingAttachment = Readonly<{
+  id: string;
+  file: File;
+  sessionGeneration: number;
+  status: 'uploading' | 'error';
+}>;
+
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
-  return <TicketDetail key={id} id={id!} />;
+  const generation = useAuthStore(state => state.sessionGeneration);
+  return <TicketDetail key={`${generation}:${id}`} id={id!} />;
 }
 
 function TicketDetail({ id }: { id: string }) {
@@ -44,13 +55,24 @@ function TicketDetail({ id }: { id: string }) {
   const customFieldPrefix = useId();
   const updateTicket = useUpdateTicket();
   const { presence, updateLocation, lastMessage } = useRealtime();
-  const [reply, setReply] = React.useState('');
-  const [isInternal, setIsInternal] = React.useState(false);
+  const draft = useOperatorDraft(id);
+  const sessionGeneration = useAuthStore(state => state.sessionGeneration);
+  const sessionGenerationRef = useRef(sessionGeneration);
+  sessionGenerationRef.current = sessionGeneration;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const [pendingAttachments, setPendingAttachments] = React.useState<readonly PendingAttachment[]>([]);
+  const [sentDraftVersion, setSentDraftVersion] = useState<OperatorDraftVersion | null>(null);
+  const pendingAttachmentIds = useRef(0);
+  const activeUploads = useRef(new Set<string>());
+  useEffect(() => () => { activeUploads.current.clear(); }, [sessionGeneration]);
+  const visiblePendingAttachments = pendingAttachments.filter(attachment => attachment.sessionGeneration === sessionGeneration);
+  const reply = draft.body;
+  const isInternal = draft.mode === 'internal';
   const [suggestion, setSuggestion] = React.useState<string | null>(null);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
-  const [attachments, setAttachments] = React.useState<File[]>([]);
   const [replyError, setReplyError] = useState<string | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
@@ -58,7 +80,6 @@ function TicketDetail({ id }: { id: string }) {
   const [qaPending, setQaPending] = useState(false);
   const submission = useRef(false);
   const changing = useRef(false);
-  const uploads = useRef(new Map<File, { filename: string; contentType: string; size: number; storageKey: string }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const ticketSelectRefs = useRef<Record<TicketSelectControl, HTMLSelectElement | null>>({
@@ -187,45 +208,135 @@ function TicketDetail({ id }: { id: string }) {
     }
   };
 
+  const updateDraft = (changes: Partial<OperatorDraftValue>) => {
+    if (draft.currentSnapshot()?.status === 'loading') return;
+    draft.update(current => ({
+      mode: changes.mode ?? current.mode,
+      body: changes.body ?? current.body,
+      attachments: changes.attachments ?? current.attachments,
+      baseConversationRevision: current.baseConversationRevision,
+    }));
+  };
+
+  const uploadAttachment = async (pending: PendingAttachment) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', pending.file);
+      const response = await dashboardApi.postForm<{ key: string }>('/attachments/upload', formData);
+      if (sessionGenerationRef.current !== pending.sessionGeneration || !activeUploads.current.has(pending.id)) return;
+      if (!response.key) throw new Error('Upload was not confirmed');
+      const uploaded: OperatorDraftAttachment = {
+        filename: pending.file.name,
+        contentType: pending.file.type,
+        size: pending.file.size,
+        storageKey: response.key,
+      };
+      draft.update(current => ({ ...current, attachments: current.attachments.some(attachment => attachment.storageKey === uploaded.storageKey)
+        ? current.attachments : [...current.attachments, uploaded] }));
+      activeUploads.current.delete(pending.id);
+      setPendingAttachments(currentAttachments => currentAttachments.filter(attachment => attachment.id !== pending.id));
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      if (sessionGenerationRef.current !== pending.sessionGeneration || !activeUploads.current.has(pending.id)) return;
+      setPendingAttachments(currentAttachments => currentAttachments.map(attachment =>
+        attachment.id === pending.id ? { ...attachment, status: 'error' } : attachment));
+    }
+  };
+
+  const addAttachments = (files: readonly File[]) => {
+    if (draft.currentSnapshot()?.status === 'loading') return;
+    const available = 10 - draftRef.current.attachments.length - visiblePendingAttachments.length;
+    const selected = files.slice(0, Math.max(0, available));
+    if (!selected.length) {
+      setNotice('A draft can include at most ten attachments.');
+      return;
+    }
+    const pending = selected.map(file => ({
+      id: `pending-${++pendingAttachmentIds.current}`,
+      file,
+      sessionGeneration,
+      status: 'uploading' as const,
+    }));
+    setPendingAttachments(current => [...current, ...pending]);
+    pending.forEach(attachment => activeUploads.current.add(attachment.id));
+    for (const attachment of pending) void uploadAttachment(attachment);
+    setNotice(`${selected.length} attachment${selected.length === 1 ? '' : 's'} selected and uploading.`);
+  };
+
+  const retryAttachment = (attachment: PendingAttachment) => {
+    if (attachment.sessionGeneration !== sessionGeneration || submission.current) return;
+    const retrying = { ...attachment, status: 'uploading' as const };
+    activeUploads.current.add(attachment.id);
+    setPendingAttachments(current => current.map(candidate => candidate.id === attachment.id ? retrying : candidate));
+    void uploadAttachment(retrying);
+  };
+
+  const discardDraft = async () => {
+    if (submission.current) return;
+    activeUploads.current.clear();
+    setPendingAttachments(current => current.map(attachment => ({ ...attachment, status: 'error' })));
+    const result = await draft.discard();
+    if (result === 'cleared') {
+      setSentDraftVersion(null);
+      setPendingAttachments(current => current.filter(attachment => attachment.sessionGeneration !== sessionGeneration));
+      setSuggestion(null);
+      setNotice('Draft discarded.');
+    }
+  };
+
+  const flushDraftBeforeNavigation = async () => {
+    if (submission.current || visiblePendingAttachments.length > 0) return false;
+    return draft.flushBeforeNavigation();
+  };
+  const draftNavigationPending = isSubmitting || visiblePendingAttachments.length > 0 ||
+    draft.status === 'unsaved' || draft.status === 'saving' || draft.status === 'error' || draft.status === 'conflict';
+
+  const retrySentDraftCleanup = async () => {
+    if (!sentDraftVersion || submission.current) return;
+    submission.current = true;
+    setIsSubmitting(true);
+    try {
+      if (await draft.cleanupAfterConfirmedSend(sentDraftVersion) === 'cleared') {
+        setSentDraftVersion(null);
+        setNotice('Sent draft cleared.');
+      }
+    } finally { submission.current = false; setIsSubmitting(false); }
+  };
+
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reply.trim() || submission.current) return;
+    if (!reply.trim() || submission.current || sentDraftVersion) return;
+    if (visiblePendingAttachments.some(attachment => attachment.status === 'uploading')) return;
+    const failedAttachments = visiblePendingAttachments.filter(attachment => attachment.status === 'error');
+    if (failedAttachments.length) {
+      failedAttachments.forEach(retryAttachment);
+      setNotice('Retrying failed attachment uploads before sending.');
+      return;
+    }
     submission.current = true;
     setReplyError(null);
     setNotice('');
 
     setIsSubmitting(true);
     try {
-      const results = await Promise.allSettled(
-        attachments.map(async (file) => {
-          const existing = uploads.current.get(file);
-          if (existing) return existing;
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await dashboardApi.postForm<{ key: string }>('/attachments/upload', formData);
-          const uploaded = {
-            filename: file.name,
-            contentType: file.type,
-            size: file.size,
-            storageKey: res.key
-          };
-          uploads.current.set(file, uploaded);
-          return uploaded;
-        })
-      );
-
-      const failure = results.find(result => result.status === 'rejected');
-      if (failure?.status === 'rejected') throw failure.reason;
-      const uploadedAttachments = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
-      await dashboardApi.post(`/tickets/${id}/articles`, {
-        body: reply,
-        is_internal: isInternal,
-        attachments: uploadedAttachments
+      const acknowledged = await draft.flushBeforeNavigation();
+      const sendingDraft = draft.currentSnapshot();
+      if (!acknowledged || !sendingDraft?.version) {
+        setReplyError('Draft needs a confirmed save before sending. Retry the draft save, then send again.');
+        return;
+      }
+      const article = await dashboardApi.post<{ id?: string }>(`/tickets/${id}/articles`, {
+        body: sendingDraft.body,
+        is_internal: sendingDraft.mode === 'internal',
+        attachments: sendingDraft.attachments
       });
-      setReply('');
-      setAttachments([]);
-      uploads.current.clear();
-      setNotice(isInternal ? 'Internal note added.' : 'Public reply added to the conversation.');
+      if (!article?.id) throw new Error('The reply was not confirmed.');
+      setSentDraftVersion(sendingDraft.version);
+      const cleanup = await draft.cleanupAfterConfirmedSend(sendingDraft.version);
+      if (cleanup === 'cleared') setSentDraftVersion(null);
+      setNotice(cleanup === 'cleared'
+        ? isInternal ? 'Internal note added.' : 'Public reply added to the conversation.'
+        : `${isInternal ? 'Internal note added.' : 'Public reply added to the conversation.'} Draft cleanup could not be confirmed; the draft is retained.`);
       setSuggestion(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['ticket', id] }),
@@ -250,7 +361,9 @@ function TicketDetail({ id }: { id: string }) {
   const reference = ticketReference(ticket, ticketPrefix);
 
   return (
-    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+    <>
+      <DraftNavigationGuard pending={draftNavigationPending} flush={flushDraftBeforeNavigation} />
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
       <div className="lg:col-span-3 xl:col-span-4 space-y-6">
         {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="rounded border border-red-300 bg-red-50 p-3 text-red-900">
           {error ? 'Could not refresh this ticket. Showing the last confirmed details. ' : 'Confirm the saved ticket details before making another change. '}
@@ -454,13 +567,31 @@ function TicketDetail({ id }: { id: string }) {
           </div>}
           <div className="p-6 border-t border-slate-200 bg-white">
             {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton></p>}
+            {(draft.status !== 'idle' && draft.status !== 'discarded') && <div role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} className={clsx(
+              'mb-4 flex flex-wrap items-center justify-between gap-3 rounded border p-3 text-sm',
+              draft.status === 'error' || draft.status === 'conflict' ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50 text-slate-700'
+            )}>
+              <span>
+                {draft.status === 'loading' && 'Restoring your saved draft…'}
+                {draft.status === 'unsaved' && 'Draft has unsaved changes.'}
+                {draft.status === 'saving' && 'Saving draft…'}
+                {draft.status === 'saved' && 'Draft saved.'}
+                {draft.status === 'error' && (draft.error ?? 'Draft could not be saved.')}
+                {draft.status === 'conflict' && (draft.error ?? 'Draft changed in another session. Review before discarding it.')}
+              </span>
+              <span className="flex items-center gap-3">
+                {draft.status === 'error' && <TocynButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className="underline">Retry draft</TocynButton>}
+                {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="underline">Discard draft</TocynButton>}
+              </span>
+            </div>}
             <form onSubmit={handleSubmitReply} className="space-y-4">
+              {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()} className="underline">Retry sent-draft cleanup</TocynButton></p>}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <TocynButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={!isInternal}
-                    onClick={() => { if (!submission.current) setIsInternal(false); }}
+                    onClick={() => { if (!submission.current) updateDraft({ mode: 'public' }); }}
                     className={clsx(
                       "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
                       !isInternal ? "bg-brand-600 text-white border-brand-700 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
@@ -471,7 +602,7 @@ function TicketDetail({ id }: { id: string }) {
                   <TocynButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={isInternal}
-                    onClick={() => { if (!submission.current) setIsInternal(true); }}
+                    onClick={() => { if (!submission.current) updateDraft({ mode: 'internal' }); }}
                     className={clsx(
                       "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
                       isInternal ? "bg-amber-700 text-white border-amber-800 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
@@ -503,7 +634,7 @@ function TicketDetail({ id }: { id: string }) {
                       <TocynButton
                         type="button"
                         disabled={isSubmitting}
-                        onClick={() => setReply(suggestion)}
+                        onClick={() => updateDraft({ body: suggestion })}
                         className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
                       >
                         Replace All
@@ -511,7 +642,7 @@ function TicketDetail({ id }: { id: string }) {
                       <TocynButton
                         type="button"
                         disabled={isSubmitting}
-                        onClick={() => setReply(prev => prev ? `${prev}\n\n${suggestion}` : suggestion)}
+                        onClick={() => updateDraft({ body: reply ? `${reply}\n\n${suggestion}` : suggestion })}
                         className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
                       >
                         Append
@@ -532,7 +663,7 @@ function TicketDetail({ id }: { id: string }) {
 
               <div className="relative">
                 <label htmlFor="reply-message" className="sr-only">Reply message</label>
-                <TocynTextarea id="reply-message" readOnly={isSubmitting} aria-busy={isSubmitting}
+                <TocynTextarea id="reply-message" readOnly={isSubmitting || draft.status === 'loading'} aria-busy={isSubmitting || draft.status === 'loading'}
                   className={clsx(
                     "w-full rounded-xl border p-4 text-sm focus:ring-4 outline-none min-h-[140px] transition-all resize-none shadow-inner",
                     isInternal
@@ -541,23 +672,44 @@ function TicketDetail({ id }: { id: string }) {
                   )}
                   placeholder={isInternal ? "Type an internal note only visible to agents..." : "Type your reply to the customer..."}
                   value={reply}
-                  onChange={(e) => { if (!submission.current) setReply(e.target.value); }}
+                  onChange={(e) => { if (!submission.current) updateDraft({ body: e.target.value }); }}
                 />
               </div>
 
-              {attachments.length > 0 && (
+              {(draft.attachments.length > 0 || visiblePendingAttachments.length > 0) && (
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {attachments.map((file, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
+                  {draft.attachments.map(attachment => (
+                    <div key={attachment.storageKey} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
                       <Paperclip className="w-3 h-3 text-slate-500" />
-                      <span className="truncate max-w-[150px]">{file.name}</span>
+                      <span className="truncate max-w-[150px]">{attachment.filename}</span>
                       <TocynButton
                         type="button"
-                        aria-disabled={isSubmitting} aria-label={`Remove ${file.name}`}
+                        aria-disabled={isSubmitting} aria-label={`Remove ${attachment.filename}`}
                         onClick={() => {
                           if (submission.current) return;
-                          uploads.current.delete(file);
-                          setAttachments(prev => prev.filter((_, i) => i !== index));
+                          updateDraft({ attachments: draftRef.current.attachments.filter(candidate => candidate.storageKey !== attachment.storageKey) });
+                          setNotice('Attachment removed.');
+                          attachButtonRef.current?.focus();
+                        }}
+                        className="text-slate-600 hover:text-red-700"
+                      >
+                        <X className="w-3 h-3" />
+                      </TocynButton>
+                    </div>
+                  ))}
+                  {visiblePendingAttachments.map(attachment => (
+                    <div key={attachment.id} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
+                      <Paperclip className="w-3 h-3 text-slate-500" />
+                      <span className="truncate max-w-[150px]">{attachment.file.name}</span>
+                      <span role={attachment.status === 'error' ? 'alert' : 'status'} className="text-slate-600">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
+                      {attachment.status === 'error' && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} className="underline">Retry upload</TocynButton>}
+                      <TocynButton
+                        type="button"
+                        aria-disabled={isSubmitting} aria-label={`Remove ${attachment.file.name}`}
+                        onClick={() => {
+                          if (submission.current) return;
+                          activeUploads.current.delete(attachment.id);
+                          setPendingAttachments(current => current.filter(candidate => candidate.id !== attachment.id));
                           setNotice('Attachment removed.');
                           attachButtonRef.current?.focus();
                         }}
@@ -586,10 +738,7 @@ function TicketDetail({ id }: { id: string }) {
                     onChange={(e) => {
                       if (submission.current) return;
                       const selectedFiles = Array.from(e.currentTarget.files ?? []);
-                      if (selectedFiles.length) {
-                        setAttachments(prev => [...prev, ...selectedFiles]);
-                        setNotice(`${selectedFiles.length} attachment${selectedFiles.length === 1 ? '' : 's'} selected.`);
-                      }
+                      if (selectedFiles.length) addAttachments(selectedFiles);
                       if (fileInputRef.current) fileInputRef.current.value = '';
                     }}
                   />
@@ -605,7 +754,7 @@ function TicketDetail({ id }: { id: string }) {
                   </TocynButton>
                   <TocynButton
                     type="submit"
-                    aria-disabled={!reply.trim() || isSubmitting}
+                    aria-disabled={!reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion)}
                     className={clsx(
                       "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
                       isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"
@@ -781,7 +930,8 @@ function TicketDetail({ id }: { id: string }) {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

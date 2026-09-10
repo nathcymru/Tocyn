@@ -51,7 +51,7 @@ No production deployment date is currently committed.
 The original alignment forecast was `beta.2` acceptance on 18 February 2027 and
 expanded scope on 9 February 2028; retain those values as history. The current
 accepted [forecast ledger](https://github.com/nathcymru/Tocyn/blob/4fce7b6654db924d818d2ee2ad77d3c855ee9d46/docs/planning/post-beta-2026-09-10/forecast.json)
-forecasts **22 January 2027** and **21 January 2028**, respectively, after evidenced
+records the earlier **22 January 2027** and **21 January 2028** forecast, after evidenced
 completion was incorporated in PR #171. This is the same conservative two-workstream
 model, not a new baseline or a release promise. No further date change is inferred
 from the partial work described below.
@@ -61,14 +61,18 @@ security evidence remain mandatory.
 
 ## Living schedule
 
+After accepted #48 integration, the same conservative model recalculates beta.2 to **23 January 2027** and expanded scope to **11 January 2028**. The two-lane scheduling order accounts for the one-day beta movement; original baselines remain immutable. The updated reproducible ledger is included with the ongoing #129 delivery record.
+
 Project planning preserves baseline dates separately from forecasts and actual dates. Reforecasting must not overwrite the original approved baseline. See ADR-0014 and repository `AGENTS.md`.
 
 ## Delivery snapshot — 10 September 2026
 
-Beta.2 is **not ready**. Accepted main is `9cee350c36f49b9459fad3db42aadc8d25de848b`.
+Beta.2 is **not ready**. Accepted main is `32fba86fd659ca9d729ff8d0ff683b4770e81454`.
 
-- [#48 / PR #167](https://github.com/nathcymru/Tocyn/pull/167) remains in draft: retained shared controls, security recovery, corrected built-widget styles, local browser/VoiceOver evidence and numeric performance gates. The authenticated navigation CI correction passed. Final refreshed-revision acceptance remains required; the branch now includes accepted #170.
+- [#48 / PR #167](https://github.com/nathcymru/Tocyn/pull/167) is accepted: retained shared controls, public TypeScript contracts, security/retry recovery, corrected built-widget styles, scoped browser/VoiceOver evidence and numeric performance gates. Exact-revision CI/security passed; the verified signed merge tree matches the reviewed head and CI runner. Owner review-only bypass was recorded, with zero Copilot reviews. Themes (#66), wrapper lifecycle (#67) and the persistent workspace (#128) retain separate acceptance.
 - [#159 / PR #170](https://github.com/nathcymru/Tocyn/pull/170) merged as a **partial foundation** after required checks and a verified signed integration. Privacy-safe local diagnostics, bounded resource accounting, credential decisions and canonical mutation summaries are on main. #159 remains open for full active-path coverage and remaining runtime evidence; production telemetry stays disabled under #42. The owner-authorised review-only bypass was recorded; no independent human approval or Copilot review is claimed.
+
+- [#129 / PR #173](https://github.com/nathcymru/Tocyn/pull/173) is a draft server foundation: tenant/operator-scoped drafts, generation/revision conflict protection, validated attachment references, preserved conversation base and private/no-store responses. Local server and two-tenant integration checks pass. Autosave/restore UI, Drafts view, confirmed-send cleanup and approved retention activation remain outstanding. No production expiry, scheduler or remote migration is activated.
 
 Issue receipts, Project status and each branch's `.agents/state/` provide current
 operational details; this dated snapshot does not replace their acceptance records.

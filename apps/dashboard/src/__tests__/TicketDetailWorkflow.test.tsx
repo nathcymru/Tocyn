@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
 import { useAuthStore } from '../store/authStore';
@@ -18,9 +18,16 @@ function deferred<T>() {let resolve!:(value:T)=>void;const promise=new Promise<T
 let client:QueryClient;
 let ticket:ReturnType<typeof initialTicket>;
 function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'assigned-agent' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
-function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = []) {
+function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
+    if(path.startsWith('/api/workspace/drafts')) {
+      const override = workspace?.(options); if (override) return override;
+      if(options.method === 'GET' || !options.method) return new Response(null,{status:204});
+      if(options.method === 'DELETE') return new Response(null,{status:204});
+      const body=JSON.parse(String(options.body));
+      return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,attachments:body.attachments,baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
+    }
     if(path.startsWith('/api/tickets/')||path==='/api/attachments/upload')return handle(path,options);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
     if(path==='/api/users/agents')return json([{id:'assigned-agent',full_name:'Assigned agent'}]);
@@ -29,11 +36,14 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
     return json([]);
   }));
 }
-function showDetail(){render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets/workflow-ticket']}><Routes><Route path="/tickets/:id" element={<TicketDetailPage/>}/></Routes></MemoryRouter></QueryClientProvider>);}
+function showDetail(){
+  const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> }], { initialEntries: ['/tickets/workflow-ticket'] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
+}
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
   ticket=initialTicket();vi.stubGlobal('WebSocket',Socket);vi.stubGlobal('alert',vi.fn());
-  useAuthStore.getState().setAuth('synthetic-operator-session',{id:'operator',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
+  useAuthStore.getState().setAuth('synthetic-operator-session',{id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
 
@@ -72,7 +82,7 @@ it('snapshots native file selection before clearing the input and preserves expl
   });
   const remove = await screen.findByRole('button', { name: 'Remove selected.txt' });
   expect(nativeFiles).toHaveLength(0);
-  expect(vi.mocked(fetch).mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
+  expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true);
   remove.focus(); fireEvent.click(remove);
   expect(screen.queryByRole('button', { name: 'Remove selected.txt' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Attach files' })).toHaveFocus();
@@ -351,6 +361,46 @@ it('refreshes the conversation and feed for the server article.created payload',
   expect(client.getQueryState(['tickets',{}])?.isInvalidated).toBe(true);
 });
 
+it('does not restore an attachment removed while its upload is pending', async () => {
+  const upload = deferred<Response>();
+  transport(path => path === '/api/attachments/upload' ? upload.promise : json(ticket));
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'removed.txt')] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Remove removed.txt' }));
+  await act(async () => { upload.resolve(json({ key: 'synthetic/removed' })); });
+  expect(screen.queryByText('removed.txt')).not.toBeInTheDocument();
+});
+
+it('preserves both attachments when two uploads complete in the same turn', async () => {
+  const first = deferred<Response>(); const second = deferred<Response>(); let count = 0;
+  transport(path => path === '/api/attachments/upload' ? (++count === 1 ? first.promise : second.promise) : json(ticket));
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'one.txt'), new File(['b'], 'two.txt')] } });
+  await act(async () => { first.resolve(json({ key: 'synthetic/one' })); second.resolve(json({ key: 'synthetic/two' })); });
+  expect(screen.queryByText('Uploading…')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove one.txt' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove two.txt' })).toBeInTheDocument();
+});
+
+it('retries acknowledged-send cleanup without sending the article again', async () => {
+  let posts=0; let deletes=0;
+  transport((_path, options) => {
+    if(options.method==='POST') { posts++; return json({id:'confirmed-article'},201); }
+    return json(ticket);
+  }, [], options => options.method==='DELETE' && ++deletes===1 ? json({error:'Cleanup unavailable'},503) : undefined);
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Only send once'}});
+  fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
+  const retry=await screen.findByRole('button',{name:'Retry sent-draft cleanup'});
+  await waitFor(()=>expect(retry).toHaveAttribute('aria-disabled','false'));
+  fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
+  expect(posts).toBe(1);
+  fireEvent.click(retry);
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'Retry sent-draft cleanup'})).not.toBeInTheDocument());
+  expect(posts).toBe(1); expect(deletes).toBe(2);
+  expect(screen.getByRole('textbox',{name:'Reply message'})).toHaveValue('');
+});
+
 
 it('retains uploaded attachments after a rejected internal note and reuses them on explicit retry',async()=>{
   let uploads=0;const posts:Record<string,unknown>[]=[];
@@ -368,6 +418,7 @@ it('retains uploaded attachments after a rejected internal note and reuses them 
   fireEvent.click(screen.getByRole('button',{name:'Internal Note'}));
   expect(screen.getByRole('button',{name:'Internal Note'})).toHaveAttribute('aria-pressed','true');
   fireEvent.change(screen.getByLabelText('Reply attachments'),{target:{files:[new File(['synthetic attachment'],'note.txt',{type:'text/plain'})]}});
+  await waitFor(()=>expect(screen.queryByText('Uploading…')).not.toBeInTheDocument());
   expect(screen.getByRole('button',{name:'Add Note'})).toHaveAttribute('aria-disabled','true');
   fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Synthetic private note'}});
   fireEvent.click(screen.getByRole('button',{name:'Add Note'}));
@@ -408,11 +459,13 @@ it('waits for all pending attachment outcomes before unlocking a partial-failure
   fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Partial attachment retry'}});
   const send=screen.getByRole('button',{name:'Send Reply'});send.focus();fireEvent.click(send);
   await waitFor(()=>expect(uploads).toBe(2));
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByText('Upload failed.')).toBeInTheDocument();
   expect(send).toHaveAttribute('aria-disabled','true');expect(document.activeElement).toBe(send);
   fireEvent.click(send);expect(uploads).toBe(2);
-  sibling.resolve(json({key:'synthetic/sibling'}));await screen.findByRole('alert');
-  fireEvent.click(send);await waitFor(()=>expect(posts).toBe(1));expect(uploads).toBe(3);
+  sibling.resolve(json({key:'synthetic/sibling'}));await screen.findByText('Upload failed.');
+  fireEvent.click(send);await waitFor(()=>expect(uploads).toBe(3));
+  await waitFor(()=>expect(screen.queryByText('Uploading…')).not.toBeInTheDocument());
+  fireEvent.click(send);await waitFor(()=>expect(posts).toBe(1));
 });
 
 it('replaces a pre-commit read when event and mutation invalidations overlap',async()=>{

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TicketListPage } from '../pages/TicketListPage';
 import { useAuthStore } from '../store/authStore';
@@ -17,7 +17,11 @@ function transport(tickets:(options:RequestInit)=>Response|Promise<Response>) {
   }));
 }
 function showFeed() {
-  render(<QueryClientProvider client={client}><MemoryRouter><TicketListPage/></MemoryRouter></QueryClientProvider>);
+  const router = createMemoryRouter([
+    { path: '/tickets', element: <TicketListPage/> },
+    { path: '/tickets/:id', element: <p>Ticket detail</p> },
+  ], { initialEntries: ['/tickets'] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
 }
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });

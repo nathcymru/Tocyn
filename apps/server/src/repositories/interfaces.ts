@@ -2,6 +2,7 @@ import type { ConversationActor } from '../types/conversation-audit';
 import { SqlKnowledgeRepository } from './knowledge.repository';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { CapabilityWriteFence } from '../auth/capability-policy';
+import type { OperatorWorkspaceRepository } from './operator-workspace.repository';
 
 export interface UserRepository {
   revokeSessions(id: string): Promise<void>;
@@ -140,4 +141,5 @@ export interface Repositories {
   ticketFields: TicketFieldRepository;
   groups: GroupRepository;
   ticketFilters: FilterRepository;
+  operatorWorkspace: OperatorWorkspaceRepository;
 }
