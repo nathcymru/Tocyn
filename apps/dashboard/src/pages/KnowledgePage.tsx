@@ -209,6 +209,7 @@ export const KnowledgePage: React.FC = () => {
             style={{ paddingLeft: `${(depth + 1) * 1.5 + 0.5}rem` }}
           >
             <TocynInput
+              aria-label={`New subcategory name for ${node.name}`}
               autoFocus
               type="text"
               value={newCategoryName}
@@ -281,6 +282,7 @@ export const KnowledgePage: React.FC = () => {
               {isAddingCategory?.parentId === null && (
                 <div className="flex items-center py-1.5 px-2 pl-6 mt-1">
                   <TocynInput
+                    aria-label="New root category name"
                     autoFocus
                     type="text"
                     value={newCategoryName}

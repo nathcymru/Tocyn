@@ -43,3 +43,16 @@ it('exposes category selection as named pressed-state buttons',async()=>{
  fireEvent.click(category);expect(category).toHaveAttribute('aria-pressed','true');expect(all).toHaveAttribute('aria-pressed','false');
  fireEvent.click(all);expect(category).toHaveAttribute('aria-pressed','false');expect(all).toHaveAttribute('aria-pressed','true');
 });
+
+
+it.each([
+ ['Add Root Category','New root category name'],
+ ['Add subcategory to Synthetic category','New subcategory name for Synthetic category'],
+])('names the category input opened by %s',async(openerName,inputName)=>{
+ render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
+ fireEvent.click(await screen.findByRole('button',{name:openerName}));
+ const input=await screen.findByRole('textbox',{name:inputName});
+ expect(input).toHaveFocus();
+ fireEvent.keyDown(input,{key:'Escape'});
+ await waitFor(()=>expect(screen.queryByRole('textbox',{name:inputName})).not.toBeInTheDocument());
+});
