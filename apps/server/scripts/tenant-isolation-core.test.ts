@@ -307,6 +307,18 @@ test('durable operator drafts and workspace state remain per-tenant, revision-bo
     assert.deepEqual(createdBody.attachments, [{ storageKey: attachmentKey, filename: 'draft.txt', size: 16, contentType: 'text/plain' }]);
     assert.equal(createdBody.baseConversationRevision, 0, 'No canonical event must not be misrepresented as an unchanged conversation');
 
+    const draftList = await fixture.request('/api/workspace/drafts?limit=1', { token: operatorA });
+    await expectStatus(draftList, 200, 'A may list its scoped draft indicators');
+    assert.equal(draftList.headers.get('cache-control'), 'private, no-store');
+    const page = await draftList.json<{ items: Array<{ ticketId: string; updatedAt: string }>; next: string | null }>();
+    assert.equal(page.items[0].ticketId, 'fixture-ticket');
+    assert.deepEqual(Object.keys(page.items[0]).sort(), ['ticketId', 'updatedAt']);
+    assert.equal(page.next, null);
+    const otherDrafts = await fixture.request('/api/workspace/drafts', { token: operatorB });
+    assert.deepEqual(await otherDrafts.json(), { items: [], next: null });
+    await expectStatus(await fixture.request('/api/workspace/drafts?limit=51', { token: operatorA }), 400, 'Draft pages are bounded');
+    await expectStatus(await fixture.request('/api/workspace/drafts'), 401, 'Draft indicators require authentication');
+
     await fixture.db.prepare('INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES (?,?,?,?,?)')
       .bind(fixture.principals.operatorA.tenantId, 'sequenced-ticket', 'Sequenced ticket', fixture.principals.customerA.email, 'dashboard').run();
     await fixture.db.prepare(`INSERT INTO conversation_events
@@ -414,6 +426,7 @@ test('durable operator drafts and workspace state remain per-tenant, revision-bo
     assert.equal(await stateB.json(), null, 'B cannot observe A workspace continuity');
 
     await fixture.revokePrincipalSessions('operatorA');
+    await expectStatus(await fixture.request('/api/workspace/drafts', { token: operatorA }), 401, 'Revoked sessions cannot list draft indicators');
     await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', { token: operatorA }), 401,
       'Revoked A session cannot restore its prior draft');
     await expectStatus(await fixture.request('/api/workspace/state', { token: operatorA }), 401,

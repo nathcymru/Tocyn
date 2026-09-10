@@ -23,3 +23,10 @@ Mutation bodies use the existing 64 KiB streaming limit and safe JSON parser. In
 Retention duration remains an owner decision. The server has an explicit injected policy/clock seam; no production expiry duration, scheduler or cleanup activation is assumed. Cleanup is bounded and actor-scoped; cross-operator cleanup requires explicit system scope. No remote migration, database seeding or provider activation is authorized by this implementation.
 
 Remaining full-issue acceptance: dashboard autosave/restore across navigation and reload, visible unsaved/conflict states, Drafts indicator/query, attachment and mode restoration, authority-change clearing, confirmed-send conditional cleanup, approved retention activation and complete end-to-end evidence. Existing UI and server tests do not substitute for those integrations.
+
+
+## Drafts-view query input
+
+`GET /api/workspace/drafts?after=<ticketId>&limit=<1..50>` returns only `{items:[{ticketId,updatedAt}],next}`. It uses stable ticket-ID keyset pagination; the continuation is the last returned authorized ticket ID. No message body, attachment metadata or other operator state is included. The query joins tenant-qualified tickets and checks current group membership for agents before returning rows, in addition to the enclosing live authenticated dashboard boundary. Empty results do not reveal hidden drafts. This supplies #129's query input; #130 still owns the complete workspace view semantics and UI.
+
+Repository integration covers two tenants with colliding identifiers, two operators, revoked group access and bounded pages. Real local Worker route tests cover no-store responses, body-free shape, missing/revoked credentials and wrong-tenant empty results. No remote resource is used.

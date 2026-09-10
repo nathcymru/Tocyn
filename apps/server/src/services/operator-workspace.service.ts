@@ -28,6 +28,10 @@ export class OperatorWorkspaceService {
     return ticket;
   }
 
+  async listDrafts(afterTicketId: string, limit: number) {
+    return this.deps.repositories.operatorWorkspace.listDrafts(afterTicketId, limit);
+  }
+
   async getDraft(ticketId: string): Promise<OperatorDraft | null> {
     await this.authorizeTicket(ticketId);
     return this.deps.repositories.operatorWorkspace.getDraft(ticketId);

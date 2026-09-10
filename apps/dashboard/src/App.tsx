@@ -1,6 +1,6 @@
 import React, { lazy } from 'react';
 import { RouteContent } from './components/RouteContent';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { SettingsLayout } from './components/layout/SettingsLayout';
 import { LoginPage } from './pages/LoginPage';
@@ -47,9 +47,8 @@ function ProtectedRoute({ children, requireMfa = true }: { children: React.React
 }
 
 export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
+  const [router] = React.useState(() => createBrowserRouter(createRoutesFromElements(
+      <>
         <Route path="/login" element={<LoginPage />} />
         <Route
           path="/mfa"
@@ -91,7 +90,7 @@ export default function App() {
             <Route path="channels/widget" element={<RouteContent><WidgetChannelPage /></RouteContent>} />
           </Route>
         </Route>
-      </Routes>
-    </BrowserRouter>
-  );
+      </>
+  )));
+  return <RouterProvider router={router} />;
 }

@@ -139,6 +139,38 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     expect(sibling?.mfa_secret).toBeNull();
   });
 
+  it('lists only current actor drafts on accessible tickets without exposing bodies or other tenants', async () => {
+    for (const tenant of ['tenant-A', 'tenant-B']) {
+      for (const actor of ['user-A', 'user-B']) sqlite.prepare('INSERT INTO users(tenant_id,id,email,role) VALUES (?,?,?,?)')
+        .run(tenant, actor, `${tenant}-${actor}@example.invalid`, 'agent');
+      sqlite.prepare('INSERT INTO groups(tenant_id,id,name) VALUES (?,?,?)').run(tenant, 'restricted', 'Restricted');
+      for (const id of ['a', 'b', 'c']) sqlite.prepare('INSERT INTO tickets(tenant_id,id,subject,customer_email,source,group_id) VALUES (?,?,?,?,?,?)')
+        .run(tenant, id, 'Synthetic', 'customer@example.invalid', 'dashboard', id === 'b' ? 'restricted' : null);
+    }
+    const sameActorB = createRepositories(createVerifiedTenantScope('tenant-B', 'user-A', ['agent'], 1), d1);
+    const otherActorA = createRepositories(createVerifiedTenantScope('tenant-A', 'user-B', ['agent'], 1), d1);
+    for (const repos of [reposA, sameActorB, otherActorA]) for (const ticketId of ['a', 'b', 'c']) {
+      await repos.operatorWorkspace.saveDraft({ ticketId, expectedGeneration: null, expectedRevision: 0,
+        mode: 'internal', body: 'private synthetic body', attachments: [], expiresAt: null });
+    }
+    const first = await reposA.operatorWorkspace.listDrafts('', 1);
+    expect(first.items.map(item => item.ticketId)).toEqual(['a']);
+    expect(first.next).toBe('a');
+    expect(Object.keys(first.items[0]).sort()).toEqual(['ticketId', 'updatedAt']);
+    const second = await reposA.operatorWorkspace.listDrafts(first.next!, 1);
+    expect(second.items.map(item => item.ticketId)).toEqual(['c']);
+    expect(second.next).toBeNull();
+    sqlite.prepare('INSERT INTO user_groups(tenant_id,user_id,group_id) VALUES (?,?,?)').run('tenant-A', 'user-A', 'restricted');
+    expect((await reposA.operatorWorkspace.listDrafts()).items.map(item => item.ticketId)).toEqual(['a', 'b', 'c']);
+    sqlite.prepare('DELETE FROM user_groups WHERE tenant_id=? AND user_id=?').run('tenant-A', 'user-A');
+    expect((await reposA.operatorWorkspace.listDrafts()).items.map(item => item.ticketId)).toEqual(['a', 'c']);
+    sqlite.prepare('DELETE FROM operator_drafts WHERE tenant_id=? AND user_id=?').run('tenant-A', 'user-A');
+    expect((await reposA.operatorWorkspace.listDrafts()).items).toEqual([]);
+    expect((await sameActorB.operatorWorkspace.listDrafts()).items).toHaveLength(2);
+    expect((await otherActorA.operatorWorkspace.listDrafts()).items).toHaveLength(2);
+    await expect(reposA.operatorWorkspace.listDrafts('', 51)).rejects.toThrow('Invalid draft page');
+  });
+
   it('keeps draft retention disabled without an injected policy and enforces the scoped group gate', async () => {
     sqlite.prepare('INSERT INTO users(tenant_id,id,email,role,mfa_enabled) VALUES (?,?,?,?,?)')
       .run('tenant-A', 'user-A', 'operator-a@example.test', 'agent', 1);

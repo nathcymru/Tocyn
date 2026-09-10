@@ -1,3 +1,7 @@
+## Active continuation — 10 September, 23:47 BST
+
+Root added a bounded body-free Drafts-list endpoint with tenant/operator/current-group SQL filtering. Repository31 tests, real local tenant-isolation4 tests, server and fixture typechecks pass. It supplies query input, not #130 view completion. Native draft129_composer (actual Terra/high) owns only ticket composer/page/tests; root owns server/controller/governance/router. Worker is active; do not duplicate its edits. Composer must preserve uploaded references, retries, authority resets and exact-send cleanup. Router navigation remains separate integration work; BrowserRouter cannot provide useBlocker, so actual back/forward acceptance needs a proper router gate, not click interception. No routine Copilot, reset, purchase or overage.
+
 ## Latest continuation — 10 September, 23:43 BST
 
 Previous goal turn made progress: PR173 aa1831d pushed, Wiki66dc96c published and three pages byte-verified. Current controller adds a bounded navigation flush: it waits for an existing PUT and the newest snapshot, returning false on unacknowledged edits, conflict, unavailable restore or authority change. It is still not connected to route navigation; full UI acceptance remains outstanding. Focused tests now21. No merge or completion.

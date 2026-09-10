@@ -50,6 +50,22 @@ export class OperatorWorkspaceRepository {
     return row ? draftFromRow(row) : null;
   }
 
+  /** Bounded, body-free input for Drafts views; current group membership is checked in the read. */
+  async listDrafts(afterTicketId = '', limit = 50): Promise<{ items: { ticketId: string; updatedAt: string }[]; next: string | null }> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50 || afterTicketId.length > 128) throw new Error('Invalid draft page');
+    const { results } = await this.db.prepare(`SELECT d.ticket_id,d.updated_at FROM operator_drafts d
+      JOIN tickets t ON t.tenant_id=d.tenant_id AND t.id=d.ticket_id
+      WHERE d.tenant_id=? AND d.user_id=? AND d.ticket_id>?
+        AND (?=0 OR t.group_id IS NULL OR EXISTS (
+          SELECT 1 FROM user_groups ug WHERE ug.tenant_id=t.tenant_id AND ug.group_id=t.group_id AND ug.user_id=?
+        )) ORDER BY d.ticket_id LIMIT ?`)
+      .bind(this.scope.tenantId, this.scope.actorId, afterTicketId, this.scope.roles.includes('agent') ? 1 : 0, this.scope.actorId, limit + 1)
+      .all<{ ticket_id: string; updated_at: string }>();
+    const rows = results ?? [];
+    const items = rows.slice(0, limit).map(row => ({ ticketId: row.ticket_id, updatedAt: row.updated_at }));
+    return { items, next: rows.length > limit ? items[items.length - 1].ticketId : null };
+  }
+
   /** A returned row is the only completed save signal. Generation prevents delete/recreate ABA. */
   async saveDraft(input: DraftSaveInput): Promise<OperatorDraft | null> {
     const generation = crypto.randomUUID();

@@ -54,6 +54,12 @@ workspace.put('/state', async c => {
     return c.json(await service(c).saveWorkspaceState(parsed.data));
   } catch (error) { return failure(c, error); }
 });
+workspace.get('/drafts', async c => {
+  const after = z.string().max(128).safeParse(c.req.query('after') ?? '');
+  const limit = z.coerce.number().int().min(1).max(50).safeParse(c.req.query('limit') ?? '50');
+  if (!after.success || !limit.success) return c.json({ error: 'Invalid draft page' }, 400);
+  try { return c.json(await service(c).listDrafts(after.data, limit.data)); } catch (error) { return failure(c, error); }
+});
 workspace.get('/drafts/:ticketId', async c => {
   const parsed = ticketId.safeParse(c.req.param('ticketId'));
   if (!parsed.success) return c.json({ error: 'Invalid ticket ID' }, 400);

@@ -2,6 +2,18 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
+## Current state — 10 September 2026, 23:48 BST
+
+Accepted main is `32fba86fd659ca9d729ff8d0ff683b4770e81454`: #48 / PR #167 accepted with required checks, verified signature, reviewed/CI/merge tree equality and recorded owner review-only bypass. #48 is closed, Project Done/100%, actual completion 10 September. #66 is now ready; its contract preparation is complete, implementation pending. #159 remains partial/open; full #152 remains open.
+
+#129 is active in draft PR #173, worktree `/private/tmp/tocyn-beta2-129`, branch `codex/129-durable-drafts`. Pushed `aefe6dd` adds tested controller/navigation-flush primitives; subsequent server Drafts-list and composer/router work is being integrated. Root owns server/router/governance, native `draft129_composer` (Terra/high) exclusively owns ticket composer/page/tests. Server list checks pass: repository31, real local tenant integration4, typechecks. Navigation guard3 and controller21 focused tests pass. Final combined validation and UI acceptance remain; no merge yet. Retention duration still needs the pending owner answer, without a default expiry.
+
+Current forecast: beta.2 **23 January 2027**, expanded scope **11 January 2028**, using unchanged two-lane/8h Monday–Saturday/3× model. Historical baselines remain immutable. 77 issue paragraphs and234 changed Project fields were read back. Wiki `66dc96c` matches three source roadmap pages. Full #140 acceptance includes SLA calendars/pause/waiting, ownership/routing, durable workspace, accessibility and tenant isolation; beta.2 is not ready.
+
+Allocation: native theme66_contract Luna/low completed read-only preparation; draft129_composer Terra/high active for auth/concurrency-sensitive UI. Earlier Astra/high controller escalation completed. No callable Work/Chat worker route; shared allowance not double-counted. Codex observed100%used, resets15September02:24BST; free reset approval pending, no redemption. Zero Copilot, paid API, purchase or overage. Leave owner VoiceOver and servers running. See [#129 state](workspace-129.md) for exact next actions.
+
+## Historical state — superseded
+
 ## Current state — 10 September 2026, 23:19 BST
 
 Accepted main: `9cee350c36f49b9459fad3db42aadc8d25de848b` (partial PR #170 integration, 21:40 UTC). Its valid GitHub signature and tree `42aaa36c9d0b0bd94d44abd2e52831365370f902` match reviewed head `6d3ce483248bc87c6b673f066f15fcc1c7c522be`. All required checks passed, no review threads, standing review-only owner bypass used, zero Copilot reviews. #159 remains OPEN / Project In progress; no 100% or actual-completion claim.

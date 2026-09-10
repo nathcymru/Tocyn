@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
 import { useAuthStore } from '../store/authStore';
@@ -21,6 +21,12 @@ function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow 
 function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = []) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
+    if(path.startsWith('/api/workspace/drafts')) {
+      if(options.method === 'GET' || !options.method) return new Response(null,{status:204});
+      if(options.method === 'DELETE') return new Response(null,{status:204});
+      const body=JSON.parse(String(options.body));
+      return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,attachments:body.attachments,baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
+    }
     if(path.startsWith('/api/tickets/')||path==='/api/attachments/upload')return handle(path,options);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
     if(path==='/api/users/agents')return json([{id:'assigned-agent',full_name:'Assigned agent'}]);
@@ -29,11 +35,14 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
     return json([]);
   }));
 }
-function showDetail(){render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets/workflow-ticket']}><Routes><Route path="/tickets/:id" element={<TicketDetailPage/>}/></Routes></MemoryRouter></QueryClientProvider>);}
+function showDetail(){
+  const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> }], { initialEntries: ['/tickets/workflow-ticket'] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
+}
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
   ticket=initialTicket();vi.stubGlobal('WebSocket',Socket);vi.stubGlobal('alert',vi.fn());
-  useAuthStore.getState().setAuth('synthetic-operator-session',{id:'operator',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
+  useAuthStore.getState().setAuth('synthetic-operator-session',{id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
 
