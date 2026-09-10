@@ -56,9 +56,10 @@ Deep-link behavior:
 History behavior:
 
 - The first deliberate conversation activation from a list adds one history entry containing the view and conversation identity. Subsequent deliberate selections in that same workspace replace the active-conversation URL/state, so Back returns to the list rather than stepping through every row. A deliberate deep link or explicit open in a new navigation context adds its own entry.
-- Browser Back from a conversation returns to the exact list state; on mobile it returns to the previous pane with the same state. Forward returns to the last active conversation when that entry exists.
+- Browser Back from a conversation opened from the workspace returns to the exact list state; on mobile it returns to the previous pane with the same state. Forward returns to the last active conversation when that entry exists.
 - Resolve/snooze-and-advance replaces the active selection while retaining the current workspace history entry; it does not make Back replay each automatic advance.
 - Resolve/snooze-and-advance updates the list and moves to the configured next item, with a stable completion/status announcement and an undo/reopen path where supported.
+- A direct external deep link has no assumed prior workspace history. Browser Back retains normal browser behavior; an explicit “Back to view” control restores the authorized list without inventing an external history entry.
 - Reload restores the last authorized work view and presentation state, then rehydrates the selected conversation and draft by revision.
 
 ## 5. Continuity, drafts and failure states
@@ -67,7 +68,7 @@ Switching conversations MUST preserve the selected work view, query/filter, sort
 
 Every save/send mutation exposes `saving`, `saved at revision`, `failed`, `retrying`, `sent` or `discarded`. A failed save never displays “Saved”; retry is idempotent and preserves the editable draft. Concurrent revision mismatch opens a review/merge decision without auto-resend or silent overwrite. On successful send, the sent content is shown in the conversation, the draft is cleared only after confirmation, and focus returns to the composer or the documented next action.
 
-Existing beta recovery behavior is a release gate: failed reply/read/write paths keep user input and attachments, retain visible last-known content when refresh fails, place focus on the retry/error control, and never cross tenant or actor authority boundaries.
+Existing beta recovery behavior is a release gate: failed reply/read/write paths keep user input and attachments, retain visible last-known content when refresh fails, provide the retry/error focus destination according to section 8 (background errors never steal focus), and never cross tenant or actor authority boundaries.
 
 ## 6. Search and filtering
 
