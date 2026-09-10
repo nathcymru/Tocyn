@@ -1,0 +1,240 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-10T17:45:07.163Z",
+  "environment": {
+    "node": "v22.19.0",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "gzipLevel": 9
+  },
+  "scenario": "Production client builds; sum of individually compressed JS/CSS assets, not initial-route transfer or browser timing.",
+  "baseline": {
+    "revision": "1c684300154187ccf8af5cd6dfcb06afe031ba6b",
+    "tree": "66fa3650113b6302d8bdc49b83615e6598e1c445",
+    "trackedDirty": false,
+    "lockSha256": "68556248212a835cdb249231f91f18b0b494bf955583f942a9e114f982249801",
+    "vite": "8.2.2",
+    "artifacts": {
+      "dashboard": {
+        "assets": [
+          {
+            "path": "assets/index-CmW5lPQ2.css",
+            "kind": "css",
+            "bytes": 81318,
+            "gzipBytes": 13236,
+            "sha256": "8cc8791c7d43a8016c62f6b3fed94519e02d05ff76983a98101681e12b11be2b"
+          },
+          {
+            "path": "assets/index-CsL8Jdiy.js",
+            "kind": "js",
+            "bytes": 1514219,
+            "gzipBytes": 486232,
+            "sha256": "b1ba329a260b1b674da2fa0da777c0ef92f0322f759fe5c64e0b172d9900126c"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 1514219,
+            "gzipBytes": 486232
+          },
+          "css": {
+            "bytes": 81318,
+            "gzipBytes": 13236
+          }
+        }
+      },
+      "portal": {
+        "assets": [
+          {
+            "path": "assets/index-Bwv1n-1B.css",
+            "kind": "css",
+            "bytes": 20897,
+            "gzipBytes": 4916,
+            "sha256": "af4237c92ead1060aba9555b73aee212748a479887a908055b69ea0546b78135"
+          },
+          {
+            "path": "assets/index-DdGLzXjl.js",
+            "kind": "js",
+            "bytes": 248673,
+            "gzipBytes": 77808,
+            "sha256": "121de8d0d7afc3aa34830772387d2ce87d16cf8713f856892d0fd86212af230f"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 248673,
+            "gzipBytes": 77808
+          },
+          "css": {
+            "bytes": 20897,
+            "gzipBytes": 4916
+          }
+        }
+      },
+      "widget": {
+        "assets": [
+          {
+            "path": "lumina-widget.js",
+            "kind": "js",
+            "bytes": 470547,
+            "gzipBytes": 143978,
+            "sha256": "49dd1b56eb2649b582ef1174cbc66348332fdef12ada331af067b3fa4d2681e4"
+          },
+          {
+            "path": "widget.css",
+            "kind": "css",
+            "bytes": 10819,
+            "gzipBytes": 3069,
+            "sha256": "59e6e3ae3f978ff8213cde44b0dec8ddbd27227b472a293f1ad794353407c253"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 470547,
+            "gzipBytes": 143978
+          },
+          "css": {
+            "bytes": 10819,
+            "gzipBytes": 3069
+          }
+        }
+      }
+    }
+  },
+  "candidate": {
+    "revision": "fcba36f9402bd915bfddf62d78766fdc567e13c6",
+    "tree": "26830f918bbb1c17027b991e74ed89bb00e52078",
+    "trackedDirty": false,
+    "lockSha256": "df0f44153bebcee82671330da2de4431796a32b374eb221c38386cd9acf67120",
+    "vite": "8.2.2",
+    "artifacts": {
+      "dashboard": {
+        "assets": [
+          {
+            "path": "assets/index-BUET_HBl.css",
+            "kind": "css",
+            "bytes": 81407,
+            "gzipBytes": 13588,
+            "sha256": "639d127ca3f5e7633aacefc966f252b1b2ebb5b0a4964030a71e22ea5bcd6d8d"
+          },
+          {
+            "path": "assets/index-DNu1g_cJ.js",
+            "kind": "js",
+            "bytes": 1622058,
+            "gzipBytes": 521976,
+            "sha256": "d3e3deca2b25f28a69e6180c6d8203ab4d4c3bf64a9bd41add6ff5c9788e0eaf"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 1622058,
+            "gzipBytes": 521976
+          },
+          "css": {
+            "bytes": 81407,
+            "gzipBytes": 13588
+          }
+        }
+      },
+      "portal": {
+        "assets": [
+          {
+            "path": "assets/index-CCqYnce6.js",
+            "kind": "js",
+            "bytes": 309600,
+            "gzipBytes": 97197,
+            "sha256": "79e28da3563aac886a97f72869454a7f8f58322a179d5d043bfb548a211633e7"
+          },
+          {
+            "path": "assets/index-CxEdba55.css",
+            "kind": "css",
+            "bytes": 22737,
+            "gzipBytes": 5430,
+            "sha256": "ae2a006531bdaf6d25bafd7e53af5648d4eef691a50daeed181a95124beb7101"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 309600,
+            "gzipBytes": 97197
+          },
+          "css": {
+            "bytes": 22737,
+            "gzipBytes": 5430
+          }
+        }
+      },
+      "widget": {
+        "assets": [
+          {
+            "path": "lumina-widget.js",
+            "kind": "js",
+            "bytes": 510497,
+            "gzipBytes": 157150,
+            "sha256": "2b8564a21abbc920fc8f064bb3611e573fad89a376e8f8b880b9df6ea9447042"
+          },
+          {
+            "path": "widget.css",
+            "kind": "css",
+            "bytes": 10811,
+            "gzipBytes": 3048,
+            "sha256": "2e7c5c3e85b0f026569425ca8b03618742cf634f9ef871f48d9fa1268fa8f587"
+          }
+        ],
+        "totals": {
+          "js": {
+            "bytes": 510497,
+            "gzipBytes": 157150
+          },
+          "css": {
+            "bytes": 10811,
+            "gzipBytes": 3048
+          }
+        }
+      }
+    }
+  },
+  "comparison": {
+    "dashboard": {
+      "js": {
+        "bytesDelta": 107839,
+        "gzipBytesDelta": 35744,
+        "gzipPercentChange": 7.351223284358084
+      },
+      "css": {
+        "bytesDelta": 89,
+        "gzipBytesDelta": 352,
+        "gzipPercentChange": 2.659413720157147
+      }
+    },
+    "portal": {
+      "js": {
+        "bytesDelta": 60927,
+        "gzipBytesDelta": 19389,
+        "gzipPercentChange": 24.919031462060456
+      },
+      "css": {
+        "bytesDelta": 1840,
+        "gzipBytesDelta": 514,
+        "gzipPercentChange": 10.455655004068348
+      }
+    },
+    "widget": {
+      "js": {
+        "bytesDelta": 39950,
+        "gzipBytesDelta": 13172,
+        "gzipPercentChange": 9.148619928044562
+      },
+      "css": {
+        "bytesDelta": -8,
+        "gzipBytesDelta": -21,
+        "gzipPercentChange": -0.6842619745845552
+      }
+    }
+  },
+  "limitations": [
+    "Build outputs must be freshly generated from the stated revision; this tool does not run builds.",
+    "No numeric budget or startup/interaction/edge-runtime acceptance is inferred.",
+    "Different lockfiles represent actual baseline/candidate dependencies; inspect tool versions before attributing changes."
+  ]
+}
