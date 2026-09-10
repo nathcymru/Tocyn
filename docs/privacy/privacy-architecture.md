@@ -8,6 +8,8 @@ This page describes Tocyn's **technical privacy architecture** and the approved 
 
 Accordingly, the FidesLang sections below describe the **approved target architecture**, not a feature that deployers can rely on today.
 
+The accepted post-beta operator directions are likewise implementation pending. Planned drafts, attention state, notifications, linked work, contextual knowledge, feedback evidence and workspace preferences must use the same tenant/user-scoped storage and retention boundaries described here. They do not create a new access-control or residency authority.
+
 ## Privacy metadata is not access control
 
 Tocyn separates two concerns:
@@ -105,6 +107,8 @@ Report flaws involving privacy metadata exposure, unsafe orchestration or cross-
 - **M5.4** — privacy metadata and controls architectural milestone.
 
 Until those issues are completed and released, documents/examples should say **planned** rather than implying FidesLang is active.
+
+The same status language applies to ADR-0016 through ADR-0028: accepted direction is not implemented capability. In particular, durable drafts, activity, SLA/ownership state and linked operational context require issue-owned schema/API work, retention decisions and tenant-isolation evidence before they may be described as available.
 
 ## Operational guide
 

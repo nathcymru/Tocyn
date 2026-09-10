@@ -95,13 +95,15 @@ The repository currently contains:
 - an injectable email transport with Resend configuration;
 - Phase 1 application-enforced tenant ownership/isolation changes in source.
 
-The **human-led API/portal private beta is ready for the approved local-only
-synthetic testing boundary** as of 9 September 2026. See the [readiness report and
-accepted evidence](docs/private-beta-readiness.md). The original planning baseline
-of 21 November 2026 is preserved in the issue/Project history. Candidate
-`v0.4.0-beta.1` preparation is complete; no tag, prerelease or deployment has been
-created. Slack, support-email expansion and governed autonomous customer-backend
-actions remain later roadmap work.
+The **human-led API/portal private beta was accepted locally on 9 September 2026** at
+`049ea82a02571681f834bcd87d43253603edf71f` and formally published as
+`v0.4.0-beta.1` on 10 September 2026. See the [readiness report and accepted
+evidence](docs/private-beta-readiness.md). It used synthetic tenants and local mail
+capture; no remote application deployment occurred. Future `v0.4.0-beta.2` requires
+the Operator Workspace gate, including full SLA clocks/pause-resume, explicit
+waiting semantics and responsible-handler ownership/routing. The technical
+production gate remains separate. Slack, support-email expansion and governed
+autonomous customer-backend actions remain later roadmap work.
 
 The approved roadmap distinguishes **implemented source**, **beta/environment validation**, and **production readiness**. A feature appearing in an issue or architecture document does not mean it is already deployed.
 
@@ -208,6 +210,7 @@ Milestones describe architecture/capability completion. Releases are separate Gi
 - [Approved architectural roadmap](https://github.com/nathcymru/Tocyn/wiki/Approved-architectural-roadmap)
 - [Repository roadmap pointer](docs/roadmap.md)
 - [Architecture decision records](docs/adr/README.md)
+- [Post-beta master development baseline](docs/planning/post-beta-2026-09-10/README.md)
 
 ## Contributors
 

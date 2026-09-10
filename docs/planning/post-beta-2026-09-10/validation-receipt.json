@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-09-10",
+  "issueBodyReadback": "pass",
+  "nativeDependencyReadback": "pass",
+  "projectForecastReadback": "pass",
+  "historicalBaselineActualEffortReadback": "unchanged",
+  "milestoneMembership": "actual issue memberships used; summary counters not trusted",
+  "beta1": {
+    "tag": "v0.4.0-beta.1",
+    "target": "049ea82a02571681f834bcd87d43253603edf71f",
+    "publishedAt": "2026-09-10T12:56:21Z"
+  },
+  "requiredCI": "Exact final revision must pass before merge; final check/merge IDs recorded in #126 completion receipt",
+  "signedIntegration": "Verify GitHub-signed squash commit; final result recorded in #126 receipt",
+  "liveWiki": "Publish reviewed sources and verify byte equality before #126 closes",
+  "copilotReviewsRequested": 0,
+  "alignmentPR": "https://github.com/nathcymru/Tocyn/pull/163",
+  "completionReceipt": "https://github.com/nathcymru/Tocyn/issues/126"
+}

@@ -18,12 +18,13 @@ Do not interpret roadmap pages as claims that those capabilities are deployed.
 
 ## Recommended reading order
 
-1. [[System-architecture]]
+1. [[Post-beta-master-baseline]] and [[System-architecture]]
 2. [[Architecture-and-tenant-isolation]]
 3. [[Roadmap-and-releases]] and [[Approved-architectural-roadmap]]
 4. [[Channels-and-conversation-model]]
 5. [[AI-and-autonomous-operations]]
 6. [[PRIVACY_ARCHITECTURE]]
 7. [[Architecture-decision-records]]
+8. [Agent handover](https://github.com/nathcymru/Tocyn/blob/main/docs/planning/post-beta-2026-09-10/handover.md)
 
 For contribution/security/privacy policy, also read the repository `CONTRIBUTING.md`, `AGENTS.md`, `SECURITY.md` and `PRIVACY_POLICY.md`.

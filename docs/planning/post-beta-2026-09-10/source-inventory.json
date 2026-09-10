@@ -1,0 +1,450 @@
+{
+  "archives": {
+    "gap2": {
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10.zip",
+      "sha256": "99c24fc5ae6ef80c1922c38dd249c1b6cf7f22b5c4a8ee8edc35ff087e66f117"
+    },
+    "ux": {
+      "file": "tocyn-post-beta-ux-update-2026-09-10.zip",
+      "sha256": "0aa97130b559a6496715ea2fc7fed4a369e8df3bef3150e92133c75399e59426"
+    },
+    "product": {
+      "file": "tocyn-product-gap-change-package-2026-09-10.zip",
+      "sha256": "5067dea3778a015749e2ac0245420d8c0fdc16cf4b03875547ff8e916ce1c8cc"
+    }
+  },
+  "files": [
+    {
+      "id": "GAP2-F01",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/00-README-COORDINATING-OVERVIEW.md",
+      "sha256": "4854b5892cff95d47c96304a8d8fd00d2b14ef94e06b7bb5d5b9bfdd6d954b48",
+      "lineCount": 180,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F02",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/01-GAP-DISPOSITION-MATRIX.md",
+      "sha256": "621600a0b6fa4fe0f51cfafb63b1cd769354458f3782ece34df31f36c0978981",
+      "lineCount": 39,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F03",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/02-TECHNICAL-IMPLEMENTATION-PLAN.md",
+      "sha256": "c7a31046aad63f9d6fc350a683ea08bdeec3beb0c4ae2fe3089e4ac81ef2fcdd",
+      "lineCount": 659,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F04",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/03-ISSUE-PROJECT-MILESTONE-RELEASE-PLAN.md",
+      "sha256": "fe546fe20dbd71dd6b7d645e87b47aee2afdfe766c51fdd387fd79c0e16cb70a",
+      "lineCount": 423,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F05",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/04-HARDENING-SPRINT-H1.md",
+      "sha256": "295e47b41a51b729ed073f54253083caef39751c5b252903a8942a59b5685f99",
+      "lineCount": 113,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F06",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/07-EXISTING-ADR-DOCUMENTATION-WIKI-CHANGE-PLAN.md",
+      "sha256": "31a9fac18923f01b235e1d7b78c3706baffff63ccbed3c877d0469e127f65fb8",
+      "lineCount": 323,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F07",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/08-PROPOSED-ISSUE-BODIES.md",
+      "sha256": "d5cc01f6da3651eec134255ef11366b02b957f752256aa66a0c04fb8e53def9e",
+      "lineCount": 115,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F08",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/09-ACCEPTANCE-TEST-AND-EVIDENCE-MATRIX.md",
+      "sha256": "818b4135a23c45a92b2242106f877b46ee39dbaff6e5bafc4bb3a7ff7d6538ca",
+      "lineCount": 76,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F09",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/10-INTEGRATION-INSTRUCTIONS-FOR-FINAL-CHANGE-PACKAGE.md",
+      "sha256": "113af3e15dfad6187386de7cbf8b7d995aaaac6c27f48ba659939bd2214deb7a",
+      "lineCount": 150,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F10",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/11-SOURCE-AND-BASELINE-REGISTER.md",
+      "sha256": "59aae8c9c92530600a720624af13f5bab047f69937e8e844769e377a36905b3c",
+      "lineCount": 220,
+      "classification": "provenance/history"
+    },
+    {
+      "id": "GAP2-F11",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/MANIFEST.md",
+      "sha256": "ac91454f6f7ccaee15fcf08febfe1ec8b881832e3bc97030d5e6d085d2fdd614",
+      "lineCount": 20,
+      "classification": "provenance/history"
+    },
+    {
+      "id": "GAP2-F12",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/adr-drafts/ADR-0016-operational-observability-and-service-level-objectives.md",
+      "sha256": "adff5d4c412877c3403a2cd59b52953e7de51c86c0139759cf06c0ef3048b675",
+      "lineCount": 127,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "GAP2-F13",
+      "archive": "gap2",
+      "file": "tocyn-gap-analysis-2-change-package-2026-09-10/adr-drafts/ADR-0017-deployment-residency-and-jurisdiction-boundaries.md",
+      "sha256": "5d59b8459c139645840aeeb8d99a12b830038ea95ba4b270a9dff21dc82972cc",
+      "lineCount": 137,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F01",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/01-current-state-and-beta-review.md",
+      "sha256": "d5477f8e2cbccb39328d54f9729fdb09ae332c240a67d27e60148708cb62c055",
+      "lineCount": 139,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F02",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/02-ux-law-gap-register.md",
+      "sha256": "031d9dc601bded5201f6bbe06a64828602074bde97ba6df10213cf82425fb35b",
+      "lineCount": 39,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F03",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/03-competitive-gap-register.md",
+      "sha256": "fa2b6abc6ba9e266ca98f8b803f2e6d1cf16168291a1ea76b31c14270677438f",
+      "lineCount": 49,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F04",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/04-cognitive-accessibility-gap-register.md",
+      "sha256": "18ec561b19e0467eab0ebe8b4c1eab6b781eacf58c50265febcfd7a85c1b6520",
+      "lineCount": 47,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F05",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/05-target-operator-workspace-architecture.md",
+      "sha256": "65fe1abc970659978b5c55a0f4900297b584413242f5cd89babaf8501ef80f85",
+      "lineCount": 562,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F06",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/06-project-plan-change-set.md",
+      "sha256": "91c53e5c20f512807144bdb1bd3faf8be63cdadfc7f6cd7bec1411754ee5be69",
+      "lineCount": 228,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F07",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/07-existing-issue-amendments.md",
+      "sha256": "bc390cfe995534b48dee302a56affa7652521addea12b4453e34680d42d0bb22",
+      "lineCount": 215,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F08",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/08-new-issue-proposals.md",
+      "sha256": "42783752525040b51da1fad6e497d0fcf970ecb98733b49330b1ead12273b82d",
+      "lineCount": 581,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F09",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/09-adr-and-documentation-change-set.md",
+      "sha256": "48a972838eee973a17c039e06d377fae5690cd35029f07c20ee9f13263c5765b",
+      "lineCount": 282,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F10",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/10-validation-and-release-gates.md",
+      "sha256": "6a9ed8f7437677eb20d01de6148a62e3246d5702ff62c1c7ca49a631d873b5e2",
+      "lineCount": 163,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F11",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/11-traceability-matrix.md",
+      "sha256": "26424bbc45cb3eb7789a913b98e97a0bc4bece3af65e95968b4b5b30e043da30",
+      "lineCount": 95,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F12",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/MANIFEST.md",
+      "sha256": "8ae6960fda496d4a0d384389101df5e221cdd0bcdf5d9e967e298b49e0e17717",
+      "lineCount": 77,
+      "classification": "provenance/history"
+    },
+    {
+      "id": "UX-F13",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/README.md",
+      "sha256": "e5ba4f1a4490b7164b9af0fcd6ca5a23b5a008d648ef446cae581c9f24a029ed",
+      "lineCount": 90,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F14",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/REFERENCES.md",
+      "sha256": "08d4b36c0f03cd6ca2b63b9353fce85658f809568f66f6b203b18c614f1b05d3",
+      "lineCount": 100,
+      "classification": "provenance/history"
+    },
+    {
+      "id": "UX-F15",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/adrs/ADR-0016-operator-workspace-continuity.md",
+      "sha256": "e37ab147181523716a81e4b50e86a9e74320caed9cb151856487196b32072b34",
+      "lineCount": 55,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F16",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/adrs/ADR-0017-durable-operator-attention-state.md",
+      "sha256": "1cdc30523c1354efa427c2c96ed6a95472bb16c6651404f57b81f3f83379871e",
+      "lineCount": 53,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F17",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/adrs/ADR-0018-cognitive-accessibility-and-attention-control.md",
+      "sha256": "925beb5395b533f5050f995172fe5a59fba12f88df06ce69b98faa8799285da5",
+      "lineCount": 52,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "UX-F18",
+      "archive": "ux",
+      "file": "tocyn-post-beta-ux-update-2026-09-10/adrs/ADR-0019-operator-ai-augments-human-workflows.md",
+      "sha256": "1eca443039cac49ec1eb278c1b514ff48f6efc5375bcd4420a573962448caeed",
+      "lineCount": 50,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F01",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/00-OVERVIEW.md",
+      "sha256": "d1019c483646a2c4f89d6261d3ab9a4bee0adb60532275660f741cfb39b0efac",
+      "lineCount": 82,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F02",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/01-PRODUCT-GAP-REGISTER.md",
+      "sha256": "10aa03ddeb842e2f0eaeee5d08618de87f739c935ff8d4ba6ba872cd1b2c30c7",
+      "lineCount": 188,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F03",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/02-ROADMAP-PROJECT-MILESTONE-PLAN.md",
+      "sha256": "fd33e9e7feaf04345496b31ab1474040a1724e8fbaf711e7a3d298188679bccb",
+      "lineCount": 172,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F04",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/03-PROPOSED-GITHUB-ISSUES.md",
+      "sha256": "f6a45549a931be3de4577d03300e5a931e8198f48f9bbda29579f1826857f69c",
+      "lineCount": 948,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F05",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/04-EXISTING-ISSUE-CHANGE-MAP.md",
+      "sha256": "e330afc415f3a3b5388ca2f0caa76a431e1bd292104846154774b75fb2223779",
+      "lineCount": 62,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F06",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/05-TECHNICAL-IMPLEMENTATION-PLAN.md",
+      "sha256": "ccf7bbe8ae9c4430d92c24192b7aa6bd75a88fe614ffb3d3f5fd44409bd27a48",
+      "lineCount": 570,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F07",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/06-SPRINT-RELEASE-DELIVERY-PLAN.md",
+      "sha256": "1fbaae851f39e8a2bec58fbd64486beece8e7a205127f625868228687790be7d",
+      "lineCount": 141,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F08",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/07-DOCUMENTATION-WIKI-CHANGE-MAP.md",
+      "sha256": "9cfe4f33879906250409e6ac1f512fd0bca33c9615d423352fb3877616da9095",
+      "lineCount": 184,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F09",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/08-HANDOFF-APPLICATION-ORDER.md",
+      "sha256": "cffa38117c86d8e37834ec263211b16ea3fa240cca5a15e68dcf351ddd101cdc",
+      "lineCount": 121,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F10",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/MANIFEST.md",
+      "sha256": "c097d8681516351666400afb6751506d840b3f92cad8eea95d90708d55ca764f",
+      "lineCount": 33,
+      "classification": "provenance/history"
+    },
+    {
+      "id": "PRODUCT-F11",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/adrs/ADR-0016-helpdesk-product-boundary.md",
+      "sha256": "31d643a7b1939fa686d6441a207c6b0ad5ab161a8fc5e2078e68fe6b1fc1fcad",
+      "lineCount": 55,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F12",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/adrs/ADR-0017-realtime-support-communications.md",
+      "sha256": "470e4716b76218fca8c7caf5d922447ecb8bf46b28a26e8ee5c11ac0f31ce669",
+      "lineCount": 55,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F13",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/adrs/ADR-0018-governed-declarative-operator-applets.md",
+      "sha256": "f5f699e9586b79cf2a752abfa10200a475aba0395d5d5082a3f5de251ba6a5c5",
+      "lineCount": 51,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F14",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/adrs/ADR-0019-tenant-knowledge-grounding-and-document-ingestion.md",
+      "sha256": "ffa7c3077ab33a0ee96be767fe8b85e0bfb5876a2bf135d31698c5d663e9d5fa",
+      "lineCount": 46,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F15",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/adrs/ADR-0020-cloudflare-access-workforce-identity.md",
+      "sha256": "13ad8d7edbd3f03bf10c5edf737db7dd922b876494f428ac7d2605a56ab2776a",
+      "lineCount": 44,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F16",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/adrs/ADR-0021-linked-work-and-problem-management.md",
+      "sha256": "15ab4bf8912c7d9e9c92e1c0631e28e40f0e9f4d9010e8ad31a9e5e518add5fa",
+      "lineCount": 43,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F17",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/adrs/ADR-0022-bounded-service-feedback-and-operational-reporting.md",
+      "sha256": "7b70f6a22f2eef92bdb6270214d1cdbda6fe261aeddd207eb71bab599266cc8c",
+      "lineCount": 51,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F18",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/references/EXTERNAL-TECHNICAL-REFERENCES.md",
+      "sha256": "cd82f277a794524f8595ce58992fad3ba4a942a5038f9c07a5c4c2dc59f4d3a2",
+      "lineCount": 42,
+      "classification": "provenance/history"
+    },
+    {
+      "id": "PRODUCT-F19",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/references/REPOSITORY-BASELINE.md",
+      "sha256": "b6253d88f9c87525083a3b89dfdc6c2df7fae5499a50369eec78b617cd0d532f",
+      "lineCount": 71,
+      "classification": "provenance/history"
+    },
+    {
+      "id": "PRODUCT-F20",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/wiki-drafts/Advanced-helpdesk-operations.md",
+      "sha256": "5d5444e7d5140ee53987b69f41f69bbbb4a373607271bbb33e4aae99b78052f4",
+      "lineCount": 23,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F21",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/wiki-drafts/Product-scope-boundaries.md",
+      "sha256": "e5e6cf79c0bf08089010e53221817ea6c054b7fac6ed36e8e184e06115c812eb",
+      "lineCount": 29,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F22",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/wiki-drafts/Realtime-support-communications.md",
+      "sha256": "9ed7c86b7a7954b5dd1e5bab35b135ec71673b2240cc325f3296bf6d1c17c72d",
+      "lineCount": 20,
+      "classification": "reviewed requirements/design/evidence"
+    },
+    {
+      "id": "PRODUCT-F23",
+      "archive": "product",
+      "file": "tocyn-product-gap-change-package-2026-09-10/wiki-drafts/Tenant-knowledge-and-AI.md",
+      "sha256": "673204258b2d2d8bf8e8ae9eac186793fa263a3cabc7f104f86b8768fc7aa591",
+      "lineCount": 15,
+      "classification": "reviewed requirements/design/evidence"
+    }
+  ]
+}

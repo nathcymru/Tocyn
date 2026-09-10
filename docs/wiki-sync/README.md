@@ -1,6 +1,6 @@
 # GitHub Wiki synchronization bundle
 
-This directory contains reviewed, repository-backed source for the Tocyn GitHub Wiki. It exists because the GitHub Wiki is a separate Git repository and the current ChatGPT GitHub connector cannot mutate it directly.
+This directory contains reviewed, repository-backed source for the Tocyn GitHub Wiki. The GitHub Wiki is a separate Git repository. This alignment read it directly using the authenticated Git route; reviewed source publication and byte comparison are required before #126 acceptance.
 
 ## Publication rule
 
@@ -23,8 +23,8 @@ For pages in this directory:
 - `Architecture-and-tenant-isolation.md`
 - `Channels-and-conversation-model.md`
 - `AI-and-autonomous-operations.md`
-- `Privacy-architecture.md`
-- `GDPR-compliance-user-guide.md`
+- `PRIVACY_ARCHITECTURE.md`
+- `GDPR_COMPLIANCE_USER_GUIDE.md`
 - `Roadmap-and-releases.md`
 - `Architecture-decision-records-addendum.md`
 
@@ -43,3 +43,5 @@ The following known pages were created/updated during the approved backlog migra
 - `ADR-0011-Architectural-milestones-and-private-beta`
 
 This bundle supplements/reconciles them; it does not authorise destroying their historical evidence.
+
+The post-beta master page and ADR-0016–0028 are part of this bundle. Historical roadmap copies are marked superseded and are excluded from active navigation. `README.md` is repository publication guidance, not a live Wiki page.

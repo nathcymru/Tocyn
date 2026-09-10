@@ -1,0 +1,1756 @@
+{
+  "anchor": "2026-09-11",
+  "nodes": [
+    {
+      "number": 108,
+      "alias": "#108",
+      "title": "Patch the local integration image dependency advisory",
+      "done": true,
+      "effort": 0,
+      "dependencies": [],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": null,
+      "new": false
+    },
+    {
+      "number": 106,
+      "alias": "#106",
+      "title": "Patch the development test-runner security advisory",
+      "done": true,
+      "effort": 0,
+      "dependencies": [],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": null,
+      "new": false
+    },
+    {
+      "number": 99,
+      "alias": "#99",
+      "title": "Restore badges and distinguish target architecture from delivery status",
+      "done": true,
+      "effort": 0,
+      "dependencies": [],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 96,
+      "alias": "#96",
+      "title": "Complete repository, architecture and privacy documentation",
+      "done": true,
+      "effort": 0,
+      "dependencies": [],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 93,
+      "alias": "#93",
+      "title": "Enforce private-beta resource guardrails",
+      "done": true,
+      "effort": 8.0,
+      "dependencies": [],
+      "baselineStart": "2026-10-27",
+      "baselineTarget": "2026-10-31",
+      "actualCompletion": "2026-09-09",
+      "progress": 100,
+      "milestone": 7,
+      "new": false
+    },
+    {
+      "number": 92,
+      "alias": "#92",
+      "title": "Attach bounded telemetry to programmatic support intake",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        60,
+        91
+      ],
+      "baselineStart": "2027-03-08",
+      "baselineTarget": "2027-03-15",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 10,
+      "new": false
+    },
+    {
+      "number": 91,
+      "alias": "#91",
+      "title": "Recover accepted payloads through durable storage journals",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        50,
+        59
+      ],
+      "baselineStart": "2026-10-15",
+      "baselineTarget": "2026-10-26",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 10,
+      "new": false
+    },
+    {
+      "number": 90,
+      "alias": "#90",
+      "title": "Expose owner and tenant Cost & Capacity controls",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        50,
+        64,
+        66
+      ],
+      "baselineStart": "2027-01-09",
+      "baselineTarget": "2027-01-20",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 6,
+      "new": false
+    },
+    {
+      "number": 89,
+      "alias": "#89",
+      "title": "Enable verified canonical support-email conversations",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        57,
+        87,
+        88
+      ],
+      "baselineStart": "2027-01-25",
+      "baselineTarget": "2027-02-04",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 36,
+      "new": false
+    },
+    {
+      "number": 88,
+      "alias": "#88",
+      "title": "Dispatch transactional outbound intents reliably",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        63,
+        64,
+        87
+      ],
+      "baselineStart": "2026-12-29",
+      "baselineTarget": "2027-01-08",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 10,
+      "new": false
+    },
+    {
+      "number": 87,
+      "alias": "#87",
+      "title": "Normalise provider events into reliable conversation state",
+      "done": false,
+      "effort": 32.0,
+      "dependencies": [
+        51,
+        59,
+        91
+      ],
+      "baselineStart": "2026-12-11",
+      "baselineTarget": "2026-12-28",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 9,
+      "new": false
+    },
+    {
+      "number": 86,
+      "alias": "#86",
+      "title": "Expose authorised deterministic self-service actions",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        61,
+        81,
+        83
+      ],
+      "baselineStart": "2027-06-08",
+      "baselineTarget": "2027-06-18",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 31,
+      "new": false
+    },
+    {
+      "number": 85,
+      "alias": "#85",
+      "title": "Report operational performance and quality metrics",
+      "done": false,
+      "effort": 16,
+      "dependencies": [
+        73,
+        84,
+        162
+      ],
+      "baselineStart": "2027-07-06",
+      "baselineTarget": "2027-07-16",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 25,
+      "new": false
+    },
+    {
+      "number": 84,
+      "alias": "#84",
+      "title": "Review agent interactions through auditable QA workflows",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        63,
+        82
+      ],
+      "baselineStart": "2027-06-24",
+      "baselineTarget": "2027-07-05",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 24,
+      "new": false
+    },
+    {
+      "number": 83,
+      "alias": "#83",
+      "title": "Transfer live agentic work safely to human operators",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        70,
+        80,
+        81
+      ],
+      "baselineStart": "2027-05-27",
+      "baselineTarget": "2027-06-07",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 22,
+      "new": false
+    },
+    {
+      "number": 82,
+      "alias": "#82",
+      "title": "Resolve reference-service tickets through bounded autonomous workflows",
+      "done": false,
+      "effort": 32.0,
+      "dependencies": [
+        76,
+        80,
+        81,
+        83
+      ],
+      "baselineStart": "2027-06-08",
+      "baselineTarget": "2027-06-23",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 21,
+      "new": false
+    },
+    {
+      "number": 81,
+      "alias": "#81",
+      "title": "Bind human approvals to specific proposed actions",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        80
+      ],
+      "baselineStart": "2027-05-15",
+      "baselineTarget": "2027-05-26",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 20,
+      "new": false
+    },
+    {
+      "number": 80,
+      "alias": "#80",
+      "title": "Validate governed actions against an isolated reference API",
+      "done": false,
+      "effort": 40.0,
+      "dependencies": [
+        63,
+        64,
+        79
+      ],
+      "baselineStart": "2027-04-26",
+      "baselineTarget": "2027-05-14",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 20,
+      "new": false
+    },
+    {
+      "number": 79,
+      "alias": "#79",
+      "title": "Enforce granular human and agent capabilities",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        19,
+        63
+      ],
+      "baselineStart": "2027-04-09",
+      "baselineTarget": "2027-04-21",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 23,
+      "new": false
+    },
+    {
+      "number": 78,
+      "alias": "#78",
+      "title": "Author and publish governed diagnostic workflows visually",
+      "done": false,
+      "effort": 32.0,
+      "dependencies": [
+        66,
+        79,
+        80,
+        81,
+        82
+      ],
+      "baselineStart": "2027-06-24",
+      "baselineTarget": "2027-07-09",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 27,
+      "new": false
+    },
+    {
+      "number": 77,
+      "alias": "#77",
+      "title": "Expand the operator copilot with translation and runbooks",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        68,
+        76,
+        152
+      ],
+      "baselineStart": "2027-05-19",
+      "baselineTarget": "2027-05-28",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 19,
+      "new": false
+    },
+    {
+      "number": 76,
+      "alias": "#76",
+      "title": "Add bounded triage and conversation summarisation",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        75,
+        152
+      ],
+      "baselineStart": "2027-05-04",
+      "baselineTarget": "2027-05-18",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 18,
+      "new": false
+    },
+    {
+      "number": 75,
+      "alias": "#75",
+      "title": "Enrich intake with authorised operational context",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        64,
+        79
+      ],
+      "baselineStart": "2027-04-22",
+      "baselineTarget": "2027-05-03",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 17,
+      "new": false
+    },
+    {
+      "number": 74,
+      "alias": "#74",
+      "title": "Preserve conversations across verified channel changes",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        53,
+        61,
+        87
+      ],
+      "baselineStart": "2027-02-27",
+      "baselineTarget": "2027-03-10",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 30,
+      "new": false
+    },
+    {
+      "number": 73,
+      "alias": "#73",
+      "title": "Expose SLA progress and responsible handlers",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        61,
+        63,
+        136,
+        162
+      ],
+      "baselineStart": "2027-02-16",
+      "baselineTarget": "2027-02-26",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 29,
+      "new": false
+    },
+    {
+      "number": 72,
+      "alias": "#72",
+      "title": "Split and merge tickets without losing context",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        59,
+        63,
+        70
+      ],
+      "baselineStart": "2027-02-24",
+      "baselineTarget": "2027-03-06",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 15,
+      "new": false
+    },
+    {
+      "number": 71,
+      "alias": "#71",
+      "title": "Enable keyboard-first workspace navigation",
+      "done": false,
+      "effort": 12.0,
+      "dependencies": [
+        62,
+        66,
+        128
+      ],
+      "baselineStart": "2027-02-05",
+      "baselineTarget": "2027-02-11",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": false
+    },
+    {
+      "number": 70,
+      "alias": "#70",
+      "title": "Add typing awareness and private colleague collaboration",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        63,
+        68
+      ],
+      "baselineStart": "2027-02-11",
+      "baselineTarget": "2027-02-23",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 15,
+      "new": false
+    },
+    {
+      "number": 69,
+      "alias": "#69",
+      "title": "Add reusable responses and safe operator macros",
+      "done": false,
+      "effort": 12.0,
+      "dependencies": [
+        68
+      ],
+      "baselineStart": "2027-02-10",
+      "baselineTarget": "2027-02-15",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 14,
+      "new": false
+    },
+    {
+      "number": 68,
+      "alias": "#68",
+      "title": "Add a rich conversation composer",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        48,
+        66,
+        129
+      ],
+      "baselineStart": "2027-01-29",
+      "baselineTarget": "2027-02-09",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 14,
+      "new": false
+    },
+    {
+      "number": 67,
+      "alias": "#67",
+      "title": "Package isolated helpdesk Web Components",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        48,
+        66
+      ],
+      "baselineStart": "2027-01-01",
+      "baselineTarget": "2027-01-12",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 16,
+      "new": false
+    },
+    {
+      "number": 66,
+      "alias": "#66",
+      "title": "Apply tenant themes through standard CSS variables",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        48
+      ],
+      "baselineStart": "2026-12-24",
+      "baselineTarget": "2026-12-31",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 16,
+      "new": false
+    },
+    {
+      "number": 65,
+      "alias": "#65",
+      "title": "Rehearse and publish the human-led private beta",
+      "done": true,
+      "effort": 16.0,
+      "dependencies": [],
+      "baselineStart": "2026-11-13",
+      "baselineTarget": "2026-11-21",
+      "actualCompletion": "2026-09-09",
+      "progress": 100,
+      "milestone": 7,
+      "new": false
+    },
+    {
+      "number": 64,
+      "alias": "#64",
+      "title": "Enforce resource budgets across active application paths",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        50,
+        60,
+        93,
+        159
+      ],
+      "baselineStart": "2026-11-06",
+      "baselineTarget": "2026-11-16",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 6,
+      "new": false
+    },
+    {
+      "number": 63,
+      "alias": "#63",
+      "title": "Record attributable ticket and conversation audit events",
+      "done": true,
+      "effort": 16.0,
+      "dependencies": [],
+      "baselineStart": "2026-10-23",
+      "baselineTarget": "2026-10-30",
+      "actualCompletion": "2026-09-09",
+      "progress": 100,
+      "milestone": 9,
+      "new": false
+    },
+    {
+      "number": 62,
+      "alias": "#62",
+      "title": "Validate human handling of canonical ticket intake",
+      "done": true,
+      "effort": 12.0,
+      "dependencies": [],
+      "baselineStart": "2026-11-02",
+      "baselineTarget": "2026-11-07",
+      "actualCompletion": "2026-09-09",
+      "progress": 100,
+      "milestone": 11,
+      "new": false
+    },
+    {
+      "number": 61,
+      "alias": "#61",
+      "title": "Validate authenticated portal conversations end to end",
+      "done": true,
+      "effort": 12.0,
+      "dependencies": [],
+      "baselineStart": "2026-10-31",
+      "baselineTarget": "2026-11-05",
+      "actualCompletion": "2026-09-09",
+      "progress": 100,
+      "milestone": 28,
+      "new": false
+    },
+    {
+      "number": 60,
+      "alias": "#60",
+      "title": "Make API and portal mutations validated and retry-safe",
+      "done": true,
+      "effort": 16.0,
+      "dependencies": [],
+      "baselineStart": "2026-10-15",
+      "baselineTarget": "2026-10-22",
+      "actualCompletion": "2026-09-09",
+      "progress": 100,
+      "milestone": 10,
+      "new": false
+    },
+    {
+      "number": 59,
+      "alias": "#59",
+      "title": "Map API and portal intake onto canonical conversation contracts",
+      "done": true,
+      "effort": 16.0,
+      "dependencies": [],
+      "baselineStart": "2026-10-07",
+      "baselineTarget": "2026-10-14",
+      "actualCompletion": "2026-09-09",
+      "progress": 100,
+      "milestone": 9,
+      "new": false
+    },
+    {
+      "number": 58,
+      "alias": "#58",
+      "title": "Provision isolated test tenants reproducibly",
+      "done": true,
+      "effort": 12.0,
+      "dependencies": [],
+      "baselineStart": "2026-09-23",
+      "baselineTarget": "2026-09-28",
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": 9,
+      "new": false
+    },
+    {
+      "number": 57,
+      "alias": "#57",
+      "title": "Establish isolated preview and beta deployments",
+      "done": true,
+      "effort": 24.0,
+      "dependencies": [],
+      "baselineStart": "2026-09-11",
+      "baselineTarget": "2026-09-22",
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": 7,
+      "new": false
+    },
+    {
+      "number": 56,
+      "alias": "#56",
+      "title": "Implement tenant-owned Telegram support messaging",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        66,
+        87,
+        88
+      ],
+      "baselineStart": "2027-04-01",
+      "baselineTarget": "2027-04-08",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 33,
+      "new": false
+    },
+    {
+      "number": 55,
+      "alias": "#55",
+      "title": "Implement tenant-owned WhatsApp messaging",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        66,
+        87,
+        88
+      ],
+      "baselineStart": "2027-03-19",
+      "baselineTarget": "2027-04-03",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 32,
+      "new": false
+    },
+    {
+      "number": 54,
+      "alias": "#54",
+      "title": "Implement tenant-owned Microsoft Teams support channels",
+      "done": false,
+      "effort": 32.0,
+      "dependencies": [
+        66,
+        87,
+        88
+      ],
+      "baselineStart": "2027-03-16",
+      "baselineTarget": "2027-03-31",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 35,
+      "new": false
+    },
+    {
+      "number": 53,
+      "alias": "#53",
+      "title": "Implement tenant-owned Slack support channels",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        66,
+        87,
+        88
+      ],
+      "baselineStart": "2027-01-13",
+      "baselineTarget": "2027-01-23",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 34,
+      "new": false
+    },
+    {
+      "number": 52,
+      "alias": "#52",
+      "title": "Deliver signed tenant webhook subscriptions reliably",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        50,
+        64,
+        88
+      ],
+      "baselineStart": "2027-03-11",
+      "baselineTarget": "2027-03-18",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 10,
+      "new": false
+    },
+    {
+      "number": 51,
+      "alias": "#51",
+      "title": "Implement authenticated durable webhook ingress",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        50,
+        64,
+        91
+      ],
+      "baselineStart": "2026-11-16",
+      "baselineTarget": "2026-11-28",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 10,
+      "new": false
+    },
+    {
+      "number": 50,
+      "alias": "#50",
+      "title": "Define enforceable cost policies and resource budgets",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [],
+      "baselineStart": "2026-09-08",
+      "baselineTarget": "2026-09-15",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 6,
+      "new": false
+    },
+    {
+      "number": 49,
+      "alias": "#49",
+      "title": "Track delivery of the omnichannel architecture",
+      "done": false,
+      "effort": 2.0,
+      "dependencies": [
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        74,
+        89,
+        90
+      ],
+      "baselineStart": "2027-04-09",
+      "baselineTarget": "2027-04-09",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": null,
+      "new": false
+    },
+    {
+      "number": 48,
+      "alias": "#48",
+      "title": "Establish shared headless primitives for standalone Tocyn",
+      "done": false,
+      "effort": 40.0,
+      "dependencies": [
+        127
+      ],
+      "baselineStart": "2026-12-03",
+      "baselineTarget": "2026-12-23",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 16,
+      "new": false
+    },
+    {
+      "number": 45,
+      "alias": "#45",
+      "title": "Evaluate deferred major dependency and Actions upgrades",
+      "done": false,
+      "effort": 8.0,
+      "dependencies": [
+        12
+      ],
+      "baselineStart": "2026-11-30",
+      "baselineTarget": "2026-12-02",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 44,
+      "alias": "#44",
+      "title": "Retire inactive services while preserving regression coverage",
+      "done": false,
+      "effort": 8.0,
+      "dependencies": [
+        14
+      ],
+      "baselineStart": "2026-11-26",
+      "baselineTarget": "2026-11-30",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 42,
+      "alias": "#42",
+      "title": "Validate production cutover and rollback readiness",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        65,
+        159,
+        160
+      ],
+      "baselineStart": "2026-12-03",
+      "baselineTarget": "2026-12-10",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 8,
+      "new": false
+    },
+    {
+      "number": 22,
+      "alias": "#22",
+      "title": "Complete remaining repository launch administration",
+      "done": false,
+      "effort": 6.0,
+      "dependencies": [
+        65
+      ],
+      "baselineStart": "2026-12-01",
+      "baselineTarget": "2026-12-03",
+      "actualCompletion": null,
+      "progress": null,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 21,
+      "alias": "#21",
+      "title": "Validate accessibility of core operator and portal workflows",
+      "done": true,
+      "effort": 12.0,
+      "dependencies": [],
+      "baselineStart": "2026-11-07",
+      "baselineTarget": "2026-11-13",
+      "actualCompletion": "2026-09-09",
+      "progress": 100,
+      "milestone": 13,
+      "new": false
+    },
+    {
+      "number": 20,
+      "alias": "#20",
+      "title": "Verify reproducible local contributor setup",
+      "done": true,
+      "effort": 8.0,
+      "dependencies": [],
+      "baselineStart": "2026-09-08",
+      "baselineTarget": "2026-09-10",
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 19,
+      "alias": "#19",
+      "title": "Complete tenant-isolation acceptance coverage",
+      "done": true,
+      "effort": 16.0,
+      "dependencies": [],
+      "baselineStart": "2026-09-29",
+      "baselineTarget": "2026-10-06",
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": 9,
+      "new": false
+    },
+    {
+      "number": 18,
+      "alias": "#18",
+      "title": "Migrate transactional mail to Cloudflare-native delivery",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        57
+      ],
+      "baselineStart": "2027-01-21",
+      "baselineTarget": "2027-01-28",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 12,
+      "new": false
+    },
+    {
+      "number": 17,
+      "alias": "#17",
+      "title": "Complete FidesLang coverage and optional user controls",
+      "done": false,
+      "effort": 24.0,
+      "dependencies": [
+        16
+      ],
+      "baselineStart": "2027-04-13",
+      "baselineTarget": "2027-04-24",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 26,
+      "new": false
+    },
+    {
+      "number": 16,
+      "alias": "#16",
+      "title": "Establish measurable FidesLang coverage",
+      "done": false,
+      "effort": 16.0,
+      "dependencies": [
+        59,
+        91
+      ],
+      "baselineStart": "2027-04-05",
+      "baselineTarget": "2027-04-12",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 26,
+      "new": false
+    },
+    {
+      "number": 15,
+      "alias": "#15",
+      "title": "Audit codebase health and test coverage",
+      "done": true,
+      "effort": 0,
+      "dependencies": [],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 14,
+      "alias": "#14",
+      "title": "Standardise repository formatting and lint conventions",
+      "done": false,
+      "effort": 8.0,
+      "dependencies": [],
+      "baselineStart": "2026-11-21",
+      "baselineTarget": "2026-11-25",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 13,
+      "alias": "#13",
+      "title": "Review and remediate codebase security vulnerabilities",
+      "done": true,
+      "effort": 0,
+      "dependencies": [],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": "2026-09-08",
+      "progress": 100,
+      "milestone": 23,
+      "new": false
+    },
+    {
+      "number": 12,
+      "alias": "#12",
+      "title": "Verify required checks on dependency-only pull requests",
+      "done": false,
+      "effort": 8.0,
+      "dependencies": [],
+      "baselineStart": "2026-09-16",
+      "baselineTarget": "2026-09-18",
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 5,
+      "new": false
+    },
+    {
+      "number": 127,
+      "alias": "NEW-UX-01",
+      "title": "Define the post-beta operator workspace interaction contract",
+      "done": false,
+      "effort": 12,
+      "dependencies": [
+        62
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 37,
+      "new": true
+    },
+    {
+      "number": 128,
+      "alias": "NEW-UX-02",
+      "title": "Build the persistent progressive operator workspace",
+      "done": false,
+      "effort": 32,
+      "dependencies": [
+        127,
+        129,
+        130,
+        48,
+        66
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": true
+    },
+    {
+      "number": 129,
+      "alias": "NEW-UX-03",
+      "title": "Persist operator drafts, selection and workspace continuity",
+      "done": false,
+      "effort": 20,
+      "dependencies": [
+        127,
+        60,
+        63,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 37,
+      "new": true
+    },
+    {
+      "number": 130,
+      "alias": "NEW-UX-04",
+      "title": "Add task-based work queues and snooze/resurface",
+      "done": false,
+      "effort": 24,
+      "dependencies": [
+        129,
+        136,
+        73,
+        64
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 37,
+      "new": true
+    },
+    {
+      "number": 131,
+      "alias": "NEW-UX-05",
+      "title": "Unify global search and scoped inbox filtering",
+      "done": false,
+      "effort": 12,
+      "dependencies": [
+        128,
+        71
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": true
+    },
+    {
+      "number": 132,
+      "alias": "NEW-UX-06",
+      "title": "Add cognitive-accessibility workspace preferences and focus mode",
+      "done": false,
+      "effort": 16,
+      "dependencies": [
+        128,
+        66
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": true
+    },
+    {
+      "number": 133,
+      "alias": "NEW-UX-07",
+      "title": "Replace transient ticket toasts with durable operator activity",
+      "done": false,
+      "effort": 16,
+      "dependencies": [
+        128,
+        63,
+        70,
+        66
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 15,
+      "new": true
+    },
+    {
+      "number": 134,
+      "alias": "NEW-UX-08",
+      "title": "Add customer context and contextual support panels",
+      "done": false,
+      "effort": 20,
+      "dependencies": [
+        128,
+        132,
+        63
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": true
+    },
+    {
+      "number": 135,
+      "alias": "NEW-UX-09",
+      "title": "Add configurable Table view and safe bulk ticket actions",
+      "done": false,
+      "effort": 16,
+      "dependencies": [
+        128,
+        60,
+        64,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": true
+    },
+    {
+      "number": 136,
+      "alias": "NEW-UX-10",
+      "title": "Add explicit waiting reasons and configurable support workflow states",
+      "done": false,
+      "effort": 24,
+      "dependencies": [
+        127,
+        60,
+        63,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 37,
+      "new": true
+    },
+    {
+      "number": 137,
+      "alias": "NEW-UX-11",
+      "title": "Add workload-aware queues and operator capacity controls",
+      "done": false,
+      "effort": 24,
+      "dependencies": [
+        73,
+        79,
+        162,
+        130
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 29,
+      "new": true
+    },
+    {
+      "number": 138,
+      "alias": "NEW-UX-12",
+      "title": "Define workspace utility actions for call, remote support and external tools",
+      "done": false,
+      "effort": 12,
+      "dependencies": [
+        128,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": true
+    },
+    {
+      "number": 139,
+      "alias": "NEW-UX-13",
+      "title": "Measure operator interaction performance and enforce UI response budgets",
+      "done": false,
+      "effort": 8,
+      "dependencies": [
+        128,
+        48
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": true
+    },
+    {
+      "number": 140,
+      "alias": "NEW-UX-14",
+      "title": "Validate the redesigned operator workspace for usability and cognitive accessibility",
+      "done": false,
+      "effort": 16,
+      "dependencies": [
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        48,
+        66,
+        68,
+        70,
+        71,
+        73,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 13,
+      "new": true
+    },
+    {
+      "number": 141,
+      "alias": "PG-GOV-00",
+      "title": "Track delivery of the approved helpdesk capability extensions",
+      "done": false,
+      "effort": 2,
+      "dependencies": [
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": null,
+      "new": true
+    },
+    {
+      "number": 142,
+      "alias": "PG-RT-01",
+      "title": "Prove the Cloudflare Realtime support-session architecture",
+      "done": false,
+      "effort": 24,
+      "dependencies": [
+        50,
+        74,
+        79,
+        87,
+        88,
+        90
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 38,
+      "new": true
+    },
+    {
+      "number": 143,
+      "alias": "PG-RT-02",
+      "title": "Model tenant-scoped realtime support sessions and media permissions",
+      "done": false,
+      "effort": 40,
+      "dependencies": [
+        142,
+        50,
+        64,
+        74,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 39,
+      "new": true
+    },
+    {
+      "number": 144,
+      "alias": "PG-RT-03",
+      "title": "Add browser voice, video and screen-sharing support sessions",
+      "done": false,
+      "effort": 48,
+      "dependencies": [
+        143,
+        48,
+        68,
+        70,
+        74
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 39,
+      "new": true
+    },
+    {
+      "number": 145,
+      "alias": "PG-RT-04",
+      "title": "Implement a tenant-owned telephony gateway for inbound and outbound calls",
+      "done": false,
+      "effort": 48,
+      "dependencies": [
+        142,
+        143,
+        74,
+        79,
+        87,
+        88,
+        90
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 40,
+      "new": true
+    },
+    {
+      "number": 146,
+      "alias": "PG-RT-05",
+      "title": "Add voicemail, callback, transfer and call-queue operations",
+      "done": false,
+      "effort": 40,
+      "dependencies": [
+        145,
+        70,
+        73,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 40,
+      "new": true
+    },
+    {
+      "number": 147,
+      "alias": "PG-RT-06",
+      "title": "Record and transcribe support sessions under tenant policy",
+      "done": false,
+      "effort": 40,
+      "dependencies": [
+        143,
+        50,
+        90
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 41,
+      "new": true
+    },
+    {
+      "number": 148,
+      "alias": "PG-RT-07",
+      "title": "Integrate realtime support artefacts into conversations, QA and reporting",
+      "done": false,
+      "effort": 24,
+      "dependencies": [
+        144,
+        146,
+        147,
+        76,
+        77,
+        84,
+        85
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 41,
+      "new": true
+    },
+    {
+      "number": 149,
+      "alias": "PG-TK-01",
+      "title": "Create linked back-office work items without exposing customer conversations",
+      "done": false,
+      "effort": 32,
+      "dependencies": [
+        70,
+        72,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 42,
+      "new": true
+    },
+    {
+      "number": 150,
+      "alias": "PG-TK-02",
+      "title": "Track service problems and incidents across affected conversations",
+      "done": false,
+      "effort": 40,
+      "dependencies": [
+        149,
+        72,
+        79,
+        88
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 42,
+      "new": true
+    },
+    {
+      "number": 151,
+      "alias": "PG-KB-01",
+      "title": "Ingest tenant PDF knowledge with lifecycle-safe provenance",
+      "done": false,
+      "effort": 32,
+      "dependencies": [
+        50,
+        64,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 43,
+      "new": true
+    },
+    {
+      "number": 152,
+      "alias": "PG-KB-02",
+      "title": "Bind AI assistance to authorised tenant knowledge scopes",
+      "done": false,
+      "effort": 24,
+      "dependencies": [
+        151,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 43,
+      "new": true
+    },
+    {
+      "number": 153,
+      "alias": "PG-AP-01",
+      "title": "Render governed operator applets from declarative schemas",
+      "done": false,
+      "effort": 40,
+      "dependencies": [
+        48,
+        68,
+        75,
+        79,
+        80,
+        81
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 44,
+      "new": true
+    },
+    {
+      "number": 154,
+      "alias": "PG-AP-02",
+      "title": "Author, validate and publish tenant applets safely",
+      "done": false,
+      "effort": 32,
+      "dependencies": [
+        153,
+        66,
+        78,
+        79,
+        80,
+        81
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 44,
+      "new": true
+    },
+    {
+      "number": 155,
+      "alias": "PG-FB-01",
+      "title": "Capture tenant-scoped CSAT and CES feedback",
+      "done": false,
+      "effort": 24,
+      "dependencies": [
+        73,
+        79,
+        88
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 45,
+      "new": true
+    },
+    {
+      "number": 156,
+      "alias": "PG-RP-01",
+      "title": "Expose a live support-operations management dashboard",
+      "done": false,
+      "effort": 32,
+      "dependencies": [
+        73,
+        85,
+        155,
+        150,
+        148
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 45,
+      "new": true
+    },
+    {
+      "number": 157,
+      "alias": "PG-RP-02",
+      "title": "Build bounded tenant-defined operational reports",
+      "done": false,
+      "effort": 40,
+      "dependencies": [
+        50,
+        79,
+        85,
+        155
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 45,
+      "new": true
+    },
+    {
+      "number": 158,
+      "alias": "PG-ID-01",
+      "title": "Accept verified Cloudflare Access workforce identity without weakening Tocyn authorisation",
+      "done": false,
+      "effort": 32,
+      "dependencies": [
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 46,
+      "new": true
+    },
+    {
+      "number": 159,
+      "alias": "OBS",
+      "title": "Establish operational observability and service-level objectives",
+      "done": false,
+      "effort": 24,
+      "dependencies": [
+        50,
+        63
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 8,
+      "new": true
+    },
+    {
+      "number": 160,
+      "alias": "RES",
+      "title": "Define deployment residency and jurisdiction boundaries",
+      "done": false,
+      "effort": 12,
+      "dependencies": [
+        19
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 8,
+      "new": true
+    },
+    {
+      "number": 161,
+      "alias": "AIG",
+      "title": "Evaluate AI inference routing, caching and provider fallback",
+      "done": false,
+      "effort": 8,
+      "dependencies": [
+        50,
+        64,
+        76
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 17,
+      "new": true
+    },
+    {
+      "number": 162,
+      "alias": "METRICS-FOUNDATION",
+      "title": "Define operational metric contracts for SLA and routing",
+      "done": false,
+      "effort": 8,
+      "dependencies": [
+        63,
+        79
+      ],
+      "baselineStart": null,
+      "baselineTarget": null,
+      "actualCompletion": null,
+      "progress": 0,
+      "milestone": 25,
+      "new": true
+    }
+  ]
+}

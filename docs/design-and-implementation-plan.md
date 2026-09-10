@@ -1,3 +1,5 @@
+> **Historical / superseded planning input.** Preserved for provenance; not current delivery authority. Follow the [approved master baseline](planning/post-beta-2026-09-10/README.md), its issue owners and accepted ADRs. Existing source behavior is evidence, not a replacement for that direction.
+
 # Luminatick: Open-Source AI Ticketing System - Phase 1 Plan
 
 ## 1. Objective

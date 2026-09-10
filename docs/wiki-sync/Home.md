@@ -22,7 +22,11 @@ Tocyn is an open-source, multi-tenant omnichannel helpdesk being built for Cloud
 
 Wiki pages distinguish **Implemented**, **Approved / planned**, and **Not yet implemented**. An approved roadmap item is not a deployment claim.
 
-The current first-beta target is a human-led API/portal private beta, candidate `v0.4.0-beta.1`, forecast 21 November 2026. No prerelease tag or production deployment is implied by that forecast.
+The local human-led API/portal beta was accepted on 9 September 2026 at
+`049ea82a02571681f834bcd87d43253603edf71f` and formally published as
+`v0.4.0-beta.1` on 10 September 2026 (PR #125 evidence). It used synthetic data
+and local mail capture; no remote application deployment occurred. Future `beta.2`
+requires the Operator Workspace gate with full SLA/ownership/routing acceptance.
 
 ## Contributors
 

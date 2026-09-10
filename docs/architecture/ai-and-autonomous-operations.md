@@ -6,6 +6,8 @@ Current Tocyn AI facilities are knowledge/advisory capabilities. The Worker can 
 
 Current AI code is **not** the future autonomous customer-backend operator. It does not create standing authority over external systems.
 
+The accepted human-led AI direction is implementation pending: operator assistance stays inline with the conversation, context and composer, requires explicit acceptance, preserves provenance where applicable and leaves the complete human workflow available when AI is disabled or unavailable. It does not require API billing or extra spend for the operator workspace gate. See [ADR-0020](../adr/ADR-0020-human-led-ai-assistance.md).
+
 ## Approved future authority model
 
 Autonomous operations will use policy-gated capabilities. Effective authority is bounded in this order:
@@ -76,3 +78,5 @@ Secrets and unrelated tenant content must not be copied into audit records merel
 - M6.4 — authorised deterministic self-service actions.
 
 These are approved future capabilities, not claims that unattended customer-backend mutation exists in the current `main` branch.
+
+Autonomous M4 work remains separate from the published `v0.4.0-beta.1` and future operator-facing `beta.2`; the latter is gated by workspace continuity, full SLA/ownership/routing and human-led acceptance, not by autonomous execution.

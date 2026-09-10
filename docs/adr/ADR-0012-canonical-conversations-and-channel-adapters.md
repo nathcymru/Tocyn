@@ -32,3 +32,7 @@ Shared ingestion, deduplication, dispatch, retry and delivery-state infrastructu
 - M1.2 shared intake/webhook architecture
 - M7.1–M7.5 provider milestones
 - tracker #49
+
+## Current direction addendum
+
+The accepted post-beta direction keeps canonical conversation state provider-independent while requiring every provider UI to render through the persistent operator workspace and shared composer. See [ADR-0017](ADR-0017-persistent-operator-workspace.md), [ADR-0020](ADR-0020-human-led-ai-assistance.md) and [ADR-0027](ADR-0027-linked-work-and-workflow-continuity.md). This is implementation pending and does not change the historical decision.

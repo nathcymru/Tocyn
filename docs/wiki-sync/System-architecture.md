@@ -78,7 +78,13 @@ Target authority: [headless primitives #48](https://github.com/nathcymru/Tocyn/i
 | **Approved / planned; not yet implemented as the target** | Ark/Zag migration, tenant token API and reusable Shadow DOM wrapper; shared durable ingress/Queues/consumer/outbox; external adapters and canonical cross-channel continuity; governed autonomous reference execution. |
 | **Separate deployment gates** | Isolated beta environments/rehearsal and production readiness. Provider setup and infrastructure deployment are not implied by source, ADRs or this diagram. |
 
-The human-led API/portal first beta remains forecast for **21 November 2026**, candidate `v0.4.0-beta.1`. This release sequence does not remove later channels or headless UI from the approved product architecture.
+The local human-led API/portal beta was accepted on 9 September 2026 at
+`049ea82a02571681f834bcd87d43253603edf71f` and formally published as
+`v0.4.0-beta.1` on 10 September 2026 with PR #125 evidence. It used synthetic data
+and local mail capture; no remote application deployment occurred. Future `beta.2`
+requires the Operator Workspace gate, including full SLA clocks/pause-resume,
+waiting treatment and responsible-handler ownership/routing. #42 production/
+cutover readiness remains separate.
 
 ## Current implementation / runtime
 
@@ -127,6 +133,11 @@ Before request-driven code accesses tenant-owned state it must derive a verified
 **Implemented/foundation:** API/portal/widget, ticket/article state, auth/permissions, tenant-qualified ownership, D1/R2, Durable Object realtime, Workers AI/Vectorize foundations, injectable mail transport.
 
 **Approved / planned:** isolated preview/beta/production environments, external channel adapters, support-email activation, expanded operator UX, FidesLang metadata, policy-gated autonomous backend actions, production readiness.
+
+The accepted ADR-0016–ADR-0028 direction is implementation pending. Workspace
+continuity, durable attention, cognitive accessibility, human-led AI, observability,
+residency, realtime support sessions, governed applets, tenant knowledge, workforce
+identity, linked work and bounded feedback are planned under their mirrored ADR pages.
 
 ## More detail
 

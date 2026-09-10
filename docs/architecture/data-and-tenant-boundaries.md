@@ -21,6 +21,8 @@ flowchart TD
 
 The same rule applies whether the caller is a human operator, portal user, API key, automation rule or future AI operator.
 
+The accepted workspace directions add drafts, attention state, activity, waiting/SLA state, linked context and feedback evidence without changing this invariant. Presentation state, presence, privacy metadata, URL state, routing labels and client preferences never establish authority. See [ADR-0018](../adr/ADR-0018-durable-operator-attention-and-continuity.md), [ADR-0022](../adr/ADR-0022-data-residency-and-storage-boundaries.md) and [ADR-0026](../adr/ADR-0026-access-identity-and-permission-boundaries.md).
+
 ## D1 ownership
 
 The Phase 1 ownership migration changes core entities from globally identified records to tenant-qualified records. Current migration definitions include tenant-qualified users, groups, tickets, articles, attachments, user-group membership and support-email configuration. Composite foreign keys prevent a record from satisfying a relationship through another tenant's identifier.
@@ -67,3 +69,5 @@ Changes touching tenant-owned state should demonstrate, as applicable:
 - no data/storage side effect on rejected requests;
 - tenant-scoped cleanup/retry behaviour;
 - audit evidence without leaking credentials or unrelated tenant content.
+
+Future workspace validation must additionally cover draft/notification/search/count/context isolation, authority-change cleanup, mixed-authority batch handling and linked-channel identity verification. These are planned acceptance requirements, not current production evidence.

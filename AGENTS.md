@@ -51,7 +51,9 @@ If a PR already exists for the issue, update that PR instead of creating another
 
 Use `Closes #NN` only when the PR fully satisfies the issue acceptance criteria. Use `Progresses #NN` for partial delivery. A merged partial PR must not close the issue.
 
-Do not request repeated Copilot/automated reviews for intermediate edits. Consolidate corrections and request review only at a meaningful PR boundary. Required CI/security checks remain mandatory even when the maintainer authorises the repository's PR-only review bypass.
+Default to zero Copilot code-review requests. Tocyn-specific automatic review triggers must remain manual-only; inspect them before creating/updating PRs. Do not request Copilot to satisfy approval counts. Only a specific material remaining risk that cannot be resolved by focused inspection or deterministic validation justifies a request; state that justification first and batch any corrections. Preserve other CI/security workflows. Never purchase allowance or enable overages.
+
+The sole maintainer grants standing authority to use the authenticated account’s legitimate PR-only administrator/owner approval bypass after applicable exact-revision checks pass. Do not ask for another human approver or repeat bypass permission requests. Record the bypass as a bypass, never independent approval. Required CI, tests, security checks, signing, linear history and substantive review findings remain mandatory. Report a concrete permission failure without repeated retries. This authority does not remove any explicitly required initial plan approval.
 
 ## Living issue and Project state
 
@@ -132,3 +134,17 @@ Run the smallest meaningful checks first and broader affected checks before deli
 A passing CI run is evidence, not a security or production-readiness declaration. Production readiness remains controlled by the relevant roadmap issue and release gate.
 
 Preserve MIT attribution and existing historical evidence.
+
+## Current approved development baseline
+
+The [10 September master package](docs/planning/post-beta-2026-09-10/README.md) is the authoritative reconciled direction for post-beta work. Read its issue map, dependency graph, acceptance gates and [handover](docs/planning/post-beta-2026-09-10/handover.md), then current owning issues. Original source packages are historical inputs, not three active plans. The accepted local beta.1 is preserved; beta.2 requires full SLA, waiting-state, ownership/routing and workspace acceptance. Roadmap phase numbering is taxonomy, not execution order. Do not resume feature work before #126 alignment acceptance.
+
+## Adaptive execution and allowance policy
+
+Distinguish CHAT, WORK and DEDICATED CODEX execution environments from model names and allowance sources. Work and dedicated Codex share usage unless reliable account-specific evidence establishes separate entitlements. Record observable capacity/reset information only; unavailable is unknown. Use subscription-authenticated routes for subscription-backed work; no silent API billing, paid overages, account switching to evade limits or purchased capacity.
+
+At meaningful task boundaries choose the lowest sufficient model and reasoning effort separately, using actual exposed controls. Prefer deterministic tools and bounded context for extraction, comparison and formatting; low effort for mechanical edits, medium for normal contained delivery, higher effort for security, architecture, concurrency or unresolved ambiguity. Escalate only the affected task and de-escalate afterward. Never claim an unavailable switch or invent usage/savings.
+
+Use native workers for useful separable tasks when their benefit exceeds context/coordination cost. One coordinator owns integration and acceptance; give workers bounded sources, non-overlapping ownership, deliverables and stopping conditions. No recursive or duplicate speculative review teams. Preserve capacity for validation/remediation/handover. Forecast capacity does not cap safe actual concurrency. If a cross-environment route is unavailable, report it once and provide a compact unexecuted handoff only where useful.
+
+Persist decisions, evidence, ownership, branches, checks and exact next actions in `.agents/state/`, synchronized with GitHub; never store secrets, customer data or private reasoning. Before leaving work, preserve uncommitted historical material, avoid redundant dependency installations and reclaim completed-worktree generated dependencies only when safe. Provide concise significant-progress updates, including a status every 30 minutes during active coordinated delivery.

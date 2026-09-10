@@ -16,6 +16,7 @@ This directory contains the version-controlled implementation, architecture, pri
   - [Privacy architecture](privacy/privacy-architecture.md)
   - [GDPR deployer technical guide](privacy/gdpr-compliance-user-guide.md)
 - [Architecture decision records](adr/README.md)
+- [Post-beta master development baseline](planning/post-beta-2026-09-10/README.md) — owner-approved consolidated direction, issue map and forecast.
 - [Agent governance](agents/README.md)
 - [Roadmap pointer and forecasts](roadmap.md)
 - [Security implementation material](security/)
@@ -33,6 +34,8 @@ Repository-level policies remain at root: `SECURITY.md`, `PRIVACY_POLICY.md`, `C
 Approved roadmap: https://github.com/nathcymru/Tocyn/wiki/Approved-architectural-roadmap
 
 Accepted ADR index: https://github.com/nathcymru/Tocyn/wiki/Architecture-decision-records
+
+The accepted post-beta ADR set is ADR-0016–ADR-0028. These are implementation-pending decisions; current source evidence remains authoritative for what is actually implemented.
 
 ## Status convention
 

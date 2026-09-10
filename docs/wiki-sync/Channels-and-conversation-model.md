@@ -1,47 +1,96 @@
-# Channels and conversation model
+# Channel adapter architecture
 
-The approved target [[System-architecture]] places these channel paths alongside the shared headless browser surfaces and distinct ingress, consumer and outbound-dispatch responsibilities. API/portal-first release sequencing does not narrow the omnichannel architecture.
+The approved target [system overview](https://github.com/nathcymru/Tocyn/blob/main/docs/architecture/system-overview.md) places these channel paths alongside the shared headless browser surfaces and distinct ingress, consumer and outbound-dispatch responsibilities. API/portal-first release sequencing does not narrow the omnichannel architecture.
 
-Tocyn's helpdesk core is channel-independent. External providers are adapters around canonical Tocyn ticket/article/conversation state rather than separate ticket systems.
+Accepted post-beta direction is implementation pending. Every provider UI is planned to render through the persistent operator workspace and shared composer; provider-specific inboxes are not an accepted architecture. See [ADR-0017](https://github.com/nathcymru/Tocyn/blob/main/docs/adr/ADR-0017-persistent-operator-workspace.md), [ADR-0020](https://github.com/nathcymru/Tocyn/blob/main/docs/adr/ADR-0020-human-led-ai-assistance.md) and [ADR-0027](https://github.com/nathcymru/Tocyn/blob/main/docs/adr/ADR-0027-linked-work-and-workflow-continuity.md).
+
+## Principle
+
+External messaging systems are adapters around Tocyn's canonical ticket/conversation state. They must not create parallel helpdesk models or make provider-specific identifiers the source of tenant authority.
+
+The first private beta intentionally validates the canonical API/portal path before adding Slack to the critical path. Slack, support email, Teams, WhatsApp and Telegram are later integration milestones.
+
+The implemented API/portal field contract and its local verification boundary
+are documented in [Canonical conversation contract](https://github.com/nathcymru/Tocyn/blob/main/docs/architecture/canonical-conversation-contract.md).
 
 ```mermaid
 flowchart LR
-  A[Authenticated API / Portal / Widget] --> C[Canonical Tocyn conversation]
-  S[Slack - planned] -.-> C
-  E[Support email - planned activation] -.-> C
-  T[Teams - planned] -.-> C
-  W[WhatsApp - planned] -.-> C
-  G[Telegram - planned] -.-> C
-  C --> O[Operator workspace]
-  O --> C
-  C --> D[Outbound dispatch]
-  D -.-> S
-  D -.-> E
-  D -.-> T
-  D -.-> W
-  D -.-> G
+    subgraph Inbound[External / service-user channels]
+      API[API]
+      Portal[Portal]
+      Widget[Widget]
+      Slack[Slack - planned]
+      Email[Support email - planned activation]
+      Teams[Teams - planned]
+      WA[WhatsApp - planned]
+      TG[Telegram - planned]
+    end
+
+    C[Verified adapter boundary]
+    M[Canonical Tocyn ticket / article state]
+    O[Human operator workspace]
+    D[Shared outbound dispatch - planned expansion]
+
+    API --> C
+    Portal --> C
+    Widget --> C
+    Slack -.-> C
+    Email -.-> C
+    Teams -.-> C
+    WA -.-> C
+    TG -.-> C
+    C --> M --> O --> M --> D
+    D -.-> Slack
+    D -.-> Email
+    D -.-> Teams
+    D -.-> WA
+    D -.-> TG
+    D --> Portal
 ```
 
-Solid lines show current core application paths; dashed lines are approved future channel adapters.
+Solid lines represent paths already present in the repository at some level; dashed provider paths represent approved future/adaptor work and must not be read as deployment claims.
 
-## Adapter rules
+## Canonical boundary
 
-Each provider adapter must:
+A provider adapter should normalise enough information to preserve, where applicable:
 
-- authenticate/verify the provider boundary before tenant resolution;
-- map provider events to a stored tenant-owned connection;
-- preserve provider conversation/message/thread/topic identifiers without treating them as authority;
-- normalise content into canonical ticket/article state;
-- deduplicate retries and preserve delivery uncertainty honestly;
-- route operator replies back to the correct provider context;
-- fail safely on revoked credentials, invalid signatures, rate limits and provider outages.
+- verified tenant/connection identity;
+- provider/channel type;
+- external conversation and message identifiers;
+- participants and message direction;
+- message body and attachment references;
+- timestamps and deduplication keys;
+- threading/topic/reply context;
+- delivery state and provider errors;
+- correlation to Tocyn ticket/article records.
 
-## First-beta sequencing
+Provider-specific data can be retained as adapter metadata where necessary, but the operator workspace should not require a different ticket model for each channel.
 
-The first private beta is API/portal-first and human-led. Slack is deliberately not a first-beta blocker because no Slack adapter existed when the roadmap was approved. The beta proves the canonical conversation and human fallback before additional adapters increase the integration surface.
+## Authentication before normalisation
 
-## Email is two capabilities
+Normalisation happens **after** the provider boundary has been authenticated/verified. For example, a Telegram path parameter naming a tenant does not authorise the event; the connection secret and stored ownership mapping must establish that relationship. Equivalent rules apply to signed webhooks, OAuth installations and support-email routing.
 
-Transactional/authentication mail transport and helpdesk support-email conversations are separate capabilities. The current injectable mail transport/Resend configuration does not by itself mean inbound/outbound helpdesk email is complete. See ADR-0013.
+## Retry and deduplication
 
-Repository detail: [`docs/architecture/channel-adapters.md`](https://github.com/nathcymru/Tocyn/blob/main/docs/architecture/channel-adapters.md).
+External systems can retry, reorder or ambiguously acknowledge messages. Adapters therefore need provider-scoped idempotency/deduplication and a durable outbound lifecycle. A transport response should not be represented as delivered unless the provider semantics support that conclusion.
+
+The approved shared ingestion/dispatch work is owned by roadmap issues #87/#88 and related integration issues. Provider-specific behaviour belongs in the relevant M7 milestone rather than leaking into the core conversation model.
+
+Backend adapter contracts may progress independently. User-facing channel acceptance still requires the shared workspace/composer capability contract, contextual channel restrictions, draft preservation and tenant-isolation evidence; this does not pull all M7 providers into the next operator gate.
+
+## Email boundaries
+
+Tocyn treats two email concerns separately:
+
+1. **transactional/authentication mail transport** — currently implemented through an injectable transport with Resend configuration;
+2. **helpdesk support-email conversations** — inbound verification, tenant routing, threading and bidirectional canonical conversation behaviour.
+
+Migrating authentication mail to another transport does not automatically implement support-email conversations, and support-email architecture must not be made dependent on that migration without a real technical requirement.
+
+## Integration acceptance pattern
+
+Every external channel should eventually demonstrate:
+
+`authenticated inbound event → verified tenant → canonical Tocyn conversation → operator reply → correct outbound channel/context → auditable state`
+
+Negative tests should include invalid credentials/signatures, cross-tenant mapping attempts, duplicate events, provider rate limits/outages and disabled/revoked connections.
