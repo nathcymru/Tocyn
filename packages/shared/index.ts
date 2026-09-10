@@ -242,3 +242,5 @@ export interface UpdateArticleArgs {
   category_id?: string | null;
   tier?: 'answer' | 'sop';
 }
+
+export * from "./cost-policy";

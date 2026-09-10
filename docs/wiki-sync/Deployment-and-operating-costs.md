@@ -47,3 +47,7 @@ No document, passing CI run, milestone date or cost estimate authorises deployme
 ## Current accepted boundary
 
 Beta.1 is complete in local Wrangler simulations with captured authentication mail. No remote resources were deployed. #159 owns observability/SLOs; #160 owns deployment residency, including separate storage/processing claims; #42 retains production acceptance. Current forecasts and full budget dependencies are in [[Post-beta-master-baseline]].
+
+## Cost-policy contract implementation
+
+The versioned [cost-policy contract](https://github.com/nathcymru/Tocyn/blob/main/docs/cost-policy-contract.md) and [dated resource catalogue](https://github.com/nathcymru/Tocyn/blob/main/docs/cost-resource-catalogue.md) define owner allocations, lower-only tenant restrictions, reserved admission, recovery and provider windows under #50. Server validators and pure contract tests support this foundation. Active-path durable enforcement remains #64/#91 and administration remains #90; these documents do not assert measured production capacity or change existing local-beta guardrails.
