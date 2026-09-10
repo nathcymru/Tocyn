@@ -58,6 +58,12 @@ function createController(identity: string | null, ticketId: string | null) {
       currentIdentity(auth.sessionGeneration, auth.user?.tenant_id, auth.user?.id, ticketId);
   };
   const replace = (next: DraftState) => { state = next; listeners.forEach(listener => listener()); };
+  const denied = (error: unknown) => error instanceof ApiError && [401, 403, 404].includes(error.status);
+  const clearDenied = () => {
+    known = false;
+    dirty = false;
+    replace({ ...empty('error'), error: 'Draft access is unavailable. Retry restoring after access is confirmed.' });
+  };
   const cancelTimer = () => { if (timer !== null) clearTimeout(timer); timer = null; };
   const schedule = () => {
     cancelTimer();
@@ -81,8 +87,11 @@ function createController(identity: string | null, ticketId: string | null) {
         replace({ ...state, version: restored.version, baseConversationRevision: restored.baseConversationRevision,
           status: withinBounds(state) ? 'unsaved' : 'error', error: withinBounds(state) ? null : 'Draft exceeds the server size limit.' });
       } else { savedEdit = edit; replace(restored); }
-    } catch {
-      if (isCurrent(requestEpoch)) replace({ ...state, status: 'error', error: 'Draft could not be restored. Retry before replacing it.' });
+    } catch (error) {
+      if (isCurrent(requestEpoch)) {
+        if (denied(error)) clearDenied();
+        else replace({ ...state, status: 'error', error: 'Draft could not be restored. Retry before replacing it.' });
+      }
     } finally {
       if (isCurrent(requestEpoch)) { restoring = false; if (known) schedule(); }
     }
@@ -114,6 +123,7 @@ function createController(identity: string | null, ticketId: string | null) {
           status: withinBounds(state) ? 'unsaved' : 'error', error: withinBounds(state) ? null : 'Draft exceeds the server size limit.' } : restored);
       } catch (error) {
         if (!isCurrent(requestEpoch)) return;
+        if (denied(error)) { clearDenied(); return; }
         uncertainWrite = true;
         replace({ ...state, status: error instanceof ApiError && error.status === 409 ? 'conflict' : 'error',
           error: error instanceof ApiError && error.status === 409
@@ -139,8 +149,9 @@ function createController(identity: string | null, ticketId: string | null) {
     return isCurrent(requestEpoch) && known && !dirty && !saving && !deleting;
   };
 
-  const update = (next: OperatorDraftValue) => {
+  const update = (value: OperatorDraftValue | ((current: OperatorDraftValue) => OperatorDraftValue)) => {
     if (!isCurrent()) return;
+    const next = typeof value === 'function' ? value(state) : value;
     edit++;
     dirty = true;
     cancelTimer();
@@ -179,6 +190,7 @@ function createController(identity: string | null, ticketId: string | null) {
         return 'cleared';
       } catch (error) {
         if (!isCurrent(requestEpoch)) return 'error';
+        if (denied(error)) { clearDenied(); return 'error'; }
         const conflict = error instanceof ApiError && error.status === 409;
         // An older send receipt cannot change the status of a newer saved draft.
         if (version && sameVersion(state.version, version)) replace({ ...state, status: conflict ? 'conflict' : 'error',
@@ -196,6 +208,7 @@ function createController(identity: string | null, ticketId: string | null) {
   return {
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     getSnapshot: () => state,
+    currentSnapshot: () => isCurrent() ? state : null,
     start: () => {
       active = true;
       epoch++;
@@ -224,6 +237,6 @@ export function useOperatorDraft(ticketId: string | null, options: Readonly<{ de
   useLayoutEffect(controller.start, [controller]);
   const debounceMs = Math.max(100, Math.min(2_000, options.debounceMs ?? 500));
   useLayoutEffect(() => { controller.setDebounce(debounceMs); }, [controller, debounceMs]);
-  return { ...state, update: controller.update, retrySave: controller.retrySave, retryRestore: controller.retryRestore,
+  return { ...state, currentSnapshot: controller.currentSnapshot, update: controller.update, retrySave: controller.retrySave, retryRestore: controller.retryRestore,
     discard: controller.discard, saveNow: controller.saveNow, flushBeforeNavigation: controller.flushBeforeNavigation, cleanupAfterConfirmedSend: controller.cleanupAfterConfirmedSend };
 }

@@ -1,4 +1,10 @@
-## Latest continuation — 10 September 2026, 23:55 BST
+## Current continuation — 11 September 2026, 00:05 BST
+
+Root and native draft129_ci (Terra/medium) corrected the actual c909ae6 CI failures: pagination fixtures now exercise the data router and authenticated fetch transport; deferred protected layout/security modules bring initial dashboard JavaScript to105,986 bytes beneath the unchanged135,000 budget. All173 dashboard tests and dashboard/portal/widget builds pass. The earlier fixture-only49tests were insufficient to cover the entire router change. Root reviewed incomplete composer work and fixed concurrent upload merging, removed-upload resurrection, current acknowledged send snapshots, authority-generation remounts and clearing restored content on explicit access denial. New regressions cover those boundaries. No final browser acceptance yet.
+
+Capacity is available again: the account reported0%used and one available reset credit; this coordinator did not redeem a reset. Native CI worker completed; root remains integration owner. Do not repeat claims that the account is exhausted. No paid usage or Copilot reviews. Previous goal turns made concrete progress. Next: fresh-head CI and real browser draft acceptance, then complete workspace-state UI/Drafts view. Retention decision still pending; no policy default or remote cleanup activated.
+
+## Historical continuation — 10 September 2026, 23:55 BST
 
 Composer integration is now committed and pushed as `eafaaf1` on PR #173. TicketDetailPage uses the authenticated draft controller for body/mode/attachment persistence, uploads references before draft save, shows save/restore/error/conflict states, retries failed uploads explicitly, preserves drafts after rejected sends, and clears only the exact confirmed-send version. App now uses a data router; DraftNavigationGuard blocks SPA and beforeunload navigation until `flushBeforeNavigation` confirms durable state. Focused dashboard validation passes: TicketDetailWorkflow25, DraftNavigationGuard3, OperatorDraftController21 (49 tests total), dashboard source typecheck and diff check. Legacy tests were updated to exercise immediate attachment persistence and explicit upload retry semantics.
 

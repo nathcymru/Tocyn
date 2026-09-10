@@ -18,9 +18,9 @@ class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, { failed: bool
 }
 
 /** A failed lazy module is retried by a document reload, not by reusing React's cached rejection. */
-export function RouteContent({ children }: { children: ReactNode }) {
+export function RouteContent({ children, persistent = false }: { children: ReactNode; persistent?: boolean }) {
   const location = useLocation();
-  return <RouteLoadBoundary key={location.pathname} reloadHref={location.pathname + location.search}>
+  return <RouteLoadBoundary key={persistent ? 'workspace' : location.pathname} reloadHref={location.pathname + location.search}>
     <Suspense fallback={<p role="status" className="p-6">Loading page…</p>}>{children}</Suspense>
   </RouteLoadBoundary>;
 }

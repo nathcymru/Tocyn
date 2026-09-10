@@ -39,7 +39,8 @@ type PendingAttachment = Readonly<{
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
-  return <TicketDetail key={id} id={id!} />;
+  const generation = useAuthStore(state => state.sessionGeneration);
+  return <TicketDetail key={`${generation}:${id}`} id={id!} />;
 }
 
 function TicketDetail({ id }: { id: string }) {
@@ -62,6 +63,8 @@ function TicketDetail({ id }: { id: string }) {
   draftRef.current = draft;
   const [pendingAttachments, setPendingAttachments] = React.useState<readonly PendingAttachment[]>([]);
   const pendingAttachmentIds = useRef(0);
+  const activeUploads = useRef(new Set<string>());
+  useEffect(() => () => { activeUploads.current.clear(); }, [sessionGeneration]);
   const visiblePendingAttachments = pendingAttachments.filter(attachment => attachment.sessionGeneration === sessionGeneration);
   const reply = draft.body;
   const isInternal = draft.mode === 'internal';
@@ -205,13 +208,13 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   const updateDraft = (changes: Partial<OperatorDraftValue>) => {
-    const current = draftRef.current;
-    draft.update({
+    if (draft.currentSnapshot()?.status === 'loading') return;
+    draft.update(current => ({
       mode: changes.mode ?? current.mode,
       body: changes.body ?? current.body,
       attachments: changes.attachments ?? current.attachments,
       baseConversationRevision: current.baseConversationRevision,
-    });
+    }));
   };
 
   const uploadAttachment = async (pending: PendingAttachment) => {
@@ -219,27 +222,28 @@ function TicketDetail({ id }: { id: string }) {
       const formData = new FormData();
       formData.append('file', pending.file);
       const response = await dashboardApi.postForm<{ key: string }>('/attachments/upload', formData);
-      if (sessionGenerationRef.current !== pending.sessionGeneration || !response.key) return;
+      if (sessionGenerationRef.current !== pending.sessionGeneration || !activeUploads.current.has(pending.id)) return;
+      if (!response.key) throw new Error('Upload was not confirmed');
       const uploaded: OperatorDraftAttachment = {
         filename: pending.file.name,
         contentType: pending.file.type,
         size: pending.file.size,
         storageKey: response.key,
       };
-      const current = draftRef.current;
-      if (!current.attachments.some(attachment => attachment.storageKey === uploaded.storageKey)) {
-        updateDraft({ attachments: [...current.attachments, uploaded] });
-      }
+      draft.update(current => ({ ...current, attachments: current.attachments.some(attachment => attachment.storageKey === uploaded.storageKey)
+        ? current.attachments : [...current.attachments, uploaded] }));
+      activeUploads.current.delete(pending.id);
       setPendingAttachments(currentAttachments => currentAttachments.filter(attachment => attachment.id !== pending.id));
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
-      if (sessionGenerationRef.current !== pending.sessionGeneration) return;
+      if (sessionGenerationRef.current !== pending.sessionGeneration || !activeUploads.current.has(pending.id)) return;
       setPendingAttachments(currentAttachments => currentAttachments.map(attachment =>
         attachment.id === pending.id ? { ...attachment, status: 'error' } : attachment));
     }
   };
 
   const addAttachments = (files: readonly File[]) => {
+    if (draft.currentSnapshot()?.status === 'loading') return;
     const available = 10 - draftRef.current.attachments.length - visiblePendingAttachments.length;
     const selected = files.slice(0, Math.max(0, available));
     if (!selected.length) {
@@ -253,6 +257,7 @@ function TicketDetail({ id }: { id: string }) {
       status: 'uploading' as const,
     }));
     setPendingAttachments(current => [...current, ...pending]);
+    pending.forEach(attachment => activeUploads.current.add(attachment.id));
     for (const attachment of pending) void uploadAttachment(attachment);
     setNotice(`${selected.length} attachment${selected.length === 1 ? '' : 's'} selected and uploading.`);
   };
@@ -260,12 +265,15 @@ function TicketDetail({ id }: { id: string }) {
   const retryAttachment = (attachment: PendingAttachment) => {
     if (attachment.sessionGeneration !== sessionGeneration || submission.current) return;
     const retrying = { ...attachment, status: 'uploading' as const };
+    activeUploads.current.add(attachment.id);
     setPendingAttachments(current => current.map(candidate => candidate.id === attachment.id ? retrying : candidate));
     void uploadAttachment(retrying);
   };
 
   const discardDraft = async () => {
     if (submission.current) return;
+    activeUploads.current.clear();
+    setPendingAttachments(current => current.map(attachment => ({ ...attachment, status: 'error' })));
     const result = await draft.discard();
     if (result === 'cleared') {
       setPendingAttachments(current => current.filter(attachment => attachment.sessionGeneration !== sessionGeneration));
@@ -298,14 +306,14 @@ function TicketDetail({ id }: { id: string }) {
     setIsSubmitting(true);
     try {
       const acknowledged = await draft.flushBeforeNavigation();
-      const sendingDraft = draftRef.current;
-      if (!acknowledged || !sendingDraft.version) {
+      const sendingDraft = draft.currentSnapshot();
+      if (!acknowledged || !sendingDraft?.version) {
         setReplyError('Draft needs a confirmed save before sending. Retry the draft save, then send again.');
         return;
       }
       const article = await dashboardApi.post<{ id?: string }>(`/tickets/${id}/articles`, {
-        body: reply,
-        is_internal: isInternal,
+        body: sendingDraft.body,
+        is_internal: sendingDraft.mode === 'internal',
         attachments: sendingDraft.attachments
       });
       if (!article?.id) throw new Error('The reply was not confirmed.');
@@ -638,7 +646,7 @@ function TicketDetail({ id }: { id: string }) {
 
               <div className="relative">
                 <label htmlFor="reply-message" className="sr-only">Reply message</label>
-                <TocynTextarea id="reply-message" readOnly={isSubmitting} aria-busy={isSubmitting}
+                <TocynTextarea id="reply-message" readOnly={isSubmitting || draft.status === 'loading'} aria-busy={isSubmitting || draft.status === 'loading'}
                   className={clsx(
                     "w-full rounded-xl border p-4 text-sm focus:ring-4 outline-none min-h-[140px] transition-all resize-none shadow-inner",
                     isInternal
@@ -683,6 +691,7 @@ function TicketDetail({ id }: { id: string }) {
                         aria-disabled={isSubmitting} aria-label={`Remove ${attachment.file.name}`}
                         onClick={() => {
                           if (submission.current) return;
+                          activeUploads.current.delete(attachment.id);
                           setPendingAttachments(current => current.filter(candidate => candidate.id !== attachment.id));
                           setNotice('Attachment removed.');
                           attachButtonRef.current?.focus();

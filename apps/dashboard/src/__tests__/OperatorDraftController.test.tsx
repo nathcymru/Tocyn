@@ -347,3 +347,14 @@ it('does not permit navigation after an unacknowledged save', async () => {
   await act(async () => { expect(await controller.flushBeforeNavigation()).toBe(false); });
   expect(current()).toMatchObject({ status: 'error', body: 'keep me' });
 });
+
+it('clears previously restored content when a save confirms lost ticket authority', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(stored('previously authorized', 3)))
+    .mockResolvedValueOnce(json({ error: 'Forbidden' }, 403)));
+  await mountWithTimers();
+  act(() => controller.update(edited('pending private content')));
+  await act(async () => { await controller.saveNow(); });
+  expect(current()).toMatchObject({ body: '', attachments: [], version: null, status: 'error' });
+  await act(async () => { await controller.saveNow(); });
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+});

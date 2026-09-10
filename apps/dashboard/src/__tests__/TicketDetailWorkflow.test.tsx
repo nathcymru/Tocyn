@@ -360,6 +360,27 @@ it('refreshes the conversation and feed for the server article.created payload',
   expect(client.getQueryState(['tickets',{}])?.isInvalidated).toBe(true);
 });
 
+it('does not restore an attachment removed while its upload is pending', async () => {
+  const upload = deferred<Response>();
+  transport(path => path === '/api/attachments/upload' ? upload.promise : json(ticket));
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'removed.txt')] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Remove removed.txt' }));
+  await act(async () => { upload.resolve(json({ key: 'synthetic/removed' })); });
+  expect(screen.queryByText('removed.txt')).not.toBeInTheDocument();
+});
+
+it('preserves both attachments when two uploads complete in the same turn', async () => {
+  const first = deferred<Response>(); const second = deferred<Response>(); let count = 0;
+  transport(path => path === '/api/attachments/upload' ? (++count === 1 ? first.promise : second.promise) : json(ticket));
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'one.txt'), new File(['b'], 'two.txt')] } });
+  await act(async () => { first.resolve(json({ key: 'synthetic/one' })); second.resolve(json({ key: 'synthetic/two' })); });
+  expect(screen.queryByText('Uploading…')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove one.txt' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove two.txt' })).toBeInTheDocument();
+});
+
 
 it('retains uploaded attachments after a rejected internal note and reuses them on explicit retry',async()=>{
   let uploads=0;const posts:Record<string,unknown>[]=[];

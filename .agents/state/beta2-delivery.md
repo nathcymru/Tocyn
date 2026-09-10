@@ -2,7 +2,11 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 10 September 2026, 23:48 BST
+## Current state — 11 September 2026, 00:05 BST
+
+Latest #129 correction batch passes173 dashboard tests and all three client builds; initial dashboard JS105,986 bytes is within the unchanged135,000 budget. Native draft129_ci Terra/medium completed pagination/data-router fixtures; root corrected upload and authority-boundary races. #129 remains partial in draft173: workspace-state UI, Drafts view, real browser acceptance and explicit retention remain. Account now reports0%used and one reset credit; no coordinator reset redemption. Refer to workspace-129.md for current validation and next actions. Forecast and accepted main below remain unchanged.
+
+## Previous checkpoint — 10 September 2026, 23:48 BST
 
 Accepted main is `32fba86fd659ca9d729ff8d0ff683b4770e81454`: #48 / PR #167 accepted with required checks, verified signature, reviewed/CI/merge tree equality and recorded owner review-only bypass. #48 is closed, Project Done/100%, actual completion 10 September. #66 is now ready; its contract preparation is complete, implementation pending. #159 remains partial/open; full #152 remains open.
 

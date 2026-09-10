@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import { RouteContent } from './components/RouteContent';
 import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate, useLocation } from 'react-router-dom';
-import { Layout } from './components/layout/Layout';
+const Layout = lazy(() => import('./components/layout/Layout').then(module => ({ default: module.Layout })));
 import { SettingsLayout } from './components/layout/SettingsLayout';
 import { LoginPage } from './pages/LoginPage';
 import { MfaPage } from './pages/MfaPage';
@@ -20,7 +20,7 @@ const AgentPermissionsPage = lazy(() => import('./pages/AgentPermissionsPage').t
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(module => ({ default: module.DashboardPage })));
 const TicketFieldsPage = lazy(() => import('./pages/TicketFieldsPage').then(module => ({ default: module.TicketFieldsPage })));
 const FiltersSettingsPage = lazy(() => import('./pages/FiltersSettingsPage').then(module => ({ default: module.FiltersSettingsPage })));
-import { SecurityProfilePage } from './pages/SecurityProfilePage';
+const SecurityProfilePage = lazy(() => import('./pages/SecurityProfilePage').then(module => ({ default: module.SecurityProfilePage })));
 const UsagePage = lazy(() => import('./pages/UsagePage').then(module => ({ default: module.UsagePage })));
 import { useAuthStore } from './store/authStore';
 
@@ -63,7 +63,7 @@ export default function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <Layout />
+              <RouteContent persistent><Layout /></RouteContent>
             </ProtectedRoute>
           }
         >
@@ -73,7 +73,7 @@ export default function App() {
           <Route path="knowledge" element={<RouteContent><KnowledgePage /></RouteContent>} />
           <Route path="knowledge/new" element={<RouteContent><KnowledgeEditorPage /></RouteContent>} />
           <Route path="knowledge/edit/:id" element={<RouteContent><KnowledgeEditorPage /></RouteContent>} />
-          <Route path="profile/security" element={<SecurityProfilePage />} />
+          <Route path="profile/security" element={<RouteContent><SecurityProfilePage /></RouteContent>} />
 
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="general" replace />} />
