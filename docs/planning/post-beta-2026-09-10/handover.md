@@ -27,3 +27,7 @@ Discovery and document work used two native dedicated-Codex Luna/medium workers 
 Historical worktrees with uncommitted source: `/private/tmp/tocyn-62-operator-workflows` (dashboard/operator work); `/private/tmp/tocyn-61-guarded-integration` (old state update). `/private/tmp/tocyn-21-mfa-correction` also contains generated local artifacts. Preserve them; compare narrowly before any later reuse. Do not reinstall dependencies in every worktree. Root checkout was clean before alignment.
 
 Some GitHub milestone counters disagree with actual issue membership. Read issues and acceptance evidence, not counts. Current Wiki is a separate git repository; publish reviewed repository-backed sources and preserve historical-only pages. Any inaccessible surface must be named in the final receipt, never claimed synchronized.
+
+## Integration receipt and relaunch condition
+
+Alignment PR: [#163](https://github.com/nathcymru/Tocyn/pull/163). The final [#126 completion receipt](https://github.com/nathcymru/Tocyn/issues/126) records the exact signed merge, successful checks, Wiki revision/read-back and export checksum. This package is accepted for relaunch only when that receipt confirms completion. Read the receipt rather than interpreting pre-merge publication steps as a remaining feature blocker. Source-clause status stays pending until its owning feature issue has acceptance evidence.

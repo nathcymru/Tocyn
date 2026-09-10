@@ -6,9 +6,9 @@ The owner-approved 10 September baseline supersedes earlier sequencing. Start wi
 
 Forecast anchor: **2026-09-11**. Beta.2 gate forecast: **2027-02-18**. Expanded scope forecast: **2028-02-09**. These are calculated conservative capacity forecasts, not promises of releases or remote approval.
 
-Two lanes,8h/day Monday–Saturday; 2.5× baseline implementation and0.5× shared4h/day review/integration. A lane remains occupied through integration. Dependencies become available the following working day. External approval/provider waits are unknown, not zero-duration guarantees. Actual concurrency may exceed this reference model.
+Two lanes, 8h/day Monday–Saturday; 2.5× baseline implementation and 0.5× shared 4h/day review/integration. A lane remains occupied through integration. Dependencies become available the following working day. External approval/provider waits are unknown, not zero-duration guarantees. Actual concurrency may exceed this reference model.
 
-Dependency-only critical network length: 1182 planning hours. Resource-constrained calendar dates differ from this analytical lower bound. Near-critical means positive float≤48h.
+Dependency-only critical network length: 1182 planning hours. Resource-constrained calendar dates differ from this analytical lower bound. Near-critical means positive float ≤48h.
 
 | Issue | Remaining 3× hours | Lane | Forecast | Prerequisites |
 |---|---:|---|---|---|
@@ -101,9 +101,42 @@ Dependency-only critical network length: 1182 planning hours. Resource-constrain
 
 ## Integration sequence
 
-Workspace127 and cost50 begin independently. Residency160 and permissions79 are ready foundations.159observability follows50.129drafts/136waiting state and162metrics feed73SLA,130queues and137routing;128workspace integrates them with48/66.140owns final beta.2 acceptance.91journal may proceed independently of64budget implementation;51requires both, then87consumer and88outbox.151→152knowledge unblocks76/77. M8/M9 follow individual prerequisites, not phase-number order.
+Workspace127 and cost50 begin independently. Residency160 and permissions79 are ready foundations.159observability follows50.129drafts/136waiting state and162metrics feed73SLA,130queues and#137 routing;128workspace integrates them with48/66.140owns final beta.2 acceptance.91journal may proceed independently of64budget implementation;51requires both, then87consumer and88outbox.151→152knowledge unblocks76/77. M8/M9 follow individual prerequisites, not phase-number order.
 
 All original baseline fields are preserved in baseline-snapshot.json. New baseline dates are the approved initial calculated forecast; later shifts change forecast only. If alignment acceptance slips past the anchor, shift forecast with the same calculator and keep baseline history.
 
+## Critical networks and resource constraints
 
-Full contracts, source traceability and acceptance: [master package](https://github.com/nathcymru/Tocyn/blob/main/docs/planning/post-beta-2026-09-10/README.md). Historical predecessor: [[Historical-Omnichannel-implementation-roadmap-2026-09-08]].
+Zero-float issues in the dependency-only expanded network: #88, #87, #74, #64, #53, #51, #50, #141, #142, #143, #145, #146, #148, #156, #159.
+
+The beta.2 gate has its own prerequisite closure; an issue can support the expanded roadmap and still block the next operator test. `beta2-blocker` and Project view 06 expose this closure. The original `beta-blocker` label remains historical beta.1 evidence.
+
+```mermaid
+flowchart LR
+ I[127 Interaction contract] --> D[129 Drafts and 136 Waiting state]
+ A[79 Capabilities] --> D
+ A --> M[162 Operational metrics]
+ D --> S[73 Full SLA]
+ M --> S
+ S --> Q[130 Queues and snooze]
+ C[50 Cost contract] --> O[159 Observability]
+ O --> B[64 Enforcement]
+ B --> Q
+ Q --> W[128 Workspace and dependent UX]
+ Q --> R[137 Ownership and routing]
+ W --> G[140 Beta.2 acceptance]
+ R --> G
+ C --> J[91 Durable journals]
+ J --> N[51 Ingress then 87 Normalization then 88 Outbound]
+ K[151 PDF lifecycle] --> T[152 Retrieval contract]
+ T --> AI[76 and 77 AI consumers]
+```
+
+The diagram is selective; the machine graph preserves every prerequisite. Residency #160 can start independently from the completed #19 foundation. #42 production readiness consumes observability/residency evidence and is distinct from beta.2. Integration with future channels remains explicitly owned without forcing existing-identity workspace contracts to wait for every channel.
+
+## Effort accounting
+
+New estimates are planning assumptions attached to each new issue, not measurements. They cover bounded implementation plus the 3× allowance. The alignment itself is unbaselined #126; no feature effort or actual completion is fabricated for it. Existing baselines and Planning effort fields are unchanged. The sole explicit existing split is #85 (24h original base): #162 receives 8h and #85 retains 16h remaining. Completed foundations contribute zero remaining hours. Every other additional capability has its own non-duplicated issue estimate. Reforecast remaining work when accepted scope or actual integration evidence changes; do not rewrite historical baseline dates.
+
+
+Full source traceability: [master package](https://github.com/nathcymru/Tocyn/blob/main/docs/planning/post-beta-2026-09-10/README.md). Historical predecessor: [[Historical-Omnichannel-implementation-roadmap-2026-09-08]].
