@@ -1,4 +1,10 @@
-## Current continuation — 11 September 2026, 00:32 BST
+## Accepted partial delivery — 11 September 2026, 00:40 BST
+
+PR173 merged as33dfe0baae890ce61de66f4d6d204432e0763c9c. GitHub signature valid; reviewed b935f33, CI merge-ref and accepted tree all33ac182e8fc2ac6b58e784de5d7e0e620938a55e. Required CI/security passed (run34542673699, including guarded browser evidence), no review threads. Standing owner PR-only review bypass used; no independent approval, non-review bypass or Copilot review. The Copilot-named setup workflow only ran deterministic context-tool checks. Receipt: https://github.com/nathcymru/Tocyn/issues/129#issuecomment-5626987921 . Issue OPEN/Project In progress verified, no completion/progress/forecast claim.
+
+Continuation branch `codex/129-workspace-continuation` starts from accepted33dfe0b in `/private/tmp/tocyn-beta2-129`; preserve the owner checkout and retained historical stash. No workers active. Next #129 work: reconcile actual selected-ticket/panel interaction ownership with128/130 and implement remaining preference integration; obtain the already-pending retention duration before expiry activation, then demonstrate full acceptance. #66 remains dependency-cleared. Do not reopen173 or repeat completed storage/composer/browser work. Full beta2 scope and forecasts unchanged. Account observed3%used/97%remaining in its Codex window, one unused reset credit; task-specific cost unknown. No redemption or paid capacity.
+
+## Historical continuation — 11 September 2026, 00:32 BST
 
 Combined candidate is ready for a coherent partial PR173 push. Root integrated real auth tenant response, guarded composer cleanup retry, server-backed list preferences and bounded Draft indicators, data-router loss prevention including already-failed saves, and guarded local-beta workspace admission. Successful CAS writes/deletes charge existing mutation capacity atomically; identical-content revision writes charge too, stale CAS does not, and writes_stopped denies without changing counters/revisions. Root caught and corrected the initial no-op accounting exception before publication.
 

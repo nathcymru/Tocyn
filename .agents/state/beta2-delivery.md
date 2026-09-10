@@ -2,7 +2,11 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 11 September 2026, 00:32 BST
+## Current state — 11 September 2026, 00:40 BST
+
+Accepted main33dfe0baae890ce61de66f4d6d204432e0763c9c integrates partial #129 via PR173. Signature valid; reviewed/CI/merge trees match; mandatory CI/security and guarded browser gate passed. Standing PR-only review bypass recorded in issue receipt5626987921; zero Copilot. #129 stays OPEN/In progress with remaining preference/retention acceptance. No workers active; continuation branch `codex/129-workspace-continuation` preserves exact next actions in [workspace-129.md](workspace-129.md). #66 is ready. Beta2 remains unready and conservative forecasts unchanged. Owner servers/VoiceOver preserved.
+
+## Historical state — 11 September 2026, 00:32 BST
 
 The next coherent #129/draft173 batch passes184 dashboard tests,515 server tests,5 real guardrail tests and the guarded local browser attachment/draft/recovery scenario. New workspace routes preserve atomic local-beta mutation accounting and stopped-write protection. The browser receipt is retained with honest dirty-source/artifact provenance; exact submitted-head CI remains required. Details and remaining acceptance are in [workspace-129.md](workspace-129.md). Both native workers completed; root remains integration owner. No merge, closure or beta readiness claimed; main, Wiki and conservative forecasts remain unchanged. Zero Copilot and no paid capacity.
 

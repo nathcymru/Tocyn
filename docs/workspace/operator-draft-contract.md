@@ -1,6 +1,6 @@
 # Operator draft and workspace storage contract
 
-Status: #129 implementation in progress in PR #173, based on accepted main `32fba86`. Server storage, composer integration, list preferences and Draft indicators are implemented on the issue branch; selected-ticket/panel interactions and retention remain pending. This increment does not complete #129 or enable beta.2. The [operator workspace contract](operator-workspace-interaction-contract.md) remains product authority.
+Status: partial #129 delivery accepted in PR #173, signed main `33dfe0b`. Server storage, composer integration, list preferences and Draft indicators are integrated; selected-ticket/panel interactions and retention remain pending. This increment does not complete #129 or enable beta.2. The [operator workspace contract](operator-workspace-interaction-contract.md) remains product authority.
 
 All routes are under `/api/workspace` and inherit current dashboard authentication, session-version checks, MFA, staff role and tenant scope. Tenant and operator come from verified scope, never request fields. Ticket access is rechecked, including agent group membership. Workspace responses are marked `Cache-Control: private, no-store`. Responses containing a draft or saved selection do not grant access to the underlying ticket.
 
