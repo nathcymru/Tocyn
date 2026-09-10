@@ -12,8 +12,8 @@
     "externalWaits": "Not estimated; separately authorised provider/sandbox availability can delay acceptance."
   },
   "dependencyOnlyHours": 1134.0,
-  "beta2Forecast": "2027-02-09",
-  "expandedForecast": "2028-01-27",
+  "beta2Forecast": "2027-01-22",
+  "expandedForecast": "2028-01-21",
   "nodes": [
     {
       "number": 108,
@@ -131,13 +131,13 @@
       "progress": 0,
       "milestone": 10,
       "new": false,
-      "forecastStart": "2027-06-17",
-      "forecastTarget": "2027-06-25",
-      "workstream": "W1",
+      "forecastStart": "2027-06-11",
+      "forecastTarget": "2027-06-19",
+      "workstream": "W2",
       "remainingPlanningHours": 48.0,
       "floatHours": 1014.0,
       "criticalPath": "Supporting",
-      "variance": 88
+      "variance": 83
     },
     {
       "number": 91,
@@ -155,13 +155,13 @@
       "progress": 0,
       "milestone": 10,
       "new": false,
-      "forecastStart": "2026-11-09",
-      "forecastTarget": "2026-11-20",
-      "workstream": "W2",
+      "forecastStart": "2026-11-05",
+      "forecastTarget": "2026-11-17",
+      "workstream": "W1",
       "remainingPlanningHours": 72.0,
       "floatHours": 48.0,
       "criticalPath": "Near-critical",
-      "variance": 22
+      "variance": 19
     },
     {
       "number": 90,
@@ -180,13 +180,13 @@
       "progress": 0,
       "milestone": 6,
       "new": false,
-      "forecastStart": "2027-06-02",
-      "forecastTarget": "2027-06-14",
-      "workstream": "W1",
+      "forecastStart": "2027-05-27",
+      "forecastTarget": "2027-06-08",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 264.0,
       "criticalPath": "Supporting",
-      "variance": 124
+      "variance": 119
     },
     {
       "number": 89,
@@ -205,13 +205,13 @@
       "progress": 0,
       "milestone": 36,
       "new": false,
-      "forecastStart": "2027-05-18",
-      "forecastTarget": "2027-06-01",
-      "workstream": "W1",
+      "forecastStart": "2027-05-12",
+      "forecastTarget": "2027-05-26",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 696.0,
       "criticalPath": "Supporting",
-      "variance": 100
+      "variance": 95
     },
     {
       "number": 88,
@@ -230,13 +230,13 @@
       "progress": 0,
       "milestone": 10,
       "new": false,
-      "forecastStart": "2027-02-01",
-      "forecastTarget": "2027-02-12",
-      "workstream": "W1",
+      "forecastStart": "2027-01-30",
+      "forecastTarget": "2027-02-11",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": 30
+      "variance": 29
     },
     {
       "number": 87,
@@ -255,13 +255,13 @@
       "progress": 0,
       "milestone": 9,
       "new": false,
-      "forecastStart": "2026-12-04",
-      "forecastTarget": "2026-12-19",
+      "forecastStart": "2027-01-14",
+      "forecastTarget": "2027-01-29",
       "workstream": "W2",
       "remainingPlanningHours": 96.0,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -7
+      "variance": 28
     },
     {
       "number": 86,
@@ -280,13 +280,13 @@
       "progress": 0,
       "milestone": 31,
       "new": false,
-      "forecastStart": "2027-06-24",
-      "forecastTarget": "2027-07-06",
-      "workstream": "W2",
+      "forecastStart": "2027-06-18",
+      "forecastTarget": "2027-06-30",
+      "workstream": "W1",
       "remainingPlanningHours": 72.0,
       "floatHours": 678.0,
       "criticalPath": "Supporting",
-      "variance": 15
+      "variance": 10
     },
     {
       "number": 85,
@@ -305,13 +305,13 @@
       "progress": 0,
       "milestone": 25,
       "new": false,
-      "forecastStart": "2027-12-16",
-      "forecastTarget": "2027-12-23",
-      "workstream": "W1",
+      "forecastStart": "2027-12-10",
+      "forecastTarget": "2027-12-17",
+      "workstream": "W2",
       "remainingPlanningHours": 48,
       "floatHours": 360.0,
       "criticalPath": "Supporting",
-      "variance": 137
+      "variance": 132
     },
     {
       "number": 84,
@@ -329,13 +329,13 @@
       "progress": 0,
       "milestone": 24,
       "new": false,
-      "forecastStart": "2027-11-29",
-      "forecastTarget": "2027-12-15",
-      "workstream": "W1",
+      "forecastStart": "2027-11-23",
+      "forecastTarget": "2027-12-09",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 360.0,
       "criticalPath": "Supporting",
-      "variance": 140
+      "variance": 135
     },
     {
       "number": 83,
@@ -354,13 +354,13 @@
       "progress": 0,
       "milestone": 22,
       "new": false,
-      "forecastStart": "2027-06-11",
-      "forecastTarget": "2027-06-23",
-      "workstream": "W2",
+      "forecastStart": "2027-06-05",
+      "forecastTarget": "2027-06-17",
+      "workstream": "W1",
       "remainingPlanningHours": 72.0,
       "floatHours": 360.0,
       "criticalPath": "Supporting",
-      "variance": 14
+      "variance": 9
     },
     {
       "number": 82,
@@ -380,13 +380,13 @@
       "progress": 0,
       "milestone": 21,
       "new": false,
-      "forecastStart": "2027-11-12",
-      "forecastTarget": "2027-11-27",
-      "workstream": "W1",
+      "forecastStart": "2027-11-06",
+      "forecastTarget": "2027-11-22",
+      "workstream": "W2",
       "remainingPlanningHours": 96.0,
       "floatHours": 360.0,
       "criticalPath": "Supporting",
-      "variance": 135
+      "variance": 130
     },
     {
       "number": 81,
@@ -403,13 +403,13 @@
       "progress": 0,
       "milestone": 20,
       "new": false,
-      "forecastStart": "2027-05-29",
-      "forecastTarget": "2027-06-10",
-      "workstream": "W2",
+      "forecastStart": "2027-05-24",
+      "forecastTarget": "2027-06-04",
+      "workstream": "W1",
       "remainingPlanningHours": 72.0,
       "floatHours": 360.0,
       "criticalPath": "Supporting",
-      "variance": 13
+      "variance": 8
     },
     {
       "number": 80,
@@ -428,19 +428,19 @@
       "progress": 0,
       "milestone": 20,
       "new": false,
-      "forecastStart": "2027-05-08",
-      "forecastTarget": "2027-05-28",
-      "workstream": "W2",
+      "forecastStart": "2027-05-03",
+      "forecastTarget": "2027-05-22",
+      "workstream": "W1",
       "remainingPlanningHours": 120.0,
       "floatHours": 360.0,
       "criticalPath": "Supporting",
-      "variance": 12
+      "variance": 7
     },
     {
       "number": 79,
       "alias": "#79",
       "title": "Enforce granular human and agent capabilities",
-      "done": false,
+      "done": true,
       "effort": 24.0,
       "dependencies": [
         19,
@@ -448,18 +448,17 @@
       ],
       "baselineStart": "2027-04-09",
       "baselineTarget": "2027-04-21",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualCompletion": "2026-09-10",
+      "progress": 100,
       "milestone": 23,
       "new": false,
       "actualStart": "2026-09-10",
-      "forecastStart": "2026-09-11",
-      "forecastTarget": "2026-09-23",
-      "workstream": "W2",
-      "remainingPlanningHours": 72.0,
-      "floatHours": 396.0,
+      "floatHours": 468.0,
       "criticalPath": "Supporting",
-      "variance": -180
+      "forecastStart": "2027-04-09",
+      "forecastTarget": "2027-04-21",
+      "remainingPlanningHours": 0,
+      "variance": -191
     },
     {
       "number": 78,
@@ -480,13 +479,13 @@
       "progress": 0,
       "milestone": 27,
       "new": false,
-      "forecastStart": "2027-11-29",
-      "forecastTarget": "2027-12-14",
-      "workstream": "W2",
+      "forecastStart": "2027-11-23",
+      "forecastTarget": "2027-12-08",
+      "workstream": "W1",
       "remainingPlanningHours": 96.0,
       "floatHours": 456.0,
       "criticalPath": "Supporting",
-      "variance": 135
+      "variance": 130
     },
     {
       "number": 77,
@@ -505,13 +504,13 @@
       "progress": 0,
       "milestone": 19,
       "new": false,
-      "forecastStart": "2027-11-04",
-      "forecastTarget": "2027-11-11",
-      "workstream": "W1",
+      "forecastStart": "2027-10-29",
+      "forecastTarget": "2027-11-05",
+      "workstream": "W2",
       "remainingPlanningHours": 48.0,
       "floatHours": 552.0,
       "criticalPath": "Supporting",
-      "variance": 143
+      "variance": 138
     },
     {
       "number": 76,
@@ -529,13 +528,13 @@
       "progress": 0,
       "milestone": 18,
       "new": false,
-      "forecastStart": "2027-10-21",
-      "forecastTarget": "2027-11-03",
-      "workstream": "W1",
+      "forecastStart": "2027-10-15",
+      "forecastTarget": "2027-10-28",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 384.0,
       "criticalPath": "Supporting",
-      "variance": 145
+      "variance": 140
     },
     {
       "number": 75,
@@ -553,13 +552,13 @@
       "progress": 0,
       "milestone": 17,
       "new": false,
-      "forecastStart": "2027-05-05",
-      "forecastTarget": "2027-05-17",
-      "workstream": "W1",
+      "forecastStart": "2027-04-29",
+      "forecastTarget": "2027-05-11",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 480.0,
       "criticalPath": "Supporting",
-      "variance": 12
+      "variance": 7
     },
     {
       "number": 74,
@@ -578,13 +577,13 @@
       "progress": 0,
       "milestone": 30,
       "new": false,
-      "forecastStart": "2027-04-24",
-      "forecastTarget": "2027-05-07",
-      "workstream": "W2",
+      "forecastStart": "2027-04-17",
+      "forecastTarget": "2027-05-01",
+      "workstream": "W1",
       "remainingPlanningHours": 72.0,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": 50
+      "variance": 45
     },
     {
       "number": 73,
@@ -604,13 +603,13 @@
       "progress": 0,
       "milestone": 29,
       "new": false,
-      "forecastStart": "2026-11-10",
-      "forecastTarget": "2026-11-24",
-      "workstream": "W1",
+      "forecastStart": "2026-10-31",
+      "forecastTarget": "2026-11-12",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
-      "floatHours": 594.0,
+      "floatHours": 666.0,
       "criticalPath": "Supporting",
-      "variance": -81
+      "variance": -91
     },
     {
       "number": 72,
@@ -629,13 +628,13 @@
       "progress": 0,
       "milestone": 15,
       "new": false,
-      "forecastStart": "2027-04-22",
-      "forecastTarget": "2027-05-04",
-      "workstream": "W1",
+      "forecastStart": "2027-04-16",
+      "forecastTarget": "2027-04-28",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 432.0,
       "criticalPath": "Supporting",
-      "variance": 50
+      "variance": 45
     },
     {
       "number": 71,
@@ -654,13 +653,13 @@
       "progress": 0,
       "milestone": 13,
       "new": false,
-      "forecastStart": "2026-12-25",
-      "forecastTarget": "2027-01-04",
-      "workstream": "W1",
+      "forecastStart": "2026-12-12",
+      "forecastTarget": "2026-12-18",
+      "workstream": "W2",
       "remainingPlanningHours": 36.0,
-      "floatHours": 630.0,
+      "floatHours": 702.0,
       "criticalPath": "Supporting",
-      "variance": -33
+      "variance": -47
     },
     {
       "number": 70,
@@ -701,13 +700,13 @@
       "progress": 0,
       "milestone": 14,
       "new": false,
-      "forecastStart": "2027-04-14",
-      "forecastTarget": "2027-04-23",
-      "workstream": "W2",
+      "forecastStart": "2027-04-07",
+      "forecastTarget": "2027-04-16",
+      "workstream": "W1",
       "remainingPlanningHours": 36.0,
       "floatHours": 858.0,
       "criticalPath": "Supporting",
-      "variance": 58
+      "variance": 52
     },
     {
       "number": 68,
@@ -750,13 +749,13 @@
       "progress": 0,
       "milestone": 16,
       "new": false,
-      "forecastStart": "2027-04-09",
-      "forecastTarget": "2027-04-21",
-      "workstream": "W1",
+      "forecastStart": "2027-04-03",
+      "forecastTarget": "2027-04-15",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 894.0,
       "criticalPath": "Supporting",
-      "variance": 85
+      "variance": 80
     },
     {
       "number": 66,
@@ -819,13 +818,13 @@
       "progress": 0,
       "milestone": 6,
       "new": false,
-      "forecastStart": "2026-10-31",
-      "forecastTarget": "2026-11-07",
+      "forecastStart": "2026-10-19",
+      "forecastTarget": "2026-10-26",
       "workstream": "W2",
       "remainingPlanningHours": 48.0,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -7
+      "variance": -18
     },
     {
       "number": 63,
@@ -984,13 +983,13 @@
       "progress": 0,
       "milestone": 33,
       "new": false,
-      "forecastStart": "2027-04-06",
-      "forecastTarget": "2027-04-13",
-      "workstream": "W2",
+      "forecastStart": "2027-03-30",
+      "forecastTarget": "2027-04-06",
+      "workstream": "W1",
       "remainingPlanningHours": 48.0,
       "floatHours": 720.0,
       "criticalPath": "Supporting",
-      "variance": 4
+      "variance": -2
     },
     {
       "number": 55,
@@ -1009,13 +1008,13 @@
       "progress": 0,
       "milestone": 32,
       "new": false,
-      "forecastStart": "2027-03-27",
-      "forecastTarget": "2027-04-08",
-      "workstream": "W1",
+      "forecastStart": "2027-03-22",
+      "forecastTarget": "2027-04-02",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 696.0,
       "criticalPath": "Supporting",
-      "variance": 4
+      "variance": -1
     },
     {
       "number": 54,
@@ -1034,13 +1033,13 @@
       "progress": 0,
       "milestone": 35,
       "new": false,
-      "forecastStart": "2027-03-20",
-      "forecastTarget": "2027-04-05",
-      "workstream": "W2",
+      "forecastStart": "2027-03-13",
+      "forecastTarget": "2027-03-29",
+      "workstream": "W1",
       "remainingPlanningHours": 96.0,
       "floatHours": 672.0,
       "criticalPath": "Supporting",
-      "variance": 4
+      "variance": -2
     },
     {
       "number": 53,
@@ -1059,13 +1058,13 @@
       "progress": 0,
       "milestone": 34,
       "new": false,
-      "forecastStart": "2027-03-15",
-      "forecastTarget": "2027-03-26",
-      "workstream": "W1",
+      "forecastStart": "2027-03-09",
+      "forecastTarget": "2027-03-20",
+      "workstream": "W2",
       "remainingPlanningHours": 72.0,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": 53
+      "variance": 48
     },
     {
       "number": 52,
@@ -1084,13 +1083,13 @@
       "progress": 0,
       "milestone": 10,
       "new": false,
-      "forecastStart": "2027-03-12",
-      "forecastTarget": "2027-03-19",
-      "workstream": "W2",
+      "forecastStart": "2027-03-05",
+      "forecastTarget": "2027-03-12",
+      "workstream": "W1",
       "remainingPlanningHours": 48.0,
       "floatHours": 720.0,
       "criticalPath": "Supporting",
-      "variance": 1
+      "variance": -5
     },
     {
       "number": 51,
@@ -1109,13 +1108,13 @@
       "progress": 0,
       "milestone": 10,
       "new": false,
-      "forecastStart": "2026-11-21",
-      "forecastTarget": "2026-12-03",
-      "workstream": "W2",
+      "forecastStart": "2026-11-18",
+      "forecastTarget": "2026-11-30",
+      "workstream": "W1",
       "remainingPlanningHours": 72.0,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": 4
+      "variance": 1
     },
     {
       "number": 50,
@@ -1161,13 +1160,13 @@
       "progress": 0,
       "milestone": null,
       "new": false,
-      "forecastStart": "2027-06-15",
-      "forecastTarget": "2027-06-16",
-      "workstream": "W1",
+      "forecastStart": "2027-06-09",
+      "forecastTarget": "2027-06-10",
+      "workstream": "W2",
       "remainingPlanningHours": 6.0,
       "floatHours": 624.0,
       "criticalPath": "Supporting",
-      "variance": 58
+      "variance": 53
     },
     {
       "number": 48,
@@ -1208,13 +1207,13 @@
       "progress": 0,
       "milestone": 5,
       "new": false,
-      "forecastStart": "2027-03-10",
-      "forecastTarget": "2027-03-13",
-      "workstream": "W1",
+      "forecastStart": "2027-03-04",
+      "forecastTarget": "2027-03-08",
+      "workstream": "W2",
       "remainingPlanningHours": 24.0,
       "floatHours": 1086.0,
       "criticalPath": "Supporting",
-      "variance": 87
+      "variance": 82
     },
     {
       "number": 44,
@@ -1231,13 +1230,13 @@
       "progress": 0,
       "milestone": 5,
       "new": false,
-      "forecastStart": "2027-03-08",
-      "forecastTarget": "2027-03-11",
-      "workstream": "W2",
+      "forecastStart": "2027-02-27",
+      "forecastTarget": "2027-03-04",
+      "workstream": "W1",
       "remainingPlanningHours": 24.0,
       "floatHours": 1086.0,
       "criticalPath": "Supporting",
-      "variance": 87
+      "variance": 81
     },
     {
       "number": 42,
@@ -1256,13 +1255,13 @@
       "progress": 0,
       "milestone": 8,
       "new": false,
-      "forecastStart": "2027-03-02",
-      "forecastTarget": "2027-03-09",
-      "workstream": "W1",
+      "forecastStart": "2027-02-24",
+      "forecastTarget": "2027-03-03",
+      "workstream": "W2",
       "remainingPlanningHours": 48.0,
       "floatHours": 1014.0,
       "criticalPath": "Supporting",
-      "variance": 76
+      "variance": 71
     },
     {
       "number": 22,
@@ -1279,13 +1278,13 @@
       "progress": null,
       "milestone": 5,
       "new": false,
-      "forecastStart": "2027-02-26",
-      "forecastTarget": "2027-03-01",
-      "workstream": "W1",
+      "forecastStart": "2027-02-20",
+      "forecastTarget": "2027-02-23",
+      "workstream": "W2",
       "remainingPlanningHours": 18.0,
       "floatHours": 1116.0,
       "criticalPath": "Supporting",
-      "variance": 75
+      "variance": 70
     },
     {
       "number": 21,
@@ -1340,7 +1339,7 @@
       "progress": 100,
       "milestone": 9,
       "new": false,
-      "floatHours": 396.0,
+      "floatHours": 468.0,
       "criticalPath": "Supporting",
       "forecastStart": "2026-09-08",
       "forecastTarget": "2026-09-15",
@@ -1362,13 +1361,13 @@
       "progress": 0,
       "milestone": 12,
       "new": false,
-      "forecastStart": "2027-02-18",
-      "forecastTarget": "2027-02-25",
-      "workstream": "W1",
+      "forecastStart": "2027-02-12",
+      "forecastTarget": "2027-02-19",
+      "workstream": "W2",
       "remainingPlanningHours": 48.0,
       "floatHours": 1086.0,
       "criticalPath": "Supporting",
-      "variance": 24
+      "variance": 19
     },
     {
       "number": 17,
@@ -1385,13 +1384,13 @@
       "progress": 0,
       "milestone": 26,
       "new": false,
-      "forecastStart": "2027-02-23",
-      "forecastTarget": "2027-03-06",
-      "workstream": "W2",
+      "forecastStart": "2027-02-15",
+      "forecastTarget": "2027-02-26",
+      "workstream": "W1",
       "remainingPlanningHours": 72.0,
       "floatHours": 942.0,
       "criticalPath": "Supporting",
-      "variance": -42
+      "variance": -49
     },
     {
       "number": 16,
@@ -1409,13 +1408,13 @@
       "progress": 0,
       "milestone": 26,
       "new": false,
-      "forecastStart": "2027-02-15",
-      "forecastTarget": "2027-02-22",
-      "workstream": "W2",
+      "forecastStart": "2027-02-05",
+      "forecastTarget": "2027-02-13",
+      "workstream": "W1",
       "remainingPlanningHours": 48.0,
       "floatHours": 942.0,
       "criticalPath": "Supporting",
-      "variance": -42
+      "variance": -49
     },
     {
       "number": 15,
@@ -1450,13 +1449,13 @@
       "progress": 0,
       "milestone": 5,
       "new": false,
-      "forecastStart": "2027-02-13",
-      "forecastTarget": "2027-02-17",
+      "forecastStart": "2027-02-01",
+      "forecastTarget": "2027-02-04",
       "workstream": "W1",
       "remainingPlanningHours": 24.0,
       "floatHours": 1086.0,
       "criticalPath": "Supporting",
-      "variance": 72
+      "variance": 61
     },
     {
       "number": 13,
@@ -1491,13 +1490,13 @@
       "progress": 0,
       "milestone": 5,
       "new": false,
-      "forecastStart": "2027-02-10",
-      "forecastTarget": "2027-02-13",
-      "workstream": "W2",
+      "forecastStart": "2027-01-23",
+      "forecastTarget": "2027-01-30",
+      "workstream": "W1",
       "remainingPlanningHours": 24.0,
       "floatHours": 1086.0,
       "criticalPath": "Supporting",
-      "variance": 127
+      "variance": 115
     },
     {
       "number": 127,
@@ -1541,13 +1540,13 @@
       "progress": 0,
       "milestone": 13,
       "new": true,
-      "forecastStart": "2026-12-08",
-      "forecastTarget": "2026-12-24",
-      "workstream": "W1",
+      "forecastStart": "2026-11-26",
+      "forecastTarget": "2026-12-11",
+      "workstream": "W2",
       "remainingPlanningHours": 96,
-      "floatHours": 594.0,
+      "floatHours": 666.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -19
     },
     {
       "number": 129,
@@ -1567,13 +1566,13 @@
       "progress": 0,
       "milestone": 37,
       "new": true,
-      "forecastStart": "2026-09-24",
-      "forecastTarget": "2026-10-05",
+      "forecastStart": "2026-09-11",
+      "forecastTarget": "2026-09-22",
       "workstream": "W2",
       "remainingPlanningHours": 60,
-      "floatHours": 396.0,
+      "floatHours": 468.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -19
     },
     {
       "number": 130,
@@ -1593,13 +1592,13 @@
       "progress": 0,
       "milestone": 37,
       "new": true,
-      "forecastStart": "2026-11-25",
-      "forecastTarget": "2026-12-07",
-      "workstream": "W1",
+      "forecastStart": "2026-11-13",
+      "forecastTarget": "2026-11-25",
+      "workstream": "W2",
       "remainingPlanningHours": 72,
-      "floatHours": 594.0,
+      "floatHours": 666.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -18
     },
     {
       "number": 131,
@@ -1617,13 +1616,13 @@
       "progress": 0,
       "milestone": 13,
       "new": true,
-      "forecastStart": "2027-01-05",
-      "forecastTarget": "2027-01-12",
-      "workstream": "W1",
+      "forecastStart": "2026-12-19",
+      "forecastTarget": "2026-12-25",
+      "workstream": "W2",
       "remainingPlanningHours": 36,
-      "floatHours": 630.0,
+      "floatHours": 702.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 132,
@@ -1641,13 +1640,13 @@
       "progress": 0,
       "milestone": 13,
       "new": true,
-      "forecastStart": "2027-01-02",
-      "forecastTarget": "2027-01-09",
-      "workstream": "W2",
+      "forecastStart": "2026-12-16",
+      "forecastTarget": "2026-12-23",
+      "workstream": "W1",
       "remainingPlanningHours": 48,
-      "floatHours": 594.0,
+      "floatHours": 666.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 133,
@@ -1667,13 +1666,13 @@
       "progress": 0,
       "milestone": 15,
       "new": true,
-      "forecastStart": "2027-01-11",
-      "forecastTarget": "2027-01-18",
-      "workstream": "W2",
+      "forecastStart": "2026-12-24",
+      "forecastTarget": "2026-12-31",
+      "workstream": "W1",
       "remainingPlanningHours": 48,
-      "floatHours": 654.0,
+      "floatHours": 726.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 134,
@@ -1692,13 +1691,13 @@
       "progress": 0,
       "milestone": 13,
       "new": true,
-      "forecastStart": "2027-01-13",
-      "forecastTarget": "2027-01-23",
-      "workstream": "W1",
+      "forecastStart": "2026-12-26",
+      "forecastTarget": "2027-01-06",
+      "workstream": "W2",
       "remainingPlanningHours": 60,
-      "floatHours": 594.0,
+      "floatHours": 666.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 135,
@@ -1718,13 +1717,13 @@
       "progress": 0,
       "milestone": 13,
       "new": true,
-      "forecastStart": "2027-01-19",
-      "forecastTarget": "2027-01-26",
-      "workstream": "W2",
+      "forecastStart": "2027-01-01",
+      "forecastTarget": "2027-01-08",
+      "workstream": "W1",
       "remainingPlanningHours": 48,
-      "floatHours": 654.0,
+      "floatHours": 726.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 136,
@@ -1744,13 +1743,13 @@
       "progress": 0,
       "milestone": 37,
       "new": true,
-      "forecastStart": "2026-10-06",
-      "forecastTarget": "2026-10-17",
+      "forecastStart": "2026-09-23",
+      "forecastTarget": "2026-10-05",
       "workstream": "W2",
       "remainingPlanningHours": 72,
-      "floatHours": 594.0,
+      "floatHours": 666.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -19
     },
     {
       "number": 137,
@@ -1770,13 +1769,13 @@
       "progress": 0,
       "milestone": 29,
       "new": true,
-      "forecastStart": "2026-12-21",
-      "forecastTarget": "2027-01-01",
-      "workstream": "W2",
+      "forecastStart": "2026-12-01",
+      "forecastTarget": "2026-12-15",
+      "workstream": "W1",
       "remainingPlanningHours": 72,
-      "floatHours": 726.0,
+      "floatHours": 798.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 138,
@@ -1794,13 +1793,13 @@
       "progress": 0,
       "milestone": 13,
       "new": true,
-      "forecastStart": "2027-01-25",
-      "forecastTarget": "2027-01-30",
-      "workstream": "W1",
+      "forecastStart": "2027-01-07",
+      "forecastTarget": "2027-01-13",
+      "workstream": "W2",
       "remainingPlanningHours": 36,
-      "floatHours": 666.0,
+      "floatHours": 738.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 139,
@@ -1818,13 +1817,13 @@
       "progress": 0,
       "milestone": 13,
       "new": true,
-      "forecastStart": "2027-01-27",
-      "forecastTarget": "2027-02-01",
-      "workstream": "W2",
+      "forecastStart": "2027-01-09",
+      "forecastTarget": "2027-01-14",
+      "workstream": "W1",
       "remainingPlanningHours": 24,
-      "floatHours": 678.0,
+      "floatHours": 750.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 140,
@@ -1859,13 +1858,13 @@
       "progress": 0,
       "milestone": 13,
       "new": true,
-      "forecastStart": "2027-02-02",
-      "forecastTarget": "2027-02-09",
-      "workstream": "W2",
+      "forecastStart": "2027-01-15",
+      "forecastTarget": "2027-01-22",
+      "workstream": "W1",
       "remainingPlanningHours": 48,
-      "floatHours": 594.0,
+      "floatHours": 666.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -23
     },
     {
       "number": 141,
@@ -1898,13 +1897,13 @@
       "progress": 0,
       "milestone": null,
       "new": true,
-      "forecastStart": "2028-01-26",
-      "forecastTarget": "2028-01-27",
-      "workstream": "W2",
+      "forecastStart": "2028-01-20",
+      "forecastTarget": "2028-01-21",
+      "workstream": "W1",
       "remainingPlanningHours": 6,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 142,
@@ -1926,13 +1925,13 @@
       "progress": 0,
       "milestone": 38,
       "new": true,
-      "forecastStart": "2027-06-26",
-      "forecastTarget": "2027-07-09",
-      "workstream": "W1",
+      "forecastStart": "2027-06-21",
+      "forecastTarget": "2027-07-03",
+      "workstream": "W2",
       "remainingPlanningHours": 72,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 143,
@@ -1953,13 +1952,13 @@
       "progress": 0,
       "milestone": 39,
       "new": true,
-      "forecastStart": "2027-07-10",
-      "forecastTarget": "2027-07-30",
-      "workstream": "W1",
+      "forecastStart": "2027-07-05",
+      "forecastTarget": "2027-07-24",
+      "workstream": "W2",
       "remainingPlanningHours": 120,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 144,
@@ -1980,13 +1979,13 @@
       "progress": 0,
       "milestone": 39,
       "new": true,
-      "forecastStart": "2027-07-31",
-      "forecastTarget": "2027-08-24",
-      "workstream": "W1",
+      "forecastStart": "2027-07-26",
+      "forecastTarget": "2027-08-18",
+      "workstream": "W2",
       "remainingPlanningHours": 144,
       "floatHours": 120.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 145,
@@ -2009,13 +2008,13 @@
       "progress": 0,
       "milestone": 40,
       "new": true,
-      "forecastStart": "2027-08-13",
-      "forecastTarget": "2027-09-06",
-      "workstream": "W2",
+      "forecastStart": "2027-08-07",
+      "forecastTarget": "2027-08-31",
+      "workstream": "W1",
       "remainingPlanningHours": 144,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 146,
@@ -2035,13 +2034,13 @@
       "progress": 0,
       "milestone": 40,
       "new": true,
-      "forecastStart": "2027-09-07",
-      "forecastTarget": "2027-09-27",
-      "workstream": "W2",
+      "forecastStart": "2027-09-01",
+      "forecastTarget": "2027-09-21",
+      "workstream": "W1",
       "remainingPlanningHours": 120,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 147,
@@ -2060,13 +2059,13 @@
       "progress": 0,
       "milestone": 41,
       "new": true,
-      "forecastStart": "2027-08-25",
-      "forecastTarget": "2027-09-14",
-      "workstream": "W1",
+      "forecastStart": "2027-08-19",
+      "forecastTarget": "2027-09-08",
+      "workstream": "W2",
       "remainingPlanningHours": 120,
       "floatHours": 144.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 148,
@@ -2089,13 +2088,13 @@
       "progress": 0,
       "milestone": 41,
       "new": true,
-      "forecastStart": "2027-12-24",
-      "forecastTarget": "2028-01-05",
-      "workstream": "W1",
+      "forecastStart": "2027-12-18",
+      "forecastTarget": "2027-12-30",
+      "workstream": "W2",
       "remainingPlanningHours": 72,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 149,
@@ -2114,13 +2113,13 @@
       "progress": 0,
       "milestone": 42,
       "new": true,
-      "forecastStart": "2027-07-07",
-      "forecastTarget": "2027-07-22",
-      "workstream": "W2",
+      "forecastStart": "2027-07-01",
+      "forecastTarget": "2027-07-16",
+      "workstream": "W1",
       "remainingPlanningHours": 96,
       "floatHours": 432.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 150,
@@ -2140,13 +2139,13 @@
       "progress": 0,
       "milestone": 42,
       "new": true,
-      "forecastStart": "2027-07-23",
-      "forecastTarget": "2027-08-12",
-      "workstream": "W2",
+      "forecastStart": "2027-07-17",
+      "forecastTarget": "2027-08-06",
+      "workstream": "W1",
       "remainingPlanningHours": 120,
       "floatHours": 432.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 151,
@@ -2165,13 +2164,13 @@
       "progress": 0,
       "milestone": 43,
       "new": true,
-      "forecastStart": "2027-09-15",
-      "forecastTarget": "2027-10-01",
-      "workstream": "W1",
+      "forecastStart": "2027-09-09",
+      "forecastTarget": "2027-09-25",
+      "workstream": "W2",
       "remainingPlanningHours": 96,
       "floatHours": 384.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 152,
@@ -2189,13 +2188,13 @@
       "progress": 0,
       "milestone": 43,
       "new": true,
-      "forecastStart": "2027-10-02",
-      "forecastTarget": "2027-10-20",
-      "workstream": "W1",
+      "forecastStart": "2027-09-27",
+      "forecastTarget": "2027-10-14",
+      "workstream": "W2",
       "remainingPlanningHours": 72,
       "floatHours": 384.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 153,
@@ -2217,13 +2216,13 @@
       "progress": 0,
       "milestone": 44,
       "new": true,
-      "forecastStart": "2027-09-28",
-      "forecastTarget": "2027-10-18",
-      "workstream": "W2",
+      "forecastStart": "2027-09-22",
+      "forecastTarget": "2027-10-12",
+      "workstream": "W1",
       "remainingPlanningHours": 120,
       "floatHours": 600.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 154,
@@ -2245,13 +2244,13 @@
       "progress": 0,
       "milestone": 44,
       "new": true,
-      "forecastStart": "2027-12-15",
-      "forecastTarget": "2027-12-30",
-      "workstream": "W2",
+      "forecastStart": "2027-12-09",
+      "forecastTarget": "2027-12-24",
+      "workstream": "W1",
       "remainingPlanningHours": 96,
       "floatHours": 456.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 155,
@@ -2270,13 +2269,13 @@
       "progress": 0,
       "milestone": 45,
       "new": true,
-      "forecastStart": "2027-10-19",
-      "forecastTarget": "2027-10-30",
-      "workstream": "W2",
+      "forecastStart": "2027-10-13",
+      "forecastTarget": "2027-10-25",
+      "workstream": "W1",
       "remainingPlanningHours": 72,
       "floatHours": 576.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 156,
@@ -2297,13 +2296,13 @@
       "progress": 0,
       "milestone": 45,
       "new": true,
-      "forecastStart": "2028-01-06",
-      "forecastTarget": "2028-01-25",
-      "workstream": "W1",
+      "forecastStart": "2027-12-31",
+      "forecastTarget": "2028-01-19",
+      "workstream": "W2",
       "remainingPlanningHours": 96,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 157,
@@ -2323,13 +2322,13 @@
       "progress": 0,
       "milestone": 45,
       "new": true,
-      "forecastStart": "2027-12-31",
-      "forecastTarget": "2028-01-20",
-      "workstream": "W2",
+      "forecastStart": "2027-12-25",
+      "forecastTarget": "2028-01-14",
+      "workstream": "W1",
       "remainingPlanningHours": 120,
       "floatHours": 408.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 158,
@@ -2346,13 +2345,13 @@
       "progress": 0,
       "milestone": 46,
       "new": true,
-      "forecastStart": "2027-11-01",
-      "forecastTarget": "2027-11-16",
-      "workstream": "W2",
+      "forecastStart": "2027-10-26",
+      "forecastTarget": "2027-11-10",
+      "workstream": "W1",
       "remainingPlanningHours": 96,
-      "floatHours": 960.0,
+      "floatHours": 1032.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 159,
@@ -2370,13 +2369,13 @@
       "progress": 0,
       "milestone": 8,
       "new": true,
-      "forecastStart": "2026-10-19",
-      "forecastTarget": "2026-10-30",
+      "forecastStart": "2026-10-06",
+      "forecastTarget": "2026-10-17",
       "workstream": "W2",
       "remainingPlanningHours": 72,
       "floatHours": 0.0,
       "criticalPath": "Critical",
-      "variance": -8
+      "variance": -19
     },
     {
       "number": 160,
@@ -2418,13 +2417,13 @@
       "progress": 0,
       "milestone": 17,
       "new": true,
-      "forecastStart": "2027-11-17",
-      "forecastTarget": "2027-11-20",
-      "workstream": "W2",
+      "forecastStart": "2027-11-11",
+      "forecastTarget": "2027-11-15",
+      "workstream": "W1",
       "remainingPlanningHours": 24,
       "floatHours": 750.0,
       "criticalPath": "Supporting",
-      "variance": -11
+      "variance": -16
     },
     {
       "number": 162,
@@ -2442,13 +2441,13 @@
       "progress": 0,
       "milestone": 25,
       "new": true,
-      "forecastStart": "2026-11-05",
-      "forecastTarget": "2026-11-09",
-      "workstream": "W1",
+      "forecastStart": "2026-10-27",
+      "forecastTarget": "2026-10-30",
+      "workstream": "W2",
       "remainingPlanningHours": 24,
-      "floatHours": 642.0,
+      "floatHours": 714.0,
       "criticalPath": "Supporting",
-      "variance": -8
+      "variance": -16
     }
   ]
 }
