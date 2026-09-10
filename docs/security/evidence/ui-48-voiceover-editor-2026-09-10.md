@@ -1,0 +1,11 @@
+# Knowledge editor spoken evidence — 10 September 2026
+
+Owner-authorised Safari/VoiceOver read the local dashboard on `127.0.0.1:5190/knowledge/new`. Actual spoken output included “Back to knowledge base button”, “heading level 1 New Article”, “Save Article button”, “Title * required invalid data edit text”, “No Category (Root) Category collapsed pop-up button”, “Customer Facing Answer Tier collapsed pop-up button”, and “Content (Markdown) text entry area”. The native required state was observed on the empty title before submission, not a server rejection.
+
+The retained Markdown toolbar announced named controls for bold, italic, strikethrough, horizontal rule, title, link, quote, code, code block, comment, image, table, lists, help, edit/live/preview modes and fullscreen. Navigation reached the content entry area. No toolbar formatting action or save was invoked in Safari; this is naming/traversal evidence, not comprehensive editor feature acceptance.
+
+Source SHA-256 at observation: `1b112528bacd01f9f0ebe72913a84f18b7df24bcb00044a40293be9d060f5c61`, KnowledgeEditorPage.tsx on dirty candidate parent `2c2680afc4f70484e5e62bf2fbbd60647aa65d93`. Served by local Vite; not claimed as a production artifact test. Companion real Chromium receipt `ui-48-editor-2c2680a.json` covers input, SOP selection, failed save/draft preservation and matching retry using intercepted synthetic APIs. Its first attempt was redirected by mandatory MFA because the synthetic fixture omitted MFA enrollment; the fixture was corrected to enrolled before the passing run, without altering application enforcement.
+
+Safari returned to the existing local ticket fixture. VoiceOver remained enabled. No account, provider or server record was changed. The subsequent pending/stale-save correction requires separate regression evidence before final integration.
+
+Final pending/stale-save correction:4focused regressions and full dashboard140tests pass; fresh Chromium evidence re-runs named-field/draft preservation and adds held-save input/back/Markdown lock plus toolbar non-mutation. Final source hash is in the JSON receipt; naming markup is unchanged from this VoiceOver observation. This does not falsely re-label the earlier spoken run as final-source runtime testing.

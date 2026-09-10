@@ -1,5 +1,5 @@
 import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory } from '../types';
@@ -11,6 +11,19 @@ export const KnowledgeEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const titleId = useId();
+  const categoryIdInput = useId();
+  const tierId = useId();
+  const contentId = useId();
+  const errorId = useId();
+  const routeKey = id ?? '__new__';
+  const savingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const routeRef = useRef(id);
+  const saveRequestRef = useRef(0);
+
+  const [loadedRouteKey, setLoadedRouteKey] = useState<string | null>(id ? null : routeKey);
+  const editorReady = routeRef.current === id && loadedRouteKey === routeKey;
 
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<string>(searchParams.get('categoryId') || '');
@@ -22,43 +35,73 @@ export const KnowledgeEditorPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const cats = await dashboardApi.get<KnowledgeCategory[]>('/knowledge/categories');
-        setCategories(cats);
-      } catch (err: any) {
-        setError(err.message);
-      }
-    };
-    fetchCategories();
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
   useEffect(() => {
+    routeRef.current = id;
+    saveRequestRef.current += 1;
+    savingRef.current = false;
+    setIsSaving(false);
+    setLoadedRouteKey(null);
+    setError(null);
+    setTitle('');
+    setCategoryId(searchParams.get('categoryId') || '');
+    setTier('answer');
+    setContent('');
+    if (!id) setLoadedRouteKey(routeKey);
+  }, [id, routeKey]);
+
+  useEffect(() => {
+    let current = true;
+    const fetchCategories = async () => {
+      try {
+        const cats = await dashboardApi.get<KnowledgeCategory[]>('/knowledge/categories');
+        if (current) setCategories(cats);
+      } catch (err: any) {
+        if (current) setError(err.message);
+      }
+    };
+    fetchCategories();
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
+    let current = true;
     if (id) {
       const fetchArticle = async () => {
         try {
-          const doc = await dashboardApi.get<any>(`/knowledge/articles/${id}`);
-          const articleContent = await dashboardApi.get<any>(`/knowledge/articles/${id}/content`);
-
+          const [doc, articleContent] = await Promise.all([
+            dashboardApi.get<any>(`/knowledge/articles/${id}`),
+            dashboardApi.get<any>(`/knowledge/articles/${id}/content`),
+          ]);
+          if (!current) return;
           setTitle(doc.title);
           setCategoryId(doc.category_id || '');
           setTier(doc.tier || 'answer');
-          // Content might be plain text string from the endpoint, depending on how API is built
           setContent(articleContent.content || articleContent || '');
+          setLoadedRouteKey(routeKey);
         } catch (err: any) {
-          setError(err.message);
+          if (current) setError(err.message);
         }
       };
       fetchArticle();
     }
-  }, [id]);
+    return () => { current = false; };
+  }, [id, routeKey]);
 
   const handleSave = async () => {
+    if (savingRef.current || !editorReady) return;
     if (!title.trim()) {
       setError('Title is required');
       return;
     }
 
+    const saveRoute = routeRef.current;
+    const request = saveRequestRef.current + 1;
+    saveRequestRef.current = request;
+    savingRef.current = true;
     setIsSaving(true);
     setError(null);
     try {
@@ -77,11 +120,14 @@ export const KnowledgeEditorPage: React.FC = () => {
           tier
         });
       }
-      navigate('/knowledge');
+      if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) navigate('/knowledge');
     } catch (err: any) {
-      setError(err.message);
+      if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) setError(err.message);
     } finally {
-      setIsSaving(false);
+      if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) {
+        savingRef.current = false;
+        setIsSaving(false);
+      }
     }
   };
 
@@ -108,6 +154,8 @@ export const KnowledgeEditorPage: React.FC = () => {
         <div className="flex items-center space-x-4">
           <TocynButton
             onClick={() => navigate('/knowledge')}
+            aria-label="Back to knowledge base"
+            disabled={isSaving || !editorReady}
             className="text-gray-500 hover:text-gray-700"
           >
             <ArrowLeft size={20} />
@@ -119,7 +167,7 @@ export const KnowledgeEditorPage: React.FC = () => {
 
         <TocynButton
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || !editorReady}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
         >
           {isSaving ? (
@@ -138,7 +186,7 @@ export const KnowledgeEditorPage: React.FC = () => {
       <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
         <div className="max-w-5xl mx-auto space-y-6">
           {error && (
-            <div className="bg-red-50 text-red-700 p-4 rounded-md">
+            <div id={errorId} role="alert" className="bg-red-50 text-red-700 p-4 rounded-md">
               {error}
             </div>
           )}
@@ -146,10 +194,12 @@ export const KnowledgeEditorPage: React.FC = () => {
           <div className="bg-white shadow rounded-lg p-6 border border-gray-200 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <label htmlFor={titleId} className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                 <TocynInput
+                  id={titleId}
                   type="text"
                   value={title}
+                  disabled={isSaving || !editorReady}
                   onChange={e => setTitle(e.target.value)}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   placeholder="e.g., How to reset your password"
@@ -158,9 +208,11 @@ export const KnowledgeEditorPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label htmlFor={categoryIdInput} className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                 <TocynSelect
+                  id={categoryIdInput}
                   value={categoryId}
+                  disabled={isSaving || !editorReady}
                   onChange={e => setCategoryId(e.target.value)}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
@@ -170,9 +222,11 @@ export const KnowledgeEditorPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
+                <label htmlFor={tierId} className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
                 <TocynSelect
+                  id={tierId}
                   value={tier}
+                  disabled={isSaving || !editorReady}
                   onChange={e => setTier(e.target.value as 'answer' | 'sop')}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
@@ -183,14 +237,15 @@ export const KnowledgeEditorPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Content (Markdown)</label>
-              <div data-color-mode="light">
+              <label htmlFor={contentId} className="block text-sm font-medium text-gray-700 mb-1">Content (Markdown)</label>
+              <div data-color-mode="light" aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
                 <MDEditor
                   value={content}
-                  onChange={val => setContent(val || '')}
+                  onChange={val => { if (!savingRef.current && editorReady) setContent(val || ''); }}
                   height={500}
                   preview="edit"
                   className="w-full"
+                  textareaProps={{ id: contentId, readOnly: isSaving || !editorReady, 'aria-describedby': error ? errorId : undefined }}
                   previewOptions={{
                     rehypePlugins: [[rehypeSanitize]]
                   }}
