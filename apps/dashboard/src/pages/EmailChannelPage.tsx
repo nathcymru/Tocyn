@@ -1,3 +1,4 @@
+import { TocynConfirmDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +21,15 @@ interface SupportEmail {
 
 export function EmailChannelPage() {
   const queryClient = useQueryClient();
+  const heading = React.useRef<HTMLHeadingElement>(null);
+  const removalOpener = React.useRef<HTMLButtonElement | null>(null);
+  const removalGuard = React.useRef(false);
+  const removalSucceeded = React.useRef(false);
+  const [removal, setRemoval] = useState<SupportEmail | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState('');
+  const [removeStatus, setRemoveStatus] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
     email_address: '',
@@ -98,6 +108,16 @@ export function EmailChannelPage() {
     }
   });
 
+  const handleRemove = async () => {
+    if (!removal || removalGuard.current) return;
+    removalGuard.current = true; setRemoving(true); setRemoveError(''); setRemoveStatus('');
+    try {
+      await deleteEmail.mutateAsync(removal.id);
+      removalSucceeded.current = true; setRemoveOpen(false); setRemoveStatus('Email channel removed.');
+    } catch { setRemoveError('Email channel removal could not be confirmed. Try again.'); }
+    finally { removalGuard.current = false; setRemoving(false); }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -108,7 +128,7 @@ export function EmailChannelPage() {
     <div className="max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Email Channels</h1>
+          <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Email Channels</h1>
           <p className="text-slate-500 mt-1">Manage inbound support email addresses</p>
         </div>
         {!isAdding && (
@@ -310,11 +330,7 @@ export function EmailChannelPage() {
 
                 <div className="flex items-center gap-2">
                   <TocynButton
-                    onClick={() => {
-                      if (confirm('Are you sure you want to remove this email channel?')) {
-                        deleteEmail.mutate(email.id);
-                      }
-                    }}
+                    aria-label={`Remove ${email.email_address}`} onClick={event => { removalOpener.current = event.currentTarget; removalSucceeded.current = false; setRemoval(email); setRemoveError(''); setRemoveOpen(true); }}
                     disabled={deleteEmail.isPending}
                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     title="Remove email"
@@ -327,6 +343,11 @@ export function EmailChannelPage() {
           </div>
         )}
       </div>
+      {removeStatus && <p role="status">{removeStatus}</p>}
+      <TocynConfirmDialog open={removeOpen} busy={removing} title={`Remove email channel: ${removal?.email_address ?? ''}`}
+        description="Remove this configured email channel?" confirmLabel={removing ? 'Removing...' : 'Remove channel'} error={removeError}
+        onConfirm={handleRemove} onOpenChange={next => { if (!next && !removalGuard.current) setRemoveOpen(false); }}
+        finalFocusEl={() => removalSucceeded.current ? heading.current : removalOpener.current} />
     </div>
   );
 }
