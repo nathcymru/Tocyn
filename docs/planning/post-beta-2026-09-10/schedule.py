@@ -24,7 +24,9 @@ calendar=[];d=anchor
 while len(calendar)<1600:
  if d.weekday()!=6:calendar.append(d)
  d+=timedelta(days=1)
-review=[0.0]*len(calendar);lane=[0,0];scheduled={n:-1 for n,v in nodes.items() if v['done']}
+review=[0.0]*len(calendar);lane=[0,0]
+# Accepted work unlocks successors only after its evidenced completion date.
+scheduled={n:max((i for i,d in enumerate(calendar) if v.get('actualCompletion') and str(d)<=v['actualCompletion']),default=-1) for n,v in nodes.items() if v['done']}
 gate=140;gateanc=set()
 def ancestors(n):
  if n in gateanc:return
@@ -43,7 +45,9 @@ while remaining:
   use=min(4-review[ri],rv);review[ri]+=use;rv-=use
   if rv>1e-9:ri+=1
  end=ri if v['effort'] else end;scheduled[n]=end;lane[l]=end+1;v.update(forecastStart=str(calendar[start]),forecastTarget=str(calendar[end]),workstream=f'W{l+1}',remainingPlanningHours=v['effort']*3)
- if v['new']:v.update(baselineStart=v['forecastStart'],baselineTarget=v['forecastTarget'])
+ if v['new']:
+  if not v.get('baselineStart'):v['baselineStart']=v['forecastStart']
+  if not v.get('baselineTarget'):v['baselineTarget']=v['forecastTarget']
  remaining.remove(n)
 # CPM ignoring resource contention, distinct from calendar forecast.
 finish={};duration={n:(0 if v['done'] else v['effort']*3) for n,v in nodes.items()}
@@ -55,7 +59,10 @@ terminal=max(finish.values());latest={}
 for n in reversed(order):latest[n]=min([latest[s]-duration[s] for s in succ[n]]+[terminal])
 for n,v in nodes.items():
  v['floatHours']=latest[n]-finish[n];v['criticalPath']='Critical' if v['floatHours']==0 else 'Near-critical' if v['floatHours']<=48 else 'Supporting'
- if v['done']:v['forecastStart']=pv.get(n,{}).get('forecast start');v['forecastTarget']=pv.get(n,{}).get('forecast target')
+ if v['done']:
+  v['forecastStart']=v.get('forecastStart') or pv.get(n,{}).get('forecast start')
+  v['forecastTarget']=v.get('forecastTarget') or pv.get(n,{}).get('forecast target')
+  v['remainingPlanningHours']=0
  def variance(a,b):
   if not a or not b:return None
   a=date.fromisoformat(a);b=date.fromisoformat(b);sign=1 if b>=a else -1;lo,hi=sorted([a,b]);return sign*sum((lo+timedelta(days=i)).weekday()!=6 for i in range(1,(hi-lo).days+1))

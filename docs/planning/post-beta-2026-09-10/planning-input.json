@@ -316,7 +316,8 @@
       "actualCompletion": null,
       "progress": 0,
       "milestone": 23,
-      "new": false
+      "new": false,
+      "actualStart": "2026-09-10"
     },
     {
       "number": 78,
@@ -798,7 +799,8 @@
       "actualCompletion": null,
       "progress": 0,
       "milestone": 6,
-      "new": false
+      "new": false,
+      "actualStart": "2026-09-10"
     },
     {
       "number": 49,
@@ -838,7 +840,8 @@
       "actualCompletion": null,
       "progress": 0,
       "milestone": 16,
-      "new": false
+      "new": false,
+      "actualStart": "2026-09-10"
     },
     {
       "number": 45,
@@ -1057,17 +1060,20 @@
       "number": 127,
       "alias": "NEW-UX-01",
       "title": "Define the post-beta operator workspace interaction contract",
-      "done": false,
+      "done": true,
       "effort": 12,
       "dependencies": [
         62
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
-      "actualCompletion": null,
-      "progress": 0,
+      "baselineStart": "2026-09-11",
+      "baselineTarget": "2026-09-19",
+      "actualCompletion": "2026-09-10",
+      "progress": 100,
       "milestone": 37,
-      "new": true
+      "new": true,
+      "actualStart": "2026-09-10",
+      "forecastStart": "2026-09-11",
+      "forecastTarget": "2026-09-19"
     },
     {
       "number": 128,
@@ -1082,8 +1088,8 @@
         48,
         66
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2026-12-17",
+      "baselineTarget": "2027-01-02",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
@@ -1101,8 +1107,8 @@
         63,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2026-10-02",
+      "baselineTarget": "2026-10-14",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 37,
@@ -1120,8 +1126,8 @@
         73,
         64
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2026-12-04",
+      "baselineTarget": "2026-12-16",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 37,
@@ -1137,8 +1143,8 @@
         128,
         71
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-01-14",
+      "baselineTarget": "2027-01-21",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
@@ -1154,8 +1160,8 @@
         128,
         66
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-01-12",
+      "baselineTarget": "2027-01-19",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
@@ -1173,8 +1179,8 @@
         70,
         66
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-01-20",
+      "baselineTarget": "2027-01-27",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 15,
@@ -1191,8 +1197,8 @@
         132,
         63
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-01-22",
+      "baselineTarget": "2027-02-02",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
@@ -1210,8 +1216,8 @@
         64,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-01-28",
+      "baselineTarget": "2027-02-04",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
@@ -1229,8 +1235,8 @@
         63,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2026-10-15",
+      "baselineTarget": "2026-10-27",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 37,
@@ -1248,8 +1254,8 @@
         162,
         130
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2026-12-30",
+      "baselineTarget": "2027-01-11",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 29,
@@ -1265,8 +1271,8 @@
         128,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-02-03",
+      "baselineTarget": "2027-02-09",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
@@ -1282,8 +1288,8 @@
         128,
         48
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-02-05",
+      "baselineTarget": "2027-02-10",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
@@ -1316,8 +1322,8 @@
         73,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-02-11",
+      "baselineTarget": "2027-02-18",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
@@ -1348,8 +1354,8 @@
         157,
         158
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2028-02-08",
+      "baselineTarget": "2028-02-09",
       "actualCompletion": null,
       "progress": 0,
       "milestone": null,
@@ -1369,8 +1375,8 @@
         88,
         90
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-07-09",
+      "baselineTarget": "2027-07-22",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 38,
@@ -1389,8 +1395,8 @@
         74,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-07-23",
+      "baselineTarget": "2027-08-12",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 39,
@@ -1409,8 +1415,8 @@
         70,
         74
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-08-13",
+      "baselineTarget": "2027-09-06",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 39,
@@ -1431,8 +1437,8 @@
         88,
         90
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-08-26",
+      "baselineTarget": "2027-09-18",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 40,
@@ -1450,8 +1456,8 @@
         73,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-09-20",
+      "baselineTarget": "2027-10-09",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 40,
@@ -1468,8 +1474,8 @@
         50,
         90
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-09-07",
+      "baselineTarget": "2027-09-27",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 41,
@@ -1490,8 +1496,8 @@
         84,
         85
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2028-01-06",
+      "baselineTarget": "2028-01-18",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 41,
@@ -1508,8 +1514,8 @@
         72,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-07-20",
+      "baselineTarget": "2027-08-04",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 42,
@@ -1527,8 +1533,8 @@
         79,
         88
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-08-05",
+      "baselineTarget": "2027-08-25",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 42,
@@ -1545,8 +1551,8 @@
         64,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-09-28",
+      "baselineTarget": "2027-10-14",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 43,
@@ -1562,8 +1568,8 @@
         151,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-10-15",
+      "baselineTarget": "2027-11-02",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 43,
@@ -1583,8 +1589,8 @@
         80,
         81
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-10-11",
+      "baselineTarget": "2027-10-30",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 44,
@@ -1604,8 +1610,8 @@
         80,
         81
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-12-28",
+      "baselineTarget": "2028-01-12",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 44,
@@ -1622,8 +1628,8 @@
         79,
         88
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-11-01",
+      "baselineTarget": "2027-11-12",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 45,
@@ -1642,8 +1648,8 @@
         150,
         148
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2028-01-19",
+      "baselineTarget": "2028-02-07",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 45,
@@ -1661,8 +1667,8 @@
         85,
         155
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2028-01-13",
+      "baselineTarget": "2028-02-02",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 45,
@@ -1677,8 +1683,8 @@
       "dependencies": [
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-11-13",
+      "baselineTarget": "2027-11-29",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 46,
@@ -1694,8 +1700,8 @@
         50,
         63
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2026-10-28",
+      "baselineTarget": "2026-11-09",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 8,
@@ -1710,12 +1716,13 @@
       "dependencies": [
         19
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-02-19",
+      "baselineTarget": "2027-02-25",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 8,
-      "new": true
+      "new": true,
+      "actualStart": "2026-09-10"
     },
     {
       "number": 161,
@@ -1728,8 +1735,8 @@
         64,
         76
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2027-11-30",
+      "baselineTarget": "2027-12-03",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 17,
@@ -1745,8 +1752,8 @@
         63,
         79
       ],
-      "baselineStart": null,
-      "baselineTarget": null,
+      "baselineStart": "2026-11-14",
+      "baselineTarget": "2026-11-18",
       "actualCompletion": null,
       "progress": 0,
       "milestone": 25,

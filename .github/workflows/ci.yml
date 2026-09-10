@@ -24,7 +24,7 @@ jobs:
       matrix:
         include:
           - check: lint
-            command: bash scripts/validate-workflows.sh && npm run lint --workspace=apps/portal && cd apps/server && npx eslint .
+            command: python3 docs/planning/post-beta-2026-09-10/test_schedule.py && python3 docs/planning/post-beta-2026-09-10/validate.py && bash scripts/validate-workflows.sh && npm run lint --workspace=apps/portal && cd apps/server && npx eslint .
           - check: typecheck
             command: npm run typecheck:rehearsal-runtime && npm run typecheck --workspace=apps/server && npm run typecheck:local-tenants --workspace=apps/server && npm run typecheck:tenant-isolation-core --workspace=apps/server && npm run typecheck:tenant-isolation-storage-background --workspace=apps/server && npm run typecheck:canonical-conversation --workspace=apps/server && npm run typecheck:canonical-conversation-atomic --workspace=apps/server && npm run typecheck:ticket-mutation-replay --workspace=apps/server && npm run typecheck:conversation-audit --workspace=apps/server && npm run typecheck:local-beta --workspace=apps/server && npm run typecheck:operator-workflow --workspace=apps/server && npm run typecheck:local-portal-workflow --workspace=apps/server
           - check: build
