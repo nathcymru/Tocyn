@@ -72,16 +72,28 @@ async function sessionRequest<T>(path: string, options: RequestInit, read: (resp
 }
 
 export function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  return sessionRequest(path,options,response => response.json() as Promise<T>);
+  return sessionRequest(path, options, response => response.json() as Promise<T>);
+}
+
+/** A 204 is an authorized absence, distinct from a JSON parse failure. */
+export function requestOptional<T>(path: string, options: RequestInit = {}): Promise<T | null> {
+  return sessionRequest(path, options, response => response.status === 204 ? Promise.resolve(null) : response.json() as Promise<T>);
+}
+
+/** Mutations that intentionally return no body still retain normal auth-session fencing. */
+export function requestEmpty(path: string, options: RequestInit = {}): Promise<void> {
+  return sessionRequest(path, options, async () => undefined);
 }
 
 export const dashboardApi = {
   get: <T>(path: string, options?: RequestInit) => request<T>(path, {...options,method:'GET'}),
+  getOptional: <T>(path: string, options?: RequestInit) => requestOptional<T>(path, {...options,method:'GET'}),
   post: <T>(path: string, body?: unknown, options?: RequestInit) => request<T>(path,{...options,method:'POST',body:JSON.stringify(body)}),
   postForm: <T>(path: string, body: FormData, options?: RequestInit) => request<T>(path,{...options,method:'POST',body}),
   patch: <T>(path: string, body?: unknown, options?: RequestInit) => request<T>(path,{...options,method:'PATCH',body:JSON.stringify(body)}),
   put: <T>(path: string, body?: unknown, options?: RequestInit) => request<T>(path,{...options,method:'PUT',body:JSON.stringify(body)}),
   delete: <T>(path: string, options?: RequestInit) => request<T>(path,{...options,method:'DELETE'}),
+  deleteEmpty: (path: string, options?: RequestInit) => requestEmpty(path,{...options,method:'DELETE'}),
   download: async (path: string, filename: string) => {
     // The body is fenced too: a late old-session attachment must not be downloaded.
     const session = useAuthStore.getState();
