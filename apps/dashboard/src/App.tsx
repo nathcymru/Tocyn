@@ -1,26 +1,27 @@
-import React from 'react';
+import React, { lazy } from 'react';
+import { RouteContent } from './components/RouteContent';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { SettingsLayout } from './components/layout/SettingsLayout';
 import { LoginPage } from './pages/LoginPage';
 import { MfaPage } from './pages/MfaPage';
-import { TicketListPage } from './pages/TicketListPage';
-import { TicketDetailPage } from './pages/TicketDetailPage';
-import { ApiKeyPage } from './pages/ApiKeyPage';
-import { AutomationPage } from './pages/AutomationPage';
-import { KnowledgePage } from './pages/KnowledgePage';
-import { KnowledgeEditorPage } from './pages/KnowledgeEditorPage';
-import { EmailChannelPage } from './pages/EmailChannelPage';
-import { WidgetChannelPage } from './pages/WidgetChannelPage';
-import { UsersPage } from './pages/UsersPage';
-import { GroupsPage } from './pages/GroupsPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { AgentPermissionsPage } from './pages/AgentPermissionsPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { TicketFieldsPage } from './pages/TicketFieldsPage';
-import { FiltersSettingsPage } from './pages/FiltersSettingsPage';
+const TicketListPage = lazy(() => import('./pages/TicketListPage').then(module => ({ default: module.TicketListPage })));
+const TicketDetailPage = lazy(() => import('./pages/TicketDetailPage').then(module => ({ default: module.TicketDetailPage })));
+const ApiKeyPage = lazy(() => import('./pages/ApiKeyPage').then(module => ({ default: module.ApiKeyPage })));
+const AutomationPage = lazy(() => import('./pages/AutomationPage').then(module => ({ default: module.AutomationPage })));
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage').then(module => ({ default: module.KnowledgePage })));
+const KnowledgeEditorPage = lazy(() => import('./pages/KnowledgeEditorPage').then(module => ({ default: module.KnowledgeEditorPage })));
+const EmailChannelPage = lazy(() => import('./pages/EmailChannelPage').then(module => ({ default: module.EmailChannelPage })));
+const WidgetChannelPage = lazy(() => import('./pages/WidgetChannelPage').then(module => ({ default: module.WidgetChannelPage })));
+const UsersPage = lazy(() => import('./pages/UsersPage').then(module => ({ default: module.UsersPage })));
+const GroupsPage = lazy(() => import('./pages/GroupsPage').then(module => ({ default: module.GroupsPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(module => ({ default: module.SettingsPage })));
+const AgentPermissionsPage = lazy(() => import('./pages/AgentPermissionsPage').then(module => ({ default: module.AgentPermissionsPage })));
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(module => ({ default: module.DashboardPage })));
+const TicketFieldsPage = lazy(() => import('./pages/TicketFieldsPage').then(module => ({ default: module.TicketFieldsPage })));
+const FiltersSettingsPage = lazy(() => import('./pages/FiltersSettingsPage').then(module => ({ default: module.FiltersSettingsPage })));
 import { SecurityProfilePage } from './pages/SecurityProfilePage';
-import { UsagePage } from './pages/UsagePage';
+const UsagePage = lazy(() => import('./pages/UsagePage').then(module => ({ default: module.UsagePage })));
 import { useAuthStore } from './store/authStore';
 
 function ProtectedRoute({ children, requireMfa = true }: { children: React.ReactNode, requireMfa?: boolean }) {
@@ -67,27 +68,27 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<DashboardPage />} />
-          <Route path="tickets" element={<TicketListPage />} />
-          <Route path="tickets/:id" element={<TicketDetailPage />} />
-          <Route path="knowledge" element={<KnowledgePage />} />
-          <Route path="knowledge/new" element={<KnowledgeEditorPage />} />
-          <Route path="knowledge/edit/:id" element={<KnowledgeEditorPage />} />
+          <Route index element={<RouteContent><DashboardPage /></RouteContent>} />
+          <Route path="tickets" element={<RouteContent><TicketListPage /></RouteContent>} />
+          <Route path="tickets/:id" element={<RouteContent><TicketDetailPage /></RouteContent>} />
+          <Route path="knowledge" element={<RouteContent><KnowledgePage /></RouteContent>} />
+          <Route path="knowledge/new" element={<RouteContent><KnowledgeEditorPage /></RouteContent>} />
+          <Route path="knowledge/edit/:id" element={<RouteContent><KnowledgeEditorPage /></RouteContent>} />
           <Route path="profile/security" element={<SecurityProfilePage />} />
 
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="general" replace />} />
-            <Route path="general" element={<SettingsPage />} />
-            <Route path="agent-permissions" element={<AgentPermissionsPage />} />
-            <Route path="users" element={<UsersPage />} />
-            <Route path="groups" element={<GroupsPage />} />
-            <Route path="ticket-fields" element={<TicketFieldsPage />} />
-            <Route path="filters" element={<FiltersSettingsPage />} />
-            <Route path="automations" element={<AutomationPage />} />
-            <Route path="api-keys" element={<ApiKeyPage />} />
-            <Route path="usage" element={<UsagePage />} />
-            <Route path="channels/email" element={<EmailChannelPage />} />
-            <Route path="channels/widget" element={<WidgetChannelPage />} />
+            <Route path="general" element={<RouteContent><SettingsPage /></RouteContent>} />
+            <Route path="agent-permissions" element={<RouteContent><AgentPermissionsPage /></RouteContent>} />
+            <Route path="users" element={<RouteContent><UsersPage /></RouteContent>} />
+            <Route path="groups" element={<RouteContent><GroupsPage /></RouteContent>} />
+            <Route path="ticket-fields" element={<RouteContent><TicketFieldsPage /></RouteContent>} />
+            <Route path="filters" element={<RouteContent><FiltersSettingsPage /></RouteContent>} />
+            <Route path="automations" element={<RouteContent><AutomationPage /></RouteContent>} />
+            <Route path="api-keys" element={<RouteContent><ApiKeyPage /></RouteContent>} />
+            <Route path="usage" element={<RouteContent><UsagePage /></RouteContent>} />
+            <Route path="channels/email" element={<RouteContent><EmailChannelPage /></RouteContent>} />
+            <Route path="channels/widget" element={<RouteContent><WidgetChannelPage /></RouteContent>} />
           </Route>
         </Route>
       </Routes>
