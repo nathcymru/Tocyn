@@ -1,3 +1,4 @@
+import { TocynConfirmDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useEffect, useState } from 'react';
 import { dashboardApi } from '../api/client';
@@ -33,6 +34,14 @@ const OPERATORS = [
 ];
 
 export const AutomationPage: React.FC = () => {
+  const heading = React.useRef<HTMLHeadingElement>(null);
+  const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
+  const deleteGuard = React.useRef(false);
+  const deleteSucceeded = React.useRef(false);
+  const [deletion, setDeletion] = useState<AutomationRule | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -66,15 +75,16 @@ export const AutomationPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this rule?')) return;
+  const handleDelete = async () => {
+    if (!deletion || deleteGuard.current) return;
+    deleteGuard.current = true; setDeleting(true); setDeleteError('');
     try {
-      await dashboardApi.delete(`/automations/${id}`);
-      setRules(rules.filter(r => r.id !== id));
+      await dashboardApi.delete(`/automations/${deletion.id}`);
+      setRules(current => current.filter(rule => rule.id !== deletion.id));
+      deleteSucceeded.current = true; setDeleteOpen(false);
       showSuccess('Rule deleted');
-    } catch (error) {
-      setError('Failed to delete rule');
-    }
+    } catch { setDeleteError('Rule could not be deleted. Try again.'); }
+    finally { deleteGuard.current = false; setDeleting(false); }
   };
 
   const startCreate = () => {
@@ -163,7 +173,7 @@ export const AutomationPage: React.FC = () => {
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Automation Rules</h1>
+          <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Automation Rules</h1>
           <p className="text-slate-500">Manage event-driven workflows and data retention.</p>
         </div>
         {!isEditing && (
@@ -178,14 +188,14 @@ export const AutomationPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-3">
+        <div role="alert" className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-3">
           <AlertCircle size={20} />
           {error}
         </div>
       )}
 
       {success && (
-        <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-3">
+        <div role="status" className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-3">
           <CheckCircle size={20} />
           {success}
         </div>
@@ -425,7 +435,7 @@ export const AutomationPage: React.FC = () => {
                   <Edit2 size={20} />
                 </TocynButton>
                 <TocynButton
-                  onClick={() => handleDelete(rule.id)}
+                  aria-label={`Delete ${rule.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(rule); setDeleteError(''); setDeleteOpen(true); }}
                   className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
                   title="Delete Rule"
                 >
@@ -436,6 +446,10 @@ export const AutomationPage: React.FC = () => {
           ))
         )}
       </div>
+      <TocynConfirmDialog open={deleteOpen} busy={deleting} title={`Delete rule: ${deletion?.name ?? ''}`}
+        description="Delete this automation rule? This action cannot be undone." confirmLabel={deleting ? 'Deleting...' : 'Delete rule'} error={deleteError}
+        onConfirm={handleDelete} onOpenChange={next => { if (!next && !deleteGuard.current) setDeleteOpen(false); }}
+        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} />
     </div>
   );
 };

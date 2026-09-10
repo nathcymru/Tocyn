@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { composeEventHandlers, TocynButton, TocynInput, TocynSelect, TocynTextarea, WorkspaceShell, WorkViewNavigator, ConversationList, ActiveConversation, ContextPanel } from '../index';
 import { Dialog, Listbox, createListCollection } from '../ark';
+import { TocynDialog, TocynConfirmDialog } from '../dialog';
 import type { TocynButtonProps, TocynInputProps, TocynPanelProps } from '../primitives';
 
 afterEach(cleanup);
@@ -119,3 +120,14 @@ const consumerPanelProps = { auditTag: 'context', 'aria-label': 'Context' } sati
 void consumerButtonProps;
 void consumerInputProps;
 void consumerPanelProps;
+
+it('forwards dialog content refs and caller ARIA descriptions through the shared wrappers',async()=>{
+  const ref=React.createRef<HTMLDivElement>();const confirmation=React.createRef<HTMLDivElement>();const key=vi.fn();
+  const {unmount}=render(<TocynDialog open labelledBy="dialog-title" aria-describedby="caller-description" onOpenChange={()=>{}} ref={ref} onKeyDown={key}>
+    <h2 id="dialog-title">Reference test</h2><p id="caller-description">Caller supplied description</p><button>Close</button>
+  </TocynDialog>);
+  const dialog=await screen.findByRole('dialog',{name:'Reference test'});expect(ref.current).toBe(dialog);expect(dialog).toHaveAccessibleDescription('Caller supplied description');
+  fireEvent.keyDown(dialog,{key:'x'});expect(key).toHaveBeenCalledOnce();unmount();expect(ref.current).toBeNull();
+  render(<TocynConfirmDialog open ref={confirmation} title="Confirmation reference" description="Action description" confirmLabel="Confirm" onConfirm={()=>{}} onOpenChange={()=>{}}/>);
+  const confirm=await screen.findByRole('dialog',{name:'Confirmation reference'});expect(confirmation.current).toBe(confirm);expect(confirm).toHaveAccessibleDescription('Action description');
+});

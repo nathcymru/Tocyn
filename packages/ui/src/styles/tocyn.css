@@ -31,3 +31,9 @@
 [data-tocyn-dialog-positioner] > [role="dialog"] { max-block-size: calc(100dvh - 2rem); overflow: auto; }
 
 [data-tocyn-dialog-positioner] > [data-tocyn-dialog-edge] { max-block-size: 100dvh; }
+
+[data-tocyn-confirm-body] { background: var(--tocyn-color-surface); color: var(--tocyn-color-text); padding: 1.5rem; max-inline-size: 30rem; border-radius: .75rem; }
+[data-tocyn-confirm-body] > * + * { margin-block-start: 1rem; }
+[data-tocyn-confirm-body] > h2 { font-size: 1.125rem; font-weight: 700; }
+[data-tocyn-confirm-actions] { display: flex; flex-wrap: wrap; justify-content: end; gap: .75rem; }
+[data-tocyn-confirm-actions] > button { border: 1px solid currentColor; border-radius: .375rem; padding: .5rem 1rem; }

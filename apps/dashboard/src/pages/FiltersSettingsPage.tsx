@@ -1,4 +1,4 @@
-import { TocynDialog } from '@luminatick/ui/dialog';
+import { TocynDialog, TocynConfirmDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
@@ -26,6 +26,15 @@ export function FiltersSettingsPage() {
   const updateFilter = useUpdateFilter();
   const deleteFilter = useDeleteFilter();
 
+  const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
+  const heading = React.useRef<HTMLHeadingElement>(null);
+  const deletionGuard = React.useRef(false);
+  const deleteSucceeded = React.useRef(false);
+  const [deletion, setDeletion] = useState<TicketFilter | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteStatus, setDeleteStatus] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -93,14 +102,14 @@ export function FiltersSettingsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this filter?')) {
-      try {
-        await deleteFilter.mutateAsync(id);
-      } catch (err) {
-        console.error('Failed to delete filter:', err);
-      }
-    }
+  const handleDelete = async () => {
+    if (!deletion || deletionGuard.current) return;
+    deletionGuard.current = true; setDeleting(true); setDeleteError(''); setDeleteStatus('');
+    try {
+      await deleteFilter.mutateAsync(deletion.id);
+      deleteSucceeded.current = true; setDeleteOpen(false); setDeleteStatus('Filter deleted.');
+    } catch { setDeleteError('Filter could not be deleted. Try again.'); }
+    finally { deletionGuard.current = false; setDeleting(false); }
   };
 
   const addCondition = () => {
@@ -131,7 +140,7 @@ export function FiltersSettingsPage() {
     <div className="max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Custom Filters</h1>
+          <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Custom Filters</h1>
           <p className="text-slate-500 text-sm">Create and manage ticket filters for your team.</p>
         </div>
         <TocynButton
@@ -143,6 +152,11 @@ export function FiltersSettingsPage() {
         </TocynButton>
       </div>
 
+      {deleteStatus && <p role="status">{deleteStatus}</p>}
+      <TocynConfirmDialog open={deleteOpen} busy={deleting} title={`Delete filter: ${deletion?.name ?? ''}`}
+        description="Delete this filter? This action cannot be undone." confirmLabel={deleting ? 'Deleting...' : 'Delete filter'} error={deleteError}
+        onConfirm={handleDelete} onOpenChange={next => { if (!next && !deletionGuard.current) setDeleteOpen(false); }}
+        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} />
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <table className="w-full text-left">
           <thead>
@@ -183,7 +197,7 @@ export function FiltersSettingsPage() {
                       </TocynButton>
                       {!filter.is_system && (
                         <TocynButton
-                          onClick={() => handleDelete(filter.id)}
+                          aria-label={`Delete ${filter.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(filter); setDeleteError(''); setDeleteOpen(true); }}
                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete Filter"
                         >
