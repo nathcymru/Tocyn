@@ -113,3 +113,7 @@ The same status language applies to ADR-0016 through ADR-0028: accepted directio
 ## Operational guide
 
 See [GDPR compliance user guide](gdpr-compliance-user-guide.md) for tenant-scoped inventory, access/erasure pipeline examples and a RoPA starter table.
+
+## Residency source validation (#160)
+
+The [deployment residency contract](https://github.com/nathcymru/Tocyn/blob/main/docs/deployment-residency.md) and preview/beta manifests now distinguish storage, HTTP, asynchronous, AI/provider and observability paths. Local release preparation validates these fields and carries them into its binding manifest. Current evidence is pending/unknown; no live jurisdiction guarantee or legal compliance is claimed. The current generator rejects hard profiles because its bindings do not implement jurisdiction-aware provisioning. Production #42 and future remote #57 must verify resource creation-time jurisdiction, processing paths and migration consequences before any constrained deployment. Tenant/request metadata cannot select a deployment region.

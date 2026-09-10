@@ -8,7 +8,286 @@
     "portalPagesProject": "tocyn-portal-beta",
     "dashboardPagesProject": "tocyn-dashboard-beta"
   },
-  "requiredSecrets": ["JWT_SECRET", "MFA_ENCRYPTION_KEY", "APP_MASTER_KEY", "OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST"],
-  "disabledCapabilities": ["ai", "vectorize", "vectorizeWorkflow", "emailRouting", "cron", "queues", "webhooks"],
-  "ingress": { "workersDev": false, "routes": [] }
+  "requiredSecrets": [
+    "JWT_SECRET",
+    "MFA_ENCRYPTION_KEY",
+    "APP_MASTER_KEY",
+    "OUTBOUND_EMAIL_RECIPIENT_ALLOWLIST"
+  ],
+  "disabledCapabilities": [
+    "ai",
+    "vectorize",
+    "vectorizeWorkflow",
+    "emailRouting",
+    "cron",
+    "queues",
+    "webhooks",
+    "logsTraces"
+  ],
+  "ingress": {
+    "workersDev": false,
+    "routes": []
+  },
+  "residency": {
+    "schemaVersion": 1,
+    "policy": {
+      "profile": "unrestricted"
+    },
+    "capabilities": {
+      "d1": {
+        "storage": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/d1/configuration/data-location/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/d1/configuration/data-location/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": true
+      },
+      "r2": {
+        "storage": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/r2/reference/data-location/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/r2/reference/data-location/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": true
+      },
+      "durableObjects": {
+        "storage": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/durable-objects/reference/data-location/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/durable-objects/reference/data-location/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": true
+      },
+      "vectorize": {
+        "storage": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/vectorize/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/vectorize/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": false
+      },
+      "workersAi": {
+        "storage": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers-ai/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers-ai/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": false
+      },
+      "queues": {
+        "storage": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/queues/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/queues/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": false
+      },
+      "cron": {
+        "storage": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers/configuration/cron-triggers/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers/configuration/cron-triggers/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": false
+      },
+      "workflows": {
+        "storage": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workflows/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workflows/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": false
+      },
+      "workerHttp": {
+        "storage": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers/configuration/placement/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers/configuration/placement/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": true
+      },
+      "logsTraces": {
+        "storage": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers/observability/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unsupported",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers/observability/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": false
+      },
+      "externalProviders": {
+        "storage": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers/runtime-apis/fetch/"
+          ],
+          "verification": "pending"
+        },
+        "processing": {
+          "status": "unknown",
+          "jurisdiction": null,
+          "evidenceCheckedAt": "2026-09-10T00:00:00Z",
+          "sources": [
+            "https://developers.cloudflare.com/workers/runtime-apis/fetch/"
+          ],
+          "verification": "pending"
+        },
+        "enabled": true
+      }
+    },
+    "resources": {
+      "d1": {
+        "selectedJurisdiction": "none",
+        "verifiedJurisdiction": null,
+        "immutableAtCreation": false,
+        "migrationPlan": "Owner-approved re-provision and migration required before a hard claim.",
+        "verification": "pending"
+      },
+      "r2": {
+        "selectedJurisdiction": "none",
+        "verifiedJurisdiction": null,
+        "immutableAtCreation": false,
+        "migrationPlan": "Owner-approved re-provision and migration required before a hard claim.",
+        "verification": "pending"
+      },
+      "durableObjects": {
+        "selectedJurisdiction": "none",
+        "verifiedJurisdiction": null,
+        "immutableAtCreation": false,
+        "migrationPlan": "Owner-approved re-provision and migration required before a hard claim.",
+        "verification": "pending"
+      }
+    }
+  }
 }
