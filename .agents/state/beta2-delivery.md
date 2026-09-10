@@ -1,29 +1,42 @@
 # Beta.2 coordinated delivery
 
-Active goal: complete approved #140 beta.2 acceptance without narrowing full SLA/ownership/routing, durability, accessibility or tenant isolation. Alignment #126 accepted; baseline main `f383b97b8599b2b9bd602c58bbd8ad9c1a0964f1`.
+Active goal: complete #140 beta.2 acceptance, including full SLA/ownership/routing, durability, accessibility and tenant isolation. Alignment #126 is accepted; its historical pause is superseded. Approved scope remains in [the master package](../../docs/planning/post-beta-2026-09-10/README.md). One coordinator owns acceptance, integration and planning publication.
 
-## Current allocation — 10 September 2026
+## Accepted work
 
-| Issue | Owner / environment | Actual model / effort | Branch and location | Boundary |
+#127 interaction contract: PR #164 merged at `ec99b5a48a8c9de2c935f0a08423e0461bdd9441` on 10 September 2026 at 14:17:30 UTC. GitHub signature verified, all required checks passed, no review threads/findings. Source archive comparison covered all 22 Critical LAW/COMP/COG findings. Wiki commit `48bf051` read back byte-identically. Issue closed; Project Done/100/Actual completion 2026-09-10. This completes a contract, not workspace implementation.
+
+## Current allocation and integration queue
+
+| Issue | Environment / owner | Actual model / effort | Branch and location | Current evidence / next action |
 |---|---|---|---|---|
-| #127 interaction contract | ux_package_audit / dedicated Codex | Luna / medium, retained worker configuration | codex/127-workspace-contract; /private/tmp/tocyn-beta2-127 | docs/workspace; no application migration |
-| #160 residency foundation | product_package_audit / dedicated Codex | Luna / medium; escalate ambiguous security boundaries | codex/160-residency-foundation; /private/tmp/tocyn-beta2-160 | residency validator/matrix and synthetic tests; no remote resources |
-| #50 cost contract | coordinator / dedicated Codex | current coordinator configuration; switching unavailable | codex/50-cost-contract; primary checkout | shared versioned contracts, policy validation, resource catalogue, evidence |
+| #50 cost contract | dedicated Codex / coordinator | current coordinator configuration; switching unavailable | codex/50-cost-contract; primary checkout; PR #165 | 36 targeted tests, server typecheck/scoped lint, root npm test and three frontend builds passed. Original PR CI passed; rebased onto #164 with forecast update, so new exact-revision CI required. Active enforcement remains #64/#91. |
+| #160 residency foundation | dedicated Codex / coordinator after product_package_audit | worker Luna/medium; consequential correction escalated to coordinator | codex/160-residency-foundation; /private/tmp/tocyn-beta2-160; PR #166 | 21 targeted tests and original PR CI passed. Rebase after #165 integrates, then required checks. Hard profiles rejected by current unrestricted generator; #42/#57 own live provisioning. |
+| #79 permissions | dedicated Codex / permissions_79 | Terra / high | codex/79-resource-permissions; /private/tmp/tocyn-beta2-79 | Active implementation; Project In progress/Actual start 2026-09-10. Live revocation must fence mutation/side-effect boundaries, not merely request start. |
+| #48 shared primitives | dedicated Codex / ux_package_audit | Luna / medium retained worker | codex/48-headless-primitives; /private/tmp/tocyn-beta2-48 | First foundation commit `5f3fbdb` returned, awaiting coordinator review. ALL retained application migration, complex-control/accessibility and measurements remain. Do not close for a partial foundation. |
 
-Two genuine workers are supporting coordinator work. #127 has returned corrected documentation; coordinator independently matched all 22 Critical findings. Its worker is preparing #79 read-only. #160 is correcting validation and adding local provisioning-manifest integration after focused review; no live locality claim is accepted. No callable Work-worker or normal-Chat delegation route is exposed; no cross-environment execution is claimed. Verified documentation treats Work/dedicated Codex usage as shared; do not double-count the same allowance. No API-key billing, extra capacity, resets or overages. Latest observed Codex balance before launch: 28% remaining, reset 15 September 02:24 BST; task-specific usage unknown.
+The #48 worker must not edit AgentPermissionsPage or permission APIs owned by #79. Coordinate its final primitive adoption at integration. Domain-only packages/shared must not import UI. Preserve historical dirty worktrees.
 
-## Critical path and integration
+A dedicated Codex Luna/low worker completed bounded forecast analysis. An additional Terra/medium UI worker could not start because the native thread limit was reached; no such execution is claimed. Existing workers are reused where useful, with coordinator review proportional to risk. No callable Work-worker or normal-Chat delegation route was found. Verified documentation treats Work/dedicated Codex allowances as shared; no separate balance is assumed. Subscription-backed route only; no API billing, purchases, resets or overages. Last observed Codex capacity: 28% remaining, reset 15 September 02:24 BST; current/task-specific consumption unknown.
 
-#50 unblocks observability #159, budgets #64 and journals #91. #127 unblocks primitives #48 and durable state #129/#136 after #79. #160 is independent production-readiness foundation. #79 is next security work; keep its implementation isolated from cost contracts. All downstream edges remain in the approved master graph.
+## Critical path and forecast
 
-One coordinator owns acceptance, Project updates and merges. Workers return commits, scope evidence and limitations; they do not close issues. Existing baselines stay immutable. Current conservative beta.2 forecast is 18 February 2027; no accelerated date is claimed before accepted delivery supports recalculation. Report progress/remaining estimate every 30 minutes in coordinating chat; initial launch update delivered.
+#50 unlocks #159 observability, #64 budgets and #91 journals. #127 unlocks #48; #79 then enables #129 drafts/#136 waiting. #162 metrics feeds #73 SLA and #137 ownership/routing. #128 integrates workspace behavior. Preserve all edges in the master graph, including #50 → #64/#91 → #51 → #87 → #88. #160 is independent production-readiness foundation.
 
-## Review and operating boundaries
+Recalculated beta.2 forecast: **15 February 2027**, expanded forecast **5 February 2028**, pending publication with PR #165. Only #127 newly accepted effort was removed. Two reference lanes, 8h/day Monday–Saturday, 3× allowance including shared review remain unchanged. Frozen new-issue baseline dates were copied from the accepted alignment forecast; the historical baseline snapshot is byte-identical. The calculator now retains completed-node forecast evidence and honors actual prerequisite completion dates. Source/lane/review invariants and delayed-completion regression pass. Actual start is recorded separately from remaining-work forecasts.
 
-Zero default Copilot review requests. Repository auto-review removed; personal automatic review disabled and verified after owner scope approval. GitHub advertises up to 30 minutes propagation: local implementation may proceed; defer new PR creation until that window has elapsed. No production/provider activation, remote Cloudflare changes or external mail. Preserve historical worktrees. Keep local dependency setup economical and isolated.
+Publish issue/Project/Wiki forecast updates after the recalculation integrates. Do not infer percentages from commits. Human updates every 30 minutes must include the evidenced estimate and active blockers; latest update reported #127 acceptance, #165/#166 checks, #79 active and #48 returned for review.
 
-## Next actions
+## Review and operational boundaries
 
-#50 has 36 passing targeted contract tests, server typecheck/scoped lint and the root npm test suite passed; both npm audit views report zero findings. These do not prove active #64 enforcement. Full required CI remains pending. #127 is pending PR validation/integration. #160 remains in correction; do not accept its initial standalone validator. The settings-clearance receipt was posted at 13:40:44 UTC; conservatively open PRs after 14:11 UTC.
+Zero Copilot reviews requested. Repository auto-review removed; personal automatic review disabled and reloaded under owner authority. Its clearance receipt was posted 13:40:44 UTC; PRs were created after 14:11 UTC. The `Copilot development setup` CI job on #166 is deterministic dependency/index validation triggered by package.json, not a code-review request; no reviews were posted.
 
-Complete and internally inspect the three bounded workstreams. Run targeted tests first, then required exact-PR checks. Use standing PR-only review bypass only after substantive checks; verify signed integration. Update owning issue, Project, affected documentation/Wiki and this delivery record after accepted integration. Do not mark beta.2 ready until every #140 prerequisite and acceptance outcome is evidenced.
+PR #164 used the standing sole-maintainer PR-only approving-review bypass after exact-revision checks. This is not independent human approval. Local GPG is unavailable; require and verify GitHub-signed squash integration. Preserve required CI/security, linear history and other protections. No production/provider activation, remote Cloudflare changes or external mail.
+
+## Exact next actions
+
+1. Finish PR #165 forecast/state validation; push rebased revision and wait for required CI. Merge only after exact-head validation and verify signed commit.
+2. Refresh #166 from accepted main, pass required checks, integrate and publish reviewed Wiki sources and issue/Project receipts.
+3. Review #48 foundation, keep a coherent draft PR for partial work and continue retained-behavior migration; integrate #79 authorization only with real negative/revocation/isolation evidence.
+4. Reforecast only from accepted progress, update dependent GitHub records and this state, and keep newly cleared work ready.
+5. Do not declare beta.2 ready until every #140 prerequisite and acceptance outcome is evidenced.
