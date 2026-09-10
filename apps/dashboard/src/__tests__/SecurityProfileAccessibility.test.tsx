@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SecurityProfilePage } from '../pages/SecurityProfilePage';
 import { useAuthStore } from '../store/authStore';
+import { AuthQueryBoundary } from '../components/auth/AuthQueryBoundary';
 import { dashboardApi } from '../api/client';
 vi.mock('../api/client',()=>({dashboardApi:{post:vi.fn()}}));
 vi.mock('qrcode.react',()=>({QRCodeSVG:()=> <span>Local setup QR</span>}));
@@ -26,6 +27,17 @@ it('guards setup and confirmation, focuses code and adopts the replacement serve
   expect(screen.getByRole('status')).toHaveTextContent('successfully enabled');expect(screen.queryByText('SYNTHETIC_ONLY')).not.toBeInTheDocument();
   await waitFor(()=>expect(screen.getByRole('heading',{name:'Security Profile'})).toHaveFocus());
 });
+it('keeps the replacement-session confirmation announcement through the authentication cache reset',async()=>{
+  vi.mocked(dashboardApi.post).mockResolvedValueOnce(setup).mockResolvedValueOnce({token:'synthetic-replacement-session',user:{...user,mfa_enabled:true}});
+  render(<AuthQueryBoundary><SecurityProfilePage/></AuthQueryBoundary>);
+  fireEvent.click(screen.getByRole('button',{name:'Set up 2FA'}));
+  fireEvent.change(await screen.findByRole('textbox',{name:'Authentication Code'}),{target:{value:'123456'}});
+  fireEvent.submit(screen.getByRole('form',{name:'Verify two-factor setup'}));
+  expect(await screen.findByRole('status')).toHaveTextContent('successfully enabled');
+  await waitFor(()=>expect(screen.getByRole('heading',{name:'Security Profile'})).toHaveFocus());
+  expect(useAuthStore.getState().sessionAnnouncement).toBeNull();
+});
+
 it('retains failed confirmation for retry and clears local setup material on cancellation',async()=>{
   vi.mocked(dashboardApi.post).mockResolvedValueOnce(setup).mockRejectedValueOnce(new Error('private server detail'));
   render(<SecurityProfilePage/>);fireEvent.click(screen.getByRole('button',{name:'Set up 2FA'}));

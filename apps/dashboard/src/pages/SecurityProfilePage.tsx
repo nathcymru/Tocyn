@@ -11,12 +11,12 @@ interface SetupResponse {
 }
 
 export function SecurityProfilePage() {
-  const { user, logout, setAuth, sessionGeneration } = useAuthStore();
+  const { user, logout, setAuth, sessionGeneration, sessionAnnouncement, clearSessionAnnouncement } = useAuthStore();
   const [setupData, setSetupData] = useState<SetupResponse | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(() => sessionAnnouncement?.generation === sessionGeneration ? sessionAnnouncement.message : null);
 
   const pending = useRef(false);
   const setupButton = useRef<HTMLButtonElement>(null);
@@ -25,8 +25,19 @@ export function SecurityProfilePage() {
   const disableButton = useRef<HTMLButtonElement>(null);
   const [disableOpen, setDisableOpen] = useState(false);
   useEffect(() => { setSetupData(null); setCode(''); setDisableOpen(false); }, [sessionGeneration]);
+  useEffect(() => {
+    if (sessionAnnouncement?.generation !== sessionGeneration) return;
+    setSuccessMessage(sessionAnnouncement.message);
+    clearSessionAnnouncement(sessionGeneration);
+  }, [clearSessionAnnouncement, sessionAnnouncement, sessionGeneration]);
   useEffect(() => { if (setupData) codeInput.current?.focus(); }, [setupData]);
-  useEffect(() => { if (successMessage) heading.current?.focus(); }, [successMessage]);
+  useEffect(() => {
+    if (!successMessage) return;
+    // AuthQueryBoundary remounts the workspace after a replacement session; run after its
+    // layout-level focus restoration so the confirmation announcement owns focus.
+    const frame = requestAnimationFrame(() => heading.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [successMessage]);
 
   const startSetup = async () => {
     if (pending.current) return;
@@ -51,9 +62,12 @@ export function SecurityProfilePage() {
       const data = await dashboardApi.post<{token:string;user:typeof user}>('/auth/mfa/confirm', { code });
       if (useAuthStore.getState().sessionGeneration !== generation) return;
       if (typeof data.token !== 'string' || !data.token || data.user?.id !== user.id || !data.user.mfa_enabled) throw new Error('Invalid confirmation');
-      setAuth(data.token, {...user,...data.user});
+      const announcement = 'Two-Factor Authentication has been successfully enabled.';
+      // Attach the non-persisted announcement to the replacement session atomically.
+      // The outgoing auth scope therefore cannot consume it before the new scope mounts.
+      setAuth(data.token, {...user,...data.user}, announcement);
       setSetupData(null); setCode('');
-      setSuccessMessage('Two-Factor Authentication has been successfully enabled.');
+      setSuccessMessage(announcement);
     } catch {
       if (useAuthStore.getState().sessionGeneration === generation) setError('Verification could not be confirmed. Check your code and try again.');
     } finally { pending.current = false; setIsLoading(false); }

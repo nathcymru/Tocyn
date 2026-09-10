@@ -82,6 +82,15 @@ describe('authentication-scoped dashboard data', () => {
     await screen.findByText('New session');expect(clients.size).toBe(2);
   });
 
+  it('clears a transient session announcement on subsequent authority or session changes', () => {
+    useAuthStore.getState().setAuth('synthetic-first',user('first'),'Synthetic confirmation');
+    expect(useAuthStore.getState().sessionAnnouncement).toMatchObject({message:'Synthetic confirmation'});
+    useAuthStore.getState().updateUser({role:'agent'});
+    expect(useAuthStore.getState().sessionAnnouncement).toBeNull();
+    useAuthStore.getState().setAuth('synthetic-second',user('second'));
+    expect(useAuthStore.getState().sessionAnnouncement).toBeNull();
+  });
+
   it('hydrates persisted authentication without persisting a cache generation or losing StrictMode startup', async () => {
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async () => response('Restored session')));
     render(<StrictMode><AuthQueryBoundary><SignedInFeed/></AuthQueryBoundary></StrictMode>);
@@ -91,6 +100,7 @@ describe('authentication-scoped dashboard data', () => {
     await screen.findByText('Restored session');
     act(() => useAuthStore.getState().updateUser({full_name:'Profile refreshed'}));
     expect(JSON.parse(localStorage.getItem('lumina-auth')!).state).not.toHaveProperty('sessionGeneration');
+    expect(JSON.parse(localStorage.getItem('lumina-auth')!).state).not.toHaveProperty('sessionAnnouncement');
   });
 
   it('resets principal-sensitive state when a profile response changes authority', async () => {

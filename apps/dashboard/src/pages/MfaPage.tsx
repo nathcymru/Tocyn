@@ -38,10 +38,6 @@ export function MfaPage() {
       setSetupData(data);
       setError('');
       setSetupStatus('Authenticator setup ready. Scan the QR code or enter the text key, then enter your authentication code.');
-      if (retryingSetup.current) {
-        codeInput.current?.focus();
-        retryingSetup.current = false;
-      }
     }).catch((err: unknown) => {
       if (active) {
         setSetupStatus('');
@@ -50,6 +46,13 @@ export function MfaPage() {
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user, setupAttempt]);
+
+  useEffect(() => {
+    if (!setupData || !retryingSetup.current) return;
+    // Focus only after React has committed the retry-created input.
+    codeInput.current?.focus();
+    retryingSetup.current = false;
+  }, [setupData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
