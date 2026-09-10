@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "revision": "8efac1d3ed24db52265865a67d9f0222022dad34",
+  "baseline": "1c684300154187ccf8af5cd6dfcb06afe031ba6b",
+  "passed": true,
+  "checks": [
+    {
+      "name": "dashboard.allJsGzip",
+      "value": 544137,
+      "limit": 570000,
+      "passed": true
+    },
+    {
+      "name": "dashboard.allCssGzip",
+      "value": 14230,
+      "limit": 16000,
+      "passed": true
+    },
+    {
+      "name": "dashboard.initialJsGzip",
+      "value": 126046,
+      "limit": 135000,
+      "passed": true
+    },
+    {
+      "name": "portal.allJsGzip",
+      "value": 99832,
+      "limit": 105000,
+      "passed": true
+    },
+    {
+      "name": "portal.allCssGzip",
+      "value": 5467,
+      "limit": 6000,
+      "passed": true
+    },
+    {
+      "name": "portal.initialJsGzip",
+      "value": 67503,
+      "limit": 72000,
+      "passed": true
+    },
+    {
+      "name": "widget.allJsGzip",
+      "value": 64777,
+      "limit": 70000,
+      "passed": true
+    },
+    {
+      "name": "widget.allCssGzip",
+      "value": 0,
+      "limit": 4000,
+      "passed": true
+    },
+    {
+      "name": "dashboard.startupMs.relativeP95",
+      "value": 64,
+      "limit": 220.70000005960463,
+      "passed": true
+    },
+    {
+      "name": "dashboard.startupMs.absoluteP95",
+      "value": 64,
+      "limit": 1500,
+      "passed": true
+    },
+    {
+      "name": "dashboard.recoveryMs.relativeP95",
+      "value": 48.40000009536743,
+      "limit": 77.07500023841858,
+      "passed": true
+    },
+    {
+      "name": "dashboard.recoveryMs.absoluteP95",
+      "value": 48.40000009536743,
+      "limit": 150,
+      "passed": true
+    },
+    {
+      "name": "portal.startupMs.relativeP95",
+      "value": 62.90000009536743,
+      "limit": 94.70000011920929,
+      "passed": true
+    },
+    {
+      "name": "portal.startupMs.absoluteP95",
+      "value": 62.90000009536743,
+      "limit": 1500,
+      "passed": true
+    },
+    {
+      "name": "portal.recoveryMs.relativeP95",
+      "value": 64.79999995231628,
+      "limit": 97.70000023841858,
+      "passed": true
+    },
+    {
+      "name": "portal.recoveryMs.absoluteP95",
+      "value": 64.79999995231628,
+      "limit": 150,
+      "passed": true
+    }
+  ]
+}
