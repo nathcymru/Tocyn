@@ -1,5 +1,7 @@
 # #48 performance evidence and remaining gates
 
+Current candidate: `af1872517430c3f81035f18f83e969f45338b03a` passes required CI/security, the 16 login/bundle and 6 widget numeric limits, authenticated navigation/recovery and fresh local Worker import/runtime checks. See `ui-48-budgets-8efac1d.json`, `ui-48-widget-budgets-8efac1d.json` and `ui-48-worker-af18725.json`. Spoken presence evidence is in `ui-48-voiceover-presence-2026-09-10.md`. Final documentary revision and integration remain pending. The dated investigations below are historical measurements and resolved intermediate gates, not the current outstanding-work list.
+
 The first reproducible production-bundle comparison is `ui-48-bundle-fcba36f.json`. It compares candidatefcba36f against local baseline1c684300, whose tree66fa3650113b6302d8bdc49b83615e6598e1c445 matches accepted main6299bfef. Both source trees were tracked-clean when built; Vite8.2.2 and Node22.19.0 were used for both. No new dependency installation was needed for the builds.
 
 | Client | Baseline JS gzip bytes | Candidate JS gzip bytes | Change |

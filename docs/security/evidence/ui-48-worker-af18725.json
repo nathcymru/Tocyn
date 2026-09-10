@@ -1,0 +1,43 @@
+{
+  "revision": "af1872517430c3f81035f18f83e969f45338b03a",
+  "scenario": "Local Wrangler deploy --dry-run only; no deployment",
+  "inputs": 168,
+  "forbiddenInputSubstrings": [
+    "react",
+    "@ark",
+    "@zag",
+    "apps/dashboard",
+    "apps/portal",
+    "apps/widget",
+    ".agents",
+    "agent-context",
+    "styled",
+    "emotion"
+  ],
+  "matches": [],
+  "javascriptBytes": 630152,
+  "gzip9Bytes": 129377,
+  "javascriptSha256": "5cf1482cf55d0290e9a7c58d8f8552f925f71a133897f03f5531f46fa66d9237",
+  "metafileSha256": "bf71f51ac3251f687d67351330f1657c487202776e135841e609fe14351e0c67",
+  "limitations": [
+    "No production/provider operation or cold-start timing claim. Owner port8787 was preserved."
+  ],
+  "runtime": {
+    "runtime": "local-wrangler",
+    "warmReads": 5,
+    "operatorRevisionObserved": true,
+    "restartRetainedStop": true,
+    "staleRevisionDenied": true,
+    "malformedPolicyRedacted": true,
+    "providerBindings": 0,
+    "mutationCeiling": 4,
+    "concurrentStopPreservedAccepted": true,
+    "cleanup": "run-owned state removed",
+    "passed": true,
+    "node": "22.19.0",
+    "tcpPort": 8799,
+    "logicalOrigin": "http://localhost:8787",
+    "test": "apps/server/scripts/local-beta-runtime.test.ts",
+    "sourceSha256": "0e6ed2778483a5e2ec79e505e9188cc47303ee5934660b9869f2a3dbd178817d"
+  }
+}
