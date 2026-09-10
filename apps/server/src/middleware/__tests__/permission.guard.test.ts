@@ -1,166 +1,104 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { permissionGuard } from "../permission.guard";
-import { createTenantRequestDeps } from "../tenant.middleware";
+import { permissionGuard, revalidatePermission } from "../permission.guard";
+
+type PolicyState = {
+  owner: boolean;
+  role: boolean;
+  tenant: boolean;
+  sessionVersion: number;
+  groupEnabled: boolean[];
+};
+
+function policyDb(state: PolicyState) {
+  return {
+    prepare(sql: string) {
+      const statement = {
+        bind: (..._values: unknown[]) => statement,
+        first: async () => {
+          if (sql.includes("deployment_capability_ceiling")) return { enabled: state.owner ? 1 : 0, revision: 1 };
+          if (sql.includes("deployment_role_capability_grants")) return { enabled: state.role ? 1 : 0, revision: 2 };
+          if (sql.includes("FROM users")) return { role: "agent", session_version: state.sessionVersion };
+          if (sql.includes("tenant_role_capability_policies")) return { enabled: state.tenant ? 1 : 0, revision: 3 };
+          return null;
+        },
+        all: async () => ({ results: state.groupEnabled.map((enabled, index) => ({ enabled: enabled ? 1 : 0, revision: index + 4 })) }),
+      };
+      return statement;
+    },
+  };
+}
+
+function appWithPrincipal(state: PolicyState) {
+  const app = new Hono();
+  app.use("*", async (c, next) => {
+    c.set("jwtPayload", { sub: "agent-1", tenant_id: "tenant-a", role: "agent", session_version: 0, mfa_verified: true });
+    await next();
+  });
+  app.use("*", permissionGuard("general"));
+  app.get("/protected", c => c.text("OK"));
+  return { app, env: { DB: policyDb(state) } };
+}
 
 describe("permissionGuard", () => {
-  it("should return 401 if no jwtPayload is found", async () => {
-    const app = new Hono();
-    // No middleware to set jwtPayload
-    app.use("*", permissionGuard("can_edit_settings"));
-    app.get("/protected", (c) => c.text("OK"));
+  it("requires the owner ceiling, role grant, and tenant restriction to allow a capability", async () => {
+    const state = { owner: true, role: true, tenant: true, sessionVersion: 0, groupEnabled: [] };
+    const { app, env } = appWithPrincipal(state);
+    expect((await app.request("/protected", undefined, env)).status).toBe(200);
 
-    const res = await app.request("/protected");
-    expect(res.status).toBe(401);
-    const body = await res.json();
-    expect(body.error).toBe("Unauthorized");
-    expect(body.message).toBe("No session found");
+    state.tenant = false;
+    const denied = await app.request("/protected", undefined, env);
+    expect(denied.status).toBe(403);
+    expect((await denied.json()).message).toContain("settings.general.manage");
   });
 
-  it("should call next() if user is admin", async () => {
+  it("does not preserve the old admin bypass or accept unknown capability names", async () => {
+    const state = { owner: true, role: true, tenant: true, sessionVersion: 0, groupEnabled: [] };
     const app = new Hono();
     app.use("*", async (c, next) => {
-      c.set("jwtPayload", {
-        sub: "user-1",
-        role: "admin",
-      });
+      c.set("jwtPayload", { sub: "admin-1", tenant_id: "tenant-a", role: "admin", session_version: 0, mfa_verified: true });
       await next();
     });
-    app.use("*", permissionGuard("can_edit_settings"));
-    app.get("/protected", (c) => c.text("OK"));
-
-    const res = await app.request("/protected");
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe("OK");
+    app.use("*", permissionGuard("not.in.the.catalog"));
+    app.get("/", c => c.text("unreachable"));
+    expect((await app.request("/", undefined, { DB: policyDb(state) })).status).toBe(403);
   });
 
-  it("should return 403 if user is neither admin nor agent", async () => {
-    const app = new Hono();
-    app.use("*", async (c, next) => {
-      c.set("jwtPayload", {
-        sub: "user-1",
-        role: "customer",
-      });
-      await next();
-    });
-    app.use("*", permissionGuard("can_edit_settings"));
-    app.get("/protected", (c) => c.text("OK"));
-
-    const res = await app.request("/protected");
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toBe("Forbidden");
-    expect(body.message).toBe("Insufficient permissions");
+  it("applies group constraints as additional restrictions", async () => {
+    const state = { owner: true, role: true, tenant: true, sessionVersion: 0, groupEnabled: [true, false] };
+    const { app, env } = appWithPrincipal(state);
+    expect((await app.request("/protected", undefined, env)).status).toBe(403);
   });
 
-  it("should call next() if agent has the required permission", async () => {
-    const mockDB = {
-      prepare: vi.fn().mockReturnThis(),
-      bind: vi.fn().mockReturnThis(),
-      first: vi.fn().mockResolvedValue({ value: JSON.stringify({ can_edit_settings: true }) }),
-    };
-
+  it("fences a paused mutation when policy revocation happens before its side effect", async () => {
+    const state = { owner: true, role: true, tenant: true, sessionVersion: 0, groupEnabled: [] };
+    let entered!: () => void;
+    let resume!: () => void;
+    const paused = new Promise<void>(resolve => { entered = resolve; });
+    const continueMutation = new Promise<void>(resolve => { resume = resolve; });
+    let commits = 0;
     const app = new Hono();
     app.use("*", async (c, next) => {
-      const scope = { tenantId: "default-tenant", actorId: "user-1", roles: ["agent"], permissionTier: 1 } as any;
-      c.set("jwtPayload", {
-        sub: "user-1",
-        role: "agent",
-        tenant_id: "default-tenant",
-      });
-      c.set("tenantDeps", createTenantRequestDeps(scope, { DB: mockDB }));
+      c.set("jwtPayload", { sub: "agent-1", tenant_id: "tenant-a", role: "agent", session_version: 0, mfa_verified: true });
       await next();
     });
-    app.use("*", permissionGuard("can_edit_settings"));
-    app.get("/protected", (c) => c.text("OK"));
-
-    const res = await app.request("/protected");
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe("OK");
-    expect(mockDB.prepare).toHaveBeenCalledWith("SELECT value FROM tenant_config WHERE tenant_id = ? AND key = ?");
-  });
-
-  it("should return 403 if agent does not have the required permission", async () => {
-    const mockDB = {
-      prepare: vi.fn().mockReturnThis(),
-      bind: vi.fn().mockReturnThis(),
-      first: vi.fn().mockResolvedValue({ value: JSON.stringify({ can_edit_settings: false, other_perm: true }) }),
-    };
-
-    const app = new Hono();
-    app.use("*", async (c, next) => {
-      const scope = { tenantId: "default-tenant", actorId: "user-1", roles: ["agent"], permissionTier: 1 } as any;
-      c.set("jwtPayload", {
-        sub: "user-1",
-        role: "agent",
-        tenant_id: "default-tenant",
-      });
-      c.set("tenantDeps", createTenantRequestDeps(scope, { DB: mockDB }));
-      await next();
+    app.use("*", permissionGuard("general"));
+    app.post("/mutation", async c => {
+      entered();
+      await continueMutation;
+      const failure = await revalidatePermission(c as any, "general");
+      if (failure) return failure;
+      commits += 1;
+      return c.json({ success: true });
     });
-    app.use("*", permissionGuard("can_edit_settings"));
-    app.get("/protected", (c) => c.text("OK"));
 
-    const res = await app.request("/protected");
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toBe("Forbidden");
-    expect(body.message).toBe("Agent missing permission: can_edit_settings");
-  });
+    const request = app.request("/mutation", { method: "POST" }, { DB: policyDb(state) });
+    await paused;
+    state.tenant = false;
+    state.sessionVersion = 1;
+    resume();
 
-  it("should return 403 if there is a DB error or config is missing", async () => {
-    const mockDB = {
-      prepare: vi.fn().mockReturnThis(),
-      bind: vi.fn().mockReturnThis(),
-      first: vi.fn().mockResolvedValue(null), // no config found
-    };
-
-    const app = new Hono();
-    app.use("*", async (c, next) => {
-      const scope = { tenantId: "default-tenant", actorId: "user-1", roles: ["agent"], permissionTier: 1 } as any;
-      c.set("jwtPayload", {
-        sub: "user-1",
-        role: "agent",
-        tenant_id: "default-tenant",
-      });
-      c.set("tenantDeps", createTenantRequestDeps(scope, { DB: mockDB }));
-      await next();
-    });
-    app.use("*", permissionGuard("can_edit_settings"));
-    app.get("/protected", (c) => c.text("OK"));
-
-    const res = await app.request("/protected");
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toBe("Forbidden");
-    expect(body.message).toBe("Agent missing permission: can_edit_settings");
-  });
-
-  it("should return 403 gracefully if DB lookup throws an exception", async () => {
-    const mockDB = {
-      prepare: vi.fn().mockReturnThis(),
-      bind: vi.fn().mockReturnThis(),
-      first: vi.fn().mockRejectedValue(new Error("DB Connection Error")),
-    };
-
-    const app = new Hono();
-    app.use("*", async (c, next) => {
-      const scope = { tenantId: "default-tenant", actorId: "user-1", roles: ["agent"], permissionTier: 1 } as any;
-      c.set("jwtPayload", {
-        sub: "user-1",
-        role: "agent",
-        tenant_id: "default-tenant",
-      });
-      c.set("tenantDeps", createTenantRequestDeps(scope, { DB: mockDB }));
-      await next();
-    });
-    app.use("*", permissionGuard("can_edit_settings"));
-    app.get("/protected", (c) => c.text("OK"));
-
-    const res = await app.request("/protected");
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toBe("Forbidden");
-    expect(body.message).toBe("Agent missing permission: can_edit_settings");
+    expect((await request).status).toBe(403);
+    expect(commits).toBe(0);
   });
 });

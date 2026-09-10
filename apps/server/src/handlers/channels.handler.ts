@@ -4,7 +4,7 @@ import { authMiddleware } from "../middleware/auth.middleware";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { mfaGuard } from "../middleware/mfa.guard";
 import { roleGuard } from "../middleware/role.guard";
-import { permissionGuard } from "../middleware/permission.guard";
+import { permissionGuard, revalidatePermission } from "../middleware/permission.guard";
 import { AppVariables } from "../types";
 import { z } from "zod";
 
@@ -39,6 +39,8 @@ channels.post("/emails", async (c) => {
     return c.json({ error: "Group not found in this tenant" }, 400);
   }
   const id = crypto.randomUUID();
+  const revalidationFailure = await revalidatePermission(c, "channels_email");
+  if (revalidationFailure) return revalidationFailure;
 
   try {
     const email = await deps.repositories.channels.createSupportEmail({
@@ -66,6 +68,9 @@ channels.delete("/emails/:id", async (c) => {
   if (!result.success) {
     return c.json({ error: "Invalid ID format" }, 400);
   }
+
+  const revalidationFailure = await revalidatePermission(c, "channels_email");
+  if (revalidationFailure) return revalidationFailure;
 
   await deps.repositories.channels.deleteSupportEmail(id);
   return c.json({ success: true });

@@ -1,42 +1,43 @@
 import { Context, Next } from "hono";
 import { Env } from "../bindings";
 import { AppVariables } from "../types";
-import { TenantRequestDeps } from "./tenant.middleware";
+import { CapabilityPolicyService, type CapabilityDecision } from "../auth/capability-policy";
+
+function principalFromContext(c: Context<{ Bindings: Env; Variables: AppVariables }>) {
+  const payload = c.get("jwtPayload");
+  if (!payload || !payload.tenant_id || !Number.isSafeInteger(payload.session_version ?? 0)) return null;
+  return { tenantId: payload.tenant_id, actorId: payload.sub, role: payload.role, sessionVersion: payload.session_version ?? 0 };
+}
+
+function forbidden(c: Context<{ Bindings: Env; Variables: AppVariables }>, decision: CapabilityDecision) {
+  const message = decision.reason === "session_revoked"
+    ? "Session revoked after permission policy changed"
+    : `Capability denied: ${decision.capability}`;
+  return c.json({ error: "Forbidden", message }, 403);
+}
 
 export const permissionGuard = (settingKey: string) => {
   return async (c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next) => {
-    const payload = c.get("jwtPayload");
-
-    if (!payload) {
+    const principal = principalFromContext(c);
+    if (!principal) {
       return c.json({ error: "Unauthorized", message: "No session found" }, 401);
     }
-
-    if (payload.role === "admin") {
-      return await next();
-    }
-
-    if (payload.role !== "agent") {
-      return c.json({ error: "Forbidden", message: "Insufficient permissions" }, 403);
-    }
-
-    const d = c.get("tenantDeps") as TenantRequestDeps;
-
-    if (!d) {
-      return c.json({ error: "Forbidden", message: `Agent missing permission: ${settingKey}` }, 403);
-    }
-
-    try {
-      const configValue = await d.repositories.config.get('agent_settings_permissions');
-      if (configValue) {
-        const permissions = JSON.parse(configValue);
-        if (permissions && permissions[settingKey] === true) {
-          return await next();
-        }
-      }
-    } catch (e) {
-      console.error("Error parsing agent_settings_permissions", e);
-    }
-
-    return c.json({ error: "Forbidden", message: `Agent missing permission: ${settingKey}` }, 403);
+    const decision = await new CapabilityPolicyService(c.env.DB).authorize(principal, settingKey);
+    if (!decision.allowed) return forbidden(c, decision);
+    c.set("permissionFences", { ...(c.get("permissionFences") ?? {}), [decision.capability]: decision });
+    await next();
   };
 };
+
+/** Re-check at the mutation boundary, not merely when the request began. */
+export async function revalidatePermission(
+  c: Context<{ Bindings: Env; Variables: AppVariables }>,
+  settingKey: string,
+): Promise<Response | null> {
+  const principal = principalFromContext(c);
+  if (!principal) return c.json({ error: "Unauthorized", message: "No session found" }, 401);
+  const current = await new CapabilityPolicyService(c.env.DB).authorize(principal, settingKey);
+  const prior = c.get("permissionFences")?.[current.capability];
+  if (!current.allowed || !prior || prior.policyFingerprint !== current.policyFingerprint) return forbidden(c, current);
+  return null;
+}

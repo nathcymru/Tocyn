@@ -37,9 +37,12 @@ describe("Settings Handler Integration Tests", () => {
     vi.clearAllMocks();
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
+    mockDB.all.mockResolvedValue({ results: [] });
     mockDB.first.mockImplementation(async () => {
       const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
       const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
       if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
         return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
       }
@@ -59,6 +62,8 @@ describe("Settings Handler Integration Tests", () => {
       mockDB.first.mockImplementation(async () => {
         const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
         const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+        if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
         if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
           return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
         }
@@ -95,6 +100,8 @@ describe("Settings Handler Integration Tests", () => {
       mockDB.first.mockImplementation(async () => {
         const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
         const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+        if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+        if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
         if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
           return { tenant_id: "default-tenant", id: "admin-1", role: "admin", password_hash: null, mfa_enabled: 0 };
         }

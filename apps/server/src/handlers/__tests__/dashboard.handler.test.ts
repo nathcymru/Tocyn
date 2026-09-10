@@ -46,6 +46,13 @@ describe("Dashboard Handler Integration Tests", () => {
     mockDB.first.mockImplementation(async () => {
       const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
       const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
+      if (typeof lastQuery === "string" && lastQuery.includes("tenant_role_capability_policies")) {
+        const bindCalls = vi.mocked(mockDB.bind).mock.calls;
+        const capability = bindCalls.at(-1)?.[2];
+        return { enabled: capability === "api-keys.manage" ? 1 : 0, revision: 1 };
+      }
       if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
         const bindCalls = vi.mocked(mockDB.bind).mock.calls;
         const sub = bindCalls.length > 0 ? bindCalls[bindCalls.length - 1][1] : "agent-1";
@@ -282,7 +289,7 @@ describe("Dashboard Handler Integration Tests", () => {
   describe("API Key Management", () => {
     it("should list API keys", async () => {
       const mockKeys = [{ id: "key-1", name: "Production" }];
-      mockDB.all.mockResolvedValueOnce({ results: mockKeys });
+      mockDB.all.mockResolvedValueOnce({ results: [] }).mockResolvedValueOnce({ results: mockKeys });
 
       const res = await dashboard.request(
         "/api-keys",

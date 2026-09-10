@@ -25,9 +25,12 @@ describe("Group Management Integration Tests", () => {
 
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
+    mockDB.all.mockResolvedValue({ results: [] });
     mockDB.first.mockImplementation(async () => {
       const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
       const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_capability_ceiling")) return { enabled: 1, revision: 1 };
+      if (typeof lastQuery === "string" && lastQuery.includes("deployment_role_capability_grants")) return { enabled: 1, revision: 1 };
       if (typeof lastQuery === "string" && lastQuery.includes("FROM users")) {
         const bindCalls = vi.mocked(mockDB.bind).mock.calls;
         const sub = bindCalls.length > 0 ? bindCalls[bindCalls.length - 1][1] : "admin-1";
@@ -95,7 +98,7 @@ describe("Group Management Integration Tests", () => {
       );
 
       expect(res.status).toBe(403);
-      expect(await res.json()).toEqual({ error: "Forbidden", message: "Agent missing permission: groups" });
+      expect(await res.json()).toEqual({ error: "Forbidden", message: "Capability denied: groups.manage" });
     });
   });
 

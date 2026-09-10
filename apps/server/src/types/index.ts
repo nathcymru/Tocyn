@@ -1,12 +1,14 @@
 import { VerifiedTenantScope } from '../types/tenant';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { ApiKeyResolution } from '../auth/api-key-resolver';
+import type { CapabilityDecision } from '../auth/capability-policy';
 export interface AppVariables {
   tenantScope?: VerifiedTenantScope;
   tenantDeps?: TenantRequestDeps;
   jwtPayload: JWTPayload;
   mfaPending?: boolean; // If MFA is required but not yet verified
   apiKeyResolution?: ApiKeyResolution;
+  permissionFences?: Record<string, CapabilityDecision>;
 }
 
 export interface Ticket {
