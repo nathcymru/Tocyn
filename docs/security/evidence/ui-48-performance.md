@@ -15,9 +15,9 @@ These are sums of individually gzip-level9-compressed JS assets, not initial-rou
 In each baseline/candidate checkout, using the same Node/tool environment, run each production client build:
 
 ```sh
-npm run build --workspace=apps/dashboard
-npm run build --workspace=apps/portal
-npm run build --workspace=apps/widget
+npm run build --workspace=apps/dashboard -- --manifest
+npm run build --workspace=apps/portal -- --manifest
+npm run build --workspace=apps/widget -- --manifest
 ```
 
 Then, from the candidate checkout:
@@ -38,3 +38,14 @@ Use fresh outputs; the tool does not run builds or attest that ignored dist file
 The resumed native worker inspected existing test/harness capabilities read-only and completed. No separate allowance, model switch, Copilot review or runtime measurement is claimed from that investigation.
 
 Validation environment repair: the existing rehearsal tests first failed because this worktree lacked the installed better-sqlite3 native binding. `npm rebuild better-sqlite3 --build-from-source` repaired it without changing dependencies. The repeated isolated-release/rehearsal contract suite passed37tests and direct rehearsal runtime passed3tests. This validates those existing contracts, not current UI timing or an actual Worker graph comparison.
+
+## Portal route split — candidate70a7a35
+
+Fresh manifest builds now distinguish all JS/CSS assets from the initial entrypoint/static-import closure. Dynamic route assets stay included in totals. `ui-48-bundle-70a7a35.json` records clean baseline/candidate revisions and all artifact hashes.
+
+- Portal initial JS gzip:77808 →67502bytes (**−13.24%** versus accepted baseline).
+- Portal all-route JS gzip:77808 →99830bytes (**+28.30%** versus accepted baseline; splitting overhead raises the prior candidate total97197bytes).
+- The authenticated ticket pages and shared dialog code load when their routes render. Login/verify and the existing authentication-generation checks remain eager and unchanged.
+- Loading is announced; a module/render failure focuses a safe message and offers a document reload instead of retrying React's cached lazy rejection. The boundary does not change authentication state.
+
+Portal61tests, TypeScript/build and lint pass. No browser startup/interaction timing or numeric performance-budget pass is inferred. The increased total remains visible and needs acceptance investigation; the initial-payload improvement does not replace that metric.
