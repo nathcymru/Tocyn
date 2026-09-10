@@ -1,0 +1,845 @@
+{
+  "version": 1,
+  "recordedAt": "2026-09-10T20:42:56.901Z",
+  "revision": "84a0ccbeaf50bf381a7912e7250741b6a855fb68",
+  "trackedDirty": false,
+  "workingTreeStatus": "?? performance-baseline/",
+  "sourceHashes": {
+    "apps/widget/src/main.tsx": "ff124c72a89add5acbbcfcd6186b385cbf6c1a6104edbce7e008cf67458916f6",
+    "apps/widget/src/App.tsx": "2251c36e93ac189b18b7609470349cc22cfa50c671a93e2a2fc72b1705159fa4",
+    "apps/widget/src/components/TicketForm.tsx": "a765a625caa56d65e24be61a87b5a18af0a469aa0f6998d914e82beae532a0b7",
+    "apps/widget/vite.config.ts": "740f62090f20e54327edc75abae077a57dbe5cc02fd7e8a30d00e236b19ca3e9",
+    "packages/ui/src/ark.ts": "843b29747bac7c8f0aa97d42a5efddfc1b546f3072e9ff446dc95527ab579193",
+    "tools/ui-browser/widget-check.mjs": "0fe9a907af6b22d4b195732c14f1642e86649b4e131691a858675042bedb2280"
+  },
+  "bundleSha256": "5706e5253cc0ad030be8cc27f547a8d407484387e31d05249761411a4a93aa72",
+  "node": "v22.23.2",
+  "browser": "151.0.7922.34",
+  "samplesPerMode": 20,
+  "warmups": 2,
+  "timingSummary": {
+    "true": {
+      "startupMs": {
+        "p50": 78.59999999997672,
+        "p95": 91.29999999998836,
+        "p99": 96.5
+      },
+      "openMs": {
+        "p50": 27.70000000001164,
+        "p95": 28.399999999965075,
+        "p99": 28.5
+      },
+      "recoveryMs": {
+        "p50": 45.70000000001164,
+        "p95": 46,
+        "p99": 46.100000000034925
+      }
+    },
+    "false": {
+      "startupMs": {
+        "p50": 80.20000000001164,
+        "p95": 89.79999999998836,
+        "p99": 90.90000000002328
+      },
+      "openMs": {
+        "p50": 27.79999999998836,
+        "p95": 28.29999999998836,
+        "p99": 28.29999999998836
+      },
+      "recoveryMs": {
+        "p50": 46.79999999998836,
+        "p95": 46.90000000002328,
+        "p99": 47.09999999997672
+      }
+    }
+  },
+  "results": [
+    {
+      "sample": 0,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 91.29999999998836,
+        "openMs": 27.699999999953434,
+        "recoveryMs": 45.399999999965075
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 0,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 79,
+        "openMs": 27.400000000023283,
+        "recoveryMs": 46.79999999998836
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 1,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 96.5,
+        "openMs": 27.599999999976717,
+        "recoveryMs": 45.70000000001164
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 1,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 90.90000000002328,
+        "openMs": 28.20000000001164,
+        "recoveryMs": 46.59999999997672
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 2,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 89.29999999998836,
+        "openMs": 27.5,
+        "recoveryMs": 45.70000000001164
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 2,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 89.79999999998836,
+        "openMs": 27.5,
+        "recoveryMs": 46.600000000034925
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 3,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 78.59999999997672,
+        "openMs": 27.600000000034925,
+        "recoveryMs": 45.5
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 3,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 78.09999999997672,
+        "openMs": 27.600000000034925,
+        "recoveryMs": 46.90000000002328
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 4,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 72.40000000002328,
+        "openMs": 28,
+        "recoveryMs": 45.5
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 4,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 81,
+        "openMs": 27.199999999953434,
+        "recoveryMs": 46.79999999998836
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 5,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 76.60000000003492,
+        "openMs": 28.099999999976717,
+        "recoveryMs": 45.899999999965075
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 5,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 81.70000000001164,
+        "openMs": 28,
+        "recoveryMs": 47.09999999997672
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 6,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 77.79999999998836,
+        "openMs": 27.599999999976717,
+        "recoveryMs": 45.100000000034925
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 6,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 82.09999999997672,
+        "openMs": 27.900000000023283,
+        "recoveryMs": 46.70000000001164
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 7,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 78.5,
+        "openMs": 27.899999999965075,
+        "recoveryMs": 45.79999999998836
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 7,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 80.20000000001164,
+        "openMs": 28.29999999998836,
+        "recoveryMs": 46.59999999997672
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 8,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 80.69999999995343,
+        "openMs": 27.5,
+        "recoveryMs": 45.29999999998836
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 8,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 74.5,
+        "openMs": 27.899999999965075,
+        "recoveryMs": 46.79999999998836
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 9,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 81.5,
+        "openMs": 27.70000000001164,
+        "recoveryMs": 46
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 9,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 78.80000000004657,
+        "openMs": 28.29999999998836,
+        "recoveryMs": 46.70000000001164
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 10,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 81.30000000004657,
+        "openMs": 28.099999999976717,
+        "recoveryMs": 46.100000000034925
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 10,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 83.29999999998836,
+        "openMs": 27.70000000001164,
+        "recoveryMs": 46.800000000046566
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 11,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 80.5,
+        "openMs": 28.399999999965075,
+        "recoveryMs": 45.90000000002328
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 11,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 76.20000000001164,
+        "openMs": 27.400000000023283,
+        "recoveryMs": 46.20000000001164
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 12,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 79,
+        "openMs": 27.70000000001164,
+        "recoveryMs": 45.70000000001164
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 12,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 80,
+        "openMs": 28,
+        "recoveryMs": 46.70000000001164
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 13,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 81.90000000002328,
+        "openMs": 28.5,
+        "recoveryMs": 45.59999999997672
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 13,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 80.59999999997672,
+        "openMs": 27.400000000023283,
+        "recoveryMs": 46.800000000046566
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 14,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 77.70000000001164,
+        "openMs": 27.600000000034925,
+        "recoveryMs": 45.800000000046566
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 14,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 78.20000000001164,
+        "openMs": 27.79999999998836,
+        "recoveryMs": 46.79999999998836
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 15,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 82.20000000001164,
+        "openMs": 28,
+        "recoveryMs": 45
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 15,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 77.90000000002328,
+        "openMs": 28.29999999998836,
+        "recoveryMs": 46.90000000002328
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 16,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 75.40000000002328,
+        "openMs": 27.70000000001164,
+        "recoveryMs": 45.79999999998836
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 16,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 81.79999999998836,
+        "openMs": 27.699999999953434,
+        "recoveryMs": 46.899999999965075
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 17,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 76.70000000001164,
+        "openMs": 27.900000000023283,
+        "recoveryMs": 45.5
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 17,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 79.20000000001164,
+        "openMs": 28.20000000001164,
+        "recoveryMs": 46.90000000002328
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 18,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 78.5,
+        "openMs": 28.20000000001164,
+        "recoveryMs": 45.899999999965075
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 18,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 88.79999999998836,
+        "openMs": 27.70000000001164,
+        "recoveryMs": 46.600000000034925
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 19,
+      "aiChat": true,
+      "timing": {
+        "startupMs": 77.5,
+        "openMs": 27.70000000001164,
+        "recoveryMs": 45.5
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "sample": 19,
+      "aiChat": false,
+      "timing": {
+        "startupMs": 83.10000000003492,
+        "openMs": 28.099999999976717,
+        "recoveryMs": 45.899999999965075
+      },
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    }
+  ],
+  "limitations": [
+    "Navigation time origin to observed launcher after two frames; DOM click to open/error observation after two frames. Automation startup latency included; not compositor paint proof.",
+    "Fresh contexts, warm browser/OS, reduced motion, serial alternating AI-on/off. No numeric widget timing threshold or valid pre-fix startup baseline claimed.",
+    "Fresh production widget build required.",
+    "Synthetic intercepted backend; no authentication/tenant or provider integration proof.",
+    "Existing legacy CSS/bootstrap only; no theme, visual, wrapper67, multi-instance or screen-reader acceptance."
+  ]
+}

@@ -48,8 +48,13 @@ Use SemVer prerelease tags such as `v0.4.0-beta.1`, `v0.4.0-beta.2` or `v0.4.0-r
 
 No production deployment date is currently committed.
 
-The consolidated baseline forecasts `beta.2` acceptance for 18 February 2027 and
-expanded scope for 9 February 2028. These are forecasts, not release promises.
+The original alignment forecast was `beta.2` acceptance on 18 February 2027 and
+expanded scope on 9 February 2028; retain those values as history. The current
+accepted [forecast ledger](https://github.com/nathcymru/Tocyn/blob/4fce7b6654db924d818d2ee2ad77d3c855ee9d46/docs/planning/post-beta-2026-09-10/forecast.json)
+forecasts **22 January 2027** and **21 January 2028**, respectively, after evidenced
+completion was incorporated in PR #171. This is the same conservative two-workstream
+model, not a new baseline or a release promise. No further date change is inferred
+from the partial work described below.
 The owner-approved review policy uses zero default Copilot/automated review requests
 and a standing owner PR bypass only after required checks; required checks and
 security evidence remain mandatory.
@@ -57,3 +62,16 @@ security evidence remain mandatory.
 ## Living schedule
 
 Project planning preserves baseline dates separately from forecasts and actual dates. Reforecasting must not overwrite the original approved baseline. See ADR-0014 and repository `AGENTS.md`.
+
+## Delivery snapshot — 10 September 2026
+
+Beta.2 is **not ready**. Accepted main is `9cee350c36f49b9459fad3db42aadc8d25de848b`.
+
+- [#48 / PR #167](https://github.com/nathcymru/Tocyn/pull/167) remains in draft: retained shared controls, security recovery, corrected built-widget styles, local browser/VoiceOver evidence and numeric performance gates. The authenticated navigation CI correction passed. Final refreshed-revision acceptance remains required; the branch now includes accepted #170.
+- [#159 / PR #170](https://github.com/nathcymru/Tocyn/pull/170) merged as a **partial foundation** after required checks and a verified signed integration. Privacy-safe local diagnostics, bounded resource accounting, credential decisions and canonical mutation summaries are on main. #159 remains open for full active-path coverage and remaining runtime evidence; production telemetry stays disabled under #42. The owner-authorised review-only bypass was recorded; no independent human approval or Copilot review is claimed.
+
+Issue receipts, Project status and each branch's `.agents/state/` provide current
+operational details; this dated snapshot does not replace their acceptance records.
+The workspace, full SLA clocks/calendars/waiting/pause behavior and ownership/routing
+remain mandatory before #140 can accept beta.2. No new release or remote deployment
+has occurred. Zero routine Copilot reviews; required validation remains mandatory.

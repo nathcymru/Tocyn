@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+#lumina-widget-root :is(input, textarea)::placeholder {
+  color: #6b7280;
+  opacity: 1;
+}

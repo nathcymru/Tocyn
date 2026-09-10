@@ -1,3 +1,5 @@
+import { TocynConfirmDialog } from '@luminatick/ui/dialog';
+import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useEffect, useState } from 'react';
 import { dashboardApi } from '../api/client';
 import { AutomationRule, AutomationCondition, WebhookConfig, RetentionConfig } from '../types';
@@ -32,6 +34,14 @@ const OPERATORS = [
 ];
 
 export const AutomationPage: React.FC = () => {
+  const heading = React.useRef<HTMLHeadingElement>(null);
+  const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
+  const deleteGuard = React.useRef(false);
+  const deleteSucceeded = React.useRef(false);
+  const [deletion, setDeletion] = useState<AutomationRule | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -65,15 +75,16 @@ export const AutomationPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this rule?')) return;
+  const handleDelete = async () => {
+    if (!deletion || deleteGuard.current) return;
+    deleteGuard.current = true; setDeleting(true); setDeleteError('');
     try {
-      await dashboardApi.delete(`/automations/${id}`);
-      setRules(rules.filter(r => r.id !== id));
+      await dashboardApi.delete(`/automations/${deletion.id}`);
+      setRules(current => current.filter(rule => rule.id !== deletion.id));
+      deleteSucceeded.current = true; setDeleteOpen(false);
       showSuccess('Rule deleted');
-    } catch (error) {
-      setError('Failed to delete rule');
-    }
+    } catch { setDeleteError('Rule could not be deleted. Try again.'); }
+    finally { deleteGuard.current = false; setDeleting(false); }
   };
 
   const startCreate = () => {
@@ -162,29 +173,29 @@ export const AutomationPage: React.FC = () => {
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Automation Rules</h1>
+          <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Automation Rules</h1>
           <p className="text-slate-500">Manage event-driven workflows and data retention.</p>
         </div>
         {!isEditing && (
-          <button
+          <TocynButton
             onClick={startCreate}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors"
           >
             <Plus size={20} />
             Create Rule
-          </button>
+          </TocynButton>
         )}
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-3">
+        <div role="alert" className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-3">
           <AlertCircle size={20} />
           {error}
         </div>
       )}
 
       {success && (
-        <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-3">
+        <div role="status" className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-3">
           <CheckCircle size={20} />
           {success}
         </div>
@@ -197,16 +208,17 @@ export const AutomationPage: React.FC = () => {
               <h2 className="text-lg font-bold text-slate-900">
                 {isEditing === 'new' ? 'Create New Automation Rule' : 'Edit Automation Rule'}
               </h2>
-              <button onClick={() => setIsEditing(null)} className="text-slate-400 hover:text-slate-600">
+              <TocynButton aria-label="Close automation editor" onClick={() => setIsEditing(null)} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
-              </button>
+              </TocynButton>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Rule Name</label>
-                  <input
+                  <label htmlFor="automation-rule-name" className="block text-sm font-semibold text-slate-700 mb-1">Rule Name</label>
+                  <TocynInput
+                    id="automation-rule-name"
                     type="text"
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                     placeholder="e.g., Slack Notification for Urgent Tickets"
@@ -215,37 +227,41 @@ export const AutomationPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Trigger Event</label>
-                  <select
+                  <label htmlFor="automation-trigger" className="block text-sm font-semibold text-slate-700 mb-1">Trigger Event</label>
+                  <TocynSelect
+                    id="automation-trigger"
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                     value={editForm.event_type}
                     onChange={e => setEditForm({ ...editForm, event_type: e.target.value as any })}
                   >
                     {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
+                  </TocynSelect>
                 </div>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Action Type</label>
-                  <select
+                  <label htmlFor="automation-action" className="block text-sm font-semibold text-slate-700 mb-1">Action Type</label>
+                  <TocynSelect
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    id="automation-action"
                     value={editForm.action_type}
                     onChange={e => setEditForm({ ...editForm, action_type: e.target.value as any })}
                   >
                     {ACTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
+                  </TocynSelect>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Status</label>
                   <div className="flex items-center gap-3 h-10">
-                    <button 
+                    <TocynButton
                       type="button"
+                      aria-label="Rule status"
+                      aria-pressed={editForm.is_active}
                       onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
                       className="transition-colors"
                     >
                       {editForm.is_active ? <ToggleRight className="text-indigo-600" size={40} /> : <ToggleLeft className="text-slate-300" size={40} />}
-                    </button>
+                    </TocynButton>
                     <span className="font-medium text-slate-700">{editForm.is_active ? 'Active' : 'Paused'}</span>
                   </div>
                 </div>
@@ -255,40 +271,43 @@ export const AutomationPage: React.FC = () => {
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-semibold text-slate-900">Conditions</h3>
-                <button 
+                <TocynButton
                   onClick={addCondition}
                   className="text-sm text-indigo-600 font-medium flex items-center gap-1 hover:underline"
                 >
                   <Plus size={16} /> Add Condition
-                </button>
+                </TocynButton>
               </div>
               <div className="space-y-3">
                 {JSON.parse(editForm.conditions || '[]').map((cond: AutomationCondition, idx: number) => (
                   <div key={idx} className="flex gap-3 items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <select
+                    <TocynSelect
                       className="flex-1 px-3 py-1.5 border border-slate-200 rounded-md text-sm"
+                      aria-label={`Condition ${idx + 1} field`}
                       value={cond.field}
                       onChange={e => changeCondition(idx, 'field', e.target.value)}
                     >
                       {FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                    </select>
-                    <select
+                    </TocynSelect>
+                    <TocynSelect
                       className="w-40 px-3 py-1.5 border border-slate-200 rounded-md text-sm"
+                      aria-label={`Condition ${idx + 1} operator`}
                       value={cond.operator}
                       onChange={e => changeCondition(idx, 'operator', e.target.value as any)}
                     >
                       {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                    <input
+                    </TocynSelect>
+                    <TocynInput
                       type="text"
                       className="flex-[2] px-3 py-1.5 border border-slate-200 rounded-md text-sm"
                       placeholder="Value..."
+                      aria-label={`Condition ${idx + 1} value`}
                       value={cond.value}
                       onChange={e => changeCondition(idx, 'value', e.target.value)}
                     />
-                    <button onClick={() => removeCondition(idx)} className="text-slate-400 hover:text-red-500 p-1">
+                    <TocynButton aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)} className="text-slate-400 hover:text-red-500 p-1">
                       <Trash2 size={18} />
-                    </button>
+                    </TocynButton>
                   </div>
                 ))}
                 {JSON.parse(editForm.conditions || '[]').length === 0 && (
@@ -304,8 +323,9 @@ export const AutomationPage: React.FC = () => {
               {editForm.action_type === 'webhook' ? (
                 <div className="space-y-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Webhook URL</label>
-                    <input
+                    <label htmlFor="automation-webhook-url" className="block text-xs font-bold text-slate-500 uppercase mb-1">Webhook URL</label>
+                    <TocynInput
+                      id="automation-webhook-url"
                       type="url"
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm"
                       placeholder="https://hooks.slack.com/services/..."
@@ -315,15 +335,16 @@ export const AutomationPage: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">HTTP Method</label>
-                      <select
+                      <label htmlFor="automation-webhook-method" className="block text-xs font-bold text-slate-500 uppercase mb-1">HTTP Method</label>
+                      <TocynSelect
+                        id="automation-webhook-method"
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm"
                         value={getActionConfig().method || 'POST'}
                         onChange={e => updateActionConfig({ ...getActionConfig(), method: e.target.value })}
                       >
                         <option value="POST">POST</option>
                         <option value="PUT">PUT</option>
-                      </select>
+                      </TocynSelect>
                     </div>
                   </div>
                 </div>
@@ -331,8 +352,9 @@ export const AutomationPage: React.FC = () => {
                 <div className="space-y-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Retention Period (Days)</label>
-                      <input
+                      <label htmlFor="automation-retention-days" className="block text-xs font-bold text-slate-500 uppercase mb-1">Retention Period (Days)</label>
+                      <TocynInput
+                        id="automation-retention-days"
                         type="number"
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm"
                         value={getActionConfig().days_to_keep || 365}
@@ -340,7 +362,7 @@ export const AutomationPage: React.FC = () => {
                       />
                     </div>
                     <div className="flex items-center gap-2 mt-5">
-                      <input
+                      <TocynInput
                         type="checkbox"
                         id="del-attachments"
                         checked={getActionConfig().delete_attachments}
@@ -355,19 +377,19 @@ export const AutomationPage: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
-              <button
+              <TocynButton
                 onClick={() => setIsEditing(null)}
                 className="px-6 py-2.5 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors"
               >
                 Cancel
-              </button>
-              <button
+              </TocynButton>
+              <TocynButton
                 onClick={handleSave}
                 className="bg-indigo-600 text-white px-8 py-2.5 rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-bold shadow-md transition-all active:scale-95"
               >
                 <Save size={20} />
                 Save Automation Rule
-              </button>
+              </TocynButton>
             </div>
           </div>
         )}
@@ -379,24 +401,24 @@ export const AutomationPage: React.FC = () => {
             </div>
             <h3 className="text-lg font-bold text-slate-900 mb-1">No automation rules yet</h3>
             <p className="text-slate-500 mb-6">Create rules to automate your ticket workflows, notify external systems, or manage data retention.</p>
-            <button 
-              onClick={startCreate} 
+            <TocynButton
+              onClick={startCreate}
               className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-indigo-700 transition-colors"
             >
               Create your first rule
-            </button>
+            </TocynButton>
           </div>
         ) : (
           !isEditing && rules.map(rule => (
             <div key={rule.id} className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-between hover:border-indigo-200 hover:shadow-sm transition-all">
               <div className="flex items-center gap-4">
-                <button onClick={() => handleToggle(rule.id, rule.is_active)} className="transition-transform active:scale-90">
+                <TocynButton aria-label={`Status of ${rule.name}`} aria-pressed={Boolean(rule.is_active)} onClick={() => handleToggle(rule.id, rule.is_active)} className="transition-transform active:scale-90">
                   {rule.is_active ? (
                     <ToggleRight className="text-indigo-600" size={36} />
                   ) : (
                     <ToggleLeft className="text-slate-300" size={36} />
                   )}
-                </button>
+                </TocynButton>
                 <div>
                   <h3 className="font-bold text-slate-900">{rule.name}</h3>
                   <div className="flex gap-2 mt-1.5">
@@ -414,27 +436,31 @@ export const AutomationPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
-                <button
+                <TocynButton
                   onClick={() => startEdit(rule)}
                   className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
                   title="Edit Rule"
                 >
                   <Edit2 size={20} />
-                </button>
-                <button
-                  onClick={() => handleDelete(rule.id)}
+                </TocynButton>
+                <TocynButton
+                  aria-label={`Delete ${rule.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(rule); setDeleteError(''); setDeleteOpen(true); }}
                   className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
                   title="Delete Rule"
                 >
                   <Trash2 size={20} />
-                </button>
+                </TocynButton>
               </div>
             </div>
           ))
         )}
       </div>
+      <TocynConfirmDialog open={deleteOpen} busy={deleting} title={`Delete rule: ${deletion?.name ?? ''}`}
+        description="Delete this automation rule? This action cannot be undone." confirmLabel={deleting ? 'Deleting...' : 'Delete rule'} error={deleteError}
+        onConfirm={handleDelete} onOpenChange={next => { if (!next && !deleteGuard.current) setDeleteOpen(false); }}
+        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} />
     </div>
   );
 };

@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -52,7 +53,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
       recovering.current = false;
     }
   }, [loading, error]);
-  
+
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const completedUploads = useRef(new Map<File, UploadedAttachment>());
@@ -302,7 +303,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
     return (
       <div className="bg-red-50 text-red-700 p-4 rounded-lg">
         <p role="alert">{error || 'Ticket not found'}</p>
-        <button type="button" onClick={() => { recovering.current = true; void fetchTicket(); }} className="mt-3 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2">Retry loading conversation</button>
+        <TocynButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }} className="mt-3 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2">Retry loading conversation</TocynButton>
         <Link to="/tickets" className="block mt-4 text-brand-600 hover:underline">Back to Tickets</Link>
       </div>
     );
@@ -329,7 +330,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
       {refreshError && <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700">
         <p role="alert">Could not refresh messages: {refreshError}</p>
-        <button type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket('interactive') === 'updated') messagesRegion.current?.focus(); }} className="mt-2 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2">Refresh messages</button>
+        <TocynButton type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket('interactive') === 'updated') messagesRegion.current?.focus(); }} className="mt-2 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2">Refresh messages</TocynButton>
       </div>}
       {downloadError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{downloadError}</p>}
       <p role="status" aria-label="Attachment download status" className="text-sm text-gray-700">{downloadStatus}</p>
@@ -348,19 +349,19 @@ function TicketDetail({ id }: { id: string | undefined }) {
                     {formatDistanceToNow(utcTimestamp(article.created_at), { addSuffix: true })}
                   </span>
                 </div>
-                <div 
+                <div
                   className={`max-w-[85%] rounded-2xl px-5 py-3 ${
-                    isCustomer 
-                      ? 'bg-brand-600 text-white rounded-tr-sm' 
+                    isCustomer
+                      ? 'bg-brand-600 text-white rounded-tr-sm'
                       : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'
                   }`}
                 >
                   <div className="whitespace-pre-wrap break-words text-sm">{article.body}</div>
-                  
+
                   {article.attachments && article.attachments.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {article.attachments.map((att) => (
-                        <button 
+                        <TocynButton
                           key={att.id}
                           type="button"
                           aria-label={`Download ${att.filename || 'attachment'}`}
@@ -375,7 +376,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                           <span className="text-xs opacity-75">
                             {attachmentSize(att.size)}
                           </span>
-                        </button>
+                        </TocynButton>
                       ))}  </div>
                   )}
                 </div>
@@ -384,11 +385,11 @@ function TicketDetail({ id }: { id: string | undefined }) {
           })}
         </div>
         {paginationVisible && <div className="border-t border-gray-200 bg-white p-4 space-y-2">
-          <button type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore || refreshing}
+          <TocynButton type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore || refreshing}
             aria-controls="conversation-messages" aria-busy={loadingMore}
             className="rounded-md border border-gray-400 bg-white px-4 py-2 text-sm font-medium text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
             {loadingMore ? 'Loading messages…' : nextCursor ? 'Load more messages' : 'All messages loaded'}
-          </button>
+          </TocynButton>
           <p role="status" aria-label="Message pagination" aria-live="polite" className="text-sm text-gray-700">{pageStatus}</p>
         </div>}
 
@@ -400,7 +401,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
               {replyError && <p id="reply-error" role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{replyError}</p>}
               <p role="status" aria-label="Reply status" className="text-sm text-gray-700">{replyStatus}</p>
               <p id="reply-requirement" className="text-sm text-gray-700">Reply text is required, including when attaching files.</p>
-              <textarea
+              <TocynTextarea
                 id="reply-message"
                 readOnly={sending}
                 aria-describedby={replyError ? 'reply-requirement reply-error' : 'reply-requirement'}
@@ -410,7 +411,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                 className="w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 resize-none"
                 rows={3}
               />
-              
+
               {/* Attachment Preview */}
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -418,7 +419,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                     <div key={idx} className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full text-sm border border-gray-200">
                       <Paperclip className="w-3 h-3 text-gray-500" />
                       <span className="max-w-[150px] truncate">{file.name}</span>
-                      <button
+                      <TocynButton
                         type="button"
                         aria-label={`Remove ${file.name}`}
                         aria-disabled={sending}
@@ -426,7 +427,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                         className="rounded text-gray-700 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700"
                       >
                         <X className="w-3 h-3" />
-                      </button>
+                      </TocynButton>
                     </div>
                   ))}
                 </div>
@@ -434,7 +435,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <input
+                  <TocynInput
                     type="file"
                     aria-label="Choose reply attachments"
                     multiple
@@ -442,7 +443,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                     ref={fileInputRef}
                     onChange={handleFileSelect}
                   />
-                  <button
+                  <TocynButton
                     type="button"
                     ref={attachButton}
                     onClick={() => { if (!sending) fileInputRef.current?.click(); }}
@@ -451,22 +452,22 @@ function TicketDetail({ id }: { id: string | undefined }) {
                   >
                     <Paperclip className="w-5 h-5" />
                     <span className="text-sm font-medium">Attach Files</span>
-                  </button>
+                  </TocynButton>
                 </div>
-                
-                <button
+
+                <TocynButton
                   type="submit"
                   aria-disabled={sending || !newMessage.trim()}
                   className="flex items-center gap-2 bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 transition-colors aria-disabled:bg-brand-700 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 font-medium"
                 >
                   {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                   Send Reply
-                </button>
+                </TocynButton>
               </div>
             </form>
           </div>
         )}
-        
+
         {ticket.status === 'resolved' || ticket.status === 'closed' ? (
            <div className="p-4 bg-gray-50 border-t border-gray-200 text-center text-sm text-gray-500">
              This ticket is {ticket.status}. You cannot reply to it.

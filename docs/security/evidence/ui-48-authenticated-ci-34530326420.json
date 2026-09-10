@@ -1,0 +1,343 @@
+{
+  "version": 1,
+  "kind": "tocyn-local-authenticated-ticket-navigation",
+  "revision": "f47faeae13fd04cba8a7de7158e876ea4a8dddc0",
+  "dirty": true,
+  "environment": {
+    "node": "v22.23.2",
+    "platform": "linux",
+    "browser": "151.0.7922.34",
+    "playwright": "1.62.1",
+    "headless": true,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "reducedMotion": "reduce",
+    "remoteBindings": 0,
+    "synthetic": true
+  },
+  "tenantIsolation": {
+    "dashboardForeignTicketDenied": true,
+    "portalForeignTicketDenied": true
+  },
+  "configuration": {
+    "samplesPerClient": 20,
+    "maximumSamples": 20,
+    "warmupsPerClient": 0
+  },
+  "artifacts": {
+    "dashboard": "86cbb9746d2b762c451c1568e195d83a9b7a0f2c6a13bb1ea59641bfe088a78c",
+    "portal": "7fa5cbc0bfa7c023c417e4ad7f04cec7f9be607f88da9eb233516b5d8a104b80"
+  },
+  "sourceHashes": {
+    "tools/ui-performance/authenticated-navigation.ts": "71fd11e20fe72365b32419268036546035f231c204450a0d76a4faecd5cd64b9",
+    "apps/server/scripts/ui-authenticated-navigation.test.ts": "4dd0b5663600c5160f25ea260ee3db4fce565cc32c6a18d5265c3d5a34a30a4d",
+    "apps/dashboard/src/pages/TicketListPage.tsx": "6809f16e45c9623a968726e356e12092394d8ba918996f0e738ff54bf99675e7",
+    "apps/dashboard/src/pages/TicketDetailPage.tsx": "593224682369567fd6233921f26116d09db50682438002a8013056ac0ce065ab",
+    "apps/portal/src/pages/TicketListPage.tsx": "3bdb7500465d80b4819dc5bd3d8684cc03a246c9f6d24aa40cc125c6b62404dc",
+    "apps/portal/src/pages/TicketDetailPage.tsx": "44db20ff6ed32836125a9d076c5d2836c4c3b06d5f9cee7fef7bb987a2df225d"
+  },
+  "measurements": [
+    {
+      "client": "dashboard",
+      "sample": 0,
+      "timing": {
+        "listToDetailMs": 303.6000000000058
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 0,
+      "timing": {
+        "listToDetailMs": 28.89999999999418
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 1,
+      "timing": {
+        "listToDetailMs": 301.5
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 1,
+      "timing": {
+        "listToDetailMs": 29.89999999999418
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 2,
+      "timing": {
+        "listToDetailMs": 335.20000000001164
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 2,
+      "timing": {
+        "listToDetailMs": 30.29999999998836
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 3,
+      "timing": {
+        "listToDetailMs": 378.8999999999942
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 3,
+      "timing": {
+        "listToDetailMs": 30
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 4,
+      "timing": {
+        "listToDetailMs": 322.1000000000058
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 4,
+      "timing": {
+        "listToDetailMs": 29.79999999998836
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 5,
+      "timing": {
+        "listToDetailMs": 328.69999999998254
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 5,
+      "timing": {
+        "listToDetailMs": 29.79999999998836
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 6,
+      "timing": {
+        "listToDetailMs": 234.5
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 6,
+      "timing": {
+        "listToDetailMs": 29.89999999999418
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 7,
+      "timing": {
+        "listToDetailMs": 362.29999999998836
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 7,
+      "timing": {
+        "listToDetailMs": 30.10000000000582
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 8,
+      "timing": {
+        "listToDetailMs": 305.6000000000058
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 8,
+      "timing": {
+        "listToDetailMs": 30.39999999999418
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 9,
+      "timing": {
+        "listToDetailMs": 253.79999999998836
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 9,
+      "timing": {
+        "listToDetailMs": 29.89999999999418
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 10,
+      "timing": {
+        "listToDetailMs": 262.5
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 10,
+      "timing": {
+        "listToDetailMs": 29.699999999982538
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 11,
+      "timing": {
+        "listToDetailMs": 562.5
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 11,
+      "timing": {
+        "listToDetailMs": 30.29999999998836
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 12,
+      "timing": {
+        "listToDetailMs": 962.5
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 12,
+      "timing": {
+        "listToDetailMs": 29.89999999999418
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 13,
+      "timing": {
+        "listToDetailMs": 291.20000000001164
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 13,
+      "timing": {
+        "listToDetailMs": 29.89999999999418
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 14,
+      "timing": {
+        "listToDetailMs": 345.9000000000233
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 14,
+      "timing": {
+        "listToDetailMs": 30.699999999982538
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 15,
+      "timing": {
+        "listToDetailMs": 294.19999999998254
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 15,
+      "timing": {
+        "listToDetailMs": 30.099999999976717
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 16,
+      "timing": {
+        "listToDetailMs": 321
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 16,
+      "timing": {
+        "listToDetailMs": 30.10000000000582
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 17,
+      "timing": {
+        "listToDetailMs": 309
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 17,
+      "timing": {
+        "listToDetailMs": 30.300000000017462
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 18,
+      "timing": {
+        "listToDetailMs": 287.9000000000233
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 18,
+      "timing": {
+        "listToDetailMs": 29.70000000001164
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 19,
+      "timing": {
+        "listToDetailMs": 294.1000000000058
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 19,
+      "timing": {
+        "listToDetailMs": 30.400000000023283
+      }
+    }
+  ],
+  "recovery": [
+    {
+      "client": "dashboard",
+      "timing": {
+        "failedDetailRetryMs": 114.10000000000582
+      }
+    },
+    {
+      "client": "portal",
+      "timing": {
+        "failedDetailRetryMs": 130.69999999998254
+      }
+    }
+  ],
+  "limitations": [
+    "Local disposable Miniflare fixture and loopback static servers only; not deployed-worker or provider timing.",
+    "Fixture-issued sessions prove only this synthetic tenant/auth flow; no production authentication or customer data.",
+    "Synthetic 503 detail faults are injected only by this loopback forwarding boundary; initial authentication and recovered reads use the real fixture.",
+    "No numeric threshold is evaluated."
+  ]
+}

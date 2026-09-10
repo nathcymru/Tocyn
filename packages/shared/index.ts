@@ -25,7 +25,8 @@ export interface Article {
   body_r2_key?: string;
   snippet?: string;
   raw_email_id?: string;
-  qa_type?: 'question' | 'answer';
+  // Legacy question is read-compatible only; new writes use answer/sop/null.
+  qa_type?: 'question' | 'answer' | 'sop' | null;
   is_internal: boolean;
   attachments?: Attachment[];
   created_at: string;

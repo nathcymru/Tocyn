@@ -1,0 +1,144 @@
+# Retained behavior migration matrix
+
+This matrix is the #48 migration boundary after #127. It accounts for retained base behavior without reproducing obsolete page composition.
+
+## Current acceptance position — 10 September 2026
+
+Native controls and retained complex-control migrations are implemented in draft PR167, not yet accepted on main. The chronological receipts below preserve intermediate findings; earlier “remaining” lists are superseded by this section and `.agents/state/ui-48.md`.
+
+- Real Chromium evidence covers form/event/busy behavior, confirmation focus/recovery, tabs, listbox, combobox, popover and splitter across default/radical/no-CSS compositions. Styled target height and reduced-motion checks pass; see `docs/security/evidence/ui-48-controls-d4cd040.json`.
+- Actual local Worker build/runtime evidence excludes browser imports; measured client startup and bundle differences remain documented separately, with all-route cost increases visible.
+- Native Safari/VoiceOver ticket-field naming, traversal and cancellation return are evidenced in `docs/security/evidence/ui-48-voiceover-ticket-fields-2026-09-10.md`. This does not complete all application screen-reader cases.
+- Current gate: integrate the final knowledge-editor recovery correction (local regressions/browser checks pass) and validate the resulting PR revision. Earlier process-cleanup CI failure is preserved in the history; subsequent full CI passed. Login/bundle/widget numeric budgets, real authenticated navigation/read-retry, corrected ShadowRoot visual checks, security recovery and scoped VoiceOver checks now have evidence in `.agents/state/ui-48.md`. Fresh integrated Worker evidence is `ui-48-worker-af18725.json`. No issue closure or beta.2 readiness is inferred.
+- Workspace state/navigation semantics, full SLA/ownership, theme persistence (#66) and wrapper lifecycle (#67) retain their separate ownership and gates.
+
+## Public contract coverage
+
+`src/type-tests/downstream-contracts.tsx` compile-checks direct downstream interface extension for every Tocyn-owned public component, including native/ARIA/event/ref properties and bounded state where exposed. Negative cases reject incompatible refs, invalid native fields and unknown button state. Workspace wrappers forward their actual div/section refs; runtime tests verify all five refs and unmount cleanup. Vendored Ark parts retain upstream types; this does not claim a downstream extension test for every upstream internal component. The compile-only module must remain outside application imports.
+
+## Retained composition inventory
+
+These rows supplement the native-control inventory below. “Implemented” means draft source and scoped regression evidence, not final acceptance. Browser/AT, visual and final performance gates above remain open.
+
+| Source / behavior family | Disposition | Current implementation / evidence |
+|---|---|---|
+| Dashboard Layout: mobile navigation, account actions, connection details | retain/migrate | Shared dialog/popovers; LayoutAccessibility tests and selected Safari receipt. |
+| TicketListPage: row action disclosure | compatibility-only/retire with #128 table replacement | Shared Popover preserves View Ticket link and Escape/outside dismissal; TicketFeedWorkflow and actual Chromium check. No new primary-table architecture. |
+| TicketListPage: search, feed, pagination, create dialog | retain/migrate behavior; replace primary composition under #128 | Shared native/dialog controls; TicketFeedWorkflow/LiveFeedWorkflow recovery tests. |
+| TicketDetailPage: reply/internal marker, attachments, history pagination | retain/migrate behavior; replace composition under workspace issues | Shared native controls; TicketDetailWorkflow and TicketDetailPagination. Domain durability and tenant authorization are separate server contracts. |
+| UsersPage / GroupsPage: details, membership, create/delete | retain/migrate | Shared dialogs, pending guards, failure/retry and focus; UserDetailsDialog, GroupMembersDialog, SettingsDeleteDialog. |
+| FiltersSettingsPage / TicketFieldsPage / AutomationPage: editors and deletion | retain/migrate | Shared dialog/confirmation controls and named native form fields; FilterEditorDialog, TicketFieldDialog, SettingsDeleteDialog. |
+| KnowledgePage: nested category disclosure/selection and deletion | retain/migrate | Named shared buttons with expanded/pressed state; shared deletion dialog and KnowledgeDeleteDialog. It is a nested button/disclosure composition, not an ARIA tree claiming roving-tree keyboard behavior. |
+| KnowledgeEditorPage: rich content editing | retain/migrate surrounding controls | Existing editor retained; shared surrounding native controls. Named controls, associated labels/error semantics and failed-save retry now have real Chromium and Safari/VoiceOver evidence; pending/stale-save regression checks pass; final PR integration remains open. No new rich-editor feature or comprehensive toolbar audit is claimed. |
+| ApiKeyPage: create, one-time copy, revoke and uncertain-result recovery | retain/migrate | Shared dialogs and status/alert feedback; ApiKeyRevokeDialog. |
+| EmailChannelPage / WidgetChannelPage: setup, save/remove/copy feedback | retain/migrate | Shared controls/confirmation and guarded drafts; EmailSettingsAccessibility, EmailRemoveDialog, WidgetSettings. No provider activation claim. |
+| Login / MFA / SecurityProfile / AgentPermissions | retain/migrate | Shared native controls retain authentication states; LoginAccessibility, MfaSetupAccessibility, SecurityProfileAccessibility, AgentPermissionsWorkflow. |
+| Portal login/verify/local mail capture/conversation | retain/migrate | Native/shared dialog adoption; portal LoginAccessibility, VerifyPage, LocalAuthCapturePage, ConversationAccessibility/read recovery/pagination tests. |
+| Widget launcher/tabs/chat/ticket/error-retry | retain/migrate | Shared primitives/Tabs and real ShadowRoot environment; widget App/AiChat/TicketForm tests plus built Chromium AI-on/off check. |
+| Widget packaging, CSS globals, lifecycle and multiple instances | compatibility-only/retire under #67 | Existing IIFE remains; production startup fixed. Custom-element/style-isolation acceptance belongs to #67 and is not claimed here. |
+
+## Migration mapping and historical receipts
+
+| Existing behavior | Shared primitive target | Migration disposition |
+|---|---|---|
+| Buttons, links and icon actions with focus/disabled/loading states | `TocynButton` plus static focus/target tokens | Retain behavior; replace local styling gradually. Critical actions remain labelled and keyboard reachable. |
+| Text inputs and search fields | `TocynInput` plus explicit search-scope composition | Retain behavior; global search and view filtering remain distinct under #127. |
+| Ticket list/table selection and pagination | `Listbox`/`Combobox` Ark exports plus `ConversationList` shell | Migrate retained selection/recovery; table becomes secondary under #127. |
+| Dialogs, menus and panels | Ark `Dialog`, `Popover`, `Splitter` and `TocynPanel` | Retain semantics; replace ad hoc focus/escape behavior after parity tests. |
+| Dashboard/portal/widget standalone login and ticket/settings screens | Package primitives imported by each Vite browser build | Preserve standalone routes; no custom-element registration required. |
+| Widget Shadow DOM/IIFE packaging | Browser-only package consumed by widget build | Keep UI package out of Worker imports; #67 wrapper lifecycle remains separate. |
+| Error, retry, public/internal, attachment and tenant-safe data behavior | Primitive state/event contracts only | Preserve in consuming applications; #48 does not own domain state or authorization. |
+
+Remaining application adoption includes complex dialogs/menus. The accepted #79 permissions page now uses shared native buttons/inputs while preserving its recovery and accessibility behavior. Non-goals for this slice: workspace routing, durable drafts, snooze/waiting state, permissions, tenant policy, theme persistence and wrapper packaging.
+
+## Native-control adoption receipt
+
+Dashboard, portal and widget now consume named button/input/select/textarea primitives through the narrow `@luminatick/ui/primitives` entry point. Native props, form semantics, refs, controlled/uncontrolled values, caller ARIA and event handlers are retained. Dashboard module resolution follows its Vite bundler so package export contracts resolve consistently. Widget token CSS is injected into its ShadowRoot; this does not claim completion of the separate wrapper packaging issue #67.
+
+Validation at this increment: all three production builds; 73 dashboard, 59 portal, 3 widget and 6 shared UI tests pass. Tests include actual keyboard activation, dialog Escape/focus restoration, listbox keyboard selection, form serialization and caller busy-state retention. These DOM tests do not substitute for the remaining browser/assistive-technology acceptance or measured startup/interaction performance. Existing dashboard large-chunk warning remains; no threshold was weakened.
+
+Remaining: Ark complex-control adoption and behavior parity, complete browser accessibility/target sizing checks, baseline-versus-candidate bundle/startup/interaction measurements, and cross-application visual validation after shared styling. Issue #48 and PR #167 remain incomplete.
+
+| Source surface | Adopted native controls | Remaining raw form controls |
+|---|---:|---:|
+| `apps/dashboard/src/components/layout/Layout.tsx` | 9 | 0 |
+| `apps/dashboard/src/pages/AgentPermissionsPage.tsx` | 3 | 0 |
+| `apps/dashboard/src/pages/ApiKeyPage.tsx` | 7 | 0 |
+| `apps/dashboard/src/pages/AutomationPage.tsx` | 21 | 0 |
+| `apps/dashboard/src/pages/EmailChannelPage.tsx` | 11 | 0 |
+| `apps/dashboard/src/pages/FiltersSettingsPage.tsx` | 12 | 0 |
+| `apps/dashboard/src/pages/GroupsPage.tsx` | 13 | 0 |
+| `apps/dashboard/src/pages/KnowledgeEditorPage.tsx` | 5 | 0 |
+| `apps/dashboard/src/pages/KnowledgePage.tsx` | 10 | 0 |
+| `apps/dashboard/src/pages/LoginPage.tsx` | 3 | 0 |
+| `apps/dashboard/src/pages/MfaPage.tsx` | 3 | 0 |
+| `apps/dashboard/src/pages/SecurityProfilePage.tsx` | 5 | 0 |
+| `apps/dashboard/src/pages/SettingsPage.tsx` | 10 | 0 |
+| `apps/dashboard/src/pages/TicketDetailPage.tsx` | 27 | 0 |
+| `apps/dashboard/src/pages/TicketFieldsPage.tsx` | 10 | 0 |
+| `apps/dashboard/src/pages/TicketListPage.tsx` | 18 | 0 |
+| `apps/dashboard/src/pages/UsagePage.tsx` | 7 | 0 |
+| `apps/dashboard/src/pages/UsersPage.tsx` | 5 | 0 |
+| `apps/dashboard/src/pages/WidgetChannelPage.tsx` | 4 | 0 |
+| `apps/portal/src/components/Layout.tsx` | 1 | 0 |
+| `apps/portal/src/pages/LocalAuthCapturePage.tsx` | 2 | 0 |
+| `apps/portal/src/pages/LoginPage.tsx` | 4 | 0 |
+| `apps/portal/src/pages/TicketDetailPage.tsx` | 9 | 0 |
+| `apps/portal/src/pages/TicketListPage.tsx` | 6 | 0 |
+| `apps/portal/src/pages/VerifyPage.tsx` | 3 | 0 |
+| `apps/widget/src/App.tsx` | 4 | 0 |
+| `apps/widget/src/components/AiChat.tsx` | 2 | 0 |
+| `apps/widget/src/components/TicketForm.tsx` | 6 | 0 |
+
+### First complex-control adoption
+
+The portal create-ticket modal now uses shared Ark dialog focus trapping, Escape handling and focus return. Submission locks dismissal while preserving draft/error recovery. Portal59tests, UItypecheck, portal lint/build passed. JSDOM requires a documented nonzero-layout fixture for Ark focusability; this does not claim actual browser visibility/focus containment. Remaining dashboard dialogs/menus and browser validation stay open. Portal candidate build after this adoption: JavaScript308.86kB (gzip98.21kB), CSS22.14kB (gzip5.31kB); these are build measurements, not startup latency or a complete baseline comparison.
+
+The operator create-ticket dialog also consumes `TocynDialog`. Its draft/retry, pending-submit dismissal lock, initial focus and focus-return tests pass (73 dashboard tests); dashboard build passes. Navigation and remaining settings modal/menu migrations are still pending.
+
+Mobile navigation migration: shared Arkdialog now owns opening, Escape and focus restoration. Actual route selection restores Workspace focus; cancellation returns to the opener. Custom content IDs are registered with the Arkroot. Five layout regressions and full76dashboard/59portal/6shared tests pass; actual browser focus containment and edge layout remain to verify.
+
+User-details/filter-editor migration: shared modal naming, initial focus and opener restoration are covered by six new tests. Filter save pending/error/retry behavior retains entered values and blocks duplicate/dismissal races. Conditions have accessible field/operator/value/remove names. User activity has no loaded records; hard-coded demonstration events were removed rather than presented as real activity. Actual activity-history/profile editing/invitations are not supplied by this UI migration. Dashboard82tests/build pass; browser acceptance remains pending.
+
+Ticket-field editor migration: generated/manual keys, select options and Active payload are preserved. Shared dialog owns initial focus and return to either trigger; pending saves block duplicate submission/dismissal, and failure retains the draft with an alert/retry. Four regressions and dashboard86tests/build pass. Safari verified initial focus and empty-state trigger return. VoiceOver announced the labelled required field/form, but navigation automation failed; full assistive-technology acceptance remains open.
+
+Group-members migration: shared modal focus/dismissal and return, visible named removal actions, explicit member-removal confirmation, guarded mutation/dismissal, inline retry/error and status announcements. Existing admin visibility and group/user mutation payloads retained. Four focused regressions cover focus, duplicate/error/retry, confirmation/cancellation, non-admin visibility and unavailable membership data; dashboard90tests/build pass. Browser/screen-reader and remaining group-create/delete flows are still to validate/migrate.
+
+Administration dialogs: group create/delete and knowledge category/article delete now consume shared dialogs with safe initial focus, actual opener return on cancellation and stable heading focus after deletion. Mutations block duplicate/pending dismissal; failures retain the target/draft and show retry feedback. Group cancellation preserves its existing draft behavior. Knowledge category actions are always visible/named; selection exposes pressed-state buttons. Seven additional regressions and full dashboard97tests/build pass. Real browser/assistive technology and remaining native confirmations/settings feedback/menus still require acceptance.
+
+Shared confirmation composition is exported with named extendable `TocynConfirmDialogProps` from `@luminatick/ui/dialog`. Caller owns `open`, `onOpenChange`, `busy`, `onConfirm`, error/recovery and final focus; the component owns named/described modal semantics and Cancel initial focus. Both shared dialog wrappers forward the content ref and preserve caller ARIA descriptions. Static confirmation styles use existing surface/text tokens; interaction tests run without presentation CSS. Filter/automation deletion now uses this composition. Final dashboard101/portal59/widget3/shared7tests, UI typecheck and all3client builds pass. Remaining browser/assistive-technology/performance acceptance is not implied by these regressions.
+
+API-key controls now use shared create/revoke dialogs, labelled required name entry, guarded mutation/dismissal and stable focus. Uncertain creation results remain explicit; metadata refresh failures are visible, acknowledged revocations are not resurrected by late list responses, and matching one-time displays are cleared. Copy feedback waits for clipboard resolution and supports failure/retry without logging key material. Seven regressions and full dashboard108tests/build pass. Server access enforcement remains unchanged; full browser/assistive-technology acceptance is separate.
+
+Channel controls: widget save/copy now exposes accurate status/error feedback, guarded pending operations, retained failed/unsaved choices and load-failure protection. Checkbox help associations/label sizing are explicit. Email removal consumes the shared confirmation with target-preserving retry and focus behavior. Six additional regressions and dashboard114tests/build pass. The embed snippet is an integration example with required public-key/API-build/sign-in setup; it no longer uses the ignored global configuration or asserts complete styling isolation. #67 still owns the full wrapper/embedding contract and evidence.
+
+Widget ticket-form increment: explicitly associated labels, read-only authenticated email, duplicate-submit guard, pending announcement/disabled editing, retained failed content with focused alert, and success/new-draft focus. The existing request URL, authenticated headers, credentials omission and body contract are unchanged. Two regressions bring widget coverage to 5 tests/2 files; widget build and new strict typecheck pass. Shared UI typecheck and workflow validator pass. Existing CI now includes widget and shared-UI typechecks without removing other checks. Dashboard114/portal59/shared7 results are prior unchanged-subsystem evidence, not reruns. Browser/assistive-technology, remaining controls and performance acceptance remain open; no #48 completion or forecast change.
+
+Widget shell/chat increment: Ark Tabs is exported through the shared headless entrypoint and consumed with manual keyboard activation (arrows/Home/End move focus; Enter/Space selects). Named launcher/close controls expose expanded state; Escape restores the launcher. Hidden mounted panels preserve local drafts across tab/close/reopen; disappearing sessions unmount private content, and changed login email keys fresh content. Ticket-only configuration selects the enabled feature. AI chat has a named input/send action, conversation log/pending announcement, synchronous duplicate guard, retained failed question with focus and explicit retry, malformed-response handling and no fabricated assistant error message/raw logging. Scrolling is non-smooth and loading dots no longer bounce. Request credentials/history contracts remain unchanged; these mock tests are not backend authorization proof.
+
+Validation: widget11/dashboard114/portal59/shared7 tests pass; widget/shared typechecks and all three client builds pass. Added six widget regressions cover keyboard/disclosure/draft continuity, AI-off mode, session disappearance, pending/history and HTTP/malformed-response recovery. Actual browser/shadow-root navigation remains a required check, not inferred from JSDOM; #67 still owns environment/embedding isolation. Ark automatic-selection timing did not pass the initial DOM test; final manual-activation semantics are explicit and tested, with actual-browser acceptance outstanding. Existing Vite/bundle warnings remain; measured full performance budgets and remaining retained controls remain open.
+
+Layout disclosure increment: account and connection details now consume shared Ark Popover rather than document-level outside-click/Escape implementations. Named content, first-action focus, dismissal/trigger return and reconnect behavior are covered. Account navigation has an explicit Workspace final-focus target, fixing a rapid-navigation focus race; duplicate sign-out requests are guarded while failed server sign-out still clears local authentication and shows the existing warning. Seven layout regressions and full dashboard116tests/21files plus TypeScript/build pass. JSDOM supplies ResizeObserver/geometry; real-browser positioning, nested mobile navigation and assistive-technology acceptance remain required. Existing bundle warning remains. No authentication API/authority or realtime semantics changed; other clients/shared source unchanged in this increment.
+
+Ticket-detail retained-control increment: QA actions are always visible, named pressed-state buttons with minimum-height targets and explicit light/dark button contrast on a white action surface. A synchronous pending guard prevents overlapping QA writes; fixed error/status feedback replaces raw-error alerts. Existing viewer names, including overflow beyond three avatars, are exposed as text to assistive technology; decorative avatars are hidden from its tree and the pulse is removed. QA marked replaces INDEXED because the service updates QA state before vector upsert, so a flag alone does not prove indexing.
+
+Full dashboard118tests/21files and TypeScript/build pass; two new regressions cover pending/failure/retry/pressed state and filtered full viewer names. Browser/computed contrast/target-size acceptance remains open. Backend QA contract discrepancy discovered: current UI sends question/answer/null, while TenantKnowledgeService.markArticleAsQA declares answer/sop/null and the handler accepts unvalidated JSON. This predates the increment; backend QA validation/contract acceptance is unresolved, recorded here and in48receipt, and must be assigned through existing knowledge/QA scope before claiming that integration. No backend changes, real AI calls, provider activation, or full48completion.
+
+Safari18:41BST10September: desktop popover/destination focus and390×844mobile focus wrap/nested Escape verified on synthetic5190/8899. Screenshot exposed account-content clipping; fixed positioning corrected it and was rechecked visually. Dashboard119tests/build pass. Evidence: docs/security/evidence/ui-48-safari-popovers-2026-09-10.md includes tested source blob/limits. Responsive mode restored. Disconnected realtime, full spoken VoiceOver and remaining performance/cross-browser acceptance stay explicit.
+
+Performance baseline checkpoint: fresh accepted-tree baseline andfcba36fcandidate production builds measured by tools/ui-performance/bundle-evidence.mjs; repeat output identical excluding timestamp. JS gzip growth dashboard7.35%, portal24.92%, widget9.15% (Vite8.2.2both). JSONartifact and reproducible method/limits in docs/security/evidence/ui-48-performance.md. No numeric budget/startup/interaction acceptance inferred; investigate portal growth and build real-browser timing/actual Worker graph evidence next. Existing edge/rehearsal contract tests initially exposed a missing local better-sqlite3 native binding; rebuilt that installed dependency from source, then37contract/3runtime tests passed. No repository dependency/version change or check waiver. Read-only worker identified missing timing harness and completed. No48closure/forecast change.
+
+Clean-revision70a7a35manifest evidence: portal initial static JS gzip67502bytes versus baseline77808(−13.24%); all-route99830versus77808(+28.30%). Both recorded in ui-48-bundle-70a7a35.json, without changing immutable first snapshot. All-client manifest builds passed. Portal61tests/lint/build passed. Real-browser timing/CI budgets and full48acceptance still open; do not present code splitting as a reduction in total bundle bytes.
+
+
+Security profile increment: shared confirmation uses Cancel initial focus and guarded pending dismissal; setup/confirmation prevent duplicate submits, preserve failed-code recovery, clear local provisioning data on session change and restore deliberate focus. Successful enrollment adopts the replacement token returned by the existing endpoint, retaining verified tenant context; stale responses cannot replace a newer session. Optional MFA disable signs out after success because migration0022 revokes the current token and the endpoint returns no replacement. Mandatory operator MFA remains enforced; no backend change or live MFA mutation was performed.
+
+Validation: eight new synthetic regressions; full dashboard127tests/22files and TypeScript/production build pass. Existing bundle warning remains. A direct ESLint attempt could not run because dashboard/root have no ESLint configuration or dashboard lint script; no lint pass is claimed. Focused native worker inspection found no material regression; coordinator additionally checked the authority-change trigger and covered optional-disable logout. Full browser/spoken VoiceOver, performance budgets and remaining control acceptance stay open. No completion percentage, forecast, merge or release change. Owner reconfirmed local test-control authority; no further permission request pending.
+
+
+Email settings increment: associated input labels and named forms; provider load/save errors are visible independently of add-channel UI, with explicit load retry. Dirty provider edits survive refetch; pending writes guard duplicate submissions and disable editing. Successful credential save replaces the local typed value with the existing mask, preserves masked-key omission, and announces configuration without claiming verified delivery. Add-channel errors preserve entries and focus recovery; pending cancel is disabled and successful/cancelled forms return focus to Add Email. Channel-load failures are distinct from an empty list. No provider/API contract change or real provider request.
+
+Validation: four new mocked-request regressions and existing two removal-dialog tests pass; full dashboard131tests/23files and TypeScript/build pass. Existing bundle warning and absent dashboard lint configuration remain. Full browser/spoken/performance acceptance is pending. Native read-only worker corrected an initial QA ownership inference: #84 is AI-agent evaluation, not ticket knowledge curation; current #151/#152 do not explicitly assign the legacy marker mismatch. Owner clarification requested for explicit Answer/SOP alignment under152 with no silent conversion of existing Question records; independent48/159 work continues. No merge/closure/forecast change.
+
+
+Approved152UI compatibility consumer: write controls now offer Answer/SOP with explicit internal-procedure naming. Read types retain legacyQuestion and includeSOP/null; legacyQuestion records display a compatibility notice and cannot be silently changed by these controls. A regression proves rendering does not send a conversion request; existing pending/retry test now verifiesSOP. Full dashboard132tests/23files, dashboardTypeScript/build and serverTypeScript pass. The wider152assistant scope remains incomplete. Server validation lives in isolated152worker branch and must integrate before48closure; pending runtime evidence is not supplied by these UI mocks. Synced current owner-approved152body into master-package issue source.

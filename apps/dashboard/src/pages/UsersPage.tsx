@@ -1,12 +1,18 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
+import { TocynButton } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
-import { User as UserIcon, Shield, Mail, Calendar, ShieldCheck, X, Activity, Settings } from 'lucide-react';
+import { User as UserIcon, Shield, Mail, Calendar, ShieldCheck, X, Settings } from 'lucide-react';
 
 export const UsersPage: React.FC = () => {
   const { data: users = [], isLoading, error } = useUsers();
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [modalType, setModalType] = useState<'edit' | 'activity' | null>(null);
+  const dialogTitleId = React.useId();
+  const closeControl = React.useRef<HTMLButtonElement>(null);
+  const opener = React.useRef<HTMLButtonElement | null>(null);
+  const closeDialog = () => { setSelectedUser(null); setModalType(null); };
 
   if (isLoading) return <div className="p-8 text-center text-slate-500 italic">Loading team members...</div>;
 
@@ -17,9 +23,9 @@ export const UsersPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
           <p className="text-slate-500 mt-1">Manage agents, admins, and their access levels.</p>
         </div>
-        <button className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm">
+        <TocynButton className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm">
           Invite New User
-        </button>
+        </TocynButton>
       </div>
 
       {error && (
@@ -36,13 +42,13 @@ export const UsersPage: React.FC = () => {
                 <UserIcon className="w-6 h-6" />
               </div>
               <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 
+                user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
                 user.role === 'agent' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
               }`}>
                 {user.role}
               </span>
             </div>
-            
+
             <h3 className="text-lg font-bold text-slate-900">{user.full_name || 'Unnamed User'}</h3>
             <div className="space-y-2 mt-4">
               <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -69,18 +75,18 @@ export const UsersPage: React.FC = () => {
             </div>
 
             <div className="mt-6 pt-6 border-t border-slate-100 flex items-center gap-3">
-              <button 
-                onClick={() => { setSelectedUser(user); setModalType('edit'); }}
+              <TocynButton
+                aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setSelectedUser(user); setModalType('edit'); }}
                 className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
               >
                 Edit Profile
-              </button>
-              <button 
-                onClick={() => { setSelectedUser(user); setModalType('activity'); }}
+              </TocynButton>
+              <TocynButton
+                aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setSelectedUser(user); setModalType('activity'); }}
                 className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
               >
                 View Activity
-              </button>
+              </TocynButton>
             </div>
           </div>
         ))}
@@ -93,16 +99,17 @@ export const UsersPage: React.FC = () => {
         )}
       </div>
 
-      {selectedUser && modalType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <TocynDialog open={Boolean(selectedUser && modalType)} onOpenChange={open => { if (!open) closeDialog(); }}
+        labelledBy={dialogTitleId} initialFocusEl={() => closeControl.current} finalFocusEl={() => opener.current}>
+        {selectedUser && (
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">
+              <h2 id={dialogTitleId} className="text-xl font-bold text-slate-900">
                 {modalType === 'edit' ? 'Edit User Profile' : 'User Activity Log'}
               </h2>
-              <button onClick={() => { setSelectedUser(null); setModalType(null); }} className="text-slate-400 hover:text-slate-600">
+              <TocynButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="text-slate-400 hover:text-slate-600">
                 <X className="w-6 h-6" />
-              </button>
+              </TocynButton>
             </div>
             <div className="p-8">
               <div className="flex items-center gap-4 mb-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
@@ -122,39 +129,23 @@ export const UsersPage: React.FC = () => {
                   <p className="text-sm text-slate-500 mt-1">In this version, users must update their own profiles via the security settings.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-brand-500 mt-1.5" />
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">Logged in from new IP</p>
-                      <p className="text-xs text-slate-500">2 hours ago • 192.168.1.45</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-slate-300 mt-1.5" />
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">Resolved Ticket #000124</p>
-                      <p className="text-xs text-slate-500">Yesterday • 4:30 PM</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 opacity-50">
-                    <Activity className="w-4 h-4 text-slate-400" />
-                    <p className="text-xs italic text-slate-500">Viewing last 30 days of activity...</p>
-                  </div>
+                <div className="text-center py-6">
+                  <p className="text-slate-600 font-medium">User activity is not available in this view yet.</p>
+                  <p className="text-sm text-slate-500 mt-1">No activity records have been loaded.</p>
                 </div>
               )}
             </div>
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button 
-                onClick={() => { setSelectedUser(null); setModalType(null); }}
+              <TocynButton
+                onClick={closeDialog}
                 className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Close
-              </button>
+              </TocynButton>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </TocynDialog>
     </div>
   );
 };

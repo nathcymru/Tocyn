@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "recordedAt": "2026-09-10T18:53:16.216Z",
+  "node": "v22.19.0",
+  "sourceHashes": {
+    "tools/ui-browser/check.mjs": "ca9fa8ebd608510c40f04f831d98a65bd277e90c629a2b76188945cd54134b51",
+    "tools/ui-browser/fixture/main.tsx": "feedf7fe34e9e37df5944516872188008c718eafad10eb78ea22df2c03e3d937",
+    "tools/ui-browser/fixture/index.html": "51cf0ed00df425d041535dd669f32d0e6eb51dfb9bb6f4307266487baff7f537",
+    "tools/ui-browser/fixture/radical.css": "b129dff68797fe6e5e20fb1c7bc596c754b6904ae9ecb65442a10452c5539717",
+    "packages/ui/src/styles/tocyn.css": "c080eb9624c1fd8a64b686b77b4718adc200542eb0e4f282288bb1aed9b29671",
+    "packages/ui/src/primitives.tsx": "e8a4b871a7c1b73b70bdc17e909be66f1614d740499d264474440a4724295b56",
+    "packages/ui/src/dialog.tsx": "219775f0c926d1fa249f80805bf2abc6a57c729550e22b0f58565ecce6584a17"
+  },
+  "workingTreeStatus": "M apps/server/scripts/local-beta-runtime.test.ts\n M packages/ui/src/styles/tocyn.css\n?? tools/ui-browser/",
+  "revision": "e0f590772bf21ba0f39ab4d07895eacd263322ee",
+  "browser": "151.0.7922.34",
+  "scenario": "Real browser shared-control interaction independence with default/radical/no presentation CSS; synthetic local fixture, not application or theme66 acceptance.",
+  "results": [
+    {
+      "style": "default",
+      "behavior": "passed",
+      "presentation": "target height and reduced motion passed",
+      "sizes": [
+        {
+          "kind": "input",
+          "width": 153,
+          "height": 50
+        },
+        {
+          "kind": "select",
+          "width": 65,
+          "height": 44
+        },
+        {
+          "kind": "textarea",
+          "width": 181,
+          "height": 50
+        },
+        {
+          "kind": "button",
+          "width": 76.75,
+          "height": 44
+        },
+        {
+          "kind": "button",
+          "width": 144.203125,
+          "height": 44
+        },
+        {
+          "kind": "button",
+          "width": 45.640625,
+          "height": 44
+        },
+        {
+          "kind": "button",
+          "width": 124.921875,
+          "height": 44
+        },
+        {
+          "kind": "button",
+          "width": 90.859375,
+          "height": 44
+        },
+        {
+          "kind": "button",
+          "width": 92.328125,
+          "height": 44
+        }
+      ]
+    },
+    {
+      "style": "radical",
+      "behavior": "passed",
+      "presentation": "target height and reduced motion passed",
+      "sizes": [
+        {
+          "kind": "input",
+          "width": 199,
+          "height": 78
+        },
+        {
+          "kind": "select",
+          "width": 105,
+          "height": 51
+        },
+        {
+          "kind": "textarea",
+          "width": 207,
+          "height": 78
+        },
+        {
+          "kind": "button",
+          "width": 101.0625,
+          "height": 49
+        },
+        {
+          "kind": "button",
+          "width": 184.75,
+          "height": 49
+        },
+        {
+          "kind": "button",
+          "width": 64.453125,
+          "height": 49
+        },
+        {
+          "kind": "button",
+          "width": 164.328125,
+          "height": 49
+        },
+        {
+          "kind": "button",
+          "width": 118.78125,
+          "height": 49
+        },
+        {
+          "kind": "button",
+          "width": 118.671875,
+          "height": 49
+        }
+      ]
+    },
+    {
+      "style": "none",
+      "behavior": "passed",
+      "presentation": "not asserted without CSS",
+      "sizes": [
+        {
+          "kind": "input",
+          "width": 153,
+          "height": 21
+        },
+        {
+          "kind": "select",
+          "width": 65,
+          "height": 19
+        },
+        {
+          "kind": "textarea",
+          "width": 181,
+          "height": 36
+        },
+        {
+          "kind": "button",
+          "width": 76.75,
+          "height": 21
+        },
+        {
+          "kind": "button",
+          "width": 144.203125,
+          "height": 21
+        },
+        {
+          "kind": "button",
+          "width": 45.640625,
+          "height": 21
+        },
+        {
+          "kind": "button",
+          "width": 124.921875,
+          "height": 21
+        },
+        {
+          "kind": "button",
+          "width": 90.859375,
+          "height": 21
+        },
+        {
+          "kind": "button",
+          "width": 92.328125,
+          "height": 21
+        }
+      ]
+    }
+  ]
+}

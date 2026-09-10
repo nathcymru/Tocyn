@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -9,7 +10,7 @@ export function LoginPage() {
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
-  
+
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const setMfaRequired = useAuthStore((state) => state.setMfaRequired);
@@ -22,7 +23,7 @@ export function LoginPage() {
 
     try {
       const data = await dashboardApi.post<AuthResponse>('/auth/login', { email, password });
-      
+
       if (data.mfa_required) {
         // We still need the token (pre-mfa) to call the MFA verify endpoint
         setAuth(data.token, data.user);
@@ -57,7 +58,7 @@ export function LoginPage() {
         <form aria-busy={loading} onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="staff-login-email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-            <input
+            <TocynInput
               id="staff-login-email"
               name="email"
               autoComplete="username"
@@ -72,7 +73,7 @@ export function LoginPage() {
           </div>
           <div>
             <label htmlFor="staff-login-password" className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-            <input
+            <TocynInput
               id="staff-login-password"
               name="password"
               autoComplete="current-password"
@@ -85,13 +86,13 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <button
+          <TocynButton
             type="submit"
             aria-disabled={loading}
             className="btn btn-primary w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11"
           >
             {loading ? 'Signing in...' : 'Sign In'}
-          </button>
+          </TocynButton>
         </form>
         <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? 'Signing in…' : ''}</p>
       </div>

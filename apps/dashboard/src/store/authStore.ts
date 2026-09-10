@@ -10,12 +10,19 @@ interface User {
   mfa_enabled: boolean;
 }
 
+interface SessionAnnouncement {
+  generation: number;
+  message: string;
+}
+
 interface AuthState {
   token: string | null;
   sessionGeneration: number;
   user: User | null;
   mfaRequired: boolean;
-  setAuth: (token: string, user: User) => void;
+  sessionAnnouncement: SessionAnnouncement | null;
+  clearSessionAnnouncement: (generation: number) => void;
+  setAuth: (token: string, user: User, announcement?: string) => void;
   updateUser: (user: Partial<User>) => void;
   setMfaRequired: (required: boolean) => void;
   logout: () => void;
@@ -28,15 +35,20 @@ export const useAuthStore = create<AuthState>()(
       sessionGeneration: 0,
       user: null,
       mfaRequired: false,
-      setAuth: (token, user) => set(state => ({ token, user, mfaRequired: false, sessionGeneration: state.sessionGeneration + 1 })),
+      sessionAnnouncement: null,
+      clearSessionAnnouncement: (generation) => set(state => state.sessionAnnouncement?.generation === generation ? { sessionAnnouncement: null } : {}),
+      setAuth: (token, user, announcement) => set(state => {
+        const generation = state.sessionGeneration + 1;
+        return { token, user, mfaRequired: false, sessionAnnouncement: announcement ? { generation, message: announcement } : null, sessionGeneration: generation };
+      }),
       updateUser: (updates) => set((state) => {
         const user = state.user ? {...state.user,...updates} : null;
         const authorityChanged = user && state.user && (user.id !== state.user.id || user.tenant_id !== state.user.tenant_id ||
           user.role !== state.user.role || user.mfa_enabled !== state.user.mfa_enabled);
-        return {user,sessionGeneration:state.sessionGeneration + (authorityChanged ? 1 : 0)};
+        return {user,sessionAnnouncement: authorityChanged ? null : state.sessionAnnouncement,sessionGeneration:state.sessionGeneration + (authorityChanged ? 1 : 0)};
       }),
       setMfaRequired: (required) => set({ mfaRequired: required }),
-      logout: () => set(state => ({ token: null, user: null, mfaRequired: false, sessionGeneration: state.sessionGeneration + 1 })),
+      logout: () => set(state => ({ token: null, user: null, mfaRequired: false, sessionAnnouncement: null, sessionGeneration: state.sessionGeneration + 1 })),
     }),
     {
       name: 'lumina-auth',

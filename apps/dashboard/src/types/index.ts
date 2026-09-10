@@ -21,7 +21,8 @@ export interface Article {
   sender_type: 'customer' | 'agent' | 'system';
   body: string;
   raw_email_id?: string;
-  qa_type?: 'question' | 'answer';
+  // Legacy question values remain readable; new writes use answer/sop/null.
+  qa_type?: 'question' | 'answer' | 'sop' | null;
   is_internal: boolean;
   attachments?: Attachment[];
   created_at: string;

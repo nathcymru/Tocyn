@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
@@ -20,7 +21,7 @@ export function MfaPage() {
   const retryingSetup = React.useRef(false);
   const codeInput = React.useRef<HTMLInputElement>(null);
   const [setupData, setSetupData] = useState<SetupResponse | null>(null);
-  
+
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const user = useAuthStore((state) => state.user);
@@ -37,10 +38,6 @@ export function MfaPage() {
       setSetupData(data);
       setError('');
       setSetupStatus('Authenticator setup ready. Scan the QR code or enter the text key, then enter your authentication code.');
-      if (retryingSetup.current) {
-        codeInput.current?.focus();
-        retryingSetup.current = false;
-      }
     }).catch((err: unknown) => {
       if (active) {
         setSetupStatus('');
@@ -49,6 +46,13 @@ export function MfaPage() {
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user, setupAttempt]);
+
+  useEffect(() => {
+    if (!setupData || !retryingSetup.current) return;
+    // Focus only after React has committed the retry-created input.
+    codeInput.current?.focus();
+    retryingSetup.current = false;
+  }, [setupData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +70,7 @@ export function MfaPage() {
         // Normal verify
         data = await dashboardApi.post<AuthResponse>('/auth/mfa/verify', { code });
       }
-      
+
       setAuth(data.token, data.user);
       navigate('/');
     } catch (err: any) {
@@ -105,7 +109,7 @@ export function MfaPage() {
             {isSetupMode ? 'Set up Two-Factor Authentication' : 'Two-Factor Authentication'}
           </h1>
           <p id="mfa-instructions" className="text-slate-600 mt-2">
-            {isSetupMode 
+            {isSetupMode
               ? 'Your account requires an additional layer of security. Please scan the QR code with your authenticator app.'
               : 'Enter the 6-digit code from your authenticator app'}
           </p>
@@ -119,7 +123,7 @@ export function MfaPage() {
         )}
 
         {isSetupMode && !setupData && error && (
-          <button type="button" aria-disabled={loading}
+          <TocynButton type="button" aria-disabled={loading}
             onClick={() => {
               if (loading) return;
               setLoading(true);
@@ -128,7 +132,7 @@ export function MfaPage() {
               setSetupAttempt(previous => previous + 1);
             }} className="mb-4 rounded border border-slate-500 px-3 py-2 text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
             Retry authenticator setup
-          </button>
+          </TocynButton>
         )}
 
         {isSetupMode && setupData && (
@@ -150,7 +154,7 @@ export function MfaPage() {
             <label htmlFor="mfa-code" className="block text-sm font-medium text-slate-700 mb-2 text-center">
               Authentication Code
             </label>
-            <input
+            <TocynInput
               id="mfa-code"
               ref={codeInput}
               readOnly={loading}
@@ -168,13 +172,13 @@ export function MfaPage() {
               autoFocus
             />
           </div>
-          <button
+          <TocynButton
             type="submit"
             aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
             className="btn btn-primary w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11 text-base font-medium"
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
-          </button>
+          </TocynButton>
         </form>
         <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
       </div>

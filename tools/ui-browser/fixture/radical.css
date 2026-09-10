@@ -1,0 +1,5 @@
+:root { --tocyn-color-surface: #111827; --tocyn-color-text: #ffffff; --tocyn-color-focus: #fde047; --tocyn-target-min: 3rem; }
+body { background: #111827; color: white; font-family: Georgia, serif; }
+button,input,select,textarea { font: inherit; border: 3px solid #fde047; border-radius: 0; padding: .75rem; }
+[data-scope="tabs"][data-part="list"] { display: flex; flex-direction: column; }
+[data-tocyn-confirm-body] { border: 4px dashed #fde047; }

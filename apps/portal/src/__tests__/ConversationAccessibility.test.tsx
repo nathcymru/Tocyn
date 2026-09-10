@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TicketListPage } from '../pages/TicketListPage';
@@ -6,18 +6,13 @@ import { TicketDetailPage } from '../pages/TicketDetailPage';
 import { portalApi } from '../api/client';
 vi.mock('../api/client', () => ({ portalApi: { get: vi.fn(), post: vi.fn(), postForm: vi.fn(), download: vi.fn() } }));
 vi.mock('@marsidev/react-turnstile', () => ({ Turnstile: () => null }));
-// JSDOM omits native dialog methods. This only models open/close, not browser focus containment.
-const originalShowModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
-const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
-beforeAll(() => {
-  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.setAttribute('open', ''); } });
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value(this: HTMLDialogElement) { this.removeAttribute('open'); } });
-});
-afterAll(() => {
-  if (originalShowModal) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', originalShowModal);
-  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal;
-  if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose);
-  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
+// JSDOM has no layout. Supply nonzero rects for mounted, non-hidden controls so
+// the real Ark focus trap can classify them; browser focus/visibility is a separate gate.
+beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (this: HTMLElement) {
+    return (this.isConnected && !this.closest('[hidden]') && this.getAttribute('type') !== 'hidden'
+      ? [new DOMRect(0, 0, 100, 30)] : []) as unknown as DOMRectList;
+  });
 });
 afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); });
 const ticket = { id: 'ticket', subject: 'Accepted conversation', status: 'open', priority: 'normal', ticket_no: 1, created_at: '2026-09-09 00:00:00' };
@@ -54,17 +49,16 @@ describe('portal conversation accessibility and recovery', () => {
     expect(await screen.findByText(new RegExp(`Ticket ${reference} • Created`))).toBeTruthy();
   });
 
-  it('names the native create dialog, focuses its first field and returns focus after its cancel event', async () => {
+  it('names the shared create dialog, focuses its first field and returns focus after Escape', async () => {
     setupReads(); mountList();
     const opener = await screen.findByRole('button', { name: 'New Ticket' });
     opener.focus(); fireEvent.click(opener);
-    const dialog = screen.getByRole('dialog', { name: 'Create New Ticket' });
-    expect(dialog.tagName).toBe('DIALOG');
-    expect(screen.getByLabelText('Subject')).toBe(document.activeElement);
+    await screen.findByRole('dialog', { name: 'Create New Ticket' });
+    await waitFor(() => expect(screen.getByLabelText('Subject')).toBe(document.activeElement));
     expect(screen.getByLabelText('Message')).toBeTruthy();
-    fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(document.activeElement).toBe(opener);
+    await waitFor(() => expect(document.activeElement).toBe(opener));
     expect(portalApi.post).not.toHaveBeenCalled();
   });
 
@@ -74,7 +68,8 @@ describe('portal conversation accessibility and recovery', () => {
     vi.mocked(portalApi.post).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
     mountList();
     const opener = await screen.findByRole('button', { name: 'New Ticket' }); fireEvent.click(opener);
-    const subject = screen.getByLabelText('Subject') as HTMLInputElement;
+    const subject = await screen.findByLabelText('Subject') as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(subject));
     const message = screen.getByLabelText('Message') as HTMLTextAreaElement;
     fireEvent.change(subject, { target: { value: 'Draft subject' } });
     fireEvent.change(message, { target: { value: 'Draft message' } });
@@ -82,9 +77,9 @@ describe('portal conversation accessibility and recovery', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('status').textContent).toContain('Creating ticket');
     fireEvent.click(submit);
-    fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
     expect(portalApi.post).toHaveBeenCalledTimes(1);
-    expect(dialog.hasAttribute('open')).toBe(true);
+    expect(dialog.getAttribute('data-state')).toBe('open');
     reject(new Error('The operator has stopped intake.'));
     const alert = await screen.findByRole('alert');
     expect(subject.getAttribute('aria-describedby')).toBe(alert.id);
@@ -93,7 +88,8 @@ describe('portal conversation accessibility and recovery', () => {
     vi.mocked(portalApi.post).mockResolvedValueOnce({ ticket: { ...ticket, id: 'new-ticket', subject: 'Draft subject' } });
     fireEvent.click(submit);
     await screen.findByRole('link', { name: /Draft subject/ });
-    expect(screen.queryByRole('dialog')).toBeNull(); expect(document.activeElement).toBe(opener);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
     expect(screen.getByRole('status').textContent).toContain('Ticket created');
     expect(portalApi.post).toHaveBeenCalledTimes(2);
   });

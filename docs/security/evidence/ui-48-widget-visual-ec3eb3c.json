@@ -1,0 +1,1854 @@
+{
+  "version": 1,
+  "kind": "tocyn-local-built-widget-visual-keyboard",
+  "recordedAt": "2026-09-10T21:37:14.302Z",
+  "revision": "ec3eb3c5f0617d78de68904498789371a67412c8",
+  "workingTreeDirty": true,
+  "environment": {
+    "node": "v22.19.0",
+    "browser": "151.0.7922.34",
+    "headless": true,
+    "reducedMotion": "reduce",
+    "localLoopback": true
+  },
+  "sourceHashes": {
+    "tools/ui-browser/widget-visual.mjs": "6af582fa4e9a7791bdb77d208cfde74f1056f9d4ddbb6fc0431b5f33d78605e3",
+    "apps/widget/src/main.tsx": "520f6323febfa4359ddaefbd01058cb0767d459d84fc82f1a75c161336e8f2bb",
+    "apps/widget/src/index.css": "5198d7184bd09542e2bda53989f226f4aad095b2477054846dc10425ee7dd934",
+    "apps/widget/src/App.tsx": "c6816be25807f2c9c25d9e4b1b87e967aec7aaf7de16c20ed04dbe0d043f22cc",
+    "apps/widget/src/components/TicketForm.tsx": "e949ea87ee3e7389d309c45253aa0dd65e9099e92026bdc10e674ecb3310b423",
+    "apps/widget/dist/lumina-widget.js": "c68713900e4e7defe360af35ca35b825e45ae5e26dce8f42215d2bc0dcfb587c"
+  },
+  "bundleSha256": "c68713900e4e7defe360af35ca35b825e45ae5e26dce8f42215d2bc0dcfb587c",
+  "scenarios": [
+    {
+      "viewport": {
+        "name": "desktop",
+        "width": 1200,
+        "height": 900
+      },
+      "aiChat": true,
+      "selectedTab": "ticket after keyboard activation",
+      "controls": {
+        "launcher": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 56,
+            "height": 56
+          }
+        },
+        "close": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 44,
+            "height": 44
+          }
+        },
+        "ticketTab": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(105, 114, 132)",
+            "background": {
+              "r": 249.18,
+              "g": 250.15,
+              "b": 251.12,
+              "a": 1
+            },
+            "contrast": 4.635583721790188,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.4128734861003664,
+            "unsupported": null
+          },
+          "target": {
+            "width": 191,
+            "height": 44
+          }
+        },
+        "name": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 44
+          }
+        },
+        "subject": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "3px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 44
+          }
+        },
+        "message": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 90
+          }
+        },
+        "send": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 44
+          },
+          "keyboardReachable": true
+        }
+      },
+      "text": {
+        "title": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 154.84375,
+            "height": 28
+          }
+        },
+        "placeholder": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(107, 114, 128)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(107, 114, 128)",
+            "boxShadow": "none",
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 44
+          }
+        },
+        "footer": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(75, 85, 99)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(75, 85, 99)",
+            "boxShadow": "none",
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "target": {
+            "width": 382,
+            "height": 32
+          }
+        }
+      },
+      "panel": {
+        "panel": {
+          "left": 796,
+          "right": 1180,
+          "top": 208,
+          "bottom": 808,
+          "width": 384,
+          "height": 600
+        },
+        "viewport": {
+          "width": 1200,
+          "height": 900
+        },
+        "documentOverflow": false
+      },
+      "clipping": false,
+      "defects": [],
+      "screenshotPath": "/tmp/tocyn-widget-visual-desktop-ai-on.png",
+      "externalRequests": 0,
+      "blockedApiWrites": 0
+    },
+    {
+      "viewport": {
+        "name": "desktop",
+        "width": 1200,
+        "height": 900
+      },
+      "aiChat": false,
+      "selectedTab": "ticket",
+      "controls": {
+        "launcher": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 56,
+            "height": 56
+          }
+        },
+        "close": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 44,
+            "height": 44
+          }
+        },
+        "ticketTab": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(37, 99, 235)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 5.168555560022562,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.4128734861003664,
+            "unsupported": null
+          },
+          "target": {
+            "width": 382,
+            "height": 44
+          }
+        },
+        "name": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 44
+          }
+        },
+        "subject": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "3px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 44
+          }
+        },
+        "message": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 90
+          }
+        },
+        "send": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 44
+          },
+          "keyboardReachable": true
+        }
+      },
+      "text": {
+        "title": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 154.84375,
+            "height": 28
+          }
+        },
+        "placeholder": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(107, 114, 128)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(107, 114, 128)",
+            "boxShadow": "none",
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "target": {
+            "width": 350,
+            "height": 44
+          }
+        },
+        "footer": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(75, 85, 99)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(75, 85, 99)",
+            "boxShadow": "none",
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "target": {
+            "width": 382,
+            "height": 32
+          }
+        }
+      },
+      "panel": {
+        "panel": {
+          "left": 796,
+          "right": 1180,
+          "top": 208,
+          "bottom": 808,
+          "width": 384,
+          "height": 600
+        },
+        "viewport": {
+          "width": 1200,
+          "height": 900
+        },
+        "documentOverflow": false
+      },
+      "clipping": false,
+      "defects": [],
+      "screenshotPath": "/tmp/tocyn-widget-visual-desktop-ai-off.png",
+      "externalRequests": 0,
+      "blockedApiWrites": 0
+    },
+    {
+      "viewport": {
+        "name": "narrow",
+        "width": 320,
+        "height": 812
+      },
+      "aiChat": true,
+      "selectedTab": "ticket after keyboard activation",
+      "controls": {
+        "launcher": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 56,
+            "height": 56
+          }
+        },
+        "close": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 44,
+            "height": 44
+          }
+        },
+        "ticketTab": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(105, 114, 132)",
+            "background": {
+              "r": 249.18,
+              "g": 250.15,
+              "b": 251.12,
+              "a": 1
+            },
+            "contrast": 4.635583721790188,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.4128734861003664,
+            "unsupported": null
+          },
+          "target": {
+            "width": 139,
+            "height": 44
+          }
+        },
+        "name": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "subject": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "3px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "message": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 90
+          }
+        },
+        "send": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          },
+          "keyboardReachable": true
+        }
+      },
+      "text": {
+        "title": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 154.84375,
+            "height": 28
+          }
+        },
+        "placeholder": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(107, 114, 128)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(107, 114, 128)",
+            "boxShadow": "none",
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "footer": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(75, 85, 99)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(75, 85, 99)",
+            "boxShadow": "none",
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "target": {
+            "width": 278,
+            "height": 32
+          }
+        }
+      },
+      "panel": {
+        "panel": {
+          "left": 20,
+          "right": 300,
+          "top": 120,
+          "bottom": 720,
+          "width": 280,
+          "height": 600
+        },
+        "viewport": {
+          "width": 320,
+          "height": 812
+        },
+        "documentOverflow": false
+      },
+      "clipping": false,
+      "defects": [],
+      "screenshotPath": "/tmp/tocyn-widget-visual-narrow-ai-on.png",
+      "externalRequests": 0,
+      "blockedApiWrites": 0
+    },
+    {
+      "viewport": {
+        "name": "narrow",
+        "width": 320,
+        "height": 812
+      },
+      "aiChat": false,
+      "selectedTab": "ticket",
+      "controls": {
+        "launcher": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 56,
+            "height": 56
+          }
+        },
+        "close": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 44,
+            "height": 44
+          }
+        },
+        "ticketTab": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(37, 99, 235)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 5.168555560022562,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.4128734861003664,
+            "unsupported": null
+          },
+          "target": {
+            "width": 278,
+            "height": 44
+          }
+        },
+        "name": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "subject": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "3px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "message": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 90
+          }
+        },
+        "send": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          },
+          "keyboardReachable": true
+        }
+      },
+      "text": {
+        "title": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 154.84375,
+            "height": 28
+          }
+        },
+        "placeholder": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(107, 114, 128)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(107, 114, 128)",
+            "boxShadow": "none",
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "footer": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(75, 85, 99)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(75, 85, 99)",
+            "boxShadow": "none",
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "target": {
+            "width": 278,
+            "height": 32
+          }
+        }
+      },
+      "panel": {
+        "panel": {
+          "left": 20,
+          "right": 300,
+          "top": 120,
+          "bottom": 720,
+          "width": 280,
+          "height": 600
+        },
+        "viewport": {
+          "width": 320,
+          "height": 812
+        },
+        "documentOverflow": false
+      },
+      "clipping": false,
+      "defects": [],
+      "screenshotPath": "/tmp/tocyn-widget-visual-narrow-ai-off.png",
+      "externalRequests": 0,
+      "blockedApiWrites": 0
+    },
+    {
+      "viewport": {
+        "name": "short",
+        "width": 320,
+        "height": 480
+      },
+      "aiChat": true,
+      "selectedTab": "ticket after keyboard activation",
+      "controls": {
+        "launcher": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 56,
+            "height": 56
+          }
+        },
+        "close": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 44,
+            "height": 44
+          }
+        },
+        "ticketTab": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(105, 114, 132)",
+            "background": {
+              "r": 249.18,
+              "g": 250.15,
+              "b": 251.12,
+              "a": 1
+            },
+            "contrast": 4.635583721790188,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.4128734861003664,
+            "unsupported": null
+          },
+          "target": {
+            "width": 139,
+            "height": 44
+          }
+        },
+        "name": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "subject": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "3px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "message": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 90
+          }
+        },
+        "send": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          },
+          "keyboardReachable": true
+        }
+      },
+      "text": {
+        "title": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 154.84375,
+            "height": 28
+          }
+        },
+        "placeholder": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(107, 114, 128)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(107, 114, 128)",
+            "boxShadow": "none",
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "footer": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(75, 85, 99)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(75, 85, 99)",
+            "boxShadow": "none",
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "target": {
+            "width": 278,
+            "height": 32
+          }
+        }
+      },
+      "panel": {
+        "panel": {
+          "left": 20,
+          "right": 300,
+          "top": 28,
+          "bottom": 388,
+          "width": 280,
+          "height": 360
+        },
+        "viewport": {
+          "width": 320,
+          "height": 480
+        },
+        "documentOverflow": false
+      },
+      "clipping": false,
+      "defects": [],
+      "screenshotPath": "/tmp/tocyn-widget-visual-short-ai-on.png",
+      "externalRequests": 0,
+      "blockedApiWrites": 0
+    },
+    {
+      "viewport": {
+        "name": "short",
+        "width": 320,
+        "height": 480
+      },
+      "aiChat": false,
+      "selectedTab": "ticket",
+      "controls": {
+        "launcher": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 56,
+            "height": 56
+          }
+        },
+        "close": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 44,
+            "height": 44
+          }
+        },
+        "ticketTab": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(37, 99, 235)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 5.168555560022562,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.4128734861003664,
+            "unsupported": null
+          },
+          "target": {
+            "width": 278,
+            "height": 44
+          }
+        },
+        "name": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "subject": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "3px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "message": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(0, 0, 0)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 21,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(0, 0, 0)",
+            "boxShadow": "none",
+            "contrast": 21,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 90
+          }
+        },
+        "send": {
+          "activeInShadow": true,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": true,
+            "outlineWidth": "2px",
+            "outlineStyle": "solid",
+            "outlineColor": "rgb(29, 78, 216)",
+            "boxShadow": "none",
+            "contrast": 6.701618401398807,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          },
+          "keyboardReachable": true
+        }
+      },
+      "text": {
+        "title": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(255, 255, 255)",
+            "background": {
+              "r": 36,
+              "g": 87,
+              "b": 214,
+              "a": 1
+            },
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(255, 255, 255)",
+            "boxShadow": "none",
+            "contrast": 6.159623091836944,
+            "unsupported": null
+          },
+          "target": {
+            "width": 154.84375,
+            "height": 28
+          }
+        },
+        "placeholder": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(107, 114, 128)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(107, 114, 128)",
+            "boxShadow": "none",
+            "contrast": 4.834490081424352,
+            "unsupported": null
+          },
+          "target": {
+            "width": 246,
+            "height": 44
+          }
+        },
+        "footer": {
+          "activeInShadow": false,
+          "text": {
+            "color": "rgb(75, 85, 99)",
+            "background": {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "a": 1
+            },
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "focus": {
+            "visible": false,
+            "outlineWidth": "3px",
+            "outlineStyle": "none",
+            "outlineColor": "rgb(75, 85, 99)",
+            "boxShadow": "none",
+            "contrast": 7.557378129674007,
+            "unsupported": null
+          },
+          "target": {
+            "width": 278,
+            "height": 32
+          }
+        }
+      },
+      "panel": {
+        "panel": {
+          "left": 20,
+          "right": 300,
+          "top": 28,
+          "bottom": 388,
+          "width": 280,
+          "height": 360
+        },
+        "viewport": {
+          "width": 320,
+          "height": 480
+        },
+        "documentOverflow": false
+      },
+      "clipping": false,
+      "defects": [],
+      "screenshotPath": "/tmp/tocyn-widget-visual-short-ai-off.png",
+      "externalRequests": 0,
+      "blockedApiWrites": 0
+    }
+  ],
+  "limitations": [
+    "Built widget loaded through a disposable local loopback server with synthetic intercepted config/session responses; no backend, provider, authentication, tenant, theme66, or wrapper67 claim.",
+    "Contrast uses computed opaque/alpha colors composited through ancestors. Unsupported color forms are recorded rather than treated as passing.",
+    "Visual checks cover default widget controls only, not full screen-reader or cross-browser acceptance."
+  ]
+}

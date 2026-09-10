@@ -1,12 +1,14 @@
+import primitiveStyles from '@luminatick/ui/styles.css?inline';
+import { EnvironmentProvider } from '@luminatick/ui/ark';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './index.css';
+import widgetStyles from './index.css?inline';
 
 // The widget is intended to be self-initializing when the script is included.
 (function () {
   const CONTAINER_ID = 'lumina-widget-container';
-  
+
   if (document.getElementById(CONTAINER_ID)) {
     return;
   }
@@ -19,17 +21,17 @@ import './index.css';
   const root = document.createElement('div');
   root.id = 'lumina-widget-root';
   shadow.appendChild(root);
+  const primitiveStyleElement = document.createElement('style');
+  primitiveStyleElement.textContent = primitiveStyles;
+  shadow.appendChild(primitiveStyleElement);
+  const widgetStyleElement = document.createElement('style');
+  // Vite compiles this import; widget utility styles stay inside the shadow tree.
+  widgetStyleElement.textContent = widgetStyles;
+  shadow.appendChild(widgetStyleElement);
 
-  // Inject styles into Shadow DOM
-  // Since we're in library mode, we might need a way to get the CSS string.
-  // For now, let's assume we can inject it or use a script to find it.
-  // A better way is to embed the styles in the JS bundle.
-  
   const styles = document.createElement('style');
-  // In a real build, we'd replace this placeholder with the actual bundled CSS.
-  // During dev, we can inject the styles.
+  // Widget positioning remains scoped to this shadow tree.
   styles.textContent = `
-    /* Basic styles to ensure the container is fixed and visible */
     #lumina-widget-root {
       position: fixed;
       bottom: 20px;
@@ -40,8 +42,7 @@ import './index.css';
   `;
   shadow.appendChild(styles);
 
-  // Attempt to load Tailwind styles if they are available as a global string
-  // (This is a simplified approach for this task)
+  // Retain optional legacy shadow-scoped additions for existing embedders.
   if ((window as any).LUMINA_WIDGET_CSS) {
     const tailwindStyles = document.createElement('style');
     tailwindStyles.textContent = (window as any).LUMINA_WIDGET_CSS;
@@ -50,7 +51,9 @@ import './index.css';
 
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
-      <App />
+      <EnvironmentProvider value={() => shadow}>
+        <App />
+      </EnvironmentProvider>
     </React.StrictMode>
   );
 })();

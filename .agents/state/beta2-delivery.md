@@ -1,32 +1,66 @@
 # Beta.2 coordinated delivery
 
-Active goal: full #140 acceptance, including SLA/ownership/routing, durability, accessibility and tenant isolation. This current section supersedes the historical checkpoints below. Approved scope: [master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
+Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Accepted and active work — 10 September 2026
+## Current state — 10 September 2026, 23:19 BST
 
-- #127 interaction contract / PR164, #50 cost contract / PR165, #160 residency foundation / PR166 are accepted; PR168 synchronized their forecast and Wiki evidence.
-- #79 permissions / PR169 accepted at12f4a5bc96eac85043b756898681a74f9848f416 (15:52:47UTC). Reviewed heade952013 and merge tree5ba20f03a6d5977d867b6f86926b7efaf4d4208c match; GitHub signature valid; all required CI/security checks passed; owner PR-only review bypass used, zero Copilot reviews. Issue/Project Closed/Done/100, actual completion10September verified. [Receipt](https://github.com/nathcymru/Tocyn/issues/79#issuecomment-5621537019).
-- #48 remains draft PR167, codex/48-headless-primitives at/private/tmp/tocyn-beta2-48. Shared native controls and two complex dialogs adopted; remaining complex controls, accepted79page migration, full browser/performance/parity acceptance remain. Refresh from current main before further integration.
-- #159 remains draft PR170, codex/159-operational-observability at/private/tmp/tocyn-beta2-159. Privacy/failure envelope repaired; bounded local performance harness and CI checks implemented, clean synthetic receipt recorded. Rebased onto accepted79main. SLI/resource instrumentation, alert/configuration evidence and final validation remain; see scoped observability-159.md.
+Accepted main: `9cee350c36f49b9459fad3db42aadc8d25de848b` (partial PR #170 integration, 21:40 UTC). Its valid GitHub signature and tree `42aaa36c9d0b0bd94d44abd2e52831365370f902` match reviewed head `6d3ce483248bc87c6b673f066f15fcc1c7c522be`. All required checks passed, no review threads, standing review-only owner bypass used, zero Copilot reviews. #159 remains OPEN / Project In progress; no 100% or actual-completion claim.
 
-## Allocation and critical path
+Earlier accepted #127/#50/#160/#79 and bounded #152 compatibility correction remain unchanged. Full #152 remains open.
 
-Coordinator continues available work. Native workers are stopped at their execution/thread limits; no running worker or separate Work allowance is claimed. Work/Chat delegation remains unavailable. Dedicated Codex subscription route only; no API billing, purchases, resets or overages. Actual task-specific consumption is unknown. Do not repeatedly retry exhausted workers.
+- **#48 / draft #167:** `/private/tmp/tocyn-beta2-48`, `codex/48-headless-primitives`, rebased on accepted main. Current retained controls, security recovery and built-widget shadow styles are implemented. Combined suites: dashboard136, portal61, server512, widget11, sharedUI7; all three fresh builds pass. Default widget visual checks cover desktop/320px/short viewports, required text and focus contrast, targets and keyboard scrolling; spoken controls rechecked. Clean8efac1d numeric receipts pass all22limits; refreshed-head CI remains required. Candidate2c2680a required CI/security passes; editor and remaining-label edits require new checks; full dashboard145tests pass after correcting the menu test input timing. Viewer-presence spoken evidence and integrated Worker graph/runtime are recorded. Coordinator found missing editor labels/error semantics despite the earlier worker audit; editor correction/browser/VoiceOver/recovery checks pass; retained setting/custom-field labels also corrected. Final new-head validation remains. Do not close #48 before their integration.
+- **#159 / merged #170:** foundation accepted; full issue remains incomplete. Fixed privacy-safe HTTP/resource events, credential/canonical summaries, bounded local collector/configuration and cost reservation are on main. Pre-tenant/legacy resource coverage, explicit result classification and complete acceptance remain; fixed-port real realtime proof is unavailable while the owner fixture uses8787. Continue from current main in a new bounded issue branch, not the merged branch. See `observability-159.md` for specific remaining work.
 
-Accepted79 unlocks its #129/#136 dependencies. Continue48workspace foundations; preserve full #73 SLA and #137 ownership/routing gate, #162metrics dependency and #128integration. #159/#64/#91 can proceed from accepted50 without reducing beta-critical capacity. Preserve all graph edges and scope.
+## Allocation and capacity
 
-Recalculated reference beta.2 forecast: **22January2027**; expanded scope **21January2028**, pending this receipt PR's acceptance/publication. Only79completion changed since acceptedPR168inputs; two8-hour Monday–Saturday lanes and3× allowance unchanged. Baselines, effort and dependencies are preserved. Published forecast remains9February2027 until coordinated read-back completes.
+Actual dedicated Codex workers this interval: `auth_sli_159` Terra/high for credential/security boundaries; `local_collection_159` Terra/medium for security UI and built-widget visual recovery. Both resumed with non-overlapping ownership: local_collection_159 completed bounded editor/settings fixes and66read-onlypreparation; auth_sli_159 owns the next129autosave/restore controller after serverfoundationdraftPR173/88b7e1f in /private/tmp/tocyn-beta2-129 on codex/129-durable-drafts, from9cee350. Root owns browser evidence, integration and GitHub. Resume has no model/effort override; no switch is claimed. Work/normal Chat delegation is unavailable here; verified Work/Codex allowance is shared and subscription-backed. Latest observed Codex capacity5%, reset15September02:24BST. No purchases, API billing, reset redemption or Copilot reviews.
 
-## Exact next actions
+## Critical path and next actions
 
-1. Validate/merge this delivery-state PR and publish/read back affected issue/Project/milestone/Wiki forecasts; preserve historical dates and receipts.
-2. Rebase48onaccepted79, adopt permission-page native primitives without losing new recovery/accessibility behavior, then remaining complex controls and browser/performance acceptance.
-3. Continue159from its scoped handover; do not treat the three-scenario local harness as complete resource/SLO acceptance.
-4. No production/provider operations. Zero routine Copilot reviews; exact-head substantive CI/signing/review-thread checks remain mandatory before authorized review bypass.
-5. Report human status and evidence-based estimate every30minutes. Beta.2 is not ready until full140scope is accepted.
+1. Finish #48 exact integrated validation, resolve material findings and integrate only after full scoped acceptance. Do not include obsolete ticket-table composition or #67 wrapper lifecycle in its scope.
+2. #129 implementation started: prerequisites127/60/63/79 closed, Project In progress/Actual start2026-09-10. Preserve scoped storage, CAS, attachment validation and authority checks. Owner retention-duration question pending; no default or remote cleanup activated. #128 is NOT yet ready: it requires127/129/130/48/66. Preserve waiting semantics and #162 metrics → full #73 SLA / #137 ownership → #140 acceptance.
+3. Independent hardening: #64 budgets / #91 journals use accepted #50; remaining #159 active-resource coverage stays tracked. Preserve #50→#64/#91→#51→#87→#88. Full #152 still depends on #151.
+4. Publish reviewed Wiki snapshot and update issue receipts at integration boundaries. Keep existing owner servers and historical worktrees intact.
+
+Reference forecast remains **22 January 2027** for beta.2 and **21 January 2028** for expanded scope. Two lanes, eight hours Monday–Saturday, threefold allowance; baselines unchanged. Partial #170 does not imply an effort reduction or new forecast. Last human operational update23:07BST; next23:37BST while active. Beta.2 is not ready.
 
 <details>
 <summary>Historical coordination checkpoints — superseded by current state above</summary>
+
+# Beta.2 coordinated delivery
+
+Active goal: full #140 acceptance, including complete SLA/ownership/routing, durability, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
+
+## Current delivery state — 10 September 2026, 19:37 BST
+
+Accepted main is **4fce7b6654db924d818d2ee2ad77d3c855ee9d46**. #127/PR164, #50/PR165, #160/PR166 and #79/PR169 remain accepted; PR171 published their current forecast. PR172 adds the owner-approved bounded Answer/SOP compatibility correction under #152. Its valid GitHub signature and tree528d88f49a34fc3c888274357937b1eb8d5644d1 match tested head9c46ba9; all required checks passed, no findings. Owner review-only bypass used, zero Copilot reviews. #152 remains open for its full assistant scope.
+
+- **#48 / draft167**: codex/48-headless-primitives, /private/tmp/tocyn-beta2-48, refreshed from accepted main. Retained controls, accessible recovery, Answer/SOP consumer and protected-route loading implemented. Latest UI local result:134 tests and build passed. Dashboard initial JS gzip486232→125880 bytes; total543977 bytes. Local login startup p95164.1→63.7 ms. Full accessibility, authenticated/widget timing, numeric budgets and Worker graph/runtime evidence remain. See ui-48.md and retained-behavior matrix.
+- **#159 / draft170**: codex/159-operational-observability, /private/tmp/tocyn-beta2-159, head a3ab403, refreshed from accepted main. HTTP plus tenant D1/R2 diagnostics, bounded performance harness and native batch rollback/gating evidence implemented. Integrated459 server tests/typecheck,7 local storage/background tests and script typecheck pass. Other resource families, complete accounting/SLIs, collectors/tracing and full acceptance remain. See observability-159.md.
+- **#152 / merged172**: compatibility server correction accepted; UI consumer remains in draft167. Project In progress, Actual start2026-09-10. Prior progress value retained pending defensible weighting of the full assistant scope; no full completion claimed. See knowledge-152.md and issue acceptance receipt.
+
+Wiki commit **16ab6d1e36feaa81eea35c21e5e1b2bcd4abe9cc** publishes the accepted knowledge marker contract, byte-identical to main's docs/security/knowledge-marker-contract.md. Existing roadmap pages remain at their verified PR171 forecast content. [Acceptance/publication receipt](https://github.com/nathcymru/Tocyn/issues/152#issuecomment-5623600368).
+
+## Allocation and capacity
+
+Coordinator is sole integration/GitHub owner. Existing native evidence_copyedit successfully resumed for bounded investigation,152 server work and159 D1 wrapper work; all those assignments are now complete. It may be reused for a useful independent task. Earlier limits affected new-agent creation and permissions_79, not every existing worker. Do not repeat the inaccurate blanket assertion that all workers are unavailable.
+
+Resume exposes no model/effort override or current metadata; no switch is claimed. Dedicated Codex subscription route is verified. Work and Codex share allowance under previously verified evidence; no callable Work/normal-Chat delegation route exists here. No API billing, purchases, overages, resets or Copilot reviews. Task-specific consumption is unavailable.
+
+## Critical path and forecast
+
+Continue48 foundations and preserve #128 integration, #129 durable state, full #73 SLA and #137 ownership/routing with #162 metrics. #159/#64/#91 remain independent where their accepted #50 prerequisite permits. #151 still governs full #152; the separately approved compatibility correction does not complete or bypass that delivery.
+
+Reference beta.2 forecast remains **22 January 2027**; expanded scope **21 January 2028**, per accepted PR171. Two8-hour Monday–Saturday lanes and3× allowance remain unchanged. Historical baselines are immutable. No forecast reduction is inferred from partial controls, telemetry or the bounded compatibility correction. Last human operational update:19:37 BST; next due about20:07 BST while active.
+
+## Exact next actions
+
+1. Check exact refreshed-head CI for167/170; do not merge merely because checks pass while scoped acceptance remains incomplete.
+2. Complete48's browser/assistive-technology and performance-budget/Worker evidence; keep total bundle growth visible alongside initial-loading gains.
+3. Continue159's uninstrumented DO/Workflow/AI boundaries, bounded aggregate operational evidence and configuration, preserving privacy and resource ceilings.
+4. Keep the dependency-cleared queue prepared without overlapping writes. Update accepted issue/Project/Wiki state at coherent integration boundaries; do not relabel incomplete beta gates.
+
+
 
 # Beta.2 coordinated delivery
 
@@ -74,4 +108,16 @@ PR #166 merged at `7a53308394f2db5093ffdc377fa1792e440a737e`, 14:46:28 UTC. All 
 
 Forecast synchronization is in draft PR #168. Accepted #50 removal recalculates beta.2 to9February2027; publication pending final consistency checks and #160 acceptance. Preserve every baseline. The coordinator corrected the input and generated tables; expanded forecast is27January2028. No scope cut or arbitrary progress percentage is authorized.
 
+## 15:05 UTC integration receipt
+
+PR168 required checks passed and signed squash `3d17a03c992c51945a8a5d401f696735e0886160` has reviewed tree `35f236315342c06972cafeb56df662f3099c9351`. Owner PR-only review bypass used; no independent approval claimed. Both Wiki forecast pages read back byte-identically at `eca8876`.39milestone current forecast descriptions/due dates updated without modifying their historical description sections. Issue/Project batch93906 completed with100processed and zeroerrors. Independent Project read-back proves all100forecast field sets match, allbaseline/status/progress/other actuals unchanged, and50/160accepted actual completion dates present. Results/readback paths `/tmp/tocyn-alignment/forecast-168-publication.json` and `project-after-168.json` were checked. Missing Actualcompletion50/160 from the worker's earlier reported sync were detected and explicitly written on read-back; their values are verified in the final Project snapshot.
+
+Shared UI candidate2283cac: all three native-control builds/tests passed, then shared portal and operator dialogs passed portal59/dashboard73 workflow tests and builds. JSDOM nonzero layout fixture is explicit; actual browser focus/visibility evidence remains required. Preserve all remaining48acceptance.159worker hit execution-time limit; repeated follow-up is not a useful strategy. No paid capacity was used.
+
 </details>
+
+## Coordinator update10September20:07BST
+
+Progress since19:37: #48 Chromium default/radical/noCSS controls including Combobox/Splitter pass; target-height fix and actual Worker runtime8799 evidence pushed. #159 D1/R2 plus realDO invocation evidence pushed;8storage/background tests. #152server compatibility alreadyacceptedmain4fce; UIawaits48. VoiceOver ticket-field naming/traversal/cancel-return now evidenced; fullATstillopen. Draft48head195b943,159headb5a8489; latestCIrunning, no merges/closures/forecastchange. Wiki acceptedmain remains unchanged until integration; issue progress receipts published.
+
+Native evidence_copyedit active159: explicit test-only evidence opt-in and reachableWorkflow/AI hook with fullclasscontract; prior discarded proposal was unreachable because localbeta prohibitedworkflow but requiredtelemetry. Rootowns48/AT/integration. Sharedallowance/modelcontrol limits unchanged; zeroCopilot. Forecast22January2027beta.2 (~4months),21January2028expanded. Nextoperationalupdate20:37BST. Preserve full140SLA/ownership/workspace gate.

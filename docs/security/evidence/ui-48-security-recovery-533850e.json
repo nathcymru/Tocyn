@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "kind": "tocyn-local-security-ui-recovery",
+  "recordedAt": "2026-09-10T21:17:08.736Z",
+  "revision": "533850e57b91a4c01cbde8fe12e4b0ef004b525d",
+  "workingTreeDirty": true,
+  "environment": {
+    "node": "v22.19.0",
+    "browser": "151.0.7922.34",
+    "headless": true,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "reducedMotion": "reduce",
+    "dashboardOrigin": "http://127.0.0.1:5190",
+    "externalRequests": 0,
+    "blockedUnmatchedApiRequests": 0
+  },
+  "sourceHashes": {
+    "tools/ui-browser/security-recovery.mjs": "7ac8e3f643e64121fb376e8523c260333c4b39a5d70af9e7e3b3afa383e27a53",
+    "apps/dashboard/src/pages/SecurityProfilePage.tsx": "3ad89e1e220ee6ebf165f1082fb8c2f9a42d6abac7a76acfda3dd7433a1974ac",
+    "apps/dashboard/src/pages/MfaPage.tsx": "ae0eb9ece7d9f1ee09b6d92e072b5ad62265a8027db210365146f5a622ccc17e",
+    "apps/dashboard/src/store/authStore.ts": "da9983511870bbee47970becd0da68245c5dd7593e9ac690a8ed554da9341192",
+    "apps/dashboard/src/__tests__/SecurityProfileAccessibility.test.tsx": "69287e87cd4d51949d6c11749f21963e378ff1f12a1195def74e37d3851d2ee8",
+    "apps/dashboard/src/__tests__/MfaSetupAccessibility.test.tsx": "55013b5093e58514cbfa294c1d4190a5ad3cedfecc555bd4cd8248caf70be2ac"
+  },
+  "syntheticApi": {
+    "setup": {
+      "route": "/api/auth/mfa/setup",
+      "responses": [
+        200,
+        503,
+        200
+      ]
+    },
+    "confirm": {
+      "route": "/api/auth/mfa/confirm",
+      "responses": [
+        400,
+        200
+      ]
+    },
+    "backendCredentialsReached": false,
+    "persistedRecords": 0
+  },
+  "evidence": {
+    "securityProfile": {
+      "pendingEnrollmentGuard": true,
+      "rejectedConfirmationRetainedDraft": true,
+      "retryAdoptedSyntheticReplacementSession": true,
+      "successfulConfirmationStatusObserved": true,
+      "successfulConfirmationFocusObserved": true,
+      "setupRequests": 1,
+      "confirmRequests": 2
+    },
+    "mfaSetup": {
+      "initialSetupRejected": true,
+      "pendingRetryGuard": true,
+      "retryFocusedCodeInput": true,
+      "setupRequests": 2
+    }
+  },
+  "limitations": [
+    "Pure dashboard UI evidence: all API requests except the intercepted MFA setup and confirmation responses are blocked, and fake credentials never reach a backend.",
+    "No MFA enrollment, account mutation, authentication proof, provider contact, or fixture record persistence is claimed.",
+    "Full-app focus and status checks are limited to the documented Security Profile confirmation and MfaPage retry contracts.",
+    "Receipt excludes tokens, provisioning URIs, secret keys, and request bodies."
+  ]
+}

@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { portalApi } from '../api/client';
@@ -48,7 +49,7 @@ export function LoginPage() {
         baseUrl: window.location.origin
       });
       setSuccess(true);
-      
+
       if (type === 'otp') {
         setTimeout(() => {
           navigate('/verify', { state: { email, challengeId: result.challengeId } });
@@ -114,7 +115,7 @@ export function LoginPage() {
                 Email address
               </label>
               <div className="mt-1">
-                <input
+                <TocynInput
                   id="email"
                   name="email"
                   type="email"
@@ -133,32 +134,32 @@ export function LoginPage() {
             <fieldset>
               <legend className="block text-sm font-medium text-gray-700 mb-2">Login method</legend>
               <div className="grid grid-cols-2 gap-4">
-                <button
+                <TocynButton
                   type="button"
                   onClick={() => { if (!loading && !success) setType('magic_link'); }}
                   aria-pressed={type === 'magic_link'}
                   className={`px-4 py-2 text-sm font-medium rounded-md border aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${
-                    type === 'magic_link' 
-                      ? 'border-brand-500 bg-brand-50 text-brand-700' 
+                    type === 'magic_link'
+                      ? 'border-brand-500 bg-brand-50 text-brand-700'
                       : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                   aria-disabled={loading || success}
                 >
                   Magic Link
-                </button>
-                <button
+                </TocynButton>
+                <TocynButton
                   type="button"
                   onClick={() => { if (!loading && !success) setType('otp'); }}
                   aria-pressed={type === 'otp'}
                   className={`px-4 py-2 text-sm font-medium rounded-md border aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${
-                    type === 'otp' 
-                      ? 'border-brand-500 bg-brand-50 text-brand-700' 
+                    type === 'otp'
+                      ? 'border-brand-500 bg-brand-50 text-brand-700'
                       : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                   aria-disabled={loading || success}
                 >
                   Code (OTP)
-                </button>
+                </TocynButton>
               </div>
             </fieldset>
 
@@ -175,14 +176,14 @@ export function LoginPage() {
             )}
 
             <div>
-              <button
+              <TocynButton
                 type="submit"
                 aria-disabled={loading || success || !email || (!!siteKey && !turnstileToken)}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 aria-disabled:bg-brand-700 aria-disabled:cursor-default items-center gap-2"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
                 {loading ? 'Sending...' : `Send ${type === 'magic_link' ? 'Magic Link' : 'Code'}`}
-              </button>
+              </TocynButton>
             </div>
           </form>
           <p role="status" aria-live="polite" className="mt-3 text-sm text-gray-700">{loading ? 'Sending login instructions…' : ''}</p>

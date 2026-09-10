@@ -1,3 +1,5 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
+import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
@@ -13,7 +15,7 @@ export function TicketListPage() {
   const [ticketPrefix, setTicketPrefix] = useState<string>('#');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileInstance>(null);
 
@@ -23,7 +25,6 @@ export function TicketListPage() {
   const [creatingTicket, setCreatingTicket] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createStatus, setCreateStatus] = useState('');
-  const createDialog = useRef<HTMLDialogElement>(null);
   const createButton = useRef<HTMLButtonElement>(null);
   const subjectInput = useRef<HTMLInputElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
@@ -35,18 +36,6 @@ export function TicketListPage() {
       recovering.current = false;
     }
   }, [loading, error]);
-
-  useEffect(() => {
-    if (!isCreating) return;
-    const dialog = createDialog.current;
-    const opener = createButton.current;
-    dialog?.showModal();
-    subjectInput.current?.focus();
-    return () => {
-      if (dialog?.open) dialog.close();
-      if (opener?.isConnected) opener.focus();
-    };
-  }, [isCreating]);
 
   const retryTickets = async () => {
     if (loading) return;
@@ -85,7 +74,7 @@ export function TicketListPage() {
     if (creatingTicket || !newSubject.trim() || !newMessage.trim()) return;
     setCreateError(null);
     setCreateStatus('');
-    
+
     setCreatingTicket(true);
     if (turnstileSiteKey) {
       turnstileRef.current?.execute();
@@ -128,7 +117,7 @@ export function TicketListPage() {
   if (error) {
     return <div className="bg-red-50 text-red-700 p-4 rounded-lg">
       <p role="alert">{error}</p>
-      <button type="button" onClick={retryTickets} className="mt-3 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Retry loading tickets</button>
+      <TocynButton type="button" onClick={retryTickets} className="mt-3 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Retry loading tickets</TocynButton>
     </div>;
   }
 
@@ -136,7 +125,7 @@ export function TicketListPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 ref={listHeading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Your Tickets</h1>
-        <button
+        <TocynButton
           ref={createButton}
           type="button"
           onClick={() => { setCreateError(null); setIsCreating(true); }}
@@ -144,13 +133,12 @@ export function TicketListPage() {
         >
           <Plus className="w-5 h-5" />
           New Ticket
-        </button>
+        </TocynButton>
       </div>
 
       <p role="status" aria-live="polite" className="text-sm text-gray-700">{createStatus}</p>
-      {isCreating && (
-        <dialog ref={createDialog} aria-labelledby="create-ticket-heading"
-          onCancel={(event) => { event.preventDefault(); if (!creatingTicket) setIsCreating(false); }}
+      <TocynDialog open={isCreating} onOpenChange={setIsCreating} busy={creatingTicket}
+          labelledBy="create-ticket-heading" initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
           className="w-full max-w-lg rounded-lg border border-gray-300 bg-white p-6 shadow-xl backdrop:bg-gray-900/40">
           <h2 id="create-ticket-heading" className="text-lg font-semibold mb-4">Create New Ticket</h2>
           {createError && <p id="create-ticket-error" role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">{createError}</p>}
@@ -158,7 +146,7 @@ export function TicketListPage() {
           <form aria-busy={creatingTicket} onSubmit={handleCreate} className="space-y-4">
             <div>
               <label htmlFor="create-ticket-subject" className="block text-sm font-medium text-gray-700">Subject</label>
-              <input
+              <TocynInput
                 id="create-ticket-subject"
                 ref={subjectInput}
                 readOnly={creatingTicket}
@@ -173,7 +161,7 @@ export function TicketListPage() {
             </div>
             <div>
               <label htmlFor="create-ticket-message" className="block text-sm font-medium text-gray-700">Message</label>
-              <textarea
+              <TocynTextarea
                 id="create-ticket-message"
                 readOnly={creatingTicket}
                 aria-describedby={createError ? "create-ticket-error" : undefined}
@@ -199,26 +187,25 @@ export function TicketListPage() {
                   }}
                 />
               )}
-              <button
+              <TocynButton
                 type="button"
                 aria-disabled={creatingTicket}
                 onClick={() => { if (!creatingTicket) setIsCreating(false); }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
               >
                 Cancel
-              </button>
-              <button
+              </TocynButton>
+              <TocynButton
                 type="submit"
                 aria-disabled={creatingTicket}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-md aria-disabled:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
               >
                 {creatingTicket && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create Ticket
-              </button>
+              </TocynButton>
             </div>
           </form>
-        </dialog>
-      )}
+      </TocynDialog>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {tickets.length === 0 ? (

@@ -1,3 +1,6 @@
+import { Popover } from '@luminatick/ui/ark';
+import { TocynDialog } from '@luminatick/ui/dialog';
+import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
 import { ticketReference } from '../utils/ticket-reference';
@@ -6,9 +9,9 @@ import { useTickets, useCreateTicket } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useFilters } from '../hooks/useFilters';
 import { useSettings } from '../hooks/useSettings';
-import { 
-  Plus, 
-  Filter, 
+import {
+  Plus,
+  Filter,
   MoreVertical,
   Clock,
   AlertCircle,
@@ -61,19 +64,8 @@ export function TicketListPage() {
   }, [searchParams]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const createDialog = React.useRef<HTMLDialogElement>(null);
+  const createSubject = React.useRef<HTMLInputElement>(null);
   const createTrigger = React.useRef<HTMLButtonElement>(null);
-  React.useEffect(() => {
-    if (!isModalOpen) return;
-    const previousFocus = createTrigger.current;
-    const dialog = createDialog.current;
-    dialog?.showModal();
-    dialog?.querySelector<HTMLInputElement>('#create-ticket-subject')?.focus();
-    return () => {
-      if (dialog?.open) dialog.close();
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, [isModalOpen]);
   const heading = React.useRef<HTMLHeadingElement>(null);
   const retryButton = React.useRef<HTMLButtonElement>(null);
   const paging = React.useRef(false);
@@ -96,7 +88,7 @@ export function TicketListPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const { data: filters, isLoading: isLoadingFilters } = useFilters();
-  
+
   const { data: paginatedData, isLoading: isLoadingTickets, error: ticketsError, isFetching, isPlaceholderData, refetch } = useTickets({
     page: page.toString(),
     ...(activeFilterId ? { filter_id: activeFilterId } : {}),
@@ -169,7 +161,7 @@ export function TicketListPage() {
       {/* Left Sidebar: Filters */}
       <div className="w-64 flex flex-col gap-2 shrink-0">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Filters</h2>
-        <button
+        <TocynButton
           onClick={() => handleFilterClick('')}
           aria-pressed={activeFilterId === ''}
           className={cn(
@@ -181,12 +173,12 @@ export function TicketListPage() {
         >
           <LayoutList className="w-4 h-4" />
           All Tickets
-        </button>
+        </TocynButton>
         {isLoadingFilters ? (
           <div className="px-3 py-2 text-sm text-slate-500">Loading filters...</div>
         ) : (
           filters?.map(filter => (
-            <button
+            <TocynButton
               key={filter.id}
               onClick={() => handleFilterClick(filter.id)}
               aria-pressed={activeFilterId === filter.id}
@@ -199,7 +191,7 @@ export function TicketListPage() {
             >
               <Filter className="w-4 h-4" />
               {filter.name}
-            </button>
+            </TocynButton>
           ))
         )}
       </div>
@@ -210,12 +202,12 @@ export function TicketListPage() {
           <div>
             <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Tickets</h1>
             <p className="text-slate-500 text-sm">
-              {activeFilterId 
-                ? filters?.find(f => f.id === activeFilterId)?.name 
+              {activeFilterId
+                ? filters?.find(f => f.id === activeFilterId)?.name
                 : 'All Tickets'}
             </p>
           </div>
-          <button 
+          <TocynButton
             type="button"
             ref={createTrigger}
             onClick={() => {setCreateError(null);setIsModalOpen(true);}}
@@ -223,7 +215,7 @@ export function TicketListPage() {
           >
             <Plus className="w-4 h-4" />
             New Ticket
-          </button>
+          </TocynButton>
         </div>
 
         <p role="status" aria-label="Ticket list status" className="text-sm text-slate-700">{isPlaceholderData ? 'Loading tickets. Previous results remain visible.' : feedStatus}</p>
@@ -231,10 +223,10 @@ export function TicketListPage() {
         {(ticketsError || retryingFeed) && (
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
             <p>{tickets.length ? 'Could not refresh tickets. Showing the last loaded results.' : 'Could not load tickets.'}</p>
-            <button type="button" ref={retryButton} onClick={() => {void retryFeed();}} aria-disabled={isFetching || retryingFeed}
+            <TocynButton type="button" ref={retryButton} onClick={() => {void retryFeed();}} aria-disabled={isFetching || retryingFeed}
               className="mt-2 rounded border border-red-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">
               {isFetching ? 'Retrying…' : 'Retry loading tickets'}
-            </button>
+            </TocynButton>
           </div>
         )}
 
@@ -242,7 +234,7 @@ export function TicketListPage() {
           <div className="p-4 border-b border-slate-200 flex items-center justify-between">
             <div className="max-w-md w-full relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
+              <TocynInput
                 type="text"
                 placeholder="Search tickets..."
                 aria-label="Search tickets"
@@ -300,7 +292,7 @@ export function TicketListPage() {
                           <span className="font-mono text-xs font-bold text-slate-600 max-w-[12rem] truncate" title={ticketReference(ticket, ticketPrefix)}>
                             {ticketReference(ticket, ticketPrefix)}
                           </span>
-                          <button
+                          <TocynButton
                             onClick={async (e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -319,7 +311,7 @@ export function TicketListPage() {
                             aria-label="Copy ticket reference"
                           >
                             {copiedId === ticket.id ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                          </button>
+                          </TocynButton>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -358,37 +350,21 @@ export function TicketListPage() {
                           {utcTimestamp(ticket.updated_at).toLocaleDateString()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right relative" onKeyDown={(event) => {
-                        if (event.key === 'Escape' && openMenuId === ticket.id) {
-                          event.preventDefault();
-                          setOpenMenuId(null);
-                          event.currentTarget.querySelector<HTMLButtonElement>('button[data-row-action]')?.focus();
-                        }
-                      }}>
-                        <button 
-                          type="button"
-                          data-row-action
-                          aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`}
-                          aria-expanded={openMenuId === ticket.id}
-                          aria-controls={`ticket-actions-${ticket.id}`}
-                          onClick={() => setOpenMenuId(openMenuId === ticket.id ? null : ticket.id)}
-                          className="p-1 text-slate-600 hover:text-slate-900 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700 relative z-10"
-                        >
-                          <MoreVertical className="w-5 h-5" />
-                        </button>
-                        {openMenuId === ticket.id && (
-                          <>
-                            <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                            <div id={`ticket-actions-${ticket.id}`} role="group" aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="absolute right-6 top-10 w-36 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1 overflow-hidden">
-                              <Link 
-                                to={`/tickets/${ticket.id}`}
-                                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 text-left w-full"
-                              >
+                      <td className="px-6 py-4 text-right relative">
+                        <Popover.Root open={openMenuId === ticket.id} onOpenChange={({open}) => setOpenMenuId(current => open ? ticket.id : current === ticket.id ? null : current)} positioning={{placement:'bottom-end',strategy:'fixed'}} lazyMount unmountOnExit>
+                          <Popover.Trigger asChild>
+                            <TocynButton type="button" aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="p-1 text-slate-600 hover:text-slate-900 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700">
+                              <MoreVertical className="w-5 h-5" />
+                            </TocynButton>
+                          </Popover.Trigger>
+                          <Popover.Positioner className="z-20">
+                            <Popover.Content aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1 overflow-hidden">
+                              <Link to={`/tickets/${ticket.id}`} onClick={() => setOpenMenuId(null)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 text-left w-full">
                                 View Ticket
                               </Link>
-                            </div>
-                          </>
-                        )}
+                            </Popover.Content>
+                          </Popover.Positioner>
+                        </Popover.Root>
                       </td>
                     </tr>
                   ))
@@ -404,22 +380,22 @@ export function TicketListPage() {
                 Showing page {meta.page} of {meta.total_pages}
               </span>
               <div className="flex gap-2">
-                <button
+                <TocynButton
                   onClick={() => { if (!isFetching && page > 1) { paging.current = true; setPage(p => p - 1); } }}
                   aria-disabled={isFetching || page === 1}
                   className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 hover:bg-white aria-disabled:bg-slate-100 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 flex items-center gap-1 bg-white shadow-sm transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Previous
-                </button>
-                <button
+                </TocynButton>
+                <TocynButton
                   onClick={() => { if (!isFetching && page < meta.total_pages) { paging.current = true; setPage(p => p + 1); } }}
                   aria-disabled={isFetching || page >= meta.total_pages}
                   className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 hover:bg-white aria-disabled:bg-slate-100 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 flex items-center gap-1 bg-white shadow-sm transition-colors"
                 >
                   Next
                   <ChevronRight className="w-4 h-4" />
-                </button>
+                </TocynButton>
               </div>
             </div>
           )}
@@ -427,16 +403,15 @@ export function TicketListPage() {
       </div>
 
       {/* New Ticket Modal */}
-      {isModalOpen && (
-        <dialog ref={createDialog} aria-labelledby="create-ticket-heading"
-          onCancel={(event) => { event.preventDefault(); if (!createTicket.isPending) setIsModalOpen(false); }}
-          className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none z-50 open:flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <TocynDialog open={isModalOpen} onOpenChange={setIsModalOpen} busy={createTicket.isPending}
+          labelledBy="create-ticket-heading" initialFocusEl={() => createSubject.current} finalFocusEl={() => createTrigger.current}
+          className="w-full max-w-2xl">
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h2 id="create-ticket-heading" className="text-xl font-bold text-slate-900">Create New Ticket</h2>
-              <button type="button" aria-disabled={createTicket.isPending} aria-label="Close new ticket" onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }} className="rounded text-slate-600 hover:text-slate-900 focus-visible:outline focus-visible:outline-2">
+              <TocynButton type="button" aria-disabled={createTicket.isPending} aria-label="Close new ticket" onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }} className="rounded text-slate-600 hover:text-slate-900 focus-visible:outline focus-visible:outline-2">
                 <X className="w-6 h-6" />
-              </button>
+              </TocynButton>
             </div>
             <form aria-busy={createTicket.isPending} onSubmit={handleCreateTicket} className="p-6 space-y-4">
               <p role="status" aria-label="Ticket creation status" className="text-sm text-slate-700">{createTicket.isPending ? "Creating ticket…" : ""}</p>
@@ -444,11 +419,12 @@ export function TicketListPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label htmlFor="create-ticket-subject" className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
-                  <input
+                  <TocynInput
                     type="text"
                     required
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                     id="create-ticket-subject"
+                    ref={createSubject}
                     readOnly={createTicket.isPending}
                     aria-describedby={createError ? "create-ticket-error" : undefined}
                     value={formData.subject}
@@ -457,7 +433,7 @@ export function TicketListPage() {
                 </div>
                 <div>
                   <label htmlFor="create-ticket-customer_email" className="block text-sm font-medium text-slate-700 mb-1">Customer Email</label>
-                  <input
+                  <TocynInput
                     type="email"
                     required
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -470,7 +446,7 @@ export function TicketListPage() {
                 </div>
                 <div>
                   <label htmlFor="create-ticket-priority" className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
-                  <select
+                  <TocynSelect
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                     id="create-ticket-priority"
                     aria-disabled={createTicket.isPending}
@@ -481,11 +457,11 @@ export function TicketListPage() {
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
                     <option value="urgent">Urgent</option>
-                  </select>
+                  </TocynSelect>
                 </div>
                 <div>
                   <label htmlFor="create-ticket-group_id" className="block text-sm font-medium text-slate-700 mb-1">Group</label>
-                  <select
+                  <TocynSelect
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                     id="create-ticket-group_id"
                     aria-disabled={createTicket.isPending}
@@ -496,11 +472,11 @@ export function TicketListPage() {
                     {groups?.map((group) => (
                       <option key={group.id} value={group.id}>{group.name}</option>
                     ))}
-                  </select>
+                  </TocynSelect>
                 </div>
                 <div>
                   <label htmlFor="create-ticket-assigned_to" className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
-                  <select
+                  <TocynSelect
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                     id="create-ticket-assigned_to"
                     aria-disabled={createTicket.isPending}
@@ -511,12 +487,12 @@ export function TicketListPage() {
                     {agents?.map((agent) => (
                       <option key={agent.id} value={agent.id}>{agent.full_name || agent.email}</option>
                     ))}
-                  </select>
+                  </TocynSelect>
                 </div>
               </div>
               <div>
                 <label htmlFor="create-ticket-body" className="block text-sm font-medium text-slate-700 mb-1">Initial Message</label>
-                <textarea
+                <TocynTextarea
                   required
                   rows={4}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -528,26 +504,25 @@ export function TicketListPage() {
                 />
               </div>
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
+                <TocynButton
                   type="button"
                   aria-disabled={createTicket.isPending}
                   onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }}
                   className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors focus-visible:outline focus-visible:outline-2"
                 >
                   Cancel
-                </button>
-                <button
+                </TocynButton>
+                <TocynButton
                   type="submit"
                   aria-disabled={createTicket.isPending}
                   className="px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors aria-disabled:bg-brand-700 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   {createTicket.isPending ? 'Creating...' : 'Create Ticket'}
-                </button>
+                </TocynButton>
               </div>
             </form>
           </div>
-        </dialog>
-      )}
+      </TocynDialog>
     </div>
   );
 }

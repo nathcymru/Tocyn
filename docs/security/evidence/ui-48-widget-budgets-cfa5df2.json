@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "revision": "cfa5df2ec916ce5cafe80596e028e3b08f8a27fc",
+  "passed": true,
+  "checks": [
+    {
+      "aiChat": true,
+      "metric": "startupMs",
+      "value": 68,
+      "limit": 1500,
+      "passed": true
+    },
+    {
+      "aiChat": true,
+      "metric": "openMs",
+      "value": 39.299999952316284,
+      "limit": 100,
+      "passed": true
+    },
+    {
+      "aiChat": true,
+      "metric": "recoveryMs",
+      "value": 49.59999990463257,
+      "limit": 150,
+      "passed": true
+    },
+    {
+      "aiChat": false,
+      "metric": "startupMs",
+      "value": 66.10000014305115,
+      "limit": 1500,
+      "passed": true
+    },
+    {
+      "aiChat": false,
+      "metric": "openMs",
+      "value": 40.299999952316284,
+      "limit": 100,
+      "passed": true
+    },
+    {
+      "aiChat": false,
+      "metric": "recoveryMs",
+      "value": 49.39999985694885,
+      "limit": 150,
+      "passed": true
+    }
+  ]
+}

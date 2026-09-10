@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "recordedAt": "2026-09-10T20:44:40.199Z",
+  "revision": "cfa5df2ec916ce5cafe80596e028e3b08f8a27fc",
+  "sourceHashes": {
+    "apps/dashboard/src/pages/TicketDetailPage.tsx": "593224682369567fd6233921f26116d09db50682438002a8013056ac0ce065ab",
+    "packages/ui/src/styles/tocyn.css": "c080eb9624c1fd8a64b686b77b4718adc200542eb0e4f282288bb1aed9b29671",
+    "tools/ui-browser/ticket-qa-check.mjs": "16d30b5f97dc63a29eff3b42475e63e18be9851010a7850d8e1d7e527d2e58c3"
+  },
+  "node": "v22.19.0",
+  "browser": "151.0.7922.34",
+  "rows": [
+    {
+      "qa_type": null,
+      "name": "Mark as SOP (internal procedure)",
+      "hover": false,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(255, 255, 255)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": null,
+      "name": "Mark as SOP (internal procedure)",
+      "hover": true,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(241, 245, 249)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 16.295987899750777
+    },
+    {
+      "qa_type": null,
+      "name": "Mark as SOP (internal procedure)",
+      "focus": {
+        "visible": true,
+        "width": "2px",
+        "style": "solid",
+        "color": "rgb(29, 78, 216)",
+        "offset": "2px",
+        "parent": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "qa_type": null,
+      "name": "Mark as answer",
+      "hover": false,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(255, 255, 255)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": null,
+      "name": "Mark as answer",
+      "hover": true,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(241, 245, 249)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 16.295987899750777
+    },
+    {
+      "qa_type": null,
+      "name": "Mark as answer",
+      "focus": {
+        "visible": true,
+        "width": "2px",
+        "style": "solid",
+        "color": "rgb(29, 78, 216)",
+        "offset": "2px",
+        "parent": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "qa_type": "answer",
+      "name": "Mark as SOP (internal procedure)",
+      "hover": false,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(255, 255, 255)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": "answer",
+      "name": "Mark as SOP (internal procedure)",
+      "hover": true,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(241, 245, 249)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 16.295987899750777
+    },
+    {
+      "qa_type": "answer",
+      "name": "Mark as SOP (internal procedure)",
+      "focus": {
+        "visible": true,
+        "width": "2px",
+        "style": "solid",
+        "color": "rgb(29, 78, 216)",
+        "offset": "2px",
+        "parent": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "qa_type": "answer",
+      "name": "Mark as answer",
+      "hover": false,
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(15, 23, 42)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": "answer",
+      "name": "Mark as answer",
+      "hover": true,
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(15, 23, 42)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": "answer",
+      "name": "Mark as answer",
+      "focus": {
+        "visible": true,
+        "width": "2px",
+        "style": "solid",
+        "color": "rgb(29, 78, 216)",
+        "offset": "2px",
+        "parent": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "qa_type": "sop",
+      "name": "Mark as SOP (internal procedure)",
+      "hover": false,
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(15, 23, 42)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": "sop",
+      "name": "Mark as SOP (internal procedure)",
+      "hover": true,
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(15, 23, 42)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": "sop",
+      "name": "Mark as SOP (internal procedure)",
+      "focus": {
+        "visible": true,
+        "width": "2px",
+        "style": "solid",
+        "color": "rgb(29, 78, 216)",
+        "offset": "2px",
+        "parent": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "qa_type": "sop",
+      "name": "Mark as answer",
+      "hover": false,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(255, 255, 255)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": "sop",
+      "name": "Mark as answer",
+      "hover": true,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(241, 245, 249)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 16.295987899750777
+    },
+    {
+      "qa_type": "sop",
+      "name": "Mark as answer",
+      "focus": {
+        "visible": true,
+        "width": "2px",
+        "style": "solid",
+        "color": "rgb(29, 78, 216)",
+        "offset": "2px",
+        "parent": "rgb(255, 255, 255)"
+      }
+    },
+    {
+      "qa_type": "question",
+      "name": "Mark as SOP (internal procedure)",
+      "hover": false,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(255, 255, 255)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": "question",
+      "name": "Mark as SOP (internal procedure)",
+      "hover": true,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(241, 245, 249)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 16.295987899750777
+    },
+    {
+      "qa_type": "question",
+      "name": "Mark as answer",
+      "hover": false,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(255, 255, 255)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 17.85253496299567
+    },
+    {
+      "qa_type": "question",
+      "name": "Mark as answer",
+      "hover": true,
+      "foreground": "rgb(15, 23, 42)",
+      "background": "rgb(241, 245, 249)",
+      "height": 44,
+      "opacity": "1",
+      "contrast": 16.295987899750777
+    }
+  ],
+  "limitations": [
+    "Synthetic intercepted article reads; no server QA mutation, public retrieval or tenant isolation proof.",
+    "Default opaque colors and final hover state only; no full theme, widget, screen-reader or visual-layout acceptance.",
+    "Legacy disabled controls retain legibility but are not keyboard focus targets."
+  ]
+}

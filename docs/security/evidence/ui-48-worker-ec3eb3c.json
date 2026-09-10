@@ -1,0 +1,44 @@
+{
+  "revision": "ec3eb3c5f0617d78de68904498789371a67412c8",
+  "scenario": "Wrangler local config deploy --dry-run only; no deployment",
+  "inputs": 162,
+  "forbiddenInputSubstrings": [
+    "react",
+    "@ark",
+    "@zag",
+    "apps/dashboard",
+    "apps/portal",
+    "apps/widget",
+    ".agents",
+    "agent-context",
+    "styled",
+    "emotion"
+  ],
+  "matches": [],
+  "javascriptBytes": 604056,
+  "gzip9Bytes": 123873,
+  "javascriptSha256": "48bdf56a35fd9a0445ab9433df898ae3ae3b93584aba890361ecc9b10ae75d01",
+  "metafileSha256": "e6e8579f243c17b0c71aaf2411bc4a62e195a2b35e785302851678da78987df8",
+  "runtime": {
+    "runtime": "local-wrangler",
+    "warmReads": 5,
+    "operatorRevisionObserved": true,
+    "restartRetainedStop": true,
+    "staleRevisionDenied": true,
+    "malformedPolicyRedacted": true,
+    "providerBindings": 0,
+    "mutationCeiling": 4,
+    "concurrentStopPreservedAccepted": true,
+    "cleanup": "run-owned state removed",
+    "node": "22.19.0",
+    "tcpPort": 8799,
+    "logicalOrigin": "http://localhost:8787",
+    "test": "apps/server/scripts/local-beta-runtime.test.ts",
+    "sourceSha256": "0e6ed2778483a5e2ec79e505e9188cc47303ee5934660b9869f2a3dbd178817d",
+    "passed": true
+  },
+  "limitations": [
+    "Interactive launch test remains bound to occupied8787 and was not rerun",
+    "No production, provider, cold-start timing or final merged revision acceptance"
+  ]
+}

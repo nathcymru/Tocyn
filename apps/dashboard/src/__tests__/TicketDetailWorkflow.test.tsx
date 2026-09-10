@@ -18,13 +18,14 @@ function deferred<T>() {let resolve!:(value:T)=>void;const promise=new Promise<T
 let client:QueryClient;
 let ticket:ReturnType<typeof initialTicket>;
 function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'assigned-agent' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
-function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>) {
+function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = []) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
     if(path.startsWith('/api/tickets/')||path==='/api/attachments/upload')return handle(path,options);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
     if(path==='/api/users/agents')return json([{id:'assigned-agent',full_name:'Assigned agent'}]);
     if(path==='/api/settings')return json({});
+    if(path==='/api/ticket-fields')return json(fields);
     return json([]);
   }));
 }
@@ -438,4 +439,18 @@ it('replaces a pre-commit read when event and mutation invalidations overlap',as
   expect(screen.getByRole('combobox',{name:'Status'})).toHaveValue('resolved');
   expect(screen.getByText('Post-event authoritative message')).toBeInTheDocument();
   expect(reads).toBeGreaterThan(2);
+});
+
+
+it('associates every retained custom field label with its native control', async () => {
+  const fields = ['text','textarea','select','checkbox'].map((field_type, i) => ({id:`field-${i}`,name:`field_${i}`,label:`Custom ${field_type}`,field_type,options:field_type==='select'?'One,Two':null,is_active:true}));
+  transport(() => json(ticket), fields);
+  showDetail();
+  for (const field of fields) {
+    const input = await screen.findByLabelText(field.label);
+    expect(input).toHaveAccessibleName(field.label);
+    expect(input.id).toBeTruthy();
+  }
+  expect(screen.getByRole('combobox',{name:'Custom select'})).toBeVisible();
+  expect(screen.getByRole('checkbox',{name:'Custom checkbox'})).toBeVisible();
 });

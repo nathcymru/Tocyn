@@ -5,8 +5,10 @@ import { portalApi } from './api/client';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { VerifyPage } from './pages/VerifyPage';
-import { TicketListPage } from './pages/TicketListPage';
-import { TicketDetailPage } from './pages/TicketDetailPage';
+import { RouteContent } from './components/RouteContent';
+
+const TicketListPage = lazy(() => import('./pages/TicketListPage').then(module => ({ default: module.TicketListPage })));
+const TicketDetailPage = lazy(() => import('./pages/TicketDetailPage').then(module => ({ default: module.TicketDetailPage })));
 
 const LocalAuthCapturePage = import.meta.env.DEV ? lazy(() => import('./pages/LocalAuthCapturePage').then(module => ({ default: module.LocalAuthCapturePage }))) : null;
 
@@ -56,8 +58,8 @@ export default function App() {
         
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Navigate to="/tickets" replace />} />
-          <Route path="tickets" element={<TicketListPage />} />
-          <Route path="tickets/:id" element={<TicketDetailPage />} />
+          <Route path="tickets" element={<RouteContent><TicketListPage /></RouteContent>} />
+          <Route path="tickets/:id" element={<RouteContent><TicketDetailPage /></RouteContent>} />
         </Route>
       </Routes>
     </BrowserRouter>

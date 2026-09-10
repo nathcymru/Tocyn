@@ -1,0 +1,41 @@
+:root, :host {
+  --tocyn-motion-duration-fast: 120ms;
+  --tocyn-motion-duration-normal: 180ms;
+  --tocyn-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --tocyn-color-focus: #1d4ed8;
+  --tocyn-color-surface: #ffffff;
+  --tocyn-color-text: #0f172a;
+  --tocyn-target-min: 2.75rem;
+  --tocyn-density-comfortable: 1rem;
+}
+
+[data-tocyn-workspace] { color: var(--tocyn-color-text); background: var(--tocyn-color-surface); }
+[data-tocyn-primitive]:focus-visible,
+[data-tocyn-workspace] :where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--tocyn-color-focus);
+  outline-offset: 2px;
+}
+[data-tocyn-primitive="select"],
+[data-tocyn-primitive="textarea"],
+[data-tocyn-primitive="button"],
+[data-tocyn-primitive="input"]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+[data-tocyn-workspace] :where(button, [role="button"], a) { min-block-size: var(--tocyn-target-min); }
+@media (prefers-reduced-motion: reduce) {
+  [data-tocyn-workspace] *, [data-tocyn-workspace] *::before, [data-tocyn-workspace] *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-tocyn-dialog-backdrop] { position: fixed; inset: 0; z-index: 1000; background: rgb(15 23 42 / 40%); }
+[data-tocyn-dialog-positioner] { position: fixed; inset: 0; z-index: 1001; display: flex; align-items: center; justify-content: center; padding: 1rem; overflow: auto; }
+[data-tocyn-dialog-positioner] > [role="dialog"] { max-block-size: calc(100dvh - 2rem); overflow: auto; }
+
+[data-tocyn-dialog-positioner] > [data-tocyn-dialog-edge] { max-block-size: 100dvh; }
+
+[data-tocyn-confirm-body] { background: var(--tocyn-color-surface); color: var(--tocyn-color-text); padding: 1.5rem; max-inline-size: 30rem; border-radius: .75rem; }
+[data-tocyn-confirm-body] > * + * { margin-block-start: 1rem; }
+[data-tocyn-confirm-body] > h2 { font-size: 1.125rem; font-weight: 700; }
+[data-tocyn-confirm-actions] { display: flex; flex-wrap: wrap; justify-content: end; gap: .75rem; }
+[data-tocyn-confirm-actions] > button { border: 1px solid currentColor; border-radius: .375rem; padding: .5rem 1rem; }

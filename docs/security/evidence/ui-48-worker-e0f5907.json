@@ -1,0 +1,42 @@
+{
+  "revision": "e0f590772bf21ba0f39ab4d07895eacd263322ee",
+  "scenario": "Wrangler local config deploy --dry-run only; no deployment",
+  "inputs": 162,
+  "forbiddenInputSubstrings": [
+    "react",
+    "@ark",
+    "@zag",
+    "apps/dashboard",
+    "apps/portal",
+    "apps/widget",
+    ".agents",
+    "agent-context",
+    "styled",
+    "emotion"
+  ],
+  "matches": [],
+  "javascriptBytes": 604056,
+  "gzip9Bytes": 123873,
+  "javascriptSha256": "48bdf56a35fd9a0445ab9433df898ae3ae3b93584aba890361ecc9b10ae75d01",
+  "metafileSha256": "5e5230fbcadf845e9c73b27d07f32055a5cd07d52ca51987d17d480a7902a805",
+  "runtime": {
+    "node": "22.19.0",
+    "tcpPort": 8799,
+    "logicalOrigin": "http://localhost:8787",
+    "test": "apps/server/scripts/local-beta-runtime.test.ts",
+    "sourceSha256": "0e6ed2778483a5e2ec79e505e9188cc47303ee5934660b9869f2a3dbd178817d",
+    "passed": true,
+    "evidence": [
+      "operator revision on warm reads",
+      "stop retained after restart",
+      "stale revision denied",
+      "malformed policy redacted",
+      "concurrent stop preserves accepted mutation",
+      "run-owned state removed"
+    ],
+    "limitations": [
+      "Interactive launch test remains bound to occupied8787 and was not rerun",
+      "No production or provider acceptance"
+    ]
+  }
+}

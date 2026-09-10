@@ -1,0 +1,12 @@
+{
+  "revision": "2c2680afc4f70484e5e62bf2fbbd60647aa65d93",
+  "dirty": true,
+  "scenario": "Local real Markdown editor: labels, input, SOP selection, synthetic failed save and unchanged retry",
+  "sourceSha256": "75e2168f4c516f614be7b0c63f7e00227480b2590dcfe208a86b27fa0f258a32",
+  "browser": "151.0.7922.34",
+  "passed": true,
+  "attempts": 2,
+  "limitations": [
+    "All API requests intercepted or blocked; no server persistence, real provider, or complete editor toolbar/VoiceOver attestation."
+  ]
+}
