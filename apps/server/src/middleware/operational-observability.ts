@@ -3,7 +3,11 @@ import type { Env } from '../bindings';
 import { observabilityEnabled, operationalEvent } from '../observability/operational-events';
 
 function safeRoute(path: string): string {
-  return path.split('/').map(segment => /^[0-9a-f-]{8,}$/i.test(segment) || /^\d+$/.test(segment) ? ':id' : segment).join('/');
+  if (path === '/health') return '/health';
+  for (const prefix of ['/api/auth', '/api/settings', '/api/channels', '/api/permissions', '/api/v1', '/api/realtime']) {
+    if (path === prefix || path.startsWith(`${prefix}/`)) return prefix;
+  }
+  return path.startsWith('/api/') ? '/api/other' : '/other';
 }
 
 export async function operationalObservability(c: Context<{ Bindings: Env }>, next: Next): Promise<void> {
