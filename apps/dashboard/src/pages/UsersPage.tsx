@@ -1,3 +1,4 @@
+import { TocynButton } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
@@ -17,9 +18,9 @@ export const UsersPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
           <p className="text-slate-500 mt-1">Manage agents, admins, and their access levels.</p>
         </div>
-        <button className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm">
+        <TocynButton className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm">
           Invite New User
-        </button>
+        </TocynButton>
       </div>
 
       {error && (
@@ -36,13 +37,13 @@ export const UsersPage: React.FC = () => {
                 <UserIcon className="w-6 h-6" />
               </div>
               <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 
+                user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
                 user.role === 'agent' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
               }`}>
                 {user.role}
               </span>
             </div>
-            
+
             <h3 className="text-lg font-bold text-slate-900">{user.full_name || 'Unnamed User'}</h3>
             <div className="space-y-2 mt-4">
               <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -69,18 +70,18 @@ export const UsersPage: React.FC = () => {
             </div>
 
             <div className="mt-6 pt-6 border-t border-slate-100 flex items-center gap-3">
-              <button 
+              <TocynButton
                 onClick={() => { setSelectedUser(user); setModalType('edit'); }}
                 className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
               >
                 Edit Profile
-              </button>
-              <button 
+              </TocynButton>
+              <TocynButton
                 onClick={() => { setSelectedUser(user); setModalType('activity'); }}
                 className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
               >
                 View Activity
-              </button>
+              </TocynButton>
             </div>
           </div>
         ))}
@@ -100,9 +101,9 @@ export const UsersPage: React.FC = () => {
               <h2 className="text-xl font-bold text-slate-900">
                 {modalType === 'edit' ? 'Edit User Profile' : 'User Activity Log'}
               </h2>
-              <button onClick={() => { setSelectedUser(null); setModalType(null); }} className="text-slate-400 hover:text-slate-600">
+              <TocynButton onClick={() => { setSelectedUser(null); setModalType(null); }} className="text-slate-400 hover:text-slate-600">
                 <X className="w-6 h-6" />
-              </button>
+              </TocynButton>
             </div>
             <div className="p-8">
               <div className="flex items-center gap-4 mb-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
@@ -145,12 +146,12 @@ export const UsersPage: React.FC = () => {
               )}
             </div>
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button 
+              <TocynButton
                 onClick={() => { setSelectedUser(null); setModalType(null); }}
                 className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Close
-              </button>
+              </TocynButton>
             </div>
           </div>
         </div>

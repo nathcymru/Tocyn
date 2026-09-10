@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { dashboardApi } from '../api/client';
@@ -127,7 +128,7 @@ export function SecurityProfilePage() {
               Add an additional layer of security to your account by requiring more than just a password to sign in.
             </p>
           </div>
-          
+
           <div className="mt-5">
             {user.mfa_enabled ? (
               <div className="space-y-4">
@@ -140,7 +141,7 @@ export function SecurityProfilePage() {
                     Two-Factor Authentication is mandatory for your role and cannot be disabled.
                   </p>
                 ) : (
-                  <button
+                  <TocynButton
                     type="button"
                     onClick={disableMfa}
                     disabled={isLoading}
@@ -148,13 +149,13 @@ export function SecurityProfilePage() {
                   >
                     <ShieldOff className="h-4 w-4 mr-2" />
                     Disable 2FA
-                  </button>
+                  </TocynButton>
                 )}
               </div>
             ) : (
               <div>
                 {!setupData ? (
-                  <button
+                  <TocynButton
                     type="button"
                     onClick={startSetup}
                     disabled={isLoading}
@@ -162,7 +163,7 @@ export function SecurityProfilePage() {
                   >
                     <KeyRound className="h-4 w-4 mr-2" />
                     Set up 2FA
-                  </button>
+                  </TocynButton>
                 ) : (
                   <div className="bg-gray-50 rounded-lg p-6 space-y-6 border border-gray-200">
                     <div className="space-y-4">
@@ -186,7 +187,7 @@ export function SecurityProfilePage() {
                           <label htmlFor="code" className="block text-sm font-medium text-gray-700">
                             Authentication Code
                           </label>
-                          <input
+                          <TocynInput
                             type="text"
                             id="code"
                             value={code}
@@ -197,21 +198,21 @@ export function SecurityProfilePage() {
                             required
                           />
                         </div>
-                        <button
+                        <TocynButton
                           type="submit"
                           disabled={isLoading || code.length !== 6}
                           className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                         >
                           Verify & Enable
-                        </button>
-                        <button
+                        </TocynButton>
+                        <TocynButton
                           type="button"
                           onClick={() => setSetupData(null)}
                           disabled={isLoading}
                           className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
                           Cancel
-                        </button>
+                        </TocynButton>
                       </form>
                     </div>
                   </div>

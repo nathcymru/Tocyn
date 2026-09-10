@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi } from '../api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -61,14 +62,14 @@ export function WidgetChannelPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
           <h2 className="text-lg font-semibold border-b pb-2 text-slate-900">Features</h2>
-          
+
           {isLoading ? (
             <div className="text-slate-500">Loading settings...</div>
           ) : (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="relative flex items-center">
-                  <input
+                  <TocynInput
                     type="checkbox"
                     id="chatEnabled"
                     checked={chatEnabled}
@@ -88,7 +89,7 @@ export function WidgetChannelPage() {
 
               <div className="flex items-center gap-3">
                 <div className="relative flex items-center">
-                  <input
+                  <TocynInput
                     type="checkbox"
                     id="formEnabled"
                     checked={formEnabled}
@@ -108,13 +109,13 @@ export function WidgetChannelPage() {
             </div>
           )}
 
-          <button
+          <TocynButton
             onClick={handleSave}
             disabled={isSaving || isLoading}
             className="w-full bg-brand-600 text-white py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
           >
             {isSaving ? 'Saving...' : 'Save Changes'}
-          </button>
+          </TocynButton>
         </div>
 
         <div className="space-y-6">
@@ -126,7 +127,7 @@ export function WidgetChannelPage() {
             <pre className="bg-black/50 p-4 rounded-lg text-xs overflow-x-auto text-emerald-400 border border-white/10 whitespace-pre">
               {snippet}
             </pre>
-            <button
+            <TocynButton
               onClick={() => {
                 navigator.clipboard.writeText(snippet);
                 alert('Snippet copied to clipboard!');
@@ -134,7 +135,7 @@ export function WidgetChannelPage() {
               className="mt-4 w-full bg-white/10 hover:bg-white/20 text-white py-2 rounded-lg text-sm font-medium transition-colors"
             >
               Copy Snippet
-            </button>
+            </TocynButton>
           </div>
 
           <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-xl">

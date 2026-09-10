@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { composeEventHandlers, TocynButton, TocynInput, WorkspaceShell, WorkViewNavigator, ConversationList, ActiveConversation, ContextPanel } from '../index';
+import { composeEventHandlers, TocynButton, TocynInput, TocynSelect, TocynTextarea, WorkspaceShell, WorkViewNavigator, ConversationList, ActiveConversation, ContextPanel } from '../index';
 import { Dialog, Listbox, createListCollection } from '../ark';
 import type { TocynButtonProps, TocynInputProps, TocynPanelProps } from '../primitives';
 
@@ -53,6 +53,21 @@ describe('named primitive contracts', () => {
     expect(screen.getByRole('textbox', { name: 'Controlled' })).toHaveValue('typed');
   });
 
+  it('retains form names, values, validation and caller busy state', async () => {
+    render(<form aria-label="Create"><TocynInput name="subject" aria-label="Subject" required aria-busy="true" defaultValue="Question" />
+      <TocynSelect name="priority" aria-label="Priority" defaultValue="normal"><option value="normal">Normal</option><option value="high">High</option></TocynSelect>
+      <TocynTextarea name="body" aria-label="Body" required defaultValue="Details" />
+      <TocynButton aria-busy="true">Send</TocynButton></form>);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Priority' }), 'high');
+    await user.type(screen.getByRole('textbox', { name: 'Body' }), ' added');
+    const form = screen.getByRole('form', { name: 'Create' }) as HTMLFormElement;
+    expect(Object.fromEntries(new FormData(form))).toEqual({subject:'Question', priority:'high', body:'Details added'});
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toBeRequired();
+    expect(screen.getByRole('textbox', { name: 'Subject' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('aria-busy', 'true');
+  });
+
   it('exposes stable labelled workspace regions without owning application state', () => {
     render(<WorkspaceShell><WorkViewNavigator /><ConversationList /><ActiveConversation /><ContextPanel /></WorkspaceShell>);
     expect(screen.getByRole('region', { name: 'Work views' })).toBeInTheDocument();
@@ -89,7 +104,8 @@ describe('Ark complex controls', () => {
     await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
     await waitFor(() => expect(trigger).toHaveFocus());
 
-    await user.click(screen.getByRole('option', { name: 'Needs Action' }));
+    screen.getByRole('listbox').focus();
+    await user.keyboard('{End}{Enter}');
     expect(onValueChange).toHaveBeenCalledWith(expect.objectContaining({ value: ['Needs Action'] }));
   });
 });

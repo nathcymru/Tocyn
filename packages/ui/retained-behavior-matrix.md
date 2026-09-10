@@ -12,4 +12,43 @@ This matrix is the #48 migration boundary after #127. It accounts for retained b
 | Widget Shadow DOM/IIFE packaging | Browser-only package consumed by widget build | Keep UI package out of Worker imports; #67 wrapper lifecycle remains separate. |
 | Error, retry, public/internal, attachment and tenant-safe data behavior | Primitive state/event contracts only | Preserve in consuming applications; #48 does not own domain state or authorization. |
 
-Non-goals for this slice: full dashboard/portal/widget adoption, workspace routing, durable drafts, snooze/waiting state, permissions, tenant policy, theme persistence and wrapper packaging.
+Remaining application adoption includes complex dialogs/menus and the #79-owned permissions page. Non-goals for this slice: workspace routing, durable drafts, snooze/waiting state, permissions, tenant policy, theme persistence and wrapper packaging.
+
+## Native-control adoption receipt
+
+Dashboard, portal and widget now consume named button/input/select/textarea primitives through the narrow `@luminatick/ui/primitives` entry point. Native props, form semantics, refs, controlled/uncontrolled values, caller ARIA and event handlers are retained. Dashboard module resolution follows its Vite bundler so package export contracts resolve consistently. Widget token CSS is injected into its ShadowRoot; this does not claim completion of the separate wrapper packaging issue #67.
+
+Validation at this increment: all three production builds; 73 dashboard, 59 portal, 3 widget and 6 shared UI tests pass. Tests include actual keyboard activation, dialog Escape/focus restoration, listbox keyboard selection, form serialization and caller busy-state retention. These DOM tests do not substitute for the remaining browser/assistive-technology acceptance or measured startup/interaction performance. Existing dashboard large-chunk warning remains; no threshold was weakened.
+
+Remaining: Ark complex-control adoption and behavior parity, complete browser accessibility/target sizing checks, baseline-versus-candidate bundle/startup/interaction measurements, and coordinated permissions-page adoption after #79. Issue #48 and PR #167 remain incomplete.
+
+| Source surface | Adopted native controls | Remaining raw form controls |
+|---|---:|---:|
+| `apps/dashboard/src/components/layout/Layout.tsx` | 9 | 0 |
+| `apps/dashboard/src/pages/AgentPermissionsPage.tsx` | 0 | 2 |
+| `apps/dashboard/src/pages/ApiKeyPage.tsx` | 7 | 0 |
+| `apps/dashboard/src/pages/AutomationPage.tsx` | 21 | 0 |
+| `apps/dashboard/src/pages/EmailChannelPage.tsx` | 11 | 0 |
+| `apps/dashboard/src/pages/FiltersSettingsPage.tsx` | 12 | 0 |
+| `apps/dashboard/src/pages/GroupsPage.tsx` | 13 | 0 |
+| `apps/dashboard/src/pages/KnowledgeEditorPage.tsx` | 5 | 0 |
+| `apps/dashboard/src/pages/KnowledgePage.tsx` | 10 | 0 |
+| `apps/dashboard/src/pages/LoginPage.tsx` | 3 | 0 |
+| `apps/dashboard/src/pages/MfaPage.tsx` | 3 | 0 |
+| `apps/dashboard/src/pages/SecurityProfilePage.tsx` | 5 | 0 |
+| `apps/dashboard/src/pages/SettingsPage.tsx` | 10 | 0 |
+| `apps/dashboard/src/pages/TicketDetailPage.tsx` | 27 | 0 |
+| `apps/dashboard/src/pages/TicketFieldsPage.tsx` | 10 | 0 |
+| `apps/dashboard/src/pages/TicketListPage.tsx` | 18 | 0 |
+| `apps/dashboard/src/pages/UsagePage.tsx` | 7 | 0 |
+| `apps/dashboard/src/pages/UsersPage.tsx` | 5 | 0 |
+| `apps/dashboard/src/pages/WidgetChannelPage.tsx` | 4 | 0 |
+| `apps/portal/src/components/Layout.tsx` | 1 | 0 |
+| `apps/portal/src/pages/LocalAuthCapturePage.tsx` | 2 | 0 |
+| `apps/portal/src/pages/LoginPage.tsx` | 4 | 0 |
+| `apps/portal/src/pages/TicketDetailPage.tsx` | 9 | 0 |
+| `apps/portal/src/pages/TicketListPage.tsx` | 6 | 0 |
+| `apps/portal/src/pages/VerifyPage.tsx` | 3 | 0 |
+| `apps/widget/src/App.tsx` | 4 | 0 |
+| `apps/widget/src/components/AiChat.tsx` | 2 | 0 |
+| `apps/widget/src/components/TicketForm.tsx` | 6 | 0 |

@@ -1,14 +1,15 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Ticket as TicketIcon, 
-  Users, 
+import {
+  LayoutDashboard,
+  Ticket as TicketIcon,
+  Users,
   Key,
-  Settings, 
-  LogOut, 
+  Settings,
+  LogOut,
   Search,
   Book,
   Menu,
@@ -72,7 +73,7 @@ function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
         setIsOpen(false); trigger.current?.focus();
       }
     }}>
-      <button
+      <TocynButton
         type="button"
         ref={trigger}
         aria-label="Account options"
@@ -83,7 +84,7 @@ function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
         className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold border border-slate-600 hover:ring-2 hover:ring-brand-500 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         {user?.full_name?.[0] || 'A'}
-      </button>
+      </TocynButton>
 
       {isOpen && (
         <div id={disclosureId} className="absolute bottom-full left-0 mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
@@ -99,13 +100,13 @@ function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
             <Key className="w-4 h-4" />
             Security Profile
           </Link>
-          <button
+          <TocynButton
             onClick={handleLogout}
             className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
           >
             <LogOut className="w-4 h-4" />
             Sign out of all sessions
-          </button>
+          </TocynButton>
         </div>
       )}
     </div>
@@ -241,10 +242,10 @@ export function Layout() {
         message: lastMessage.payload.subject,
         ticketId: lastMessage.payload.id,
       };
-      
+
       // Avoid duplicate toasts for the same event if multiple updates happen fast
       setToasts(prev => [toast, ...prev].slice(0, 5));
-      
+
       setTimeout(() => {
         // Do not remove a notification while its keyboard action has focus.
         const focused = document.activeElement?.closest('[data-ticket-notification]');
@@ -260,7 +261,7 @@ export function Layout() {
       {/* Toast Container */}
       <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
         {toasts.map(toast => (
-          <div 
+          <div
             key={toast.id}
             data-ticket-notification={toast.id}
             className="bg-white border border-slate-200 shadow-xl rounded-lg p-4 w-80 pointer-events-auto transform transition-all animate-in slide-in-from-right hover:scale-[1.02] cursor-pointer"
@@ -272,15 +273,15 @@ export function Layout() {
               )}>
                 <Bell className="w-4 h-4" />
               </div>
-              <button type="button" aria-label={`Open ticket notification: ${toast.title}`}
+              <TocynButton type="button" aria-label={`Open ticket notification: ${toast.title}`}
                 onClick={() => {
                   if (toast.ticketId) navigate(`/tickets/${toast.ticketId}`);
                   setToasts(prev => prev.filter(t => t.id !== toast.id));
                 }} className="flex-1 min-w-0 text-left rounded focus-visible:outline focus-visible:outline-2">
                 <p role="status" className="text-sm font-semibold text-slate-900">{toast.title}</p>
                 <p className="text-xs text-slate-500 truncate">{toast.message}</p>
-              </button>
-              <button
+              </TocynButton>
+              <TocynButton
                 type="button"
                 aria-label="Dismiss ticket notification"
                 onClick={(e) => {
@@ -291,7 +292,7 @@ export function Layout() {
                 className="text-slate-600 hover:text-slate-900 p-1 rounded focus-visible:outline focus-visible:outline-2"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </TocynButton>
             </div>
           </div>
         ))}
@@ -303,8 +304,8 @@ export function Layout() {
       {isSidebarOpen && (
         <dialog id={mobileDialogId} ref={mobileDialog} aria-label="Navigation" onCancel={() => setIsSidebarOpen(false)}
           className="fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none w-20 overflow-visible border-0 bg-slate-900 text-white p-2 backdrop:bg-slate-900/50">
-          <button type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
-            className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X aria-hidden="true" /></button>
+          <TocynButton type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
+            className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X aria-hidden="true" /></TocynButton>
           <div className="h-[calc(100dvh-4rem)]"><SidebarContent onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
         </dialog>
       )}
@@ -312,7 +313,7 @@ export function Layout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
-          <button
+          <TocynButton
             type="button"
             ref={navigationTrigger}
             aria-label="Open navigation"
@@ -323,12 +324,12 @@ export function Layout() {
             onClick={() => setIsSidebarOpen(true)}
           >
             <Menu className="w-6 h-6" />
-          </button>
-          
+          </TocynButton>
+
           <div className="max-w-md w-full relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
+            <TocynInput
+              type="text"
               placeholder="Search tickets..."
               aria-label="Search all tickets"
               value={searchInput}
@@ -353,7 +354,7 @@ export function Layout() {
               setShowConnDetails(false); connectionTrigger.current?.focus();
             }
           }}>
-            <button 
+            <TocynButton
               type="button"
               ref={connectionTrigger}
               aria-expanded={showConnDetails}
@@ -361,15 +362,15 @@ export function Layout() {
               onClick={() => setShowConnDetails(!showConnDetails)}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
-                isConnected 
-                  ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" 
+                isConnected
+                  ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
                   : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
               )}
             >
               {isConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
               <span>{isConnected ? 'Real-time' : 'Disconnected'}</span>
               <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showConnDetails && "rotate-180")} />
-            </button>
+            </TocynButton>
 
             {showConnDetails && (
               <div id={connectionId} className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
@@ -380,7 +381,7 @@ export function Layout() {
                     isConnected ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500"
                   )} />
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-500 flex items-center gap-1.5">
@@ -397,7 +398,7 @@ export function Layout() {
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-slate-100">
-                  <button 
+                  <TocynButton
                     onClick={() => {
                       manualReconnect();
                       setShowConnDetails(false);
@@ -407,7 +408,7 @@ export function Layout() {
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Force Reconnect
-                  </button>
+                  </TocynButton>
                 </div>
               </div>
             )}

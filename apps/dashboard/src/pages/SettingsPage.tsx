@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
 import { Building2, Settings as SettingsIcon, Mail, Save, Loader2, Cloud, AlertCircle, Shield, Activity } from 'lucide-react';
@@ -57,12 +58,12 @@ export const SettingsPage: React.FC = () => {
     try {
       // Clean and validate data before sending
       const payload: Record<string, string> = {};
-      
+
       for (const [key, rawValue] of Object.entries(formData)) {
         // Enforce key format (uppercase alphanumeric and underscores, 1-100 chars)
         if (!/^[A-Z0-9_]+$/.test(key)) continue;
         if (key.length === 0 || key.length > 100) continue;
-        
+
         // Ensure graceful handling of null/undefined and enforce string type
         let value = rawValue;
         if (value === null || value === undefined) {
@@ -70,18 +71,18 @@ export const SettingsPage: React.FC = () => {
         } else if (typeof value !== 'string') {
           value = String(value);
         }
-        
+
         // Omit empty sensitive credentials if they were not modified
         if (value === '••••••••') continue;
-        
+
         // Enforce max length of 5000 characters for values
         if (value.length > 5000) {
           value = value.slice(0, 5000);
         }
-        
+
         payload[key] = value;
       }
-      
+
       // Enforce max 50 keys
       const finalPayload = Object.fromEntries(
         Object.entries(payload).slice(0, 50)
@@ -111,7 +112,7 @@ export const SettingsPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900">General Settings</h1>
           <p className="text-slate-500 mt-0.5">Manage your organization and system defaults.</p>
         </div>
-        <button
+        <TocynButton
           onClick={handleSubmit}
           disabled={updateSettings.isPending || !!masterKeyError}
           className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 font-medium cursor-pointer"
@@ -122,7 +123,7 @@ export const SettingsPage: React.FC = () => {
             <Save className="w-5 h-5" />
           )}
           Save Changes
-        </button>
+        </TocynButton>
       </div>
 
       {masterKeyError && (
@@ -131,7 +132,7 @@ export const SettingsPage: React.FC = () => {
           <div>
             <h3 className="text-lg font-semibold text-red-800">Critical: Missing Encryption Key</h3>
             <p className="text-red-700 mt-1">
-              Your server is missing the <code className="bg-red-100 px-1 py-0.5 rounded font-mono text-sm">APP_MASTER_KEY</code> environment variable. 
+              Your server is missing the <code className="bg-red-100 px-1 py-0.5 rounded font-mono text-sm">APP_MASTER_KEY</code> environment variable.
               This 32-character key is required to securely encrypt and decrypt API tokens and other sensitive settings.
             </p>
             <p className="text-red-700 mt-2 font-medium text-sm">
@@ -156,7 +157,7 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="COMPANY_NAME" className="block text-sm font-medium text-slate-700 mb-1">
                 Company Name
               </label>
-              <input
+              <TocynInput
                 type="text"
                 id="COMPANY_NAME"
                 name="COMPANY_NAME"
@@ -171,7 +172,7 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="PORTAL_URL" className="block text-sm font-medium text-slate-700 mb-1">
                 Portal URL
               </label>
-              <input
+              <TocynInput
                 type="url"
                 id="PORTAL_URL"
                 name="PORTAL_URL"
@@ -196,7 +197,7 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="SYSTEM_TIMEZONE" className="block text-sm font-medium text-slate-700 mb-1">
                 System Timezone
               </label>
-              <select
+              <TocynSelect
                 id="SYSTEM_TIMEZONE"
                 name="SYSTEM_TIMEZONE"
                 value={formData.SYSTEM_TIMEZONE}
@@ -212,14 +213,14 @@ export const SettingsPage: React.FC = () => {
                 <option value="Europe/Paris">Central Europe (CET)</option>
                 <option value="Asia/Tokyo">Tokyo (JST)</option>
                 <option value="Australia/Sydney">Sydney (AEST)</option>
-              </select>
+              </TocynSelect>
             </div>
 
             <div>
               <label htmlFor="TICKET_PREFIX" className="block text-sm font-medium text-slate-700 mb-1">
                 Ticket Prefix
               </label>
-              <input
+              <TocynInput
                 type="text"
                 id="TICKET_PREFIX"
                 name="TICKET_PREFIX"
@@ -247,7 +248,7 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="DEFAULT_EMAIL_SIGNATURE" className="block text-sm font-medium text-slate-700 mb-1">
                 Default Email Signature
               </label>
-              <textarea
+              <TocynTextarea
                 id="DEFAULT_EMAIL_SIGNATURE"
                 name="DEFAULT_EMAIL_SIGNATURE"
                 value={formData.DEFAULT_EMAIL_SIGNATURE}
@@ -278,7 +279,7 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="CLOUDFLARE_ACCOUNT_ID" className="block text-sm font-medium text-slate-700 mb-1">
                 Cloudflare Account ID
               </label>
-              <input
+              <TocynInput
                 type="text"
                 id="CLOUDFLARE_ACCOUNT_ID"
                 name="CLOUDFLARE_ACCOUNT_ID"
@@ -292,7 +293,7 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="CLOUDFLARE_API_TOKEN" className="block text-sm font-medium text-slate-700 mb-1">
                 Cloudflare API Token
               </label>
-              <input
+              <TocynInput
                 type="password"
                 id="CLOUDFLARE_API_TOKEN"
                 name="CLOUDFLARE_API_TOKEN"
@@ -322,7 +323,7 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="TURNSTILE_SITE_KEY" className="block text-sm font-medium text-slate-700 mb-1">
                 Turnstile Site Key
               </label>
-              <input
+              <TocynInput
                 type="text"
                 id="TURNSTILE_SITE_KEY"
                 name="TURNSTILE_SITE_KEY"
@@ -336,7 +337,7 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="TURNSTILE_SECRET_KEY" className="block text-sm font-medium text-slate-700 mb-1">
                 Turnstile Secret Key
               </label>
-              <input
+              <TocynInput
                 type="password"
                 id="TURNSTILE_SECRET_KEY"
                 name="TURNSTILE_SECRET_KEY"

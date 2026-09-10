@@ -7,7 +7,7 @@ export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonE
 export const TocynButton = React.forwardRef<HTMLButtonElement, TocynButtonProps>(function TocynButton(
   { children, className, disabled, loading, state, ...props }, ref,
 ) {
-  return <button {...props} ref={ref} data-tocyn-primitive="button" disabled={disabled || loading || state === 'loading' || state === 'disabled'} className={className} aria-busy={loading || state === 'loading' || undefined}>
+  return <button {...props} ref={ref} data-tocyn-primitive="button" disabled={disabled || loading || state === 'loading' || state === 'disabled'} className={className} aria-busy={loading || state === 'loading' || props['aria-busy']}>
     {children}
   </button>;
 });
@@ -18,7 +18,7 @@ export interface TocynInputProps extends React.InputHTMLAttributes<HTMLInputElem
 export const TocynInput = React.forwardRef<HTMLInputElement, TocynInputProps>(function TocynInput(
   { className, disabled, loading, state, ...props }, ref,
 ) {
-  return <input {...props} data-tocyn-primitive="input" ref={ref} disabled={disabled || loading} className={className} aria-busy={loading || undefined} data-state={state} />;
+  return <input {...props} data-tocyn-primitive="input" ref={ref} disabled={disabled || loading} className={className} aria-busy={loading || props['aria-busy']} data-state={state} />;
 });
 
 export interface TocynPanelProps extends React.HTMLAttributes<HTMLElement>, PrimitiveProps, ComposableState<'open' | 'closed'> {
@@ -38,4 +38,19 @@ export const WorkspaceRegion = React.forwardRef<HTMLElement, WorkspaceRegionProp
   { label, children, ...props }, ref,
 ) {
   return <section {...props} ref={ref} aria-label={label}>{children}</section>;
+});
+
+/** Native form controls preserve platform keyboard, validation and form ownership. */
+export interface TocynTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement>, PrimitiveProps {
+  ref?: React.Ref<HTMLTextAreaElement>;
+}
+export const TocynTextarea = React.forwardRef<HTMLTextAreaElement, TocynTextareaProps>(function TocynTextarea(props, ref) {
+  return <textarea {...props} data-tocyn-primitive="textarea" ref={ref} />;
+});
+
+export interface TocynSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement>, PrimitiveProps {
+  ref?: React.Ref<HTMLSelectElement>;
+}
+export const TocynSelect = React.forwardRef<HTMLSelectElement, TocynSelectProps>(function TocynSelect(props, ref) {
+  return <select {...props} data-tocyn-primitive="select" ref={ref} />;
 });

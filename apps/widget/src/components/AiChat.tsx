@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState, useRef, useEffect } from 'react';
 
@@ -121,7 +122,7 @@ const AiChat: React.FC<Props> = ({ config }) => {
       </div>
 
       <form onSubmit={handleSend} className="flex gap-2">
-        <input
+        <TocynInput
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -129,7 +130,7 @@ const AiChat: React.FC<Props> = ({ config }) => {
           className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
           disabled={isLoading}
         />
-        <button
+        <TocynButton
           type="submit"
           disabled={isLoading || !input.trim()}
           className="p-2 rounded text-white flex items-center justify-center disabled:opacity-50 transition-colors"
@@ -138,7 +139,7 @@ const AiChat: React.FC<Props> = ({ config }) => {
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
           </svg>
-        </button>
+        </TocynButton>
       </form>
     </div>
   );

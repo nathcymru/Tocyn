@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi, ApiError } from '../api/client';
 import { CreditCard, Database, HardDrive, Cpu, Activity, AlertCircle, ExternalLink, RefreshCw, Zap } from 'lucide-react';
@@ -46,7 +47,7 @@ export function UsagePage() {
       setError(null);
       setIsAuthError(false);
       setIsMasterKeyMissing(false);
-      
+
       const response = await dashboardApi.get<UsageStats>('/settings/usage');
       setData(response);
       setShowCredentialsForm(false);
@@ -70,12 +71,12 @@ export function UsagePage() {
       setError('Account ID is required');
       return;
     }
-    
+
     // Only require API Token if it's not currently set (auth error) or they are explicitly changing it
     const payload: Record<string, string> = {
       CLOUDFLARE_ACCOUNT_ID: accountId.trim()
     };
-    
+
     if (apiToken.trim()) {
       payload.CLOUDFLARE_API_TOKEN = apiToken.trim();
     }
@@ -112,7 +113,7 @@ export function UsagePage() {
             {isAuthError ? 'Cloudflare Credentials Required' : 'Update Cloudflare Credentials'}
           </h3>
           <p className={cn("mt-1", isAuthError ? "text-orange-700" : "text-brand-700")}>
-            {isAuthError 
+            {isAuthError
               ? 'To view your usage and costs, you need to provide your Cloudflare Account ID and an API Token with Account Analytics permissions.'
               : 'Update your Cloudflare Account ID or Analytics API Token. Leave the token field blank to keep your existing encrypted token.'}
           </p>
@@ -121,7 +122,7 @@ export function UsagePage() {
           </p>
         </div>
       </div>
-      
+
       <div className="p-6 space-y-6 text-slate-600">
         <div>
           <h4 className="font-medium text-slate-900 mb-2">1. How to get your API Token:</h4>
@@ -148,7 +149,7 @@ export function UsagePage() {
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Cloudflare Account ID
               </label>
-              <input
+              <TocynInput
                 type="text"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
@@ -160,7 +161,7 @@ export function UsagePage() {
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Cloudflare API Token
               </label>
-              <input
+              <TocynInput
                 type="password"
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
@@ -169,21 +170,21 @@ export function UsagePage() {
               />
             </div>
             <div className="pt-2 flex gap-3">
-              <button 
+              <TocynButton
                 onClick={saveCredentials}
                 disabled={savingCredentials}
                 className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
               >
                 {savingCredentials ? 'Saving...' : 'Save & View Usage'}
-              </button>
+              </TocynButton>
               {!isAuthError && (
-                <button 
+                <TocynButton
                   onClick={() => setShowCredentialsForm(false)}
                   disabled={savingCredentials}
                   className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
                   Cancel
-                </button>
+                </TocynButton>
               )}
             </div>
           </div>
@@ -217,18 +218,18 @@ export function UsagePage() {
           <div>
             <h3 className="text-lg font-semibold text-red-800">Critical: Missing Encryption Key</h3>
             <p className="text-red-700 mt-1">
-              Your server is missing the <code className="bg-red-100 px-1 py-0.5 rounded font-mono text-sm">APP_MASTER_KEY</code> environment variable. 
+              Your server is missing the <code className="bg-red-100 px-1 py-0.5 rounded font-mono text-sm">APP_MASTER_KEY</code> environment variable.
               This 32-character key is required to securely encrypt and decrypt API tokens and other sensitive settings.
             </p>
             <p className="text-red-700 mt-2 font-medium text-sm">
               Please ask your system administrator to add it to your server's environment configuration, then restart the application.
             </p>
-            <button 
+            <TocynButton
               onClick={fetchUsage}
               className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
             >
               Retry
-            </button>
+            </TocynButton>
           </div>
         </div>
       </div>
@@ -247,12 +248,12 @@ export function UsagePage() {
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700">
           <p className="font-medium">Error loading usage data</p>
           <p className="text-sm mt-1">{error}</p>
-          <button 
+          <TocynButton
             onClick={fetchUsage}
             className="mt-4 px-4 py-2 bg-red-100 text-red-800 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
           >
             Retry
-          </button>
+          </TocynButton>
         </div>
       </div>
     );
@@ -271,12 +272,12 @@ export function UsagePage() {
           </p>
         </div>
         {!isAuthError && !showCredentialsForm && (
-          <button
+          <TocynButton
             onClick={() => setShowCredentialsForm(true)}
             className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
           >
             Update Credentials
-          </button>
+          </TocynButton>
         )}
       </div>
 
@@ -284,7 +285,7 @@ export function UsagePage() {
 
       {!isAuthError && !showCredentialsForm && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <StatCard 
+          <StatCard
             title="D1 Reads and Writes"
             description="Database row operations"
             icon={Database}
@@ -297,7 +298,7 @@ export function UsagePage() {
             fillClass="bg-blue-500"
           />
 
-          <StatCard 
+          <StatCard
             title="R2 Operations (Class A)"
             description="Writes to storage"
             icon={HardDrive}
@@ -310,7 +311,7 @@ export function UsagePage() {
             fillClass="bg-indigo-500"
           />
 
-          <StatCard 
+          <StatCard
             title="R2 Operations (Class B)"
             description="Reads from storage"
             icon={HardDrive}
@@ -323,7 +324,7 @@ export function UsagePage() {
             fillClass="bg-purple-500"
           />
 
-          <StatCard 
+          <StatCard
             title="Workers Requests"
             description="API calls, widget loads, pages"
             icon={Activity}
@@ -336,7 +337,7 @@ export function UsagePage() {
             fillClass="bg-emerald-500"
           />
 
-          <StatCard 
+          <StatCard
             title="Workers AI Neurons"
             description="RAG, embedding, auto-responses"
             icon={Cpu}
@@ -349,7 +350,7 @@ export function UsagePage() {
             fillClass="bg-brand-500"
           />
 
-          <StatCard 
+          <StatCard
             title="Durable Objects Requests"
             description="Real-time presence connections"
             icon={Zap}
@@ -362,7 +363,7 @@ export function UsagePage() {
             fillClass="bg-amber-500"
           />
 
-          <StatCard 
+          <StatCard
             title="Vectorize Queries"
             description="Vector search queries"
             icon={Database}
@@ -375,7 +376,7 @@ export function UsagePage() {
             fillClass="bg-pink-500"
           />
 
-          <StatCard 
+          <StatCard
             title="Vectorize Writes"
             description="Vector index updates"
             icon={Database}
@@ -410,7 +411,7 @@ function StatCard({ title, description, icon: Icon, current, limit, unit, format
   const percentage = Math.min((current / limit) * 100, 100);
   const isNearLimit = percentage >= 80;
   const isOverLimit = percentage >= 100;
-  
+
   const displayCurrent = format ? format(current) : current;
   const displayLimit = format ? format(limit) : limit;
 
@@ -446,8 +447,8 @@ function StatCard({ title, description, icon: Icon, current, limit, unit, format
           <span className="text-slate-500">Free Tier Limit</span>
         </div>
         <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
-          <div 
-            className={cn("h-full transition-all duration-500 rounded-full", 
+          <div
+            className={cn("h-full transition-all duration-500 rounded-full",
               isOverLimit ? "bg-red-500" : isNearLimit ? "bg-orange-500" : fillClass
             )}
             style={{ width: `${percentage}%` }}

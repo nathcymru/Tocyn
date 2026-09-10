@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { User } from '../types';
@@ -10,7 +11,7 @@ export function VerifyPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { login } = useAuthStore();
-  
+
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +116,7 @@ export function VerifyPage() {
                 Authentication Code
               </label>
               <div className="mt-1">
-                <input
+                <TocynInput
                   id="code"
                   name="code"
                   inputMode="numeric"
@@ -134,25 +135,25 @@ export function VerifyPage() {
             </div>
 
             <div>
-              <button
+              <TocynButton
                 type="submit"
                 aria-disabled={loading || code.length !== 6}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 aria-disabled:bg-brand-700 aria-disabled:cursor-default items-center gap-2"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
                 {loading ? 'Verifying...' : 'Verify Code'}
-              </button>
+              </TocynButton>
             </div>
           </form>
           <p role="status" aria-live="polite" className="mt-3 text-sm text-gray-700">{loading ? 'Verifying code…' : ''}</p>
 
           <div className="mt-6 text-center">
-            <button
+            <TocynButton
               onClick={() => navigate('/login')}
               className="text-sm text-brand-600 hover:text-brand-500 font-medium"
             >
               Request a new code
-            </button>
+            </TocynButton>
           </div>
         </div>
       </div>

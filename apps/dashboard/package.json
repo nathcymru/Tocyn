@@ -22,7 +22,8 @@
     "react-router-dom": "7.18.3",
     "rehype-sanitize": "^6.0.0",
     "tailwind-merge": "^2.2.0",
-    "zustand": "^4.5.0"
+    "zustand": "^4.5.0",
+    "@luminatick/ui": "*"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

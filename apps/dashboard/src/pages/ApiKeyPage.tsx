@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React, { useEffect, useState } from 'react';
 import { Key, Plus, Trash2, Copy, Check, ShieldAlert, Clock } from 'lucide-react';
 import { dashboardApi } from '../api/client';
@@ -65,7 +66,7 @@ export function ApiKeyPage() {
           <h1 className="text-2xl font-bold text-slate-900">API Keys</h1>
           <p className="text-slate-500 text-sm">Manage external access to the Luminatick API.</p>
         </div>
-        <button
+        <TocynButton
           onClick={() => {
             setCreatedKey(null);
             setIsCreating(true);
@@ -74,7 +75,7 @@ export function ApiKeyPage() {
         >
           <Plus className="w-4 h-4" />
           Create New Key
-        </button>
+        </TocynButton>
       </div>
 
       {isCreating && (
@@ -85,7 +86,7 @@ export function ApiKeyPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Key Name
               </label>
-              <input
+              <TocynInput
                 type="text"
                 placeholder="e.g. CRM Integration"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
@@ -95,19 +96,19 @@ export function ApiKeyPage() {
               />
             </div>
             <div className="flex gap-3">
-              <button
+              <TocynButton
                 type="submit"
                 className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
               >
                 Generate Key
-              </button>
-              <button
+              </TocynButton>
+              <TocynButton
                 type="button"
                 onClick={() => setIsCreating(false)}
                 className="text-slate-600 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 Cancel
-              </button>
+              </TocynButton>
             </div>
           </form>
         </div>
@@ -124,24 +125,24 @@ export function ApiKeyPage() {
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2 bg-white p-3 rounded-lg border border-amber-300 font-mono text-sm break-all">
             <span className="flex-1">{createdKey.apiKey}</span>
-            <button
+            <TocynButton
               onClick={() => copyToClipboard(createdKey.apiKey)}
               className="p-2 hover:bg-slate-100 rounded-md transition-colors shrink-0"
               title="Copy to clipboard"
             >
               {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
-            </button>
+            </TocynButton>
           </div>
-          
-          <button
+
+          <TocynButton
             onClick={() => setCreatedKey(null)}
             className="mt-4 text-amber-800 text-sm font-medium hover:underline"
           >
             I've saved my key
-          </button>
+          </TocynButton>
         </div>
       )}
 
@@ -181,13 +182,13 @@ export function ApiKeyPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
+                      <TocynButton
                         onClick={() => handleDelete(key.id)}
                         className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         title="Revoke Key"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </TocynButton>
                     </td>
                   </tr>
                 ))

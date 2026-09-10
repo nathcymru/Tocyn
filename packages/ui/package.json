@@ -7,7 +7,9 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./styles.css": "./src/styles/tocyn.css"
+    "./styles.css": "./src/styles/tocyn.css",
+    "./primitives": "./src/primitives.tsx",
+    "./ark": "./src/ark.ts"
   },
   "sideEffects": [
     "./src/styles/tocyn.css"

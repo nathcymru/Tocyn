@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -31,10 +32,10 @@ export const KnowledgePage: React.FC = () => {
         dashboardApi.get<KnowledgeCategory[]>('/knowledge/categories'),
         dashboardApi.get<KnowledgeDoc[]>('/knowledge/articles')
       ]);
-      
+
       const categoryMap = new Map<string, CategoryNode>();
       const roots: CategoryNode[] = [];
-      
+
       cats.forEach(c => {
         categoryMap.set(c.id, { ...c, children: [] });
       });
@@ -47,7 +48,7 @@ export const KnowledgePage: React.FC = () => {
           roots.push(node);
         }
       });
-      
+
       setCategories(roots);
       setDocs(articles);
     } catch (err: any) {
@@ -131,10 +132,10 @@ export const KnowledgePage: React.FC = () => {
   const renderCategoryNode = (node: CategoryNode, depth = 0) => {
     const isExpanded = expandedCategories.has(node.id);
     const isSelected = selectedCategoryId === node.id;
-    
+
     return (
       <div key={node.id} className="w-full">
-        <div 
+        <div
           className={`flex items-center justify-between py-1.5 px-2 rounded-md cursor-pointer group ${
             isSelected ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'
           }`}
@@ -143,12 +144,12 @@ export const KnowledgePage: React.FC = () => {
         >
           <div className="flex items-center space-x-2 flex-1 min-w-0">
             {node.children.length > 0 ? (
-              <button 
+              <TocynButton
                 onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
                 className="p-0.5 hover:bg-gray-200 rounded text-gray-400"
               >
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
+              </TocynButton>
             ) : (
               <span className="w-[18px]"></span>
             )}
@@ -156,7 +157,7 @@ export const KnowledgePage: React.FC = () => {
             <span className="truncate text-sm">{node.name}</span>
           </div>
           <div className="hidden group-hover:flex items-center space-x-1">
-            <button
+            <TocynButton
               onClick={(e) => {
                 e.stopPropagation();
                 setIsAddingCategory({ parentId: node.id });
@@ -166,8 +167,8 @@ export const KnowledgePage: React.FC = () => {
               title="Add Subcategory"
             >
               <Plus size={14} />
-            </button>
-            <button
+            </TocynButton>
+            <TocynButton
               onClick={(e) => {
                 e.stopPropagation();
                 confirmDeleteCategory(node.id, node.name);
@@ -176,22 +177,22 @@ export const KnowledgePage: React.FC = () => {
               title="Delete Category"
             >
               <Trash2 size={14} />
-            </button>
+            </TocynButton>
           </div>
         </div>
-        
+
         {isExpanded && node.children.length > 0 && (
           <div className="mt-1">
             {node.children.map(child => renderCategoryNode(child, depth + 1))}
           </div>
         )}
-        
+
         {isAddingCategory?.parentId === node.id && (
-          <div 
+          <div
             className="flex items-center py-1.5 px-2 mt-1"
             style={{ paddingLeft: `${(depth + 1) * 1.5 + 0.5}rem` }}
           >
-            <input
+            <TocynInput
               autoFocus
               type="text"
               value={newCategoryName}
@@ -210,7 +211,7 @@ export const KnowledgePage: React.FC = () => {
     );
   };
 
-  const filteredDocs = docs.filter(doc => 
+  const filteredDocs = docs.filter(doc =>
     selectedCategoryId === null || doc.category_id === selectedCategoryId
   );
 
@@ -218,13 +219,13 @@ export const KnowledgePage: React.FC = () => {
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-gray-50">
       <div className="flex-none px-6 py-4 bg-white border-b border-gray-200 flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">Knowledge Base</h1>
-        <button
+        <TocynButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
         >
           <Plus size={16} className="mr-2" />
           New Article
-        </button>
+        </TocynButton>
       </div>
 
       {error && (
@@ -238,17 +239,17 @@ export const KnowledgePage: React.FC = () => {
         <div className="w-72 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
           <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Categories</h2>
-            <button
+            <TocynButton
               onClick={() => setIsAddingCategory({ parentId: null })}
               className="p-1 hover:bg-gray-100 rounded-md text-gray-500"
               title="Add Root Category"
             >
               <Plus size={16} />
-            </button>
+            </TocynButton>
           </div>
-          
+
           <div className="p-2">
-            <div 
+            <div
               className={`flex items-center py-1.5 px-2 rounded-md cursor-pointer mb-2 ${
                 selectedCategoryId === null ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'
               }`}
@@ -257,13 +258,13 @@ export const KnowledgePage: React.FC = () => {
               <FileText size={16} className="mr-2 text-gray-400" />
               <span className="text-sm font-medium">All Articles</span>
             </div>
-            
+
             <div className="space-y-1">
               {categories.map(root => renderCategoryNode(root))}
-              
+
               {isAddingCategory?.parentId === null && (
                 <div className="flex items-center py-1.5 px-2 pl-6 mt-1">
-                  <input
+                  <TocynInput
                     autoFocus
                     type="text"
                     value={newCategoryName}
@@ -297,15 +298,15 @@ export const KnowledgePage: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredDocs.map((doc) => (
-                  <tr 
-                    key={doc.id} 
+                  <tr
+                    key={doc.id}
                     className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => navigate(`/knowledge/edit/${doc.id}`)}
                   >
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">{doc.title}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        doc.status === 'active' ? 'bg-green-100 text-green-800' : 
+                        doc.status === 'active' ? 'bg-green-100 text-green-800' :
                         doc.status === 'processing' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
                       }`}>
                         {doc.status}
@@ -322,12 +323,12 @@ export const KnowledgePage: React.FC = () => {
                       {new Date(doc.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
+                      <TocynButton
                         onClick={(e) => confirmDeleteDoc(doc.id, doc.title, e)}
                         className="text-red-600 hover:text-red-900"
                       >
                         Delete
-                      </button>
+                      </TocynButton>
                     </td>
                   </tr>
                 ))}
@@ -350,18 +351,18 @@ export const KnowledgePage: React.FC = () => {
             <h3 className="text-lg font-medium text-gray-900 mb-4">Confirm Deletion</h3>
             <p className="text-sm text-gray-500 mb-6">{deleteConfirm.title}</p>
             <div className="flex justify-end space-x-3">
-              <button
+              <TocynButton
                 onClick={() => setDeleteConfirm({ isOpen: false, type: null, id: null, title: '' })}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 Cancel
-              </button>
-              <button
+              </TocynButton>
+              <TocynButton
                 onClick={executeDelete}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               >
                 Delete
-              </button>
+              </TocynButton>
             </div>
           </div>
         </div>

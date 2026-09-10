@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -29,13 +30,13 @@ export function EmailChannelPage() {
   const [error, setError] = useState<string | null>(null);
 
   const { data: groups } = useGroups();
-  
-  
+
+
   const [resendApiKey, setResendApiKey] = useState('');
   const [resendFromEmail, setResendFromEmail] = useState('');
   const [savingResend, setSavingResend] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
-  
+
   const { data: settings } = useQuery({
     queryKey: ['settings'],
     queryFn: () => dashboardApi.get<Record<string, string>>('/settings'),
@@ -74,7 +75,7 @@ export function EmailChannelPage() {
   });
 
   const createEmail = useMutation({
-    mutationFn: (data: typeof formData) => 
+    mutationFn: (data: typeof formData) =>
       dashboardApi.post<SupportEmail>('/channels/emails', {
         ...data,
         group_id: data.group_id || null,
@@ -111,17 +112,17 @@ export function EmailChannelPage() {
           <p className="text-slate-500 mt-1">Manage inbound support email addresses</p>
         </div>
         {!isAdding && (
-          <button
+          <TocynButton
             onClick={() => setIsAdding(true)}
             className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Email
-          </button>
+          </TocynButton>
         )}
       </div>
 
-      
+
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-brand-50 text-brand-600 rounded-lg">
@@ -138,7 +139,7 @@ export function EmailChannelPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Resend API Key
             </label>
-            <input
+            <TocynInput
               type="password"
               placeholder="re_xxxxxxxxxxxxxxxxx"
               value={resendApiKey}
@@ -151,7 +152,7 @@ export function EmailChannelPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Default From Email
             </label>
-            <input
+            <TocynInput
               type="email"
               placeholder="support@yourdomain.com"
               value={resendFromEmail}
@@ -163,14 +164,14 @@ export function EmailChannelPage() {
         </div>
         <div className="mt-4 flex items-center justify-end gap-3">
           {resendSuccess && <span className="text-sm text-green-600 flex items-center gap-1"><Check className="w-4 h-4"/> Saved successfully</span>}
-          <button
+          <TocynButton
             onClick={saveResendSettings}
             disabled={savingResend || !resendApiKey || !resendFromEmail}
             className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             {savingResend ? 'Saving...' : 'Save Configuration'}
-          </button>
+          </TocynButton>
         </div>
       </div>
 
@@ -178,12 +179,12 @@ export function EmailChannelPage() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-slate-900">Add Support Email</h2>
-            <button 
+            <TocynButton
               onClick={() => { setIsAdding(false); setError(null); }}
               className="text-slate-400 hover:text-slate-600"
             >
               Cancel
-            </button>
+            </TocynButton>
           </div>
 
           {error && (
@@ -199,7 +200,7 @@ export function EmailChannelPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Email Address *
                 </label>
-                <input
+                <TocynInput
                   type="email"
                   required
                   placeholder="support@yourdomain.com"
@@ -212,7 +213,7 @@ export function EmailChannelPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Display Name
                 </label>
-                <input
+                <TocynInput
                   type="text"
                   placeholder="Support Team"
                   value={formData.name}
@@ -227,7 +228,7 @@ export function EmailChannelPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Assign to Group
                 </label>
-                <select
+                <TocynSelect
                   value={formData.group_id}
                   onChange={e => setFormData({ ...formData, group_id: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
@@ -236,7 +237,7 @@ export function EmailChannelPage() {
                   {groups?.map(g => (
                     <option key={g.id} value={g.id}>{g.name}</option>
                   ))}
-                </select>
+                </TocynSelect>
                 <p className="text-xs text-slate-500 mt-1">
                   Tickets from this email will be automatically assigned to this group.
                 </p>
@@ -244,7 +245,7 @@ export function EmailChannelPage() {
             </div>
 
             <div className="flex items-center gap-2 mt-2">
-              <input
+              <TocynInput
                 type="checkbox"
                 id="is_default"
                 checked={formData.is_default}
@@ -257,13 +258,13 @@ export function EmailChannelPage() {
             </div>
 
             <div className="flex justify-end pt-4 border-t border-slate-100">
-              <button
+              <TocynButton
                 type="submit"
                 disabled={createEmail.isPending}
                 className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
               >
                 {createEmail.isPending ? 'Saving...' : 'Save Email'}
-              </button>
+              </TocynButton>
             </div>
           </form>
         </div>
@@ -306,9 +307,9 @@ export function EmailChannelPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
-                  <button
+                  <TocynButton
                     onClick={() => {
                       if (confirm('Are you sure you want to remove this email channel?')) {
                         deleteEmail.mutate(email.id);
@@ -319,7 +320,7 @@ export function EmailChannelPage() {
                     title="Remove email"
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </TocynButton>
                 </div>
               </div>
             ))}

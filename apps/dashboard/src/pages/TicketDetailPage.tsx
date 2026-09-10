@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef } from 'react';
@@ -9,8 +10,8 @@ import { useRealtime } from '../hooks/useRealtime';
 import { useTicketFields } from '../hooks/useTicketFields';
 import { ApiError, dashboardApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { 
-  ArrowLeft, 
+import {
+  ArrowLeft,
   Send,
   User,
   ShieldCheck,
@@ -211,8 +212,8 @@ function TicketDetail({ id }: { id: string }) {
       const failure = results.find(result => result.status === 'rejected');
       if (failure?.status === 'rejected') throw failure.reason;
       const uploadedAttachments = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
-      await dashboardApi.post(`/tickets/${id}/articles`, { 
-        body: reply, 
+      await dashboardApi.post(`/tickets/${id}/articles`, {
+        body: reply,
         is_internal: isInternal,
         attachments: uploadedAttachments
       });
@@ -238,7 +239,7 @@ function TicketDetail({ id }: { id: string }) {
   if (isLoading) return <div className="p-8 text-center text-slate-500">Loading ticket...</div>;
   if (!ticket) return <div className="p-8 space-y-4 text-center text-slate-700">
     <p role="alert">{error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}</p>
-    <button type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</button>
+    <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</TocynButton>
     <Link to="/tickets" className="block underline">Back to Tickets</Link>
   </div>;
   const reference = ticketReference(ticket, ticketPrefix);
@@ -248,7 +249,7 @@ function TicketDetail({ id }: { id: string }) {
       <div className="lg:col-span-3 xl:col-span-4 space-y-6">
         {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="rounded border border-red-300 bg-red-50 p-3 text-red-900">
           {error ? 'Could not refresh this ticket. Showing the last confirmed details. ' : 'Confirm the saved ticket details before making another change. '}
-          <button type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</button>
+          <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</TocynButton>
         </div>}
         {changeError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{changeError}</p>}
         {notice && <p role="status" className="text-slate-700">{notice}</p>}
@@ -258,7 +259,7 @@ function TicketDetail({ id }: { id: string }) {
             Back to Tickets
           </Link>
           <div className="flex items-center gap-2">
-            <select
+            <TocynSelect
               key={`ticket-status-${ticketSelectVersions.status}`}
               ref={node => { ticketSelectRefs.current.status = node; }}
               aria-label="Status" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -273,7 +274,7 @@ function TicketDetail({ id }: { id: string }) {
               <option value="pending">Pending</option>
               <option value="resolved">Resolved</option>
               <option value="closed">Closed</option>
-            </select>
+            </TocynSelect>
           </div>
         </div>
 
@@ -282,7 +283,7 @@ function TicketDetail({ id }: { id: string }) {
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <button type="button" aria-label="Copy ticket reference"
+                  <TocynButton type="button" aria-label="Copy ticket reference"
                     onClick={() => {
                       navigator.clipboard.writeText(reference);
                       setCopied(true);
@@ -293,7 +294,7 @@ function TicketDetail({ id }: { id: string }) {
                   >
                     {reference}
                     {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400 group-hover/copy:text-white transition-colors" />}
-                  </button>
+                  </TocynButton>
                   <h1 className="text-2xl font-bold text-slate-900 leading-tight">{ticket.subject}</h1>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-slate-500">
@@ -307,14 +308,14 @@ function TicketDetail({ id }: { id: string }) {
                   </span>
                 </div>
               </div>
-              
+
               {/* Presence Indicator */}
               <div className="flex flex-col items-end gap-2">
                 {viewers.length > 0 && (
                   <div className="flex items-center gap-2">
                     <div className="flex items-center -space-x-2">
                       {viewers.slice(0, 3).map((viewer, i) => (
-                        <div 
+                        <div
                           key={i}
                           className="w-8 h-8 rounded-full bg-brand-500 border-2 border-white flex items-center justify-center text-white text-[10px] font-bold shadow-sm"
                           title={`${viewer.name} is viewing this ticket`}
@@ -340,8 +341,8 @@ function TicketDetail({ id }: { id: string }) {
 
           <div id="conversation-messages" className="p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
             {ticket.articles.map((article) => (
-              <div 
-                key={article.id} 
+              <div
+                key={article.id}
                 className={clsx(
                   "flex gap-4 group",
                   article.sender_type === 'agent' ? "flex-row-reverse" : "flex-row"
@@ -356,8 +357,8 @@ function TicketDetail({ id }: { id: string }) {
                 </div>
                 <div className={clsx(
                   "max-w-[80%] rounded-2xl p-4 shadow-sm border transition-all",
-                  article.sender_type === 'agent' 
-                    ? "bg-brand-600 text-white border-brand-700" 
+                  article.sender_type === 'agent'
+                    ? "bg-brand-600 text-white border-brand-700"
                     : "bg-white text-slate-900 border-slate-200",
                   article.is_internal && "!bg-amber-50 !border-amber-200 !text-amber-900 shadow-amber-100/50"
                 )}>
@@ -377,13 +378,13 @@ function TicketDetail({ id }: { id: string }) {
                   {article.attachments && article.attachments.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {article.attachments.map((att: any) => (
-                        <button 
-                          key={att.id} 
+                        <TocynButton
+                          key={att.id}
                           onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, att.filename || att.file_name); }}
                           className={clsx(
                             "flex w-full cursor-pointer hover:opacity-80 items-center gap-2 p-2 rounded-lg text-sm",
-                            article.sender_type === 'agent' 
-                              ? "bg-brand-700/50 text-white" 
+                            article.sender_type === 'agent'
+                              ? "bg-brand-700/50 text-white"
                               : "bg-gray-50 text-gray-700 border border-gray-100",
                             article.is_internal && "!bg-amber-100/50 !text-amber-900 border border-amber-200/50"
                           )}
@@ -393,15 +394,15 @@ function TicketDetail({ id }: { id: string }) {
                           <span className="text-xs opacity-75">
                             {attachmentSize(att.size ?? att.file_size)}
                           </span>
-                        </button>
+                        </TocynButton>
                       ))}
                     </div>
                   )}
-                  
+
                   {/* QA Toggle Buttons */}
                   <div className="mt-3 pt-3 border-t border-white/20 flex items-center justify-between gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="flex items-center gap-2">
-                      <button
+                      <TocynButton
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'question' ? null : 'question')}
                         className={clsx(
                           "text-[9px] font-bold uppercase px-2 py-0.5 rounded border transition-colors",
@@ -409,8 +410,8 @@ function TicketDetail({ id }: { id: string }) {
                         )}
                       >
                         {article.qa_type === 'question' ? '✓ Question' : 'Mark as Question'}
-                      </button>
-                      <button
+                      </TocynButton>
+                      <TocynButton
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'answer' ? null : 'answer')}
                         className={clsx(
                           "text-[9px] font-bold uppercase px-2 py-0.5 rounded border transition-colors",
@@ -418,7 +419,7 @@ function TicketDetail({ id }: { id: string }) {
                         )}
                       >
                         {article.qa_type === 'answer' ? '✓ Answer' : 'Mark as Answer'}
-                      </button>
+                      </TocynButton>
                     </div>
                     {article.qa_type && (
                       <span className="flex items-center gap-1 text-[9px] font-bold text-white/90 bg-white/10 px-2 py-0.5 rounded-full border border-white/20">
@@ -433,21 +434,21 @@ function TicketDetail({ id }: { id: string }) {
           </div>
 
           {ticket.pagination && <div className="border-t border-slate-200 bg-white p-4 space-y-2">
-            <button type="button" onClick={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage({ cancelRefetch: false }); }} aria-disabled={!hasNextPage || isFetchingNextPage}
+            <TocynButton type="button" onClick={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage({ cancelRefetch: false }); }} aria-disabled={!hasNextPage || isFetchingNextPage}
               aria-controls="conversation-messages" aria-busy={isFetchingNextPage}
               className="rounded-md border border-slate-400 bg-white px-4 py-2 text-sm font-medium text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
               {isFetchingNextPage ? 'Loading messages…' : hasNextPage ? 'Load more messages' : 'All messages loaded'}
-            </button>
+            </TocynButton>
             <p role="status" aria-live="polite" className="text-sm text-slate-700">
               {isFetchNextPageError ? 'Could not load more messages. Try again.' : isFetchingNextPage ? 'Loading more messages…' : `Showing ${ticket.articles.length} messages.${hasNextPage ? ' More messages are available.' : ' All messages are loaded.'}`}
             </p>
           </div>}
           <div className="p-6 border-t border-slate-200 bg-white">
-            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} <button type="button" onClick={() => void refetch()} className="underline">Refresh conversation</button></p>}
+            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton></p>}
             <form onSubmit={handleSubmitReply} className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <button 
+                  <TocynButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={!isInternal}
                     onClick={() => { if (!submission.current) setIsInternal(false); }}
@@ -457,8 +458,8 @@ function TicketDetail({ id }: { id: string }) {
                     )}
                   >
                     Public Reply
-                  </button>
-                  <button 
+                  </TocynButton>
+                  <TocynButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={isInternal}
                     onClick={() => { if (!submission.current) setIsInternal(true); }}
@@ -468,10 +469,10 @@ function TicketDetail({ id }: { id: string }) {
                     )}
                   >
                     Internal Note
-                  </button>
+                  </TocynButton>
                 </div>
-                
-                <button
+
+                <TocynButton
                   type="button"
                   onClick={handleGetAiSuggestion}
                   disabled={isGeneratingSuggestion || isSubmitting}
@@ -479,7 +480,7 @@ function TicketDetail({ id }: { id: string }) {
                 >
                   <Activity className="w-3.5 h-3.5" />
                   {isGeneratingSuggestion ? 'Thinking...' : 'AI Suggestion'}
-                </button>
+                </TocynButton>
               </div>
 
               {suggestion && (
@@ -490,42 +491,42 @@ function TicketDetail({ id }: { id: string }) {
                       AI Auto-Draft
                     </span>
                     <div className="flex items-center gap-3">
-                      <button
+                      <TocynButton
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => setReply(suggestion)}
                         className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
                       >
                         Replace All
-                      </button>
-                      <button
+                      </TocynButton>
+                      <TocynButton
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => setReply(prev => prev ? `${prev}\n\n${suggestion}` : suggestion)}
                         className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
                       >
                         Append
-                      </button>
-                      <button
+                      </TocynButton>
+                      <TocynButton
                         type="button"
                         onClick={() => setSuggestion(null)}
                         className="text-slate-400 hover:text-slate-600"
                       >
                         <X className="w-3.5 h-3.5" />
-                      </button>
+                      </TocynButton>
                     </div>
                   </div>
                   <p className="text-sm text-slate-700 italic leading-relaxed">"{suggestion}"</p>
                 </div>
               )}
-              
+
               <div className="relative">
                 <label htmlFor="reply-message" className="sr-only">Reply message</label>
-                <textarea id="reply-message" readOnly={isSubmitting} aria-busy={isSubmitting}
+                <TocynTextarea id="reply-message" readOnly={isSubmitting} aria-busy={isSubmitting}
                   className={clsx(
                     "w-full rounded-xl border p-4 text-sm focus:ring-4 outline-none min-h-[140px] transition-all resize-none shadow-inner",
-                    isInternal 
-                      ? "bg-amber-50/50 border-amber-200 focus:ring-amber-500/10" 
+                    isInternal
+                      ? "bg-amber-50/50 border-amber-200 focus:ring-amber-500/10"
                       : "bg-slate-50/50 border-slate-200 focus:ring-brand-500/10"
                   )}
                   placeholder={isInternal ? "Type an internal note only visible to agents..." : "Type your reply to the customer..."}
@@ -533,14 +534,14 @@ function TicketDetail({ id }: { id: string }) {
                   onChange={(e) => { if (!submission.current) setReply(e.target.value); }}
                 />
               </div>
-              
+
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {attachments.map((file, index) => (
                     <div key={index} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
                       <Paperclip className="w-3 h-3 text-slate-500" />
                       <span className="truncate max-w-[150px]">{file.name}</span>
-                      <button
+                      <TocynButton
                         type="button"
                         aria-disabled={isSubmitting} aria-label={`Remove ${file.name}`}
                         onClick={() => {
@@ -553,7 +554,7 @@ function TicketDetail({ id }: { id: string }) {
                         className="text-slate-600 hover:text-red-700"
                       >
                         <X className="w-3 h-3" />
-                      </button>
+                      </TocynButton>
                     </div>
                   ))}
                 </div>
@@ -562,16 +563,16 @@ function TicketDetail({ id }: { id: string }) {
               <div className="flex items-center justify-between">
                 <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
                   <Info className="w-3 h-3" />
-                  {isInternal 
-                    ? "Private note for team coordination." 
+                  {isInternal
+                    ? "Private note for team coordination."
                     : "Public replies are visible to the customer in this conversation."}
                 </p>
                 <div className="flex items-center gap-2">
-                  <input 
+                  <TocynInput
                     type="file" aria-label="Reply attachments" disabled={isSubmitting}
-                    multiple 
-                    ref={fileInputRef} 
-                    className="hidden" 
+                    multiple
+                    ref={fileInputRef}
+                    className="hidden"
                     onChange={(e) => {
                       if (submission.current) return;
                       const selectedFiles = Array.from(e.currentTarget.files ?? []);
@@ -580,9 +581,9 @@ function TicketDetail({ id }: { id: string }) {
                         setNotice(`${selectedFiles.length} attachment${selectedFiles.length === 1 ? '' : 's'} selected.`);
                       }
                       if (fileInputRef.current) fileInputRef.current.value = '';
-                    }} 
+                    }}
                   />
-                  <button 
+                  <TocynButton
                     type="button"
                     ref={attachButtonRef}
                     aria-disabled={isSubmitting} aria-label="Attach files"
@@ -591,9 +592,9 @@ function TicketDetail({ id }: { id: string }) {
                     title="Attach files"
                   >
                     <Paperclip className="w-4 h-4" />
-                  </button>
-                  <button 
-                    type="submit" 
+                  </TocynButton>
+                  <TocynButton
+                    type="submit"
                     aria-disabled={!reply.trim() || isSubmitting}
                     className={clsx(
                       "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
@@ -602,7 +603,7 @@ function TicketDetail({ id }: { id: string }) {
                   >
                     <Send className="w-4 h-4" />
                     {isInternal ? "Add Note" : "Send Reply"}
-                  </button>
+                  </TocynButton>
                 </div>
               </div>
             </form>
@@ -620,7 +621,7 @@ function TicketDetail({ id }: { id: string }) {
             <div>
               <label htmlFor="ticket-priority" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Priority</label>
               <div className="mt-1">
-                <select
+                <TocynSelect
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   ref={node => { ticketSelectRefs.current.priority = node; }}
                   id="ticket-priority" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -635,13 +636,13 @@ function TicketDetail({ id }: { id: string }) {
                   <option value="normal">Normal</option>
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
-                </select>
+                </TocynSelect>
               </div>
             </div>
             <div>
               <label htmlFor="ticket-assigned_to" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Assigned To</label>
               <div className="mt-1">
-                <select
+                <TocynSelect
                   key={`ticket-assigned_to-${ticketSelectVersions.assigned_to}`}
                   ref={node => { ticketSelectRefs.current.assigned_to = node; }}
                   id="ticket-assigned_to" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -656,13 +657,13 @@ function TicketDetail({ id }: { id: string }) {
                   {agents?.map(agent => (
                     <option key={agent.id} value={agent.id}>{agent.full_name || agent.email}</option>
                   ))}
-                </select>
+                </TocynSelect>
               </div>
             </div>
             <div>
               <label htmlFor="ticket-group_id" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Group</label>
               <div className="mt-1">
-                <select
+                <TocynSelect
                   key={`ticket-group_id-${ticketSelectVersions.group_id}`}
                   ref={node => { ticketSelectRefs.current.group_id = node; }}
                   id="ticket-group_id" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -677,20 +678,20 @@ function TicketDetail({ id }: { id: string }) {
                   {groups?.map(group => (
                     <option key={group.id} value={group.id}>{group.name}</option>
                   ))}
-                </select>
+                </TocynSelect>
               </div>
             </div>
-            
+
             {ticketFields && ticketFields.filter(f => f.is_active).length > 0 && (
               <div className="pt-4 mt-4 border-t border-slate-200">
                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Custom Attributes</h4>
                 <div className="space-y-4">
                   {ticketFields.filter(f => f.is_active).map((field) => {
                     const value = ticket.custom_fields ? ticket.custom_fields[field.name] : '';
-                    
+
                     const handleSave = (newValue: any) => {
                       if (value === newValue) return;
-                      
+
                       void handleTicketChange({
                         custom_fields: {
                           ...(ticket.custom_fields || {}),
@@ -705,7 +706,7 @@ function TicketDetail({ id }: { id: string }) {
                           {field.label}
                         </label>
                         {field.field_type === 'select' && field.options ? (
-                          <select
+                          <TocynSelect
                             value={value || ''}
                             onChange={(e) => handleSave(e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
@@ -714,10 +715,10 @@ function TicketDetail({ id }: { id: string }) {
                             {field.options.split(',').map(s => s.trim()).filter(Boolean).map((opt) => (
                               <option key={opt} value={opt}>{opt}</option>
                             ))}
-                          </select>
+                          </TocynSelect>
                         ) : field.field_type === 'checkbox' ? (
                           <div className="flex items-center gap-2">
-                            <input
+                            <TocynInput
                               type="checkbox"
                               checked={value === true || value === 'true'}
                               onChange={(e) => handleSave(e.target.checked)}
@@ -726,10 +727,10 @@ function TicketDetail({ id }: { id: string }) {
                             <span className="text-sm font-medium text-slate-700">{field.label}</span>
                           </div>
                         ) : (
-                          <CustomFieldInput 
-                            field={field} 
-                            value={value} 
-                            onSave={handleSave} 
+                          <CustomFieldInput
+                            field={field}
+                            value={value}
+                            onSave={handleSave}
                           />
                         )}
                       </div>
@@ -783,7 +784,7 @@ function CustomFieldInput({ field, value, onSave }: { field: any, value: any, on
 
   if (field.field_type === 'textarea') {
     return (
-      <textarea
+      <TocynTextarea
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
@@ -794,7 +795,7 @@ function CustomFieldInput({ field, value, onSave }: { field: any, value: any, on
   }
 
   return (
-    <input
+    <TocynInput
       type="text"
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}

@@ -1,3 +1,4 @@
+import primitiveStyles from '@luminatick/ui/styles.css?inline';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -6,7 +7,7 @@ import './index.css';
 // The widget is intended to be self-initializing when the script is included.
 (function () {
   const CONTAINER_ID = 'lumina-widget-container';
-  
+
   if (document.getElementById(CONTAINER_ID)) {
     return;
   }
@@ -19,12 +20,15 @@ import './index.css';
   const root = document.createElement('div');
   root.id = 'lumina-widget-root';
   shadow.appendChild(root);
+  const primitiveStyleElement = document.createElement('style');
+  primitiveStyleElement.textContent = primitiveStyles;
+  shadow.appendChild(primitiveStyleElement);
 
   // Inject styles into Shadow DOM
   // Since we're in library mode, we might need a way to get the CSS string.
   // For now, let's assume we can inject it or use a script to find it.
   // A better way is to embed the styles in the JS bundle.
-  
+
   const styles = document.createElement('style');
   // In a real build, we'd replace this placeholder with the actual bundled CSS.
   // During dev, we can inject the styles.

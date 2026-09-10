@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -28,13 +29,13 @@ export function TicketFieldsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Custom Ticket Fields</h1>
           <p className="text-slate-500 mt-1">Manage extra attributes for your tickets.</p>
         </div>
-        <button
+        <TocynButton
           onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm shadow-brand-500/20 hover:bg-brand-700 transition-colors"
         >
           <Plus className="w-4 h-4" />
           Create Field
-        </button>
+        </TocynButton>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -47,12 +48,12 @@ export function TicketFieldsPage() {
             </div>
             <h3 className="text-lg font-bold text-slate-900 mb-2">No custom fields</h3>
             <p className="text-slate-500 mb-6">Create fields to collect specific information on tickets.</p>
-            <button
+            <TocynButton
               onClick={() => setIsModalOpen(true)}
               className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors"
             >
               Create your first field
-            </button>
+            </TocynButton>
           </div>
         ) : (
           <table className="w-full text-left text-sm">
@@ -82,8 +83,8 @@ export function TicketFieldsPage() {
                   <td className="px-6 py-4">
                     <span className={clsx(
                       "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
-                      field.is_active 
-                        ? "bg-green-50 text-green-700 border border-green-200" 
+                      field.is_active
+                        ? "bg-green-50 text-green-700 border border-green-200"
                         : "bg-slate-100 text-slate-500 border border-slate-200"
                     )}>
                       {field.is_active ? 'Active' : 'Inactive'}
@@ -97,8 +98,8 @@ export function TicketFieldsPage() {
       </div>
 
       {isModalOpen && (
-        <CreateFieldModal 
-          onClose={() => setIsModalOpen(false)} 
+        <CreateFieldModal
+          onClose={() => setIsModalOpen(false)}
           onSuccess={() => {
             setIsModalOpen(false);
             queryClient.invalidateQueries({ queryKey: ['ticket-fields'] });
@@ -147,15 +148,15 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">Create Ticket Field</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <TocynButton onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
-          </button>
+          </TocynButton>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Display Label</label>
-            <input
+            <TocynInput
               required
               type="text"
               value={formData.label}
@@ -167,7 +168,7 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
 
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Key Name</label>
-            <input
+            <TocynInput
               required
               type="text"
               value={formData.name}
@@ -180,7 +181,7 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
 
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Field Type</label>
-            <select
+            <TocynSelect
               value={formData.field_type}
               onChange={(e) => setFormData({ ...formData, field_type: e.target.value })}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
@@ -189,13 +190,13 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
               <option value="textarea">Textarea (Multi-line)</option>
               <option value="select">Dropdown (Select)</option>
               <option value="checkbox">Checkbox</option>
-            </select>
+            </TocynSelect>
           </div>
 
           {formData.field_type === 'select' && (
             <div className="animate-in slide-in-from-top-2">
               <label className="block text-sm font-bold text-slate-700 mb-1">Options</label>
-              <input
+              <TocynInput
                 required
                 type="text"
                 value={formData.options}
@@ -207,7 +208,7 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
           )}
 
           <div className="flex items-center gap-3 pt-2">
-            <button
+            <TocynButton
               type="button"
               onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
               className={clsx(
@@ -219,25 +220,25 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
                 "w-4 h-4 bg-white rounded-full absolute top-1 transition-transform shadow-sm",
                 formData.is_active ? "translate-x-5" : "translate-x-1"
               )} />
-            </button>
+            </TocynButton>
             <span className="text-sm font-medium text-slate-700">Active</span>
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-            <button
+            <TocynButton
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 border border-transparent rounded-lg transition-colors"
             >
               Cancel
-            </button>
-            <button
+            </TocynButton>
+            <TocynButton
               type="submit"
               disabled={mutation.isPending}
               className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-50"
             >
               {mutation.isPending ? 'Creating...' : 'Create Field'}
-            </button>
+            </TocynButton>
           </div>
         </form>
       </div>

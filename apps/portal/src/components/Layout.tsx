@@ -1,3 +1,4 @@
+import { TocynButton } from '@luminatick/ui/primitives';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { portalApi } from '../api/client';
@@ -36,14 +37,14 @@ export function Layout() {
               <span className="text-sm text-gray-600">
                 {user?.name} ({user?.email})
               </span>
-              <button
+              <TocynButton
                 onClick={handleLogout}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
                 title="Sign out of all sessions"
                 aria-label="Sign out of all sessions"
               >
                 <LogOut className="w-5 h-5" />
-              </button>
+              </TocynButton>
             </div>
           </div>
         </div>

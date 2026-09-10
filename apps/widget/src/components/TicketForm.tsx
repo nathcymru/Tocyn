@@ -1,3 +1,4 @@
+import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
 
@@ -47,12 +48,12 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
         </div>
         <h3 className="text-lg font-bold text-gray-900 mb-2">Ticket Submitted!</h3>
         <p className="text-gray-600 mb-6">We've received your request and will get back to you soon.</p>
-        <button
+        <TocynButton
           onClick={() => setStatus('idle')}
           className="text-blue-600 font-medium hover:underline"
         >
           Submit another ticket
-        </button>
+        </TocynButton>
       </div>
     );
   }
@@ -61,7 +62,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Your Name</label>
-        <input
+        <TocynInput
           type="text"
           required
           className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
@@ -72,7 +73,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       </div>
       <div>
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email Address</label>
-        <input
+        <TocynInput
           type="email"
           required
           className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
@@ -83,7 +84,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       </div>
       <div>
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Subject</label>
-        <input
+        <TocynInput
           type="text"
           required
           className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
@@ -94,7 +95,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       </div>
       <div>
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Message</label>
-        <textarea
+        <TocynTextarea
           required
           rows={3}
           className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
@@ -106,14 +107,14 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       {status === 'error' && (
         <p className="text-red-500 text-sm">Something went wrong. Please try again.</p>
       )}
-      <button
+      <TocynButton
         type="submit"
         disabled={status === 'submitting'}
         className="w-full py-2 px-4 rounded font-bold text-white transition-opacity disabled:opacity-50"
         style={{ backgroundColor: config.primaryColor }}
       >
         {status === 'submitting' ? 'Submitting...' : 'Send Message'}
-      </button>
+      </TocynButton>
     </form>
   );
 };
