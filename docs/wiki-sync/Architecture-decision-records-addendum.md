@@ -16,4 +16,20 @@ Also ensure the index continues to link:
 - ADR-0010 — Policy-gated actions and reference validation
 - ADR-0011 — Architectural milestones and private beta
 
+The accepted post-beta source pages are mirrored in this bundle and remain implementation pending:
+
+- [ADR-0016 — Helpdesk product boundary and release gates](ADR-0016-product-boundary-and-release-gates.md)
+- [ADR-0017 — Persistent operator workspace](ADR-0017-persistent-operator-workspace.md)
+- [ADR-0018 — Durable operator attention and continuity](ADR-0018-durable-operator-attention-and-continuity.md)
+- [ADR-0019 — Cognitive accessibility and attention control](ADR-0019-cognitive-accessibility-and-attention-control.md)
+- [ADR-0020 — Human-led operator AI](ADR-0020-human-led-ai-assistance.md)
+- [ADR-0021 — Operational observability and service-level objectives](ADR-0021-observability-and-accountable-feedback.md)
+- [ADR-0022 — Deployment residency and jurisdiction boundaries](ADR-0022-data-residency-and-storage-boundaries.md)
+- [ADR-0023 — Realtime support communications](ADR-0023-realtime-state-and-collaboration.md)
+- [ADR-0024 — Governed declarative operator applets](ADR-0024-governed-workspace-applets.md)
+- [ADR-0025 — Tenant knowledge grounding and document ingestion](ADR-0025-knowledge-and-contextual-assistance.md)
+- [ADR-0026 — Cloudflare Access workforce identity](ADR-0026-access-identity-and-permission-boundaries.md)
+- [ADR-0027 — Linked work and problem management](ADR-0027-linked-work-and-workflow-continuity.md)
+- [ADR-0028 — Bounded service feedback and operational reporting](ADR-0028-operator-feedback-and-learning-loops.md)
+
 If the live Wiki already contains ADR numbers above 0011 that conflict with this addendum, **do not overwrite them**. Stop publication, preserve the existing numbers, and renumber these new ADR source pages with explicit cross-links in a small follow-up PR.

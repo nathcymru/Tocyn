@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-09-10",
+  "issueBodyReadback": "pass",
+  "nativeDependencyReadback": "pass",
+  "projectForecastReadback": "pass",
+  "historicalBaselineActualEffortReadback": "unchanged",
+  "milestoneMembership": "actual issue memberships used; summary counters not trusted",
+  "beta1": {
+    "tag": "v0.4.0-beta.1",
+    "target": "049ea82a02571681f834bcd87d43253603edf71f",
+    "publishedAt": "2026-09-10T12:56:21Z"
+  },
+  "requiredCI": "pending alignment PR",
+  "signedIntegration": "pending",
+  "liveWiki": "pending reviewed publication",
+  "copilotReviewsRequested": 0
+}

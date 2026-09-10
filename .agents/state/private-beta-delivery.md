@@ -1,3 +1,5 @@
+> **Historical beta delivery record.** Current coordination and ready queue: [post-beta alignment](post-beta-alignment.md). Preserve this evidence; do not execute its old next actions.
+
 # Private-beta delivery coordination
 
 Updated 9 September 2026, 07:06 UTC. This is the authoritative coordinating view.

@@ -29,6 +29,10 @@ Each meaningful partial or complete delivery leaves an issue/PR completion recei
 - Merge is not automatically equivalent to issue completion.
 - Automated review is requested at meaningful PR boundaries rather than continuously.
 
+## Current direction addendum
+
+The owner-approved post-beta workflow uses zero default Copilot or automated review requests and permits the owner’s PR review bypass where explicitly governed. This does not weaken required CI, security, tenant-isolation, accessibility or release checks, and does not change baseline/forecast/actual accounting. See [ADR-0016](ADR-0016-product-boundary-and-release-gates.md) and [ADR-0028](ADR-0028-operator-feedback-and-learning-loops.md).
+
 ## Related
 
 - `AGENTS.md`

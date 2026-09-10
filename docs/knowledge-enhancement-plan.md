@@ -1,3 +1,5 @@
+> **Historical / superseded planning input.** Preserved for provenance; not current delivery authority. Follow the [approved master baseline](planning/post-beta-2026-09-10/README.md), its issue owners and accepted ADRs. Existing source behavior is evidence, not a replacement for that direction.
+
 # Phase 3.3: Knowledge Base Enhancement Plan
 
 This document outlines the architecture and implementation steps required to enhance the Knowledge Base page with category management, a markdown editor, and document lifecycle management.

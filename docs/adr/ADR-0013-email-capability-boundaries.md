@@ -32,3 +32,7 @@ A transport migration does not automatically implement the support channel. The 
 - `docs/architecture/channel-adapters.md`
 - M1.4 Transactional Mail
 - M7.5 Support Email
+
+## Current direction addendum
+
+The post-beta direction keeps authentication mail separate from support-email conversations. The historical local beta used local mail capture; no external beta mail delivery is required for the next workspace gate. See [ADR-0016](ADR-0016-product-boundary-and-release-gates.md) and [ADR-0027](ADR-0027-linked-work-and-workflow-continuity.md). This is implementation pending.

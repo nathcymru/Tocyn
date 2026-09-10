@@ -1,3 +1,5 @@
+> **Historical beta delivery record.** Current coordination and ready queue: [post-beta alignment](post-beta-alignment.md). Preserve this evidence; do not execute its old next actions.
+
 # Prepared successors after #60
 
 Preparation only, 9 September 2026. No successor implementation or completion claim.

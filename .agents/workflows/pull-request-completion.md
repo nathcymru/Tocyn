@@ -23,3 +23,5 @@ After a PR is accepted/merged:
 8. If Project access is unavailable, include the intended updates in the receipt and report the limitation.
 
 A merge is not automatically issue completion.
+
+Owner policy: use the standing PR-only approval bypass after exact-revision mandatory checks; record its use without calling it independent review. Copilot defaults to zero requests. Initial plan approval, where requested, remains separate. See AGENTS.md.

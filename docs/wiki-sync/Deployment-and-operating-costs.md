@@ -42,3 +42,8 @@ Record resource consumption during implementation acceptance so later cost forec
 ## Production boundary
 
 No document, passing CI run, milestone date or cost estimate authorises deployment. Remote provisioning/migration/cutover remains controlled by the relevant M0.3/M0.4 issue and explicit owner authority.
+
+
+## Current accepted boundary
+
+Beta.1 is complete in local Wrangler simulations with captured authentication mail. No remote resources were deployed. #159 owns observability/SLOs; #160 owns deployment residency, including separate storage/processing claims; #42 retains production acceptance. Current forecasts and full budget dependencies are in [[Post-beta-master-baseline]].

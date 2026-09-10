@@ -1,3 +1,5 @@
+> **Historical / superseded planning input.** Preserved for provenance; not current delivery authority. Follow the [approved master baseline](planning/post-beta-2026-09-10/README.md), its issue owners and accepted ADRs. Existing source behavior is evidence, not a replacement for that direction.
+
 # Luminatick Implementation Tasks
 
 ## Phase 1.1: Core Infrastructure & D1 Schema

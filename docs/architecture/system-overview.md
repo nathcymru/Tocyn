@@ -2,6 +2,8 @@
 
 Tocyn is being built as an omnichannel, multi-tenant helpdesk: service users contact support through a portal, embedded widget, programmatic API or external channel, while human operators work in one canonical conversation workspace. Bounded AI assistance and governed autonomous workflows extend that shared model; they do not create a separate helpdesk or bypass human control.
 
+The accepted post-beta direction is implementation pending. ADR-0016 through ADR-0028 define the product boundary, persistent workspace, durable attention, cognitive accessibility, human-led AI, observability, residency, realtime collaboration, governed applets, contextual knowledge, access boundaries, linked workflow and feedback evidence. These decisions do not imply that the corresponding features, external providers or remote resources exist.
+
 ## Approved target architecture
 
 **Approved / planned target, not a claim that every component is implemented or deployed.** The principal diagram shows the accepted system boundaries. The delivery-status section below identifies the current foundations and remaining work.
@@ -78,7 +80,7 @@ Target authority: [headless primitives #48](https://github.com/nathcymru/Tocyn/i
 | **Approved / planned; not yet implemented as the target** | Ark/Zag migration, tenant token API and reusable Shadow DOM wrapper; shared durable ingress/Queues/consumer/outbox; external adapters and canonical cross-channel continuity; governed autonomous reference execution. |
 | **Separate deployment gates** | Isolated beta environments/rehearsal and production readiness. Provider setup and infrastructure deployment are not implied by source, ADRs or this diagram. |
 
-The human-led API/portal first beta remains forecast for **21 November 2026**, candidate `v0.4.0-beta.1`. This release sequence does not remove later channels or headless UI from the approved product architecture.
+The local human-led beta was accepted on 9 September 2026 at `049ea82a02571681f834bcd87d43253603edf71f` and published as prerelease `v0.4.0-beta.1` on 10 September 2026. The next operator-facing `beta.2` remains future and requires the approved workspace gate, including full SLA clocks/pause-resume, waiting treatment and responsible-handler ownership/routing. This does not remove later channels or headless UI from the approved architecture.
 
 ## Current implementation / runtime
 
@@ -153,6 +155,12 @@ The first private beta intentionally proves the API/portal version of this flow 
 ## Current AI boundary
 
 Current AI code is advisory/stateless at the model call boundary: it generates embeddings, suggested operator responses and knowledge-grounded responses. It does not provide the approved future policy-gated customer-backend mutation framework. The latter is M4 work and must pass deployment-owner policy, tenant restriction, validation, approval where required, audit and takeover controls.
+
+The accepted human-led AI direction keeps assistance in the existing conversation/context/composer surfaces, with explicit operator acceptance and a complete AI-off path. It does not require API billing or extra spend as part of the workspace gate.
+
+## Planned operator-state boundary
+
+Drafts, snooze/resurface, waiting reasons, SLA clocks, responsible-handler routing, durable activity and collision state are additive to canonical ticket/conversation state. They must use authenticated tenant/user-scoped storage and server authority. Realtime signals invalidate or notify; they are not the source of truth. Capacity-aware routing, external applets and provider-specific integrations remain separate implementation increments over these contracts.
 
 ## Deployment status
 

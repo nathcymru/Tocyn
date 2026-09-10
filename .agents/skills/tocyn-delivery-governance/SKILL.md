@@ -7,7 +7,7 @@ description: Keep Tocyn issues, pull requests, Project progress and baseline/for
 2. Before coding, confirm no conflicting active PR. Work on a dedicated issue branch. Set/confirm Project status `In progress` and `Actual start` when Project write access exists.
 3. Preserve baseline dates. Never move a baseline to hide lateness. Update only forecast dates when evidence changes the likely schedule.
 4. Use one coherent PR per issue where practical. If stopping with useful partial work, push it to the existing branch and keep/open a draft PR with `Progresses #NN`, an explicit remaining-work list and validation evidence.
-5. Before review, run the relevant deterministic checks. Consolidate fixes; avoid repeated automated review cycles for trivial intermediate edits.
+5. Before review, run the relevant deterministic checks. Default to zero Copilot reviews. Follow AGENTS.md standing PR-only owner bypass, exact-revision checks and manual-only automatic-review settings; consolidate any justified exceptional review.
 6. After a meaningful partial merge, add an issue progress receipt containing: delivered outcome, PR/commit, checks, acceptance criteria advanced, remaining work, risks/blockers, defensible `Progress %`, and any forecast change with reason.
 7. After complete delivery, prove every acceptance criterion against the integrated revision, set `Progress % = 100`, record `Actual completion`, set Project status `Done`, close the issue and update affected dependent forecasts.
 8. Schedule variance is forecast/actual completion minus immutable baseline target in working days. Negative is ahead; positive is behind. Reforecast affected critical/near-critical successors when the movement is material.

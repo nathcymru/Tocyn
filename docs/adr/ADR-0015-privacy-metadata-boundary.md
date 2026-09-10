@@ -38,3 +38,7 @@ As of the decision date, `main` does not yet contain FidesLang declarations. #16
 - `docs/privacy/privacy-architecture.md`
 - issues #16 and #17
 - M5.4 Privacy Metadata & Controls
+
+## Current direction addendum
+
+Workspace drafts, attention state, linked work, feedback and contextual assistance remain subject to this boundary: metadata, presentation state and operator feedback never grant tenant access. Their planned storage and retention treatment is described in [ADR-0018](ADR-0018-durable-operator-attention-and-continuity.md), [ADR-0022](ADR-0022-data-residency-and-storage-boundaries.md) and [ADR-0026](ADR-0026-access-identity-and-permission-boundaries.md). This is implementation pending.

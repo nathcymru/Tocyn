@@ -2,6 +2,8 @@
 
 The approved target [system overview](system-overview.md) places these channel paths alongside the shared headless browser surfaces and distinct ingress, consumer and outbound-dispatch responsibilities. API/portal-first release sequencing does not narrow the omnichannel architecture.
 
+Accepted post-beta direction is implementation pending. Every provider UI is planned to render through the persistent operator workspace and shared composer; provider-specific inboxes are not an accepted architecture. See [ADR-0017](../adr/ADR-0017-persistent-operator-workspace.md), [ADR-0020](../adr/ADR-0020-human-led-ai-assistance.md) and [ADR-0027](../adr/ADR-0027-linked-work-and-workflow-continuity.md).
+
 ## Principle
 
 External messaging systems are adapters around Tocyn's canonical ticket/conversation state. They must not create parallel helpdesk models or make provider-specific identifiers the source of tenant authority.
@@ -73,6 +75,8 @@ Normalisation happens **after** the provider boundary has been authenticated/ver
 External systems can retry, reorder or ambiguously acknowledge messages. Adapters therefore need provider-scoped idempotency/deduplication and a durable outbound lifecycle. A transport response should not be represented as delivered unless the provider semantics support that conclusion.
 
 The approved shared ingestion/dispatch work is owned by roadmap issues #87/#88 and related integration issues. Provider-specific behaviour belongs in the relevant M7 milestone rather than leaking into the core conversation model.
+
+Backend adapter contracts may progress independently. User-facing channel acceptance still requires the shared workspace/composer capability contract, contextual channel restrictions, draft preservation and tenant-isolation evidence; this does not pull all M7 providers into the next operator gate.
 
 ## Email boundaries
 

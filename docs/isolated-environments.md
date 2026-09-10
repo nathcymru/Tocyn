@@ -1,6 +1,6 @@
 # Isolated preview and beta release preparation
 
-This is **source preparation** for [#57](https://github.com/nathcymru/Tocyn/issues/57). It is not evidence of a deployed preview or beta, protected GitHub environment, Cloudflare resource, Access policy, Resend delivery, migration, or rollback rehearsal. The current owner-directed beta uses **local Wrangler simulations and local mail capture only**; see [local authentication capture](local-auth-capture.md). Remote actions are prohibited for this phase. The owner choices below are historical future prerequisites, not instructions to perform them now.
+This is **source preparation** for [#57](https://github.com/nathcymru/Tocyn/issues/57). It is not evidence of a deployed preview or beta, protected GitHub environment, Cloudflare resource, Access policy, Resend delivery, migration, or rollback rehearsal. The accepted beta used **local Wrangler simulations and local mail capture only**; see [local authentication capture](local-auth-capture.md). It was accepted at `049ea82a02571681f834bcd87d43253603edf71f` on 9 September 2026 and published as `v0.4.0-beta.1` on 10 September 2026. Remote actions remain prohibited for this source-preparation phase. A future `beta.2` is gated separately by the approved operator workspace and production-readiness decisions; no external beta mail delivery is a prerequisite for that gate. The owner choices below are historical future prerequisites, not instructions to perform them now.
 
 ## Prepared source controls
 
