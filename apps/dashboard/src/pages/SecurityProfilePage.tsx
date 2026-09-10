@@ -1,5 +1,6 @@
+import { TocynConfirmDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -10,66 +11,66 @@ interface SetupResponse {
 }
 
 export function SecurityProfilePage() {
-  const { user, updateUser } = useAuthStore();
+  const { user, logout, setAuth, sessionGeneration } = useAuthStore();
   const [setupData, setSetupData] = useState<SetupResponse | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const pending = useRef(false);
+  const setupButton = useRef<HTMLButtonElement>(null);
+  const codeInput = useRef<HTMLInputElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const disableButton = useRef<HTMLButtonElement>(null);
+  const [disableOpen, setDisableOpen] = useState(false);
+  useEffect(() => { setSetupData(null); setCode(''); setDisableOpen(false); }, [sessionGeneration]);
+  useEffect(() => { if (setupData) codeInput.current?.focus(); }, [setupData]);
+  useEffect(() => { if (successMessage) heading.current?.focus(); }, [successMessage]);
+
   const startSetup = async () => {
+    if (pending.current) return;
+    pending.current = true; setIsLoading(true); setError(null); setSuccessMessage(null);
+    const generation = useAuthStore.getState().sessionGeneration;
     try {
-      setIsLoading(true);
-      setError(null);
       const data = await dashboardApi.post<SetupResponse>('/auth/mfa/setup');
+      if (useAuthStore.getState().sessionGeneration !== generation) return;
       setSetupData(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to start MFA setup');
-    } finally {
-      setIsLoading(false);
-    }
+    } catch {
+      if (useAuthStore.getState().sessionGeneration === generation) setError('Setup could not be started. Please try again.');
+    } finally { pending.current = false; setIsLoading(false); }
   };
 
   const confirmSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code || code.length !== 6) {
-      setError('Please enter a valid 6-digit code');
-      return;
-    }
-
+    if (pending.current || !user) return;
+    if (!/^\d{6}$/.test(code)) { setError('Please enter a valid 6-digit code'); return; }
+    pending.current = true; setIsLoading(true); setError(null); setSuccessMessage(null);
+    const generation = useAuthStore.getState().sessionGeneration;
     try {
-      setIsLoading(true);
-      setError(null);
-      await dashboardApi.post('/auth/mfa/confirm', { code });
-      updateUser({ mfa_enabled: true });
-      setSetupData(null);
-      setCode('');
+      const data = await dashboardApi.post<{token:string;user:typeof user}>('/auth/mfa/confirm', { code });
+      if (useAuthStore.getState().sessionGeneration !== generation) return;
+      if (typeof data.token !== 'string' || !data.token || data.user?.id !== user.id || !data.user.mfa_enabled) throw new Error('Invalid confirmation');
+      setAuth(data.token, {...user,...data.user});
+      setSetupData(null); setCode('');
       setSuccessMessage('Two-Factor Authentication has been successfully enabled.');
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to verify code. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    } catch {
+      if (useAuthStore.getState().sessionGeneration === generation) setError('Verification could not be confirmed. Check your code and try again.');
+    } finally { pending.current = false; setIsLoading(false); }
   };
 
   const disableMfa = async () => {
-    if (!window.confirm('Are you sure you want to disable Two-Factor Authentication? This will make your account less secure.')) {
-      return;
-    }
-
+    if (pending.current || !user || user.role === 'admin' || user.role === 'agent') return;
+    pending.current = true; setIsLoading(true); setError(null); setSuccessMessage(null);
+    const generation = useAuthStore.getState().sessionGeneration;
     try {
-      setIsLoading(true);
-      setError(null);
       await dashboardApi.post('/auth/mfa/disable');
-      updateUser({ mfa_enabled: false });
-      setSuccessMessage('Two-Factor Authentication has been disabled.');
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to disable MFA');
-    } finally {
-      setIsLoading(false);
-    }
+      if (useAuthStore.getState().sessionGeneration !== generation) return;
+      // The authority-change trigger revokes this token; no replacement is returned.
+      setSetupData(null); setCode(''); setDisableOpen(false); logout();
+    } catch {
+      if (useAuthStore.getState().sessionGeneration === generation) setError('Disabling two-factor authentication could not be confirmed. It remains shown as enabled.');
+    } finally { pending.current = false; setIsLoading(false); }
   };
 
   const getSecretFromUri = (uri: string) => {
@@ -84,15 +85,19 @@ export function SecurityProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <TocynConfirmDialog open={disableOpen} onOpenChange={setDisableOpen} busy={isLoading}
+        title="Disable two-factor authentication?" description="This will make your account less secure and sign you out. You will need to sign in again."
+        confirmLabel="Disable 2FA" error={error ?? undefined} onConfirm={() => { void disableMfa(); }}
+        finalFocusEl={() => user.mfa_enabled ? disableButton.current : heading.current} />
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Security Profile</h1>
+        <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Security Profile</h1>
         <p className="mt-1 text-sm text-gray-500">
           Manage your account security and two-factor authentication settings.
         </p>
       </div>
 
       {successMessage && (
-        <div className="bg-green-50 border-l-4 border-green-400 p-4">
+        <div role="status" className="bg-green-50 border-l-4 border-green-400 p-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <Shield className="h-5 w-5 text-green-400" />
@@ -104,8 +109,8 @@ export function SecurityProfilePage() {
         </div>
       )}
 
-      {error && (
-        <div className="bg-red-50 border-l-4 border-red-400 p-4">
+      {error && !disableOpen && (
+        <div role="alert" className="bg-red-50 border-l-4 border-red-400 p-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <AlertTriangle className="h-5 w-5 text-red-400" />
@@ -143,7 +148,8 @@ export function SecurityProfilePage() {
                 ) : (
                   <TocynButton
                     type="button"
-                    onClick={disableMfa}
+                    ref={disableButton}
+                    onClick={() => { setError(null); setDisableOpen(true); }}
                     disabled={isLoading}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
                   >
@@ -157,6 +163,7 @@ export function SecurityProfilePage() {
                 {!setupData ? (
                   <TocynButton
                     type="button"
+                    ref={setupButton}
                     onClick={startSetup}
                     disabled={isLoading}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
@@ -182,14 +189,14 @@ export function SecurityProfilePage() {
 
                     <div className="border-t border-gray-200 pt-6">
                       <h4 className="font-medium text-gray-900 mb-4">Step 2: Verify Code</h4>
-                      <form onSubmit={confirmSetup} className="flex gap-4 items-end">
+                      <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className="flex gap-4 items-end">
                         <div className="flex-1 max-w-xs">
                           <label htmlFor="code" className="block text-sm font-medium text-gray-700">
                             Authentication Code
                           </label>
                           <TocynInput
                             type="text"
-                            id="code"
+                            id="code" ref={codeInput} inputMode="numeric" autoComplete="one-time-code" disabled={isLoading}
                             value={code}
                             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
@@ -207,7 +214,7 @@ export function SecurityProfilePage() {
                         </TocynButton>
                         <TocynButton
                           type="button"
-                          onClick={() => setSetupData(null)}
+                          onClick={() => { setSetupData(null); setCode(''); setError(null); requestAnimationFrame(() => setupButton.current?.focus()); }}
                           disabled={isLoading}
                           className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
