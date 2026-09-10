@@ -1,4 +1,5 @@
 import primitiveStyles from '@luminatick/ui/styles.css?inline';
+import { EnvironmentProvider } from '@luminatick/ui/ark';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -54,7 +55,9 @@ import './index.css';
 
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
-      <App />
+      <EnvironmentProvider value={() => shadow}>
+        <App />
+      </EnvironmentProvider>
     </React.StrictMode>
   );
 })();

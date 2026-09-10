@@ -13,3 +13,9 @@ The fixture waits for combobox focus restoration to settle across two animation 
 With the existing local synthetic operator fixture running, `node tools/ui-browser/contrast-check.mjs http://127.0.0.1:5190` verifies three previously failing text pairs in the actual dashboard. It uses only loopback HTTP, blocks other origins, obtains synthetic fixture authentication without recording tokens, and creates no saved data. The opaque sRGB test rejects unsupported transparency/image layers rather than asserting their contrast. Node22 and the installed Playwright runtime are required.
 
 These normal text pairs use the4.5:1 threshold in [WCAG2.2 Contrast Minimum](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html). This targeted regression is not a full contrast audit: placeholders, icons, focus indicators, hover states, other pages and themes remain separate acceptance.
+
+## Built legacy widget interaction
+
+Run `npm run build --workspace=apps/widget`, then `node tools/ui-browser/widget-check.mjs` from the root using the same Node/Playwright prerequisites. The script serves the actual IIFE build in an ephemeral loopback page, intercepts only synthetic local configuration/session/ticket responses, blocks other origins and disposes browser/server. It verifies the real legacy ShadowRoot bootstrap, open/close focus, manual keyboard tabs, preserved drafts, failed submission/retry and AI-off ticket use. Source and artifact hashes accompany results.
+
+The negative control without EnvironmentProvider times out on ArrowRight navigation. The original library build fails before launch with an undefined Node process reference. Tests now exercise those actual browser boundaries; no Node shim is injected. This does not accept #67’s future custom-element lifecycle, styling isolation or multi-instance contract, and does not prove screen-reader/visual or backend authentication behavior.

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "recordedAt": "2026-09-10T19:41:08.786Z",
+  "revision": "2284a68aed0377d4477659bb6f41a070a61f73d7",
+  "workingTreeStatus": "M .agents/state/ui-48.md\n M apps/widget/src/main.tsx\n M apps/widget/vite.config.ts\n M packages/ui/src/ark.ts\n M tools/ui-browser/README.md\n?? docs/security/evidence/ui-48-widget-2284a68.json\n?? tools/ui-browser/widget-check.mjs",
+  "sourceHashes": {
+    "apps/widget/src/main.tsx": "ff124c72a89add5acbbcfcd6186b385cbf6c1a6104edbce7e008cf67458916f6",
+    "apps/widget/src/App.tsx": "2251c36e93ac189b18b7609470349cc22cfa50c671a93e2a2fc72b1705159fa4",
+    "apps/widget/src/components/TicketForm.tsx": "a765a625caa56d65e24be61a87b5a18af0a469aa0f6998d914e82beae532a0b7",
+    "apps/widget/vite.config.ts": "740f62090f20e54327edc75abae077a57dbe5cc02fd7e8a30d00e236b19ca3e9",
+    "packages/ui/src/ark.ts": "843b29747bac7c8f0aa97d42a5efddfc1b546f3072e9ff446dc95527ab579193",
+    "tools/ui-browser/widget-check.mjs": "0f1a89ce14569ba33365aa0d0a1750f1b4f4bb23be6593960d19f7baeb41599c"
+  },
+  "bundleSha256": "5706e5253cc0ad030be8cc27f547a8d407484387e31d05249761411a4a93aa72",
+  "node": "v22.19.0",
+  "browser": "151.0.7922.34",
+  "results": [
+    {
+      "aiChat": true,
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "manual keyboard tabs",
+        "cross-tab draft retention",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    },
+    {
+      "aiChat": false,
+      "result": "passed",
+      "submissions": 2,
+      "checks": [
+        "real legacy shadow-root bootstrap",
+        "open/close focus",
+        "AI-off ticket path",
+        "failed-draft retention",
+        "failed submit/retry focus",
+        "new draft focus"
+      ]
+    }
+  ],
+  "limitations": [
+    "Fresh production widget build required.",
+    "Synthetic intercepted backend; no authentication/tenant or provider integration proof.",
+    "Existing legacy CSS/bootstrap only; no theme, visual, wrapper67, multi-instance or screen-reader acceptance."
+  ]
+}

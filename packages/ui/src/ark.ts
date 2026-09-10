@@ -8,3 +8,4 @@ export { Combobox, type ComboboxInputValueChangeDetails } from '@ark-ui/react/co
 export { Popover } from '@ark-ui/react/popover';
 export { Splitter } from '@ark-ui/react/splitter';
 export { Tabs } from '@ark-ui/react/tabs';
+export { EnvironmentProvider, type EnvironmentProviderProps } from '@ark-ui/react/environment';
