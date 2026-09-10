@@ -2,13 +2,13 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 10 September 2026, 23:01 BST
+## Current state — 10 September 2026, 23:13 BST
 
 Accepted main: `9cee350c36f49b9459fad3db42aadc8d25de848b` (partial PR #170 integration, 21:40 UTC). Its valid GitHub signature and tree `42aaa36c9d0b0bd94d44abd2e52831365370f902` match reviewed head `6d3ce483248bc87c6b673f066f15fcc1c7c522be`. All required checks passed, no review threads, standing review-only owner bypass used, zero Copilot reviews. #159 remains OPEN / Project In progress; no 100% or actual-completion claim.
 
 Earlier accepted #127/#50/#160/#79 and bounded #152 compatibility correction remain unchanged. Full #152 remains open.
 
-- **#48 / draft #167:** `/private/tmp/tocyn-beta2-48`, `codex/48-headless-primitives`, rebased on accepted main. Current retained controls, security recovery and built-widget shadow styles are implemented. Combined suites: dashboard136, portal61, server512, widget11, sharedUI7; all three fresh builds pass. Default widget visual checks cover desktop/320px/short viewports, required text and focus contrast, targets and keyboard scrolling; spoken controls rechecked. Clean8efac1d numeric receipts pass all22limits; refreshed-head CI remains required. Candidate2c2680a required CI/security passes; current editor edits require new checks. Viewer-presence spoken evidence and integrated Worker graph/runtime are recorded. Coordinator found missing editor labels/error semantics despite the earlier worker audit; correction, browser/VoiceOver proof and final pending/stale-save tests are in progress. Do not close #48 before their integration.
+- **#48 / draft #167:** `/private/tmp/tocyn-beta2-48`, `codex/48-headless-primitives`, rebased on accepted main. Current retained controls, security recovery and built-widget shadow styles are implemented. Combined suites: dashboard136, portal61, server512, widget11, sharedUI7; all three fresh builds pass. Default widget visual checks cover desktop/320px/short viewports, required text and focus contrast, targets and keyboard scrolling; spoken controls rechecked. Clean8efac1d numeric receipts pass all22limits; refreshed-head CI remains required. Candidate2c2680a required CI/security passes; editor and remaining-label edits require new checks; full dashboard143tests pass after correcting the menu test input timing. Viewer-presence spoken evidence and integrated Worker graph/runtime are recorded. Coordinator found missing editor labels/error semantics despite the earlier worker audit; editor correction/browser/VoiceOver/recovery checks pass; retained setting/custom-field labels also corrected. Final new-head validation remains. Do not close #48 before their integration.
 - **#159 / merged #170:** foundation accepted; full issue remains incomplete. Fixed privacy-safe HTTP/resource events, credential/canonical summaries, bounded local collector/configuration and cost reservation are on main. Pre-tenant/legacy resource coverage, explicit result classification and complete acceptance remain; fixed-port real realtime proof is unavailable while the owner fixture uses8787. Continue from current main in a new bounded issue branch, not the merged branch. See `observability-159.md` for specific remaining work.
 
 ## Allocation and capacity
@@ -22,7 +22,7 @@ Actual dedicated Codex workers this interval: `auth_sli_159` Terra/high for cred
 3. Independent hardening: #64 budgets / #91 journals use accepted #50; remaining #159 active-resource coverage stays tracked. Preserve #50→#64/#91→#51→#87→#88. Full #152 still depends on #151.
 4. Publish reviewed Wiki snapshot and update issue receipts at integration boundaries. Keep existing owner servers and historical worktrees intact.
 
-Reference forecast remains **22 January 2027** for beta.2 and **21 January 2028** for expanded scope. Two lanes, eight hours Monday–Saturday, threefold allowance; baselines unchanged. Partial #170 does not imply an effort reduction or new forecast. Last human operational update22:38BST; next23:08BST while active. Beta.2 is not ready.
+Reference forecast remains **22 January 2027** for beta.2 and **21 January 2028** for expanded scope. Two lanes, eight hours Monday–Saturday, threefold allowance; baselines unchanged. Partial #170 does not imply an effort reduction or new forecast. Last human operational update23:07BST; next23:37BST while active. Beta.2 is not ready.
 
 <details>
 <summary>Historical coordination checkpoints — superseded by current state above</summary>

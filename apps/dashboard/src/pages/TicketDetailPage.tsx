@@ -1,7 +1,7 @@
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useId } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTicket, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
@@ -41,6 +41,7 @@ function TicketDetail({ id }: { id: string }) {
   const { data: settings } = useSettings();
   const ticketPrefix = settings?.TICKET_PREFIX || '#';
   const { data: ticketFields } = useTicketFields();
+  const customFieldPrefix = useId();
   const updateTicket = useUpdateTicket();
   const { presence, updateLocation, lastMessage } = useRealtime();
   const [reply, setReply] = React.useState('');
@@ -517,6 +518,7 @@ function TicketDetail({ id }: { id: string }) {
                       </TocynButton>
                       <TocynButton
                         type="button"
+                        aria-label="Dismiss suggested reply"
                         onClick={() => setSuggestion(null)}
                         className="text-slate-400 hover:text-slate-600"
                       >
@@ -696,6 +698,7 @@ function TicketDetail({ id }: { id: string }) {
                 <div className="space-y-4">
                   {ticketFields.filter(f => f.is_active).map((field) => {
                     const value = ticket.custom_fields ? ticket.custom_fields[field.name] : '';
+                    const inputId = `${customFieldPrefix}-${field.id}`;
 
                     const handleSave = (newValue: any) => {
                       if (value === newValue) return;
@@ -710,11 +713,12 @@ function TicketDetail({ id }: { id: string }) {
 
                     return (
                       <div key={field.id}>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                        <label htmlFor={inputId} className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
                           {field.label}
                         </label>
                         {field.field_type === 'select' && field.options ? (
                           <TocynSelect
+                            id={inputId}
                             value={value || ''}
                             onChange={(e) => handleSave(e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
@@ -727,6 +731,7 @@ function TicketDetail({ id }: { id: string }) {
                         ) : field.field_type === 'checkbox' ? (
                           <div className="flex items-center gap-2">
                             <TocynInput
+                              id={inputId}
                               type="checkbox"
                               checked={value === true || value === 'true'}
                               onChange={(e) => handleSave(e.target.checked)}
@@ -736,6 +741,7 @@ function TicketDetail({ id }: { id: string }) {
                           </div>
                         ) : (
                           <CustomFieldInput
+                            id={inputId}
                             field={field}
                             value={value}
                             onSave={handleSave}
@@ -779,7 +785,7 @@ function TicketDetail({ id }: { id: string }) {
   );
 }
 
-function CustomFieldInput({ field, value, onSave }: { field: any, value: any, onSave: (v: any) => void }) {
+function CustomFieldInput({ id, field, value, onSave }: { id: string, field: any, value: any, onSave: (v: any) => void }) {
   const [localValue, setLocalValue] = useState(value || '');
 
   useEffect(() => {
@@ -793,6 +799,7 @@ function CustomFieldInput({ field, value, onSave }: { field: any, value: any, on
   if (field.field_type === 'textarea') {
     return (
       <TocynTextarea
+        id={id}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
@@ -804,6 +811,7 @@ function CustomFieldInput({ field, value, onSave }: { field: any, value: any, on
 
   return (
     <TocynInput
+      id={id}
       type="text"
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}

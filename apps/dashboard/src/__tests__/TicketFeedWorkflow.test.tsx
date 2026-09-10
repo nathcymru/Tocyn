@@ -178,6 +178,9 @@ it('names ticket actions and restores trigger focus when the disclosure is dismi
   fireEvent.click(trigger);
   await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
   const action = await screen.findByRole('link', { name: 'View Ticket' });
+  // Zag defers dismissable-layer registration until the popup commits. Model the
+  // next browser input frame rather than firing Escape in the opening commit.
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
   action.focus(); fireEvent.keyDown(action, { key: 'Escape' });
   await waitFor(() => expect(trigger).toHaveFocus()); expect(trigger).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('link', { name: 'View Ticket' })).not.toBeInTheDocument();

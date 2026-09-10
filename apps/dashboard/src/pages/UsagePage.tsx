@@ -146,10 +146,11 @@ export function UsagePage() {
           <h4 className="font-medium text-slate-900 mb-4">2. Enter your credentials:</h4>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="cloudflare-account-id" className="block text-sm font-medium text-slate-700 mb-1">
                 Cloudflare Account ID
               </label>
               <TocynInput
+                id="cloudflare-account-id"
                 type="text"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
@@ -158,10 +159,11 @@ export function UsagePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="cloudflare-api-token" className="block text-sm font-medium text-slate-700 mb-1">
                 Cloudflare API Token
               </label>
               <TocynInput
+                id="cloudflare-api-token"
                 type="password"
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
