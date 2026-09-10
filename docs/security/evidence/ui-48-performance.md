@@ -49,3 +49,16 @@ Fresh manifest builds now distinguish all JS/CSS assets from the initial entrypo
 - Loading is announced; a module/render failure focuses a safe message and offers a document reload instead of retrying React's cached lazy rejection. The boundary does not change authentication state.
 
 Portal61tests, TypeScript/build and lint pass. No browser startup/interaction timing or numeric performance-budget pass is inferred. The increased total remains visible and needs acceptance investigation; the initial-payload improvement does not replace that metric.
+
+## Controlled local browser harness
+
+`tools/ui-performance/browser-evidence.mjs` loads fresh production login routes for dashboard and portal in isolated Chromium contexts, with serial alternating baseline/candidate samples. It measures usable-submit observation and native-click-to-visible synthetic-denial recovery, preserving raw samples and nearest-rank p50/p95/p99 alongside revision, artifact and tool metadata. All requests stay on a temporary127.0.0.1 static server; outbound requests are blocked, and authentication/config responses are synthetic. No real credentials, mail or provider are used.
+
+Use the installed Playwright runtime via Node module resolution (for example an explicit `NODE_PATH` to the approved bundled runtime); the harness never downloads browsers. After fresh baseline/candidate builds, run:
+
+```sh
+node tools/ui-performance/browser-evidence.mjs BASELINE_ROOT CANDIDATE_ROOT 20 > browser-comparison.json
+node --test tools/ui-performance/browser-evidence.test.mjs
+```
+
+Limits: warm browser/OS caches, fresh browser contexts, no-store uncompressed assets, no throttling, shared machine load, reduced motion, startup observation overhead and two-animation-frame rendering approximation. This is a login-only performance scenario, not cold-start, backend authentication, authenticated workspace, widget or full accessibility acceptance. Numeric CI budgets remain open until the measured regression profile is assessed; the harness does not declare a performance pass.
