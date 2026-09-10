@@ -283,7 +283,14 @@ function TicketDetail({ id }: { id: string }) {
 
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reply.trim() || submission.current || visiblePendingAttachments.length) return;
+    if (!reply.trim() || submission.current) return;
+    if (visiblePendingAttachments.some(attachment => attachment.status === 'uploading')) return;
+    const failedAttachments = visiblePendingAttachments.filter(attachment => attachment.status === 'error');
+    if (failedAttachments.length) {
+      failedAttachments.forEach(retryAttachment);
+      setNotice('Retrying failed attachment uploads before sending.');
+      return;
+    }
     submission.current = true;
     setReplyError(null);
     setNotice('');
@@ -669,7 +676,7 @@ function TicketDetail({ id }: { id: string }) {
                     <div key={attachment.id} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
                       <Paperclip className="w-3 h-3 text-slate-500" />
                       <span className="truncate max-w-[150px]">{attachment.file.name}</span>
-                      <span role="status" className="text-slate-600">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
+                      <span role={attachment.status === 'error' ? 'alert' : 'status'} className="text-slate-600">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
                       {attachment.status === 'error' && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} className="underline">Retry upload</TocynButton>}
                       <TocynButton
                         type="button"

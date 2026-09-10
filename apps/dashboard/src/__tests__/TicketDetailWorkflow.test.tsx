@@ -81,7 +81,7 @@ it('snapshots native file selection before clearing the input and preserves expl
   });
   const remove = await screen.findByRole('button', { name: 'Remove selected.txt' });
   expect(nativeFiles).toHaveLength(0);
-  expect(vi.mocked(fetch).mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
+  expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true);
   remove.focus(); fireEvent.click(remove);
   expect(screen.queryByRole('button', { name: 'Remove selected.txt' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Attach files' })).toHaveFocus();
@@ -377,6 +377,7 @@ it('retains uploaded attachments after a rejected internal note and reuses them 
   fireEvent.click(screen.getByRole('button',{name:'Internal Note'}));
   expect(screen.getByRole('button',{name:'Internal Note'})).toHaveAttribute('aria-pressed','true');
   fireEvent.change(screen.getByLabelText('Reply attachments'),{target:{files:[new File(['synthetic attachment'],'note.txt',{type:'text/plain'})]}});
+  await waitFor(()=>expect(screen.queryByText('Uploading…')).not.toBeInTheDocument());
   expect(screen.getByRole('button',{name:'Add Note'})).toHaveAttribute('aria-disabled','true');
   fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Synthetic private note'}});
   fireEvent.click(screen.getByRole('button',{name:'Add Note'}));
@@ -417,11 +418,13 @@ it('waits for all pending attachment outcomes before unlocking a partial-failure
   fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Partial attachment retry'}});
   const send=screen.getByRole('button',{name:'Send Reply'});send.focus();fireEvent.click(send);
   await waitFor(()=>expect(uploads).toBe(2));
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByText('Upload failed.')).toBeInTheDocument();
   expect(send).toHaveAttribute('aria-disabled','true');expect(document.activeElement).toBe(send);
   fireEvent.click(send);expect(uploads).toBe(2);
-  sibling.resolve(json({key:'synthetic/sibling'}));await screen.findByRole('alert');
-  fireEvent.click(send);await waitFor(()=>expect(posts).toBe(1));expect(uploads).toBe(3);
+  sibling.resolve(json({key:'synthetic/sibling'}));await screen.findByText('Upload failed.');
+  fireEvent.click(send);await waitFor(()=>expect(uploads).toBe(3));
+  await waitFor(()=>expect(screen.queryByText('Uploading…')).not.toBeInTheDocument());
+  fireEvent.click(send);await waitFor(()=>expect(posts).toBe(1));
 });
 
 it('replaces a pre-commit read when event and mutation invalidations overlap',async()=>{
