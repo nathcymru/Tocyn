@@ -37,6 +37,11 @@ export class StatelessAiService {
     }
   }
 
+  /** Records deterministic fallback selection, never its text or a model invocation. */
+  private fallback(response: string): Promise<string> {
+    return measureResourceOperation({ resource: 'ai', operation: 'fallback', emit: this.emit, execute: () => response });
+  }
+
   private sanitizeInput(text: string | null | undefined): string {
     if (!text) return '';
     return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -70,22 +75,24 @@ ${sanitizedInput}
 
 Please provide a suggested response:`;
 
-      const result = await this.ai.run('@cf/meta/llama-3-8b-instruct', {
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        max_tokens: 1024,
-      });
+      return await measureResourceOperation({ resource: 'ai', operation: 'run', emit: this.emit, execute: async () => {
+        const result = await this.ai.run('@cf/meta/llama-3-8b-instruct', {
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: 1024,
+        });
 
-      if (!result.response) {
-        throw new Error('No response returned from AI model');
-      }
+        if (!result.response) {
+          throw new Error('No response returned from AI model');
+        }
 
-      return result.response;
+        return result.response;
+      } });
     } catch (error) {
       console.error('AI Suggestion error:', { category: errorCategory(error) });
-      return "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
+      return this.fallback("I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.");
     }
   }
 
@@ -111,15 +118,15 @@ IMPORTANT RULES:
         { role: 'user', content: userMessage }
       ];
 
-      const result = await this.ai.run('@cf/meta/llama-3-8b-instruct', {
+      const result = await measureResourceOperation({ resource: 'ai', operation: 'run', emit: this.emit, execute: () => this.ai.run('@cf/meta/llama-3-8b-instruct', {
         messages: messages as any,
         max_tokens: 512,
-      });
+      }) });
 
-      return result.response || "I'm sorry, I couldn't generate a response.";
+      return result.response || this.fallback("I'm sorry, I couldn't generate a response.");
     } catch (error) {
       console.error('AI Response error:', { category: errorCategory(error) });
-      return "I'm having trouble connecting to my brain. Please try again later.";
+      return this.fallback("I'm having trouble connecting to my brain. Please try again later.");
     }
   }
 }

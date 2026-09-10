@@ -86,7 +86,7 @@ widget.post('/chat', rateLimiter(5, 60000), widgetAuthMiddleware, tenantRateLimi
   const { message, history, category_id } = result.data;
 
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const reader = new WidgetKnowledgeReader(deps, aiService);
 
   const contextResults = await reader.search(message, 3, category_id);

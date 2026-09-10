@@ -24,7 +24,7 @@ knowledgeHandler.use('*', authMiddleware, mfaGuard, roleGuard(['agent', 'admin']
 // Article Endpoints
 knowledgeHandler.get('/articles', async (c) => {
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const docs = await service.listDocuments();
   return c.json(docs);
@@ -33,7 +33,7 @@ knowledgeHandler.get('/articles', async (c) => {
 knowledgeHandler.get('/articles/:id', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const doc = await service.getDocument(id);
   if (!doc) {
@@ -45,7 +45,7 @@ knowledgeHandler.get('/articles/:id', async (c) => {
 knowledgeHandler.delete('/articles/:id', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   await service.deleteDocument(id);
   return c.json({ success: true });
@@ -55,7 +55,7 @@ knowledgeHandler.delete('/articles/:id', async (c) => {
 knowledgeHandler.delete('/:id', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   await service.deleteDocument(id);
   return c.json({ success: true });
@@ -73,7 +73,7 @@ knowledgeHandler.post('/articles/:id/qa', async (c) => {
   if (!parsed.success) return c.json({ error: 'Invalid QA marker type' }, 400);
   const { type } = parsed.data;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   await service.markArticleAsQA(id, type);
   return c.json({ success: true });
@@ -82,7 +82,7 @@ knowledgeHandler.post('/articles/:id/qa', async (c) => {
 knowledgeHandler.get('/articles/:id/content', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   try {
     const content = await service.getArticleContent(id);
@@ -103,7 +103,7 @@ knowledgeHandler.post('/', async (c) => {
   }
 
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const content = new Uint8Array(await file.arrayBuffer());
   const docId = await service.uploadAndProcess(title, file.name, content, file.type);
@@ -115,7 +115,7 @@ knowledgeHandler.post('/', async (c) => {
 knowledgeHandler.get('/tickets/:id/ai-suggest', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const suggestion = await service.getAiSuggestion(id);
   return c.json({ suggestion });
@@ -137,7 +137,7 @@ const articleSchema = z.object({
 // Category endpoints
 knowledgeHandler.get('/categories', async (c) => {
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const categories = await service.getCategories();
   return c.json(categories);
@@ -152,7 +152,7 @@ knowledgeHandler.post('/categories', async (c) => {
 
   const { name, parent_id } = result.data;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const id = await service.createCategory(name, parent_id || undefined);
   return c.json({ id });
@@ -161,7 +161,7 @@ knowledgeHandler.post('/categories', async (c) => {
 knowledgeHandler.delete('/categories/:id', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   try {
     await service.deleteCategory(id);
@@ -184,7 +184,7 @@ knowledgeHandler.post('/articles', async (c) => {
 
   const { title, content, category_id, tier } = result.data;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const id = await service.createArticle(title, content, category_id || null, tier);
   return c.json({ id });
@@ -200,7 +200,7 @@ knowledgeHandler.put('/articles/:id', async (c) => {
 
   const { title, content, category_id, tier } = result.data;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI);
+  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   await service.updateArticle(id, title, content, category_id || null, tier);
   return c.json({ success: true });

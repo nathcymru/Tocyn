@@ -69,3 +69,11 @@ Nativeworkflow_validation completed realMiniflareWorkflowbinding test; sourcebun
 ## Configuration boundary —10September2026
 
 Added explicit logs/traces/invocation/persistence/destination-off fields to production/local configs and isolated local evidence profile with guardedlocalentrypoint. InitialLuna/mediumoutput had ENVtest pairedwithlocal-index (would503) and falselysaidNode22missing; rootcaughtboth, scopedTerra/highfixverifiedactualhealth200+event. InstalledWranglerparser replacescopiedschemaassertions. Rootaddedexactevidenceprofilekeys/invocationlogguards andrequiredCIwiring.4configtests passNode22, workflowvalidatorpasses; drybuildpassedworker. No remoteactivation, no productionlogging, no#159completionclaim. Currentremaining: fullSLI/resourcecost/activefallback/load/retention acceptance. Nativeworkerscompleted, rootintegrationowner. Nextbatchshouldtargetend-to-endacceptance, notduplicateprimitive receipts. Forecastunchanged;13%weeklyusage lastobserved, nospend/reset/Copilot.
+
+## Current acceptance queue — 10 September 2026
+
+Root connected trusted knowledge/widget emitters to suggestion/chat calls and deterministic fallback selection. Existing responses and authorization preserved. Eight regressions added; 481 server tests/53 files, TypeScript and focused ESLint pass. No live AI provider enabled.
+
+Read-only acceptance_159 worker (dedicated Codex, Terra/medium) mapped approved acceptance at edc1e9c; root reconciled this increment. Remaining: bounded local collection/export with sampling/retention/access rules; aggregate auth/canonical-mutation SLIs and active resource hooks; event/retention accounting under #50/#64 without treating sampled events as billing; end-to-end observer-failure proof; exact-head CI/review. Future pipeline implementations stay under #51/#91/#87/#88; their extension contracts remain required here. Canonical audit stays separate and unsampled.
+
+PR170 remains draft and #159 open. Forecast/baselines unchanged. Root sole integration owner; workers completed. No Copilot, bypass, paid capacity or remote resource action in this increment.
