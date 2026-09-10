@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "baselineTree": "66fa3650113b6302d8bdc49b83615e6598e1c445",
+  "minimumSamples": 20,
+  "gzipBytes": {
+    "dashboard": { "initialJs": 135000, "allJs": 570000, "allCss": 16000 },
+    "portal": { "initialJs": 72000, "allJs": 105000, "allCss": 6000 },
+    "widget": { "allJs": 70000, "allCss": 4000 }
+  },
+  "timing": {
+    "startupMs": { "baselineMultiplier": 1.25, "slackMs": 16.7, "absoluteP95Ms": 1500 },
+    "recoveryMs": { "baselineMultiplier": 1.25, "slackMs": 16.7, "absoluteP95Ms": 150 }
+  }
+}

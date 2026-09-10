@@ -36,6 +36,8 @@ export function snapshot(root) {
       const entries=Object.entries(manifest).filter(([,item])=>item.isEntry).map(([key])=>key);
       if(!entries.length)throw new Error('Build manifest has no entrypoint');
       entries.forEach(visit);
+      const assetPaths=new Set(assets.map(asset=>asset.path));
+      for(const file of initialFiles)if(!assetPaths.has(file))throw new Error('Build manifest references a missing JS/CSS asset');
       const selected=assets.filter(asset=>initialFiles.has(asset.path));
       initial={files:selected.map(asset=>asset.path),totals:Object.fromEntries(['js','css'].map(kind=>[kind,selected.filter(asset=>asset.kind===kind).reduce((sum,asset)=>({bytes:sum.bytes+asset.bytes,gzipBytes:sum.gzipBytes+asset.gzipBytes}),{bytes:0,gzipBytes:0})]))};
     }

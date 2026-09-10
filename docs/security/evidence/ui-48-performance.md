@@ -83,3 +83,19 @@ Dashboard protected routes now load on demand with the same accessible loading/e
 `ui-48-browser-a52904f.json` records another80alternating samples under the same local browser scenario. Dashboard startup p95:164.1→63.7ms; recovery p95:48.7→49.9ms. Portal startup p95:63.4→61.7ms; recovery65.0→64.9ms. These remain local warm-process measurements, not production promises.
 
 Dashboard initial JS gzip drops486232→125880bytes(−74.1%); all-route JS grows486232→543977bytes(+11.9%). The deferred knowledge-editor chunk still accounts for much of the total. Portal initial67502/all-route99830bytes remain unchanged. Keep total-cost growth visible; initial loading gains do not satisfy all-route/numeric-budget/authenticated-interaction gates.134dashboardtests andTypeScript/build pass.
+
+## Initial regression limits and required CI
+
+`tools/ui-performance/budgets.json` now defines engineering regression limits for the measured scenarios. These do not ratify production SLOs or complete authenticated workspace/widget timing acceptance. Historical measurements and baseline tree66fa365 remain unchanged. The build check compares fresh candidate and accepted6299bfef client builds on one runner, using each lockfile, pinned Playwright1.62.1,20alternating samples per side and raw nearest-rank p95 calculations. Browser artifacts remain synthetic/local; no real authentication or provider is contacted.
+
+| Client | Initial JS gzip ceiling | All-route JS gzip ceiling | All CSS gzip ceiling |
+|---|---:|---:|---:|
+| Dashboard | 135000 bytes | 570000 bytes | 16000 bytes |
+| Portal | 72000 bytes | 105000 bytes | 6000 bytes |
+| Widget | Included in all JS | 70000 bytes | 4000 bytes |
+
+These preserve the measured initial-load reductions with limited headroom: dashboard125880→135000 and portal67502→72000. All-route ceilings keep the deliberate Ark migration cost visible (dashboard~544kB and portal~100kB gzip), instead of hiding it in the initial metric; they allow roughly5%additional JS growth. Widget’s production-constant fix removed development React and brought gzip below63kB; its70kBceiling remains well below the old143978-byte baseline. CSS has explicit ceilings rather than an unlimited exemption. These are initial measurable regression guards, not proof that every byte is optimal.
+
+For dashboard/portal login startup and synthetic-denial recovery, candidate p95 must satisfy **both** baseline p95×1.25+16.7ms and an absolute ceiling (1500ms startup;150ms recovery). The relative limit detects regression on the same machine; one60Hzframe of fixed slack and25%relative tolerance accommodate shared-runner measurement variation. The absolute ceiling prevents an equally slow baseline/candidate pair passing solely by comparison. Limits are intentionally specific to this two-frame observation harness, not input-to-photon or real backend latency. A failure requires investigation; do not automatically raise limits to make CI pass.
+
+Required build CI installs the locked Chromium runtime, builds the immutable baseline with its own dependencies, creates a fresh receipt, enforces the budgets and retains the raw artifact for3days. Evidence rejects dirty source, wrong baseline tree, mismatched Vite versions, missing manifest assets and incomplete samples; supplied percentile summaries cannot override raw observations. Other CI/security checks remain intact. Broad affected-flow accessibility/visual checks, authenticated workspace interaction costs and final integration remain open.

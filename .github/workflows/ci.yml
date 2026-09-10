@@ -28,7 +28,7 @@ jobs:
           - check: typecheck
             command: npm run typecheck --workspace=apps/widget && npm run typecheck --workspace=packages/ui && npm run typecheck:rehearsal-runtime && npm run typecheck --workspace=apps/server && npm run typecheck:local-tenants --workspace=apps/server && npm run typecheck:tenant-isolation-core --workspace=apps/server && npm run typecheck:tenant-isolation-storage-background --workspace=apps/server && npm run typecheck:canonical-conversation --workspace=apps/server && npm run typecheck:canonical-conversation-atomic --workspace=apps/server && npm run typecheck:ticket-mutation-replay --workspace=apps/server && npm run typecheck:conversation-audit --workspace=apps/server && npm run typecheck:local-beta --workspace=apps/server && npm run typecheck:operator-workflow --workspace=apps/server && npm run typecheck:local-portal-workflow --workspace=apps/server && npm run typecheck:operational-performance --workspace=apps/server && npm run typecheck:local-observability-collector --workspace=apps/server
           - check: build
-            command: npm run build --workspace=apps/dashboard && npm run build --workspace=apps/portal && npm run build --workspace=apps/widget
+            command: npm run build --workspace=apps/dashboard -- --manifest && npm run build --workspace=apps/portal -- --manifest && npm run build --workspace=apps/widget -- --manifest && node --test tools/ui-performance/check-budgets.test.mjs tools/ui-performance/browser-evidence.test.mjs && node tools/ui-performance/browser-evidence.mjs performance-baseline . 20 > "$RUNNER_TEMP/tocyn-ui-performance.json" && node tools/ui-performance/check-budgets.mjs "$RUNNER_TEMP/tocyn-ui-performance.json"
           - check: test
             command: npm test && npm run test:rehearsal-runtime && TZ=Europe/London npm exec --workspace=apps/dashboard -- vitest run src/__tests__/utcTimestamp.test.ts && cd apps/server && bash ./scripts/d1-smoke-test.sh && npx tsx scripts/d1-integration-test.ts && node scripts/local-auth-smoke.mjs && npx tsx scripts/verify-local-tenant-fixture.ts && npm run test:local-tenants:focused && npm run test:tenant-isolation-core && npm run test:tenant-isolation-storage-background && npm run test:local-tenant-realtime && npm run test:canonical-conversation && npm run test:canonical-conversation-atomic && npm run test:ticket-mutation-replay && npm run test:conversation-audit && npm run test:local-beta && npm run test:local-beta-runtime && npm run test:operator-workflow && npm run test:local-portal-workflow && npm run test:observability-config && npm run test:local-observability-collector && npm run test:operational-performance && npm run evidence:operational-performance
     steps:
@@ -43,5 +43,31 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Checkout immutable UI performance baseline
+        if: matrix.check == 'build'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: 6299bfef444fb23a40d79895040bc9fa398e83b7
+          path: performance-baseline
+          persist-credentials: false
+      - name: Build baseline clients with their locked dependencies
+        if: matrix.check == 'build'
+        working-directory: performance-baseline
+        run: |
+          npm ci --ignore-scripts
+          npm run build --workspace=apps/dashboard -- --manifest
+          npm run build --workspace=apps/portal -- --manifest
+          npm run build --workspace=apps/widget -- --manifest
+      - name: Install locked browser test runtime
+        if: matrix.check == 'build'
+        run: npm exec -- playwright install --with-deps chromium
       - name: Validate
         run: ${{ matrix.command }}
+      - name: Retain synthetic UI performance evidence
+        if: always() && matrix.check == 'build'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ui-performance-${{ github.run_id }}
+          path: ${{ runner.temp }}/tocyn-ui-performance.json
+          retention-days: 3
+          if-no-files-found: warn

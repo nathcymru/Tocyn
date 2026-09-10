@@ -28,6 +28,7 @@
   ],
   "devDependencies": {
     "miniflare": "5.20260907.0-alpha",
+    "playwright": "1.62.1",
     "tsx": "^4.23.13",
     "typescript": "^5.0.0",
     "wrangler": "^4.83.0"
