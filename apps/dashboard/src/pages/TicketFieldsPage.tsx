@@ -1,3 +1,4 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +9,7 @@ import { useTicketFields } from '../hooks/useTicketFields';
 
 export function TicketFieldsPage() {
   const queryClient = useQueryClient();
+  const opener = React.useRef<HTMLButtonElement | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { data: fields, isLoading } = useTicketFields();
@@ -30,7 +32,7 @@ export function TicketFieldsPage() {
           <p className="text-slate-500 mt-1">Manage extra attributes for your tickets.</p>
         </div>
         <TocynButton
-          onClick={() => setIsModalOpen(true)}
+          onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
           className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm shadow-brand-500/20 hover:bg-brand-700 transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -49,7 +51,7 @@ export function TicketFieldsPage() {
             <h3 className="text-lg font-bold text-slate-900 mb-2">No custom fields</h3>
             <p className="text-slate-500 mb-6">Create fields to collect specific information on tickets.</p>
             <TocynButton
-              onClick={() => setIsModalOpen(true)}
+              onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
               className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors"
             >
               Create your first field
@@ -97,20 +99,22 @@ export function TicketFieldsPage() {
         )}
       </div>
 
-      {isModalOpen && (
-        <CreateFieldModal
+        <CreateFieldModal open={isModalOpen} finalFocusEl={() => opener.current}
           onClose={() => setIsModalOpen(false)}
           onSuccess={() => {
             setIsModalOpen(false);
             queryClient.invalidateQueries({ queryKey: ['ticket-fields'] });
           }}
         />
-      )}
     </div>
   );
 }
 
-function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
+function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: boolean, finalFocusEl: () => HTMLElement | null, onClose: () => void, onSuccess: () => void }) {
+  const titleId = React.useId();
+  const initialFocus = React.useRef<HTMLInputElement>(null);
+  const savingGuard = React.useRef(false);
+  const [saveError, setSaveError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     label: '',
@@ -121,9 +125,16 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
 
   const mutation = useMutation({
     mutationFn: (data: any) => dashboardApi.post('/ticket-fields', data),
-    onSuccess,
-    onError: (err: any) => alert(err.message),
+
   });
+
+  React.useEffect(() => {
+    if (!open) {
+      setFormData({name:'',label:'',field_type:'text',options:'',is_active:true});
+      setSaveError('');
+    }
+  }, [open]);
+  const close = () => { if (!savingGuard.current) onClose(); };
 
   const generateKeyName = (label: string) => {
     return label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -138,28 +149,36 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate(formData);
+    if (savingGuard.current) return;
+    savingGuard.current = true;
+    setSaveError('');
+    try { await mutation.mutateAsync(formData); onSuccess(); }
+    catch { setSaveError('Ticket field could not be created. Your changes have been kept; try again.'); }
+    finally { savingGuard.current = false; }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <TocynDialog open={open} busy={mutation.isPending} onOpenChange={next => { if (!next) close(); }}
+      labelledBy={titleId} initialFocusEl={() => initialFocus.current} finalFocusEl={finalFocusEl}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Create Ticket Field</h2>
-          <TocynButton onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <h2 id={titleId} className="text-lg font-bold text-slate-900">Create Ticket Field</h2>
+          <TocynButton type="button" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
           </TocynButton>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} aria-labelledby={titleId} className="p-6">
+          {saveError && <p role="alert" className="mb-4 text-red-700">{saveError}</p>}
+          <fieldset disabled={mutation.isPending} className="space-y-5">
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Display Label</label>
+            <label htmlFor={`${titleId}-label`} className="block text-sm font-bold text-slate-700 mb-1">Display Label</label>
             <TocynInput
               required
               type="text"
-              value={formData.label}
+              id={`${titleId}-label`} ref={initialFocus} value={formData.label}
               onChange={handleLabelChange}
               placeholder="e.g., Device Model"
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
@@ -167,11 +186,11 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Key Name</label>
+            <label htmlFor={`${titleId}-name`} className="block text-sm font-bold text-slate-700 mb-1">Key Name</label>
             <TocynInput
               required
               type="text"
-              value={formData.name}
+              id={`${titleId}-name`} value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., device_model"
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none font-mono"
@@ -180,9 +199,9 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Field Type</label>
+            <label htmlFor={`${titleId}-type`} className="block text-sm font-bold text-slate-700 mb-1">Field Type</label>
             <TocynSelect
-              value={formData.field_type}
+              id={`${titleId}-type`} value={formData.field_type}
               onChange={(e) => setFormData({ ...formData, field_type: e.target.value })}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
             >
@@ -195,11 +214,11 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
 
           {formData.field_type === 'select' && (
             <div className="animate-in slide-in-from-top-2">
-              <label className="block text-sm font-bold text-slate-700 mb-1">Options</label>
+              <label htmlFor={`${titleId}-options`} className="block text-sm font-bold text-slate-700 mb-1">Options</label>
               <TocynInput
                 required
                 type="text"
-                value={formData.options}
+                id={`${titleId}-options`} value={formData.options}
                 onChange={(e) => setFormData({ ...formData, options: e.target.value })}
                 placeholder="Comma-separated (e.g. Option 1, Option 2)"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
@@ -207,27 +226,15 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
             </div>
           )}
 
-          <div className="flex items-center gap-3 pt-2">
-            <TocynButton
-              type="button"
-              onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
-              className={clsx(
-                "w-10 h-6 rounded-full transition-colors relative",
-                formData.is_active ? "bg-brand-500" : "bg-slate-200"
-              )}
-            >
-              <div className={clsx(
-                "w-4 h-4 bg-white rounded-full absolute top-1 transition-transform shadow-sm",
-                formData.is_active ? "translate-x-5" : "translate-x-1"
-              )} />
-            </TocynButton>
-            <span className="text-sm font-medium text-slate-700">Active</span>
-          </div>
+          <label className="flex min-h-11 items-center gap-3 pt-2 text-sm font-medium text-slate-700">
+            <TocynInput type="checkbox" checked={formData.is_active} onChange={e => setFormData({...formData,is_active:e.target.checked})} className="h-5 w-5" />
+            Active
+          </label>
 
           <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
             <TocynButton
               type="button"
-              onClick={onClose}
+              onClick={close}
               className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 border border-transparent rounded-lg transition-colors"
             >
               Cancel
@@ -240,8 +247,9 @@ function CreateFieldModal({ onClose, onSuccess }: { onClose: () => void, onSucce
               {mutation.isPending ? 'Creating...' : 'Create Field'}
             </TocynButton>
           </div>
+          </fieldset>
         </form>
       </div>
-    </div>
+    </TocynDialog>
   );
 }
