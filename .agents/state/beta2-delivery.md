@@ -15,15 +15,19 @@ Coordinator continues available work. Native workers are stopped at their execut
 
 Accepted79 unlocks its #129/#136 dependencies. Continue48workspace foundations; preserve full #73 SLA and #137 ownership/routing gate, #162metrics dependency and #128integration. #159/#64/#91 can proceed from accepted50 without reducing beta-critical capacity. Preserve all graph edges and scope.
 
-Recalculated reference beta.2 forecast: **22January2027**; expanded scope **21January2028**, pending this receipt PR's acceptance/publication. Only79completion changed since acceptedPR168inputs; two8-hour Monday–Saturday lanes and3× allowance unchanged. Baselines, effort and dependencies are preserved. Published forecast remains9February2027 until coordinated read-back completes.
+Recalculated reference beta.2 forecast: **22January2027**; expanded scope **21January2028**, accepted and published through PR171. Only79completion changed since acceptedPR168inputs; two8-hour Monday–Saturday lanes and3× allowance unchanged. Baselines, effort and dependencies are preserved. Published issue/Project/milestone/Wiki forecasts match this ledger; read-back completed.
 
 ## Exact next actions
 
-1. Validate/merge this delivery-state PR and publish/read back affected issue/Project/milestone/Wiki forecasts; preserve historical dates and receipts.
+1. PR171publication is complete; preserve its verified receipt and continue dependency-cleared beta work.
 2. Rebase48onaccepted79, adopt permission-page native primitives without losing new recovery/accessibility behavior, then remaining complex controls and browser/performance acceptance.
 3. Continue159from its scoped handover; do not treat the three-scenario local harness as complete resource/SLO acceptance.
 4. No production/provider operations. Zero routine Copilot reviews; exact-head substantive CI/signing/review-thread checks remain mandatory before authorized review bypass.
 5. Report human status and evidence-based estimate every30minutes. Beta.2 is not ready until full140scope is accepted.
+
+## PR171 publication receipt
+
+Signed merge6299bfef444fb23a40d79895040bc9fa398e83b7 matched reviewed tree66fa3650113b6302d8bdc49b83615e6598e1c445 after required checks; owner review bypass used, noCopilot. All100Project forecasts verified,76issue updates read back,38active milestone forecasts updated. Completed milestone23closed with historical due date preserved. Both Wiki roadmap pages byte-match sources at2b4b766. Baseline/actual/status/progress fields unchanged. [Publication receipt](https://github.com/nathcymru/Tocyn/issues/140#issuecomment-5621723062). Older pending-publication checkpoints are superseded.
 
 <details>
 <summary>Historical coordination checkpoints — superseded by current state above</summary>
