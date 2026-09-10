@@ -10,6 +10,7 @@ import { AppVariables } from '../types';
 import { z } from 'zod';
 
 const knowledgeHandler = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+const qaMarkerSchema = z.object({ type: z.enum(['answer', 'sop']).nullable() });
 
 knowledgeHandler.onError((error, c) => {
   if (error.message === 'Maximum tag stripping depth exceeded: possible malicious input') {
@@ -62,7 +63,15 @@ knowledgeHandler.delete('/:id', async (c) => {
 
 knowledgeHandler.post('/articles/:id/qa', async (c) => {
   const id = c.req.param('id');
-  const { type } = await c.req.json();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid QA marker type' }, 400);
+  }
+  const parsed = qaMarkerSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'Invalid QA marker type' }, 400);
+  const { type } = parsed.data;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const aiService = new StatelessAiService(c.env.AI);
   const service = new TenantKnowledgeService(deps, aiService);

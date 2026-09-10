@@ -1,4 +1,4 @@
-import { TenantKnowledgeService } from '../../services/tenant-knowledge.service';
+import { TenantKnowledgeService, WidgetKnowledgeReader } from '../../services/tenant-knowledge.service';
 import { Hono } from 'hono';
 import * as jose from 'jose';
 import * as OTPAuth from 'otpauth';
@@ -271,6 +271,49 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     expect(await reposA.articles.get(article.id)).toMatchObject({ qa_type: null, chunk_count: 1 });
     expect(await reposA.tickets.claimRetention(ticket.id, '2099-01-01')).toBeNull();
     expect(deleteByIds).toHaveBeenCalledWith([`qa_${article.id}_0`]);
+  });
+
+  it('marks answer, SOP, and unmarked states without crossing tenants or rewriting legacy questions', async () => {
+    const ticketA = await reposA.tickets.create({ subject: 'QA A', customer_email: 'a@test.com', source: 'email', status: 'open', priority: 'normal' } as any);
+    const ticketB = await reposB.tickets.create({ subject: 'QA B', customer_email: 'b@test.com', source: 'email', status: 'open', priority: 'normal' } as any);
+    const articleA = await reposA.articles.create({ ticket_id: ticketA.id, sender_type: 'agent', body: 'Answer body' } as any);
+    const articleB = await reposB.articles.create({ ticket_id: ticketB.id, sender_type: 'agent', body: 'B body', qa_type: 'question' } as any);
+    await reposB.articles.updateQAState(articleB.id, 'question' as any, 7);
+    const upsert = vi.fn(async () => undefined);
+    const deleteByIds = vi.fn(async () => undefined);
+    const service = new TenantKnowledgeService({ repositories: reposA, attachmentStorage: {}, vectorStorage: { upsert, deleteByIds } } as any, { generateEmbeddings: vi.fn(async () => [0.1]) } as any);
+
+    await service.markArticleAsQA(articleA.id, 'answer');
+    expect((await reposA.articles.get(articleA.id))?.qa_type).toBe('answer');
+    await service.markArticleAsQA(articleA.id, 'sop');
+    expect((await reposA.articles.get(articleA.id))?.qa_type).toBe('sop');
+    await service.markArticleAsQA(articleA.id, null);
+    expect(await reposA.articles.get(articleA.id)).toMatchObject({ qa_type: null, chunk_count: 0 });
+    expect(await reposB.articles.get(articleB.id)).toMatchObject({ qa_type: 'question', chunk_count: 7 });
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(deleteByIds).toHaveBeenCalledWith([`qa_${articleA.id}_0`]);
+  });
+
+  it('revalidates public QA against tenant rows despite stale Answer vector metadata', async () => {
+    const ticketA = await reposA.tickets.create({ subject: 'A', customer_email: 'a@example.invalid', source: 'email', status: 'open', priority: 'normal' } as any);
+    const ticketB = await reposB.tickets.create({ subject: 'B', customer_email: 'b@example.invalid', source: 'email', status: 'open', priority: 'normal' } as any);
+    const articles = [];
+    for (const [label, marker, internal, foreign] of [
+      ['Public answer', 'answer', false, false], ['Internal SOP', 'sop', false, false],
+      ['Private answer', 'answer', true, false], ['Legacy question', 'question', false, false],
+      ['Tenant B answer', 'answer', false, true],
+    ] as const) {
+      const repositories = foreign ? reposB : reposA;
+      const article = await repositories.articles.create({ticket_id:foreign ? ticketB.id : ticketA.id, sender_type:'agent', body:label, is_internal:internal} as any);
+      await repositories.articles.updateQAState(article.id, marker as any, 1);
+      articles.push(article);
+    }
+    const query = vi.fn().mockResolvedValue({matches:articles.map(article => ({score:1, metadata:{source_id:article.id,type:'qa',tier:'answer',status:'published',text:'Stale vector text'}}))});
+    const reader = new WidgetKnowledgeReader({repositories:reposA,attachmentStorage:{},vectorStorage:{query}} as any, {generateEmbeddings:vi.fn().mockResolvedValue([1])} as any);
+    expect(await reader.search('synthetic query', 10)).toEqual([{content:'Public answer'}]);
+    expect(query).toHaveBeenCalledWith([1],{topK:10,filter:{tier:'answer',status:'published'},returnMetadata:true});
+    expect(await reposA.articles.get(articles[3].id)).toMatchObject({qa_type:'question',chunk_count:1});
+    expect(await reposB.articles.get(articles[4].id)).toMatchObject({qa_type:'answer',chunk_count:1});
   });
 
   it.each(['2026-09-01T12:00:00.000Z', '2026-09-01 12:00:00'])('compares retention times chronologically at the boundary (%s)', async cutoff => {
