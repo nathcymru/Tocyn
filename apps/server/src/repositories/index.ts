@@ -7,6 +7,7 @@ import { VerifiedTenantScope } from '../types/tenant';
 import { UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
 import { D1Database } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
+import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 
 export class SqlUserRepository implements UserRepository {
   async revokeSessions(id: string): Promise<void> {
@@ -185,7 +186,7 @@ export class SqlTicketRepository implements TicketRepository {
     return results[3].meta.changes > 0;
   }
 
-  constructor(private scope: VerifiedTenantScope, private db: D1Database, private betaAdmission?: LocalBetaAdmissionRepository) {}
+  constructor(private scope: VerifiedTenantScope, private db: D1Database, private betaAdmission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {}
 
   async list(
     options: {
@@ -382,13 +383,15 @@ export class SqlTicketRepository implements TicketRepository {
     const articleId = crypto.randomUUID();
     const { ticket, article } = data;
     if (this.betaAdmission) {
-      const raw=await new TicketMutationReplayRepository(this.db,this.scope,this.betaAdmission).commit({ticketId,articleId,ticket,article,audit:data.audit,attachments:[]});
+      const raw=await new TicketMutationReplayRepository(this.db,this.scope,this.betaAdmission,this.canonicalMutationSli).commit({ticketId,articleId,ticket,article,audit:data.audit,attachments:[]});
       const snapshot=JSON.parse(raw) as {ticket:Ticket;article:Article};
       return {ticket:snapshot.ticket,article:{...snapshot.article,is_internal:Boolean(snapshot.article.is_internal)}};
     }
     // D1 executes the batch as one transaction. A failed article insert rolls
     // back the ticket too; neither tenant nor parent IDs come from the input.
-    const results = await this.db.batch<Ticket | Article>([
+    this.canonicalMutationSli?.recordAttempt();
+    let results;
+    try { results = await this.db.batch<Ticket | Article>([
       this.db.prepare(`INSERT INTO tickets
         (tenant_id, id, subject, status, priority, customer_id, customer_email, assigned_to, group_id, source, source_email, custom_fields, intake_received_at, intake_processed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`).bind(
@@ -407,10 +410,14 @@ export class SqlTicketRepository implements TicketRepository {
         article.intake_source, article.received_at, article.processed_at,
       ),
       ...(data.audit ? [conversationMutationEvent(this.db,this.scope,{id:crypto.randomUUID(),ticketId,articleId,actor:data.audit,intake:true,internal:false})] : []),
-    ]);
+    ]); } catch (error) { this.canonicalMutationSli?.recordUncertain(); throw error; }
     const createdTicket = results[0].results[0] as Ticket | undefined;
     const createdArticle = results[1].results[0] as Article | undefined;
-    if (!createdTicket || !createdArticle) throw new Error('Failed to create ticket and initial article');
+    if (!createdTicket || !createdArticle) {
+      this.canonicalMutationSli?.recordUncertain();
+      throw new Error('Failed to create ticket and initial article');
+    }
+    this.canonicalMutationSli?.recordDurablyCompleted();
     return { ticket: createdTicket, article: { ...createdArticle, is_internal: Boolean(createdArticle.is_internal) } };
   }
 
@@ -986,12 +993,12 @@ export class SqlRequestLimitRepository {
   }
 }
 
-export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository): Repositories {
+export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli): Repositories {
   return {
     requestLimits: new SqlRequestLimitRepository(scope, db),
     knowledge: new SqlKnowledgeRepository(scope, db),
     users: new SqlUserRepository(scope, db),
-    tickets: new SqlTicketRepository(scope, db, betaAdmission),
+    tickets: new SqlTicketRepository(scope, db, betaAdmission, canonicalMutationSli),
     articles: new SqlArticleRepository(scope, db),
     attachments: new SqlAttachmentRepository(scope, db),
     channels: new SqlChannelsRepository(scope, db),

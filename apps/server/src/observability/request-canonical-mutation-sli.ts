@@ -10,6 +10,7 @@ export type RequestCanonicalMutationSliSnapshot = Readonly<{
     attempted: number;
     durablyCompleted: number;
     replayed: number;
+    noOp: number;
     denied: number;
     uncertain: number;
   }>;
@@ -19,6 +20,7 @@ export type RequestCanonicalMutationSli = Readonly<{
   recordAttempt: () => void;
   recordDurablyCompleted: () => void;
   recordReplayed: () => void;
+  recordNoOp: () => void;
   recordDenied: () => void;
   recordUncertain: () => void;
   markObserverFault: () => void;
@@ -27,7 +29,7 @@ export type RequestCanonicalMutationSli = Readonly<{
   snapshot: () => RequestCanonicalMutationSliSnapshot;
 }>;
 
-type Terminal = 'durablyCompleted' | 'replayed' | 'uncertain';
+type Terminal = 'durablyCompleted' | 'replayed' | 'noOp' | 'uncertain';
 
 /**
  * Accepts at most one canonical mutation outcome per request. This is not a
@@ -51,6 +53,7 @@ export function createRequestCanonicalMutationSli(): RequestCanonicalMutationSli
     },
     recordDurablyCompleted(): void { terminalRecord('durablyCompleted'); },
     recordReplayed(): void { terminalRecord('replayed'); },
+    recordNoOp(): void { terminalRecord('noOp'); },
     recordDenied(): void {
       if (attempted || denied || terminal !== undefined) { complete = false; return; }
       denied = true;
@@ -67,6 +70,7 @@ export function createRequestCanonicalMutationSli(): RequestCanonicalMutationSli
         attempted: attempted ? 1 : 0,
         durablyCompleted: terminal === 'durablyCompleted' ? 1 : 0,
         replayed: terminal === 'replayed' ? 1 : 0,
+        noOp: terminal === 'noOp' ? 1 : 0,
         denied: denied ? 1 : 0,
         uncertain: terminal === 'uncertain' || unresolved ? 1 : 0,
       });

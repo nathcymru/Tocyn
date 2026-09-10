@@ -73,6 +73,8 @@ describe("Ticket Detail Fixes Verification", () => {
   });
 
   it("should allow updating priority, assigned_to, and group_id", async () => {
+      // D1 returns one result for each submitted batch statement.
+      mockDB.batch.mockImplementation(async (statements: unknown[]) => statements.map((_, index) => ({ results: index >= statements.length - 2 ? [{ id: 't-1' }] : [] })));
     mockDB.run.mockResolvedValue({ success: true });
 
     const validAgentUuid = "11111111-1111-1111-1111-111111111111";

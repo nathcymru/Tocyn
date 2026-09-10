@@ -13,7 +13,7 @@ type CanonicalMutationSliEvent = {
   type: 'canonical_mutation.sli.request';
   scope: 'request';
   complete: boolean;
-  counts: { attempted: number; durablyCompleted: number; replayed: number; denied: number; uncertain: number };
+  counts: { attempted: number; durablyCompleted: number; replayed: number; noOp: number; denied: number; uncertain: number };
 };
 type Receipt = {
   tenant_id: string;
@@ -237,13 +237,13 @@ test('canonical mutation SLI: real tenant-scoped D1 receipts, replay, denial and
     assert.equal(typeof captured.result, 'string');
     assert.deepEqual(captured.events, [
       { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
-        counts: { attempted: 1, durablyCompleted: 1, replayed: 0, denied: 0, uncertain: 0 } },
+        counts: { attempted: 1, durablyCompleted: 1, replayed: 0, noOp: 0, denied: 0, uncertain: 0 } },
       { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
-        counts: { attempted: 1, durablyCompleted: 0, replayed: 1, denied: 0, uncertain: 0 } },
+        counts: { attempted: 1, durablyCompleted: 0, replayed: 1, noOp: 0, denied: 0, uncertain: 0 } },
       { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
-        counts: { attempted: 0, durablyCompleted: 0, replayed: 0, denied: 1, uncertain: 0 } },
+        counts: { attempted: 0, durablyCompleted: 0, replayed: 0, noOp: 0, denied: 1, uncertain: 0 } },
       { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
-        counts: { attempted: 1, durablyCompleted: 0, replayed: 0, denied: 0, uncertain: 1 } },
+        counts: { attempted: 1, durablyCompleted: 0, replayed: 0, noOp: 0, denied: 0, uncertain: 1 } },
     ]);
     assert.equal(JSON.stringify(captured.events).includes(privateBody), false, 'SLI summaries never serialize mutation content');
     assert.equal(JSON.stringify(captured.events).includes(fixture.principals.customerA.tenantId), false, 'SLI summaries never serialize tenant identifiers');
@@ -275,7 +275,7 @@ test('canonical mutation SLI records an observed receipt replay, not a later cal
 function expectReplayObservation(snapshot: RequestCanonicalMutationSliSnapshot): void {
   assert.deepEqual(snapshot, {
     version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
-    counts: { attempted: 1, durablyCompleted: 0, replayed: 1, denied: 0, uncertain: 0 },
+    counts: { attempted: 1, durablyCompleted: 0, replayed: 1, noOp: 0, denied: 0, uncertain: 0 },
   }, 'The SLI establishes only that a durable receipt was observed before revocation, never that a later caller returned it');
 }
 

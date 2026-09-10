@@ -108,3 +108,10 @@ Native auth_sli_159 Terra/high implemented request-owned unsampled canonical cou
 Worker reports12real Miniflare replay tests,2canonical atomic tests,28focusedtests and corresponding scriptTypeScript checks passing. Root inspected service/repository boundaries and corrected a material accounting error in the handoff: H+A+M+64C is bounded by3H+64C, not2H. Costhelper/catalogue now independently reserve auth and canonical summaries, both defaultH, with invalid/overflow regressions. Full505server tests/57files, serverTypeScript and focusedESLint pass (existingmodulewarning only). No provider/resources/Copilot used.
 
 Current worker complete; root ownsintegration/exactheadCI. Remaining159includes current legacycreate/PATCH and otherauthpaths, completeactivepath/observerfailureacceptance and finalintegration. #64durablebudgeting/#42productiontelemetry retainownership. No issueclosure, forecastchange or productionclaim.
+
+
+## Staff create/PATCH and no-op accounting — 10 September 21:59 BST
+
+NativeTerra/high worker extended request canonical summaries to dashboard atomic ticket creation and audited dashboard/API PATCH. An explicit internal {ticket,changed} outcome uses the committed UPDATE RETURNING row; unchanged updates record fixednoOp, not durablechange. Existing publicresponses and broadcastbehavior remainunchanged. Sameone-summary/request cap, M≤H; costboundstillH+A+M+64C≤3H+64C.
+
+Root found missing/malformed batch results could be mislabelednoOp. Added result-shape failure→uncertainty regression and preservedfailure behavior, correctedthreeoldhandler mocks to return oneD1result perstatement. Full506tests/58files, serverTypeScript, focusedlint and rootrealMiniflareconversation-audit9tests pass. Worker also passedatomic2/replayruntime/focused46/scriptTypes. The sourceSLIschema remainsdraftv1 with newnoOpfield; no deployedconsumercompatibilityclaim. Remaining159authissuance/widget/APIkeySLIs, activeoperationcoverage and completefailure/collectionacceptance stayopen. No production/Copilot/forecastchange.

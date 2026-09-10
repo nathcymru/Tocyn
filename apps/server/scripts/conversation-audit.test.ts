@@ -9,6 +9,7 @@ import { splitSql } from './split-sql';
 import { canonicalMutationJson } from '../src/services/ticket-mutation-replay.service';
 import { createRepositories } from '../src/repositories';
 import { createSystemTenantScope } from '../src/auth/scope';
+import { initializeLocalBetaFixture } from './local-beta-fixture';
 
 type Json = Record<string, unknown>;
 type AuditEvent = {
@@ -22,6 +23,13 @@ type AuditEvent = {
   actor: { kind: string; id?: string; provenance: string };
   facts: Json;
 };
+type CanonicalMutationSliEvent = {
+  version: 1;
+  type: 'canonical_mutation.sli.request';
+  scope: 'request';
+  complete: boolean;
+  counts: { attempted: number; durablyCompleted: number; replayed: number; noOp: number; denied: number; uncertain: number };
+};
 
 function tokenFrom(value: unknown): string {
   const token = (value as { token?: unknown })?.token;
@@ -33,6 +41,20 @@ async function expectStatus(response: FixtureResponse, expected: number, reason:
   if (response.status === expected) return;
   await response.body?.cancel();
   assert.fail(`${reason}: received ${response.status}`);
+}
+
+async function captureCanonicalMutationSli<T>(run: () => Promise<T>): Promise<{ result: T; events: CanonicalMutationSliEvent[] }> {
+  const events: CanonicalMutationSliEvent[] = [];
+  const log = console.log;
+  console.log = (value?: unknown) => {
+    if (typeof value !== 'string') return;
+    try {
+      const event = JSON.parse(value) as { type?: unknown };
+      if (event.type === 'canonical_mutation.sli.request') events.push(event as CanonicalMutationSliEvent);
+    } catch { /* Other diagnostics are outside this bounded assertion. */ }
+  };
+  try { return { result: await run(), events }; }
+  finally { console.log = log; }
 }
 
 async function customerToken(fixture: LocalTenantFixture, principal: 'customerA' | 'customerB', suffix: string): Promise<string> {
@@ -145,6 +167,51 @@ test('API audit events are atomic, attributable, and v2 replay-stable', async ()
     const immutableReplay = await fixture.request('/api/v1/tickets', { method: 'POST', apiKey: credential.apiKey, idempotencyKey: 'audit-v2', body: payload, ip: `${fixture.rateLimitIdentity}-audit-immutable-replay` });
     await expectStatus(immutableReplay, 201, 'V2 replay after later changes');
     assert.deepEqual(await immutableReplay.json<Json>(), firstBody, 'The v2 response is stored at commit time, not rebuilt from later audit state');
+  });
+});
+
+test('canonical mutation SLI records real dashboard creation, changed audit PATCH, and durable no-op separately', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const credential = await fixture.createScopedApiKey('operatorA', ['tickets:write', 'tickets:read']);
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'canonical-audit-sli-evidence',
+      tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
+      invitations: [
+        ...Object.values(fixture.principals).map(principal => ({
+          tenantId: principal.tenantId, id: principal.localId,
+          kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+        })),
+        { tenantId: fixture.principals.customerA.tenantId, id: credential.id, kind: 'api-key' as const },
+      ],
+    });
+    const staff = await staffToken(fixture);
+    fixture.enableIsolatedObservability();
+    const privateBody = 'synthetic-dashboard-canonical-sli-body';
+    const captured = await captureCanonicalMutationSli(async () => {
+      const created = await fixture.request('/api/tickets', { method: 'POST', token: staff, body: {
+        subject: 'dashboard canonical SLI', customer_email: fixture.principals.customerA.email, body: privateBody,
+      }, ip: `${fixture.rateLimitIdentity}-dashboard-canonical-sli` });
+      await expectStatus(created, 201, 'Dashboard creation durable batch');
+      const ticket = ticketId(await created.json<Json>());
+      const changed = await fixture.request(`/api/tickets/${ticket}`, { method: 'PATCH', token: staff,
+        body: { status: 'resolved' }, ip: `${fixture.rateLimitIdentity}-canonical-sli-dashboard-patch` });
+      await expectStatus(changed, 200, 'Changed dashboard audited PATCH');
+      const noOp = await fixture.request(`/api/v1/tickets/${ticket}`, { method: 'PATCH', apiKey: credential.apiKey,
+        body: { status: 'resolved' }, ip: `${fixture.rateLimitIdentity}-canonical-sli-noop` });
+      await expectStatus(noOp, 200, 'Unchanged audited PATCH');
+      return ticket;
+    });
+    assert.equal(typeof captured.result, 'string');
+    assert.deepEqual(captured.events, [
+      { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
+        counts: { attempted: 1, durablyCompleted: 1, replayed: 0, noOp: 0, denied: 0, uncertain: 0 } },
+      { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
+        counts: { attempted: 1, durablyCompleted: 1, replayed: 0, noOp: 0, denied: 0, uncertain: 0 } },
+      { version: 1, type: 'canonical_mutation.sli.request', scope: 'request', complete: true,
+        counts: { attempted: 1, durablyCompleted: 0, replayed: 0, noOp: 1, denied: 0, uncertain: 0 } },
+    ]);
+    assert.equal(JSON.stringify(captured.events).includes(privateBody), false, 'Canonical summaries omit dashboard content');
+    assert.equal(JSON.stringify(captured.events).includes(fixture.principals.customerA.tenantId), false, 'Canonical summaries omit tenant IDs');
   });
 });
 

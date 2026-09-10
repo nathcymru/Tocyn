@@ -274,6 +274,8 @@ describe("v1 Handler Integration Tests", () => {
 
   describe("PATCH /tickets/:id", () => {
     it("should update ticket properties", async () => {
+      // D1 returns one result for each submitted batch statement.
+      mockDB.batch.mockImplementation(async (statements: unknown[]) => statements.map((_, index) => ({ results: index >= statements.length - 2 ? [{ id: 't-123' }] : [] })));
       const res = await request("/tickets/t-123", {
         method: "PATCH",
         headers: {

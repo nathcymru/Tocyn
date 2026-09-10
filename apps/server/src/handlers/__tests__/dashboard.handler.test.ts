@@ -200,6 +200,8 @@ describe("Dashboard Handler Integration Tests", () => {
 
   describe("PATCH /tickets/:id", () => {
     it("should update ticket and create a system note", async () => {
+      // D1 returns one result for each submitted batch statement.
+      mockDB.batch.mockImplementation(async (statements: unknown[]) => statements.map((_, index) => ({ results: index >= statements.length - 2 ? [{ id: 't-1' }] : [] })));
       mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
 
       const validUuid = "123e4567-e89b-12d3-a456-426614174000";

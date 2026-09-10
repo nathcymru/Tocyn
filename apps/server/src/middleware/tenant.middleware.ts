@@ -60,7 +60,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
   const betaAdmission = guarded
     ? new LocalBetaAdmissionRepository(db, scope, { kind, id: scope.actorId }, credential)
     : undefined;
-  const repositories = createRepositories(scope, db, betaAdmission);
+  const repositories = createRepositories(scope, db, betaAdmission, canonicalMutationSli);
   const attachmentStorage = betaAdmission
     ? new LocalBetaAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, betaAdmission, emitResourceOperation)
     : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation);
@@ -73,7 +73,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     capabilityPolicy: new CapabilityPolicyService(db, scope),
     betaAdmission,
     boundedConversationRead: betaAdmission ? new BoundedConversationReadRepository(db, scope) : undefined,
-    conversationAudit: new ConversationAuditRepository(db, scope, betaAdmission),
+    conversationAudit: new ConversationAuditRepository(db, scope, betaAdmission, canonicalMutationSli),
     canonicalMutationSli,
     ticketMutations: new TicketMutationReplayRepository(db, scope, betaAdmission, canonicalMutationSli),
     repositories,
