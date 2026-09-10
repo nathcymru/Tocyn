@@ -54,7 +54,7 @@ it('keeps QA controls visible and named, guards pending writes and exposes retry
   vi.mocked(dashboardApi.post).mockImplementationOnce(()=>new Promise((_resolve,reject)=>{fail=reject;}));
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets/ticket']}><Routes><Route path="/tickets/:id" element={<TicketDetailPage/>}/></Routes></MemoryRouter></QueryClientProvider>);
-  const question=await screen.findByRole('button',{name:'Mark as question'});
+  const question=await screen.findByRole('button',{name:'Mark as SOP (internal procedure)'});
   expect(question).toHaveAttribute('aria-pressed','false');
   expect(question.parentElement?.parentElement?.className).not.toContain('opacity-0');
   fireEvent.click(question);fireEvent.click(question);
@@ -63,10 +63,10 @@ it('keeps QA controls visible and named, guards pending writes and exposes retry
   expect(await screen.findByRole('alert')).toHaveTextContent('QA marking could not be confirmed');
   expect(screen.queryByText(/private synthetic failure detail/)).not.toBeInTheDocument();
   expect(question).toBeEnabled();
-  vi.mocked(dashboardApi.post).mockImplementationOnce(async()=>{current.qa_type='question';return {} as never;});
+  vi.mocked(dashboardApi.post).mockImplementationOnce(async()=>{current.qa_type='sop';return {} as never;});
   fireEvent.click(question);
   await waitFor(()=>expect(question).toHaveAttribute('aria-pressed','true'));
-  expect(dashboardApi.post).toHaveBeenLastCalledWith('/knowledge/articles/qa-article/qa',{type:'question'});
+  expect(dashboardApi.post).toHaveBeenLastCalledWith('/knowledge/articles/qa-article/qa',{type:'sop'});
   expect(screen.getByText('QA marked')).toBeInTheDocument();expect(screen.queryByText('INDEXED')).not.toBeInTheDocument();
   client.clear();
 });
@@ -79,4 +79,16 @@ it('exposes all verified viewer names beyond the three visible avatars',async()=
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets/ticket']}><Routes><Route path="/tickets/:id" element={<TicketDetailPage/>}/></Routes></MemoryRouter></QueryClientProvider>);
   expect(await screen.findByText('Viewing this ticket: Synthetic viewer 0, Synthetic viewer 1, Synthetic viewer 2, Synthetic viewer 3')).toBeInTheDocument();
   expect(screen.queryByText(/Different ticket viewer/)).not.toBeInTheDocument();client.clear();
+});
+
+
+it('retains legacy Question records visibly without sending a conversion request',async()=>{
+  vi.mocked(dashboardApi.get).mockResolvedValue({...ticket,articles:[{...article('legacy','Existing synthetic message'),qa_type:'question'}],pagination:{has_more:false,next_cursor:null}} as never);
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets/ticket']}><Routes><Route path="/tickets/:id" element={<TicketDetailPage/>}/></Routes></MemoryRouter></QueryClientProvider>);
+  expect(await screen.findByText(/Legacy Question marker retained/)).toBeInTheDocument();
+  const sop=screen.getByRole('button',{name:'Mark as SOP (internal procedure)'});expect(sop).toBeDisabled();
+  expect(screen.getByRole('button',{name:'Mark as answer'})).toBeDisabled();
+  fireEvent.click(sop);expect(dashboardApi.post).not.toHaveBeenCalled();expect(screen.getByText('Existing synthetic message')).toBeInTheDocument();
+  client.clear();
 });

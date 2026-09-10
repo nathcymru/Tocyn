@@ -161,7 +161,7 @@ function TicketDetail({ id }: { id: string }) {
     }
   };
 
-  const handleToggleQa = async (articleId: string, type: 'question' | 'answer' | null) => {
+  const handleToggleQa = async (articleId: string, type: 'sop' | 'answer' | null) => {
     if (qaChanging.current) return;
     qaChanging.current = true; setQaPending(true); setChangeError(null); setNotice('');
     try {
@@ -404,21 +404,22 @@ function TicketDetail({ id }: { id: string }) {
                     </div>
                   )}
 
+                  {article.qa_type === 'question' && <p className="text-sm text-slate-700 bg-white p-2">Legacy Question marker retained. Compatibility review is required before changing this marker.</p>}
                   {/* QA Toggle Buttons */}
                   <div className="mt-3 p-2 rounded bg-white text-slate-900 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <TocynButton
-                        aria-label="Mark as question" aria-pressed={article.qa_type === 'question'} disabled={qaPending}
-                        onClick={() => handleToggleQa(article.id, article.qa_type === 'question' ? null : 'question')}
+                        aria-label="Mark as SOP (internal procedure)" aria-pressed={article.qa_type === 'sop'} disabled={qaPending || article.qa_type === 'question'}
+                        onClick={() => handleToggleQa(article.id, article.qa_type === 'sop' ? null : 'sop')}
                         className={clsx(
                           "min-h-11 text-xs font-semibold px-3 py-2 rounded border transition-colors",
-                          article.qa_type === 'question' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 border-slate-400 hover:bg-slate-100"
+                          article.qa_type === 'sop' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 border-slate-400 hover:bg-slate-100"
                         )}
                       >
-                        {article.qa_type === 'question' ? '✓ Question' : 'Mark as Question'}
+                        {article.qa_type === 'sop' ? '✓ SOP (internal)' : 'Mark as SOP (internal)'}
                       </TocynButton>
                       <TocynButton
-                        aria-label="Mark as answer" aria-pressed={article.qa_type === 'answer'} disabled={qaPending}
+                        aria-label="Mark as answer" aria-pressed={article.qa_type === 'answer'} disabled={qaPending || article.qa_type === 'question'}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'answer' ? null : 'answer')}
                         className={clsx(
                           "min-h-11 text-xs font-semibold px-3 py-2 rounded border transition-colors",
