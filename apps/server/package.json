@@ -38,6 +38,7 @@
     "test:operator-workflow": "tsx --test scripts/operator-workflow.test.ts",
     "typecheck:operator-workflow": "tsc -p scripts/tsconfig.operator-workflow.json",
     "test:operational-performance": "tsx --test scripts/operational-performance.test.ts",
+    "test:observability-config": "node --test scripts/observability-config.test.mjs",
     "typecheck:operational-performance": "tsc -p scripts/tsconfig.operational-performance.json",
     "evidence:operational-performance": "tsx scripts/run-operational-performance.ts"
   },

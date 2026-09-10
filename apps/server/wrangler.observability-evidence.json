@@ -1,17 +1,19 @@
 {
-  "name": "tocyn-server-local",
+  "name": "tocyn-server-observability-evidence",
   "main": "src/local-index.ts",
   "compatibility_date": "2024-04-01",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "ENVIRONMENT": "local",
+    "OBSERVABILITY_MODE": "isolated-evidence",
+    "LOCAL_BETA_ENABLED": "true",
     "PORTAL_URL": "http://localhost:5174",
     "CORS_ORIGINS": "http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174,http://127.0.0.1:5173"
   },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "tocyn-local",
+      "database_name": "tocyn-observability-evidence",
       "migrations_dir": "migrations",
       "remote": false
     }
@@ -19,7 +21,7 @@
   "r2_buckets": [
     {
       "binding": "ATTACHMENTS_BUCKET",
-      "bucket_name": "tocyn-local-attachments",
+      "bucket_name": "tocyn-observability-evidence-attachments",
       "remote": false
     }
   ],
