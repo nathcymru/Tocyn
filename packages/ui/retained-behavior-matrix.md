@@ -12,6 +12,10 @@ Native controls and retained complex-control migrations are implemented in draft
 - Remaining acceptance: full affected application/ShadowRoot browser and assistive-technology coverage, contrast/visual checks, justified final performance budgets and exact integrated-revision validation. No issue closure or beta.2 readiness is inferred.
 - Workspace state/navigation semantics, full SLA/ownership, theme persistence (#66) and wrapper lifecycle (#67) retain their separate ownership and gates.
 
+## Public contract coverage
+
+`src/type-tests/downstream-contracts.tsx` compile-checks direct downstream interface extension for every Tocyn-owned public component, including native/ARIA/event/ref properties and bounded state where exposed. Negative cases reject incompatible refs, invalid native fields and unknown button state. Workspace wrappers forward their actual div/section refs; runtime tests verify all five refs and unmount cleanup. Vendored Ark parts retain upstream types; this does not claim a downstream extension test for every upstream internal component. The compile-only module must remain outside application imports.
+
 ## Retained composition inventory
 
 These rows supplement the native-control inventory below. “Implemented” means draft source and scoped regression evidence, not final acceptance. Browser/AT, visual and final performance gates above remain open.

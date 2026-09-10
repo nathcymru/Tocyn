@@ -70,11 +70,27 @@ describe('named primitive contracts', () => {
   });
 
   it('exposes stable labelled workspace regions without owning application state', () => {
-    render(<WorkspaceShell><WorkViewNavigator /><ConversationList /><ActiveConversation /><ContextPanel /></WorkspaceShell>);
+    const shellRef = React.createRef<HTMLDivElement>();
+    const regionRef = React.createRef<HTMLElement>();
+    const listRef = React.createRef<HTMLElement>();
+    const conversationRef = React.createRef<HTMLElement>();
+    const contextRef = React.createRef<HTMLElement>();
+    const { unmount } = render(<WorkspaceShell ref={shellRef}><WorkViewNavigator ref={regionRef} /><ConversationList ref={listRef} /><ActiveConversation ref={conversationRef} /><ContextPanel ref={contextRef} /></WorkspaceShell>);
+    expect(shellRef.current).toBe(document.querySelector('[data-tocyn-workspace]'));
     expect(screen.getByRole('region', { name: 'Work views' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Conversations' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Active conversation' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Context' })).toBeInTheDocument();
+    expect(regionRef.current).toBe(screen.getByRole('region', { name: 'Work views' }));
+    expect(listRef.current).toBe(screen.getByRole('region', { name: 'Conversations' }));
+    expect(conversationRef.current).toBe(screen.getByRole('region', { name: 'Active conversation' }));
+    expect(contextRef.current).toBe(screen.getByRole('region', { name: 'Context' }));
+    unmount();
+    expect(shellRef.current).toBeNull();
+    expect(regionRef.current).toBeNull();
+    expect(listRef.current).toBeNull();
+    expect(conversationRef.current).toBeNull();
+    expect(contextRef.current).toBeNull();
   });
 });
 

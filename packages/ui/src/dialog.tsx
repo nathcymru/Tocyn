@@ -3,6 +3,7 @@ import { TocynButton } from './primitives';
 import { Dialog } from '@ark-ui/react/dialog';
 
 export interface TocynDialogProps extends React.HTMLAttributes<HTMLDivElement> {
+  ref?: React.Ref<HTMLDivElement>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy?: boolean;

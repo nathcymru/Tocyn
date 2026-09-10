@@ -31,6 +31,7 @@ export const TocynPanel = React.forwardRef<HTMLElement, TocynPanelProps>(functio
 });
 
 export interface WorkspaceRegionProps extends React.HTMLAttributes<HTMLElement> {
+  ref?: React.Ref<HTMLElement>;
   label: string;
   children?: React.ReactNode;
 }
