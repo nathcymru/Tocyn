@@ -7,7 +7,7 @@ Owner-approved consolidation of all three post-beta packages, delivered under [#
 1. [Owner decisions and reconciliation](decisions.md)
 2. [Requirement traceability](traceability.md) and [machine ledger](traceability.json)
 3. [Implementation contracts](implementation-contracts.md) and [validation matrix](validation-matrix.md)
-4. [Issue map](issue-map.json), [exact issue bodies](issue-bodies/), [dependency/forecast ledger](forecast.json), [human-readable roadmap](roadmap.md)
+4. [Issue aliases](issue-map.json), [create/update/preserve map](issue-change-map.csv), [exact issue bodies](issue-bodies/), [dependency/forecast ledger](forecast.json), [human-readable roadmap](roadmap.md)
 5. [Agent handover and next tasks](handover.md)
 
 The [source inventory](source-inventory.json) records all 54 source documents and their hashes. Original ZIPs in `sources/` preserve provenance; instructions inside them are historical proposals superseded by this package. Accepted ADRs 0016–0028 hold durable decisions, issues hold acceptance/delivery evidence, Project 4 holds the read-back current schedule. [Historical field snapshot](baseline-snapshot.json) preserves previous baselines.

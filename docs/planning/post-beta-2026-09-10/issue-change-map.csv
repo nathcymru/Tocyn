@@ -1,0 +1,102 @@
+issue,operation,alias,title,implementation_status,body,dependencies
+126,create alignment owner,ALIGN,Reconcile master baseline,planning delivery,https://github.com/nathcymru/Tocyn/issues/126,
+108,preserve completed,#108,Patch the local integration image dependency advisory,accepted historical completion,,
+106,preserve completed,#106,Patch the development test-runner security advisory,accepted historical completion,,
+99,preserve completed,#99,Restore badges and distinguish target architecture from delivery status,accepted historical completion,,
+96,preserve completed,#96,"Complete repository, architecture and privacy documentation",accepted historical completion,,
+93,preserve completed,#93,Enforce private-beta resource guardrails,accepted historical completion,,
+92,update,#92,Attach bounded telemetry to programmatic support intake,outstanding,issue-bodies/92.md,"60,91"
+91,update,#91,Recover accepted payloads through durable storage journals,outstanding,issue-bodies/91.md,"50,59"
+90,update,#90,Expose owner and tenant Cost & Capacity controls,outstanding,issue-bodies/90.md,"50,64,66"
+89,update,#89,Enable verified canonical support-email conversations,outstanding,issue-bodies/89.md,"57,87,88"
+88,update,#88,Dispatch transactional outbound intents reliably,outstanding,issue-bodies/88.md,"63,64,87"
+87,update,#87,Normalise provider events into reliable conversation state,outstanding,issue-bodies/87.md,"51,59,91"
+86,update,#86,Expose authorised deterministic self-service actions,outstanding,issue-bodies/86.md,"61,81,83"
+85,update,#85,Report operational performance and quality metrics,outstanding,issue-bodies/85.md,"73,84,162"
+84,update,#84,Review agent interactions through auditable QA workflows,outstanding,issue-bodies/84.md,"63,82"
+83,update,#83,Transfer live agentic work safely to human operators,outstanding,issue-bodies/83.md,"70,80,81"
+82,update,#82,Resolve reference-service tickets through bounded autonomous workflows,outstanding,issue-bodies/82.md,"76,80,81,83"
+81,update,#81,Bind human approvals to specific proposed actions,outstanding,issue-bodies/81.md,80
+80,update,#80,Validate governed actions against an isolated reference API,outstanding,issue-bodies/80.md,"63,64,79"
+79,update,#79,Enforce granular human and agent capabilities,outstanding,issue-bodies/79.md,"19,63"
+78,update,#78,Author and publish governed diagnostic workflows visually,outstanding,issue-bodies/78.md,"66,79,80,81,82"
+77,update,#77,Expand the operator copilot with translation and runbooks,outstanding,issue-bodies/77.md,"68,76,152"
+76,update,#76,Add bounded triage and conversation summarisation,outstanding,issue-bodies/76.md,"75,152"
+75,update,#75,Enrich intake with authorised operational context,outstanding,issue-bodies/75.md,"64,79"
+74,update,#74,Preserve conversations across verified channel changes,outstanding,issue-bodies/74.md,"53,61,87"
+73,update,#73,Expose SLA progress and responsible handlers,outstanding,issue-bodies/73.md,"61,63,136,162"
+72,update,#72,Split and merge tickets without losing context,outstanding,issue-bodies/72.md,"59,63,70"
+71,update,#71,Enable keyboard-first workspace navigation,outstanding,issue-bodies/71.md,"62,66,128"
+70,update,#70,Add typing awareness and private colleague collaboration,outstanding,issue-bodies/70.md,"63,68"
+69,update,#69,Add reusable responses and safe operator macros,outstanding,issue-bodies/69.md,68
+68,update,#68,Add a rich conversation composer,outstanding,issue-bodies/68.md,"48,66,129"
+67,update,#67,Package isolated helpdesk Web Components,outstanding,issue-bodies/67.md,"48,66"
+66,update,#66,Apply tenant themes through standard CSS variables,outstanding,issue-bodies/66.md,48
+65,preserve completed,#65,Rehearse and publish the human-led private beta,accepted historical completion,,
+64,update,#64,Enforce resource budgets across active application paths,outstanding,issue-bodies/64.md,"50,60,93,159"
+63,preserve completed,#63,Record attributable ticket and conversation audit events,accepted historical completion,,
+62,preserve completed,#62,Validate human handling of canonical ticket intake,accepted historical completion,,
+61,preserve completed,#61,Validate authenticated portal conversations end to end,accepted historical completion,,
+60,preserve completed,#60,Make API and portal mutations validated and retry-safe,accepted historical completion,,
+59,preserve completed,#59,Map API and portal intake onto canonical conversation contracts,accepted historical completion,,
+58,preserve completed,#58,Provision isolated test tenants reproducibly,accepted historical completion,,
+57,preserve completed,#57,Establish isolated preview and beta deployments,accepted historical completion,,
+56,update,#56,Implement tenant-owned Telegram support messaging,outstanding,issue-bodies/56.md,"66,87,88"
+55,update,#55,Implement tenant-owned WhatsApp messaging,outstanding,issue-bodies/55.md,"66,87,88"
+54,update,#54,Implement tenant-owned Microsoft Teams support channels,outstanding,issue-bodies/54.md,"66,87,88"
+53,update,#53,Implement tenant-owned Slack support channels,outstanding,issue-bodies/53.md,"66,87,88"
+52,update,#52,Deliver signed tenant webhook subscriptions reliably,outstanding,issue-bodies/52.md,"50,64,88"
+51,update,#51,Implement authenticated durable webhook ingress,outstanding,issue-bodies/51.md,"50,64,91"
+50,update,#50,Define enforceable cost policies and resource budgets,outstanding,issue-bodies/50.md,
+49,update,#49,Track delivery of the omnichannel architecture,outstanding,issue-bodies/49.md,"51,52,53,54,55,56,74,89,90"
+48,update,#48,Establish shared headless primitives for standalone Tocyn,outstanding,issue-bodies/48.md,127
+45,update,#45,Evaluate deferred major dependency and Actions upgrades,outstanding,issue-bodies/45.md,12
+44,update,#44,Retire inactive services while preserving regression coverage,outstanding,issue-bodies/44.md,14
+42,update,#42,Validate production cutover and rollback readiness,outstanding,issue-bodies/42.md,"65,159,160"
+22,reopen and update,#22,Complete remaining repository launch administration,outstanding,issue-bodies/22.md,65
+21,preserve completed,#21,Validate accessibility of core operator and portal workflows,accepted historical completion,,
+20,preserve completed,#20,Verify reproducible local contributor setup,accepted historical completion,,
+19,preserve completed,#19,Complete tenant-isolation acceptance coverage,accepted historical completion,,
+18,update,#18,Migrate transactional mail to Cloudflare-native delivery,outstanding,issue-bodies/18.md,57
+17,update,#17,Complete FidesLang coverage and optional user controls,outstanding,issue-bodies/17.md,16
+16,update,#16,Establish measurable FidesLang coverage,outstanding,issue-bodies/16.md,"59,91"
+15,preserve completed,#15,Audit codebase health and test coverage,accepted historical completion,,
+14,update,#14,Standardise repository formatting and lint conventions,outstanding,issue-bodies/14.md,
+13,preserve completed,#13,Review and remediate codebase security vulnerabilities,accepted historical completion,,
+12,update,#12,Verify required checks on dependency-only pull requests,outstanding,issue-bodies/12.md,
+127,create,NEW-UX-01,Define the post-beta operator workspace interaction contract,outstanding,issue-bodies/127.md,62
+128,create,NEW-UX-02,Build the persistent progressive operator workspace,outstanding,issue-bodies/128.md,"127,129,130,48,66"
+129,create,NEW-UX-03,"Persist operator drafts, selection and workspace continuity",outstanding,issue-bodies/129.md,"127,60,63,79"
+130,create,NEW-UX-04,Add task-based work queues and snooze/resurface,outstanding,issue-bodies/130.md,"129,136,73,64"
+131,create,NEW-UX-05,Unify global search and scoped inbox filtering,outstanding,issue-bodies/131.md,"128,71"
+132,create,NEW-UX-06,Add cognitive-accessibility workspace preferences and focus mode,outstanding,issue-bodies/132.md,"128,66"
+133,create,NEW-UX-07,Replace transient ticket toasts with durable operator activity,outstanding,issue-bodies/133.md,"128,63,70,66"
+134,create,NEW-UX-08,Add customer context and contextual support panels,outstanding,issue-bodies/134.md,"128,132,63"
+135,create,NEW-UX-09,Add configurable Table view and safe bulk ticket actions,outstanding,issue-bodies/135.md,"128,60,64,79"
+136,create,NEW-UX-10,Add explicit waiting reasons and configurable support workflow states,outstanding,issue-bodies/136.md,"127,60,63,79"
+137,create,NEW-UX-11,Add workload-aware queues and operator capacity controls,outstanding,issue-bodies/137.md,"73,79,162,130"
+138,create,NEW-UX-12,"Define workspace utility actions for call, remote support and external tools",outstanding,issue-bodies/138.md,"128,79"
+139,create,NEW-UX-13,Measure operator interaction performance and enforce UI response budgets,outstanding,issue-bodies/139.md,"128,48"
+140,create,NEW-UX-14,Validate the redesigned operator workspace for usability and cognitive accessibility,outstanding,issue-bodies/140.md,"128,129,130,131,132,133,134,135,136,137,138,139,48,66,68,70,71,73,79"
+141,create,PG-GOV-00,Track delivery of the approved helpdesk capability extensions,outstanding,issue-bodies/141.md,"142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158"
+142,create,PG-RT-01,Prove the Cloudflare Realtime support-session architecture,outstanding,issue-bodies/142.md,"50,74,79,87,88,90"
+143,create,PG-RT-02,Model tenant-scoped realtime support sessions and media permissions,outstanding,issue-bodies/143.md,"142,50,64,74,79"
+144,create,PG-RT-03,"Add browser voice, video and screen-sharing support sessions",outstanding,issue-bodies/144.md,"143,48,68,70,74"
+145,create,PG-RT-04,Implement a tenant-owned telephony gateway for inbound and outbound calls,outstanding,issue-bodies/145.md,"142,143,74,79,87,88,90"
+146,create,PG-RT-05,"Add voicemail, callback, transfer and call-queue operations",outstanding,issue-bodies/146.md,"145,70,73,79"
+147,create,PG-RT-06,Record and transcribe support sessions under tenant policy,outstanding,issue-bodies/147.md,"143,50,90"
+148,create,PG-RT-07,"Integrate realtime support artefacts into conversations, QA and reporting",outstanding,issue-bodies/148.md,"144,146,147,76,77,84,85"
+149,create,PG-TK-01,Create linked back-office work items without exposing customer conversations,outstanding,issue-bodies/149.md,"70,72,79"
+150,create,PG-TK-02,Track service problems and incidents across affected conversations,outstanding,issue-bodies/150.md,"149,72,79,88"
+151,create,PG-KB-01,Ingest tenant PDF knowledge with lifecycle-safe provenance,outstanding,issue-bodies/151.md,"50,64,79"
+152,create,PG-KB-02,Bind AI assistance to authorised tenant knowledge scopes,outstanding,issue-bodies/152.md,"151,79"
+153,create,PG-AP-01,Render governed operator applets from declarative schemas,outstanding,issue-bodies/153.md,"48,68,75,79,80,81"
+154,create,PG-AP-02,"Author, validate and publish tenant applets safely",outstanding,issue-bodies/154.md,"153,66,78,79,80,81"
+155,create,PG-FB-01,Capture tenant-scoped CSAT and CES feedback,outstanding,issue-bodies/155.md,"73,79,88"
+156,create,PG-RP-01,Expose a live support-operations management dashboard,outstanding,issue-bodies/156.md,"73,85,155,150,148"
+157,create,PG-RP-02,Build bounded tenant-defined operational reports,outstanding,issue-bodies/157.md,"50,79,85,155"
+158,create,PG-ID-01,Accept verified Cloudflare Access workforce identity without weakening Tocyn authorisation,outstanding,issue-bodies/158.md,79
+159,create,OBS,Establish operational observability and service-level objectives,outstanding,issue-bodies/159.md,"50,63"
+160,create,RES,Define deployment residency and jurisdiction boundaries,outstanding,issue-bodies/160.md,19
+161,create,AIG,"Evaluate AI inference routing, caching and provider fallback",outstanding,issue-bodies/161.md,"50,64,76"
+162,create,METRICS-FOUNDATION,Define operational metric contracts for SLA and routing,outstanding,issue-bodies/162.md,"63,79"

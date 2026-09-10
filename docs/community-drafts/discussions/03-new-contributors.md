@@ -1,3 +1,5 @@
+> Historical community draft. Current published architecture, roadmap and Wiki guidance are maintained in [the master baseline](https://github.com/nathcymru/Tocyn/blob/main/docs/planning/post-beta-2026-09-10/README.md) and `docs/wiki-sync/`. Preserve this text as drafting history; do not republish it over current guidance.
+
 # New to Tocyn? Find a useful first contribution
 
 You are welcome here whether your strengths are code, documentation, testing, accessibility or security.
