@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createRequestAuthSli } from '../request-auth-sli';
 
-describe('request-scoped app-session auth SLI', () => {
+describe('request-scoped credential auth SLI', () => {
   it('keeps one unsampled fixed-dimension trusted decision', () => {
     const sli = createRequestAuthSli();
     sli.record('accepted');
     expect(sli.snapshot()).toEqual({
       version: 1,
       type: 'auth.sli.request',
-      scope: 'app-session',
+      scope: 'credential',
       complete: true,
       counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 },
     });

@@ -9,11 +9,11 @@ import { getCookie } from "hono/cookie";
 import { createVerifiedTenantScope } from "../auth/scope";
 import { createTenantRequestDeps } from "./tenant.middleware";
 import { UserAuthResolver, UserAuthResolution } from "../auth/user-auth-resolver";
-import type { AppSessionAuthDecision } from '../observability/request-auth-sli';
+import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 
 export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next) => {
   let recorded = false;
-  const record = (decision: AppSessionAuthDecision) => {
+  const record = (decision: RequestCredentialAuthDecision) => {
     if (recorded) return;
     recorded = true;
     try { c.get('requestAuthSli')?.record(decision); } catch { /* Evidence cannot affect authentication. */ }

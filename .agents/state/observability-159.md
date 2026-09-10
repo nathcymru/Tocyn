@@ -115,3 +115,10 @@ Current worker complete; root ownsintegration/exactheadCI. Remaining159includes 
 NativeTerra/high worker extended request canonical summaries to dashboard atomic ticket creation and audited dashboard/API PATCH. An explicit internal {ticket,changed} outcome uses the committed UPDATE RETURNING row; unchanged updates record fixednoOp, not durablechange. Existing publicresponses and broadcastbehavior remainunchanged. Sameone-summary/request cap, M≤H; costboundstillH+A+M+64C≤3H+64C.
 
 Root found missing/malformed batch results could be mislabelednoOp. Added result-shape failure→uncertainty regression and preservedfailure behavior, correctedthreeoldhandler mocks to return oneD1result perstatement. Full506tests/58files, serverTypeScript, focusedlint and rootrealMiniflareconversation-audit9tests pass. Worker also passedatomic2/replayruntime/focused46/scriptTypes. The sourceSLIschema remainsdraftv1 with newnoOpfield; no deployedconsumercompatibilityclaim. Remaining159authissuance/widget/APIkeySLIs, activeoperationcoverage and completefailure/collectionacceptance stayopen. No production/Copilot/forecastchange.
+
+
+## API-key and customer credential coverage — 10 September 2026
+
+NativeTerra/high extended the same requestauthSLI to APIkey and widget/customer middleware after trusted currentcredentialvalidation. Scope is nowcredential, includingstaff; permission/admission/foreignresourcedecisions remainseparate. Duplicatecredentialgates markevidenceincomplete, neverdoublecount. Resolver/runtimefaults distinguishunavailable fromexplicitinvalid/revokeddenial. Rootreviewed splitresolution/composition andrenamed costboundcredentialAuthRequests toreflectallcurrentgates; maximumemissionsunchanged.
+
+WorkerrealMiniflaretenant-core2tests provevalid API/widgetcredentials, foreignresource404withacceptedauthentication, revocations andthrowingobserver leavingvalidAPI200. Workerfocused28+57tests/type/lintpassed; rootfull506tests/58files andserverTypeScriptpassed. Password/MFAissuance and realtimecredentials remainexplicitnextscope; no productiontelemetry orcomplete159claim. ExactnewheadCI pending; noCopilot/paid/remoteactions orforecastchange.

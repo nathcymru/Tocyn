@@ -33,8 +33,8 @@ describe('diagnostic workload accounting contract', () => {
 });
 
 it('allows lower auth bounds only inside the trusted HTTP workload ceiling', () => {
-  expect(estimateDiagnosticEnvelope({ httpRequests: 2, resourceCompositions: 0, appSessionAuthRequests: 0, canonicalMutationRequests: 0 })).toEqual({ logEvents: 2, traceEvents: 0 });
-  for (const value of [-1, 3, 0.5, NaN, Infinity]) expect(() => estimateDiagnosticEnvelope({ httpRequests: 2, resourceCompositions: 0, appSessionAuthRequests: value })).toThrow();
+  expect(estimateDiagnosticEnvelope({ httpRequests: 2, resourceCompositions: 0, credentialAuthRequests: 0, canonicalMutationRequests: 0 })).toEqual({ logEvents: 2, traceEvents: 0 });
+  for (const value of [-1, 3, 0.5, NaN, Infinity]) expect(() => estimateDiagnosticEnvelope({ httpRequests: 2, resourceCompositions: 0, credentialAuthRequests: value })).toThrow();
 });
 
 it('reserves simultaneous auth and canonical summaries and rejects understated invalid bounds', () => {

@@ -22,6 +22,16 @@ export async function resolveApiKeyRequestDeps(
     return null;
   }
 
+  return composeApiKeyRequestDeps(resolution, env, canonicalMutationSli);
+}
+
+/** Builds trusted dependencies only after API-key credential resolution. */
+export async function composeApiKeyRequestDeps(
+  resolution: ApiKeyResolution,
+  env: Env,
+  canonicalMutationSli?: RequestCanonicalMutationSli,
+): Promise<{ deps: TenantRequestDeps; resolution: ApiKeyResolution }> {
+
   // Integration principal — NOT createSystemTenantScope
   const scope = createVerifiedTenantScope(
     resolution.tenantId,

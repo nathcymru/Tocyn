@@ -268,7 +268,7 @@ describe("Auth & Tenant Middleware Chain Integration", () => {
   });
 });
 
-describe('isolated request app-session SLI integration', () => {
+describe('isolated request credential SLI integration', () => {
   const secret = new TextEncoder().encode(JWT_SECRET);
   const enabled = { JWT_SECRET, ENVIRONMENT: 'test', LOCAL_BETA_ENABLED: 'false', OBSERVABILITY_MODE: 'isolated-evidence' } as Env;
 
@@ -303,9 +303,9 @@ describe('isolated request app-session SLI integration', () => {
     expect(unavailable.status).toBe(401);
 
     expect(signals).toEqual([
-      { version: 1, type: 'auth.sli.request', scope: 'app-session', complete: true, counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
-      { version: 1, type: 'auth.sli.request', scope: 'app-session', complete: true, counts: { attempted: 1, accepted: 0, denied: 0, unavailable: 0, challenge: 1 } },
-      { version: 1, type: 'auth.sli.request', scope: 'app-session', complete: true, counts: { attempted: 1, accepted: 0, denied: 0, unavailable: 1, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true, counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true, counts: { attempted: 1, accepted: 0, denied: 0, unavailable: 0, challenge: 1 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true, counts: { attempted: 1, accepted: 0, denied: 0, unavailable: 1, challenge: 0 } },
     ]);
     expect(JSON.stringify(signals)).not.toContain('staff-1');
   });

@@ -1,17 +1,17 @@
 /**
- * A single protected app-session gate may report one decision for its request.
+ * A single protected credential gate may report one decision for its request.
  * This is deliberately neither a global counter nor a sampled diagnostic
  * collector: callers own its lifetime and must export it before the request
  * ends if they need isolated-evidence output.
  */
 export const REQUEST_AUTH_SLI_VERSION = 1 as const;
 
-export type AppSessionAuthDecision = 'accepted' | 'denied' | 'unavailable' | 'challenge';
+export type RequestCredentialAuthDecision = 'accepted' | 'denied' | 'unavailable' | 'challenge';
 
 export type RequestAuthSliSnapshot = Readonly<{
   version: typeof REQUEST_AUTH_SLI_VERSION;
   type: 'auth.sli.request';
-  scope: 'app-session';
+  scope: 'credential';
   complete: boolean;
   counts: Readonly<{
     attempted: number;
@@ -24,7 +24,7 @@ export type RequestAuthSliSnapshot = Readonly<{
 
 export type RequestAuthSli = Readonly<{
   /** Records exactly one trusted decision. A duplicate makes this evidence incomplete. */
-  record: (decision: AppSessionAuthDecision) => void;
+  record: (decision: RequestCredentialAuthDecision) => void;
   /** Marks a failed optional observer without changing the request decision. */
   markObserverFault: () => void;
   hasDecision: () => boolean;
@@ -32,16 +32,16 @@ export type RequestAuthSli = Readonly<{
 }>;
 
 /**
- * Keeps a bounded unsampled denominator for exactly one request-scoped app
- * authentication decision. It intentionally exposes no tenant, actor,
+ * Keeps a bounded unsampled denominator for exactly one request-scoped
+ * credential decision. It intentionally exposes no tenant, actor,
  * credential, route, status, or error data.
  */
 export function createRequestAuthSli(): RequestAuthSli {
-  let decision: AppSessionAuthDecision | undefined;
+  let decision: RequestCredentialAuthDecision | undefined;
   let complete = true;
 
   return Object.freeze({
-    record(value: AppSessionAuthDecision): void {
+    record(value: RequestCredentialAuthDecision): void {
       if (decision !== undefined) {
         complete = false;
         return;
@@ -69,7 +69,7 @@ export function createRequestAuthSli(): RequestAuthSli {
       return Object.freeze({
         version: REQUEST_AUTH_SLI_VERSION,
         type: 'auth.sli.request' as const,
-        scope: 'app-session' as const,
+        scope: 'credential' as const,
         complete,
         counts,
       });
