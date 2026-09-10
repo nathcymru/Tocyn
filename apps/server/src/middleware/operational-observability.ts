@@ -11,15 +11,26 @@ function safeRoute(path: string): string {
 }
 
 export async function operationalObservability(c: Context<{ Bindings: Env }>, next: Next): Promise<void> {
-  const correlationId = crypto.randomUUID();
-  const started = Date.now();
+  let measurement: { correlationId: string; started: number } | undefined;
+  try {
+    if (observabilityEnabled(c.env)) measurement = { correlationId: crypto.randomUUID(), started: Date.now() };
+  } catch { /* Diagnostic initialization cannot prevent the request. */ }
+  let failed = false;
   try {
     await next();
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    if (!observabilityEnabled(c.env)) return;
-    const status = c.res.status;
-    const outcome = status >= 500 ? 'server_error' : status >= 400 ? 'client_error' : 'success';
-    try { console.log(JSON.stringify(operationalEvent({ correlationId, route: safeRoute(c.req.path), method: c.req.method, outcome, status, latencyMs: Date.now() - started }))); }
-    catch { /* Telemetry cannot affect authorization, isolation, or request recovery. */ }
+    // Never return from finally: doing so would suppress a downstream error
+    // whenever diagnostics are disabled. Even event construction is optional.
+    try {
+      if (measurement) {
+        const { correlationId, started } = measurement;
+        const status = failed ? 500 : c.res.status;
+        const outcome = status >= 500 ? 'server_error' : status >= 400 ? 'client_error' : 'success';
+        console.log(JSON.stringify(operationalEvent({ correlationId, route: safeRoute(c.req.path), method: c.req.method, outcome, status, latencyMs: Date.now() - started })));
+      }
+    } catch { /* Telemetry cannot affect authorization, isolation, or request recovery. */ }
   }
 }
