@@ -10,21 +10,31 @@ export async function measureOperations(options: {
   const now = options.now ?? (() => performance.now());
   let cursor = 0;
   const results: {latencyMs:number; matched:boolean; transportFailure:boolean}[] = [];
-  const start = now();
-  await Promise.all(Array.from({length:concurrency}, async () => {
-    while (cursor < samples) {
+  let stopped = false;
+  const readClock = () => {
+    const value = now();
+    if (!Number.isFinite(value)) throw new Error('Invalid measurement clock');
+    return value;
+  };
+  const start = readClock();
+  const workers = await Promise.allSettled(Array.from({length:concurrency}, async () => {
+    try {
+    while (!stopped && cursor < samples) {
       cursor++;
-      const began = now();
+      const began = readClock();
       let matched = false;
       let transportFailure = false;
       try { matched = (await run()).status === expectedStatus; }
       catch { transportFailure = true; }
-      const latencyMs = now() - began;
+      const latencyMs = readClock() - began;
       if (!Number.isFinite(latencyMs) || latencyMs < 0) throw new Error('Invalid measurement clock');
       results.push({latencyMs, matched, transportFailure});
     }
+    } catch { stopped = true; throw new Error('Invalid measurement clock'); }
   }));
-  const elapsedMs = now() - start;
+  // Drain requests already started before allowing the fixture owner to dispose its resources.
+  if (workers.some(worker => worker.status === 'rejected')) throw new Error('Invalid measurement clock');
+  const elapsedMs = readClock() - start;
   if (!Number.isFinite(elapsedMs) || elapsedMs < 0) throw new Error('Invalid measurement clock');
   const ordered = results.map(result=>result.latencyMs).sort((a,b)=>a-b);
   const percentile = (fraction:number) => ordered[Math.max(0, Math.ceil(ordered.length*fraction)-1)];

@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "result": "passed",
+  "kind": "tocyn-local-performance",
+  "recordedAt": "2026-09-10T16:31:55.910Z",
+  "revision": "07c2e0333fb1cf8b21998da44a9c207a0d25e0a7",
+  "dirty": false,
+  "sources": {
+    "scripts/run-operational-performance.ts": "71982bb1174be6a3098072714daf99dbdc970e80f128fab21d2151a021a100f0",
+    "scripts/operational-performance.ts": "3e7f5f4cf21ed9d0f3b8087a33555ce9af45db5c330ef760e8a7c06559bc42b3",
+    "scripts/local-tenant-fixture.ts": "5f0c607c218413775fcb8d82f980af8a0874e23ec8a335f24148dca975b25916"
+  },
+  "tools": {
+    "node": "v22.19.0",
+    "miniflare": "5.20260907.0-alpha",
+    "tsx": "4.23.13"
+  },
+  "environment": {
+    "mode": "disposable-miniflare",
+    "synthetic": true,
+    "remoteBindings": 0,
+    "telemetry": "off",
+    "cleanup": "disposed"
+  },
+  "configuration": {
+    "samplesPerScenario": 20,
+    "concurrency": 2,
+    "warmupPerScenario": 1
+  },
+  "measurements": [
+    {
+      "scenario": "health",
+      "warmupRequests": 1,
+      "samples": 20,
+      "concurrency": 2,
+      "expectedStatus": 200,
+      "elapsedMs": 1.4108329999999114,
+      "expectedResponses": 20,
+      "unexpectedResponses": 0,
+      "transportFailures": 0,
+      "latencyMs": {
+        "min": 0.031375000000025466,
+        "p50": 0.06841699999995399,
+        "p95": 0.39912500000014006,
+        "p99": 0.4304579999998168,
+        "max": 0.4304579999998168
+      },
+      "percentileMethod": "nearest-rank"
+    },
+    {
+      "scenario": "unauthenticated-metadata",
+      "warmupRequests": 1,
+      "samples": 20,
+      "concurrency": 2,
+      "expectedStatus": 401,
+      "elapsedMs": 2.3213750000002165,
+      "expectedResponses": 20,
+      "unexpectedResponses": 0,
+      "transportFailures": 0,
+      "latencyMs": {
+        "min": 0.11674999999991087,
+        "p50": 0.20191699999986668,
+        "p95": 0.4347500000001219,
+        "p99": 0.4653330000001006,
+        "max": 0.4653330000001006
+      },
+      "percentileMethod": "nearest-rank"
+    },
+    {
+      "scenario": "authenticated-metadata",
+      "warmupRequests": 1,
+      "samples": 20,
+      "concurrency": 2,
+      "expectedStatus": 200,
+      "elapsedMs": 1216.979625,
+      "expectedResponses": 20,
+      "unexpectedResponses": 0,
+      "transportFailures": 0,
+      "latencyMs": {
+        "min": 107.50900000000001,
+        "p50": 120.39945799999987,
+        "p95": 132.47616599999992,
+        "p99": 132.49791700000014,
+        "max": 132.49791700000014
+      },
+      "percentileMethod": "nearest-rank"
+    }
+  ],
+  "fixtureResources": {
+    "d1Rows": 7,
+    "r2Objects": 0,
+    "routeRequests": 65
+  },
+  "limitations": [
+    "Local Node-hosted application with real Miniflare bindings; not deployed Worker latency.",
+    "Three HTTP scenarios only; no canonical-write, R2, DO, Workflow, AI or Queue benchmark.",
+    "Stored-row/object counts are fixture inventory, not D1 read/write billing counts.",
+    "No global SLO ratified; ingress issue51 retains its separate measured target."
+  ]
+}

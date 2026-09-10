@@ -1,5 +1,15 @@
 # #159 implementation checkpoint
 
+## Current next actions (supersedes earlier queues below)
+
+Draft PR170 remains partial. Exact clean07c2e0333fb1cf8b21998da44a9c207a0d25e0a7 receipt is retained under docs/security/evidence/:60expected measured outcomes,0unexpected/transport failures,65total requests, disposed local fixture. Authenticated-metadata p95 in this run is132.476ms; this is a local concurrent observation, not a deployed Worker threshold or a regression claim against differently loaded runs. CI on07c2e03 passed all required checks.
+
+Sampler failure handling now drains started requests and stops new scheduling before returning a clock error; five sampler tests and its TypeScript check pass. Initial SLI denominators/numerators/windows, collector status and alert/runbook conditions are specified in the operational-observability contract. Unratified thresholds remain explicit and no collector or production configuration is inferred from the document.
+
+Next: active resource instrumentation and environment Logs/Tracing configuration, cost event-volume accounting, then exact-revision full validation and broader failure/tenant evidence. Canonical-write/D1-operation/R2/DO/Workflow/AI/pipeline measurements remain required. No acceptance closure or100percent claim.
+
+## Historical checkpoints
+
 Owning issue159 / draft PR170, branch codex/159-operational-observability; coordinator owns integration and acceptance. Initial worker Terra/high stopped at execution limit afterd023154; no active worker claim.
 
 Coordinator corrected optional-diagnostic exception handling: disabled telemetry no longer returns from finally and suppresses application errors. Initialization and sink failures do not prevent or replace application processing/errors. Thrown failures emit a sanitized500/server_error envelope when logging works; exception messages are excluded. Nine focused tests pass, covering original-error identity, denied-response preservation, disabled mode, sink failure and initialization failure. No remote resources, external services, Copilot review or deployment used.

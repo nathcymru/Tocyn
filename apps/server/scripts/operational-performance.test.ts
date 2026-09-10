@@ -27,3 +27,22 @@ test('rejects invalid bounds before performing a request',async()=>{
   }
   assert.equal(called,false);
 });
+
+test('drains in-flight requests and stops scheduling when the clock fails',async()=>{
+  const times=[0,1,2,0,3]; let calls=0; let settled=false;
+  const finishes:Array<()=>void>=[];
+  const measured=measureOperations({samples:10,concurrency:2,expectedStatus:200,now:()=>times.shift()!,run:()=>{
+    calls++;return new Promise(resolve=>finishes.push(()=>resolve({status:200})));
+  }});
+  const observed=measured.then(()=>{settled=true;return null;},error=>{settled=true;return error;});
+  assert.equal(calls,2);finishes[0]();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(settled,false);assert.equal(calls,2);
+  finishes[1]();const error=await observed;
+  assert.match(error.message,/Invalid measurement clock/);assert.equal(calls,2);
+});
+test('rejects a nonfinite starting clock before creating operations',async()=>{
+  let calls=0;
+  await assert.rejects(measureOperations({samples:1,concurrency:1,expectedStatus:200,now:()=>NaN,run:async()=>{calls++;return {status:200};}}),/Invalid measurement clock/);
+  assert.equal(calls,0);
+});
