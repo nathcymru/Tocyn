@@ -16,6 +16,7 @@ import v1 from './handlers/v1.handler';
 import widget from './handlers/widget.handler';
 import customerHandler from './handlers/customer.handler';
 import { environmentGuard } from './middleware/environment-guard';
+import { operationalObservability } from './middleware/operational-observability';
 import { AppVariables } from './types';
 
 export const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
@@ -28,6 +29,7 @@ app.onError((error,c) => {
 });
 app.use('*', environmentGuard);
 app.use('*', localBetaGuard);
+app.use('*', operationalObservability);
 
 app.get('/api/realtime', async (c) => {
   const upgradeHeader = c.req.header('Upgrade');

@@ -16,6 +16,8 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   ENVIRONMENT?: string;
+  /** Isolated synthetic observability evidence only; production remains gated by #42. */
+  OBSERVABILITY_MODE?: 'off' | 'isolated-evidence';
   /** Explicit guarded local-only beta profile; malformed values fail closed. */
   LOCAL_BETA_ENABLED?: string;
   INBOUND_EMAIL_AUTH_VERIFIED?: string;

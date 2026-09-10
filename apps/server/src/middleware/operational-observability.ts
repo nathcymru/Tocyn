@@ -1,0 +1,21 @@
+import type { Context, Next } from 'hono';
+import type { Env } from '../bindings';
+import { observabilityEnabled, operationalEvent } from '../observability/operational-events';
+
+function safeRoute(path: string): string {
+  return path.split('/').map(segment => /^[0-9a-f-]{8,}$/i.test(segment) || /^\d+$/.test(segment) ? ':id' : segment).join('/');
+}
+
+export async function operationalObservability(c: Context<{ Bindings: Env }>, next: Next): Promise<void> {
+  const correlationId = crypto.randomUUID();
+  const started = Date.now();
+  try {
+    await next();
+  } finally {
+    if (!observabilityEnabled(c.env)) return;
+    const status = c.res.status;
+    const outcome = status >= 500 ? 'server_error' : status >= 400 ? 'client_error' : 'success';
+    try { console.log(JSON.stringify(operationalEvent({ correlationId, route: safeRoute(c.req.path), method: c.req.method, outcome, status, latencyMs: Date.now() - started }))); }
+    catch { /* Telemetry cannot affect authorization, isolation, or request recovery. */ }
+  }
+}
