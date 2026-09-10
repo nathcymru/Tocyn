@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { InMemoryEmailTransport } from '../src/services/email/transport';
+import { capabilityWriteConstraint } from '../src/auth/capability-policy';
 
 async function run() {
   // Miniflare serializes its own Headers implementation across the R2 binding bridge.
@@ -48,6 +49,36 @@ async function run() {
     assert.strictEqual((await db.prepare("SELECT tenant_id FROM customer_auth_tokens WHERE id='migration-token'").first())?.tenant_id, 'default-tenant');
     assert.strictEqual((await db.prepare("SELECT body FROM articles WHERE tenant_id='default-tenant' AND id='migration-article'").first())?.body, 'Preserved legacy text');
     assert.strictEqual((await db.prepare('PRAGMA foreign_key_check').all()).results.length, 0);
+
+    // A D1 batch does not throw merely because an earlier statement affects
+    // zero rows. Every protected statement must carry the same write fence.
+    await db.batch([
+      db.prepare("INSERT INTO users (tenant_id, id, email, role, session_version) VALUES ('fence-tenant', 'fence-agent', 'fence@example.test', 'agent', 0)"),
+      db.prepare("INSERT INTO tenant_role_capability_policies (tenant_id, role, capability, enabled) VALUES ('fence-tenant', 'agent', 'settings.general.manage', 1)"),
+      db.prepare("INSERT INTO tenant_config (tenant_id, key, value) VALUES ('fence-tenant', 'existing', 'before')"),
+    ]);
+    const writeFence = capabilityWriteConstraint({ tenantId: 'fence-tenant', actorId: 'fence-agent', role: 'agent', sessionVersion: 0, capability: 'settings.general.manage' });
+    await db.prepare("UPDATE tenant_role_capability_policies SET enabled = 0 WHERE tenant_id = 'fence-tenant' AND capability = 'settings.general.manage'").run();
+    const policyRevokedBatch = await db.batch([
+      db.prepare(`UPDATE tenant_config SET value = 'after' WHERE tenant_id = ? AND key = 'existing' AND ${writeFence.sql}`).bind('fence-tenant', ...writeFence.values),
+      db.prepare(`INSERT INTO tenant_config (tenant_id, key, value) SELECT ?, 'new', 'blocked' WHERE ${writeFence.sql}`).bind('fence-tenant', ...writeFence.values),
+    ]);
+    assert.strictEqual(policyRevokedBatch[0]?.meta.changes, 0);
+    assert.strictEqual(policyRevokedBatch[1]?.meta.changes, 0);
+    assert.strictEqual((await db.prepare("SELECT value FROM tenant_config WHERE tenant_id = 'fence-tenant' AND key = 'existing'").first())?.value, 'before');
+    assert.strictEqual(await db.prepare("SELECT 1 FROM tenant_config WHERE tenant_id = 'fence-tenant' AND key = 'new'").first(), null);
+
+    await db.batch([
+      db.prepare("UPDATE tenant_role_capability_policies SET enabled = 1 WHERE tenant_id = 'fence-tenant' AND capability = 'settings.general.manage'"),
+      db.prepare("UPDATE users SET session_version = 1 WHERE tenant_id = 'fence-tenant' AND id = 'fence-agent'"),
+    ]);
+    const sessionRevokedBatch = await db.batch([
+      db.prepare(`UPDATE tenant_config SET value = 'after-session-revocation' WHERE tenant_id = ? AND key = 'existing' AND ${writeFence.sql}`).bind('fence-tenant', ...writeFence.values),
+      db.prepare(`INSERT INTO tenant_config (tenant_id, key, value) SELECT ?, 'new-after-session-revocation', 'blocked' WHERE ${writeFence.sql}`).bind('fence-tenant', ...writeFence.values),
+    ]);
+    assert.strictEqual(sessionRevokedBatch[0]?.meta.changes, 0);
+    assert.strictEqual(sessionRevokedBatch[1]?.meta.changes, 0);
+    console.log("SUCCESS: Revoked capability/session fences block every statement in a real D1 batch.");
 
     // 1. Composition Boundary Tests (Fail Closed)
     console.log("Testing Composition Boundary...");

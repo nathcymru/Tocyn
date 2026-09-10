@@ -38,6 +38,7 @@ describe("Settings Handler Integration Tests", () => {
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
     mockDB.all.mockResolvedValue({ results: [] });
+    mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
     mockDB.first.mockImplementation(async () => {
       const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
       const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
@@ -146,7 +147,7 @@ describe("Settings Handler Integration Tests", () => {
     });
 
     it("should update settings and encrypt sensitive values", async () => {
-      mockDB.run.mockResolvedValue({ success: true });
+      mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
       const token = await generateAdminToken();
 
       const payload = {
@@ -188,7 +189,7 @@ describe("Settings Handler Integration Tests", () => {
     });
 
     it("should skip updating sensitive settings if value is ••••••••", async () => {
-      mockDB.run.mockResolvedValue({ success: true });
+      mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
       const token = await generateAdminToken();
 
       const payload = {

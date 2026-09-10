@@ -26,6 +26,8 @@ describe("Group Management Integration Tests", () => {
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
     mockDB.all.mockResolvedValue({ results: [] });
+    mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
+    mockDB.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     mockDB.first.mockImplementation(async () => {
       const prepCalls = vi.mocked(mockDB.prepare).mock.calls;
       const lastQuery = prepCalls.length > 0 ? prepCalls[prepCalls.length - 1][0] : "";
@@ -61,7 +63,7 @@ describe("Group Management Integration Tests", () => {
 
   describe("POST /groups", () => {
     it("should allow an admin to create a group", async () => {
-      mockDB.run.mockResolvedValueOnce({ success: true });
+      mockDB.run.mockResolvedValueOnce({ success: true, meta: { changes: 1 } });
       firstQueue.push({ id: "g-1", name: "Support", description: "Desc" });
 
       const res = await dashboard.request(
@@ -106,7 +108,7 @@ describe("Group Management Integration Tests", () => {
     it("should allow an admin to delete a group with no tickets", async () => {
       firstQueue.push({ id: "g-1" }, { count: 0 });
 
-      mockDB.batch.mockResolvedValueOnce([{ success: true }, { success: true }]);
+      mockDB.batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
 
       const res = await dashboard.request(
         "/groups/g-1",
@@ -172,7 +174,7 @@ describe("Group Management Integration Tests", () => {
 
     it("should allow admin to add a member", async () => {
       firstQueue.push({ id: "g-1" }, { id: "u-2" });
-      mockDB.run.mockResolvedValueOnce({ success: true });
+      mockDB.run.mockResolvedValueOnce({ success: true, meta: { changes: 1 } });
 
       const res = await dashboard.request(
         "/groups/g-1/members",
@@ -194,8 +196,8 @@ describe("Group Management Integration Tests", () => {
 
     it("should allow admin to remove a member", async () => {
       firstQueue.push({ 1: 1 });
-      mockDB.run.mockResolvedValueOnce({ success: true });
-      mockDB.run.mockResolvedValueOnce({ success: true });
+      mockDB.run.mockResolvedValueOnce({ success: true, meta: { changes: 1 } });
+      mockDB.run.mockResolvedValueOnce({ success: true, meta: { changes: 1 } });
 
       const res = await dashboard.request(
         "/groups/g-1/members/u-2",

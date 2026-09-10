@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { permissionGuard, revalidatePermission } from "../permission.guard";
+import { CapabilityFenceError, requireCapabilityWrite } from "../../auth/capability-policy";
 
 type PolicyState = {
   owner: boolean;
@@ -41,6 +42,12 @@ function appWithPrincipal(state: PolicyState) {
 }
 
 describe("permissionGuard", () => {
+  it("fails closed when a guarded D1 mutation does not provide write evidence", () => {
+    const fence = { tenantId: "tenant-a", actorId: "agent-1", role: "agent", sessionVersion: 0, capability: "settings.general.manage" } as const;
+    expect(() => requireCapabilityWrite(undefined, fence)).toThrow(CapabilityFenceError);
+    expect(() => requireCapabilityWrite({ meta: { changes: 0 } }, fence)).toThrow(CapabilityFenceError);
+  });
+
   it("requires the owner ceiling, role grant, and tenant restriction to allow a capability", async () => {
     const state = { owner: true, role: true, tenant: true, sessionVersion: 0, groupEnabled: [] };
     const { app, env } = appWithPrincipal(state);

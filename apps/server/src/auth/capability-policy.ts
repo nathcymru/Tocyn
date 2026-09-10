@@ -101,9 +101,13 @@ export function capabilityWriteConstraint(fence?: CapabilityWriteFence): { sql: 
 }
 
 export function requireCapabilityWrite(result: { meta?: { changes?: number } } | null | undefined, fence?: CapabilityWriteFence): void {
-  // D1 returns `meta.changes` for every mutation. Some narrow unit doubles
-  // intentionally omit metadata; only a concrete zero is a denial signal.
-  if (fence && result?.meta && !result.meta.changes) throw new CapabilityFenceError();
+  // D1 returns mutation metadata. A guarded write without positive evidence
+  // is indistinguishable from a failed fence and must not be treated as a
+  // successful side effect.
+  const changes = result?.meta?.changes;
+  if (fence && (typeof changes !== "number" || !Number.isInteger(changes) || changes < 1)) {
+    throw new CapabilityFenceError();
+  }
 }
 
 type PolicyRow = { enabled: number | boolean; revision?: number | null };

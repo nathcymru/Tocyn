@@ -39,7 +39,7 @@ describe("Dashboard Handler Integration Tests", () => {
     vi.clearAllMocks();
     firstQueue = [];
     mockDB.all.mockResolvedValue({ results: [] });
-    mockDB.run.mockResolvedValue({ success: true });
+    mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
     mockDB.batch.mockResolvedValue([{results:[{id:'t-1'}]}]);
     mockDB.prepare.mockReturnThis();
     mockDB.bind.mockReturnThis();
@@ -200,7 +200,7 @@ describe("Dashboard Handler Integration Tests", () => {
 
   describe("PATCH /tickets/:id", () => {
     it("should update ticket and create a system note", async () => {
-      mockDB.run.mockResolvedValue({ success: true });
+      mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
 
       const validUuid = "123e4567-e89b-12d3-a456-426614174000";
 
@@ -305,7 +305,7 @@ describe("Dashboard Handler Integration Tests", () => {
     });
 
     it("should create a new API key", async () => {
-      mockDB.run.mockResolvedValueOnce({ success: true });
+      mockDB.run.mockResolvedValueOnce({ success: true, meta: { changes: 1 } });
 
       const res = await dashboard.request(
         "/api-keys",

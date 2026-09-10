@@ -45,11 +45,26 @@ describe('Real Phase 1 migration chain', () => {
       });
       const write = db.prepare(`INSERT INTO tenant_config (tenant_id, key, value)
         SELECT ?, ?, ? WHERE ${guard.sql}`);
+      db.prepare("INSERT INTO tenant_config (tenant_id, key, value) VALUES (?, 'existing-setting', 'before')")
+        .run('fence-tenant');
 
       db.prepare("UPDATE tenant_role_capability_policies SET enabled = 0 WHERE tenant_id = ? AND capability = 'settings.general.manage'")
         .run('fence-tenant');
       expect(write.run('fence-tenant', 'blocked-by-policy', 'no', ...guard.values).changes).toBe(0);
       expect(db.prepare("SELECT value FROM tenant_config WHERE key = 'blocked-by-policy'").get()).toBeUndefined();
+
+      // D1 batches do not abort merely because one statement affects zero
+      // rows, so every statement in a multi-write settings operation carries
+      // the fence. This SQLite transaction uses the identical statements.
+      const guardedSettingsBatch = db.transaction(() => [
+        db.prepare(`UPDATE tenant_config SET value = 'after' WHERE tenant_id = ? AND key = 'existing-setting' AND ${guard.sql}`)
+          .run('fence-tenant', ...guard.values).changes,
+        write.run('fence-tenant', 'also-blocked-by-policy', 'no', ...guard.values).changes,
+      ]);
+      expect(guardedSettingsBatch()).toEqual([0, 0]);
+      expect(db.prepare("SELECT value FROM tenant_config WHERE tenant_id = ? AND key = 'existing-setting'").get('fence-tenant'))
+        .toEqual({ value: 'before' });
+      expect(db.prepare("SELECT value FROM tenant_config WHERE key = 'also-blocked-by-policy'").get()).toBeUndefined();
 
       db.prepare("UPDATE tenant_role_capability_policies SET enabled = 1 WHERE tenant_id = ? AND capability = 'settings.general.manage'")
         .run('fence-tenant');
