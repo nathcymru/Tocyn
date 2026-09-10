@@ -2,6 +2,18 @@
 
 This matrix is the #48 migration boundary after #127. It accounts for retained base behavior without reproducing obsolete page composition.
 
+## Current acceptance position — 10 September 2026
+
+Native controls and retained complex-control migrations are implemented in draft PR167, not yet accepted on main. The chronological receipts below preserve intermediate findings; earlier “remaining” lists are superseded by this section and `.agents/state/ui-48.md`.
+
+- Real Chromium evidence covers form/event/busy behavior, confirmation focus/recovery, tabs, listbox, combobox, popover and splitter across default/radical/no-CSS compositions. Styled target height and reduced-motion checks pass; see `docs/security/evidence/ui-48-controls-d4cd040.json`.
+- Actual local Worker build/runtime evidence excludes browser imports; measured client startup and bundle differences remain documented separately, with all-route cost increases visible.
+- Native Safari/VoiceOver ticket-field naming, traversal and cancellation return are evidenced in `docs/security/evidence/ui-48-voiceover-ticket-fields-2026-09-10.md`. This does not complete all application screen-reader cases.
+- Remaining acceptance: full affected application/ShadowRoot browser and assistive-technology coverage, contrast/visual checks, justified final performance budgets and exact integrated-revision validation. No issue closure or beta.2 readiness is inferred.
+- Workspace state/navigation semantics, full SLA/ownership, theme persistence (#66) and wrapper lifecycle (#67) retain their separate ownership and gates.
+
+## Migration mapping and historical receipts
+
 | Existing behavior | Shared primitive target | Migration disposition |
 |---|---|---|
 | Buttons, links and icon actions with focus/disabled/loading states | `TocynButton` plus static focus/target tokens | Retain behavior; replace local styling gradually. Critical actions remain labelled and keyboard reachable. |
