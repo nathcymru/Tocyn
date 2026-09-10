@@ -285,3 +285,140 @@ test('credential SLI observes password step-up, MFA completion, revoked challeng
     assert.equal(JSON.stringify(captured.events).includes(fixture.principals.customerB.tenantId), false, 'Credential summaries omit tenant IDs');
   });
 });
+
+test('durable operator drafts and workspace state remain per-tenant, revision-bound, and session-scoped', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const { token: operatorA } = await operatorAppToken(fixture, 'operatorA');
+    const { token: operatorB } = await operatorAppToken(fixture, 'operatorB');
+    const attachmentKey = 'agent-attachments/fixture-operator/draft.txt';
+    await fixture.r2.bucket.put(`${fixture.principals.operatorA.tenantId}/${attachmentKey}`, 'draft attachment', {
+      httpMetadata: { contentType: 'text/plain' },
+    });
+    const draft = {
+      expectedGeneration: null, expectedRevision: 0, mode: 'internal', body: 'synthetic A-only draft',
+      attachments: [{ storageKey: attachmentKey, filename: 'draft.txt' }],
+    };
+    const created = await fixture.request('/api/workspace/drafts/fixture-ticket', { method: 'PUT', token: operatorA, body: draft });
+    await expectStatus(created, 200, 'A may persist its own scoped draft');
+    assert.equal(created.headers.get('cache-control'), 'private, no-store');
+    const createdBody = await created.json<{ generation: string; revision: number; body: string; attachments: Array<{ storageKey: string }>; baseConversationRevision: number }>();
+    assert.equal(createdBody.revision, 1);
+    assert.equal(createdBody.body, draft.body);
+    assert.deepEqual(createdBody.attachments, [{ storageKey: attachmentKey, filename: 'draft.txt', size: 16, contentType: 'text/plain' }]);
+    assert.equal(createdBody.baseConversationRevision, 0, 'No canonical event must not be misrepresented as an unchanged conversation');
+
+    await fixture.db.prepare('INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES (?,?,?,?,?)')
+      .bind(fixture.principals.operatorA.tenantId, 'sequenced-ticket', 'Sequenced ticket', fixture.principals.customerA.email, 'dashboard').run();
+    await fixture.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      fixture.principals.operatorA.tenantId, 'sequence-seven', 'sequenced-ticket', 7, 'message.reply', 'staff',
+      fixture.principals.operatorA.localId, 'mfa-staff', 'dashboard', 'public', '{}',
+    ).run();
+    const sequenced = await fixture.request('/api/workspace/drafts/sequenced-ticket', {
+      method: 'PUT', token: operatorA, body: { expectedGeneration: null, expectedRevision: 0, mode: 'public', body: 'derived revision', attachments: [] },
+    });
+    await expectStatus(sequenced, 200, 'Draft save derives its base revision from the canonical event sequence');
+    const sequencedBody = await sequenced.json<{ generation: string; baseConversationRevision: number }>();
+    assert.equal(sequencedBody.baseConversationRevision, 7);
+    await fixture.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      fixture.principals.operatorA.tenantId, 'sequence-eight', 'sequenced-ticket', 8, 'message.reply', 'customer',
+      fixture.principals.customerA.localId, 'authenticated-customer', 'portal', 'public', '{}',
+    ).run();
+    const autosaved = await fixture.request('/api/workspace/drafts/sequenced-ticket', {
+      method: 'PUT', token: operatorA,
+      body: { expectedGeneration: sequencedBody.generation, expectedRevision: 1, mode: 'public', body: 'derived revision updated', attachments: [] },
+    });
+    await expectStatus(autosaved, 200, 'Autosave may advance a matching draft revision');
+    assert.equal((await autosaved.json<{ baseConversationRevision: number }>()).baseConversationRevision, 7, 'Autosave preserves the original collision base');
+    await expectStatus(await fixture.request('/api/workspace/drafts/sequenced-ticket', {
+      method: 'PUT', token: operatorA,
+      body: { expectedGeneration: sequencedBody.generation, expectedRevision: 2, mode: 'public', body: 'forged revision', attachments: [], baseConversationRevision: 999 },
+    }), 400, 'Client-supplied canonical revision cannot override the server-derived value');
+
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-b-only', { token: operatorA }), 404,
+      'A cannot restore B-only ticket work');
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', { token: operatorB }), 204,
+      'B cannot observe A draft despite an identically named tenant-local ticket');
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', {
+      method: 'PUT', token: operatorB, body: { ...draft, body: 'synthetic B-only draft', attachments: [] },
+    }), 200, 'B owns a distinct draft for its tenant-local ticket');
+
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', {
+      method: 'PUT', token: operatorA, body: draft,
+    }), 409, 'An old draft revision cannot overwrite a saved draft');
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', {
+      method: 'PUT', token: operatorA,
+      body: { ...draft, expectedGeneration: createdBody.generation, expectedRevision: 1, attachments: [{ storageKey: 'agent-attachments/other-operator/forged.txt', filename: 'forged.txt' }] },
+    }), 400, 'A foreign attachment reference cannot be bound into an existing draft');
+    const updated = await fixture.request('/api/workspace/drafts/fixture-ticket', {
+      method: 'PUT', token: operatorA, body: { ...draft, expectedGeneration: createdBody.generation, expectedRevision: 1, body: 'synthetic A revision two', attachments: [] },
+    });
+    await expectStatus(updated, 200, 'Matching revision updates a draft');
+    const updatedBody = await updated.json<{ generation: string; revision: number }>();
+    assert.equal(updatedBody.revision, 2);
+    await expectStatus(await fixture.request(`/api/workspace/drafts/fixture-ticket?generation=${updatedBody.generation}&revision=1`, { method: 'DELETE', token: operatorA }), 409,
+      'Confirmed-send cleanup cannot remove a newer draft revision');
+    await expectStatus(await fixture.request(`/api/workspace/drafts/fixture-ticket?generation=${updatedBody.generation}&revision=2`, { method: 'DELETE', token: operatorA }), 204,
+      'Matching version permits explicit discard');
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', {
+      method: 'PUT', token: operatorA, body: { ...draft, expectedGeneration: updatedBody.generation, expectedRevision: 2, body: 'stale save', attachments: [] },
+    }), 409, 'A stale save after deletion cannot create a replacement draft');
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', { token: operatorA }), 204,
+      'Rejected stale save leaves no replacement draft');
+    const recreated = await fixture.request('/api/workspace/drafts/fixture-ticket', {
+      method: 'PUT', token: operatorA, body: { ...draft, expectedGeneration: null, expectedRevision: 0, body: 'recreated draft', attachments: [] },
+    });
+    await expectStatus(recreated, 200, 'A deleted draft can be recreated as a new generation');
+    const recreatedBody = await recreated.json<{ generation: string; revision: number }>();
+    assert.notEqual(recreatedBody.generation, updatedBody.generation);
+    await expectStatus(await fixture.request(`/api/workspace/drafts/fixture-ticket?generation=${updatedBody.generation}&revision=2`, { method: 'DELETE', token: operatorA }), 409,
+      'Delayed cleanup for an old generation cannot delete a recreated draft');
+    const retained = await fixture.request('/api/workspace/drafts/fixture-ticket', { token: operatorA });
+    await expectStatus(retained, 200, 'Mismatched cleanup retains the current draft');
+    assert.equal((await retained.json<{ body: string }>()).body, 'recreated draft');
+
+    const state = {
+      expectedRevision: 0, view: 'custom', sort: 'updated_desc', filters: {},
+      listQuery: 'synthetic current-view query', listAnchor: 'opaque-anchor-1', selectedTicketId: 'fixture-ticket', panel: 'details',
+    };
+    const stateA = await fixture.request('/api/workspace/state', { method: 'PUT', token: operatorA, body: state });
+    await expectStatus(stateA, 200, 'A may persist server-scoped workspace continuity');
+    const storedState = await stateA.json<{ revision: number; view: string; sort: string; filters: unknown; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: string; updatedAt: string }>();
+    assert.equal(storedState.revision, 1);
+    assert.equal(storedState.view, 'custom');
+    assert.equal(storedState.sort, 'updated_desc');
+    assert.deepEqual(storedState.filters, {});
+    assert.equal(storedState.listQuery, 'synthetic current-view query');
+    assert.equal(storedState.listAnchor, 'opaque-anchor-1');
+    assert.equal(storedState.selectedTicketId, 'fixture-ticket');
+    assert.equal(storedState.panel, 'details');
+    assert.match(storedState.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+    const stateUpdate = await fixture.request('/api/workspace/state', {
+      method: 'PUT', token: operatorA, body: { ...state, expectedRevision: 1, listAnchor: 'opaque-anchor-2' },
+    });
+    await expectStatus(stateUpdate, 200, 'A matching workspace revision updates state');
+    assert.equal((await stateUpdate.json<{ revision: number; listAnchor: string }>()).revision, 2);
+    const races = await Promise.all(['opaque-anchor-3a', 'opaque-anchor-3b'].map(listAnchor =>
+      fixture.request('/api/workspace/state', { method: 'PUT', token: operatorA, body: { ...state, expectedRevision: 2, listAnchor } }),
+    ));
+    assert.deepEqual(races.map(response => response.status).sort(), [200, 409], 'Only one same-revision workspace save may commit');
+    await expectStatus(await fixture.request('/api/workspace/state', { method: 'PUT', token: operatorA, rawBody: '{', contentType: 'application/json' }), 400,
+      'Malformed workspace JSON is a client error');
+    await expectStatus(await fixture.request('/api/workspace/state', { method: 'PUT', token: operatorA, rawBody: 'x'.repeat(64 * 1024 + 1), contentType: 'application/json' }), 413,
+      'Oversized workspace bodies are rejected before parsing');
+    const stateB = await fixture.request('/api/workspace/state', { token: operatorB });
+    await expectStatus(stateB, 200, 'B may read only its own workspace state');
+    assert.equal(await stateB.json(), null, 'B cannot observe A workspace continuity');
+
+    await fixture.revokePrincipalSessions('operatorA');
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', { token: operatorA }), 401,
+      'Revoked A session cannot restore its prior draft');
+    await expectStatus(await fixture.request('/api/workspace/state', { token: operatorA }), 401,
+      'Revoked A session cannot restore its prior workspace state');
+    await expectStatus(await fixture.request('/api/workspace/drafts/fixture-ticket', { token: operatorB }), 200,
+      'A revocation does not disturb B work');
+  });
+});

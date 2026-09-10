@@ -15,6 +15,7 @@ import { rateLimiter } from "../middleware/rate-limiter";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { JWTPayload, AppVariables } from "../types";
 import { TenantTicketService } from "../services/tenant-ticket.service";
+import workspace from "./operator-workspace.handler";
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -60,6 +61,7 @@ const dashboard = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
 // Apply auth, MFA, role-based access control, and tenant scoping to all dashboard routes
 dashboard.use("*", authMiddleware, mfaGuard, roleGuard(["agent", "admin"]), tenantMiddleware);
+dashboard.route("/workspace", workspace);
 
 /**
  * GET /api/ticket-fields

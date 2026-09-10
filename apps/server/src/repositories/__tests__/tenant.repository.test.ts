@@ -6,6 +6,7 @@ import authHandler from '../../handlers/auth.handler';
 import customerHandler from '../../handlers/customer.handler';
 import { AuthService } from '../../services/auth/auth.service';
 import { TenantAutomationService } from '../../services/tenant-automation.service';
+import { OperatorWorkspaceError, OperatorWorkspaceService } from '../../services/operator-workspace.service';
 import { splitSql } from '../../../scripts/split-sql';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
@@ -136,6 +137,53 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     const sibling = await reposB.users.get('user-A');
     expect(sibling?.mfa_enabled).toBe(0);
     expect(sibling?.mfa_secret).toBeNull();
+  });
+
+  it('keeps draft retention disabled without an injected policy and enforces the scoped group gate', async () => {
+    sqlite.prepare('INSERT INTO users(tenant_id,id,email,role,mfa_enabled) VALUES (?,?,?,?,?)')
+      .run('tenant-A', 'user-A', 'operator-a@example.test', 'agent', 1);
+    sqlite.prepare('INSERT INTO groups (tenant_id,id,name) VALUES (?,?,?)').run('tenant-A', 'restricted-group', 'Restricted');
+    sqlite.prepare(`INSERT INTO tickets (tenant_id,id,subject,customer_email,source,group_id)
+      VALUES (?,?,?,?,?,?)`).run('tenant-A', 'restricted-ticket', 'Restricted', 'customer@example.test', 'dashboard', 'restricted-group');
+    const deps = { scope: scopeA, repositories: reposA, attachmentStorage: { getAttachment: async () => null } } as any;
+    const denied = new OperatorWorkspaceService(deps);
+    await expect(denied.saveDraft({ ticketId: 'restricted-ticket', expectedGeneration: null, expectedRevision: 0, mode: 'public', body: '', attachments: [] }))
+      .rejects.toMatchObject({ status: 403 } satisfies Partial<OperatorWorkspaceError>);
+    expect(await reposA.operatorWorkspace.getDraft('restricted-ticket')).toBeNull();
+    await expect(denied.purgeExpired()).rejects.toThrow('not configured');
+
+    sqlite.prepare('INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES (?,?,?,?,?)')
+      .run('tenant-A', 'retention-ticket', 'Retention', 'customer@example.test', 'dashboard');
+    let now = new Date('2040-01-01T00:00:00.000Z');
+    const retained = new OperatorWorkspaceService(deps, {
+      now: () => now,
+      retention: { expiresAt: date => new Date(date.getTime() + 60_000).toISOString() },
+    });
+    const saved = await retained.saveDraft({ ticketId: 'retention-ticket', expectedGeneration: null, expectedRevision: 0, mode: 'public', body: '', attachments: [] });
+    expect(saved.expiresAt).toBe('2040-01-01T00:01:00.000Z');
+    expect(await retained.purgeExpired()).toBe(0);
+    now = new Date('2040-01-01T00:01:00.000Z');
+    expect(await retained.purgeExpired()).toBe(1);
+    await expect(reposA.operatorWorkspace.purgeExpiredForActor(now.toISOString(), 0)).rejects.toThrow('Invalid operator draft cleanup limit');
+    await expect(reposA.operatorWorkspace.purgeExpiredForSystem(now.toISOString())).rejects.toThrow('System scope required');
+    expect(await reposA.operatorWorkspace.getDraft('retention-ticket')).toBeNull();
+  });
+
+  it('returns no stale workspace row when selection cleanup loses a concurrent state save', async () => {
+    sqlite.prepare('INSERT INTO users(tenant_id,id,email,role,mfa_enabled) VALUES (?,?,?,?,?)')
+      .run('tenant-A', 'user-A', 'workspace-a@example.test', 'agent', 1);
+    const first = await reposA.operatorWorkspace.saveWorkspaceState({
+      expectedRevision: 0, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'one',
+      selectedTicketId: 'gone-ticket', panel: 'conversation',
+    });
+    expect(first?.revision).toBe(1);
+    const concurrent = await reposA.operatorWorkspace.saveWorkspaceState({
+      expectedRevision: 1, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'two',
+      selectedTicketId: null, panel: 'conversation',
+    });
+    expect(concurrent?.revision).toBe(2);
+    expect(await reposA.operatorWorkspace.clearSelectedTicketIfVersion('gone-ticket', 1)).toBeNull();
+    expect(await reposA.operatorWorkspace.getWorkspaceState()).toMatchObject({ revision: 2, listAnchor: 'two', selectedTicketId: null });
   });
 
   it('enforces request limits across fresh repositories while isolating tenants', async () => {
