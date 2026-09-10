@@ -286,7 +286,7 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
     const outcome = await mutation.commit(prepared, verifiedAttachments);
     if (!outcome.replayed) {
       try {
-        await new BroadcastService(c.env, deps.scope).broadcast('article.created', {
+        await new BroadcastService(c.env, deps.scope, deps.emitResourceOperation).broadcast('article.created', {
           ticketId: outcome.ticketId, articleId: outcome.articleId, senderType: 'customer', isInternal: false,
         });
       } catch {

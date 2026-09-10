@@ -45,3 +45,7 @@ D1 increment: resumednative evidence_copyedit proposed and implemented observed-
 
 
 Integration refresh701cb13 includes accepted172/main4fce7b6. Integrated server459tests/51files andTypeScriptpass onNode22. Local7storage/background+scriptTypeScript evidence covers unchangedD1/R2implementation; new172tests are included in459. ExactnewPRCIstillrequired. Currentcriticalpath unchanged; full159acceptanceopen.
+
+## Durable Object request slice — 10 September 19:55 BST
+
+Native evidence_copyedit implemented optional broadcast measurement and trusted dashboard/customer wiring; coordinator added production/disabled and sink-failure regressions. Fixed durable_object/invoke per fetch attempt shares existing64event cap; no payload/object/tenant/error content. Retry/swallow semantics retained. 464server tests/51files pass; worker TypeScript/lint passed before additional test-only cases. Full159 remains open: actual DO runtime proof, complete SLI counters, Workflow/AI/journal/Queue/outbox and collector/recovery/load acceptance. No forecast change, zeroCopilot. Existing170draft retained.

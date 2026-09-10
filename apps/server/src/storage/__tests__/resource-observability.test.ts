@@ -5,6 +5,7 @@ import { TenantR2Adapter } from '../adapters';
 import { LocalBetaAttachmentStorage } from '../local-beta-attachments';
 import type { LocalBetaAdmissionRepository } from '../../repositories/local-beta-admission.repository';
 import { MAX_RESOURCE_EVENTS_PER_COMPOSITION } from '../../observability/resource-operation';
+import { BroadcastService } from '../../services/broadcast.service';
 const scope = createVerifiedTenantScope('synthetic-tenant-a', 'synthetic-actor', ['agent'], 1);
 afterEach(() => vi.restoreAllMocks());
 it('measures actual qualified R2 calls without copying keys, content, options or result fields', async () => {
@@ -40,4 +41,15 @@ it.each(['production','disabled','isolated'])('enforces composition gating and o
   expect(bucket.get).toHaveBeenCalledTimes(MAX_RESOURCE_EVENTS_PER_COMPOSITION+2);
   expect(log).toHaveBeenCalledTimes(mode==='isolated'?MAX_RESOURCE_EVENTS_PER_COMPOSITION:0);
   expect(JSON.stringify(log.mock.calls)).not.toMatch(/private|synthetic/);
+});
+it.each(['isolated','production','disabled'])('shares the trusted request emitter with Durable Object broadcasts: %s', async mode => {
+  const log=vi.spyOn(console,'log').mockImplementation(()=>{});
+  const fetch=vi.fn(async()=>new Response('ok'));
+  const env={DB:{},ATTACHMENTS_BUCKET:{},VECTOR_INDEX:{},ENVIRONMENT:'development',LOCAL_BETA_ENABLED:'true',OBSERVABILITY_MODE:'isolated-evidence',NOTIFICATION_DO:{idFromName:vi.fn(()=> 'tenant-object'),get:vi.fn(()=>({fetch}))}} as any;
+  if(mode==='production')env.ENVIRONMENT='production';if(mode==='disabled')env.OBSERVABILITY_MODE='disabled';
+  const deps=createTenantRequestDeps(scope,env);
+  await new BroadcastService(env,scope,deps.emitResourceOperation).broadcast('ticket.updated',{tenantId:'private',body:'private'});
+  expect(fetch).toHaveBeenCalledTimes(1);
+  if(mode==='isolated')expect(log).toHaveBeenCalledWith(expect.stringContaining('"resource":"durable_object"'));else expect(log).not.toHaveBeenCalled();
+  expect(log.mock.calls.flat().join(' ')).not.toMatch(/private|synthetic-tenant/);
 });

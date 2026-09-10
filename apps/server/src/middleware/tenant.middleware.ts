@@ -1,5 +1,5 @@
 import { observeD1 } from '../repositories/observed-d1';
-import { createResourceOperationEmitter } from '../observability/resource-operation';
+import { createResourceOperationEmitter, type ResourceOperationEmitter } from '../observability/resource-operation';
 import { CapabilityPolicyService } from '../repositories/capability-policy.repository';
 import { localBetaEnabled, type BetaPrincipal } from '../types/local-beta';
 import { LocalBetaRuntimeRepository } from '../repositories/local-beta-runtime.repository';
@@ -18,6 +18,7 @@ import { createRepositories } from '../repositories';
 import { TenantAttachmentStorage, LegacyArticleBodyStorage, TenantVectorStorage } from '../storage/adapters';
 
 export type TenantRequestDeps = {
+  emitResourceOperation?: ResourceOperationEmitter;
   scope: VerifiedTenantScope;
   capabilityPolicy: CapabilityPolicyService;
   betaAdmission?: LocalBetaAdmissionRepository;
@@ -65,6 +66,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
   const vectorStorage = new TenantVectorStorage(scope, env.VECTOR_INDEX);
 
   return {
+    emitResourceOperation,
     scope,
     capabilityPolicy: new CapabilityPolicyService(db, scope),
     betaAdmission,

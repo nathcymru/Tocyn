@@ -256,7 +256,7 @@ dashboard.post("/tickets", async (c) => {
       sender_type: "customer",
     }, {kind:'staff',id:agent.sub,source:'dashboard'});
 
-    await new BroadcastService(c.env,d.scope).notifyTicketCreated(ticket);
+    await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketCreated(ticket);
     try {
       await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(ticket,article);
     } catch { console.error('Initial ticket email delivery failed'); }
@@ -405,7 +405,7 @@ dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
       await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(ticket,article,savedAttachments);
     } catch { console.error('Ticket reply email delivery failed'); }
   }
-  await new BroadcastService(c.env,d.scope).broadcast('article.created',{ticket_id:ticketId,article_id:article.id});
+  await new BroadcastService(c.env,d.scope,d.emitResourceOperation).broadcast('article.created',{ticket_id:ticketId,article_id:article.id});
   return c.json({ ...article, attachments }, 201);
 });
 
@@ -444,7 +444,7 @@ dashboard.patch("/tickets/:id", async (c) => {
   if (!ticket) return c.json({error:'Ticket not found'},404);
   if (agent.role === 'agent' && ticket.group_id && !await d.repositories.groups.isMember(ticket.group_id,agent.sub)) return c.json({error:'Forbidden'},403);
   const updated = await d.conversationAudit.updateWithEvents(id,updateFields,{kind:'staff',id:agent.sub,source:'dashboard'},true);
-  if (updated) await new BroadcastService(c.env, d.scope).notifyTicketUpdated(updated);
+  if (updated) await new BroadcastService(c.env, d.scope, d.emitResourceOperation).notifyTicketUpdated(updated);
 
   return c.json({ success: true });
 });
