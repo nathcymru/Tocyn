@@ -75,3 +75,11 @@ Fresh production manifest builds for all three clients on both clean source tree
 | portal recoveryMs | 64.6 / 65.0 / 65.4 | 64.4 / 64.8 / 64.9 |
 
 No large login timing regression appeared in this local sample; differences of a few milliseconds are not evidence of a general speedup. The portal route split's byte reduction is stronger evidence than a small timing difference in this unthrottled warm-process environment. The stated limits and outstanding authenticated/workspace/widget/numeric-budget gates remain unchanged.
+
+## Dashboard route split — candidatea52904f
+
+Dashboard protected routes now load on demand with the same accessible loading/error recovery contract as the portal. Login, MFA and enforced security setup remain eager. The unchanged application sources were freshly built immediately before committinga52904f; the timing snapshot records its clean revision and built artifact hashes. Prior baseline/portal/widget artifacts remain from the previously documented fresh builds; those application sources did not change.
+
+`ui-48-browser-a52904f.json` records another80alternating samples under the same local browser scenario. Dashboard startup p95:164.1→63.7ms; recovery p95:48.7→49.9ms. Portal startup p95:63.4→61.7ms; recovery65.0→64.9ms. These remain local warm-process measurements, not production promises.
+
+Dashboard initial JS gzip drops486232→125880bytes(−74.1%); all-route JS grows486232→543977bytes(+11.9%). The deferred knowledge-editor chunk still accounts for much of the total. Portal initial67502/all-route99830bytes remain unchanged. Keep total-cost growth visible; initial loading gains do not satisfy all-route/numeric-budget/authenticated-interaction gates.134dashboardtests andTypeScript/build pass.
