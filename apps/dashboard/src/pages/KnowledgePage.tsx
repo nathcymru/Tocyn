@@ -1,3 +1,4 @@
+import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +25,16 @@ export const KnowledgePage: React.FC = () => {
     title: string;
   }>({ isOpen: false, type: null, id: null, title: '' });
 
+  const deleteTitleId = React.useId();
+  const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
+  const deleteCancel = React.useRef<HTMLButtonElement>(null);
+  const heading = React.useRef<HTMLHeadingElement>(null);
+  const deleteGuard = React.useRef(false);
+  const deleteSucceeded = React.useRef(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteStatus, setDeleteStatus] = useState('');
+  const closeDelete = () => { if (!deleteGuard.current) setDeleteConfirm(previous => ({...previous,isOpen:false})); };
   const navigate = useNavigate();
 
   const fetchData = async () => {
@@ -81,7 +92,8 @@ export const KnowledgePage: React.FC = () => {
     }
   };
 
-  const confirmDeleteCategory = (id: string, name: string) => {
+  const confirmDeleteCategory = (id: string, name: string, opener: HTMLButtonElement) => {
+    deleteOpener.current = opener; deleteSucceeded.current = false; setDeleteError('');
     setDeleteConfirm({
       isOpen: true,
       type: 'category',
@@ -90,8 +102,9 @@ export const KnowledgePage: React.FC = () => {
     });
   };
 
-  const confirmDeleteDoc = (id: string, title: string, e: React.MouseEvent) => {
+  const confirmDeleteDoc = (id: string, title: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
+    deleteOpener.current = e.currentTarget; deleteSucceeded.current = false; setDeleteError('');
     setDeleteConfirm({
       isOpen: true,
       type: 'document',
@@ -101,7 +114,8 @@ export const KnowledgePage: React.FC = () => {
   };
 
   const executeDelete = async () => {
-    if (!deleteConfirm.id || !deleteConfirm.type) return;
+    if (!deleteConfirm.id || !deleteConfirm.type || deleteGuard.current) return;
+    deleteGuard.current = true; setDeleting(true); setDeleteError(''); setDeleteStatus('');
     try {
       if (deleteConfirm.type === 'category') {
         await dashboardApi.delete(`/knowledge/categories/${deleteConfirm.id}`);
@@ -111,12 +125,13 @@ export const KnowledgePage: React.FC = () => {
       } else {
         await dashboardApi.delete(`/knowledge/articles/${deleteConfirm.id}`);
       }
-      setDeleteConfirm({ isOpen: false, type: null, id: null, title: '' });
+      deleteSucceeded.current = true;
+      setDeleteConfirm(previous => ({...previous,isOpen:false}));
+      setDeleteStatus('Deletion completed.');
       fetchData();
-    } catch (err: any) {
-      setError(err.message);
-      setDeleteConfirm({ isOpen: false, type: null, id: null, title: '' });
-    }
+    } catch {
+      setDeleteError('Deletion failed. The item has been kept selected; try again.');
+    } finally { deleteGuard.current = false; setDeleting(false); }
   };
 
   const toggleExpand = (id: string) => {
@@ -140,12 +155,11 @@ export const KnowledgePage: React.FC = () => {
             isSelected ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'
           }`}
           style={{ paddingLeft: `${depth * 1.5 + 0.5}rem` }}
-          onClick={() => setSelectedCategoryId(node.id)}
         >
           <div className="flex items-center space-x-2 flex-1 min-w-0">
             {node.children.length > 0 ? (
               <TocynButton
-                onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
+                aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`} aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
                 className="p-0.5 hover:bg-gray-200 rounded text-gray-400"
               >
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -153,10 +167,12 @@ export const KnowledgePage: React.FC = () => {
             ) : (
               <span className="w-[18px]"></span>
             )}
+            <TocynButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className="flex flex-1 min-w-0 items-center gap-2 text-left">
             <Folder size={14} className={isSelected ? 'text-indigo-500' : 'text-gray-400'} />
             <span className="truncate text-sm">{node.name}</span>
+            </TocynButton>
           </div>
-          <div className="hidden group-hover:flex items-center space-x-1">
+          <div className="flex items-center space-x-1">
             <TocynButton
               onClick={(e) => {
                 e.stopPropagation();
@@ -164,17 +180,17 @@ export const KnowledgePage: React.FC = () => {
                 setExpandedCategories(prev => new Set(prev).add(node.id));
               }}
               className="p-1 hover:bg-gray-200 rounded text-gray-500"
-              title="Add Subcategory"
+              title="Add Subcategory" aria-label={`Add subcategory to ${node.name}`}
             >
               <Plus size={14} />
             </TocynButton>
             <TocynButton
               onClick={(e) => {
                 e.stopPropagation();
-                confirmDeleteCategory(node.id, node.name);
+                confirmDeleteCategory(node.id, node.name, e.currentTarget);
               }}
               className="p-1 hover:bg-red-100 rounded text-red-500"
-              title="Delete Category"
+              title="Delete Category" aria-label={`Delete category ${node.name}`}
             >
               <Trash2 size={14} />
             </TocynButton>
@@ -218,7 +234,7 @@ export const KnowledgePage: React.FC = () => {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-gray-50">
       <div className="flex-none px-6 py-4 bg-white border-b border-gray-200 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Knowledge Base</h1>
+        <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Knowledge Base</h1>
         <TocynButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
@@ -249,15 +265,15 @@ export const KnowledgePage: React.FC = () => {
           </div>
 
           <div className="p-2">
-            <div
-              className={`flex items-center py-1.5 px-2 rounded-md cursor-pointer mb-2 ${
+            <TocynButton aria-pressed={selectedCategoryId === null}
+              className={`flex w-full items-center py-1.5 px-2 rounded-md cursor-pointer mb-2 ${
                 selectedCategoryId === null ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'
               }`}
               onClick={() => setSelectedCategoryId(null)}
             >
               <FileText size={16} className="mr-2 text-gray-400" />
               <span className="text-sm font-medium">All Articles</span>
-            </div>
+            </TocynButton>
 
             <div className="space-y-1">
               {categories.map(root => renderCategoryNode(root))}
@@ -345,28 +361,29 @@ export const KnowledgePage: React.FC = () => {
         </div>
       </div>
 
-      {deleteConfirm.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      {deleteStatus && <p role="status">{deleteStatus}</p>}
+      <TocynDialog open={deleteConfirm.isOpen} busy={deleting} labelledBy={deleteTitleId} initialFocusEl={() => deleteCancel.current}
+        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} onOpenChange={next => { if (!next) closeDelete(); }}>
           <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Confirm Deletion</h3>
+            <h3 id={deleteTitleId} className="text-lg font-medium text-gray-900 mb-4">Confirm Deletion</h3>
             <p className="text-sm text-gray-500 mb-6">{deleteConfirm.title}</p>
+            {deleteError && <p role="alert" className="mb-4 text-red-700">{deleteError}</p>}
             <div className="flex justify-end space-x-3">
               <TocynButton
-                onClick={() => setDeleteConfirm({ isOpen: false, type: null, id: null, title: '' })}
+                ref={deleteCancel} disabled={deleting} onClick={closeDelete}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 Cancel
               </TocynButton>
               <TocynButton
-                onClick={executeDelete}
+                disabled={deleting} onClick={executeDelete}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               >
                 Delete
               </TocynButton>
             </div>
           </div>
-        </div>
-      )}
+      </TocynDialog>
     </div>
   );
 };

@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { GroupsPage } from '../pages/GroupsPage';
-const fixture=vi.hoisted(()=>({add:vi.fn(),remove:vi.fn(),admin:true,membersError:false}));
+const fixture=vi.hoisted(()=>({add:vi.fn(),remove:vi.fn(),create:vi.fn(),delete:vi.fn(),admin:true,membersError:false}));
 vi.mock('../store/authStore',()=>({useAuthStore:()=>({user:{role:fixture.admin?'admin':'agent'}})}));
 vi.mock('../hooks/useGroups',()=>({
  useGroups:()=>({data:[{id:'group-a',name:'Support',created_at:'2026-09-10'}],isLoading:false}),
- useCreateGroup:()=>({mutateAsync:vi.fn()}),useDeleteGroup:()=>({mutateAsync:vi.fn()}),
+ useCreateGroup:()=>({mutateAsync:fixture.create}),useDeleteGroup:()=>({mutateAsync:fixture.delete}),
  useGroupMembers:()=>({data:[{id:'member-a',full_name:'Existing agent',email:'existing@example.invalid'}],isLoading:false,isError:fixture.membersError}),
  useAgents:()=>({data:[{id:'member-a',full_name:'Existing agent',email:'existing@example.invalid'},{id:'candidate-a',full_name:'Available agent',email:'available@example.invalid'}],isLoading:false,isError:false}),
  useAddMember:()=>({mutateAsync:fixture.add}),useRemoveMember:()=>({mutateAsync:fixture.remove}),
@@ -57,4 +57,38 @@ it('does not expose membership mutations to non-admins or offer adds with unavai
  fixture.admin=true;fixture.membersError=true;const reopened=await openMembers();
  expect(within(reopened.dialog).getByRole('alert')).toHaveTextContent('Group members could not be loaded');
  expect(within(reopened.dialog).getByRole('button',{name:'Add Available agent'})).toBeDisabled();
+});
+
+it('creates through labelled fields, retaining a failed draft and guarding duplicate submissions',async()=>{
+ let reject!:(error:Error)=>void;fixture.create.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});
+ render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Create Group'});opener.focus();fireEvent.click(opener);
+ const dialog=await screen.findByRole('dialog',{name:'New Support Group'});const name=within(dialog).getByRole('textbox',{name:'Group Name'});
+ await waitFor(()=>expect(name).toHaveFocus());fireEvent.change(name,{target:{value:'New team'}});
+ fireEvent.change(within(dialog).getByRole('textbox',{name:'Description (Optional)'}),{target:{value:'Synthetic team'}});
+ const form=within(dialog).getByRole('form');fireEvent.submit(form);fireEvent.submit(form);expect(fixture.create).toHaveBeenCalledTimes(1);
+ expect(name).toBeDisabled();expect(within(dialog).getByRole('button',{name:'Close group editor'})).toBeDisabled();
+ fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
+ await act(async()=>reject(new Error('synthetic failure')));expect(await screen.findByRole('alert')).toHaveTextContent('Your draft has been kept');
+ expect(name).toHaveValue('New team');fireEvent.submit(form);await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+ expect(fixture.create).toHaveBeenLastCalledWith({name:'New team',description:'Synthetic team'});await waitFor(()=>expect(opener).toHaveFocus());
+});
+it('preserves the existing cancelled group draft without submitting',async()=>{
+ render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Create Group'});fireEvent.click(opener);
+ const dialog=await screen.findByRole('dialog',{name:'New Support Group'});
+ await waitFor(()=>expect(within(dialog).getByRole('textbox',{name:'Group Name'})).toHaveFocus());fireEvent.change(within(dialog).getByRole('textbox',{name:'Group Name'}),{target:{value:'Later'}});
+ fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));await waitFor(()=>expect(opener).toHaveFocus());
+ fireEvent.click(opener);expect(await screen.findByRole('textbox',{name:'Group Name'})).toHaveValue('Later');expect(fixture.create).not.toHaveBeenCalled();
+});
+it('cancels group deletion safely and locks failed/retried deletion until completion',async()=>{
+ let reject!:(error:Error)=>void;fixture.delete.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});
+ render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Delete Support'});opener.focus();fireEvent.click(opener);
+ let dialog=await screen.findByRole('dialog',{name:'Delete group: Support'});const cancel=within(dialog).getByRole('button',{name:'Cancel'});
+ await waitFor(()=>expect(cancel).toHaveFocus());fireEvent.click(cancel);await waitFor(()=>expect(opener).toHaveFocus());expect(fixture.delete).not.toHaveBeenCalled();
+ fireEvent.click(opener);dialog=await screen.findByRole('dialog',{name:'Delete group: Support'});
+ const remove=within(dialog).getByRole('button',{name:'Delete group'});fireEvent.click(remove);fireEvent.click(remove);expect(fixture.delete).toHaveBeenCalledTimes(1);
+ expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
+ await act(async()=>reject(new Error('synthetic failure')));expect(await screen.findByRole('alert')).toHaveTextContent('no active tickets');
+ fireEvent.click(within(dialog).getByRole('button',{name:'Delete group'}));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+ expect(fixture.delete).toHaveBeenLastCalledWith('group-a');expect(screen.getByRole('status')).toHaveTextContent('Group deleted.');
+ await waitFor(()=>expect(screen.getByRole('heading',{name:'Group Management'})).toHaveFocus());
 });

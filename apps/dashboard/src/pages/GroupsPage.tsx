@@ -9,8 +9,7 @@ import {
   X,
   Shield,
   Mail,
-  Search,
-  AlertCircle
+  Search
 } from 'lucide-react';
 import {
   useGroups,
@@ -22,7 +21,7 @@ import {
   useAgents
 } from '../hooks/useGroups';
 import { useAuthStore } from '../store/authStore';
-import { Group, User } from '../types';
+import { Group } from '../types';
 
 export const GroupsPage: React.FC = () => {
   const { user: currentUser } = useAuthStore();
@@ -35,6 +34,25 @@ export const GroupsPage: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
+  const createTitle = React.useId();
+  const deleteTitle = React.useId();
+  const createOpener = React.useRef<HTMLButtonElement>(null);
+  const groupNameInput = React.useRef<HTMLInputElement>(null);
+  const pageHeading = React.useRef<HTMLHeadingElement>(null);
+  const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
+  const deleteCancel = React.useRef<HTMLButtonElement>(null);
+  const createGuard = React.useRef(false);
+  const deleteGuard = React.useRef(false);
+  const deleteSucceeded = React.useRef(false);
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteGroup, setDeleteGroup] = useState<Group | null>(null);
+  const [createError, setCreateError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [groupStatus, setGroupStatus] = useState('');
+  const closeCreate = () => { if (!createGuard.current) setIsCreating(false); };
+  const closeDelete = () => { if (!deleteGuard.current) setDeleteOpen(false); };
 
   const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
@@ -42,8 +60,8 @@ export const GroupsPage: React.FC = () => {
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGroupName) return;
-
+    if (!isAdmin || !newGroupName || createGuard.current) return;
+    createGuard.current = true; setCreating(true); setCreateError(''); setGroupStatus('');
     try {
       await createGroupMutation.mutateAsync({
         name: newGroupName,
@@ -52,19 +70,21 @@ export const GroupsPage: React.FC = () => {
       setNewGroupName('');
       setNewGroupDescription('');
       setIsCreating(false);
-    } catch (error) {
-      console.error('Failed to create group', error);
-    }
+      setGroupStatus('Group created.');
+    } catch {
+      setCreateError('Group could not be created. Your draft has been kept; try again.');
+    } finally { createGuard.current = false; setCreating(false); }
   };
 
-  const handleDeleteGroup = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this group? It must not have any active tickets.')) return;
-
+  const handleDeleteGroup = async () => {
+    if (!isAdmin || !deleteGroup || deleteGuard.current) return;
+    deleteGuard.current = true; setDeleting(true); setDeleteError(''); setGroupStatus('');
     try {
-      await deleteGroupMutation.mutateAsync(id);
-    } catch (error: any) {
-      alert(error.message || 'Failed to delete group. Ensure no tickets are assigned to it.');
-    }
+      await deleteGroupMutation.mutateAsync(deleteGroup.id);
+      deleteSucceeded.current = true; setDeleteOpen(false); setGroupStatus('Group deleted.');
+    } catch {
+      setDeleteError('Group could not be deleted. Check that no active tickets are assigned, then try again.');
+    } finally { deleteGuard.current = false; setDeleting(false); }
   };
 
   if (isLoadingGroups) return <div className="p-8 text-center text-slate-500">Loading groups...</div>;
@@ -75,12 +95,12 @@ export const GroupsPage: React.FC = () => {
     <div className="max-w-6xl mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Group Management</h1>
+          <h1 ref={pageHeading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Group Management</h1>
           <p className="text-slate-500 mt-1">Organize agents into teams to handle specific ticket categories.</p>
         </div>
         {isAdmin && (
           <TocynButton
-            onClick={() => setIsCreating(true)}
+            ref={createOpener} onClick={() => { setCreateError(''); setIsCreating(true); }}
             className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -89,55 +109,72 @@ export const GroupsPage: React.FC = () => {
         )}
       </div>
 
-      {isCreating && (
+      {groupStatus && <p role="status" className="mb-4">{groupStatus}</p>}
+      <TocynDialog open={isCreating} busy={creating} labelledBy={createTitle} initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current} onOpenChange={next => { if (!next) closeCreate(); }}>
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm mb-8 animate-in fade-in slide-in-from-top-4">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-slate-900">New Support Group</h2>
-            <TocynButton onClick={() => setIsCreating(false)} className="text-slate-400 hover:text-slate-600">
+            <h2 id={createTitle} className="text-lg font-bold text-slate-900">New Support Group</h2>
+            <TocynButton aria-label="Close group editor" disabled={creating} onClick={closeCreate} className="text-slate-400 hover:text-slate-600">
               <X size={20} />
             </TocynButton>
           </div>
-          <form onSubmit={handleCreateGroup} className="space-y-4">
+          <form onSubmit={handleCreateGroup} aria-labelledby={createTitle}>
+            {createError && <p role="alert" className="mb-4 text-red-700">{createError}</p>}
+            <fieldset disabled={creating} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Group Name</label>
+              <label htmlFor={`${createTitle}-name`} className="block text-sm font-semibold text-slate-700 mb-1">Group Name</label>
               <TocynInput
                 type="text"
                 required
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                 placeholder="e.g., Technical Support"
-                value={newGroupName}
+                id={`${createTitle}-name`} ref={groupNameInput} value={newGroupName}
                 onChange={e => setNewGroupName(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Description (Optional)</label>
+              <label htmlFor={`${createTitle}-description`} className="block text-sm font-semibold text-slate-700 mb-1">Description (Optional)</label>
               <TocynTextarea
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                 placeholder="Briefly describe what this group handles..."
                 rows={2}
-                value={newGroupDescription}
+                id={`${createTitle}-description`} value={newGroupDescription}
                 onChange={e => setNewGroupDescription(e.target.value)}
               />
             </div>
             <div className="flex justify-end gap-3">
               <TocynButton
                 type="button"
-                onClick={() => setIsCreating(false)}
+                onClick={closeCreate}
                 className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors"
               >
                 Cancel
               </TocynButton>
               <TocynButton
                 type="submit"
-                disabled={createGroupMutation.isPending}
+                disabled={creating}
                 className="bg-brand-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors disabled:opacity-50"
               >
-                {createGroupMutation.isPending ? 'Creating...' : 'Create Group'}
+                {creating ? 'Creating...' : 'Create Group'}
               </TocynButton>
             </div>
+            </fieldset>
           </form>
         </div>
-      )}
+      </TocynDialog>
+      <TocynDialog open={deleteOpen} busy={deleting} labelledBy={deleteTitle} initialFocusEl={() => deleteCancel.current}
+        finalFocusEl={() => deleteSucceeded.current ? pageHeading.current : deleteOpener.current}
+        onOpenChange={next => { if (!next) closeDelete(); }}>
+        <div className="bg-white rounded-xl p-6 space-y-4">
+          <h2 id={deleteTitle} className="text-lg font-bold">Delete group: {deleteGroup?.name}</h2>
+          <p>Delete this group? It must not have any active tickets. This action cannot be undone.</p>
+          {deleteError && <p role="alert" className="text-red-700">{deleteError}</p>}
+          <div className="flex gap-3 justify-end">
+            <TocynButton ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</TocynButton>
+            <TocynButton disabled={deleting} onClick={handleDeleteGroup}>{deleting ? 'Deleting...' : 'Delete group'}</TocynButton>
+          </div>
+        </div>
+      </TocynDialog>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-left">
@@ -174,7 +211,7 @@ export const GroupsPage: React.FC = () => {
                     </TocynButton>
                     {isAdmin && (
                       <TocynButton
-                        onClick={() => handleDeleteGroup(group.id)}
+                        aria-label={`Delete ${group.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeleteGroup(group); setDeleteError(''); setDeleteOpen(true); }}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete Group"
                       >
