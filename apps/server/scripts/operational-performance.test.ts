@@ -1,0 +1,29 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { measureOperations } from './operational-performance';
+test('records reproducible nearest-rank latency and distinct failure counts without error details', async () => {
+  let clock=0; let count=0;
+  const result=await measureOperations({samples:4,concurrency:1,expectedStatus:200,now:()=>clock,run:async()=>{
+    count++;clock+=count;
+    if(count===3)throw new Error('synthetic-secret');
+    return {status:count===2?500:200};
+  }});
+  assert.deepEqual(result.latencyMs,{min:1,p50:2,p95:4,p99:4,max:4});
+  assert.equal(result.elapsedMs,10);assert.equal(result.expectedResponses,2);
+  assert.equal(result.unexpectedResponses,1);assert.equal(result.transportFailures,1);
+  assert.equal(JSON.stringify(result).includes('synthetic-secret'),false);
+});
+test('never exceeds configured concurrency and completes each requested operation once', async()=>{
+  let active=0;let peak=0;let completed=0;
+  const result=await measureOperations({samples:17,concurrency:3,expectedStatus:403,run:async()=>{
+    active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,1));active--;completed++;return {status:403};
+  }});
+  assert.equal(peak,3);assert.equal(completed,17);assert.equal(result.expectedResponses,17);
+});
+test('rejects invalid bounds before performing a request',async()=>{
+  let called=false;
+  for(const values of [{samples:0,concurrency:1},{samples:1001,concurrency:1},{samples:10,concurrency:9},{samples:1,concurrency:2}]) {
+    await assert.rejects(measureOperations({...values,expectedStatus:200,run:async()=>{called=true;return {status:200};}}),/bounds/);
+  }
+  assert.equal(called,false);
+});

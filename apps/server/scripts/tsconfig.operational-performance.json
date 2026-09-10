@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "operational-performance.ts",
+    "operational-performance.test.ts",
+    "run-operational-performance.ts",
+    "local-tenant-fixture.ts"
+  ]
+}
