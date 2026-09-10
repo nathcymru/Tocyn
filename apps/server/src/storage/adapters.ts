@@ -1,3 +1,4 @@
+import { measureResourceOperation, type ResourceOperationEmitter } from '../observability/resource-operation';
 import { VerifiedTenantScope } from '../types/tenant';
 import { createHash } from 'node:crypto';
 
@@ -15,22 +16,22 @@ interface VectorizeIndex {
 }
 
 export class TenantR2Adapter {
-  constructor(private scope: VerifiedTenantScope, private bucket: R2Bucket) {}
+  constructor(private scope: VerifiedTenantScope, private bucket: R2Bucket, private emit?: ResourceOperationEmitter) {}
 
   private getScopedKey(objectId: string): string {
     return `${this.scope.tenantId}/${objectId}`;
   }
 
   async get(objectId: string) {
-    return this.bucket.get(this.getScopedKey(objectId));
+    return measureResourceOperation({resource:'r2',operation:'read',execute:() => this.bucket.get(this.getScopedKey(objectId)),emit:this.emit});
   }
 
   async put(objectId: string, value: any, options?: any) {
-    return this.bucket.put(this.getScopedKey(objectId), value, options);
+    return measureResourceOperation({resource:'r2',operation:'write',execute:() => this.bucket.put(this.getScopedKey(objectId), value, options),emit:this.emit});
   }
 
   async delete(objectId: string) {
-    return this.bucket.delete(this.getScopedKey(objectId));
+    return measureResourceOperation({resource:'r2',operation:'delete',execute:() => this.bucket.delete(this.getScopedKey(objectId)),emit:this.emit});
   }
 }
 
@@ -117,8 +118,8 @@ export class TenantVectorStorage {
 export class TenantAttachmentStorage {
   private r2Adapter: TenantR2Adapter;
 
-  constructor(scope: VerifiedTenantScope, bucket: R2Bucket) {
-    this.r2Adapter = new TenantR2Adapter(scope, bucket);
+  constructor(scope: VerifiedTenantScope, bucket: R2Bucket, emit?: ResourceOperationEmitter) {
+    this.r2Adapter = new TenantR2Adapter(scope, bucket, emit);
   }
 
   async getAttachment(objectId: string) {

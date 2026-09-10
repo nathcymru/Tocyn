@@ -1,3 +1,5 @@
+import { TenantR2Adapter } from '../src/storage/adapters';
+import { createResourceOperationEmitter } from '../src/observability/resource-operation';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Module } from 'node:module';
@@ -236,5 +238,34 @@ test('workflow source contract: withdrawn/deleted/foreign retries never restore 
     assert.deepEqual(bVectors(), bBefore);
     assert.deepEqual(await depsB.repositories.knowledge.getDocument('shared-document'), bDocBefore);
     assert.equal(vectors.size, 1);
+  });
+});
+
+
+test('local R2 measurements preserve colliding tenant objects and emit only bounded envelopes', async t => {
+  await withTwoTenantFixture(async fixture => {
+    const messages: string[] = [];
+    t.mock.method(console, 'log', (message: unknown) => { messages.push(String(message)); });
+    const emitter = createResourceOperationEmitter({ENVIRONMENT:'development',LOCAL_BETA_ENABLED:'true',OBSERVABILITY_MODE:'isolated-evidence'});
+    const a = fixture.principals.customerA.tenantId;
+    const b = fixture.principals.customerB.tenantId;
+    const adapterA = new TenantR2Adapter(createSystemTenantScope({tenantId:a,actor:'synthetic-measurement'}), fixture.r2.bucket, emitter);
+    const adapterB = new TenantR2Adapter(createSystemTenantScope({tenantId:b,actor:'synthetic-measurement'}), fixture.r2.bucket, emitter);
+    await adapterA.put('measured-shared-object', 'synthetic-private-body-a');
+    await adapterB.put('measured-shared-object', 'synthetic-private-body-b');
+    assert.equal(await (await adapterA.get('measured-shared-object')).text(), 'synthetic-private-body-a');
+    await adapterA.delete('measured-shared-object');
+    assert.equal(await adapterA.get('measured-shared-object'), null);
+    assert.equal(await (await adapterB.get('measured-shared-object')).text(), 'synthetic-private-body-b');
+    const events=messages.map(message=>JSON.parse(message));
+    assert.equal(events.length,6);
+    assert.deepEqual(events.map(event=>event.operation),['write','write','read','delete','read','read']);
+    for(const event of events){
+      assert.deepEqual(Object.keys(event).sort(),['version','type','resource','operation','outcome','latencyMs'].sort());
+      assert.equal(event.resource,'r2');assert.equal(event.outcome,'success');assert.ok(Number.isFinite(event.latencyMs)&&event.latencyMs>=0);
+    }
+    assert.ok(!messages.join('').includes('synthetic-private'));
+    assert.ok(!messages.join('').includes('measured-shared-object'));
+    assert.ok(!messages.join('').includes(a));assert.ok(!messages.join('').includes(b));
   });
 });

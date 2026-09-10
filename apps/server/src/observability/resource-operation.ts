@@ -1,3 +1,4 @@
+import { observabilityEnabled } from './operational-events';
 export const RESOURCE_OPERATION_EVENT_VERSION = 1 as const;
 
 export type ResourceKind = 'd1' | 'r2' | 'durable_object' | 'workflow' | 'ai';
@@ -58,4 +59,17 @@ export async function measureResourceOperation<T>(options: ResourceOperationOpti
     finish('failure');
     throw error;
   }
+}
+
+export type ResourceOperationEmitter = (event: ResourceOperationEvent) => void | Promise<void>;
+/** A per-composition output ceiling, not an SLO or a complete usage counter. */
+export const MAX_RESOURCE_EVENTS_PER_COMPOSITION = 64;
+export function createResourceOperationEmitter(env: Parameters<typeof observabilityEnabled>[0]): ResourceOperationEmitter | undefined {
+  try { if (!observabilityEnabled(env)) return undefined; } catch { return undefined; }
+  let emitted = 0;
+  return event => {
+    if (emitted >= MAX_RESOURCE_EVENTS_PER_COMPOSITION) return;
+    emitted++;
+    console.log(JSON.stringify(resourceOperationEvent(event)));
+  };
 }

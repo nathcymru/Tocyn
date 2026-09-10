@@ -1,3 +1,4 @@
+import { createResourceOperationEmitter } from '../observability/resource-operation';
 import { CapabilityPolicyService } from '../repositories/capability-policy.repository';
 import { localBetaEnabled, type BetaPrincipal } from '../types/local-beta';
 import { LocalBetaRuntimeRepository } from '../repositories/local-beta-runtime.repository';
@@ -54,9 +55,10 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     ? new LocalBetaAdmissionRepository(env.DB, scope, { kind, id: scope.actorId }, credential)
     : undefined;
   const repositories = createRepositories(scope, env.DB, betaAdmission);
+  const emitResourceOperation = createResourceOperationEmitter(env);
   const attachmentStorage = betaAdmission
-    ? new LocalBetaAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, betaAdmission)
-    : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET);
+    ? new LocalBetaAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, betaAdmission, emitResourceOperation)
+    : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation);
   const legacyArticleStorage = scope.tenantId === 'default-tenant' ? new LegacyArticleBodyStorage(scope, env.ATTACHMENTS_BUCKET) : undefined;
   const vectorStorage = new TenantVectorStorage(scope, env.VECTOR_INDEX);
 

@@ -4,7 +4,7 @@ import type { VerifiedTenantScope } from '../types/tenant';
 
 /** The pre-R2 attempt charge is durable; failed or uncertain puts are never refunded. */
 export class LocalBetaAttachmentStorage extends TenantAttachmentStorage {
-  constructor(scope: VerifiedTenantScope, bucket: ConstructorParameters<typeof TenantAttachmentStorage>[1], private admission: LocalBetaAdmissionRepository) { super(scope, bucket); }
+  constructor(scope: VerifiedTenantScope, bucket: ConstructorParameters<typeof TenantAttachmentStorage>[1], private admission: LocalBetaAdmissionRepository, emit?: ConstructorParameters<typeof TenantAttachmentStorage>[2]) { super(scope, bucket, emit); }
   override async putAttachment(objectId: string, value: unknown, options?: unknown) {
     await this.admission.chargeUploadAttempt();
     // Never delete on an ambiguous put failure: an object may already be accepted.
