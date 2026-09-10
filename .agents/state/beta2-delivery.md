@@ -6,37 +6,40 @@ Active goal: complete #140 beta.2 acceptance, including full SLA/ownership/routi
 
 #127 interaction contract: PR #164 merged at `ec99b5a48a8c9de2c935f0a08423e0461bdd9441` on 10 September 2026 at 14:17:30 UTC. GitHub signature verified, all required checks passed, no review threads/findings. Source archive comparison covered all 22 Critical LAW/COMP/COG findings. Wiki commit `48bf051` read back byte-identically. Issue closed; Project Done/100/Actual completion 2026-09-10. This completes a contract, not workspace implementation.
 
-## Current allocation and integration queue
+## Current ownership and remaining work
 
-| Issue | Environment / owner | Actual model / effort | Branch and location | Current evidence / next action |
-|---|---|---|---|---|
-| #50 cost contract | dedicated Codex / coordinator | current coordinator configuration; switching unavailable | codex/50-cost-contract; primary checkout; PR #165 | 36 targeted tests, server typecheck/scoped lint, root npm test and three frontend builds passed. Original PR CI passed; rebased onto #164 with forecast update, so new exact-revision CI required. Active enforcement remains #64/#91. |
-| #160 residency foundation | dedicated Codex / coordinator after product_package_audit | worker Luna/medium; consequential correction escalated to coordinator | codex/160-residency-foundation; /private/tmp/tocyn-beta2-160; PR #166 | 21 targeted tests and original PR CI passed. Rebase after #165 integrates, then required checks. Hard profiles rejected by current unrestricted generator; #42/#57 own live provisioning. |
-| #79 permissions | dedicated Codex / permissions_79 | Terra / high | codex/79-resource-permissions; /private/tmp/tocyn-beta2-79 | Active implementation; Project In progress/Actual start 2026-09-10. Live revocation must fence mutation/side-effect boundaries, not merely request start. |
-| #48 shared primitives | dedicated Codex / ux_package_audit | Luna / medium retained worker | codex/48-headless-primitives; /private/tmp/tocyn-beta2-48 | First foundation commit `5f3fbdb` returned, awaiting coordinator review. ALL retained application migration, complex-control/accessibility and measurements remain. Do not close for a partial foundation. |
+| Issue | Dedicated Codex allocation | Branch / PR | Current responsibility |
+|---|---|---|---|
+| #48 | coordinator after Luna/medium foundation | codex/48-headless-primitives, /private/tmp/tocyn-beta2-48, draft #167 | Native controls adopted across three apps; continuing complex-dialog migration and parity tests. Browser accessibility/performance and #79 page adoption remain. |
+| #79 | permissions_79, Terra/high | codex/79-resource-permissions, /private/tmp/tocyn-beta2-79, draft #169 | SQL mutation fences and strict result validation; coordinator acceptance review and required CI pending. |
+| #140 delivery records | coordinator after Luna/low publication worker | codex/beta2-integration-state, primary checkout, draft #168 | Integrate accepted50/160 receipts, regenerate forecast and publish consistent issue/Project/Wiki records. |
 
-The #48 worker must not edit AgentPermissionsPage or permission APIs owned by #79. Coordinate its final primitive adoption at integration. Domain-only packages/shared must not import UI. Preserve historical dirty worktrees.
-
-A dedicated Codex Luna/low worker completed bounded forecast analysis. An additional Terra/medium UI worker could not start because the native thread limit was reached; no such execution is claimed. Existing workers are reused where useful, with coordinator review proportional to risk. No callable Work-worker or normal-Chat delegation route was found. Verified documentation treats Work/dedicated Codex allowances as shared; no separate balance is assumed. Subscription-backed route only; no API billing, purchases, resets or overages. Last observed Codex capacity: 28% remaining, reset 15 September 02:24 BST; current/task-specific consumption unknown.
+Native agent thread limits rejected additional UI workers, so no extra execution is claimed. Work/normal-Chat delegation remains unavailable; verified documentation treats Work and dedicated Codex allowance as shared. Subscription-backed route only, no API billing/purchases/resets/overages. Task-specific consumption unknown. Last observed capacity25% remaining, reset15September02:24BST; refresh at meaningful boundaries.
 
 ## Critical path and forecast
 
-#50 unlocks #159 observability, #64 budgets and #91 journals. #127 unlocks #48; #79 then enables #129 drafts/#136 waiting. #162 metrics feeds #73 SLA and #137 ownership/routing. #128 integrates workspace behavior. Preserve all edges in the master graph, including #50 → #64/#91 → #51 → #87 → #88. #160 is independent production-readiness foundation.
+Accepted #50 unlocks #159 observability/#64 budgets/#91 journals. Accepted #127 unlocks #48. #79 precedes #129 durable drafts and #136 waiting semantics; #162 metrics feeds full #73 SLA/#137 ownership/routing. #128 integrates workspace behavior. Preserve every master graph edge, including #50→#64/#91→#51→#87→#88. #67 remains separate from standalone workspace acceptance. #160 is accepted source residency evidence, not live provisioning.
 
-Recalculated beta.2 forecast: **15 February 2027**, expanded forecast **5 February 2028**, pending publication with PR #165. Only #127 newly accepted effort was removed. Two reference lanes, 8h/day Monday–Saturday, 3× allowance including shared review remain unchanged. Frozen new-issue baseline dates were copied from the accepted alignment forecast; the historical baseline snapshot is byte-identical. The calculator now retains completed-node forecast evidence and honors actual prerequisite completion dates. Source/lane/review invariants and delayed-completion regression pass. Actual start is recorded separately from remaining-work forecasts.
+Current reproducible beta.2 forecast: **9February2027**; expanded scope **27January2028**, pending PR168 publication. Two reference lanes,8h/day Monday–Saturday,3× allowance including shared review. Only accepted #50/#160 were changed from the prior integrated planning input; exact comparison proves every other node unchanged, including #65/#92. Baselines/effort/dependencies remain immutable. A low-effort worker's broad patch accidentally altered #92 and #65; coordinator restored both before publication and added deterministic text/table read-back validation. Do not repeat broad JSON text replacement; identify records by issue number.
 
-Publish issue/Project/Wiki forecast updates after the recalculation integrates. Do not infer percentages from commits. Human updates every 30 minutes must include the evidenced estimate and active blockers; latest update reported #127 acceptance, #165/#166 checks, #79 active and #48 returned for review.
+## Boundaries and exact next actions
 
-## Review and operational boundaries
+Zero Copilot reviews requested. Repository auto-review removed and personal auto-review disabled under owner authority. `Copilot development setup` is deterministic CI, not an AI review. Preserve all substantive exact-revision checks; verify GitHub-signed squash tree and record review-only owner bypass. No remote Cloudflare resources, production activation, external email, or additional releases.
 
-Zero Copilot reviews requested. Repository auto-review removed; personal automatic review disabled and reloaded under owner authority. Its clearance receipt was posted 13:40:44 UTC; PRs were created after 14:11 UTC. The `Copilot development setup` CI job on #166 is deterministic dependency/index validation triggered by package.json, not a code-review request; no reviews were posted.
+1. Finish source/acceptance reconciliation in PR168, pass exact CI, merge and synchronize GitHub forecasts and Wiki. #50/#160 are already closed/ProjectDone100 with source receipts.
+2. Continue #48 complex controls and complete retained behavior/browser/performance acceptance; its partial draft must not close the issue.
+3. Review #79 complete current scope, atomic mutation/revocation and tenant-negative evidence; final CI/security/signature gates before acceptance.
+4. Start cleared #159 observability when a useful independent implementation slot is available. Keep #91 ready without stealing beta-critical capacity.
+5. Human operational updates every30minutes include evidenced forecast, active workers and blockers. Do not declare beta.2 before every #140 requirement is evidenced.
 
-PR #164 used the standing sole-maintainer PR-only approving-review bypass after exact-revision checks. This is not independent human approval. Local GPG is unavailable; require and verify GitHub-signed squash integration. Preserve required CI/security, linear history and other protections. No production/provider activation, remote Cloudflare changes or external mail.
+## Integration update — 10 September, 14:50 UTC
 
-## Exact next actions
+PR #165 merged at `6d6a6ef163da093a4277385e8f34b6fd0e439585` using owner-authorized review bypass after all exact-head checks and no review findings. Signed integration and tree verified; Wiki `75b3d8a7` published/read back. #50 accepted as contract-only, closed and Project Done/100/actual completion 10 September. An initial worker receipt mistakenly included downstream enforcement/UI scope and assigned35%; the correction receipt preserves that history and explicitly restores correct ownership under #64/#91/#90. Receipt: https://github.com/nathcymru/Tocyn/issues/50#issuecomment-5620514318.
 
-1. Finish PR #165 forecast/state validation; push rebased revision and wait for required CI. Merge only after exact-head validation and verify signed commit.
-2. Refresh #166 from accepted main, pass required checks, integrate and publish reviewed Wiki sources and issue/Project receipts.
-3. Review #48 foundation, keep a coherent draft PR for partial work and continue retained-behavior migration; integrate #79 authorization only with real negative/revocation/isolation evidence.
-4. Reforecast only from accepted progress, update dependent GitHub records and this state, and keep newly cleared work ready.
-5. Do not declare beta.2 ready until every #140 prerequisite and acceptance outcome is evidenced.
+PR #166 merged at `7a53308394f2db5093ffdc377fa1792e440a737e`, 14:46:28 UTC. All required checks passed on `56436a5fc822d4c4c71c8206c373b1f9e2fc73a4`; GitHub-signed valid integration tree `d1e73053759c6185859bdb9c17cbbe90928f2f38` matches reviewed head. No review findings; standing review-only bypass recorded. Dedicated Codex Luna/low publication worker now assesses source acceptance and publishes Wiki/#160 receipt, then updates forecast. No live jurisdiction/resource claim.
+
+#48 remains draft PR #167. Coordinator corrected native event composition, loading/ARIA retention, standalone CSS hooks, actual keyboard and focus-return tests, then adopted button/input/select/textarea primitives across dashboard/portal/widget except #79's permissions page. All three builds and 73 dashboard/59 portal/3 widget/6 shared tests passed before final rebase; current CI required. Complex dialogs/menus, permissions-page adoption, browser accessibility and measured performance remain. Additional worker starts were rejected by the native thread limit; no UI worker is claimed active. Coordinator owns continued migration.
+
+#79 worker repaired a genuine recheck-to-write race with SQL predicates inside mutations; full server362tests and D1 integration passed on its earlier revision. Coordinator rebased onto accepted main and requested fail-closed handling of missing mutation metadata rather than accommodating test doubles, plus batch atomicity inspection. Dedicated Codex Terra/high remains active. No acceptance yet.
+
+Forecast synchronization is in draft PR #168. Accepted #50 removal recalculates beta.2 to9February2027; publication pending final consistency checks and #160 acceptance. Preserve every baseline. The coordinator corrected the input and generated tables; expanded forecast is27January2028. No scope cut or arbitrary progress percentage is authorized.
