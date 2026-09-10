@@ -65,7 +65,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
   };
 
   return (
-    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start'}} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
+    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
     <div className="relative mt-2">
       <Popover.Trigger asChild>
       <TocynButton
@@ -320,7 +320,7 @@ export function Layout() {
             />
           </div>
 
-          <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
+          <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
           <div className="flex items-center gap-4 relative">
             <Popover.Trigger asChild>
             <TocynButton

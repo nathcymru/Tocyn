@@ -124,3 +124,21 @@ it('guards overlapping sign-outs and still clears local authentication when serv
   expect(screen.getByRole('heading')).toHaveTextContent('/login');
   expect(alert).toHaveBeenCalledWith(expect.stringContaining('Server sign-out could not be confirmed'));
 });
+
+it('keeps nested account content fixed-positioned and dismisses it before mobile navigation', async () => {
+  render(tree()); await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+  const navigation=await screen.findByRole('dialog',{name:'Navigation'});
+  await waitFor(()=>expect(within(navigation).getByRole('button',{name:'Close navigation'})).toHaveFocus());
+  const account=within(navigation).getByRole('button',{name:'Account options'});
+  await userEvent.click(account);
+  const security=await within(navigation).findByRole('link',{name:'Security Profile'});
+  await waitFor(()=>expect(security).toHaveFocus());
+  const positioner=security.closest('[data-scope="popover"][data-part="positioner"]');
+  expect(positioner).toHaveStyle({position:'fixed'});
+  await userEvent.keyboard('{Escape}');
+  await waitFor(()=>expect(account).toHaveFocus());
+  expect(screen.getByRole('dialog',{name:'Navigation'})).toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
+  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Navigation'})).not.toBeInTheDocument());
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Open navigation'})).toHaveFocus());
+});
