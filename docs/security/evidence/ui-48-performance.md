@@ -101,3 +101,11 @@ For dashboard/portal login startup and synthetic-denial recovery, candidate p95 
 Required build CI installs the locked Chromium runtime, builds the immutable baseline with its own dependencies, creates a fresh receipt, enforces the budgets and retains the raw artifact for3days. Evidence rejects dirty source, wrong baseline tree, mismatched Vite versions, missing manifest assets and incomplete samples; supplied percentile summaries cannot override raw observations. Other CI/security checks remain intact. Broad affected-flow accessibility/visual checks, authenticated workspace interaction costs and final integration remain open.
 
 Clean revision857510c passed the16local checks: see ui-48-browser-857510c.json (raw data/artifact hashes) and ui-48-budgets-857510c.json (evaluated limits).80measured observations plus4warmups. This establishes the local result only; required CI must separately pass on its runner. Both full/development and production-only dependency audits reported0vulnerabilities after the pinned browser-tool addition.
+
+
+Required CI run [34524932528](https://github.com/nathcymru/Tocyn/actions/runs/34524932528) passed all 16 performance budget checks for PR head19b9bbd, tested merge revision e04352228c8bc2bc8f4ffea4cfc658b8bfc8626c. Raw runner data and evaluated limits are retained as ui-48-browser-ci-34524932528.json and ui-48-budgets-ci-34524932528.json, preserving evidence beyond the temporary Actions artifact. These files record their original measured revision; later documentation changes do not relabel that measurement. Full48 acceptance remains open.
+
+
+## Built widget timing
+
+`ui-48-widget-timing-19b9bbd.json` records 40 samples plus two excluded warmups against a fresh production build, with exact source/artifact hashes and dirty-worktree metadata for the new harness. AI-on/off p95 respectively: startup66.3/64.6ms, opening39.4/41.8ms, failed-submit recovery48.2/48.9ms. Each sample also passes keyboard tabs where enabled, draft retention, retry and focus assertions. These are local synthetic two-frame observations, not production targets. No valid pre-fix widget startup comparison exists because that artifact failed before launch. Widget numeric timing limits and authenticated workspace timing remain separate work; existing widget byte ceilings continue to apply in CI.

@@ -23,3 +23,9 @@ The negative control without EnvironmentProvider times out on ArrowRight navigat
 ## Ticket action compatibility popup
 
 With the existing synthetic dashboard fixture on127.0.0.1:5190, run `node tools/ui-browser/ticket-actions-check.cjs`. It intercepts one synthetic list row, preserves the existing test-session entrypoint, blocks other origins and makes no mutation. Real Chromium checks initial link focus, the retained navigation destination, Escape return focus and outside-click dismissal. This is not backend ticket/tenant evidence or full workspace acceptance.
+
+## Widget startup and interaction measurements
+
+After a fresh production widget build, `node tools/ui-browser/widget-check.mjs 20` records 20 samples per AI-on/off mode, alternating modes with a fresh browser context each time, after one excluded warmup per mode. The argument is bounded to 1–50; the default one-sample run remains a functional smoke check. Every sample also runs the retained interaction/retry assertions above.
+
+Startup runs from navigation time origin to observing a usable launcher after two animation frames. Opening and failed-submit recovery run from captured DOM clicks to visible controls/alert after two frames. The observer includes attribute changes because opening reveals retained mounted content through `hidden`; testing child additions alone misses this state change. Measurements use a warm browser process, reduced motion and synthetic responses, not production latency or compositor paint. Raw samples and nearest-rank p50/p95/p99 are emitted. The earlier broken production bundle has no valid startup baseline; no shim, speedup comparison or global timing threshold is invented.
