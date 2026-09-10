@@ -79,3 +79,7 @@ After deploying the system, you must configure email routing to receive support 
 - **Apply Migrations:** If you add new tables locally, apply them to production with: `npm run deploy:server`.
 - **Update Widget:** If you modify the widget code, update it in R2 with: `npm run deploy:widget`.
 - **R2 Public Access:** After the first `setup:prod`, ensure the `luminatick-widget` R2 bucket is configured for public access in the Cloudflare Dashboard to serve the `lumina-widget.js` file.
+
+## Residency source validation (#160)
+
+The [deployment residency contract](https://github.com/nathcymru/Tocyn/blob/main/docs/deployment-residency.md) and preview/beta manifests now distinguish storage, HTTP, asynchronous, AI/provider and observability paths. Local release preparation validates these fields and carries them into its binding manifest. Current evidence is pending/unknown; no live jurisdiction guarantee or legal compliance is claimed. The current generator rejects hard profiles because its bindings do not implement jurisdiction-aware provisioning. Production #42 and future remote #57 must verify resource creation-time jurisdiction, processing paths and migration consequences before any constrained deployment. Tenant/request metadata cannot select a deployment region.

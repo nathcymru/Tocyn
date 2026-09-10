@@ -44,6 +44,9 @@ test('release configuration accepts only exact isolated preview values', () => {
     assert.equal(configuration.vars.DISABLE_RATE_LIMIT, 'false');
     for (const binding of ['ai', 'vectorize', 'workflows', 'queues', 'email']) assert.equal(Object.hasOwn(configuration, binding), false);
     assert.equal(bindingManifest.resources.d1DatabaseId, environment.TOCYN_D1_DATABASE_ID);
+    const sourceManifest = JSON.parse(readFileSync(new URL('../../deployment/preview.json', import.meta.url)));
+    assert.deepEqual(bindingManifest.residency, sourceManifest.residency);
+    assert.equal(bindingManifest.residency.resources.d1.verifiedJurisdiction, null);
     assert.equal(readFileSync(join(output, 'wrangler.source.json'), 'utf8').includes('luminatick'), false);
   } finally { rmSync(output, { recursive: true, force: true }); }
 });
@@ -68,7 +71,7 @@ async function fixture(t) {
   const source = join(temporary, 'checkout');
   const output = join(temporary, 'artifact');
   mkdirSync(join(source, 'scripts', 'deployment'), { recursive: true });
-  for (const name of ['isolated-release.mjs', 'verify-release-artifact.mjs']) cpSync(new URL(name, import.meta.url), join(source, 'scripts', 'deployment', name));
+  for (const name of ['isolated-release.mjs', 'verify-release-artifact.mjs', 'residency-manifest.mjs']) cpSync(new URL(name, import.meta.url), join(source, 'scripts', 'deployment', name));
   cpSync(new URL('../../deployment', import.meta.url), join(source, 'deployment'), { recursive: true });
   const put = (name, contents) => { mkdirSync(join(source, name, '..'), { recursive: true }); writeFileSync(join(source, name), contents); };
   put('.gitignore', 'dist/\n');
@@ -183,4 +186,26 @@ test('packaging enforces the Worker browser and development-tooling boundary usi
     writeFileSync(join(f.output, 'worker-meta.json'), JSON.stringify({ inputs: { [path]: {} } }));
     assert.throws(() => f.api.packageRelease(f.options), /browser UI or development-agent tooling/);
   }
+});
+
+test('release loading rejects missing residency and hard metadata the generator cannot honor', async t => {
+  const f = await fixture(t);
+  const path = join(f.source, 'deployment/preview.json');
+  const original = JSON.parse(readFileSync(path));
+  const missing = structuredClone(original); delete missing.residency;
+  writeFileSync(path, JSON.stringify(missing));
+  assert.throws(() => f.api.assertManifestSet(), /residency manifest rejected/);
+  const hard = structuredClone(original);
+  hard.residency.policy = { profile: 'hard', jurisdiction: 'eu' };
+  for (const capability of Object.values(hard.residency.capabilities)) {
+    if (!capability.enabled) continue;
+    for (const dimension of ['storage', 'processing']) Object.assign(capability[dimension], {
+      status: 'guaranteed', jurisdiction: 'eu', verification: 'verified',
+    });
+  }
+  for (const resource of Object.values(hard.residency.resources)) Object.assign(resource, {
+    selectedJurisdiction: 'eu', verifiedJurisdiction: 'eu', immutableAtCreation: true, verification: 'verified',
+  });
+  writeFileSync(path, JSON.stringify(hard));
+  assert.throws(() => f.api.assertManifestSet(), /jurisdiction-aware provisioning/);
 });

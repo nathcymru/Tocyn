@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, write
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { artifactFiles, digest, hashTree, portableSourceConfiguration, verifyReleaseArtifact } from './verify-release-artifact.mjs';
+import { validateResidencyManifest } from './residency-manifest.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const manifestDirectory = join(root, 'deployment');
@@ -28,6 +29,9 @@ function readManifest(target) {
   if (!environments.has(target)) fail(`unknown environment ${JSON.stringify(target)}`);
   const manifest = JSON.parse(readFileSync(join(manifestDirectory, `${target}.json`), 'utf8'));
   if (manifest.environment !== target) fail(`manifest/environment mismatch for ${target}`);
+  try { validateResidencyManifest({ ...manifest.residency, disabledCapabilities: manifest.disabledCapabilities }); }
+  catch (cause) { fail(`${target} residency manifest rejected: ${cause.message}`); }
+  if (manifest.residency.policy.profile === 'hard') fail('hard residency requires jurisdiction-aware provisioning; this isolated generator cannot produce it');
   return manifest;
 }
 
@@ -159,6 +163,7 @@ export function prepareRelease({ target, revision, output, mode = 'park', verify
     origins: { portal: values.portalOrigin, dashboard: values.dashboardOrigin, api: values.apiOrigin },
     requiredSecrets: manifest.requiredSecrets,
     disabledCapabilities: manifest.disabledCapabilities,
+    residency: manifest.residency,
     ingress: manifest.ingress,
     runtime: configuration.vars,
     workerConfigurationDigest: digest(portableSourceConfiguration(configuration))
