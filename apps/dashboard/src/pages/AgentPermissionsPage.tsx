@@ -84,7 +84,7 @@ export function AgentPermissionsPage() {
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><Shield className="w-6 h-6 text-brand-600" /> Agent permissions</h1>
           <p className="text-slate-500 mt-1">Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
         </div>
-        <button type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
+        <button type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className="min-h-11 flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save changes
         </button>
       </div>
@@ -108,7 +108,7 @@ export function AgentPermissionsPage() {
               <label className={`relative inline-flex min-h-11 min-w-11 items-center ${available ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                 <span className="sr-only">Allow agents to use {capability.label}</span>
                 <input type="checkbox" className="sr-only peer" checked={checked} disabled={!available} aria-disabled={!available || saving || loading || revision === null} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
-                <span aria-hidden="true" className="relative block w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
+                <span aria-hidden="true" className="relative block w-11 h-6 bg-slate-500 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-blue-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
               </label>
             </div>
           );
