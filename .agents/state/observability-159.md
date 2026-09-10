@@ -49,3 +49,7 @@ Integration refresh701cb13 includes accepted172/main4fce7b6. Integrated server45
 ## Durable Object request slice — 10 September 19:55 BST
 
 Native evidence_copyedit implemented optional broadcast measurement and trusted dashboard/customer wiring; coordinator added production/disabled and sink-failure regressions. Fixed durable_object/invoke per fetch attempt shares existing64event cap; no payload/object/tenant/error content. Retry/swallow semantics retained. 464server tests/51files pass; worker TypeScript/lint passed before additional test-only cases. Full159 remains open: actual DO runtime proof, complete SLI counters, Workflow/AI/journal/Queue/outbox and collector/recovery/load acceptance. No forecast change, zeroCopilot. Existing170draft retained.
+
+## Actual DO runtime proof — 10 September20:01BST
+
+New durable-object-resource-runtime.test.ts bundles actual NotificationDO in memory, registers Miniflare namespace, invokes BroadcastService with actual local emitter and verifies fixed event/privacy. Production-mode real invocation suppresses output. Runtime disposed/log capture restored. Added to existing storage-background command and its TypeScript include;8tests and expanded typecheck pass. No sessions/recipient delivery/hibernation claim. Native evidence_copyedit authored; coordinator inspected/fixed harness coverage/cleanup requirements. Full159 remains incomplete; no forecast change.

@@ -17,7 +17,7 @@
     "typecheck:local-tenants": "tsc -p scripts/tsconfig.local-tenant-fixture.json",
     "test:tenant-isolation-core": "tsx --test scripts/tenant-isolation-core.test.ts",
     "typecheck:tenant-isolation-core": "tsc -p scripts/tsconfig.tenant-isolation-core.json",
-    "test:tenant-isolation-storage-background": "tsx --test scripts/tenant-isolation-storage-background.test.ts",
+    "test:tenant-isolation-storage-background": "tsx --test scripts/tenant-isolation-storage-background.test.ts scripts/durable-object-resource-runtime.test.ts",
     "typecheck:tenant-isolation-storage-background": "tsc -p scripts/tsconfig.tenant-isolation-storage-background.json",
     "test:local-tenant-realtime": "node --import tsx scripts/local-tenant-realtime-smoke.mjs",
     "test:canonical-conversation": "tsx --test scripts/canonical-conversation.test.ts",
