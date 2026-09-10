@@ -10,7 +10,7 @@ import { Env } from "../bindings";
 import { authMiddleware } from "../middleware/auth.middleware";
 import { mfaGuard } from "../middleware/mfa.guard";
 import { roleGuard } from "../middleware/role.guard";
-import { permissionGuard, revalidatePermission } from "../middleware/permission.guard";
+import { permissionGuard, permissionWriteFence, revalidatePermission } from "../middleware/permission.guard";
 import { rateLimiter } from "../middleware/rate-limiter";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { JWTPayload, AppVariables } from "../types";
@@ -91,7 +91,7 @@ dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard(
   try {
     const field = await d.repositories.ticketFields.create({
       name, label, field_type, options: options || null, is_active
-    });
+    }, permissionWriteFence(c, "ticket_fields"));
     return c.json(field, 201);
   } catch (error: any) {
     if (error.message.includes("UNIQUE constraint failed")) {
@@ -139,7 +139,7 @@ dashboard.post("/automations", permissionGuard("automations"), async (c) => {
     name, event_type, conditions: conditions || undefined,
     action_type, action_config: action_config || undefined,
     is_active: is_active ? true : false
-  });
+  }, permissionWriteFence(c, "automations"));
 
   return c.json(rule, 201);
 });
@@ -156,7 +156,7 @@ dashboard.patch("/automations/:id", permissionGuard("automations"), async (c) =>
   const revalidationFailure = await revalidatePermission(c, "automations");
   if (revalidationFailure) return revalidationFailure;
 
-  const rule = await d.repositories.automations.update(id, payload);
+  const rule = await d.repositories.automations.update(id, payload, permissionWriteFence(c, "automations"));
   return c.json(rule);
 });
 
@@ -170,7 +170,7 @@ dashboard.delete("/automations/:id", permissionGuard("automations"), async (c) =
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "automations");
   if (revalidationFailure) return revalidationFailure;
-  await d.repositories.automations.delete(id);
+  await d.repositories.automations.delete(id, permissionWriteFence(c, "automations"));
   return c.json({ success: true });
 });
 
@@ -197,7 +197,7 @@ dashboard.post("/api-keys", permissionGuard("api_keys"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "api_keys");
   if (revalidationFailure) return revalidationFailure;
-  const result = await d.repositories.apiKeys.create(name);
+  const result = await d.repositories.apiKeys.create(name, undefined, permissionWriteFence(c, "api_keys"));
   return c.json(result, 201);
 });
 
@@ -211,7 +211,7 @@ dashboard.delete("/api-keys/:id", permissionGuard("api_keys"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "api_keys");
   if (revalidationFailure) return revalidationFailure;
-  await d.repositories.apiKeys.delete(id);
+  await d.repositories.apiKeys.delete(id, permissionWriteFence(c, "api_keys"));
   return c.json({ success: true });
 });
 
@@ -498,7 +498,7 @@ dashboard.post("/groups", roleGuard(["admin", "agent"]), permissionGuard("groups
   if (revalidationFailure) return revalidationFailure;
 
   try {
-    const group = await d.repositories.groups.create({ name, description });
+    const group = await d.repositories.groups.create({ name, description }, permissionWriteFence(c, "groups"));
     return c.json(group, 201);
   } catch (error: any) {
     if (error.message.includes("UNIQUE constraint failed")) {
@@ -529,7 +529,7 @@ dashboard.delete("/groups/:id", roleGuard(["admin", "agent"]), permissionGuard("
 
   const revalidationFailure = await revalidatePermission(c, "groups");
   if (revalidationFailure) return revalidationFailure;
-  await d.repositories.groups.delete(id);
+  await d.repositories.groups.delete(id, permissionWriteFence(c, "groups"));
   return c.json({ success: true });
 });
 
@@ -581,7 +581,7 @@ dashboard.post("/groups/:id/members", roleGuard(["admin", "agent"]), permissionG
   const revalidationFailure = await revalidatePermission(c, "groups");
   if (revalidationFailure) return revalidationFailure;
   try {
-    await d.repositories.groups.addMember(groupId, userId);
+    await d.repositories.groups.addMember(groupId, userId, permissionWriteFence(c, "groups"));
   } catch (error: any) {
     if (error.message.includes("UNIQUE constraint failed")) {
       return c.json({ error: "User is already a member of this group" }, 409);
@@ -615,7 +615,7 @@ dashboard.delete(
 
     const revalidationFailure = await revalidatePermission(c, "groups");
     if (revalidationFailure) return revalidationFailure;
-    await d.repositories.groups.removeMember(groupId, userId);
+    await d.repositories.groups.removeMember(groupId, userId, permissionWriteFence(c, "groups"));
     return c.json({ success: true });
   }
 );

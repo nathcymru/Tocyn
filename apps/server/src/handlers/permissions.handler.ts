@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { CAPABILITY_CATALOG } from "../auth/capability-policy";
+import { CAPABILITY_CATALOG, capabilityWriteConstraint } from "../auth/capability-policy";
 import { Env } from "../bindings";
 import { authMiddleware } from "../middleware/auth.middleware";
 import { mfaGuard } from "../middleware/mfa.guard";
-import { permissionGuard, revalidatePermission } from "../middleware/permission.guard";
+import { permissionGuard, permissionWriteFence, revalidatePermission } from "../middleware/permission.guard";
 import { roleGuard } from "../middleware/role.guard";
 import { tenantMiddleware } from "../middleware/tenant.middleware";
 import { AppVariables } from "../types";
@@ -74,14 +74,15 @@ permissions.put("/", roleGuard(["admin"]), permissionGuard("permissions.manage")
 
   const tenantId = c.get("jwtPayload").tenant_id!;
   const changeToken = crypto.randomUUID();
+  const writeGuard = capabilityWriteConstraint(permissionWriteFence(c, "permissions.manage"));
   const ensureVersion = c.env.DB.prepare(`INSERT OR IGNORE INTO tenant_capability_policy_versions
     (tenant_id, role, revision, change_token, updated_at)
-    VALUES (?, 'agent', 1, '', CURRENT_TIMESTAMP)`)
-    .bind(tenantId);
+    SELECT ?, 'agent', 1, '', CURRENT_TIMESTAMP WHERE ${writeGuard.sql}`)
+    .bind(tenantId, ...writeGuard.values);
   const revisionUpdate = c.env.DB.prepare(`UPDATE tenant_capability_policy_versions
     SET revision = revision + 1, change_token = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE tenant_id = ? AND role = 'agent' AND revision = ?`)
-    .bind(changeToken, tenantId, result.data.revision);
+    WHERE tenant_id = ? AND role = 'agent' AND revision = ? AND ${writeGuard.sql}`)
+    .bind(changeToken, tenantId, result.data.revision, ...writeGuard.values);
   const statements = policyEntries.map(([legacyKey, allowed]) => c.env.DB.prepare(`INSERT INTO tenant_role_capability_policies
       (tenant_id, role, capability, enabled, revision, updated_at)
     SELECT ?, 'agent', ?, ?, 1, CURRENT_TIMESTAMP

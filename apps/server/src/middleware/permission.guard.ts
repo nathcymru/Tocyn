@@ -1,7 +1,7 @@
 import { Context, Next } from "hono";
 import { Env } from "../bindings";
 import { AppVariables } from "../types";
-import { CapabilityPolicyService, type CapabilityDecision } from "../auth/capability-policy";
+import { CapabilityFenceError, CapabilityPolicyService, resolveCapability, type CapabilityDecision, type CapabilityWriteFence } from "../auth/capability-policy";
 
 function principalFromContext(c: Context<{ Bindings: Env; Variables: AppVariables }>) {
   const payload = c.get("jwtPayload");
@@ -25,7 +25,14 @@ export const permissionGuard = (settingKey: string) => {
     const decision = await new CapabilityPolicyService(c.env.DB).authorize(principal, settingKey);
     if (!decision.allowed) return forbidden(c, decision);
     c.set("permissionFences", { ...(c.get("permissionFences") ?? {}), [decision.capability]: decision });
-    await next();
+    try {
+      await next();
+    } catch (error) {
+      if (error instanceof CapabilityFenceError) {
+        return c.json({ error: "Forbidden", message: "Permission changed before the protected mutation could commit" }, 403);
+      }
+      throw error;
+    }
   };
 };
 
@@ -40,4 +47,17 @@ export async function revalidatePermission(
   const prior = c.get("permissionFences")?.[current.capability];
   if (!current.allowed || !prior || prior.policyFingerprint !== current.policyFingerprint) return forbidden(c, current);
   return null;
+}
+
+/** Build the SQL write fence after revalidation succeeds. */
+export function permissionWriteFence(
+  c: Context<{ Bindings: Env; Variables: AppVariables }>,
+  settingKey: string,
+): CapabilityWriteFence {
+  const principal = principalFromContext(c);
+  const capability = resolveCapability(settingKey);
+  if (!principal || !capability || !c.get("permissionFences")?.[capability.id]) {
+    throw new CapabilityFenceError();
+  }
+  return { ...principal, capability: capability.id };
 }

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Env } from "../bindings";
 import { roleGuard } from "../middleware/role.guard";
-import { permissionGuard, revalidatePermission } from "../middleware/permission.guard";
+import { permissionGuard, permissionWriteFence, revalidatePermission } from "../middleware/permission.guard";
 import { AppVariables } from "../types";
 import { z } from "zod";
 import { TenantRequestDeps } from "../middleware/tenant.middleware";
@@ -43,7 +43,7 @@ filters.post("/", roleGuard(["admin"]), permissionGuard("filters"), async (c) =>
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "filters");
   if (revalidationFailure) return revalidationFailure;
-  const filter = await d.repositories.ticketFilters.create(result.data);
+  const filter = await d.repositories.ticketFilters.create(result.data, permissionWriteFence(c, "filters"));
   return c.json(filter, 201);
 });
 
@@ -81,7 +81,7 @@ filters.put("/:id", roleGuard(["admin", "agent"]), permissionGuard("filters"), a
   if (revalidationFailure) return revalidationFailure;
 
   try {
-    const updated = await d.repositories.ticketFilters.update(id, result.data);
+    const updated = await d.repositories.ticketFilters.update(id, result.data, permissionWriteFence(c, "filters"));
     if (!updated) {
       return c.json({ error: "Filter not found" }, 404);
     }
@@ -111,7 +111,7 @@ filters.delete("/:id", roleGuard(["admin"]), permissionGuard("filters"), async (
   if (revalidationFailure) return revalidationFailure;
 
   try {
-    await d.repositories.ticketFilters.delete(id);
+    await d.repositories.ticketFilters.delete(id, permissionWriteFence(c, "filters"));
     return c.json({ success: true });
   } catch (err: any) {
     if (err.message === "Cannot delete system filters") {

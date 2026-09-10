@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import Database from 'better-sqlite3';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { capabilityWriteConstraint } from '../../auth/capability-policy';
 
 const directory = join(__dirname, '../../../migrations');
 const migrations = readdirSync(directory).filter(n => n.endsWith('.sql')).sort();
@@ -26,6 +27,38 @@ function legacy() {
 }
 
 describe('Real Phase 1 migration chain', () => {
+  it('fences a paused capability mutation in its write statement after revocation', () => {
+    const db = new Database(':memory:');
+    try {
+      db.pragma('foreign_keys = ON');
+      apply(db, 1, 28);
+      db.prepare("INSERT INTO users (tenant_id, id, email, role, session_version) VALUES (?, ?, ?, 'agent', 0)")
+        .run('fence-tenant', 'fence-agent', 'agent@fence.test');
+      db.prepare("INSERT INTO tenant_role_capability_policies (tenant_id, role, capability, enabled) VALUES (?, 'agent', 'settings.general.manage', 1)")
+        .run('fence-tenant');
+
+      // The request has already passed its read check and is paused before the
+      // actual side effect. The SQL predicate is created from that request.
+      const guard = capabilityWriteConstraint({
+        tenantId: 'fence-tenant', actorId: 'fence-agent', role: 'agent', sessionVersion: 0,
+        capability: 'settings.general.manage',
+      });
+      const write = db.prepare(`INSERT INTO tenant_config (tenant_id, key, value)
+        SELECT ?, ?, ? WHERE ${guard.sql}`);
+
+      db.prepare("UPDATE tenant_role_capability_policies SET enabled = 0 WHERE tenant_id = ? AND capability = 'settings.general.manage'")
+        .run('fence-tenant');
+      expect(write.run('fence-tenant', 'blocked-by-policy', 'no', ...guard.values).changes).toBe(0);
+      expect(db.prepare("SELECT value FROM tenant_config WHERE key = 'blocked-by-policy'").get()).toBeUndefined();
+
+      db.prepare("UPDATE tenant_role_capability_policies SET enabled = 1 WHERE tenant_id = ? AND capability = 'settings.general.manage'")
+        .run('fence-tenant');
+      db.prepare("UPDATE users SET session_version = 1 WHERE tenant_id = ? AND id = ?").run('fence-tenant', 'fence-agent');
+      expect(write.run('fence-tenant', 'blocked-by-session', 'no', ...guard.values).changes).toBe(0);
+      expect(db.prepare("SELECT value FROM tenant_config WHERE key = 'blocked-by-session'").get()).toBeUndefined();
+    } finally { db.close(); }
+  });
+
   it('preserves populated legacy ownership, tokens and configuration through 0019', () => {
     const db = legacy();
     try {

@@ -175,7 +175,7 @@ describe("Settings Handler Integration Tests", () => {
 
       // Check that DB.bind was called with default-tenant, key, and encrypted value
       const configBindCalls = vi.mocked(mockDB.bind).mock.calls.filter(c => c[1] === "APP_NAME" || c[1] === "RESEND_API_KEY");
-      expect(configBindCalls[0]).toEqual(["default-tenant", "APP_NAME", "New Luminatick"]);
+      expect(configBindCalls[0]?.slice(0, 3)).toEqual(["default-tenant", "APP_NAME", "New Luminatick"]);
 
       const resendBindCall = configBindCalls[1];
       expect(resendBindCall[0]).toBe("default-tenant");
@@ -214,7 +214,8 @@ describe("Settings Handler Integration Tests", () => {
       // Check that tenant_config prepare was called only once (for APP_NAME)
       const configPrepCalls = vi.mocked(mockDB.prepare).mock.calls.filter(c => typeof c[0] === "string" && c[0].includes("tenant_config"));
       expect(configPrepCalls.length).toBe(1);
-      expect(mockDB.bind).toHaveBeenCalledWith("default-tenant", "APP_NAME", "Updated Name");
+      const configBind = vi.mocked(mockDB.bind).mock.calls.find(call => call[1] === "APP_NAME");
+      expect(configBind?.slice(0, 3)).toEqual(["default-tenant", "APP_NAME", "Updated Name"]);
       expect(mockDB.run).toHaveBeenCalledTimes(1);
     });
 

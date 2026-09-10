@@ -54,6 +54,58 @@ export type CapabilityDecision = {
   policyFingerprint: string;
 };
 
+/**
+ * Values captured from an authenticated request and bound into the protected
+ * write itself.  This is deliberately data, rather than a prior successful
+ * read: the SQL predicate is evaluated in the same statement/transaction as
+ * the mutation, so revocation cannot land between a check and the write.
+ */
+export type CapabilityWriteFence = CapabilityPrincipal & { capability: string };
+
+export class CapabilityFenceError extends Error {
+  constructor() {
+    super("Permission changed before the protected mutation could commit");
+    this.name = "CapabilityFenceError";
+  }
+}
+
+export function capabilityWriteConstraint(fence?: CapabilityWriteFence): { sql: string; values: unknown[] } {
+  if (!fence) return { sql: "1 = 1", values: [] };
+  return {
+    sql: `EXISTS (
+      SELECT 1
+      FROM users actor
+      JOIN deployment_capability_ceiling owner
+        ON owner.capability = ? AND owner.enabled = 1
+      JOIN deployment_role_capability_grants role_grant
+        ON role_grant.role = ? AND role_grant.capability = owner.capability AND role_grant.enabled = 1
+      LEFT JOIN tenant_role_capability_policies tenant_policy
+        ON tenant_policy.tenant_id = actor.tenant_id AND tenant_policy.role = actor.role
+        AND tenant_policy.capability = owner.capability
+      WHERE actor.tenant_id = ? AND actor.id = ? AND actor.role = ? AND actor.session_version = ?
+        AND (? <> 'agent' OR tenant_policy.enabled = 1)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM tenant_group_capability_constraints group_constraint
+          JOIN user_groups membership
+            ON membership.tenant_id = group_constraint.tenant_id AND membership.group_id = group_constraint.group_id
+          WHERE group_constraint.tenant_id = actor.tenant_id AND membership.user_id = actor.id
+            AND group_constraint.capability = owner.capability AND group_constraint.enabled = 0
+        )
+    )`,
+    values: [
+      fence.capability, fence.role,
+      fence.tenantId, fence.actorId, fence.role, fence.sessionVersion, fence.role,
+    ],
+  };
+}
+
+export function requireCapabilityWrite(result: { meta?: { changes?: number } } | null | undefined, fence?: CapabilityWriteFence): void {
+  // D1 returns `meta.changes` for every mutation. Some narrow unit doubles
+  // intentionally omit metadata; only a concrete zero is a denial signal.
+  if (fence && result?.meta && !result.meta.changes) throw new CapabilityFenceError();
+}
+
 type PolicyRow = { enabled: number | boolean; revision?: number | null };
 
 function enabled(row: PolicyRow | null | undefined): boolean {

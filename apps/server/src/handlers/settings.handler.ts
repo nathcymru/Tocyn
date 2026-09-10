@@ -3,7 +3,7 @@ import { Env } from "../bindings";
 import { authMiddleware } from "../middleware/auth.middleware";
 import { mfaGuard } from "../middleware/mfa.guard";
 import { roleGuard } from "../middleware/role.guard";
-import { permissionGuard, revalidatePermission } from "../middleware/permission.guard";
+import { permissionGuard, permissionWriteFence, revalidatePermission } from "../middleware/permission.guard";
 import { AppVariables } from "../types";
 import { z } from "zod";
 import filters from "./filters.handler";
@@ -156,7 +156,7 @@ settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
       value = await encryptString(value, c.env.APP_MASTER_KEY);
     }
 
-    await d.repositories.config.set(key, value);
+    await d.repositories.config.set(key, value, permissionWriteFence(c, "general"));
   }
 
   return c.json({ success: true });

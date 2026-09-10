@@ -4,7 +4,7 @@ Issue #79 implements a finite server-side capability catalog for the existing op
 
 ## Authority order
 
-Each capability is evaluated at the request and again immediately before a protected database mutation:
+Each capability is evaluated at the request and again immediately before a protected database mutation. The mutation itself carries the same capability/session predicate in its D1 statement (or D1 batch), so a policy update cannot commit between a successful recheck and the protected write:
 
 1. the deployment-owner capability ceiling;
 2. the deployment-owner role grant;
@@ -31,6 +31,7 @@ Run these checks from the repository root with synthetic/local data only:
 
 ```sh
 npm exec --workspace=apps/server -- vitest run src/middleware/__tests__/permission.guard.test.ts src/handlers/__tests__/permissions.handler.test.ts
+npm exec --workspace=apps/server -- vitest run src/repositories/__tests__/migrations.test.ts
 npm exec --workspace=apps/server -- vitest run src/handlers/__tests__/dashboard.handler.test.ts src/handlers/__tests__/groups.test.ts src/handlers/__tests__/channels.handler.test.ts src/handlers/__tests__/settings.handler.test.ts src/handlers/__tests__/filters.handler.test.ts
 npm run typecheck --workspace=apps/server
 npm run build --workspace=apps/dashboard
