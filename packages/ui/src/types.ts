@@ -20,7 +20,9 @@ export interface ComposableState<TState extends string = string> {
 }
 
 export interface InteractionHandlers<TEvent = SyntheticEvent> {
+  /** Called first for pointer/interaction start. Calling preventDefault cancels native handling. */
   onInteractionStart?: (event: TEvent) => void;
+  /** Called after a non-cancelled interaction completes. */
   onInteractionEnd?: (event: TEvent) => void;
 }
 
