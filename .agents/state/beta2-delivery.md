@@ -40,3 +40,13 @@ PR #164 used the standing sole-maintainer PR-only approving-review bypass after 
 3. Review #48 foundation, keep a coherent draft PR for partial work and continue retained-behavior migration; integrate #79 authorization only with real negative/revocation/isolation evidence.
 4. Reforecast only from accepted progress, update dependent GitHub records and this state, and keep newly cleared work ready.
 5. Do not declare beta.2 ready until every #140 prerequisite and acceptance outcome is evidenced.
+
+## Integration update — 10 September, 14:43 UTC
+
+PR #165 merged at `6d6a6ef163da093a4277385e8f34b6fd0e439585` using owner-authorized review bypass after all exact-head checks and no review findings. Dedicated Codex Luna/low `publish_cost_acceptance` is verifying signature/tree, publishing its Wiki sources and assessing #50 closure/Project acceptance. Forecast publication remains pending.
+
+PR #166 rebased onto this main; head `56436a5fc822d4c4c71c8206c373b1f9e2fc73a4`. Lint/typecheck/build/CodeQL passed; test job 102915857641 in run 34490551362 still running at last observation. Do not merge until all exact-head checks pass.
+
+#48 is now draft PR #167. Coordinator corrected native event composition, loading-state handling, standalone CSS focus hooks, real keyboard activation and dialog focus-return tests; typecheck and five focused tests passed before rebase. Full retained application migration and complex-control keyboard/browser/performance evidence remain. Follow-up worker restart was rejected by native thread limit; do not claim that worker is running. Coordinator must resume this work or reuse a freed slot.
+
+#79 worker returned commit `6f58bc9` then resumed to address Node22 full-suite execution and atomic revocation fencing review. Its acceptance is not yet approved. Feature scope and beta.2 gate remain unchanged.
