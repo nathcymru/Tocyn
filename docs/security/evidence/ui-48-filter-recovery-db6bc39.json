@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "kind": "tocyn-local-filter-save-recovery",
+  "recordedAt": "2026-09-10T21:04:46.732Z",
+  "revision": "db6bc3974d697885ab6c0630a5a91a6feb6faab1",
+  "workingTreeDirty": true,
+  "environment": {
+    "node": "v22.19.0",
+    "browser": "151.0.7922.34",
+    "headless": true,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "reducedMotion": "reduce",
+    "dashboardOrigin": "http://127.0.0.1:5190",
+    "localApiFixture": "http://127.0.0.1:8899",
+    "externalRequests": 0,
+    "blockedMutations": 0
+  },
+  "sourceHashes": {
+    "tools/ui-browser/filter-recovery.mjs": "38d686a09a77ac4d011fdbc22397552dbea98ae93a5525bdba072d26009e349c",
+    "apps/dashboard/src/pages/FiltersSettingsPage.tsx": "66286dbfea6d297e3eb312667ad01e7cebbbb4a53ea7bee98e1bc6ecbf46fb0d",
+    "apps/dashboard/src/hooks/useFilters.ts": "ed2c3b78700a9414dd7bbf4208169fd5a6aabe66a34c9b37cebe8b05aef926f3",
+    "apps/dashboard/src/__tests__/FilterEditorDialog.test.tsx": "d7b683d236b661eefdc7aab0ab84458c162c7c4f19f96fe4f68e4b70dfb82571"
+  },
+  "syntheticFault": {
+    "route": "/api/settings/filters",
+    "method": "POST",
+    "firstResponseStatus": 503,
+    "retryResponseStatus": 200,
+    "persistedRecords": 0
+  },
+  "evidence": {
+    "namedCreateFilterDialog": true,
+    "rejectedSaveAlert": true,
+    "retainedDraft": true,
+    "retryPayloadUnchanged": true,
+    "syntheticSuccessFocusRestored": true,
+    "saveAttemptShapes": [
+      {
+        "nameLength": 25,
+        "conditions": [
+          {
+            "field": "priority",
+            "operator": "contains",
+            "valueLength": 6
+          }
+        ],
+        "payloadSha256": "977ee06ead995180b231784fe54ae6bbd62656b215334f22083b26bfd0223b6c"
+      },
+      {
+        "nameLength": 25,
+        "conditions": [
+          {
+            "field": "priority",
+            "operator": "contains",
+            "valueLength": 6
+          }
+        ],
+        "payloadSha256": "977ee06ead995180b231784fe54ae6bbd62656b215334f22083b26bfd0223b6c"
+      }
+    ]
+  },
+  "limitations": [
+    "The 503 and 200 responses are browser-route synthetic faults; neither creates or changes a fixture record.",
+    "Authentication and filter-list reads use the existing local loopback fixture only; this is not provider, production, or authorization coverage.",
+    "Receipt redacts request bodies and tokens; payload evidence is a digest and field/value lengths only."
+  ]
+}
