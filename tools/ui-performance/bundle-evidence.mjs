@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, join, relative } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
@@ -22,7 +22,24 @@ export function snapshot(root) {
     });
     if(!assets.some(asset=>asset.kind==='js'))throw new Error(`Missing built JavaScript for ${client}`);
     const totals=Object.fromEntries(['js','css'].map(kind=>[kind,assets.filter(asset=>asset.kind===kind).reduce((sum,asset)=>({bytes:sum.bytes+asset.bytes,gzipBytes:sum.gzipBytes+asset.gzipBytes}),{bytes:0,gzipBytes:0})]));
-    return [client,{assets,totals}];
+    let initial = null;
+    const manifestPath=join(dist,'.vite','manifest.json');
+    if(existsSync(manifestPath)) {
+      const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
+      const visited=new Set(),initialFiles=new Set();
+      function visit(key) {
+        if(visited.has(key))return;visited.add(key);
+        const item=manifest[key];if(!item)throw new Error('Incomplete build manifest');
+        initialFiles.add(item.file);for(const css of item.css??[])initialFiles.add(css);
+        for(const dependency of item.imports??[])visit(dependency);
+      }
+      const entries=Object.entries(manifest).filter(([,item])=>item.isEntry).map(([key])=>key);
+      if(!entries.length)throw new Error('Build manifest has no entrypoint');
+      entries.forEach(visit);
+      const selected=assets.filter(asset=>initialFiles.has(asset.path));
+      initial={files:selected.map(asset=>asset.path),totals:Object.fromEntries(['js','css'].map(kind=>[kind,selected.filter(asset=>asset.kind===kind).reduce((sum,asset)=>({bytes:sum.bytes+asset.bytes,gzipBytes:sum.gzipBytes+asset.gzipBytes}),{bytes:0,gzipBytes:0})]))};
+    }
+    return [client,{assets,totals,initial}];
   }));
   return {revision:git(root,'rev-parse','HEAD'),tree:git(root,'rev-parse','HEAD^{tree}'),trackedDirty:git(root,'status','--porcelain','--untracked-files=no')!=='',lockSha256:createHash('sha256').update(readFileSync(join(root,'package-lock.json'))).digest('hex'),vite:require('vite/package.json').version,artifacts};
 }
@@ -36,5 +53,5 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
   const [baselineRoot,candidateRoot]=process.argv.slice(2);
   if(!baselineRoot||!candidateRoot)throw new Error('Usage: node tools/ui-performance/bundle-evidence.mjs BASELINE_ROOT CANDIDATE_ROOT');
   const baseline=snapshot(baselineRoot),candidate=snapshot(candidateRoot);
-  console.log(JSON.stringify({version:1,generatedAt:new Date().toISOString(),environment:{node:process.version,platform:process.platform,architecture:process.arch,gzipLevel:9},scenario:'Production client builds; sum of individually compressed JS/CSS assets, not initial-route transfer or browser timing.',baseline,candidate,comparison:compare(baseline,candidate),limitations:['Build outputs must be freshly generated from the stated revision; this tool does not run builds.','No numeric budget or startup/interaction/edge-runtime acceptance is inferred.','Different lockfiles represent actual baseline/candidate dependencies; inspect tool versions before attributing changes.']},null,2));
+  console.log(JSON.stringify({version:1,generatedAt:new Date().toISOString(),environment:{node:process.version,platform:process.platform,architecture:process.arch,gzipLevel:9},scenario:'Production client builds; sum of individually compressed JS/CSS assets, not initial-route transfer or browser timing.',baseline,candidate,comparison:compare(baseline,candidate),limitations:['Build outputs must be freshly generated from the stated revision; this tool does not run builds.','Initial assets, when a manifest exists, follow static imports only; dynamic route loads remain included in total assets. No timing or budget pass is inferred.','Different lockfiles represent actual baseline/candidate dependencies; inspect tool versions before attributing changes.']},null,2));
 }
