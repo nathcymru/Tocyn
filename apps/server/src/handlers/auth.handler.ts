@@ -7,8 +7,13 @@ import { authMiddleware, mfaChallengeMiddleware, mfaEnrollmentMiddleware, loginA
 import { rateLimiter } from "../middleware/rate-limiter";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { UserAuthResolution } from "../auth/user-auth-resolver";
+import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 
 const auth = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+
+function recordCredentialDecision(c: { get: (key: 'requestAuthSli') => AppVariables['requestAuthSli'] }, decision: RequestCredentialAuthDecision): void {
+  try { c.get('requestAuthSli')?.record(decision); } catch { /* Evidence cannot affect authentication. */ }
+}
 
 
 /**
@@ -22,12 +27,24 @@ auth.post("/login", rateLimiter(5, 60000), loginAuthResolverMiddleware, async (c
     return c.json({ error: "Email and password are required" }, 400);
   }
 
-  if (!authUser || !authUser.passwordHash) {
+  if (c.get('loginAdmissionSuppressed')) {
     return c.json({ error: "Invalid credentials" }, 401);
   }
 
-  const isValid = await authService.verifyPassword(password, authUser.passwordHash);
+  if (!authUser || !authUser.passwordHash) {
+    recordCredentialDecision(c, 'denied');
+    return c.json({ error: "Invalid credentials" }, 401);
+  }
+
+  let isValid: boolean;
+  try {
+    isValid = await authService.verifyPassword(password, authUser.passwordHash);
+  } catch (error) {
+    recordCredentialDecision(c, 'unavailable');
+    throw error;
+  }
   if (!isValid) {
+    recordCredentialDecision(c, 'denied');
     return c.json({ error: "Invalid credentials" }, 401);
   }
 
@@ -44,11 +61,14 @@ auth.post("/login", rateLimiter(5, 60000), loginAuthResolverMiddleware, async (c
 
   // If MFA is required, return a short-lived mfa-challenge token
   if (requiresMfa) {
-    const preMfaToken = await authService.generateMfaChallengeToken(
-      userPayload,
-      c.env.JWT_SECRET,
-      "15m"
-    );
+    let preMfaToken: string;
+    try {
+      preMfaToken = await authService.generateMfaChallengeToken(userPayload, c.env.JWT_SECRET, "15m");
+    } catch (error) {
+      recordCredentialDecision(c, 'unavailable');
+      throw error;
+    }
+    recordCredentialDecision(c, 'challenge');
 
     return c.json({
       mfa_required: true,
@@ -63,11 +83,14 @@ auth.post("/login", rateLimiter(5, 60000), loginAuthResolverMiddleware, async (c
   }
 
   // If MFA is not required, return a full app token
-  const fullToken = await authService.generateToken(
-    userPayload,
-    c.env.JWT_SECRET,
-    true
-  );
+  let fullToken: string;
+  try {
+    fullToken = await authService.generateToken(userPayload, c.env.JWT_SECRET, true);
+  } catch (error) {
+    recordCredentialDecision(c, 'unavailable');
+    throw error;
+  }
+  recordCredentialDecision(c, 'accepted');
 
   return c.json({
     mfa_required: false,
@@ -86,16 +109,32 @@ auth.post("/login", rateLimiter(5, 60000), loginAuthResolverMiddleware, async (c
  */
 auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
-  const { code } = await c.req.json();
+  let requestBody: { code?: unknown };
+  try {
+    requestBody = await c.req.json();
+  } catch {
+    // Keep malformed request handling outside the credential denominator.
+    // This preserves the middleware's existing indistinguishable 401 response.
+    return c.json({ error: "Unauthorized: Invalid or expired MFA challenge token" }, 401);
+  }
+  const { code } = requestBody;
 
-  if (!code) {
+  if (!code || typeof code !== 'string') {
+    recordCredentialDecision(c, 'denied');
     return c.json({ error: "MFA code is required" }, 400);
   }
 
   const d = c.get("tenantDeps") as TenantRequestDeps;
-  const user = await d.repositories.users.get(payload.sub);
+  let user;
+  try {
+    user = await d.repositories.users.get(payload.sub);
+  } catch {
+    recordCredentialDecision(c, 'unavailable');
+    return c.json({ error: "Unauthorized: Invalid or expired MFA challenge token" }, 401);
+  }
 
   if (!user || !user.mfa_secret || !user.mfa_enabled) {
+    recordCredentialDecision(c, 'denied');
     return c.json({ error: "MFA is not set up for this user" }, 400);
   }
 
@@ -103,11 +142,19 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
   try {
     decryptedSecret = await mfaService.decryptSecret(user.mfa_secret, c.env.MFA_ENCRYPTION_KEY);
   } catch (err) {
+    recordCredentialDecision(c, 'unavailable');
     return c.json({ error: "Failed to decrypt MFA secret" }, 500);
   }
 
-  const isValid = mfaService.verifyCode(code, decryptedSecret);
+  let isValid: boolean;
+  try {
+    isValid = mfaService.verifyCode(code, decryptedSecret);
+  } catch (error) {
+    recordCredentialDecision(c, 'unavailable');
+    throw error;
+  }
   if (!isValid) {
+    recordCredentialDecision(c, 'denied');
     return c.json({ error: "Invalid MFA code" }, 400);
   }
 
@@ -119,11 +166,14 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
     session_version: user.session_version ?? 0,
   };
 
-  const fullToken = await authService.generateToken(
-    userPayload,
-    c.env.JWT_SECRET,
-    true
-  );
+  let fullToken: string;
+  try {
+    fullToken = await authService.generateToken(userPayload, c.env.JWT_SECRET, true);
+  } catch (error) {
+    recordCredentialDecision(c, 'unavailable');
+    throw error;
+  }
+  recordCredentialDecision(c, 'accepted');
 
   return c.json({
     token: fullToken,

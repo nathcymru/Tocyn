@@ -11,6 +11,19 @@ import { createTenantRequestDeps } from "./tenant.middleware";
 import { UserAuthResolver, UserAuthResolution } from "../auth/user-auth-resolver";
 import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 
+function recordCredentialDecision(c: Context<{ Bindings: Env; Variables: AppVariables }>, decision: RequestCredentialAuthDecision): void {
+  try { c.get('requestAuthSli')?.record(decision); } catch { /* Evidence cannot affect authentication. */ }
+}
+
+function isKnownJwtCredentialFailure(error: unknown): boolean {
+  return error instanceof jose.errors.JOSEAlgNotAllowed
+    || error instanceof jose.errors.JWSInvalid
+    || error instanceof jose.errors.JWSSignatureVerificationFailed
+    || error instanceof jose.errors.JWTClaimValidationFailed
+    || error instanceof jose.errors.JWTExpired
+    || error instanceof jose.errors.JWTInvalid;
+}
+
 export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next) => {
   let recorded = false;
   const record = (decision: RequestCredentialAuthDecision) => {
@@ -106,12 +119,21 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
   }
 };
 
-export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next) => {
+export const mfaChallengeMiddleware = async (
+  c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next, observeCredential = true,
+) => {
+  const record = (decision: RequestCredentialAuthDecision) => {
+    if (observeCredential) recordCredentialDecision(c, decision);
+  };
+  let challengeVerified = false;
   const authHeader = c.req.header("Authorization");
   let token = null;
   if (authHeader && authHeader.startsWith("Bearer ")) token = authHeader.substring(7);
 
-  if (!token) return c.json({ error: "Unauthorized: Missing or invalid token format" }, 401);
+  if (!token) {
+    record('denied');
+    return c.json({ error: "Unauthorized: Missing or invalid token format" }, 401);
+  }
 
   try {
     const { payload } = await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET), {
@@ -124,35 +146,40 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
     const sub = payload.sub as string;
 
     if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) {
+      record('denied');
       return c.json({ error: "Unauthorized: Missing or invalid tenant context" }, 401);
     }
 
     if (!sub || typeof sub !== "string" || !sub.trim()) {
+      record('denied');
       return c.json({ error: "Unauthorized: Missing or invalid subject claim" }, 401);
     }
 
     let activeRole = payload.role as string;
     if (!c.env.DB) {
+      record('unavailable');
       return c.json({ error: "Unauthorized: Database unavailable" }, 401);
     }
 
     const resolver = new UserAuthResolver(c.env.DB);
     const userRes = await resolver.resolveUserById(tenantId, sub);
     if (userRes && (!Number.isSafeInteger(payload.session_version ?? 0) || (payload.session_version ?? 0) !== userRes.sessionVersion)) {
+      record('denied');
       return c.json({ error: "Unauthorized: Session revoked" }, 401);
     }
     if (!userRes) {
+      record('denied');
       return c.json({ error: "Unauthorized: User account no longer exists" }, 401);
     }
     if (userRes.role !== payload.role) {
+      record('denied');
       return c.json({ error: "Unauthorized: User role changed" }, 401);
     }
     activeRole = userRes.role;
 
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
-
-    c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
     const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
+    challengeVerified = true;
     await authorizeLocalBeta(c.env, scope);
     c.set("tenantScope", scope as any);
 
@@ -162,6 +189,9 @@ export const mfaChallengeMiddleware = async (c: Context<{ Bindings: Env; Variabl
     await next();
   } catch (error) {
     if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
+    // A handler after a verified challenge owns its own credential result.
+    // Do not reinterpret its failure as a JWT verifier outcome.
+    if (!challengeVerified) record(isKnownJwtCredentialFailure(error) ? 'denied' : 'unavailable');
     return c.json({ error: "Unauthorized: Invalid or expired MFA challenge token" }, 401);
   }
 };
@@ -183,7 +213,7 @@ export const mfaEnrollmentMiddleware = async (
   try { audience = jose.decodeJwt(token).aud; }
   catch { return c.json({ error: "Unauthorized: Invalid enrollment session" }, 401); }
 
-  if (audience === "mfa-challenge") return mfaChallengeMiddleware(c, next);
+  if (audience === "mfa-challenge") return mfaChallengeMiddleware(c, next, false);
   if (audience === "app") {
     return authMiddleware(c, async () => {
       if (c.get("jwtPayload").mfa_verified !== true) {
@@ -196,20 +226,32 @@ export const mfaEnrollmentMiddleware = async (
   return c.json({ error: "Unauthorized: Invalid enrollment audience" }, 401);
 };
 
-export const loginAuthResolverMiddleware = async (c: Context, next: Next) => {
-  if (!c.env.DB) return c.json({ error: "Authentication unavailable" }, 503);
+export const loginAuthResolverMiddleware = async (c: Context<{ Bindings: Env; Variables: AppVariables }>, next: Next) => {
+  if (!c.env.DB) {
+    recordCredentialDecision(c, 'unavailable');
+    return c.json({ error: "Authentication unavailable" }, 503);
+  }
   const body = await c.req.json().catch(() => ({}));
   let authUser: UserAuthResolution | null = null;
 
   if (body.email && typeof body.email === "string") {
-    const resolver = new UserAuthResolver(c.env.DB);
-    authUser = await resolver.resolveCredentialsByEmail(body.email);
+    try {
+      authUser = await new UserAuthResolver(c.env.DB).resolveCredentialsByEmail(body.email);
+    } catch (error) {
+      recordCredentialDecision(c, 'unavailable');
+      throw error;
+    }
   }
 
   if (authUser) {
     try { await authorizeLocalBeta(c.env, createVerifiedTenantScope(authUser.tenantId, authUser.userId, [authUser.role], 1)); }
     catch (error) {
-      if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') authUser = null;
+      if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') {
+        // Preserve the enumeration-safe response without turning an admission
+        // result into a password credential denial.
+        c.set('loginAdmissionSuppressed', true);
+        authUser = null;
+      }
       else if (error instanceof BetaAdmissionError) return c.json({code:error.code,error:error.message},error.status);
       else throw error;
     }
@@ -220,14 +262,18 @@ export const loginAuthResolverMiddleware = async (c: Context, next: Next) => {
 };
 
 /** WebSocket query tokens use the same current session verifier before constructing scope. */
-export async function authenticateRealtimeToken(env: Env, token: string) {
-  let user;
-  try {
-    user = await new AuthService(env).verifyToken(token);
-    if (!user || !['agent', 'admin'].includes(user.role)) return null;
-  } catch {
+export async function authenticateRealtimeToken(env: Env, token: string, record?: (decision: RequestCredentialAuthDecision) => void) {
+  const verification = await new AuthService(env).verifyCurrentAppCredential(token);
+  if (verification.decision !== 'accepted') {
+    try { record?.(verification.decision); } catch { /* Evidence cannot affect authentication. */ }
     return null;
   }
+  const user = verification.user;
+  if (!['agent', 'admin'].includes(user.role)) {
+    try { record?.('denied'); } catch { /* Evidence cannot affect authentication. */ }
+    return null;
+  }
+  try { record?.('accepted'); } catch { /* Evidence cannot affect authentication. */ }
   const scope = createVerifiedTenantScope(user.tenant_id!, user.id, [user.role], 1);
   await authorizeLocalBeta(env, scope);
   return user;

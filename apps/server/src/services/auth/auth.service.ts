@@ -3,6 +3,20 @@ import { JWTPayload, User } from "../../types";
 import { Env } from "../../bindings";
 import { UserAuthResolver } from "../../auth/user-auth-resolver";
 
+export type CurrentAppCredentialVerification =
+  | { decision: 'accepted'; user: User }
+  | { decision: 'denied' }
+  | { decision: 'unavailable' };
+
+function isKnownJwtCredentialFailure(error: unknown): boolean {
+  return error instanceof jose.errors.JOSEAlgNotAllowed
+    || error instanceof jose.errors.JWSInvalid
+    || error instanceof jose.errors.JWSSignatureVerificationFailed
+    || error instanceof jose.errors.JWTClaimValidationFailed
+    || error instanceof jose.errors.JWTExpired
+    || error instanceof jose.errors.JWTInvalid;
+}
+
 export class AuthService {
   constructor(private env?: Env) {}
 
@@ -89,33 +103,47 @@ export class AuthService {
   /**
    * Verifies a JWT token using aud: "app".
    */
-  public async verifyToken(token: string): Promise<User | null> {
-    if (!this.env?.JWT_SECRET) return null;
+  /**
+   * Revalidates an app credential with a classification suitable for a
+   * request-scoped observer. The result itself remains private to the caller:
+   * it never serializes a user, token, or verifier error.
+   */
+  public async verifyCurrentAppCredential(token: string): Promise<CurrentAppCredentialVerification> {
+    if (!this.env?.JWT_SECRET || !this.env.DB) return { decision: 'unavailable' };
 
+    let payload: jose.JWTPayload;
     try {
-      const secretKey = new TextEncoder().encode(this.env.JWT_SECRET);
-      const { payload } = await jose.jwtVerify(token, secretKey, {
+      ({ payload } = await jose.jwtVerify(token, new TextEncoder().encode(this.env.JWT_SECRET), {
         algorithms: ["HS256"],
         requiredClaims: ["exp", "iat", "sub"],
         audience: "app",
-      });
+      }));
+    } catch (error) {
+      return { decision: isKnownJwtCredentialFailure(error) ? 'denied' : 'unavailable' };
+    }
 
-      const jwtPayload = payload as unknown as JWTPayload;
+    const jwtPayload = payload as unknown as JWTPayload;
+    const tenantId = (jwtPayload as any).tenant_id;
+    if (jwtPayload.mfa_verified !== true
+      || !tenantId || typeof tenantId !== "string" || !tenantId.trim()
+      || !jwtPayload.sub || typeof jwtPayload.sub !== 'string' || !jwtPayload.sub.trim()) {
+      return { decision: 'denied' };
+    }
 
-      if (jwtPayload.mfa_verified !== true) {
-        return null;
-      }
-
-      const tenantId = (jwtPayload as any).tenant_id;
-      if (!tenantId || typeof tenantId !== "string" || !tenantId.trim()) return null;
-      if (!jwtPayload.sub) return null;
-
-      if (!this.env?.DB) return null;
-
-      const resolver = new UserAuthResolver(this.env.DB);
-      const resolved = await resolver.resolveUserById(tenantId, jwtPayload.sub);
-      if (!resolved || resolved.role !== jwtPayload.role || !Number.isSafeInteger(jwtPayload.session_version ?? 0) || resolved.sessionVersion !== (jwtPayload.session_version ?? 0)) return null;
-      return {
+    let resolved;
+    try {
+      resolved = await new UserAuthResolver(this.env.DB).resolveUserById(tenantId, jwtPayload.sub);
+    } catch {
+      return { decision: 'unavailable' };
+    }
+    if (!resolved || resolved.role !== jwtPayload.role
+      || !Number.isSafeInteger(jwtPayload.session_version ?? 0)
+      || resolved.sessionVersion !== (jwtPayload.session_version ?? 0)) {
+      return { decision: 'denied' };
+    }
+    return {
+      decision: 'accepted',
+      user: {
         session_version: resolved.sessionVersion,
         session_expires_at: jwtPayload.exp,
         id: resolved.userId,
@@ -123,11 +151,13 @@ export class AuthService {
         full_name: resolved.fullName,
         role: resolved.role,
         tenant_id: resolved.tenantId,
-      } as any;
-    } catch (err) {
-      console.error("Token verification failed");
-      return null;
-    }
+      } as any,
+    };
+  }
+
+  public async verifyToken(token: string): Promise<User | null> {
+    const result = await this.verifyCurrentAppCredential(token);
+    return result.decision === 'accepted' ? result.user : null;
   }
 
   /**

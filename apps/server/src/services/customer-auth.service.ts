@@ -9,6 +9,12 @@ import { UserAuthResolver } from '../auth/user-auth-resolver';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import * as jose from 'jose';
 
+export type CustomerAuthVerification =
+  | { decision: 'accepted'; result: { token: string; user: User } }
+  | { decision: 'denied' }
+  /** Local beta admission intentionally occurs before consuming the credential. */
+  | { decision: 'admission-suppressed' };
+
 export class CustomerAuthService {
   private emailService?: EmailService;
 
@@ -139,34 +145,36 @@ export class CustomerAuthService {
     return { challengeId: type === 'otp' ? tokenId : undefined };
   }
 
-  async verifyAuth(plainToken: string, challengeId?: string): Promise<{ token: string, user: User } | null> {
+  async verifyAuthWithDecision(plainToken: string, challengeId?: string): Promise<CustomerAuthVerification> {
     if (!this.deps || !this.deps.scope.tenantId) {
-      return null;
+      return { decision: 'denied' };
     }
 
-    if (challengeId ? !/^[0-9a-f-]{36}$/.test(challengeId) || !/^\d{6}$/.test(plainToken) : !/^[0-9a-f]{64}$/.test(plainToken)) return null;
+    if (challengeId ? !/^[0-9a-f-]{36}$/.test(challengeId) || !/^\d{6}$/.test(plainToken) : !/^[0-9a-f]{64}$/.test(plainToken)) {
+      return { decision: 'denied' };
+    }
     const tokenHash = await this.hashToken(challengeId ? `${challengeId}\0${plainToken}` : plainToken);
     const verifiedAt = this.now();
     const now = new Date(verifiedAt).toISOString();
 
     if (localBetaEnabled(this.env)) {
       const candidateId = await this.deps.repositories.users.findCustomerAuthTokenUser(tokenHash, challengeId);
-      if (!candidateId) return null;
+      if (!candidateId) return { decision: 'denied' };
       try { await authorizeLocalBeta(this.env, this.deps.scope, { kind: 'customer', id: candidateId }); }
-      catch (error) { if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') return null; throw error; }
+      catch (error) { if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') return { decision: 'admission-suppressed' }; throw error; }
     }
     // Use isolated verification
     const user = await this.deps.repositories.users.verifyAndConsumeCustomerAuthToken(tokenHash, now, challengeId);
 
     if (!user) {
-      return null;
+      return { decision: 'denied' };
     }
 
     const alg = "HS256";
     const secretKey = new TextEncoder().encode(this.env.JWT_SECRET);
     const userTenantId = user.tenant_id;
     if (!userTenantId || typeof userTenantId !== 'string' || !userTenantId.trim()) {
-      return null;
+      return { decision: 'denied' };
     }
     const payload = {
       session_version: user.session_version ?? 0,
@@ -183,6 +191,14 @@ export class CustomerAuthService {
       .setExpirationTime(issuedAt + 7 * 24 * 60 * 60)
       .sign(secretKey);
 
-    return { token: jwt, user: { id: user.id, email: user.email, full_name: user.full_name, role: user.role, tenant_id: user.tenant_id } as User };
+    return {
+      decision: 'accepted',
+      result: { token: jwt, user: { id: user.id, email: user.email, full_name: user.full_name, role: user.role, tenant_id: user.tenant_id } as User },
+    };
+  }
+
+  async verifyAuth(plainToken: string, challengeId?: string): Promise<{ token: string, user: User } | null> {
+    const verification = await this.verifyAuthWithDecision(plainToken, challengeId);
+    return verification.decision === 'accepted' ? verification.result : null;
   }
 }

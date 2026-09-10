@@ -11,12 +11,18 @@ vi.mock("../../utils/turnstile", () => ({
   verifyTurnstileToken: vi.fn().mockResolvedValue(true)
 }));
 import { TenantTicketService } from "../../services/tenant-ticket.service";
+import { Hono } from 'hono';
+import { operationalObservability } from '../../middleware/operational-observability';
+import type { RequestAuthSliSnapshot } from '../../observability/request-auth-sli';
 
 // Define mock functions so they can be overridden in tests
 const mockRequestAuth = vi.fn().mockResolvedValue(undefined);
-const mockVerifyAuth = vi.fn().mockResolvedValue({
-  token: "mock-jwt-token",
-  user: { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", role: "customer" }
+const mockVerifyAuthWithDecision = vi.fn().mockResolvedValue({
+  decision: 'accepted',
+  result: {
+    token: "mock-jwt-token",
+    user: { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", role: "customer" },
+  },
 });
 
 const mockFindTickets = vi.fn().mockResolvedValue({ data: [], total: 0 });
@@ -35,7 +41,7 @@ vi.mock("../../services/customer-auth.service", () => {
       return {
         resolveTenantFromWidgetKey: vi.fn().mockResolvedValue("default-tenant"),
         requestAuth: mockRequestAuth,
-        verifyAuth: mockVerifyAuth,
+        verifyAuthWithDecision: mockVerifyAuthWithDecision,
         resolveTenantFromWidgetKey: vi.fn().mockResolvedValue("default-tenant"),
         getConfig: vi.fn().mockResolvedValue({ TICKET_PREFIX: '#' })
       };
@@ -152,9 +158,12 @@ describe("Customer Handler Integration Tests", () => {
     }));
     mockDB.all.mockResolvedValue({ results: [] });
     mockRequestAuth.mockResolvedValue(undefined);
-    mockVerifyAuth.mockResolvedValue({
-      token: "mock-jwt-token",
-      user: { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", role: "customer" }
+    mockVerifyAuthWithDecision.mockResolvedValue({
+      decision: 'accepted',
+      result: {
+        token: "mock-jwt-token",
+        user: { id: "user-1", tenant_id: "default-tenant", email: "test@example.com", role: "customer" },
+      },
     });
     mockFindTickets.mockResolvedValue({ data: [], total: 0 });
     mockCreateTicketWithArticle.mockResolvedValue({
@@ -205,11 +214,11 @@ describe("Customer Handler Integration Tests", () => {
       const setCookieHeader = res.headers.get("Set-Cookie");
       expect(setCookieHeader).toContain("lumina_customer_token=mock-jwt-token");
       expect(setCookieHeader).toContain("HttpOnly");
-      expect(mockVerifyAuth).toHaveBeenCalledWith("plain-token-123", undefined);
+      expect(mockVerifyAuthWithDecision).toHaveBeenCalledWith("plain-token-123", undefined);
     });
 
     it("should return 401 if token is invalid", async () => {
-      mockVerifyAuth.mockResolvedValueOnce(null);
+      mockVerifyAuthWithDecision.mockResolvedValueOnce({ decision: 'denied' });
 
       const res = await customer.request(
         "/auth/verify",
@@ -224,6 +233,19 @@ describe("Customer Handler Integration Tests", () => {
       expect(res.status).toBe(401);
       const body = await res.json();
       expect(body.error).toBe("Invalid token");
+    });
+
+    it('preserves the enumeration-safe response without a credential decision when local admission suppressed verification', async () => {
+      mockVerifyAuthWithDecision.mockResolvedValueOnce({ decision: 'admission-suppressed' });
+      const signals: RequestAuthSliSnapshot[] = [];
+      const observed = new Hono();
+      observed.use('*', (c, next) => operationalObservability(c as any, next, () => {}, signal => { signals.push(signal); }));
+      observed.route('/', customer);
+      const response = await observed.request('/auth/verify', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-widget-key': 'test-key' }, body: JSON.stringify({ token: 'opaque-but-private' }),
+      }, { DB: mockDB as any, JWT_SECRET, ENVIRONMENT: 'local', LOCAL_BETA_ENABLED: 'false', OBSERVABILITY_MODE: 'isolated-evidence' });
+      expect(response.status).toBe(401);
+      expect(signals).toEqual([]);
     });
   });
 

@@ -9,6 +9,8 @@ export interface AppVariables {
   tenantDeps?: TenantRequestDeps;
   jwtPayload: JWTPayload;
   mfaPending?: boolean; // If MFA is required but not yet verified
+  /** Private local-beta admission state for the password handler only. */
+  loginAdmissionSuppressed?: boolean;
   apiKeyResolution?: ApiKeyResolution;
   permissionFences?: Record<string, CapabilityDecision>;
   /** Request-owned, isolated-evidence authentication SLI only. */

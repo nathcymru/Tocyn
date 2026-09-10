@@ -249,3 +249,39 @@ test('credential SLI records current API-key and widget decisions without treati
     } finally { console.log = log; }
   });
 });
+
+test('credential SLI observes password step-up, MFA completion, revoked challenge, and opaque customer verification without treating an auth request acknowledgement as acceptance', async () => {
+  await withTwoTenantFixture(async fixture => {
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'credential-sli-password-mfa-evidence',
+      tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
+      invitations: Object.values(fixture.principals).map(principal => ({
+        tenantId: principal.tenantId,
+        id: principal.localId,
+        kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+      })),
+    });
+    fixture.enableIsolatedObservability();
+    const captured = await captureCredentialSli(async () => {
+      const operator = await operatorAppToken(fixture, 'operatorA');
+      await fixture.revokePrincipalSessions('operatorA');
+      await expectStatus(await fixture.request('/api/auth/mfa/verify', {
+        method: 'POST', token: operator.challenge, body: { code: fixture.currentMfaCode('operatorA') },
+      }), 401, 'Revoked MFA challenge must not complete authentication');
+      return customerWidgetToken(fixture, fixture.principals.customerB);
+    });
+    assert.equal(typeof captured.result, 'string');
+    assert.deepEqual(captured.events, [
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 0, denied: 0, unavailable: 0, challenge: 1 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 0, denied: 1, unavailable: 0, challenge: 0 } },
+      { version: 1, type: 'auth.sli.request', scope: 'credential', complete: true,
+        counts: { attempted: 1, accepted: 1, denied: 0, unavailable: 0, challenge: 0 } },
+    ]);
+    assert.equal(captured.events.length, 4, 'Customer auth request acknowledgement emits no credential decision');
+    assert.equal(JSON.stringify(captured.events).includes(fixture.principals.customerB.tenantId), false, 'Credential summaries omit tenant IDs');
+  });
+});

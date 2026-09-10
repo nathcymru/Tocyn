@@ -21,9 +21,14 @@ import { rateLimiter } from "../middleware/rate-limiter";
 import { decryptString } from "../utils/crypto";
 import { verifyTurnstileToken } from "../utils/turnstile";
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
+import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 import { MutationInputError, mutationInputErrorBody, normalizeAttachmentReferences, portalTicketCreateSchema, portalTicketReplySchema, readIdempotencyKey, readMutationJson } from './mutation-request';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+
+function recordCredentialDecision(c: { get: (key: 'requestAuthSli') => AppVariables['requestAuthSli'] }, decision: RequestCredentialAuthDecision): void {
+  try { c.get('requestAuthSli')?.record(decision); } catch { /* Evidence cannot affect authentication. */ }
+}
 
 app.use('*', async (c, next) => requestBounds(c.req.path.endsWith('/attachments/upload') ? 10 * 1024 * 1024 + 50000 : 64 * 1024)(c, next));
 
@@ -120,10 +125,28 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
   const deps = createTenantRequestDeps(scope, c.env);
 
   const authService = new CustomerAuthService(c.env, deps, undefined, undefined, c.env.localNow);
-  if (typeof body.token !== 'string' || !body.token || body.token.length > 512) return c.json({ error: 'Invalid token' }, 400);
-  if (body.challengeId !== undefined && typeof body.challengeId !== 'string') return c.json({ error: 'Invalid challenge' }, 400);
-  const result = await authService.verifyAuth(body.token, body.challengeId);
-  if (!result) return c.json({ error: 'Invalid token' }, 401);
+  if (typeof body.token !== 'string' || !body.token || body.token.length > 512) {
+    recordCredentialDecision(c, 'denied');
+    return c.json({ error: 'Invalid token' }, 400);
+  }
+  if (body.challengeId !== undefined && typeof body.challengeId !== 'string') {
+    recordCredentialDecision(c, 'denied');
+    return c.json({ error: 'Invalid challenge' }, 400);
+  }
+  let verification;
+  try {
+    verification = await authService.verifyAuthWithDecision(body.token, body.challengeId);
+  } catch (error) {
+    recordCredentialDecision(c, 'unavailable');
+    throw error;
+  }
+  if (verification.decision === 'admission-suppressed') return c.json({ error: 'Invalid token' }, 401);
+  if (verification.decision === 'denied') {
+    recordCredentialDecision(c, 'denied');
+    return c.json({ error: 'Invalid token' }, 401);
+  }
+  const result = verification.result;
+  recordCredentialDecision(c, 'accepted');
 
   setCookie(c, 'lumina_customer_token', result.token, {
     httpOnly: true,
