@@ -1,0 +1,26 @@
+{
+  "sourceRevision": "cec34e159818db7af078af261d97b99e7a8848e7",
+  "testScriptSha256": "b795db2c48aa2407b4eb04bf87f87f4ab27947818d45cd6eb28564d36a729d74",
+  "node": "22.19.0",
+  "runtime": "Miniflare5.20260907.0-alpha",
+  "scenario": "Disposable actual VectorizeWorkflow instances; draft-document path and local-beta rejection",
+  "resourceMode": "local synthetic D1/R2; no AI binding or remote providers",
+  "results": {
+    "storageBackgroundTestsPassed": 10,
+    "finalWorkflowTestsPassed": 2,
+    "scriptTypecheck": "passed",
+    "focusedEslint": "passed"
+  },
+  "observations": [
+    "Actual Workflow completes draft-document step",
+    "Draft remains draft and R2 bucket empty",
+    "Structured d1/invoke/success and workflow/run/success emitted without tenant/document IDs",
+    "Local-beta instance errors with existing guard and no resource events",
+    "Miniflare disposed including setup failure"
+  ],
+  "limitations": [
+    "No published-document or AI runtime execution",
+    "No full durability/retry/fallback/load acceptance",
+    "No production readiness or complete SLI/cost counting claim"
+  ]
+}
