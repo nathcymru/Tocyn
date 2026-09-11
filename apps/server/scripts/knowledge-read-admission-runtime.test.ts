@@ -14,7 +14,7 @@ const secret='synthetic-knowledge-read-secret-at-least-32-chars';
 const dimensions=['workerRequests','d1RowsRead','d1RowsWritten','r2StorageBytes','r2ClassAOperations','r2ClassBOperations',
   'workflowExecutions','workflowSteps','workflowStorageBytes','doRequests','doRowsRead','doRowsWritten','logEvents'] as const;
 
-async function fixture(){
+async function fixture(storageLimit?:number){
   const bundled=await build({entryPoints:[resolve(import.meta.dirname,'knowledge-read-admission-runtime-entry.ts')],bundle:true,
     format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto'],write:false});
   const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'knowledge-read-proof',modules:true,compatibilityDate:'2024-04-03',
@@ -37,7 +37,8 @@ async function fixture(){
         VALUES ('knowledge-deployment','knowledge-policy',1,1,'knowledge-coordinator',64,30000,?)`).bind(JSON.stringify(owner)),
     ]);
     for(const tenantId of ['knowledge-a','knowledge-b','knowledge-low']){
-      const limits=tenantId==='knowledge-low'?Object.fromEntries(dimensions.map(dimension=>[dimension,1])):high;
+      const limits=tenantId==='knowledge-low'?Object.fromEntries(dimensions.map(dimension=>[dimension,1])):
+        {...high,...(storageLimit===undefined?{}:{r2StorageBytes:storageLimit})};
       const restriction={schemaVersion:1,tenantId,ownerPolicyId:'knowledge-policy',ownerPolicyRevision:1,revision:1,mode:'conservative',limits,disabledFeatures:[]};
       await db.batch([
         db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'knowledge-admin',?,'admin',1,1)")
@@ -176,5 +177,23 @@ test('exhausted content admission has zero R2 effects',async()=>{
     assert.equal((await request(f,'knowledge-low','/articles/shared/content')).status,429);
     assert.equal((await control(f)).r2Gets,0);
     assert.equal((await f.db.prepare("SELECT count(*) AS count FROM budget_grant_operations").first<{count:number}>())?.count,0);
+  }finally{await f.mf.dispose();}
+});
+
+
+test('existing content reads require no new stored-byte allocation',async()=>{
+  const f=await fixture(0);try{
+    await insertDocument(f.db,'knowledge-a','existing','Existing','knowledge/existing/body.md');
+    await f.bucket.put('knowledge-a/knowledge/existing/body.md','retained content');
+    for(let attempt=0;attempt<2;attempt++){
+      const response=await request(f,'knowledge-a','/articles/existing/content');
+      assert.equal(response.status,200,await response.clone().text());
+      assert.deepEqual(await response.json(),{content:'retained content'});
+    }
+    const operations=await f.db.prepare("SELECT operation_envelope_json FROM budget_grant_operations WHERE tenant_id='knowledge-a'").all<{operation_envelope_json:string}>();
+    assert.equal(operations.results.length,2);
+    for(const row of operations.results){const envelope=JSON.parse(row.operation_envelope_json);
+      assert.equal(envelope.r2StorageBytes??0,0);assert.equal(envelope.r2ClassBOperations,1);}
+    assert.equal((await control(f)).r2Gets,2);
   }finally{await f.mf.dispose();}
 });

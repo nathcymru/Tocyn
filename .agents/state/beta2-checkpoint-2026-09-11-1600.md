@@ -1,3 +1,11 @@
+# Integration correction — 11 September 2026
+
+Supersedes the active queue below; historical evidence is retained. PR205 remains the frozen batch, with a required correctness fix: existing knowledge-content GETs charge Class B operations, not new persistent R2 storage stock. A native zero-new-storage test first failed with429 and now passes twice with two distinct charged read operations. Source writes retain storage reservations; transfer/CPU accounting remains outstanding under64. The closure query was moved unchanged into the tenant-scoped repository boundary after ESLint identified it.
+
+Validation after both corrections: shared budget-runtime TypeScript and knowledge native10/10 pass; server ESLint passes. Focused knowledge unit5/5 passed for the storage correction. The earlier combined69/69 result remains evidence for the prior combined revision, not a rerun claim. Exact new-head fullCI/security is required before acceptance. Local logs: /private/tmp/tocyn-205-stock-final-{types,native}.log and /private/tmp/tocyn-205-stock-eslint.log. A failed attempt to call nonexistent server npm lint was corrected to the actual ESLint command.
+
+Outside batch:210 configuration ready;211 API-key replay corrected and under root validation;212 channel configuration delivered as a draft stacked on210. Workers continue knowledge deletion/recovery, authentication overhead authority review and mail overhead discovery. No owner approval is currently requested; proposed internal ingress partition is being checked against existing50authority before any escalation. Latest observed Codex remaining20%, reset17September23:59:48BST; task usage unavailable. No separate allowance, paid usage or Copilot review assumed.
+
 # Frozen integration batch — 11September2026,16:09BST
 
 This section supersedes the earlier queue below. Root froze all reviewed increments in PR205: workspace204, retention206, knowledge reads207, groups208 and filters209 plus originaladministration205, based on accepted202. New configuration210, API-key0060, knowledgeDELETE0061 and channelconfiguration0062 remain outside this batch. Source drafts remain evidence and must not merge independently; supersede after205acceptance.

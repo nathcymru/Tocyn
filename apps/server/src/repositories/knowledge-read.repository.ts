@@ -30,6 +30,12 @@ function safeCount(value:unknown): value is number {
 export class KnowledgeReadAccountingRepository {
   constructor(private readonly db:D1Database,private readonly scope:VerifiedTenantScope) {}
 
+  async isGrantClosed(reservationId:string,holderId:string):Promise<boolean> {
+    return Boolean(await this.db.prepare(`SELECT 1 FROM budget_grant_closures
+      WHERE tenant_id=? AND reservation_id=? AND holder_id=? LIMIT 1`)
+      .bind(this.scope.tenantId,reservationId,holderId).first());
+  }
+
   async listSnapshot():Promise<KnowledgeListSnapshot> {
     const row=await this.db.prepare(`SELECT document_rows,projection_bytes,revision FROM knowledge_read_scan_counters
       WHERE tenant_id=? LIMIT 1`).bind(this.scope.tenantId).first<{document_rows:number;projection_bytes:number;revision:number}>();
