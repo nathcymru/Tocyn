@@ -68,9 +68,23 @@ export class BudgetAuthorityRepository {
     readonly bindingIdentity: object = db) {}
 
   async authorizeApiKeyTicket(scope: VerifiedTenantScope, tenantId: string, apiKeyId: string): Promise<BudgetAuthorityPrincipal | null> {
+    return this.authorizeApiKeyTicketPermission(scope, tenantId, apiKeyId, 'tickets:write');
+  }
+
+  /**
+   * History is an independently admitted read path.  Keep its live-key check
+   * distinct from the mutation adapter so a read-only key is never forced
+   * through a write permission contract.
+   */
+  async authorizeApiKeyTicketRead(scope: VerifiedTenantScope, tenantId: string, apiKeyId: string): Promise<BudgetAuthorityPrincipal | null> {
+    return this.authorizeApiKeyTicketPermission(scope, tenantId, apiKeyId, 'tickets:read');
+  }
+
+  private async authorizeApiKeyTicketPermission(scope: VerifiedTenantScope, tenantId: string, apiKeyId: string,
+    requiredPermission: 'tickets:read' | 'tickets:write'): Promise<BudgetAuthorityPrincipal | null> {
     if (scope.tenantId !== tenantId || scope.actorId !== apiKeyId || !scope.roles.includes('integration')
       || (this.boundScope && (this.boundScope.tenantId !== scope.tenantId || this.boundScope.actorId !== scope.actorId))) return null;
-    const principal = { kind: 'api-key' as const, apiKeyId, requiredPermission: 'tickets:write' };
+    const principal = { kind: 'api-key' as const, apiKeyId, requiredPermission };
     return await this.livePrincipal(scope, principal) ? principal : null;
   }
 

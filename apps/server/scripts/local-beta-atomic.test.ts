@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { D1PreparedStatement } from '@cloudflare/workers-types';
+import { createVerifiedTenantScope } from '../src/auth/scope';
+import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-admission.repository';
 import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fixture';
 import { guardedFixture, betaCounters } from './local-beta-fixture';
 
@@ -119,6 +122,52 @@ test('integrated beta: stopped and exhausted uploads make zero R2 calls; uncerta
     assert.equal((await upload('stopped-keyed-upload')).status, 503);
     assert.deepEqual(f.r2.operationCounts(), after, 'stopped uploads cannot probe keyed storage markers');
   });
+});
+
+test('integrated beta: cold and warm upload charges each write two D1 rows including current indexes', async t => {
+  for (const channel of ['staff', 'customer'] as const) {
+    await withTwoTenantFixture(async f => {
+      await guardedFixture(f, { ticketLimit: 2, mutationLimit: 4, recoveryReserve: 2, uploadLimit: 2 });
+      const principal = f.principals[channel === 'staff' ? 'operatorA' : 'customerA'];
+      const writes: number[][] = [];
+      const db = new Proxy(f.db, {
+        get(target, property) {
+          if (property === 'batch') return async (statements: D1PreparedStatement[]) => {
+            const results = await target.batch(statements);
+            writes.push(results.map(result => result.meta.rows_written));
+            return results;
+          };
+          const value = Reflect.get(target, property);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+      const scope = createVerifiedTenantScope(principal.tenantId, principal.localId, [principal.role], 1);
+      const admission = new LocalBetaAdmissionRepository(db, scope, { kind: channel, id: principal.localId });
+      const assertionCount = async () => (await f.db.prepare('SELECT count(*) AS n FROM local_beta_assertion').first<{ n: number }>())!.n;
+      assert.equal(await assertionCount(), 0, 'The first charge exercises the cold assertion INSERT');
+      await admission.chargeUploadAttempt();
+      assert.equal(await assertionCount(), 1);
+      await admission.chargeUploadAttempt();
+      assert.equal(await assertionCount(), 1, 'The second charge exercises the existing assertion conflict UPDATE');
+      assert.deepEqual(writes, [[1, 1], [1, 1]], channel);
+      await assert.rejects(admission.chargeUploadAttempt(), { code: 'beta_upload_limit' });
+      assert.equal((await betaCounters(f))!.upload_attempts, 2, 'A rejected third attempt cannot change the charged counter');
+      assert.equal(writes.length, 2, 'Only two admission batches completed');
+
+      // D1 row metadata includes index writes. The assertion uses its rowid;
+      // incrementing upload_attempts does not modify the counter's run_id index.
+      // A future index/schema change must revisit the two-attempt write envelope.
+      const assertionIndexes = (await f.db.prepare("PRAGMA index_list('local_beta_assertion')").all()).results;
+      assert.deepEqual(assertionIndexes, []);
+      const counterIndexes = (await f.db.prepare("PRAGMA index_list('local_beta_runs')").all<{ name: string; origin: string }>()).results;
+      assert.deepEqual(counterIndexes.map(index => ({ name: index.name, origin: index.origin })),
+        [{ name: 'sqlite_autoindex_local_beta_runs_1', origin: 'pk' }]);
+      const counterIndexColumns = (await f.db.prepare("PRAGMA index_info('sqlite_autoindex_local_beta_runs_1')").all<{ name: string }>()).results.map(column => column.name);
+      assert.deepEqual(counterIndexColumns, ['run_id']);
+      t.diagnostic(JSON.stringify({ channel, coldWrites: writes[0], warmWrites: writes[1],
+        twoAttemptWrites: writes.flat().reduce((sum, count) => sum + count, 0), assertionIndexes, counterIndexes, counterIndexColumns }));
+    });
+  }
 });
 
 test('integrated beta: marker-only replay and conflict retain their prepaid upload attempts', async () => {

@@ -1129,7 +1129,7 @@ test('active API create/reply recover one same-key failed or unacknowledged batc
   }finally{await h.mf.dispose();}
 });
 
-test('native API canonical metadata includes worst-case 100-receipt cleanup and indexed mutation writes',async()=>{
+test('native API canonical metadata includes worst-case 100-receipt cleanup and current-public-history projection writes',async()=>{
   const h=await warmHarness();try{
     const first=await h.create('metadata-seed');const target=await first.json() as {id:string};
     for(const operation of ['create','reply'] as const){
@@ -1149,6 +1149,9 @@ test('native API canonical metadata includes worst-case 100-receipt cleanup and 
       assert.ok(measured.rowsWritten>100);assert.ok(measured.rowsRead>0);
       assert.ok(measured.rowsWritten<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
       assert.ok(2*measured.rowsWritten<=CANONICAL_MUTATION_D1_WRITES);
+      const projectionIndexes=await h.db.prepare('PRAGMA index_list(conversation_public_history)').all();
+      assert.equal(projectionIndexes.results.length,2,'projection primary/sequence indexes are included in the canonical write inventory');
+      assert.ok(100*5+34*9<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     }
   }finally{await h.mf.dispose();}
 });
