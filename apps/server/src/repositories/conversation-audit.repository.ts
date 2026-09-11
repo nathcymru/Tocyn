@@ -122,7 +122,7 @@ export class ConversationAuditRepository {
     // conversation contract until those endpoints adopt an explicit page.
     if (!articleIds) {
       const result = await this.db.prepare(`SELECT id,article_id,kind FROM conversation_events
-        WHERE tenant_id=? AND ticket_id=? AND visibility='public'
+        WHERE tenant_id=? AND ticket_id=? AND kind IN ('ticket.intake','message.reply') AND visibility='public'
         ORDER BY sequence`).bind(this.scope.tenantId, ticketId).all<Pick<ConversationEvent, 'id' | 'article_id' | 'kind'>>();
       return result.results;
     }
