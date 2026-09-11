@@ -11,7 +11,6 @@ Dependency-only critical network length: 1086 planning hours. Resource-constrain
 | [#12](https://github.com/nathcymru/Tocyn/issues/12) Verify required checks on dependency-only pull requests | 24 | W2 | 2026-09-11 → 2026-09-15 |  |
 | [#91](https://github.com/nathcymru/Tocyn/issues/91) Recover accepted payloads through durable storage journals | 72 | W1 | 2026-09-11 → 2026-09-23 | #50, #59 |
 | [#64](https://github.com/nathcymru/Tocyn/issues/64) Enforce resource budgets across active application paths | 48 | W2 | 2026-09-16 → 2026-09-25 | #50, #60, #93, #159 |
-| [#68](https://github.com/nathcymru/Tocyn/issues/68) Add a rich conversation composer | 72 | W1 | 2026-09-24 → 2026-10-06 | #48, #66, #129 |
 | [#130](https://github.com/nathcymru/Tocyn/issues/130) Add task-based work queues and snooze/resurface | 72 | W2 | 2026-09-26 → 2026-10-09 | #129, #136, #73, #64 |
 | [#70](https://github.com/nathcymru/Tocyn/issues/70) Add typing awareness and private colleague collaboration | 72 | W1 | 2026-10-07 → 2026-10-19 | #63, #68 |
 | [#128](https://github.com/nathcymru/Tocyn/issues/128) Build the persistent progressive operator workspace | 96 | W2 | 2026-10-10 → 2026-10-26 | #127, #129, #130, #48, #66 |

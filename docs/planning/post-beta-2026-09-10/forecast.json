@@ -712,7 +712,7 @@
       "number": 68,
       "alias": "#68",
       "title": "Add a rich conversation composer",
-      "done": false,
+      "done": true,
       "effort": 24.0,
       "dependencies": [
         48,
@@ -721,17 +721,18 @@
       ],
       "baselineStart": "2027-01-29",
       "baselineTarget": "2027-02-09",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualCompletion": "2026-09-11",
+      "progress": 100,
       "milestone": 14,
       "new": false,
       "forecastStart": "2026-09-24",
       "forecastTarget": "2026-10-06",
       "workstream": "W1",
-      "remainingPlanningHours": 72.0,
+      "actualStart": "2026-09-11",
+      "remainingPlanningHours": 0,
       "floatHours": 480.0,
       "criticalPath": "Supporting",
-      "variance": -108
+      "variance": -129
     },
     {
       "number": 67,
