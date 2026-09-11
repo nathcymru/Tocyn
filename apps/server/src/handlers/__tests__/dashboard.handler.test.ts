@@ -29,7 +29,7 @@ const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
 let validToken: string;
 
 const request = (path: string, init?: RequestInit, env?: any) => {
-  return dashboard.request(path, init, { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket, ...env });
+  return dashboard.request(path, init, { BUDGET_ADMISSION_POLICY: 'off', DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket, ...env });
 };
 
 let firstQueue: any[] = [];
@@ -85,7 +85,7 @@ describe("Dashboard Handler Integration Tests", () => {
         {
           headers: { Authorization: `Bearer ${validToken}` },
         },
-        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
+        { BUDGET_ADMISSION_POLICY: 'off', DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
       );
 
       expect(res.status).toBe(200);
@@ -502,7 +502,7 @@ describe("Dashboard Handler Integration Tests", () => {
             ]
           })
         },
-        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
+        { BUDGET_ADMISSION_POLICY: 'off', DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
       );
 
       expect(res.status).toBe(201);

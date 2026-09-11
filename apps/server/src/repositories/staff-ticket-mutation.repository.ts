@@ -78,9 +78,6 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
   return statements;
 }
 
-export function staffMutationSnapshot(snapshot: string): string {
-  return `json_set(${snapshot},'$.staffVersion',1,'$.staffBodyFormat','plain')`;
-}
 export function staffMutationReceiptStatement(db: D1Database, scope: VerifiedTenantScope, ns: StaffMutationNamespace,
   ticketId: string, articleId: string, snapshot: string, values: unknown[]): D1PreparedStatement {
   return db.prepare(`INSERT INTO staff_ticket_mutation_receipts

@@ -2,6 +2,7 @@ export { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO'
 export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
 import { app } from '../src/application';
 import { apiTicketBudgetCache } from '../src/middleware/budget-admission.middleware';
+import { LocalAuthCaptureTransport } from '../src/services/email/transport';
 
 let wrappedNamespace: any;
 let wrappedDatabase: any;
@@ -11,6 +12,15 @@ let loseCanonicalAck = false;
 let failCanonicalAttempts = 0;
 let canonicalAttempts = 0;
 const canonicalBatches: { statements: number; rowsRead: number; rowsWritten: number }[] = [];
+let r2Gets = 0;
+const localCapture = new LocalAuthCaptureTransport();
+function instrumentBucket(bucket: any): any {
+  if (!bucket) return bucket;
+  return new Proxy(bucket, { get(target, property) {
+    if (property === 'get') return async (...args: any[]) => { r2Gets++; return target.get(...args); };
+    const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value;
+  }});
+}
 function instrumentDatabase(db: any): any {
   if (wrappedDatabase) return wrappedDatabase;
   const statements = new WeakMap<object,{ raw:any; sql:string }>();
@@ -111,9 +121,10 @@ export default {
         if (control.loseReserveAck) lostReserveAcksRemaining = 1;
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
       }
-      return Response.json({ calls, canonicalBatches, canonicalAttempts, reservePaused:!!releaseReserve, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
+      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, reservePaused:!!releaseReserve, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
-    return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), BUDGET_COORDINATOR_DO: instrument(env.BUDGET_COORDINATOR_DO, env.DB),
+    return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), ATTACHMENTS_BUCKET: instrumentBucket(env.ATTACHMENTS_BUCKET), emailTransport: localCapture,
+      BUDGET_COORDINATOR_DO: instrument(env.BUDGET_COORDINATOR_DO, env.DB),
       localNow: () => clock ?? Date.now() }, ctx);
   },
 };
