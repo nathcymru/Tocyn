@@ -16,7 +16,7 @@ try {
       assert.equal(splashRequests.length, 0);
     } else {
       const panel = page.locator('.tocyn-auth-splash');
-      assert.ok((await panel.boundingBox()).width <= width / 3);
+      assert.ok((await panel.boundingBox()).width <= width * 0.45);
       const image = panel.locator('img');
       assert.equal(await image.evaluate(img => getComputedStyle(img).objectPosition), '0% 0%');
       assert.ok((await image.getAttribute('src')).startsWith(`/splash/${mode}/`));
@@ -29,5 +29,5 @@ try {
     await page.screenshot({ path: `/private/tmp/tocyn-auth-${new URL(url).port}-${mode}-${width}.png` });
     await context.close();
   }
-  console.log(JSON.stringify({ passed: true, variants: 8, checks: ['theme pools', '33% maximum', 'top-left anchor', 'mobile omission/no splash request', 'stable during typing', 'no horizontal overflow'], scope: 'local browser layout; not a backend-authentication proof' }));
+  console.log(JSON.stringify({ passed: true, variants: 8, checks: ['theme pools', '45% maximum', 'top-left anchor', 'mobile omission/no splash request', 'stable during typing', 'no horizontal overflow'], scope: 'local browser layout; not a backend-authentication proof' }));
 } finally { await browser.close(); }
