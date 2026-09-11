@@ -1086,7 +1086,7 @@ test('full 128-allocation authority that exceeds the bounded DO payload fails cl
   } finally { await mf?.dispose(); }
 });
 
-for (const operation of ['create','reply'] as const) for (const change of ['authority','policy','window','restriction','key','permission','expiry'] as const) {
+for (const operation of ['create','reply','update'] as const) for (const change of ['authority','policy','window','restriction','key','permission','expiry'] as const) {
   test(`active API ${operation} fences ${change} after admission before canonical commit`,async()=>{
     const h=await warmHarness();try{
       const seedResponse=await h.create('fence-target');assert.equal(seedResponse.status,201);
@@ -1102,8 +1102,10 @@ for (const operation of ['create','reply'] as const) for (const change of ['auth
       };
       const before=await counts();
       await h.control(change==='expiry'?{canonicalDelayMs:1100}:{beforeCanonical:change});
-      const response=operation==='create'?await h.create('fenced'):await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}/articles`,{
+      const response=operation==='create'?await h.create('fenced'):operation==='reply'?await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}/articles`,{
         method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':'fenced'},body:JSON.stringify({body:'Fenced reply',sender_type:'agent'}),
+      }):await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}`,{
+        method:'PATCH',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':'fenced'},body:JSON.stringify({status:'pending'}),
       });
       assert.ok([401,403,503].includes(response.status),`expected fenced failure, received ${response.status}`);await response.body?.cancel();
       assert.deepEqual(await counts(),before);assert.ok((await h.grants()).every(grant=>grant.accounted.workerRequests!>0),'denial never refunds accepted grants');
@@ -1129,10 +1131,27 @@ test('active API create/reply recover one same-key failed or unacknowledged batc
   }finally{await h.mf.dispose();}
 });
 
+test('active API PATCH admits one current-key fenced update and recovers its 200 receipt without another grant',async()=>{
+  const h=await warmHarness();try{
+    const created=await h.create('update-admission-target');assert.equal(created.status,201);const target=await created.json() as {id:string};
+    const update=(key:string,body:object)=>h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}`,{
+      method:'PATCH',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':key},body:JSON.stringify(body),
+    });
+    const before=await h.control();
+    const first=await update('update-admission-retry',{status:'pending'});assert.equal(first.status,200);assert.equal(first.headers.get('Idempotency-Replayed'),'false');await first.body?.cancel();
+    const charged=await h.control();assert.ok(charged.canonicalBatches>before.canonicalBatches,'The admitted PATCH enters one canonical D1 batch');
+    const replay=await update('update-admission-retry',{status:'pending'});assert.equal(replay.status,200);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');await replay.body?.cancel();
+    assert.deepEqual((await h.control()).calls,charged.calls,'Receipt replay reuses the warm bounded grant');
+    assert.equal((await h.db.prepare("SELECT count(*) AS n FROM ticket_mutation_receipts WHERE tenant_id='runtime-tenant' AND operation='api.ticket.update'").first<{n:number}>())?.n,1);
+    assert.equal((await h.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='runtime-tenant' AND ticket_id=? AND kind='ticket.state_changed'").bind(target.id).first<{n:number}>())?.n,1);
+    const conflict=await update('update-admission-retry',{status:'resolved'});assert.equal(conflict.status,409);await conflict.body?.cancel();
+  }finally{await h.mf.dispose();}
+});
+
 test('native API canonical metadata includes worst-case 100-receipt cleanup and current-public-history projection writes',async()=>{
   const h=await warmHarness();try{
     const first=await h.create('metadata-seed');const target=await first.json() as {id:string};
-    for(const operation of ['create','reply'] as const){
+    for(const operation of ['create','reply','update'] as const){
       const key=`measure-${operation}`,hash=await credentialDigest(key);
       await h.db.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<150)
         INSERT INTO ticket_mutation_receipts (tenant_id,principal_kind,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,
@@ -1140,10 +1159,12 @@ test('native API canonical metadata includes worst-case 100-receipt cleanup and 
         SELECT tenant_id,principal_kind,principal_id,?,CASE WHEN x=1 THEN ? ELSE printf('%064d',x) END,payload_hash,fingerprint_version,response_version,
           result_ticket_id,result_article_id,response_status,response_snapshot,unixepoch()-100,unixepoch()-1
         FROM ticket_mutation_receipts,n WHERE tenant_id='runtime-tenant' AND key_hash=?`).bind(`api.ticket.${operation}`,hash,await credentialDigest('metadata-seed')).run();
-      const response=operation==='create'?await h.create(key):await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}/articles`,{
+      const response=operation==='create'?await h.create(key):operation==='reply'?await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}/articles`,{
         method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':key},body:JSON.stringify({body:'Measured first public staff response',sender_type:'agent'}),
+      }):await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}`,{
+        method:'PATCH',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':key},body:JSON.stringify({status:'pending'}),
       });
-      assert.equal(response.status,201);await response.body?.cancel();
+      assert.equal(response.status,operation==='update'?200:201);await response.body?.cancel();
       const measured=(await h.control()).canonicalBatches.at(-1);
       console.log(JSON.stringify({fixture:'native-d1-canonical-metadata',operation,...measured}));
       assert.ok(measured.rowsWritten>100);assert.ok(measured.rowsRead>0);

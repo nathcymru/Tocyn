@@ -91,6 +91,10 @@ function apiReply(fixture: LocalTenantFixture, key: string, ticketId: string, re
   return fixture.request(`/api/v1/tickets/${ticketId}/articles`, { method: 'POST', apiKey: key, idempotencyKey: retryKey, body, ip: `${fixture.rateLimitIdentity}-${suffix}` });
 }
 
+function apiUpdate(fixture: LocalTenantFixture, key: string, ticketId: string, retryKey: string | undefined, body: Json, suffix: string): Promise<FixtureResponse> {
+  return fixture.request(`/api/v1/tickets/${ticketId}`, { method: 'PATCH', apiKey: key, idempotencyKey: retryKey, body, ip: `${fixture.rateLimitIdentity}-${suffix}` });
+}
+
 function portalCreate(fixture: LocalTenantFixture, token: string, retryKey: string | undefined, body: Json, suffix: string): Promise<FixtureResponse> {
   return fixture.request('/api/v1/customer/tickets', { method: 'POST', token, idempotencyKey: retryKey, body, ip: `${fixture.rateLimitIdentity}-${suffix}`, origin: 'http://localhost:5174' });
 }
@@ -157,6 +161,49 @@ test('retry-safe mutations: absent key remains compatible while malformed, non-J
     }), 413, 'Streamed over-limit JSON');
     assert.deepEqual(await rows(fixture), rejectedBefore, 'Rejected requests must not create mutations or receipts');
     t.diagnostic(JSON.stringify({ validationRejections: 4, persistedRowsAfterRejections: 0, fixture: 'real-miniflare-d1-r2' }));
+  });
+});
+
+test('retry-safe API PATCH stores one 200 update receipt across concurrent and lost-response retries', async t => {
+  await withTwoTenantFixture(async fixture => {
+    const key = await apiKey(fixture);
+    const created = await apiCreate(fixture, key, 'update-target-create', {
+      subject: 'durable update target', customer_email: fixture.principals.customerA.email, body: 'synthetic target',
+    }, 'update-target');
+    await expectStatus(created, 201, 'Create update target');
+    const id = ticketId(await created.json<Json>());
+    const countEvents = async () => (await fixture.db.prepare('SELECT count(*) AS n FROM conversation_events WHERE tenant_id=? AND ticket_id=?')
+      .bind(fixture.principals.customerA.tenantId,id).first<{ n: number }>())?.n ?? 0;
+    const before = { rows: await rows(fixture), events: await countEvents() };
+    const concurrent = await Promise.all([
+      apiUpdate(fixture,key,id,'update-concurrent',{ status: 'pending', custom_fields: { b: 2, a: 'one' } },'update-concurrent-a'),
+      apiUpdate(fixture,key,id,'update-concurrent',{ custom_fields: { a: 'one', b: 2 }, status: 'pending' },'update-concurrent-b'),
+    ]);
+    for (const response of concurrent) await expectStatus(response,200,'Matching API PATCH retry');
+    assert.deepEqual(concurrent.map(response => response.headers.get('Idempotency-Replayed')).sort(),['false','true']);
+    assert.deepEqual(await concurrent[0].json<Json>(),await concurrent[1].json<Json>(),'The replay returns the durable 200 response');
+    assert.equal(await countEvents(),before.events + 1,'One winning PATCH emits one state audit event');
+    assert.equal((await rows(fixture)).receipts,before.rows.receipts + 1,'Concurrent PATCH writes one receipt');
+    await error(await apiUpdate(fixture,key,id,'update-concurrent',{ status: 'resolved' },'update-conflict'),409,'idempotency_conflict','Changed PATCH payload conflicts');
+
+    const lost = await apiUpdate(fixture,key,id,'update-lost-response',{ priority: 'high' },'update-lost-first');
+    await expectStatus(lost,200,'Committed PATCH before lost delivery');
+    await lost.body?.cancel();
+    const recovered = await apiUpdate(fixture,key,id,'update-lost-response',{ priority: 'high' },'update-lost-retry');
+    await expectStatus(recovered,200,'Retry recovers committed PATCH');
+    assert.equal(recovered.headers.get('Idempotency-Replayed'),'true');
+    assert.equal(await countEvents(),before.events + 2,'Lost-response retry cannot duplicate the audit event');
+    const stored = await fixture.db.prepare(`SELECT response_status,response_version,response_snapshot FROM ticket_mutation_receipts
+      WHERE tenant_id=? AND operation='api.ticket.update' AND result_ticket_id=? AND key_hash IS NOT NULL ORDER BY created_at LIMIT 1`)
+      .bind(fixture.principals.customerA.tenantId,id).first<{ response_status: number; response_version: number; response_snapshot: string }>();
+    assert.deepEqual({ status: stored?.response_status, version: stored?.response_version },{ status:200, version:3 });
+    assert.match(stored?.response_snapshot ?? '',/"version":3/);
+
+    const other = await apiKey(fixture,'operatorB');
+    const foreignBefore = await rows(fixture,fixture.principals.customerB.tenantId);
+    await expectStatus(await apiUpdate(fixture,other,id,'foreign-update',{ status: 'closed' },'foreign-update'),404,'Foreign API PATCH remains tenant-scoped');
+    assert.deepEqual(await rows(fixture,fixture.principals.customerB.tenantId),foreignBefore,'Foreign target cannot reserve a receipt');
+    t.diagnostic(JSON.stringify({ concurrentReceipts:1, auditEvents:await countEvents(), lostResponseRecovered:true, fixture:'real-miniflare-d1-r2' }));
   });
 });
 
