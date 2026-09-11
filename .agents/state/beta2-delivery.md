@@ -1,3 +1,5 @@
+Current coordinator checkpoint: [retention integration and active queue](budget-64-retention-admission.md). Accepted main `a03683ac49f5db6f269d5179391538ea3d4c960e` (PR203,11September14:27UTC); full64 and beta.2/#140 remain incomplete. This current paragraph supersedes historical ownership/pending statements below. No owner approval missing.
+
 Current coordinator checkpoint: [list admission and active workstreams](budget-64-list-admission.md). Accepted main b5705ade (PR201); full beta2 remains incomplete. This supersedes older ownership/pending statements below.
 
 Current coordinator: [realtime integration](budget-64-realtime-admission.md). Accepted main `fd8a679a46ba7752c946f07848371a6cab9376aa` (PR #200), required CI/security passed and signed tested-tree equality verified; #64 receipt5635048529. Support/SLA retry and exact-response corrections are accepted. Realtime, knowledge, retention and list candidates remain unaccepted. Full #64/#130/#140 remain open. Historical checkpoints below do not override this current state.
