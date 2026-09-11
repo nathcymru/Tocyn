@@ -9,10 +9,13 @@ import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fi
 import { createSystemTenantScope } from '../src/auth/scope';
 import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
 import { TenantAutomationService } from '../src/services/tenant-automation.service';
+import { RetentionAdmissionRepository } from '../src/repositories/retention-admission.repository';
+import { RETENTION_FINALIZE_STEP_ENVELOPE } from '../src/budgets/retention-admission.service';
 import { TenantKnowledgeService } from '../src/services/tenant-knowledge.service';
 import { StatelessAiService } from '../src/services/ai.service';
 import { NotificationDO } from '../src/durable_objects/NotificationDO';
 import type { Env } from '../src/bindings';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { VectorizeJob } from '../src/workflows/vectorize.workflow';
 
 // These source-contract tests do not enable scheduled jobs, AI or realtime in the
@@ -52,6 +55,31 @@ function scopedDeps(fixture: LocalTenantFixture, tenantId: string, extra: Record
     DB: fixture.db, ATTACHMENTS_BUCKET: fixture.r2.bucket,
     VECTOR_INDEX: unexpectedVectorBoundary().index, ...extra,
   });
+}
+
+function measuredNativeD1<T extends D1Database>(database: T) {
+  const totals={rowsRead:0,rowsWritten:0};
+  const unwrap=new WeakMap<object,object>();
+  const record=(result:any)=>{totals.rowsRead+=result?.meta?.rows_read??0;totals.rowsWritten+=result?.meta?.rows_written??0;return result;};
+  const statement=(source:any):any=>{
+    const proxy=new Proxy(source,{get(target,property){const value=Reflect.get(target,property);
+      if(property==='bind') return (...args:unknown[])=>statement(value.apply(target,args));
+      if(property==='first') return async (...args:unknown[])=>{
+        if(args.length) throw new Error('Measured retention fixture does not use first(column)');
+        const result=record(await target.all()); return result.results[0]??null;
+      };
+      if(property==='all'||property==='raw'||property==='run') return async (...args:unknown[])=>record(await value.apply(target,args));
+      return typeof value==='function'?value.bind(target):value;
+    }});unwrap.set(proxy,source);return proxy;
+  };
+  const db=new Proxy(database as any,{get(target,property){const value=Reflect.get(target,property);
+    if(property==='prepare') return (sql:string)=>statement(value.call(target,sql));
+    if(property==='batch') return async (statements:any[])=>{
+      const results=await value.call(target,statements.map(item=>unwrap.get(item)??item));results.forEach(record);return results;
+    };
+    return typeof value==='function'?value.bind(target):value;
+  }}) as T;
+  return {db,totals};
 }
 
 async function seedAttachment(fixture: LocalTenantFixture, tenantId: string, attachmentId = 'shared-attachment', internal = false) {
@@ -128,6 +156,196 @@ test('retention source contract: failed A cleanup freezes writes; retry deletes 
     assert.deepEqual(await service.runRetention(), { deleted_tickets: 0, deleted_attachments: 0 });
     assert.deepEqual(fixture.r2.operationCounts(), beforeRetry, 'Completed retention retry must perform no storage work');
     assert.equal(vector.operationCount(), 0, 'Attachment-only retention and recovery must perform no vector operation');
+  });
+});
+
+test('bounded retention never adopts an unowned claim or freezes a ticket that fails the current rule', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId = fixture.principals.customerA.tenantId;
+    const deps = createTenantRequestDeps(createSystemTenantScope({ tenantId, actor: 'scheduled-retention' }), {
+      DB:fixture.db,ATTACHMENTS_BUCKET:fixture.r2.bucket,VECTOR_INDEX:unexpectedVectorBoundary().index,
+      BUDGET_ADMISSION_POLICY:'off',
+    } as unknown as Env);
+    const rule = await deps.repositories.automations.create({ name:'Closed only',event_type:'scheduled.retention',action_type:'retention',
+      conditions:JSON.stringify([{field:'ticket.status',operator:'equals',value:'closed'}]),
+      action_config:JSON.stringify({days_to_keep:1,delete_attachments:true}),is_active:true });
+    await fixture.db.prepare("UPDATE tickets SET status='open',updated_at='2000-01-01T00:00:00.000Z' WHERE tenant_id=? AND id='fixture-ticket'")
+      .bind(tenantId).run();
+    const orphan = await deps.repositories.tickets.claimRetention('fixture-ticket','2099-01-01T00:00:00.000Z');
+    assert.ok(orphan);
+    const second = await deps.repositories.tickets.create({ subject:'Second open ticket',customer_email:'second@example.test',source:'test',status:'open',priority:'normal' } as any);
+    await fixture.db.prepare("UPDATE tickets SET updated_at='2000-01-01T00:00:00.000Z' WHERE tenant_id=? AND id=?").bind(tenantId,second.id).run();
+    const service = new TenantAutomationService(deps);
+    const raced = await deps.repositories.tickets.create({ subject:'Same timestamp race',customer_email:'race@example.test',source:'test',status:'closed',priority:'normal' } as any);
+    await fixture.db.prepare("UPDATE tickets SET updated_at='2000-01-01T00:00:00.000Z' WHERE tenant_id=? AND id=?").bind(tenantId,raced.id).run();
+    const eligibleSnapshot = (await deps.repositories.tickets.get(raced.id))!;
+    assert.equal(service.evaluateConditions(rule.conditions,{ticket:eligibleSnapshot}),true);
+    await fixture.db.prepare("UPDATE tickets SET status='open',updated_at='2000-01-01T00:00:00.000Z' WHERE tenant_id=? AND id=?")
+      .bind(tenantId,raced.id).run();
+    const work = new RetentionAdmissionRepository(fixture.db,deps.scope);
+    assert.equal(await work.claimEligible(eligibleSnapshot,'2026-09-10T00:00:00.000Z',rule),null,
+      'full ticket comparison rejects a same-timestamp post-condition change');
+    await service.runBoundedRetention({env:{BUDGET_ADMISSION_POLICY:'off'} as Env,now:()=>Date.parse('2026-09-11T12:00:00.000Z')});
+    assert.ok(await deps.repositories.tickets.get('fixture-ticket'));
+    assert.ok(await deps.repositories.tickets.get(second.id));
+    assert.ok(await deps.repositories.tickets.get(raced.id));
+    assert.deepEqual(await fixture.db.prepare('SELECT token FROM ticket_cleanup_claims WHERE tenant_id=? AND ticket_id=?')
+      .bind(tenantId,'fixture-ticket').first(),{token:orphan.token},'another runner claim remains untouched');
+    assert.equal(await fixture.db.prepare('SELECT 1 FROM ticket_cleanup_claims WHERE tenant_id=? AND ticket_id=?').bind(tenantId,second.id).first(),null);
+    assert.equal(await fixture.db.prepare('SELECT 1 FROM retention_ticket_progress WHERE tenant_id=? AND rule_id=?').bind(tenantId,rule.id).first(),null);
+  });
+});
+
+test('post-admission rule and budget revocation deny external and finalization effects in native D1', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId = fixture.principals.customerA.tenantId;
+    const deps = createTenantRequestDeps(createSystemTenantScope({ tenantId, actor:'scheduled-retention' }), {
+      DB:fixture.db,ATTACHMENTS_BUCKET:fixture.r2.bucket,VECTOR_INDEX:unexpectedVectorBoundary().index,
+    } as unknown as Env);
+    const rule = await deps.repositories.automations.create({name:'Revocable retention',event_type:'scheduled.retention',action_type:'retention',
+      action_config:JSON.stringify({days_to_keep:1,delete_attachments:true}),is_active:true});
+    await fixture.db.prepare("UPDATE tickets SET status='closed',updated_at='2000-01-01T00:00:00.000Z' WHERE tenant_id=? AND id='fixture-ticket'")
+      .bind(tenantId).run();
+    const ticket = (await deps.repositories.tickets.get('fixture-ticket'))!;
+    const work = new RetentionAdmissionRepository(fixture.db,deps.scope);
+    const claim = await work.claimEligible(ticket,'2026-09-10T00:00:00.000Z',rule);
+    assert.ok(claim);
+    await fixture.db.prepare(`INSERT INTO retention_cleanup_work
+      (tenant_id,ticket_id,claim_token,item_key,item_kind,state,attempts,attempt_token,lease_expires_at)
+      VALUES (?,?,?,'attachment:synthetic','attachment','claimed',1,1,'2099-01-01T00:00:00.000Z')`)
+      .bind(tenantId,ticket.id,claim.token).run();
+    assert.equal(await work.currentRule(rule.id,rule),true,'pre-admission rule observation is current');
+    await Promise.resolve(); // synthetic admission boundary
+    await fixture.db.prepare('UPDATE automation_rules SET is_active=0 WHERE tenant_id=? AND id=?').bind(tenantId,rule.id).run();
+    assert.equal(await work.recordAdmission(ticket.id,'attachment:synthetic',claim.token,1,rule),false);
+    let externalEffects = 0;
+    if (await work.authorizeEffect(ticket.id,'attachment:synthetic',claim.token,1,rule)) externalEffects++;
+    assert.equal(externalEffects,0,'revocation after admission cannot reach R2 or Vectorize');
+    await fixture.db.prepare(`INSERT INTO retention_cleanup_work
+      (tenant_id,ticket_id,claim_token,item_key,item_kind,state,attempts,attempt_token,lease_expires_at)
+      VALUES (?,?,?,'finalize','finalize','claimed',1,1,'2099-01-01T00:00:00.000Z')`)
+      .bind(tenantId,ticket.id,claim.token).run();
+    assert.equal(await work.finalizeOne(ticket.id,claim.token,1,rule),'stale');
+    assert.ok(await deps.repositories.tickets.get(ticket.id),'revoked finalization preserves ticket ownership');
+
+    const budgetRule = await deps.repositories.automations.create({name:'Budget-fenced retention',event_type:'scheduled.retention',action_type:'retention',
+      action_config:JSON.stringify({days_to_keep:1,delete_attachments:true}),is_active:true});
+    const budgetTicket = await deps.repositories.tickets.create({subject:'Budget fence',customer_email:'budget@example.test',source:'test',status:'closed',priority:'normal'} as any);
+    await fixture.db.prepare("UPDATE tickets SET updated_at='2000-01-01T00:00:00.000Z' WHERE tenant_id=? AND id=?").bind(tenantId,budgetTicket.id).run();
+    const budgetCurrent = (await deps.repositories.tickets.get(budgetTicket.id))!;
+    const budgetClaim = await work.claimEligible(budgetCurrent,'2026-09-10T00:00:00.000Z',budgetRule);
+    assert.ok(budgetClaim);
+    const policyJson='{}', restrictionJson='{}', expiresAt=Date.now()+60_000;
+    await fixture.db.batch([
+      fixture.db.prepare("INSERT INTO budget_deployment_authority VALUES ('retention-deployment',1,'active',?)").bind(Date.now()),
+      fixture.db.prepare(`INSERT INTO budget_owner_policies
+        (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
+        VALUES ('retention-deployment','retention-policy',1,1,'retention-coordinator',8,60000,?)`).bind(policyJson),
+      fixture.db.prepare(`INSERT INTO budget_tenant_allocations
+        (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
+        VALUES ('retention-deployment',?,'retention-policy',1,1,'retention-namespace',?,'active')`).bind(tenantId,restrictionJson),
+      fixture.db.prepare(`INSERT INTO retention_cleanup_work
+        (tenant_id,ticket_id,claim_token,item_key,item_kind,state,attempts,attempt_token,lease_expires_at)
+        VALUES (?,?,?,'finalize','finalize','claimed',1,1,'2099-01-01T00:00:00.000Z')`).bind(tenantId,budgetTicket.id,budgetClaim.token),
+    ]);
+    const authority = {
+      snapshot:{deployment_id:'retention-deployment',authority_revision:1,coordinator_id:'retention-coordinator',max_reservations:8,
+        authority_max_age_ms:60000,policy_id:'retention-policy',policy_revision:1,policy_json:policyJson,tenant_id:tenantId,
+        reservation_namespace:'retention-namespace',restriction_json:restrictionJson},
+      expiresAt,purpose:'new-work',operationId:'retention-operation',operationFingerprint:'retention-fingerprint',
+      grant:{tenantId,aggregateId:'retention-coordinator',reservationId:'retention-reservation',holderId:'retention-holder',
+        operationId:'retention-operation',operationFingerprint:'retention-fingerprint',operationEnvelope:{}},
+    } as const;
+    assert.equal(await work.recordAdmission(budgetTicket.id,'finalize',budgetClaim.token,1,budgetRule,authority),true);
+    await fixture.db.prepare("UPDATE budget_deployment_authority SET state='revoked' WHERE deployment_id='retention-deployment'").run();
+    assert.equal(await work.authorizeEffect(budgetTicket.id,'finalize',budgetClaim.token,1,budgetRule,authority),false,
+      'revoked exact budget authority denies R2 and Vectorize effects');
+    assert.equal(await work.finalizeOne(budgetTicket.id,budgetClaim.token,1,budgetRule,authority),'stale');
+    assert.ok(await deps.repositories.tickets.get(budgetTicket.id),'revoked budget authority preserves ticket ownership');
+  });
+});
+
+test('finalization drains a large completed-work and receipt ledger before its constant-sized ticket cascade', async context => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId = fixture.principals.customerA.tenantId;
+    const deps = createTenantRequestDeps(createSystemTenantScope({ tenantId, actor:'scheduled-retention' }), {
+      DB:fixture.db,ATTACHMENTS_BUCKET:fixture.r2.bucket,VECTOR_INDEX:unexpectedVectorBoundary().index,
+    } as unknown as Env);
+    const rule = await deps.repositories.automations.create({name:'Bounded finalization',event_type:'scheduled.retention',action_type:'retention',
+      action_config:JSON.stringify({days_to_keep:1,delete_attachments:true}),is_active:true});
+    const ticket = await deps.repositories.tickets.create({subject:'Large ledger',customer_email:'ledger@example.test',source:'test',status:'closed',priority:'normal'} as any);
+    await fixture.db.prepare("UPDATE tickets SET updated_at='2000-01-01T00:00:00.000Z' WHERE tenant_id=? AND id=?").bind(tenantId,ticket.id).run();
+    const current = (await deps.repositories.tickets.get(ticket.id))!;
+    const work = new RetentionAdmissionRepository(fixture.db,deps.scope);
+    const claim = await work.claimEligible(current,'2026-09-10T00:00:00.000Z',rule);
+    assert.ok(claim);
+    const statements = [];
+    for (let index=0; index<129; index++) {
+      statements.push(fixture.db.prepare(`INSERT INTO retention_cleanup_work
+        (tenant_id,ticket_id,claim_token,item_key,item_kind,state) VALUES (?,?,?,?,?,'complete')`)
+        .bind(tenantId,ticket.id,claim.token,`done:${String(index).padStart(3,'0')}`,'attachment'));
+      statements.push(fixture.db.prepare(`INSERT INTO ticket_mutation_receipts
+        (tenant_id,principal_kind,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,
+         created_at,expires_at,lifecycle,result_ticket_id,result_article_id,response_status,response_snapshot)
+        VALUES (?,'api-key','ledger-key','api.ticket.update',?,?,1,3,1,9999999999,'completed',?,NULL,200,?)`)
+        .bind(tenantId,index.toString(16).padStart(64,'0'),'f'.repeat(64),ticket.id,JSON.stringify({version:3,ticket:{id:ticket.id}})));
+    }
+    for (let offset=0; offset<statements.length; offset+=50) await fixture.db.batch(statements.slice(offset,offset+50));
+    await fixture.db.prepare(`INSERT INTO retention_cleanup_work
+      (tenant_id,ticket_id,claim_token,item_key,item_kind,state) VALUES (?,?,?,'finalize','finalize','pending')`)
+      .bind(tenantId,ticket.id,claim.token).run();
+    const measured=measuredNativeD1(fixture.db);
+    const finalizer=new RetentionAdmissionRepository(measured.db,deps.scope);
+    let turns=0, sawConstantTail=false, maxRowsRead=0, maxRowsWritten=0;
+    while (await deps.repositories.tickets.get(ticket.id)) {
+      assert.ok(++turns<300,'finite bounded finalization must converge');
+      const beforeTurn={...measured.totals};
+      const item = await finalizer.claimNext(ticket.id,claim.token,'2026-09-11T12:00:00.000Z','2099-01-01T00:00:00.000Z');
+      assert.ok(item && item.itemKey==='finalize');
+      assert.equal(await finalizer.recordAdmission(ticket.id,item.itemKey,claim.token,item.attemptToken,rule),true);
+      const before = await fixture.db.prepare(`SELECT
+        (SELECT count(*) FROM retention_cleanup_work WHERE tenant_id=? AND ticket_id=? AND item_key!='finalize') AS work_rows,
+        (SELECT count(*) FROM ticket_mutation_receipts WHERE tenant_id=? AND result_ticket_id=?) AS receipt_rows`)
+        .bind(tenantId,ticket.id,tenantId,ticket.id).first<{work_rows:number;receipt_rows:number}>();
+      const outcome = await finalizer.finalizeOne(ticket.id,claim.token,item.attemptToken,rule);
+      if (outcome==='more') {
+        const after = await fixture.db.prepare(`SELECT
+          (SELECT count(*) FROM retention_cleanup_work WHERE tenant_id=? AND ticket_id=? AND item_key!='finalize') AS work_rows,
+          (SELECT count(*) FROM ticket_mutation_receipts WHERE tenant_id=? AND result_ticket_id=?) AS receipt_rows`)
+          .bind(tenantId,ticket.id,tenantId,ticket.id).first<{work_rows:number;receipt_rows:number}>();
+        assert.ok(before && after && before.work_rows+before.receipt_rows-(after.work_rows+after.receipt_rows)<=1,
+          'one admitted finalization mutates at most one ledger row');
+        if (after?.work_rows===0 && after.receipt_rows===0) {
+          const tail = await fixture.db.prepare('SELECT count(*) AS n FROM retention_cleanup_work WHERE tenant_id=? AND ticket_id=?')
+            .bind(tenantId,ticket.id).first<{n:number}>();
+          assert.equal(tail?.n,1,'only the current finalize item remains for the eventual ticket cascade');
+          sawConstantTail=true;
+        }
+        assert.equal(await finalizer.continueItem(ticket.id,item.itemKey,claim.token,item.attemptToken),true);
+      } else if (outcome!=='deleted') {
+        const diagnostic = await fixture.db.prepare(`SELECT
+          (SELECT count(*) FROM tickets WHERE tenant_id=? AND id=?) AS ticket_rows,
+          (SELECT count(*) FROM retention_cleanup_work WHERE tenant_id=? AND ticket_id=?) AS work_rows,
+          (SELECT count(*) FROM retention_finalization_gates WHERE tenant_id=? AND ticket_id=?) AS gate_rows,
+          (SELECT count(*) FROM ticket_cleanup_claims WHERE tenant_id=? AND ticket_id=?) AS claim_rows`)
+          .bind(tenantId,ticket.id,tenantId,ticket.id,tenantId,ticket.id,tenantId,ticket.id).first();
+        assert.fail(`unexpected stale finalizer ${JSON.stringify(diagnostic)}`);
+      }
+      const turnRowsRead=measured.totals.rowsRead-beforeTurn.rowsRead;
+      const turnRowsWritten=measured.totals.rowsWritten-beforeTurn.rowsWritten;
+      maxRowsRead=Math.max(maxRowsRead,turnRowsRead);maxRowsWritten=Math.max(maxRowsWritten,turnRowsWritten);
+      assert.ok(turnRowsRead<=(RETENTION_FINALIZE_STEP_ENVELOPE.d1RowsRead??0),`finalizer read envelope exceeded: ${turnRowsRead}`);
+      assert.ok(turnRowsWritten<=(RETENTION_FINALIZE_STEP_ENVELOPE.d1RowsWritten??0),`finalizer write envelope exceeded: ${turnRowsWritten}`);
+    }
+    assert.equal(sawConstantTail,true);
+    assert.equal(await fixture.db.prepare('SELECT 1 FROM retention_cleanup_work WHERE tenant_id=? AND ticket_id=?').bind(tenantId,ticket.id).first(),null);
+    assert.equal(await fixture.db.prepare('SELECT 1 FROM retention_ticket_progress WHERE tenant_id=? AND ticket_id=?').bind(tenantId,ticket.id).first(),null);
+    const gone = await fixture.db.prepare("SELECT count(*) AS n FROM ticket_mutation_receipts WHERE tenant_id=? AND lifecycle='gone'").bind(tenantId).first<{n:number}>();
+    assert.equal(gone?.n,129,'receipt history survives redacted without a ticket-delete trigger fanout');
+    context.diagnostic(JSON.stringify({completedWorkRows:129,historicalReceipts:129,turns,
+      measuredRowsRead:measured.totals.rowsRead,measuredRowsWritten:measured.totals.rowsWritten,maxRowsRead,maxRowsWritten,
+      remainingPerTurn:{d1RowsRead:(RETENTION_FINALIZE_STEP_ENVELOPE.d1RowsRead??0)-maxRowsRead,
+        d1RowsWritten:(RETENTION_FINALIZE_STEP_ENVELOPE.d1RowsWritten??0)-maxRowsWritten}}));
   });
 });
 
@@ -215,9 +433,9 @@ test('workflow source contract: withdrawn/deleted/foreign retries never restore 
       await deps.repositories.knowledge.createDocument({ id: 'shared-document', title: 'Synthetic document', file_path: 'shared-document.md' });
       await deps.attachmentStorage.putAttachment('shared-document.md', `body:${deps.scope.tenantId}`);
       await deps.repositories.knowledge.updateDocument('shared-document', { status: 'published', chunk_count: 1 });
-      await run(deps.scope.tenantId);
+      await deps.vectorStorage.upsert('doc_shared-document_0', [0.25, 0.75], { source_id: 'shared-document', type: 'document', status: 'published' });
     }
-    assert.equal(aiCalls, 2, 'Positive jobs must reach the real embedding service');
+    assert.equal(aiCalls, 0, 'Legacy jobs cannot reach the unbounded embedding path');
     assert.equal(vectors.size, 2);
     assert.equal(new Set([...vectors.values()].map(vector => vector.namespace)).size, 2);
     const bVectors = () => [...vectors.values()].filter(vector => vector.metadata.tenant_id === b);
@@ -225,20 +443,20 @@ test('workflow source contract: withdrawn/deleted/foreign retries never restore 
     const bDocBefore = await depsB.repositories.knowledge.getDocument('shared-document');
     await serviceA.unpublishDocument('shared-document');
     const before = { aiCalls, vectorWrites, r2: fixture.r2.operationCounts() };
-    await run(a);
-    await run(a);
+    await assert.rejects(run(a), /Legacy vector jobs require a durable manifest migration/);
+    await assert.rejects(run(a), /Legacy vector jobs require a durable manifest migration/);
     assert.deepEqual({ aiCalls, vectorWrites, r2: fixture.r2.operationCounts() }, before, 'Withdrawn retries must perform no external work');
     assert.equal((await depsA.repositories.knowledge.getDocument('shared-document'))?.status, 'pending');
     await serviceA.deleteDocument('shared-document');
     await depsB.repositories.knowledge.createDocument({ id: 'b-only-document', title: 'B only', file_path: 'b-only.md' });
     const afterDelete = { aiCalls, vectorWrites, r2: fixture.r2.operationCounts() };
-    await assert.rejects(run(a), /Document not found/);
-    await assert.rejects(run(a, 'b-only-document'), /Document not found/);
+    await assert.rejects(run(a), /Legacy vector jobs require a durable manifest migration/);
+    await assert.rejects(run(a, 'b-only-document'), /Legacy vector jobs require a durable manifest migration/);
     await assert.rejects(run(''), /Scoped workflow identity required/);
     assert.deepEqual({ aiCalls, vectorWrites, r2: fixture.r2.operationCounts() }, afterDelete);
     assert.deepEqual(bVectors(), bBefore);
     assert.deepEqual(await depsB.repositories.knowledge.getDocument('shared-document'), bDocBefore);
-    assert.equal(vectors.size, 1);
+    assert.equal(vectors.size, 2, 'legacy vectors are never synchronously deleted without an admitted durable manifest cleanup');
   });
 });
 
@@ -310,5 +528,41 @@ test('trusted tenant composition enables only bounded local D1 diagnostics', asy
     });
     assert.equal(await production.repositories.articles.get('synthetic-missing-article'), null);
     assert.equal(emitted.length, 1);
+  });
+});
+
+
+test('retention discovery seeks past large historical prefixes', async context => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId=fixture.principals.customerA.tenantId;
+    const scope=createSystemTenantScope({tenantId,actor:'scheduled-retention'});
+    await fixture.db.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<4000)
+      INSERT INTO automation_rules(tenant_id,id,name,event_type,action_type,action_config,is_active)
+      SELECT ?,printf('seek-rule-%05d',x),printf('Seek %05d',x),'scheduled.retention','retention','{}',1 FROM n`).bind(tenantId).run();
+    await fixture.db.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<4000)
+      INSERT INTO tickets(tenant_id,id,subject,customer_email,status,priority,source,updated_at)
+      SELECT ?,printf('seek-ticket-%05d',x),'Seek','seek@example.invalid','closed','normal','web','2000-01-01T00:00:00.000Z' FROM n`).bind(tenantId).run();
+    await fixture.db.prepare(`INSERT INTO ticket_cleanup_claims(tenant_id,ticket_id,token,mode)
+      SELECT tenant_id,id,id,'retention' FROM tickets WHERE tenant_id=? AND id LIKE 'seek-ticket-%'`).bind(tenantId).run();
+    await fixture.db.prepare(`INSERT INTO retention_ticket_progress(tenant_id,ticket_id,claim_token,rule_id,rule_action_config,candidate_updated_at)
+      SELECT tenant_id,ticket_id,token,CASE WHEN ticket_id='seek-ticket-04000' THEN 'seek-rule-04000' ELSE 'seek-rule-00001' END,'{}','2000-01-01T00:00:00.000Z'
+      FROM ticket_cleanup_claims WHERE tenant_id=? AND ticket_id LIKE 'seek-ticket-%'`).bind(tenantId).run();
+    await fixture.db.prepare(`INSERT INTO tickets(tenant_id,id,subject,customer_email,status,priority,source,updated_at)
+      VALUES (?,'seek-later','Later','seek@example.invalid','closed','normal','web','2001-01-01T00:00:00.000Z')`).bind(tenantId).run();
+    const costs:number[]=[];
+    const wrap=(statement:any):any=>new Proxy(statement,{get(target,key){
+      if(key==='bind')return (...values:unknown[])=>wrap(target.bind(...values));
+      if(key==='all')return async()=>{const result=await target.all();costs.push(result.meta.rows_read);return result;};
+      const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+    }});
+    const measured=new Proxy(fixture.db,{get(target,key){if(key==='prepare')return(sql:string)=>wrap(target.prepare(sql));const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});
+    const work=new RetentionAdmissionRepository(measured,scope);
+    assert.deepEqual((await work.nextRules('seek-rule-03998')).map(row=>row.id),['seek-rule-03999','seek-rule-04000']);
+    assert.deepEqual((await work.nextTickets('2020-01-01T00:00:00.000Z',{id:'seek-ticket-03998',updatedAt:'2000-01-01T00:00:00.000Z'})).map(row=>row.id),['seek-ticket-03999','seek-ticket-04000','seek-later']);
+    assert.deepEqual((await work.nextTickets('2020-01-01T00:00:00.000Z',null)).map(row=>row.id),['seek-ticket-00001','seek-ticket-00002','seek-ticket-00003','seek-ticket-00004','seek-ticket-00005','seek-ticket-00006','seek-ticket-00007','seek-ticket-00008']);
+    assert.deepEqual((await work.nextTickets('2020-01-01T00:00:00.000Z',{id:'seek-ticket-04000',updatedAt:'2000-01-01T00:00:00.000Z'})).map(row=>row.id),['seek-later']);
+    assert.deepEqual(await work.resumableTickets('seek-rule-04000'),[{id:'seek-ticket-04000',token:'seek-ticket-04000'}]);
+    context.diagnostic(JSON.stringify({fixture:'retention-discovery-4000-prefixes',rowsRead:costs}));
+    assert.ok(costs.every(cost=>cost<128),'Bounded seeks must not rescan historical prefixes');
   });
 });

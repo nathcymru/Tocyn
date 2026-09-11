@@ -25,7 +25,9 @@ type AuthorityRow = Readonly<{
 
 export type BudgetAuthorityPrincipal =
   | Readonly<{ kind: 'session'; sessionVersion: number }>
-  | Readonly<{ kind: 'api-key'; apiKeyId: string; requiredPermission: string }>;
+  | Readonly<{ kind: 'api-key'; apiKeyId: string; requiredPermission: string }>
+  /** Trusted workflow composition only; never constructed from a request. */
+  | Readonly<{ kind: 'system'; actor: 'vectorize-workflow' | 'scheduled-retention' }>;
 
 export const BUDGET_AUTHORITY_MAX_TENANT_ALLOCATIONS = 128 as const;
 /** Each coherent snapshot statement stops after this sentinel; a matching index bounds its candidate scan. */
@@ -96,6 +98,7 @@ export class BudgetAuthorityRepository {
         && Number.isSafeInteger(membership.session_version) && membership.session_version === scope.authVersion
         && membership.session_version === principal.sessionVersion;
     }
+    if (principal.kind === 'system') return scope.roles.includes('system') && scope.actorId === principal.actor;
     if (!scope.roles.includes('integration') || scope.actorId !== principal.apiKeyId) return false;
     const key = await this.db.prepare(`SELECT permissions FROM api_keys
       WHERE tenant_id=? AND id=? AND is_active=1 LIMIT 1`).bind(scope.tenantId, principal.apiKeyId).first<{ permissions: string }>();

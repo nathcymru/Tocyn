@@ -654,12 +654,13 @@ async function run() {
   // Real local admission preserves the original positive/negative AI isolation checks.
   const now = Date.now();
   const limit = 1_000_000_000_000;
-  const dimensions = ['workerRequests','d1RowsRead','r2ClassBOperations','doRequests','doRowsRead','doRowsWritten','logEvents','aiMicroNeurons','vectorQueriedDimensions'];
+  const dimensions = ['workerRequests','d1RowsRead','r2ClassBOperations','doRequests','doRowsRead','doRowsWritten','logEvents','aiMicroNeurons','vectorQueriedDimensions','d1RowsWritten','d1StorageBytes','workflowExecutions','workflowSteps','workflowStorageBytes','vectorStoredDimensions'];
     const limits = Object.fromEntries(dimensions.map(dimension => [dimension, limit]));
     const owner = { schemaVersion: 1, policyId: 'http-ai-policy', revision: 1, deploymentId: 'http-ai-deployment', mode: 'conservative',
       catalogueVersion: 'synthetic-2026-09-11', maxGrantLifetimeMs: 60_000,
       budgets: dimensions.map(dimension => ({ dimension, limit, allocationId: `ai-${dimension}`, recoveryPercent: 20,
-        provenance: 'owner-allocation', window: { kind: 'interval', id: 'ai-window', startsAt: now - 1, endsAt: now + 60_000 } })), };
+        provenance: 'owner-allocation', window: ['d1StorageBytes','workflowStorageBytes','vectorStoredDimensions'].includes(dimension)
+          ? {kind:'stock',id:'ai-stock'} : { kind: 'interval', id: 'ai-window', startsAt: now - 1, endsAt: now + 60_000 } })), };
   await db.batch([
       db.prepare("INSERT INTO budget_deployment_authority VALUES ('http-ai-deployment',1,'active',?)").bind(now),
       db.prepare(`INSERT INTO budget_owner_policies (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
@@ -1171,7 +1172,51 @@ async function run() {
   if (checkTicketB === null) throw new Error("Retention A accidentally deleted Tenant B old ticket!");
   console.log("SUCCESS: Retention A deletes Tenant A qualifying ticket and leaves Tenant B ticket intact");
 
-  await worker.scheduled({} as any, envMock, {} as any);
+  // The active scheduler retains D1 ownership after an ambiguous provider
+  // acknowledgement. A later bounded turn repeats the idempotent delete; it
+  // never treats the missing acknowledgement as a refund or a completed job.
+  const retryTicket = await reposApiKeyA.tickets.create({ subject: 'Retention retry', customer_email: 'retry@a.test', source: 'test', status: 'open', priority: 'normal' });
+  const retryArticle = await reposApiKeyA.articles.create({ ticket_id: retryTicket.id, sender_type: 'customer', body: 'retry' } as any);
+  await reposApiKeyA.attachments.create({ article_id: retryArticle.id, file_name: 'retry.txt', file_size: 1, content_type: 'text/plain', r2_key: 'retention-retry' } as any);
+  await bucket.put(`tenant-A/retention-retry`, 'synthetic');
+  await db.prepare("UPDATE tickets SET updated_at=? WHERE tenant_id='tenant-A' AND id=?").bind(oldDate,retryTicket.id).run();
+  const retryScope = createSystemTenantScope({ tenantId: 'tenant-A', actor: 'scheduled-retention' });
+  const retryDeps: any = createTenantRequestDeps(retryScope, envMock);
+  const retainedDelete = retryDeps.attachmentStorage.deleteAttachment.bind(retryDeps.attachmentStorage);
+  let ambiguousDeletes = 0;
+  retryDeps.attachmentStorage = { ...retryDeps.attachmentStorage, deleteAttachment: async (key: string) => { ambiguousDeletes++; await retainedDelete(key); if (ambiguousDeletes === 1) throw new Error('synthetic lost R2 delete acknowledgement'); } };
+  const retryService = new TenantAutomationService(retryDeps);
+  await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() });
+  assert.notEqual(await reposApiKeyA.tickets.get(retryTicket.id), null, 'ambiguous R2 acknowledgement retains the ticket claim');
+  assert.equal((await db.prepare("SELECT state,attempts FROM retention_cleanup_work WHERE tenant_id='tenant-A' AND ticket_id=? LIMIT 1").bind(retryTicket.id).first())?.state, 'uncertain');
+  for (let turn = 0; turn < 32 && await reposApiKeyA.tickets.get(retryTicket.id); turn++) await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() + 600_000 + turn });
+  assert.equal(await reposApiKeyA.tickets.get(retryTicket.id), null, 'bounded restart eventually completes the retained R2 delete');
+  assert.equal(ambiguousDeletes, 2, 'the idempotent R2 delete is retried after its missing acknowledgement');
+  console.log('SUCCESS: Retention keeps ambiguous external cleanup owned and resumes it in bounded turns');
+
+  const vectorRetryTicket = await reposApiKeyA.tickets.create({ subject: 'Vector retention retry', customer_email: 'vector-retry@a.test', source: 'test', status: 'open', priority: 'normal' });
+  const vectorRetryArticle = await reposApiKeyA.articles.create({ ticket_id: vectorRetryTicket.id, sender_type: 'customer', body: null, qa_type: 'answer', chunk_count: 1 } as any);
+  await reposApiKeyA.articles.updateQAState(vectorRetryArticle.id, 'answer', 1);
+  await db.prepare("UPDATE tickets SET updated_at=? WHERE tenant_id='tenant-A' AND id=?").bind(oldDate,vectorRetryTicket.id).run();
+  const retainedVectorDelete = retryDeps.vectorStorage.deleteByIds.bind(retryDeps.vectorStorage);
+  let ambiguousVectorDeletes = 0;
+  retryDeps.vectorStorage = { ...retryDeps.vectorStorage, deleteByIds: async (ids: string[]) => { ambiguousVectorDeletes++; await retainedVectorDelete(ids); if (ambiguousVectorDeletes === 1) throw new Error('synthetic lost Vectorize delete acknowledgement'); } };
+  for (let turn = 0; turn < 8 && ambiguousVectorDeletes === 0; turn++) await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() + 1_200_000 + turn });
+  assert.notEqual(await reposApiKeyA.tickets.get(vectorRetryTicket.id), null, 'ambiguous Vectorize acknowledgement retains the ticket claim');
+  for (let turn = 0; turn < 40 && await reposApiKeyA.tickets.get(vectorRetryTicket.id); turn++) await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() + 1_800_000 + turn });
+  assert.equal(await reposApiKeyA.tickets.get(vectorRetryTicket.id), null, 'bounded restart eventually completes the retained Vectorize delete');
+  assert.equal(ambiguousVectorDeletes, 2, 'the idempotent Vectorize delete is retried after its missing acknowledgement');
+  console.log('SUCCESS: Retention keeps ambiguous Vectorize cleanup owned and resumes it in bounded turns');
+
+  // Retention is intentionally one durable external item per cron turn.
+  // Drive local cron continuations to completion rather than restoring the
+  // former unbounded all-ticket cleanup in the scheduler.
+  // External work and relational finalization each use one admitted durable
+  // turn. Drive the local scheduler through every bounded child table rather
+  // than restoring an unbounded final ticket cascade.
+  for (let turn = 0; turn < 40 && await reposApiKeyB.tickets.get(ticketBOld.id); turn++) {
+    await worker.scheduled({} as any, envMock, {} as any);
+  }
   assert.strictEqual(await reposApiKeyB.tickets.get(ticketBOld.id), null, 'Actual scheduled entrypoint must process tenant B');
 
   const { VectorizeWorkflow } = await import('../src/workflows/vectorize.workflow');
@@ -1181,9 +1226,25 @@ async function run() {
   await assert.rejects(() => workflow.run({payload:{action:'create',documentId:'missing'}},step), /Scoped workflow identity/);
   await reposApiKeyA.knowledge.createDocument({id:'workflow-shared',title:'A workflow',file_path:'workflow-a',tier:'answer'});
   await reposApiKeyB.knowledge.createDocument({id:'workflow-shared',title:'B workflow',file_path:'workflow-b',tier:'answer'});
-  await depsA.attachmentStorage.putAttachment('workflow-a','A scoped content');
-  await reposApiKeyA.knowledge.updateDocument('workflow-shared',{status:'published'});
-  await workflow.run({payload:{tenantId:'tenant-A',action:'create',documentId:'workflow-shared'}},step);
+  await assert.rejects(() => workflow.run({payload:{tenantId:'tenant-A',action:'create',documentId:'workflow-shared'}},step), /durable manifest migration/);
+  const { TenantKnowledgeService } = await import('../src/services/tenant-knowledge.service');
+  const { StatelessAiService } = await import('../src/services/ai.service');
+  const pendingWorkflowJobs: any[] = [];
+  const workflowEnv = { ...aiEnv, AI: { run: async () => ({ data: [Array(1024).fill(0.1)] }) },
+    VECTORIZE_WORKFLOW: { create: async ({params}: any) => { pendingWorkflowJobs.push(params); return {id:'synthetic-continuation'}; } } };
+  const workflowDeps = createTenantRequestDeps(scopeA, workflowEnv as any);
+  const sourceService = new TenantKnowledgeService(workflowDeps, new StatelessAiService(workflowEnv.AI as any));
+  await sourceService.updateArticle('workflow-shared','A workflow','A scoped content');
+  const sourceVersion = await sourceService.pendingPreparationVersion('workflow-shared');
+  assert.ok(sourceVersion, 'Source publication must retain durable pending preparation');
+  workflow.env = workflowEnv;
+  pendingWorkflowJobs.push({tenantId:'tenant-A',action:'prepare',documentId:'workflow-shared',version:sourceVersion});
+  let completedJobs = 0;
+  while (pendingWorkflowJobs.length) {
+    assert.ok(++completedJobs <= 4, 'One source must use a finite preparation/index continuation');
+    await workflow.run({payload:pendingWorkflowJobs.shift()},step);
+  }
+  assert.strictEqual((await reposApiKeyA.knowledge.getDocument('workflow-shared'))?.status,'published', 'Actual admitted workflow must complete tenant A source');
   assert.strictEqual((await reposApiKeyB.knowledge.getDocument('workflow-shared'))?.status,'pending');
   console.log('SUCCESS: Scoped workflow rejects missing authority and preserves the other tenant document');
 

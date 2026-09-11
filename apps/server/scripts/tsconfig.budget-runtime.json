@@ -15,6 +15,15 @@
     "support-sla-mutation-receipts.test.ts",
     "ticket-list-admission-runtime.test.ts",
     "configuration-admission-runtime-entry.ts",
-    "configuration-admission-runtime.test.ts"
+    "configuration-admission-runtime.test.ts",
+    "admin-settings-admission-runtime.test.ts",
+    "saved-filter-admission-runtime-entry.ts",
+    "saved-filter-admission-runtime.test.ts",
+    "group-directory-admission-runtime-entry.ts",
+    "group-directory-admission-runtime.test.ts",
+    "operator-workspace-admission-runtime.test.ts",
+    "operator-workspace-admission-runtime-entry.ts",
+    "knowledge-read-admission-runtime-entry.ts",
+    "knowledge-read-admission-runtime.test.ts"
   ]
 }

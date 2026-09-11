@@ -3,7 +3,7 @@ import { VerifiedTenantScope } from '../types/tenant';
 import { createHash } from 'node:crypto';
 
 interface R2Bucket {
-  get(key: string): Promise<any>;
+  get(key: string, options?: any): Promise<any>;
   put(key: string, value: any, options?: any): Promise<any>;
   delete(key: string): Promise<any>;
 }
@@ -24,6 +24,11 @@ export class TenantR2Adapter {
 
   async get(objectId: string) {
     return measureResourceOperation({resource:'r2',operation:'read',execute:() => this.bucket.get(this.getScopedKey(objectId)),emit:this.emit});
+  }
+
+  async getRange(objectId: string, offset: number, length: number) {
+    return measureResourceOperation({ resource: 'r2', operation: 'read',
+      execute: () => this.bucket.get(this.getScopedKey(objectId), { range: { offset, length } }), emit: this.emit });
   }
 
   async put(objectId: string, value: any, options?: any) {
@@ -129,6 +134,11 @@ export class TenantAttachmentStorage {
 
   async getAttachment(objectId: string) {
     return this.r2Adapter.get(objectId);
+  }
+
+  /** A manifest continuation reads only its fixed source window. */
+  async getAttachmentRange(objectId: string, offset: number, length: number) {
+    return this.r2Adapter.getRange(objectId, offset, length);
   }
 
   async putAttachment(objectId: string, value: any, options?: any) {

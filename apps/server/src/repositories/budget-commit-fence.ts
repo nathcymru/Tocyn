@@ -3,9 +3,10 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { VerifiedTenantScope } from '../types/tenant';
 
 /** Actor-independent, exact admitted policy fence, evaluated inside canonical D1 batches. */
-export function budgetCommitConstraint(authority: BudgetCommitAuthority, tenantId: string): { sql: string; values: unknown[] } {
+export function budgetCommitConstraint(authority: BudgetCommitAuthority, tenantId: string,
+  acceptedPurposes: readonly BudgetCommitAuthority['purpose'][] = ['new-work']): { sql: string; values: unknown[] } {
   const s = authority.snapshot;
-  if (authority.purpose !== 'new-work' || s.tenant_id !== tenantId || !Number.isSafeInteger(authority.expiresAt)) {
+  if (!acceptedPurposes.includes(authority.purpose) || s.tenant_id !== tenantId || !Number.isSafeInteger(authority.expiresAt)) {
     return { sql: '0', values: [] };
   }
   return { sql: `EXISTS (SELECT 1 FROM budget_tenant_allocations a
@@ -28,18 +29,25 @@ function grantLink(authority: BudgetCommitAuthority): { sql: string; values: unk
     || !identity(grant.operationId) || !identity(grant.operationFingerprint)) return { sql: '0', values: [] };
   return { sql: `?=? AND ?=? AND ?=?`, values: [grant.operationId,authority.operationId,grant.operationFingerprint,authority.operationFingerprint,grant.tenantId,authority.snapshot.tenant_id] };
 }
-/** Current API credential and exact admission are checked in the same D1 transaction. */
-export function apiBudgetMutationStatements(db: D1Database, scope: VerifiedTenantScope, commit: ApiMutationCommit): readonly D1PreparedStatement[] {
-  const budget = budgetCommitConstraint(commit.authority,scope.tenantId);
-  const link = grantLink(commit.authority), grant = commit.authority.grant;
-  const valid = scope.actorId === commit.apiKeyId && scope.roles.includes('integration');
-  const assertion = db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
-    VALUES (?,CASE WHEN ?=1 AND ${budget.sql} AND EXISTS (SELECT 1 FROM api_keys
-      WHERE tenant_id=? AND id=? AND is_active=1 AND instr(','||replace(permissions,' ','')||',',',tickets:write,')>0)
-      THEN 1 ELSE 0 END) ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
-    .bind(scope.tenantId,valid ? 1 : 0,...budget.values,scope.tenantId,commit.apiKeyId);
-  // The closure predicate is evaluated in this canonical batch: after a
-  // holder is sealed, no delayed operation can acquire durable evidence.
+
+/** Read-only continuation constraint for an operation linked by the first
+ * source mutation. It keeps later batches exact without rewriting the link. */
+export function budgetGrantOperationConstraint(scope: VerifiedTenantScope,
+  authority: BudgetCommitAuthority): { sql: string; values: unknown[] } {
+  const link=grantLink(authority),grant=authority.grant;
+  return {sql:`${link.sql} AND NOT EXISTS (SELECT 1 FROM budget_grant_closures
+      WHERE tenant_id=? AND reservation_id=? AND holder_id=?) AND EXISTS (SELECT 1 FROM budget_grant_operations
+      WHERE tenant_id=? AND reservation_id=? AND holder_id=? AND operation_id=? AND aggregate_id=?
+        AND operation_fingerprint=? AND operation_envelope_json=?)`,
+    values:[...link.values,scope.tenantId,grant?.reservationId ?? '',grant?.holderId ?? '',scope.tenantId,
+      grant?.reservationId ?? '',grant?.holderId ?? '',grant?.operationId ?? '',grant?.aggregateId ?? '',
+      grant?.operationFingerprint ?? '',JSON.stringify(grant?.operationEnvelope ?? {})]};
+}
+/** Links the exact locally-spent operation to durable closure evidence. The
+ * caller must place a current-principal/policy assertion before these rows. */
+export function budgetGrantOperationStatements(db: D1Database, scope: VerifiedTenantScope,
+  authority: BudgetCommitAuthority): readonly D1PreparedStatement[] {
+  const link = grantLink(authority), grant = authority.grant;
   const operation = db.prepare(`INSERT INTO budget_grant_operations
     (tenant_id,reservation_id,holder_id,operation_id,aggregate_id,operation_fingerprint,operation_envelope_json)
     SELECT ?,?,?,?,?,?,? WHERE ${link.sql} AND NOT EXISTS (SELECT 1 FROM budget_grant_closures
@@ -56,5 +64,16 @@ export function apiBudgetMutationStatements(db: D1Database, scope: VerifiedTenan
         AND operation_fingerprint=? AND operation_envelope_json=?) THEN 1 ELSE 0 END WHERE tenant_id=?`)
     .bind(scope.tenantId,grant?.reservationId ?? '',grant?.holderId ?? '',scope.tenantId,grant?.reservationId ?? '',grant?.holderId ?? '',grant?.operationId ?? '',grant?.aggregateId ?? '',
       grant?.operationFingerprint ?? '',JSON.stringify(grant?.operationEnvelope ?? {}),scope.tenantId);
-  return [assertion,operation,exact];
+  return [operation,exact];
+}
+/** Current API credential and exact admission are checked in the same D1 transaction. */
+export function apiBudgetMutationStatements(db: D1Database, scope: VerifiedTenantScope, commit: ApiMutationCommit): readonly D1PreparedStatement[] {
+  const budget = budgetCommitConstraint(commit.authority,scope.tenantId);
+  const valid = scope.actorId === commit.apiKeyId && scope.roles.includes('integration');
+  const assertion = db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+    VALUES (?,CASE WHEN ?=1 AND ${budget.sql} AND EXISTS (SELECT 1 FROM api_keys
+      WHERE tenant_id=? AND id=? AND is_active=1 AND instr(','||replace(permissions,' ','')||',',',tickets:write,')>0)
+      THEN 1 ELSE 0 END) ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
+    .bind(scope.tenantId,valid ? 1 : 0,...budget.values,scope.tenantId,commit.apiKeyId);
+  return [assertion,...budgetGrantOperationStatements(db,scope,commit.authority)];
 }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import permissions from "../permissions.handler";
 import { AuthService } from "../../services/auth/auth.service";
+import { CAPABILITY_CATALOG } from '../../auth/capability-policy';
 
 const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
 
@@ -74,6 +75,18 @@ describe("permissions handler", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(expect.objectContaining({ revision: 5, sessionsRevoked: true }));
     expect(db.batch).toHaveBeenCalledOnce();
+  });
+
+  it('keeps every currently delegable legacy capability admissible under the bounded policy count', async () => {
+    const db = permissionDb();
+    const policies = Object.fromEntries(CAPABILITY_CATALOG.filter(capability => capability.legacyKey)
+      .map(capability => [capability.legacyKey!, true]));
+    const response = await permissions.request('/', {
+      method: 'PUT', headers: { Authorization: `Bearer ${await token('admin')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revision: 4, policies }),
+    }, { DB: db as any, JWT_SECRET });
+    expect(response.status).toBe(200);
+    expect(Object.keys(policies)).toHaveLength(CAPABILITY_CATALOG.filter(capability => capability.legacyKey).length);
   });
 
   it("rejects stale policy writes before changing delegation", async () => {
