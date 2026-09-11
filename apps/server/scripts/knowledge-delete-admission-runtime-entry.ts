@@ -8,7 +8,7 @@ import {TenantKnowledgeService} from '../src/services/tenant-knowledge.service';
 import {StatelessAiService} from '../src/services/ai.service';
 
 let beforeRevoke:'session'|'policy'|undefined,beforeEffect:'closure'|undefined,failR2Once=false,failVectorOnce=false,wrapped:any;
-let r2Deletes=0,vectorDeleteCalls=0,vectorIds=0,d1Reads=0,d1Writes=0;
+let r2Deletes=0,vectorDeleteCalls=0,vectorIds=0,d1Reads=0,d1Writes=0,meterActive=false;
 const vector={upsert:async()=>undefined,query:async()=>({matches:[]}),deleteByIds:async(ids:string[])=>{
   vectorDeleteCalls++;vectorIds+=ids.length;if(failVectorOnce){failVectorOnce=false;throw new Error('synthetic lost vector response');}
 }};
@@ -24,11 +24,12 @@ function instrumentDb(db:any){if(wrapped)return wrapped;const statements=new Wea
   const wrap=(raw:any,sql:string):any=>{const proxy=new Proxy(raw,{get(target,key){if(key==='bind')return(...values:any[])=>wrap(target.bind(...values),sql);
     if(key==='first')return async(...args:any[])=>{if(beforeEffect&&sql.includes('AND authority_revision=? AND recovery_reservation=?')){
       beforeEffect=undefined;await closeLatestGrant(db);}return target.first(...args);};
+    if(key==='run')return async(...args:any[])=>{const result=await target.run(...args);if(meterActive){d1Reads+=result.meta?.rows_read??0;d1Writes+=result.meta?.rows_written??0;}return result;};
     const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});statements.set(proxy,{raw,sql});return proxy;};
   wrapped=new Proxy(db,{get(target,key){if(key==='prepare')return(sql:string)=>wrap(target.prepare(sql),sql);if(key==='batch')return async(items:any[])=>{
     const deletion=items.some(item=>statements.get(item)?.sql.includes('knowledge_delete_jobs'));
     if(deletion&&beforeRevoke){const action=beforeRevoke;beforeRevoke=undefined;await mutate(target,action);}
-    const results=await target.batch(items.map(item=>statements.get(item)?.raw??item));if(deletion){
+    const results=await target.batch(items.map(item=>statements.get(item)?.raw??item));if(meterActive){
       d1Reads+=results.reduce((sum:number,result:any)=>sum+(result.meta?.rows_read??0),0);
       d1Writes+=results.reduce((sum:number,result:any)=>sum+(result.meta?.rows_written??0),0);}
     return results;};const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});return wrapped;}
@@ -47,9 +48,9 @@ export default {async fetch(request:Request,env:any,ctx:ExecutionContext){const 
   if(url.pathname==='/__knowledge-delete-step'){
     const body=await request.json() as {tenantId:string;documentId:string;deleteToken:string;purpose:'new-work'|'recovery'};
     const scope=createSystemTenantScope({tenantId:body.tenantId,actor:'knowledge-delete'}),deps=createTenantRequestDeps(scope,{...env,DB:db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:vector});
-    const outcome=await new TenantKnowledgeService(deps,new StatelessAiService(env.AI,deps.emitResourceOperation)).runKnowledgeDeleteStep({env:{...env,DB:db,
+    meterActive=true;try{const outcome=await new TenantKnowledgeService(deps,new StatelessAiService(env.AI,deps.emitResourceOperation)).runKnowledgeDeleteStep({env:{...env,DB:db,
       ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:vector},documentId:body.documentId,deleteToken:body.deleteToken,purpose:body.purpose});
-    return Response.json({outcome});
+      return Response.json({outcome});}finally{meterActive=false;}
   }
-  return app.fetch(request,{...env,DB:db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:vector},ctx);
+  meterActive=true;try{return await app.fetch(request,{...env,DB:db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:vector},ctx);}finally{meterActive=false;}
 }};

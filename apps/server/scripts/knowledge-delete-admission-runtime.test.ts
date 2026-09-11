@@ -6,6 +6,7 @@ import {build} from 'esbuild';
 import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import {SignJWT} from 'jose';
 import {splitSql} from './split-sql';
+import {KNOWLEDGE_DELETE_HTTP_ENVELOPE,KNOWLEDGE_DELETE_STEP_ENVELOPE} from '../src/budgets/knowledge-delete-admission.service';
 
 const root=resolve(import.meta.dirname,'..'),now=Math.floor(Date.now()/1000)*1000,secret='synthetic-knowledge-delete-secret-32-chars';
 const dimensions=['workerRequests','d1RowsRead','d1RowsWritten','r2StorageBytes','r2ClassAOperations','r2ClassBOperations','workflowExecutions',
@@ -47,9 +48,12 @@ async function step(f:Awaited<ReturnType<typeof fixture>>,documentId:string,toke
 async function doc(db:any,tenant:string,id:string,path:string,status='published',chunks=0){await db.prepare(`INSERT INTO knowledge_docs
   (tenant_id,id,title,file_path,status,chunk_count,tier) VALUES (?,?,?, ?,?,?,'answer')`).bind(tenant,id,`${tenant} title`,path,status,chunks).run();}
 
-test('admitted DELETE preserves success/missing/isolation and current authority fencing',async()=>{const f=await fixture();try{
+test('admitted DELETE preserves success/missing/isolation and current authority fencing',async t=>{const f=await fixture();try{
   await doc(f.db,'delete-a','shared','knowledge/shared/a');await doc(f.db,'delete-b','shared','knowledge/shared/b');
+  await control(f,{reset:true});
   let response=await remove(f,'delete-a','shared');assert.equal(response.status,200,await response.clone().text());assert.deepEqual(await response.json(),{success:true});
+  const httpMeasured=await control(f);assert.ok(httpMeasured.d1Writes<=(KNOWLEDGE_DELETE_HTTP_ENVELOPE.d1RowsWritten??0));
+  t.diagnostic(`admitted HTTP DELETE observed D1 rows_written=${httpMeasured.d1Writes} within envelope=${KNOWLEDGE_DELETE_HTTP_ENVELOPE.d1RowsWritten}`);
   assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_docs WHERE tenant_id='delete-a' AND id='shared'").first(),null);
   assert.ok(await f.db.prepare("SELECT delete_token FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id='shared'").first());
   assert.ok(await f.db.prepare("SELECT 1 FROM knowledge_docs WHERE tenant_id='delete-b' AND id='shared'").first());
@@ -80,7 +84,10 @@ test('bounded recovery removes document R2/vector/derived artefacts and preserve
   await f.bucket.put('delete-a/article/collision/versions/3','article');
   const response=await remove(f,'delete-a',id);assert.equal(response.status,200,await response.clone().text());
   const job=await f.db.prepare("SELECT delete_token FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first<{delete_token:string}>();assert.ok(job);
-  let turns=0,outcome:'next'|'complete'|'blocked'='next';while(outcome!=='complete'&&turns++<40){outcome=(await step(f,id,job!.delete_token)).outcome;assert.notEqual(outcome,'blocked');}
+  let turns=0,outcome:'next'|'complete'|'blocked'='next',r2Deletes=0,vectorDeleteCalls=0,vectorIds=0,maxD1Writes=0;
+  while(outcome!=='complete'&&turns++<40){await control(f,{reset:true});outcome=(await step(f,id,job!.delete_token)).outcome;assert.notEqual(outcome,'blocked');
+    const turn=await control(f);r2Deletes+=turn.r2Deletes;vectorDeleteCalls+=turn.vectorDeleteCalls;vectorIds+=turn.vectorIds;maxD1Writes=Math.max(maxD1Writes,turn.d1Writes);
+    assert.ok(turn.d1Writes<=(KNOWLEDGE_DELETE_STEP_ENVELOPE.d1RowsWritten??0));}
   assert.equal(outcome,'complete');assert.ok(turns>5&&turns<40);
   for(const path of paths)assert.equal(await f.bucket.get(`delete-a/${path}`),null);assert.ok(await f.bucket.get('delete-a/article/collision/versions/3'));
   assert.equal((await f.db.prepare("SELECT count(*) count FROM knowledge_index_versions WHERE tenant_id='delete-a' AND document_id=? AND source_kind='document'").bind(id).first<{count:number}>())?.count,0);
@@ -88,8 +95,8 @@ test('bounded recovery removes document R2/vector/derived artefacts and preserve
   assert.deepEqual(await f.db.prepare("SELECT source_kind,version FROM knowledge_index_versions WHERE tenant_id='delete-a' AND document_id=?").bind(id).first(),{source_kind:'article',version:3});
   assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id='delete-a' AND document_id=?").bind(id).first(),null);
   assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first(),null);
-  const measured=await control(f);assert.equal(measured.r2Deletes,2);assert.equal(measured.vectorIds,205);assert.equal(measured.vectorDeleteCalls,3);
-  t.diagnostic(`bounded turns=${turns}, R2 deletes=${measured.r2Deletes}, vector batches=${measured.vectorDeleteCalls}, vector ids=${measured.vectorIds}, observed D1 reads=${measured.d1Reads}, writes=${measured.d1Writes}`);
+  assert.equal(r2Deletes,2);assert.equal(vectorIds,205);assert.equal(vectorDeleteCalls,3);
+  t.diagnostic(`bounded turns=${turns}, R2 deletes=${r2Deletes}, vector batches=${vectorDeleteCalls}, vector ids=${vectorIds}, maximum whole-step D1 rows_written=${maxD1Writes}/${KNOWLEDGE_DELETE_STEP_ENVELOPE.d1RowsWritten}`);
 }finally{await f.mf.dispose();}});
 
 test('published legacy source without a trustworthy vector manifest remains owned and never guesses 100 ids',async()=>{const f=await fixture();try{
@@ -125,4 +132,25 @@ test('a lost provider response retains uncertain ownership and a newly charged r
   assert.equal(operationsAfter,operationsBefore+1);
   let outcome:'next'|'complete'|'blocked'='next';for(let turn=0;turn<12&&outcome!=='complete';turn++)outcome=(await step(f,'lost',job!.delete_token)).outcome;
   assert.equal(outcome,'complete');assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id='delete-a' AND document_id='lost'").first(),null);
+}finally{await f.mf.dispose();}});
+
+test('deletion waits for an admitted source lease, then invalidates the stalled producer before cleanup',async()=>{const f=await fixture();try{
+  await doc(f.db,'delete-a','stalled','knowledge/stalled/body/versions/1','pending',0);
+  await f.db.batch([
+    f.db.prepare(`INSERT INTO knowledge_index_versions
+      (tenant_id,document_id,source_kind,version,file_path,tier,state,chunk_count,source_bytes)
+      VALUES ('delete-a','stalled','document',1,'knowledge/stalled/body/versions/1','answer','source_pending',0,12)`),
+    f.db.prepare(`INSERT INTO knowledge_index_jobs
+      (tenant_id,document_id,version,next_chunk_index,state,provider_lease_expires_at)
+      VALUES ('delete-a','stalled',1,0,'source_pending',datetime('now','+5 minutes'))`),
+  ]);
+  assert.equal((await remove(f,'delete-a','stalled')).status,200);const job=await f.db.prepare("SELECT delete_token FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id='stalled'")
+    .first<{delete_token:string}>();assert.ok(job);
+  assert.equal((await step(f,'stalled',job!.delete_token)).outcome,'blocked');assert.equal((await control(f)).r2Deletes,0);
+  assert.deepEqual(await f.db.prepare("SELECT v.state,j.state AS job_state FROM knowledge_index_versions v JOIN knowledge_index_jobs j USING (tenant_id,document_id,version) WHERE v.tenant_id='delete-a' AND v.document_id='stalled'").first(),
+    {state:'withdrawn',job_state:'source_pending'});
+  await f.db.prepare("UPDATE knowledge_index_jobs SET provider_lease_expires_at=datetime('now','-1 second') WHERE tenant_id='delete-a' AND document_id='stalled'").run();
+  let outcome:'next'|'complete'|'blocked'='next';for(let turn=0;turn<15&&outcome!=='complete';turn++)outcome=(await step(f,'stalled',job!.delete_token,'recovery')).outcome;
+  assert.equal(outcome,'complete');assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_index_versions WHERE tenant_id='delete-a' AND document_id='stalled'").first(),null);
+  assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_docs WHERE tenant_id='delete-a' AND id='stalled'").first(),null);
 }finally{await f.mf.dispose();}});
