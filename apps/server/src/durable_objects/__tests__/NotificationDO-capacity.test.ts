@@ -44,9 +44,9 @@ describe('bounded realtime capacity', () => {
   });
   it('reserves full diagnostics for three complete direct fanouts', () => {
     const envelope = estimateDirectNotificationBroadcastEnvelope();
-    expect(envelope).toMatchObject({ doRequests: 3, d1RowsRead: 384, logEvents: 24_579 });
+    expect(envelope).toMatchObject({ doRequests: 3, d1RowsRead: 1_152, logEvents: 49_155 });
     expect(estimateNotificationBroadcastWithCleanupEnvelope()).toMatchObject({
-      doRequests: 771, doRowsWritten: 768, d1RowsRead: 98_688, logEvents: 6_316_803,
+      doRequests: 771, doRowsWritten: 768, d1RowsRead: 99_456, logEvents: 6_341_379,
     });
   });
   it('accounts separately for ticket-authorized advisory typing and its bounded cleanup', () => {

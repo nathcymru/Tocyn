@@ -292,11 +292,28 @@ export class NotificationDO {
 
   /** Current tenant, staff session, ticket and group membership are all required for this advisory signal. */
   private async authorizedForTicket(session: SessionAttachment | null, user: UserAuthResolution, ticketId: string): Promise<boolean> {
-    if (!this.belongsToThisObject(session) || ticketId.length === 0 || ticketId.length > COLLABORATION_MAX_TICKET_ID_LENGTH) return false;
+    if (!this.belongsToThisObject(session) || !this.validTicketId(ticketId)) return false;
     try {
       return await authorizeNotificationTicket(this.env, session.tenantId, user, ticketId);
     } catch { /* A failed current authorization check must never disclose a typing event. */ }
     return false;
+  }
+
+  private validTicketId(ticketId: unknown): ticketId is string {
+    return typeof ticketId === 'string' && ticketId.length > 0 && ticketId.length <= COLLABORATION_MAX_TICKET_ID_LENGTH
+      && !/[\u0000-\u001f\u007f]/.test(ticketId);
+  }
+
+  /** Ticket-bearing canonical events must retain a usable current-ticket
+   * reference. Presence and other advisory messages deliberately have none. */
+  private canonicalTicketId(message: unknown): string | null | undefined {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) return undefined;
+    const event = message as { type?: unknown; payload?: unknown };
+    if (event.type !== 'ticket.created' && event.type !== 'ticket.updated' && event.type !== 'article.created') return undefined;
+    if (!event.payload || typeof event.payload !== 'object' || Array.isArray(event.payload)) return null;
+    const payload = event.payload as Record<string, unknown>;
+    const ticketId = event.type === 'article.created' ? payload.ticket_id : payload.id;
+    return this.validTicketId(ticketId) ? ticketId : null;
   }
 
   /** A small, transient per-socket map preserves ticket-specific throttling without retaining unbounded client keys. */
@@ -361,6 +378,7 @@ export class NotificationDO {
       let body: string;
       let message: unknown;
       try { body = await request.text(); message = JSON.parse(body); } catch { return new Response('Invalid broadcast', { status: 400 }); }
+      if (this.canonicalTicketId(message) === null) return new Response('Invalid broadcast', { status: 400 });
       if (!await this.consumeCanonicalBroadcast(request, body)) return new Response('Broadcast authority unavailable', { status: 503 });
       return await this.broadcast(message, undefined, 'canonical') ? new Response('OK') : this.capacityDenied();
     }
@@ -471,8 +489,14 @@ export class NotificationDO {
   private async deliver(ws: WebSocket, message: unknown, closeInvalid: boolean, source: 'lease' | 'canonical' | 'prepaid'): Promise<boolean> {
     // Cleanup must revalidate, but cannot initiate more closes and recursive offline fanouts.
     // A later ordinary event/alarm still closes invalid sessions. This mode is never client-controlled.
-    if (!await this.active(ws, closeInvalid, source)) return true; // Closed or currently unauthorized recipients cannot receive data.
+    const recipient = await this.activeStaff(ws, closeInvalid, source);
+    if (!recipient) return true; // Closed or currently unauthorized recipients cannot receive data.
     if (ws.readyState !== WebSocket.OPEN) return true;
+    const ticketId = this.canonicalTicketId(message);
+    // A malformed ticket-bearing event has no safe recipient set. This also
+    // protects direct internal calls that do not cross the HTTP parser.
+    if (ticketId === null) return false;
+    if (ticketId !== undefined && !await this.authorizedForTicket(ws.deserializeAttachment() as SessionAttachment | null, recipient, ticketId)) return true;
     try { ws.send(JSON.stringify(message)); return true; }
     catch { return false; } // Caller observes bounded failure; successful recipients may already have received it.
   }
