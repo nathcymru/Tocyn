@@ -15,6 +15,13 @@ const conflict = () => new TicketMutationError(409,'idempotency_conflict','Idemp
 const invalid = () => new TicketMutationError(400,'invalid_mutation','Invalid support-state or SLA mutation');
 async function digest(value: string) { return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))), byte=>byte.toString(16).padStart(2,'0')).join(''); }
 function frozen<T>(value: T): T { return Object.freeze(structuredClone(value)); }
+function omitUndefined(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(omitUndefined);
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).flatMap(([key, item]) => item === undefined ? [] : [[key, omitUndefined(item)] as const]));
+  }
+  return value;
+}
 
 type Attempt = SupportSlaMutationAttempt & { authority?: BudgetCommitAuthority; started: boolean; keyed: boolean };
 
@@ -31,7 +38,7 @@ export class SupportSlaMutationService {
   private async authorize(requirements: Attempt['requirements']) { if (!await this.sessions.authorize(this.credential,requirements,this.now())) throw denied(); }
   async prepare(input: SupportSlaMutationInput, key?: string): Promise<PreparedSupportSlaMutation> {
     if (key !== undefined && !/^[A-Za-z0-9._~-]{1,128}$/.test(key)) throw invalid();
-    const serialized = canonicalMutationJson({ operation: input.operation, ticketId: input.ticketId, payload: input.payload });
+    const serialized = canonicalMutationJson(omitUndefined({ operation: input.operation, ticketId: input.ticketId, payload: input.payload }));
     if (new TextEncoder().encode(serialized).byteLength > 128 * 1024) throw new TicketMutationError(413,'payload_too_large','Payload too large');
     const requirements: { capability?: SupportSlaMutationInput['capability']; ticket?: { id: string; groupId: string | null } } = {
       ...(input.capability ? { capability: input.capability } : {}),
@@ -55,9 +62,15 @@ export class SupportSlaMutationService {
       intent:frozen({operationId:namespace.keyHash,operationFingerprint:payloadHash,workScopeKey:`${input.operation}:${await digest(input.ticketId ?? 'tenant')}`}),started:false,keyed:key!==undefined});
     return prepared;
   }
+  async replay(prepared: PreparedSupportSlaMutation): Promise<SupportSlaMutationOutcome | null> {
+    const attempt=this.attempts.get(prepared); if (!attempt) throw unavailable();
+    await this.authorize(attempt.requirements);
+    return prepared.replay;
+  }
   admissionIntent(prepared: PreparedSupportSlaMutation) { const attempt=this.attempts.get(prepared); if (!attempt || prepared.replay) throw unavailable(); return attempt.intent; }
   async admit(prepared: PreparedSupportSlaMutation) {
     const attempt=this.attempts.get(prepared); if(!attempt) throw unavailable();
+    await this.authorize(attempt.requirements);
     const receipt=await this.receipts.findActive(attempt.namespace);
     if (receipt) { if(receipt.payload_hash!==attempt.namespace.payloadHash) throw conflict(); if(!receipt.response_snapshot) throw unavailable(); return {status:'replayed' as const,outcome:{ status: receipt.response_status, body: JSON.parse(receipt.response_snapshot) } as SupportSlaMutationOutcome}; }
     const result=await this.budget.service.admit({repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:this.budget.business,now:()=>this.now()});
@@ -81,7 +94,10 @@ export class SupportSlaMutationService {
     try { return await execute(proxy); }
     catch (error) {
       await this.authorize(attempt.requirements); const winner=await this.receipts.findActive(attempt.namespace);
-      if (winner?.response_snapshot) return decodeWinner(JSON.parse(winner.response_snapshot));
+      if (winner?.response_snapshot) {
+        if (winner.payload_hash !== attempt.namespace.payloadHash) throw conflict();
+        return decodeWinner(JSON.parse(winner.response_snapshot));
+      }
       throw error;
     }
   }
