@@ -27,3 +27,12 @@ PR203accepted a03683ac49f5db6f269d5179391538ea3d4c960e at14:27:22UTC; exacthead/
 Final local refresh includes accepted203 and knowledge runtime typing correction163ba2c. Combined runtime types and focused finalizer/discovery2/2 pass (logs /private/tmp/tocyn-206-203-{types,native}.log). Knowledge source accounting was separately rechecked with203migration0053: upload/article/QA20writes and failed recovery16 remain within the20 envelope. WikiHome published and byte-verified at0796e16 from accepted203 source.
 
 Current queue: root owns202knowledge82237a9,204workspace2b4554c,205admine976c87,206retention, and saved-filter7ab865c awaiting review/registration/draft. Knowledge-read0057 and groups/directory0058 are active Sol/high workers. Saved-filter worker is complete and idle while root integrates; no duplicate review agents. Fullforecastunchanged; next30-minuteupdate15:38BST.
+
+
+## 15:40 BST integration checkpoint
+
+No owner response or permission is missing. Accepted main remains PR203. Exact-head CI test jobs for PR202 (34610532368), PR204 (34610939026), and PR205 (34610754458) were verified running; their build, lint, typecheck and CodeQL checks have passed. These are pending test results, not accepted candidates.
+
+Root review returned saved-filter pre-admission projection handling to its existing worker for correction and regression evidence. Knowledge-read PR207 (005cd55) is returned to its existing worker to verify combined source-write accounting with migration0057, fresh empty-tenant behavior, and runtime-specific typing on current202. Group/directory worker continues native verification using Node22; a Node26 missing SQLite binding is a failed environment launch, not a passing check. No new agent or review cycle was created. Root retains integration ownership; workers retain only their separate filter, knowledge-read and groups trees.
+
+Next: receive corrected bounded slices; finish exact-head CI acceptance for202/204/205; refresh stacked206/207 after parent acceptance; integrate required native test registrations. Full64 and140 remain open. No forecast/baseline changes or arbitrary progress percentages. The 30-minute owner update was delivered at15:40BST; next due16:10BST.
