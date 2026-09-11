@@ -7,20 +7,20 @@ const payload={sub:'staff-a',tenant_id:'tenant-a',role:'admin',email:'staff@exam
 
 describe('knowledge read admission',()=>{
   it('prices a complete list from maintained population and projected bytes without a row cap',()=>{
-    const envelope=knowledgeReadEnvelope('knowledge.article.list',{documentRows:25_000,projectionBytes:6_400_000,revision:9});
-    expect(envelope).toMatchObject({workerRequests:1,d1RowsRead:79_096});
+    const envelope=knowledgeReadEnvelope('knowledge.article.list',{documentRows:25_000,projectionBytes:6_400_000,revision:9,counterExists:true});
+    expect(envelope).toMatchObject({workerRequests:1,d1RowsRead:79_096,d1RowsWritten:2});
   });
 
   it('reserves one class-B read and the exact immutable source bytes for versioned content',()=>{
     const envelope=knowledgeReadEnvelope('knowledge.article.content',{
       exists:true,filePath:'knowledge/doc/body.md/versions/4',sourceBytes:10*1024*1024,versioned:true,
     });
-    expect(envelope).toMatchObject({workerRequests:1,d1RowsRead:4_096,r2ClassBOperations:1,r2StorageBytes:10*1024*1024});
+    expect(envelope).toMatchObject({workerRequests:1,d1RowsRead:4_096,d1RowsWritten:2,r2ClassBOperations:1,r2StorageBytes:10*1024*1024});
   });
 
   it('rejects unsafe accounting rather than truncating retained history',()=>{
     expect(knowledgeReadEnvelope('knowledge.article.list',{
-      documentRows:Number.MAX_SAFE_INTEGER,projectionBytes:0,revision:1,
+      documentRows:Number.MAX_SAFE_INTEGER,projectionBytes:0,revision:1,counterExists:true,
     })).toBeNull();
   });
 

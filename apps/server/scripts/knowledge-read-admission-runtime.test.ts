@@ -7,6 +7,7 @@ import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import {SignJWT} from 'jose';
 import {splitSql} from './split-sql';
 import {knowledgeReadEnvelope} from '../src/budgets/knowledge-read-admission.service';
+import {isolateWarmReservedEnvelope} from '../src/budgets/isolate-grant-holder';
 
 const root=resolve(import.meta.dirname,'..'),now=Math.floor(Date.now()/1000)*1000;
 const secret='synthetic-knowledge-read-secret-at-least-32-chars';
@@ -48,7 +49,7 @@ async function fixture(){
     const token=async(tenantId:string)=>new SignJWT({tenant_id:tenantId,role:'admin',mfa_verified:true,session_version:1,email:`${tenantId}@example.test`})
       .setProtectedHeader({alg:'HS256'}).setSubject('knowledge-admin').setAudience('app').setIssuedAt(Math.floor(now/1000))
       .setExpirationTime(Math.floor(now/1000)+3600).sign(new TextEncoder().encode(secret));
-    return {mf,db,bucket:await mf.getR2Bucket('ATTACHMENTS_BUCKET'),token};
+    return {mf,db,bucket:await mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket,token};
   }catch(error){await mf.dispose();throw error;}
 }
 
@@ -58,7 +59,7 @@ async function request(f:Awaited<ReturnType<typeof fixture>>,tenantId:string,pat
 async function control(f:Awaited<ReturnType<typeof fixture>>,value?:Record<string,string>){
   const response=await f.mf.dispatchFetch('http://runtime.test/__knowledge-read-control',value
     ?{method:'POST',body:JSON.stringify(value)}:undefined);
-  return response.json() as Promise<{r2Gets:number;r2Bytes:number;knowledgeRowsRead:number;knowledgeBusinessRows:number}>;
+  return response.json() as Promise<{r2Gets:number;r2Bytes:number;knowledgeRowsRead:number;knowledgeRowsWritten:number;knowledgeBusinessRows:number}>;
 }
 async function insertDocument(db:any,tenantId:string,id:string,title:string,filePath=`knowledge/${id}/body.md`){
   await db.prepare(`INSERT INTO knowledge_docs (tenant_id,id,title,file_path,status,tier) VALUES (?,?,?,?,'pending','answer')`)
@@ -75,14 +76,29 @@ test('complete knowledge list and detail retain large tenant history with dynami
     await insertDocument(f.db,'knowledge-b','foreign-only','Foreign');
     const counter=await f.db.prepare(`SELECT document_rows,projection_bytes,revision FROM knowledge_read_scan_counters WHERE tenant_id='knowledge-a'`)
       .first<{document_rows:number;projection_bytes:number;revision:number}>();assert.ok(counter);
-    const envelope=knowledgeReadEnvelope('knowledge.article.list',{documentRows:counter.document_rows,projectionBytes:counter.projection_bytes,revision:counter.revision});
+    const envelope=knowledgeReadEnvelope('knowledge.article.list',{documentRows:counter.document_rows,projectionBytes:counter.projection_bytes,revision:counter.revision,counterExists:true});
     const list=await request(f,'knowledge-a','/articles');assert.equal(list.status,200,await list.clone().text());
     const rows=await list.json() as {id:string}[];assert.equal(rows.length,1_201);assert.equal(rows.filter(row=>row.id==='shared').length,1);
     const measured=await control(f);assert.ok(measured.knowledgeRowsRead>0&&measured.knowledgeRowsRead<=envelope!.d1RowsRead!,
       `${measured.knowledgeRowsRead} <= ${envelope!.d1RowsRead}`);
+    assert.equal(measured.knowledgeRowsWritten,envelope!.d1RowsWritten);
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM budget_grant_operations WHERE tenant_id='knowledge-a'")
+      .first<{count:number}>())?.count,1);
     const detail=await request(f,'knowledge-a','/articles/shared');assert.equal(detail.status,200);assert.equal((await detail.json() as {title:string}).title,'Tenant A');
     assert.equal((await request(f,'knowledge-a','/articles/foreign-only')).status,404);
-    t.diagnostic(`native complete list rows=${rows.length}, D1 rows_read=${measured.knowledgeRowsRead}, admitted=${envelope!.d1RowsRead}`);
+    t.diagnostic(`native complete list rows=${rows.length}, D1 rows_read=${measured.knowledgeRowsRead}, admitted=${envelope!.d1RowsRead}, exact-link rows_written=${measured.knowledgeRowsWritten}`);
+  }finally{await f.mf.dispose();}
+});
+
+test('a newly-created tenant with no knowledge rows retains the empty list response',async()=>{
+  const f=await fixture();try{
+    const counter=await f.db.prepare(`SELECT document_rows,projection_bytes FROM knowledge_read_scan_counters
+      WHERE tenant_id='knowledge-a'`).first<{document_rows:number;projection_bytes:number}>();
+    assert.equal(counter,null);
+    const response=await request(f,'knowledge-a','/articles');
+    assert.equal(response.status,200,await response.clone().text());
+    assert.deepEqual(await response.json(),[]);
+    assert.equal((await control(f)).knowledgeRowsWritten,2);
   }finally{await f.mf.dispose();}
 });
 
@@ -100,7 +116,8 @@ test('versioned and legacy content keep the response contract with conservative 
     await f.bucket.put('knowledge-a/knowledge/legacy/body.md','legacy content');
     const legacy=await request(f,'knowledge-a','/articles/legacy/content');assert.deepEqual(await legacy.json(),{content:'legacy content'});
     const measured=await control(f);assert.equal(measured.r2Gets,2);assert.equal(measured.r2Bytes,source.length+'legacy content'.length);
-    t.diagnostic(`native R2 class-B gets=${measured.r2Gets}, returned source bytes=${measured.r2Bytes}`);
+    assert.equal(measured.knowledgeRowsWritten,4);
+    t.diagnostic(`native R2 class-B gets=${measured.r2Gets}, returned source bytes=${measured.r2Bytes}, exact-link rows_written=${measured.knowledgeRowsWritten}`);
   }finally{await f.mf.dispose();}
 });
 
@@ -110,6 +127,7 @@ for(const action of ['session','policy'] as const)test(`post-reservation ${actio
     const response=await request(f,'knowledge-a','/articles/shared');assert.equal(response.status,503,await response.clone().text());
     assert.deepEqual(await response.json(),{code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'});
     assert.equal((await control(f)).r2Gets,0);
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM budget_grant_operations").first<{count:number}>())?.count,0);
   }finally{await f.mf.dispose();}
 });
 
@@ -124,6 +142,7 @@ test('counter growth and immutable source changes after reservation fail closed 
     await control(f,{beforeRead:'source'});
     assert.equal((await request(f,'knowledge-a','/articles/shared/content')).status,503);
     assert.equal((await control(f)).r2Gets,0);
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM budget_grant_operations").first<{count:number}>())?.count,0);
   }finally{await f.mf.dispose();}
 });
 
@@ -136,6 +155,15 @@ for(const action of ['policy','closure'] as const)test(`${action} authority is c
     await control(f,{afterRead:action});
     assert.equal((await request(f,'knowledge-a','/articles/shared/content')).status,503);
     assert.equal((await control(f)).r2Gets,0);
+    if(action==='closure'){
+      const linked=await f.db.prepare(`SELECT o.operation_id,o.operation_fingerprint,o.operation_envelope_json
+        FROM budget_grant_operations o JOIN budget_grant_closures c
+          ON c.tenant_id=o.tenant_id AND c.reservation_id=o.reservation_id AND c.holder_id=o.holder_id
+        WHERE o.tenant_id='knowledge-a'`).first<{operation_id:string;operation_fingerprint:string;operation_envelope_json:string}>();
+      assert.ok(linked?.operation_id&&linked.operation_fingerprint);
+      assert.deepEqual(JSON.parse(linked.operation_envelope_json),isolateWarmReservedEnvelope(knowledgeReadEnvelope(
+        'knowledge.article.content',{exists:true,filePath:'knowledge/shared/body.md/versions/1',sourceBytes:7,versioned:true})!));
+    }
   }finally{await f.mf.dispose();}
 });
 
@@ -147,5 +175,6 @@ test('exhausted content admission has zero R2 effects',async()=>{
     await f.bucket.put('knowledge-low/knowledge/shared/body.md/versions/1','content');
     assert.equal((await request(f,'knowledge-low','/articles/shared/content')).status,429);
     assert.equal((await control(f)).r2Gets,0);
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM budget_grant_operations").first<{count:number}>())?.count,0);
   }finally{await f.mf.dispose();}
 });

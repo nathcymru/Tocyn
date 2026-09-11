@@ -1,12 +1,12 @@
-import type { D1Database, D1Result } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement, D1Result } from '@cloudflare/workers-types';
 import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import { KNOWLEDGE_SOURCE_MAX_BYTES } from '../budgets/knowledge-source-admission.service';
 import type { SessionBudgetCredential } from './session-budget-authority.repository';
-import { budgetCommitConstraint } from './budget-commit-fence';
+import { budgetCommitConstraint, budgetGrantOperationConstraint } from './budget-commit-fence';
 import type { KnowledgeDoc } from './knowledge.repository';
 import type { VerifiedTenantScope } from '../types/tenant';
 
-export type KnowledgeListSnapshot = Readonly<{ documentRows:number; projectionBytes:number; revision:number }>;
+export type KnowledgeListSnapshot = Readonly<{ documentRows:number; projectionBytes:number; revision:number; counterExists:boolean }>;
 export type KnowledgeContentSnapshot = Readonly<{
   exists:boolean; filePath?:string; sourceBytes:number; versioned:boolean;
 }>;
@@ -33,8 +33,17 @@ export class KnowledgeReadAccountingRepository {
   async listSnapshot():Promise<KnowledgeListSnapshot> {
     const row=await this.db.prepare(`SELECT document_rows,projection_bytes,revision FROM knowledge_read_scan_counters
       WHERE tenant_id=? LIMIT 1`).bind(this.scope.tenantId).first<{document_rows:number;projection_bytes:number;revision:number}>();
-    if(!row||!safeCount(row.document_rows)||!safeCount(row.projection_bytes)||!safeCount(row.revision))throw new KnowledgeReadFenceError('unavailable');
-    return {documentRows:row.document_rows,projectionBytes:row.projection_bytes,revision:row.revision};
+    if(!row){
+      // A tenant created after migration has no counter until its first
+      // document. The primary-key probe is bounded and distinguishes that
+      // valid empty state from missing accounting for retained history.
+      const document=await this.db.prepare(`SELECT 1 FROM knowledge_docs WHERE tenant_id=? LIMIT 1`)
+        .bind(this.scope.tenantId).first();
+      if(document)throw new KnowledgeReadFenceError('unavailable');
+      return {documentRows:0,projectionBytes:0,revision:0,counterExists:false};
+    }
+    if(!safeCount(row.document_rows)||!safeCount(row.projection_bytes)||!safeCount(row.revision))throw new KnowledgeReadFenceError('unavailable');
+    return {documentRows:row.document_rows,projectionBytes:row.projection_bytes,revision:row.revision,counterExists:true};
   }
 
   async contentSnapshot(documentId:string):Promise<KnowledgeContentSnapshot> {
@@ -70,6 +79,19 @@ function currentFenceSql(scope:VerifiedTenantScope,fence:KnowledgeReadFence):{sq
     values:[trusted?1:0,scope.tenantId,scope.actorId,credential.role,credential.sessionVersion,credential.expiresAt,...budget.values,...exact.values]};
 }
 
+function exactOperationInsert(db:D1Database,scope:VerifiedTenantScope,authority:BudgetCommitAuthority,
+  guard:{sql:string;values:unknown[]}):D1PreparedStatement {
+  const grant=authority.grant;
+  return db.prepare(`INSERT INTO budget_grant_operations
+    (tenant_id,reservation_id,holder_id,operation_id,aggregate_id,operation_fingerprint,operation_envelope_json)
+    SELECT ?,?,?,?,?,?,? WHERE ${guard.sql}
+    ON CONFLICT(tenant_id,reservation_id,holder_id,operation_id) DO UPDATE SET operation_id=excluded.operation_id
+      WHERE aggregate_id=excluded.aggregate_id AND operation_fingerprint=excluded.operation_fingerprint
+        AND operation_envelope_json=excluded.operation_envelope_json`)
+    .bind(scope.tenantId,grant?.reservationId??'',grant?.holderId??'',grant?.operationId??'',grant?.aggregateId??'',
+      grant?.operationFingerprint??'',JSON.stringify(grant?.operationEnvelope??{}),...guard.values);
+}
+
 /** Every business read shares one native D1 snapshot with current credential,
  * policy, exact spent operation and dynamic accounting assertions. */
 export class KnowledgeReadRepository {
@@ -78,21 +100,28 @@ export class KnowledgeReadRepository {
   private async read<T>(fence:KnowledgeReadFence,business:{sql:string;values:unknown[];orderBy?:string},extra?:{sql:string;values:unknown[]}):Promise<D1Result<T>> {
     const current=currentFenceSql(this.scope,fence);
     const guard=`${current.sql}${extra?` AND ${extra.sql}`:''}`,guardValues=[...current.values,...(extra?.values??[])];
-    const assertion=this.db.prepare(`SELECT 1 AS admitted /* knowledge-read-fence */ WHERE ${guard} LIMIT 1`).bind(...guardValues);
+    const guarded={sql:guard,values:guardValues},operation=budgetGrantOperationConstraint(this.scope,fence.authority);
+    const insert=exactOperationInsert(this.db,this.scope,fence.authority,guarded);
+    const assertion=this.db.prepare(`SELECT 1 AS admitted /* knowledge-read-fence */ WHERE ${guard} AND ${operation.sql} LIMIT 1`)
+      .bind(...guardValues,...operation.values);
     // The business statement repeats the compact guard. A failed assertion
     // therefore cannot make D1 materialize an unadmitted document result.
-    const statement=this.db.prepare(`${business.sql} AND (${guard})${business.orderBy?` ORDER BY ${business.orderBy}`:''}`)
-      .bind(...business.values,...guardValues);
-    const results=await this.db.batch<T>([assertion,statement]);
-    if(!results[0]?.results?.[0])throw new KnowledgeReadFenceError('authority_changed');
-    return results[1];
+    const statement=this.db.prepare(`${business.sql} AND (${guard}) AND (${operation.sql})${business.orderBy?` ORDER BY ${business.orderBy}`:''}`)
+      .bind(...business.values,...guardValues,...operation.values);
+    const results=await this.db.batch<T>([insert,assertion,statement]);
+    if(!results[1]?.results?.[0])throw new KnowledgeReadFenceError('authority_changed');
+    return results[2];
   }
 
   async list(fence:KnowledgeReadFence):Promise<KnowledgeDoc[]> {
     const snapshot=fence.snapshot as KnowledgeListSnapshot|undefined;
-    if(!snapshot||!safeCount(snapshot.documentRows)||!safeCount(snapshot.projectionBytes)||!safeCount(snapshot.revision))throw new KnowledgeReadFenceError('unavailable');
-    const counter={sql:`EXISTS (SELECT 1 FROM knowledge_read_scan_counters WHERE tenant_id=?
-      AND document_rows<=? AND projection_bytes<=? AND revision>=0)`,values:[this.scope.tenantId,snapshot.documentRows,snapshot.projectionBytes]};
+    if(!snapshot||!safeCount(snapshot.documentRows)||!safeCount(snapshot.projectionBytes)||!safeCount(snapshot.revision)
+      ||typeof snapshot.counterExists!=='boolean')throw new KnowledgeReadFenceError('unavailable');
+    const counter=snapshot.counterExists
+      ? {sql:`EXISTS (SELECT 1 FROM knowledge_read_scan_counters WHERE tenant_id=?
+          AND document_rows<=? AND projection_bytes<=? AND revision>=0)`,values:[this.scope.tenantId,snapshot.documentRows,snapshot.projectionBytes]}
+      : {sql:`NOT EXISTS (SELECT 1 FROM knowledge_read_scan_counters WHERE tenant_id=?)
+          AND NOT EXISTS (SELECT 1 FROM knowledge_docs WHERE tenant_id=? LIMIT 1)`,values:[this.scope.tenantId,this.scope.tenantId]};
     const result=await this.read<KnowledgeDoc>(fence,{sql:`SELECT * FROM knowledge_docs WHERE tenant_id=?`,values:[this.scope.tenantId],orderBy:'created_at DESC'},counter);
     return result.results;
   }

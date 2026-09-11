@@ -33,7 +33,9 @@ export function knowledgeReadEnvelope(operation:KnowledgeReadOperation,snapshot:
   }
   const content=operation==='knowledge.article.content'?(snapshot as KnowledgeContentSnapshot|undefined):undefined;
   if(content&&(!Number.isSafeInteger(content.sourceBytes)||content.sourceBytes<0))return null;
-  return Object.freeze({workerRequests:1,d1RowsRead,
+  // One exact budget_grant_operations row (table plus its primary-key index) is the
+  // durable consumption evidence committed in the same D1 batch as the read.
+  return Object.freeze({workerRequests:1,d1RowsRead,d1RowsWritten:2,
     ...(operation==='knowledge.article.content'?{r2ClassBOperations:1,r2StorageBytes:content?.sourceBytes??0}:{}),
     ...estimateDiagnosticEnvelope({httpRequests:1,canonicalMutationRequests:0})});
 }

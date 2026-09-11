@@ -14,20 +14,30 @@ export const KNOWLEDGE_SOURCE_MAX_BYTES = 10 * 1024 * 1024;
 // The HTTP request stores the source and creates one durable preparation job.
 // Manifest and cleanup rows are admitted in fixed continuation batches.
 // Version, preparation-job and current-document writes each maintain their
-// primary/secondary lookup structures. Twenty covers QA's separately fenced
-// retention claim, source begin/capture batches, exact-operation link and
-// claim release; there is no uncharged external retry.
-const KNOWLEDGE_SOURCE_D1_WRITES = 20;
+// primary/secondary lookup structures. Migration 0057 adds atomic list-counter
+// maintenance to current-document publication. Native whole-attempt evidence is
+// 24 writes for first-document upload, 23 for article update and 21 for QA
+// staging; there is no
+// uncharged external retry.
+const KNOWLEDGE_SOURCE_D1_WRITES = Object.freeze({ document: 24, article: 23, qa: 21 });
 
-export const KNOWLEDGE_SOURCE_WRITE_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({
-  workerRequests: 1, d1RowsRead: 2_560, d1RowsWritten: KNOWLEDGE_SOURCE_D1_WRITES,
+const sourceEnvelopeBase = (d1RowsWritten: number): Readonly<ResourceAmounts> => Object.freeze({
+  workerRequests: 1, d1RowsRead: 2_560, d1RowsWritten,
   r2StorageBytes: KNOWLEDGE_SOURCE_MAX_BYTES, r2ClassAOperations: 1,
   workflowExecutions: 1, workflowSteps: 1, workflowStorageBytes: 1_024,
   ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }),
 });
 
-function sourceEnvelope(sourceBytes: number): Readonly<ResourceAmounts> {
-  return Object.freeze({ ...KNOWLEDGE_SOURCE_WRITE_ENVELOPE, r2StorageBytes: sourceBytes });
+export const KNOWLEDGE_SOURCE_WRITE_ENVELOPES: Readonly<Record<'document'|'article'|'qa',Readonly<ResourceAmounts>>> = Object.freeze({
+  document: sourceEnvelopeBase(KNOWLEDGE_SOURCE_D1_WRITES.document),
+  article: sourceEnvelopeBase(KNOWLEDGE_SOURCE_D1_WRITES.article),
+  qa: sourceEnvelopeBase(KNOWLEDGE_SOURCE_D1_WRITES.qa),
+});
+/** Compatibility export for callers that need the maximum source-write shape. */
+export const KNOWLEDGE_SOURCE_WRITE_ENVELOPE = KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document;
+
+function sourceEnvelope(sourceBytes: number, sourceKind: 'document'|'article'|'qa'): Readonly<ResourceAmounts> {
+  return Object.freeze({ ...KNOWLEDGE_SOURCE_WRITE_ENVELOPES[sourceKind], r2StorageBytes: sourceBytes });
 }
 
 export type KnowledgeSourceCommitFence = Pick<StaffMutationCommit, 'credential'|'requirements'|'authority'>;
@@ -107,7 +117,7 @@ export async function admitKnowledgeSourceWrite(input: {
       sessions: new SessionBudgetAuthorityRepository(deps.database, deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
       scope: deps.scope, credential, requirements: {},
       intent: { operationId: crypto.randomUUID(), operationFingerprint: await fingerprint(['knowledge-source-v1', deps.scope.tenantId, deps.scope.actorId, input.sourceKind, input.sourceBytes]), workScopeKey: 'knowledge.source.write' },
-      business: sourceEnvelope(input.sourceBytes), now: input.now,
+      business: sourceEnvelope(input.sourceBytes,input.sourceKind), now: input.now,
     });
     const authority = outcome.status !== 'rejected' ? outcome.commitAuthority : undefined;
     return (outcome.status === 'spent' || outcome.status === 'idempotent') && authority

@@ -6,7 +6,7 @@ import { app } from '../src/application';
 let beforeRead:'session'|'policy'|'growth'|'source'|undefined;
 let afterRead:'session'|'policy'|'closure'|undefined;
 let wrappedDatabase:any,wrappedNamespace:any;
-let r2Gets=0,r2Bytes=0,knowledgeRowsRead=0,knowledgeBusinessRows=0;
+let r2Gets=0,r2Bytes=0,knowledgeRowsRead=0,knowledgeRowsWritten=0,knowledgeBusinessRows=0;
 const calls={refresh:0,reserve:0};
 let lastGrant:{tenantId:string;reservationId:string;holderId:string;aggregateId:string}|undefined;
 
@@ -37,7 +37,8 @@ function instrumentDatabase(db:any){
       const results=await target.batch(batch.map(statement=>statements.get(statement)?.raw??statement));
       if(knowledge){
         knowledgeRowsRead+=results.reduce((sum:number,result:any)=>sum+(result.meta?.rows_read??0),0);
-        knowledgeBusinessRows+=results[1]?.meta?.rows_read??0;
+        knowledgeRowsWritten+=results.reduce((sum:number,result:any)=>sum+(result.meta?.rows_written??0),0);
+        knowledgeBusinessRows+=results[2]?.meta?.rows_read??0;
         if(afterRead){const action=afterRead;afterRead=undefined;await mutate(target,action);}
       }
       return results;
@@ -68,7 +69,7 @@ export default {async fetch(request:Request,env:any,ctx:ExecutionContext){
       const value=await request.json() as {beforeRead?:typeof beforeRead;afterRead?:typeof afterRead};
       beforeRead=value.beforeRead;afterRead=value.afterRead;
     }
-    return Response.json({r2Gets,r2Bytes,knowledgeRowsRead,knowledgeBusinessRows,calls});
+    return Response.json({r2Gets,r2Bytes,knowledgeRowsRead,knowledgeRowsWritten,knowledgeBusinessRows,calls});
   }
   return app.fetch(request,{...env,DB:instrumentDatabase(env.DB),ATTACHMENTS_BUCKET:instrumentBucket(env.ATTACHMENTS_BUCKET),
     BUDGET_COORDINATOR_DO:instrumentNamespace(env.BUDGET_COORDINATOR_DO)},ctx);
