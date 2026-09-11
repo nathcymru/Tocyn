@@ -130,15 +130,17 @@ export class DashboardSummaryReadRepository{
     }else if(operation==='dashboard.ticket.sla.read'||operation==='dashboard.ticket.sla-batch.read'){
       const s=commit.snapshot as DashboardSlaSnapshot|undefined;
       if(!s||s.kind!=='sla')sql.push('0');
-      else for(const item of s.tickets){
-        sql.push('COALESCE((SELECT pause_rows_upper_bound FROM dashboard_sla_pause_read_counters WHERE tenant_id=? AND ticket_id=?),0)<=?');
-        values.push(this.scope.tenantId,item.ticketId,item.pauseRows);
-        sql.push(`COALESCE((SELECT length(CAST(COALESCE(c.policy_calendar_json,p.calendar_json,'') AS BLOB)) FROM ticket_sla_clocks c
-          LEFT JOIN sla_policies p ON p.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.ticket_id=?),0)<=?`);
-        values.push(this.scope.tenantId,item.ticketId,item.calendarBytes);
-        sql.push(`COALESCE((SELECT length(CAST(COALESCE(u.full_name,'') AS BLOB)) FROM tickets t LEFT JOIN users u
-          ON u.tenant_id=t.tenant_id AND u.id=t.assigned_to WHERE t.tenant_id=? AND t.id=?),0)<=?`);
-        values.push(this.scope.tenantId,item.ticketId,item.handlerBytes);
+      else {
+        // The public batch permits 25 IDs. Keep every current-metadata check in
+        // the one atomic guard without exceeding D1's bound-parameter ceiling.
+        sql.push(`NOT EXISTS (SELECT 1 FROM json_each(?) snapshot WHERE
+          COALESCE((SELECT pause_rows_upper_bound FROM dashboard_sla_pause_read_counters
+            WHERE tenant_id=? AND ticket_id=json_extract(snapshot.value,'$.ticketId')),0)>json_extract(snapshot.value,'$.pauseRows')
+          OR COALESCE((SELECT length(CAST(COALESCE(c.policy_calendar_json,p.calendar_json,'') AS BLOB)) FROM ticket_sla_clocks c
+            LEFT JOIN sla_policies p ON p.tenant_id=c.tenant_id WHERE c.tenant_id=? AND c.ticket_id=json_extract(snapshot.value,'$.ticketId')),0)>json_extract(snapshot.value,'$.calendarBytes')
+          OR COALESCE((SELECT length(CAST(COALESCE(u.full_name,'') AS BLOB)) FROM tickets t LEFT JOIN users u
+            ON u.tenant_id=t.tenant_id AND u.id=t.assigned_to WHERE t.tenant_id=? AND t.id=json_extract(snapshot.value,'$.ticketId')),0)>json_extract(snapshot.value,'$.handlerBytes'))`);
+        values.push(JSON.stringify(s.tickets),this.scope.tenantId,this.scope.tenantId,this.scope.tenantId);
       }
     }else if(commit.snapshot!==undefined)sql.push('0');
     return {sql:sql.join(' AND '),values};
