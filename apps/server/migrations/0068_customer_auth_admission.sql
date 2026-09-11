@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS customer_current_otp_challenges (
   tenant_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
   token_id TEXT NOT NULL,
-  PRIMARY KEY (tenant_id, user_id)
+  PRIMARY KEY (tenant_id, user_id),
+  FOREIGN KEY (tenant_id, user_id) REFERENCES users(tenant_id, id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_current_otp_token
   ON customer_current_otp_challenges(tenant_id, token_id);
