@@ -17,3 +17,7 @@ lookup and compare its returned file span with local source. Do not equate catal
 verification with indexed-revision or query verification. Follow the Graphify skill.
 
 Issue/PR receipts carry current integration and CI evidence. No Copilot review was requested.
+
+## Verified after owner-requested restart
+
+The beta coordinator resumed on 11 September and successfully called hosted list_repositories, graph_stats and a bounded query_graph. Tocyn was queryable and the indexed SHA exactly matched accepted main263479fec24030c957d698eec1aefb855985d7e9. Returned budget-authority.repository.ts lines32–46 were checked against that source revision. This supersedes the earlier session's unverified lookup status. Open feature branches remain newer than this index and require local source checks. Native workers do not automatically inherit the coordinator's connector availability. No paid extraction, provider work or Copilot review was invoked.
