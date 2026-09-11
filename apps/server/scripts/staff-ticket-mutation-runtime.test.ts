@@ -9,7 +9,7 @@ import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { splitSql } from './split-sql';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
-import { TicketMutationReplayRepository, type MutationCandidate } from '../src/repositories/ticket-mutation-replay.repository';
+import { TicketMutationReplayRepository, type MutationCandidate, type StaffReplyPrecondition } from '../src/repositories/ticket-mutation-replay.repository';
 import { staffReplyPreconditionMatches } from '../src/repositories/staff-reply-precondition.repository';
 import { CapabilityPolicyService } from '../src/repositories/capability-policy.repository';
 import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-admission.repository';
@@ -87,10 +87,10 @@ async function fixture() {
       const value=Reflect.get(target,property);return typeof value==='function'?value.bind(target):value;
     }});
     class Canonical extends TicketMutationReplayRepository {
-      override async commitStaff(candidate:MutationCandidate,commit:StaffMutationCommit) {
+      override async commitStaff(candidate:MutationCandidate,commit:StaffMutationCommit,precondition?: StaffReplyPrecondition) {
         canonicalAttempts++;
         const action = beforeCommit;beforeCommit=undefined;if (action) await action();
-        const result = await super.commitStaff(candidate,commit);
+        const result = await super.commitStaff(candidate,commit,precondition);
         if (loseResponse) {loseResponse=false;throw new Error('Synthetic lost committed response');}
         return result;
       }
@@ -442,5 +442,36 @@ test('native stale-reply precondition is tenant-and-actor scoped, ignores metada
     assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), false);
     assert.equal(await staffReplyPreconditionMatches(f.db, f.scope('b'), candidate, precondition), false,
       'A colliding ticket and generation in another tenant cannot satisfy the precondition');
+  } finally { await f.mf.dispose(); }
+});
+
+
+test('staff reply precondition stays in the fingerprint and atomically retains a stale acknowledged draft', async () => {
+  const f = await fixture(); try {
+    const generation = '22222222-2222-4222-8222-222222222222';
+    const input: StaffMutationInput = { operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: {
+      body: 'Acknowledged draft', bodyFormat: 'plain', draft: { generation, revision: 1, baseConversationRevision: 0 },
+    } };
+    await f.db.prepare(`INSERT INTO operator_drafts
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'public','Acknowledged draft','plain','[]',0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`).bind(generation).run();
+    const service = f.service(); const prepared = await service.prepareStaffMutation(input, 'stale-draft');
+    assert.equal((await service.admit(prepared)).status, 'spent');
+    const before = await f.counts();
+    f.before(async () => { await f.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES ('a',?,'ticket',1,'message.reply','customer','customer','authenticated-customer','portal','public','{}')`).bind(crypto.randomUUID()).run(); });
+    await assert.rejects(service.commit(prepared), (error: any) => error.status === 409 && error.code === 'staff_reply_stale');
+    const after = await f.counts();
+    assert.deepEqual({ tickets: after.tickets, articles: after.articles, attachments: after.attachments,
+      receipts: after.staff_ticket_mutation_receipts }, { tickets: before.tickets, articles: before.articles,
+      attachments: before.attachments, receipts: before.staff_ticket_mutation_receipts }, 'Stale replies create no ticket, article, attachment, or receipt side effect');
+    await f.db.prepare("UPDATE operator_drafts SET revision=2,base_conversation_revision=1 WHERE tenant_id='a' AND user_id='staff' AND ticket_id='ticket'").run();
+    const rebased: StaffMutationInput = { ...input, data: { ...input.data, draft: { generation, revision: 2, baseConversationRevision: 1 } } };
+    const winner = await service.prepareStaffMutation(rebased, 'fingerprint');
+    assert.equal((await service.admit(winner)).status, 'spent');
+    await service.commit(winner);
+    await assert.rejects(service.prepareStaffMutation({ ...rebased, data: { ...rebased.data, draft: { generation, revision: 1, baseConversationRevision: 0 } } }, 'fingerprint'),
+      (error: any) => error.status === 409, 'The acknowledged draft reference is part of the idempotency fingerprint');
   } finally { await f.mf.dispose(); }
 });

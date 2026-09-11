@@ -11,7 +11,7 @@ import { articleBodyFormat, type ArticleBodyFormat } from '@luminatick/shared';
 import { SessionBudgetAdmissionService } from '../budgets/session-admission.service';
 import { SessionBudgetAuthorityRepository, type SessionBudgetCredential, type SessionBudgetRequirements } from '../repositories/session-budget-authority.repository';
 import { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
-import { TicketMutationReplayRepository, type MutationCandidate } from '../repositories/ticket-mutation-replay.repository';
+import { TicketMutationReplayRepository, StaffReplyPreconditionConflictError, type MutationCandidate } from '../repositories/ticket-mutation-replay.repository';
 import { StaffTicketMutationRepository } from '../repositories/staff-ticket-mutation.repository';
 import { TicketMutationError, canonicalMutationJson } from './ticket-mutation-replay.service';
 
@@ -19,6 +19,7 @@ const unavailable = () => new TicketMutationError(503,'staff_mutation_unavailabl
 const denied = () => new TicketMutationError(403,'staff_mutation_denied','Ticket mutation is not authorized');
 const invalid = () => new TicketMutationError(400,'invalid_mutation','Invalid ticket mutation');
 const unsupportedFormat = () => new TicketMutationError(400,'unsupported_article_format','Article format is not enabled');
+const staleDraft = () => new TicketMutationError(409,'staff_reply_stale','The saved draft or conversation changed. Review and rebase before sending.');
 // Match the current reply capability and dashboard request contract before
 // admission; Markdown rendering enforces the same character and byte bounds.
 const MAX_ARTICLE_BODY_SIZE = 16_000;
@@ -70,8 +71,11 @@ export class StaffTicketMutationService {
     const attachments = input.data.attachments ?? [];
     if (!Array.isArray(attachments) || attachments.length > 10 || (input.data.is_internal !== undefined && typeof input.data.is_internal !== 'boolean')) throw invalid();
     const seen = new Set<string>();
+    const draft = input.data.draft;
+    if (draft && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(draft.generation)
+      || !Number.isSafeInteger(draft.revision) || draft.revision < 1 || !Number.isSafeInteger(draft.baseConversationRevision) || draft.baseConversationRevision < 0)) throw invalid();
     return { operation: input.operation, ticketId: input.ticketId, data: { body: input.data.body, bodyFormat, is_internal: input.data.is_internal ?? false,
-      attachments: attachments.map(a => {
+      ...(draft ? { draft } : {}), attachments: attachments.map(a => {
         if (!a || typeof a.storageKey !== 'string' || a.storageKey.length > 1024 || !a.storageKey.startsWith(`agent-attachments/${this.credential.actorId}/`)
           || seen.has(a.storageKey) || typeof a.filename !== 'string') throw invalid();
         seen.add(a.storageKey);
@@ -178,12 +182,14 @@ export class StaffTicketMutationService {
     if (attempt.commitStarted) throw unavailable();
     attempt.commitStarted = true;
     try {
-      const raw = await this.canonical.commitStaff(candidate,{ credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace });
+      const raw = await this.canonical.commitStaff(candidate,{ credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace },
+        input.operation === 'dashboard.ticket.reply' && input.data.draft ? { ticketId: candidate.ticketId, ...input.data.draft } : undefined);
       return this.render(raw,input.operation,false,Boolean(attempt.namespace));
-    } catch {
+    } catch (error) {
       await this.authorize(attempt.requirements);
       const winner = attempt.namespace ? await this.receipts.findActive(attempt.namespace) : null;
       if (winner && attempt.namespace) return this.replay(winner,attempt.namespace);
+      if (error instanceof StaffReplyPreconditionConflictError) throw staleDraft();
       throw unavailable();
     }
   }

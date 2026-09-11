@@ -29,6 +29,13 @@ export type AuditedTicketUpdateOutcome = Readonly<{ ticket: Ticket | null; chang
 export class ConversationAuditRepository {
   constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {}
 
+  /** Current full sequence is used only by an explicit, already-authorized draft rebase review. */
+  async currentRevision(ticketId: string): Promise<number> {
+    const row = await this.db.prepare('SELECT COALESCE(MAX(sequence),0) AS revision FROM conversation_events WHERE tenant_id=? AND ticket_id=?')
+      .bind(this.scope.tenantId, ticketId).first<{ revision: number }>();
+    return row?.revision ?? 0;
+  }
+
   async history(ticketId: string, publicOnly: boolean, limit: number, cursor?: string) {
     const visible = publicOnly ? `AND e.visibility='public' AND e.kind IN ('ticket.intake','message.reply')
       AND ((e.kind='ticket.intake' AND e.article_id IS NULL) OR EXISTS

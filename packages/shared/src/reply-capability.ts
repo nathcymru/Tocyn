@@ -29,8 +29,12 @@ export type ReplyModeCapability = Readonly<{
   attachments: typeof REPLY_ATTACHMENT_RULES;
 }>;
 
+/** Advertised only when the current authorized dashboard route enforces it. */
+export type ReplyCollisionCapabilityV1 = Readonly<{ version: 1; protocol: 'draft-precondition-v1'; conversationRevision: number }>;
+
 export type ReplyCapabilityV1 = Readonly<{
   version: 1;
   ticketId: string;
   modes: readonly ReplyModeCapability[];
+  collision?: ReplyCollisionCapabilityV1;
 }>;

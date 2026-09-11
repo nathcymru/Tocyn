@@ -52,6 +52,7 @@ function createController(identity: string | null, ticketId: string | null) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let saving: Promise<void> | null = null;
   let deleting: Promise<CleanupResult> | null = null;
+  let rebasing = false;
   const listeners = new Set<() => void>();
   const path = `/workspace/drafts/${encodeURIComponent(ticketId ?? '')}`;
   const isCurrent = (requestEpoch = epoch) => {
@@ -69,12 +70,12 @@ function createController(identity: string | null, ticketId: string | null) {
   const cancelTimer = () => { if (timer !== null) clearTimeout(timer); timer = null; };
   const schedule = () => {
     cancelTimer();
-    if (!isCurrent() || !known || !dirty || restoring || saving || deleting || state.status === 'conflict' || !withinBounds(state)) return;
+    if (!isCurrent() || !known || !dirty || restoring || saving || deleting || rebasing || state.status === 'conflict' || !withinBounds(state)) return;
     timer = setTimeout(() => { timer = null; void saveNow(); }, debounceMs);
   };
 
   const restore = async () => {
-    if (!isCurrent() || restoring || saving || deleting || state.status === 'conflict') return;
+    if (!isCurrent() || restoring || saving || deleting || rebasing || state.status === 'conflict') return;
     const requestEpoch = epoch;
     restoring = true;
     known = false;
@@ -103,7 +104,7 @@ function createController(identity: string | null, ticketId: string | null) {
     cancelTimer();
     if (!isCurrent()) return Promise.resolve();
     if (saving) return saving;
-    if (!known || !dirty || restoring || deleting || state.status === 'conflict' || !withinBounds(state)) return Promise.resolve();
+    if (!known || !dirty || restoring || deleting || rebasing || state.status === 'conflict' || !withinBounds(state)) return Promise.resolve();
     const requestEpoch = epoch;
     const snapshot = state;
     const submittedEdit = edit;
@@ -144,7 +145,7 @@ function createController(identity: string | null, ticketId: string | null) {
     const requestEpoch = epoch;
     const failed = () => state.status === 'error' || state.status === 'conflict';
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (!isCurrent(requestEpoch) || !known || restoring || deleting || state.status === 'conflict' || !withinBounds(state)) return false;
+      if (!isCurrent(requestEpoch) || !known || restoring || deleting || rebasing || state.status === 'conflict' || !withinBounds(state)) return false;
       if (!dirty && !saving) return true;
       await saveNow();
       if (!isCurrent(requestEpoch) || failed()) return false;
@@ -164,6 +165,36 @@ function createController(identity: string | null, ticketId: string | null) {
       status: blocked ? state.status : withinBounds(next) ? 'unsaved' : 'error',
       error: blocked ? state.error : withinBounds(next) ? null : 'Draft exceeds the server size limit.' });
     schedule();
+  };
+
+  /** Rebase is explicit: the caller supplies a freshly fetched full conversation revision. */
+  const rebase = async (expectedReviewedConversationRevision: number): Promise<boolean> => {
+    if (!isCurrent() || !known || dirty || restoring || saving || deleting || rebasing || !state.version
+      || !Number.isSafeInteger(expectedReviewedConversationRevision) || expectedReviewedConversationRevision < 0) return false;
+    const requestEpoch = epoch, snapshot = state, version = state.version, submittedEdit = edit;
+    rebasing = true;
+    replace({ ...state, status: 'saving', error: null });
+    try {
+      const saved = await dashboardApi.post<StoredDraft>(`${path}/rebase`, {
+        expectedGeneration: version.generation, expectedRevision: version.revision, expectedReviewedConversationRevision,
+      });
+      if (!isCurrent(requestEpoch)) return false;
+      const restored = toStored(saved);
+      // Never replace text edited while the explicit review request was in flight.
+      if (edit !== submittedEdit) {
+        dirty = true;
+        replace({ ...state, version: restored.version, baseConversationRevision: restored.baseConversationRevision,
+          status: withinBounds(state) ? 'unsaved' : 'error', error: withinBounds(state) ? null : 'Draft exceeds the server size limit.' });
+      } else { savedEdit = submittedEdit; dirty = false; replace(restored); }
+      return true;
+    } catch (error) {
+      if (isCurrent(requestEpoch)) {
+        if (denied(error)) clearDenied();
+        else replace({ ...state, status: error instanceof ApiError && error.status === 409 ? 'conflict' : 'error',
+          error: error instanceof ApiError && error.status === 409 ? 'Conversation changed before the draft could be rebased.' : 'Draft rebase failed. The draft is retained.' });
+      }
+      return false;
+    } finally { if (isCurrent(requestEpoch)) { rebasing = false; schedule(); } }
   };
 
   const remove = (requestedVersion?: OperatorDraftVersion): Promise<CleanupResult> => {
@@ -220,7 +251,7 @@ function createController(identity: string | null, ticketId: string | null) {
       return () => { active = false; epoch++; cancelTimer(); };
     },
     setDebounce: (value: number) => { debounceMs = value; },
-    update, saveNow, flushBeforeNavigation,
+    update, saveNow, rebase, flushBeforeNavigation,
     retrySave: () => { void saveNow(); },
     retryRestore: () => { if (!known) void restore(); },
     discard: () => remove(),
@@ -241,5 +272,5 @@ export function useOperatorDraft(ticketId: string | null, options: Readonly<{ de
   const debounceMs = Math.max(100, Math.min(2_000, options.debounceMs ?? 500));
   useLayoutEffect(() => { controller.setDebounce(debounceMs); }, [controller, debounceMs]);
   return { ...state, currentSnapshot: controller.currentSnapshot, update: controller.update, retrySave: controller.retrySave, retryRestore: controller.retryRestore,
-    discard: controller.discard, saveNow: controller.saveNow, flushBeforeNavigation: controller.flushBeforeNavigation, cleanupAfterConfirmedSend: controller.cleanupAfterConfirmedSend };
+    discard: controller.discard, saveNow: controller.saveNow, rebase: controller.rebase, flushBeforeNavigation: controller.flushBeforeNavigation, cleanupAfterConfirmedSend: controller.cleanupAfterConfirmedSend };
 }

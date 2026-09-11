@@ -106,6 +106,7 @@ function TicketDetail({ id }: { id: string }) {
   const qaChanging = useRef(false);
   const [qaPending, setQaPending] = useState(false);
   const submission = useRef(false);
+  const idempotency = useRef<{ intent: string; key: string } | null>(null);
   const changing = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
@@ -423,6 +424,20 @@ function TicketDetail({ id }: { id: string }) {
     } finally { submission.current = false; setIsSubmitting(false); }
   };
 
+  const reviewAndRebaseDraft = async () => {
+    if (submission.current || draft.status !== 'conflict') return;
+    setReplyError(null); setNotice('');
+    try {
+      const result = await replyCapabilities.refetch({ throwOnError: true });
+      const collision = result.data?.collision;
+      if (!collision) { setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.'); return; }
+      if (await draft.rebase(collision.conversationRevision)) {
+        idempotency.current = null;
+        setNotice('Conversation reviewed and draft rebased. Review it, then send manually.');
+      } else setReplyError('The conversation changed again. Your draft is retained; refresh and review before rebasing.');
+    } catch (error) { setReplyError(error instanceof Error ? `${error.message}. Your draft is retained.` : 'Could not review the conversation. Your draft is retained.'); }
+  };
+
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reply.trim() || submission.current || sentDraftVersion) return;
@@ -448,12 +463,21 @@ function TicketDetail({ id }: { id: string }) {
         setReplyError('Draft needs a confirmed save before sending. Retry the draft save, then send again.');
         return;
       }
+      const collision = replyCapabilities.data?.collision;
+      const precondition = collision ? {
+        generation: sendingDraft.version.generation, revision: sendingDraft.version.revision,
+        baseConversationRevision: sendingDraft.baseConversationRevision,
+      } : undefined;
+      const intent = JSON.stringify({ ticketId: id, draft: precondition, mode: sendingDraft.mode, body: sendingDraft.body,
+        bodyFormat: sendingDraft.bodyFormat, attachments: sendingDraft.attachments.map(({ storageKey, filename, size, contentType }) => ({ storageKey, filename, size, contentType })) });
+      if (!idempotency.current || idempotency.current.intent !== intent) idempotency.current = { intent, key: crypto.randomUUID() };
       const article = await dashboardApi.post<{ id?: string }>(`/tickets/${id}/articles`, {
         body: sendingDraft.body,
         body_format: sendingDraft.bodyFormat,
         is_internal: sendingDraft.mode === 'internal',
-        attachments: sendingDraft.attachments
-      });
+        attachments: sendingDraft.attachments,
+        ...(precondition ? { draft: precondition } : {}),
+      }, { headers: { 'Idempotency-Key': idempotency.current.key } });
       if (!article?.id) throw new Error('The reply was not confirmed.');
       stopTyping(id, sendingDraft.baseConversationRevision);
       setSentDraftVersion(sendingDraft.version);
@@ -469,7 +493,9 @@ function TicketDetail({ id }: { id: string }) {
       ]);
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
-        setReplyError(`${error.message}. Your draft is retained. Refresh the conversation before trying again if delivery is uncertain.`);
+        if (error instanceof ApiError && error.status === 409 && replyCapabilities.data?.collision) {
+          setReplyError('The saved draft or conversation changed. Review and rebase before sending; your draft is retained.');
+        } else setReplyError(`${error.message}. Your draft is retained. Refresh the conversation before trying again if delivery is uncertain.`);
       }
     } finally {
       submission.current = false;
@@ -762,6 +788,7 @@ function TicketDetail({ id }: { id: string }) {
               </span>
               <span className="flex items-center gap-3">
                 {draft.status === 'error' && <TocynButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className="underline">Retry draft</TocynButton>}
+                {draft.status === 'conflict' && replyCapabilities.data?.collision && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void reviewAndRebaseDraft()} className="underline">Review and rebase draft</TocynButton>}
                 {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="underline">Discard draft</TocynButton>}
               </span>
             </div>}
