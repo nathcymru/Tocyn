@@ -974,16 +974,22 @@ dashboard.get("/tickets", async (c) => {
     ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
     : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
   try {
+    const viewer: { role: 'agent' | 'admin'; actorId: string } = {
+      role: payload.role === 'agent' ? 'agent' : 'admin', actorId: d.scope.actorId,
+    };
+    const currentCredential: { role: 'agent' | 'admin'; sessionVersion: number; expiresAt: number } = {
+      role: payload.role === 'agent' ? 'agent' : 'admin',
+      sessionVersion: payload.session_version ?? -1, expiresAt: payload.exp,
+    };
     const listOptions = {
       sort: sort.data,
       customerEmail:c.req.query('customer_email'), filterId:c.req.query('filter_id'),
       status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),
       groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:c.req.query('search'),
       page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50),
-      viewer: { role: payload.role === 'agent' ? 'agent' : 'admin', actorId: d.scope.actorId },
+      viewer,
       ...(admission.snapshot ? { scanFence: admission.snapshot } : {}),
-      ...(admission.snapshot ? { currentCredential: { role: payload.role === 'agent' ? 'agent' : 'admin',
-        sessionVersion: payload.session_version ?? -1, expiresAt: payload.exp } } : {}),
+      ...(admission.snapshot ? { currentCredential } : {}),
       ...(queue.data ? { queue: queue.data as TicketQueueKey } : {}),
     };
     if (queue.data) {
