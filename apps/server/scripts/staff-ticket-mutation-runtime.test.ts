@@ -208,7 +208,7 @@ test('optional existing capability and actual grant expiry are fenced inside the
   }finally{await f.mf.dispose();}
 });
 
-test('attachment intent, immutable preparation, deletion redaction, snapshot cap and future format fail closed',async()=>{
+test('attachment intent, immutable preparation, deletion redaction and snapshot cap retain bounded retry then receipt replay',async()=>{
   const f=await fixture();try{
     const s=f.service();const input:StaffMutationInput={operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'Attachment',is_internal:true,attachments:[{storageKey:'agent-attachments/staff/file',filename:'file.txt'}]}};
     const p=await s.prepare(input,'attachment');input.data.body='Mutated';assert.equal((await s.admit(p)).status,'spent');
@@ -218,10 +218,35 @@ test('attachment intent, immutable preparation, deletion redaction, snapshot cap
     await f.db.prepare('DELETE FROM attachments WHERE tenant_id=? AND id=?').bind('a',result.attachments[0].id).run();
     await assert.rejects(s.prepare({...input,data:{...input.data,body:'Attachment'}},'attachment'),(error:any)=>error.status===410);
     const row=await f.db.prepare("SELECT response_snapshot,lifecycle FROM staff_ticket_mutation_receipts WHERE tenant_id='a'").first();assert.deepEqual(row,{response_snapshot:null,lifecycle:'gone'});
-    await assert.rejects(s.prepare({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'Markdown',bodyFormat:'markdown-v1'}},'format'),(error:any)=>error.code==='unsupported_article_format');
     const huge=await s.prepare(reply(),'huge');assert.equal((await s.admit(huge)).status,'spent');
     await f.db.prepare("UPDATE tickets SET custom_fields=? WHERE tenant_id='a' AND id='ticket'").bind('x'.repeat(262144)).run();
     const before=await f.counts();await assert.rejects(s.commit(huge));assert.deepEqual(await f.counts(),before);
+    await f.db.prepare("UPDATE tickets SET custom_fields=NULL WHERE tenant_id='a' AND id='ticket'").run();
+    const retry=await s.prepare(reply(),'huge');assert.equal(retry.replay,null);assert.equal((await s.admit(retry)).status,'idempotent');
+    const committed=await s.commit(retry);assert.equal(committed.replayed,false);
+    const replay=await s.prepare(reply(),'huge');assert.equal(replay.replay?.replayed,true);assert.equal(replay.replay?.article.id,committed.article.id);
+  }finally{await f.mf.dispose();}
+});
+
+test('two tenants persist shared article formats, reject unknown formats, and replay the canonical format without a second batch',async()=>{
+  const f=await fixture();try{
+    const markdownCreate:StaffMutationInput={operation:'dashboard.ticket.create',data:{subject:'Markdown intake',customer_email:'customer-a@example.test',body:'# Markdown intake',bodyFormat:'markdown-v1',group_id:'group'}};
+    const created=await accept(f.service('a'),markdownCreate,'format-create');assert.equal(created.outcome.article.body_format,'markdown-v1');
+    const createdStored=await f.db.prepare("SELECT body_format FROM articles WHERE tenant_id='a' AND id=?").bind(created.outcome.article.id).first();
+    assert.deepEqual(createdStored,{body_format:'markdown-v1'});
+    const markdown:StaffMutationInput={operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'# Markdown',bodyFormat:'markdown-v1'}};
+    const first=await accept(f.service('a'),markdown,'format-key');
+    assert.equal(first.outcome.article.body_format,'markdown-v1');
+    const stored=await f.db.prepare("SELECT body_format FROM articles WHERE tenant_id='a' AND id=?").bind(first.outcome.article.id).first();
+    assert.deepEqual(stored,{body_format:'markdown-v1'});
+    const receipt=await f.db.prepare("SELECT response_snapshot FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND principal_id='staff' AND operation='dashboard.ticket.reply'").first<{response_snapshot:string}>();
+    const snapshot=JSON.parse(receipt!.response_snapshot);assert.equal(snapshot.staffBodyFormat,'markdown-v1');assert.equal(snapshot.article.body_format,'markdown-v1');
+    const batches=f.batches.length;const replay=await f.service('a').prepare(markdown,'format-key');
+    assert.equal(replay.replay?.replayed,true);assert.equal(replay.replay?.article.body_format,'markdown-v1');assert.equal(f.batches.length,batches);
+    await assert.rejects(f.service('a').prepare({...markdown,data:{...markdown.data,bodyFormat:'plain'}},'format-key'),(error:any)=>error.status===409);
+    const plain:StaffMutationInput={operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'Plain',bodyFormat:'plain'}};
+    const other=await accept(f.service('b'),plain,'format-key');assert.equal(other.outcome.article.body_format,'plain');assert.notEqual(other.outcome.article.id,first.outcome.article.id);
+    await assert.rejects(f.service('a').prepare({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'Unknown',bodyFormat:'markdown-v2' as unknown as 'plain'}},'unknown-format'),(error:any)=>error.code==='unsupported_article_format');
   }finally{await f.mf.dispose();}
 });
 

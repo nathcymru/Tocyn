@@ -7,6 +7,7 @@ import type { PreparedStaffMutation, StaffMutationInput, StaffMutationNamespace,
 import type { VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import type { CapabilityWriteFence } from '../auth/capability-policy';
 import type { BudgetCommitAuthority, CanonicalBudgetIntent } from '../budgets/isolate-admission.service';
+import { articleBodyFormat, type ArticleBodyFormat } from '@luminatick/shared';
 import { SessionBudgetAdmissionService } from '../budgets/session-admission.service';
 import { SessionBudgetAuthorityRepository, type SessionBudgetCredential, type SessionBudgetRequirements } from '../repositories/session-budget-authority.repository';
 import { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
@@ -17,6 +18,7 @@ import { TicketMutationError, canonicalMutationJson } from './ticket-mutation-re
 const unavailable = () => new TicketMutationError(503,'staff_mutation_unavailable','Ticket mutation unavailable; retry with the same key');
 const denied = () => new TicketMutationError(403,'staff_mutation_denied','Ticket mutation is not authorized');
 const invalid = () => new TicketMutationError(400,'invalid_mutation','Invalid ticket mutation');
+const unsupportedFormat = () => new TicketMutationError(400,'unsupported_article_format','Article format is not enabled');
 async function digest(text: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))), byte => byte.toString(16).padStart(2,'0')).join('');
 }
@@ -48,7 +50,8 @@ export class StaffTicketMutationService {
   }
   private normalize(input: StaffMutationInput): StaffMutationInput {
     const d = input.data;
-    if (d.bodyFormat !== undefined && d.bodyFormat !== 'plain') throw new TicketMutationError(400,'unsupported_article_format','Article format is not enabled');
+    let bodyFormat: ArticleBodyFormat;
+    try { bodyFormat = articleBodyFormat(d.bodyFormat); } catch { throw unsupportedFormat(); }
     if (typeof d.body !== 'string' || !d.body.trim()) throw invalid();
     if (input.operation === 'dashboard.ticket.create') {
       const data = input.data;
@@ -56,14 +59,14 @@ export class StaffTicketMutationService {
       if (data.status && !['open','pending','resolved','closed'].includes(data.status)) throw invalid();
       if (data.priority && !['low','normal','high','urgent'].includes(data.priority)) throw invalid();
       return { operation: input.operation, data: { subject: data.subject, customer_email: data.customer_email.toLowerCase(), body: data.body,
-        bodyFormat: 'plain', status: data.status ?? 'open', priority: data.priority ?? 'normal', group_id: data.group_id ?? null,
+        bodyFormat, status: data.status ?? 'open', priority: data.priority ?? 'normal', group_id: data.group_id ?? null,
         assigned_to: data.assigned_to ?? null, ...(data.custom_fields == null ? {} : { custom_fields: data.custom_fields }) } };
     }
     if (input.operation !== 'dashboard.ticket.reply' || typeof input.ticketId !== 'string' || !input.ticketId) throw invalid();
     const attachments = input.data.attachments ?? [];
     if (!Array.isArray(attachments) || attachments.length > 10 || (input.data.is_internal !== undefined && typeof input.data.is_internal !== 'boolean')) throw invalid();
     const seen = new Set<string>();
-    return { operation: input.operation, ticketId: input.ticketId, data: { body: input.data.body, bodyFormat: 'plain', is_internal: input.data.is_internal ?? false,
+    return { operation: input.operation, ticketId: input.ticketId, data: { body: input.data.body, bodyFormat, is_internal: input.data.is_internal ?? false,
       attachments: attachments.map(a => {
         if (!a || typeof a.storageKey !== 'string' || a.storageKey.length > 1024 || !a.storageKey.startsWith(`agent-attachments/${this.credential.actorId}/`)
           || seen.has(a.storageKey) || typeof a.filename !== 'string') throw invalid();
@@ -74,10 +77,15 @@ export class StaffTicketMutationService {
       }) } };
   }
   private render(raw: string, operation: StaffMutationInput['operation'], replayed: boolean, keyed: boolean): StaffMutationOutcome {
-    let snapshot: { staffVersion: number; staffBodyFormat: string; ticket: Ticket; article: Article; attachments: Attachment[] };
+    let snapshot: { staffVersion: number; staffBodyFormat?: unknown; ticket: Ticket; article: Article; attachments: Attachment[] };
     try { snapshot = JSON.parse(raw); } catch { throw unavailable(); }
-    if (snapshot.staffVersion !== 1 || snapshot.staffBodyFormat !== 'plain' || !snapshot.ticket?.id || !snapshot.article?.id || !Array.isArray(snapshot.attachments)) throw unavailable();
-    const article = { ...snapshot.article, is_internal: Boolean(snapshot.article.is_internal) };
+    if (snapshot.staffVersion !== 1 || !snapshot.ticket?.id || !snapshot.article?.id || !Array.isArray(snapshot.attachments)) throw unavailable();
+    let bodyFormat: ArticleBodyFormat;
+    try { bodyFormat = articleBodyFormat(snapshot.article.body_format); } catch { throw unavailable(); }
+    // Existing plain receipts remain readable. New snapshots obtain this value
+    // from the just-written canonical article, and must agree with it on replay.
+    if (snapshot.staffBodyFormat !== undefined && snapshot.staffBodyFormat !== bodyFormat) throw unavailable();
+    const article = { ...snapshot.article, body_format: bodyFormat, is_internal: Boolean(snapshot.article.is_internal) };
     const attachments = snapshot.attachments;
     const body = operation.endsWith('.create') ? { ...snapshot.ticket } : { ...article,
       attachments: attachments.map(a => ({ id: a.id, filename: a.file_name, size: a.file_size, contentType: a.content_type, storageKey: a.r2_key })) };
@@ -149,9 +157,9 @@ export class StaffTicketMutationService {
       candidate.ticket = { subject:input.data.subject,customer_email:input.data.customer_email,customer_id:customer?.id ?? null,
         source:'dashboard',status:input.data.status ?? 'open',priority:input.data.priority ?? 'normal',group_id:input.data.group_id,
         assigned_to:input.data.assigned_to,custom_fields:input.data.custom_fields,intake_received_at:now,intake_processed_at:now };
-      candidate.article = { body:input.data.body,sender_type:'customer',sender_id:customer?.id,is_internal:false,intake_source:'dashboard',received_at:now,processed_at:now };
+      candidate.article = { body:input.data.body,body_format:input.data.bodyFormat,sender_type:'customer',sender_id:customer?.id,is_internal:false,intake_source:'dashboard',received_at:now,processed_at:now };
     } else {
-      candidate.article = { body:input.data.body,sender_type:'agent',sender_id:this.credential.actorId,is_internal:input.data.is_internal ?? false,
+      candidate.article = { body:input.data.body,body_format:input.data.bodyFormat,sender_type:'agent',sender_id:this.credential.actorId,is_internal:input.data.is_internal ?? false,
         intake_source:'dashboard',received_at:now,processed_at:now };
       const requested = input.data.attachments ?? [];
       if (verified.length !== requested.length) throw invalid();
