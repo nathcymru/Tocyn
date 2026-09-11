@@ -28,13 +28,22 @@ export class StaffTicketMutationRepository {
     // Preserve dashboard's existing link-to-existing-user behavior; no customer creation.
     return this.db.prepare('SELECT id FROM users WHERE tenant_id=? AND email=? LIMIT 1').bind(this.scope.tenantId,email).first();
   }
-  async eligibleResponsibleOwner(ticketId: string, ownerId: string | null): Promise<boolean> {
-    const row = await this.db.prepare(`SELECT 1 AS eligible FROM tickets t WHERE t.tenant_id=? AND t.id=?
-      AND (? IS NULL OR EXISTS (SELECT 1 FROM users owner WHERE owner.tenant_id=t.tenant_id AND owner.id=?
-        AND owner.role IN ('admin','agent') AND (t.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership
-          WHERE membership.tenant_id=t.tenant_id AND membership.user_id=owner.id AND membership.group_id=t.group_id)))) LIMIT 1`)
-      .bind(this.scope.tenantId,ticketId,ownerId,ownerId).first<{ eligible: number }>();
-    return row?.eligible === 1;
+  async responsibleOwnerAdmission(ticketId: string, ownerId: string | null, capacityOverride: boolean): Promise<'eligible' | 'unavailable' | 'at_capacity' | 'denied'> {
+    const row = await this.db.prepare(`SELECT CASE
+      WHEN NOT EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=?) THEN 'denied'
+      WHEN ? IS NULL THEN 'eligible'
+      WHEN NOT EXISTS (SELECT 1 FROM tickets t JOIN users owner ON owner.tenant_id=t.tenant_id AND owner.id=?
+        WHERE t.tenant_id=? AND t.id=? AND owner.role IN ('admin','agent')
+          AND (t.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership WHERE membership.tenant_id=t.tenant_id AND membership.user_id=owner.id AND membership.group_id=t.group_id))) THEN 'denied'
+      WHEN EXISTS (SELECT 1 FROM operator_routing_profiles p WHERE p.tenant_id=? AND p.user_id=? AND p.is_available=0) THEN 'unavailable'
+      WHEN ?=1 OR NOT EXISTS (SELECT 1 FROM operator_routing_profiles p WHERE p.tenant_id=? AND p.user_id=? AND p.assignment_capacity IS NOT NULL) THEN 'eligible'
+      WHEN (SELECT count(*) FROM tickets active WHERE active.tenant_id=? AND active.assigned_to=? AND active.id<>? AND active.status IN ('open','pending'))
+        < (SELECT assignment_capacity FROM operator_routing_profiles WHERE tenant_id=? AND user_id=?) THEN 'eligible'
+      ELSE 'at_capacity' END AS result`)
+      .bind(this.scope.tenantId,ticketId,ownerId,ownerId,this.scope.tenantId,ticketId,this.scope.tenantId,ownerId,
+        capacityOverride ? 1 : 0,this.scope.tenantId,ownerId,this.scope.tenantId,ownerId,ticketId,this.scope.tenantId,ownerId)
+      .first<{ result: 'eligible' | 'unavailable' | 'at_capacity' | 'denied' }>();
+    return row?.result ?? 'denied';
   }
 }
 
@@ -58,14 +67,20 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
   if (commit.responsibleOwner) {
     const assignment = commit.responsibleOwner;
     // `assigned_to` remains the single canonical responsible-handler field.
-    // A target is current tenant staff and, for a grouped ticket, remains a
-    // current member of that exact group at commit time. This is deliberately
-    // independent of later #137 availability, ceilings, and fairness rules.
+    // Availability and the current-work ceiling are rechecked in this same
+    // D1 batch, so two assignments cannot both consume the final slot.
     sql.push(`EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=?
       AND (? IS NULL OR EXISTS (SELECT 1 FROM users owner WHERE owner.tenant_id=t.tenant_id AND owner.id=?
         AND owner.role IN ('admin','agent') AND (t.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership
           WHERE membership.tenant_id=t.tenant_id AND membership.user_id=owner.id AND membership.group_id=t.group_id)))))`);
     values.push(scope.tenantId,assignment.ticketId,assignment.ownerId,assignment.ownerId);
+    sql.push(`(? IS NULL OR NOT EXISTS (SELECT 1 FROM operator_routing_profiles p WHERE p.tenant_id=? AND p.user_id=? AND p.is_available=0))`);
+    values.push(assignment.ownerId,scope.tenantId,assignment.ownerId);
+    sql.push(`(? IS NULL OR ?=1 OR NOT EXISTS (SELECT 1 FROM operator_routing_profiles p WHERE p.tenant_id=? AND p.user_id=? AND p.assignment_capacity IS NOT NULL)
+      OR (SELECT count(*) FROM tickets active WHERE active.tenant_id=? AND active.assigned_to=? AND active.id<>? AND active.status IN ('open','pending'))
+        < (SELECT assignment_capacity FROM operator_routing_profiles p WHERE p.tenant_id=? AND p.user_id=?))`);
+    values.push(assignment.ownerId,assignment.capacityOverride && c.role === 'admin' ? 1 : 0,scope.tenantId,assignment.ownerId,
+      scope.tenantId,assignment.ownerId,assignment.ticketId,scope.tenantId,assignment.ownerId);
   }
   if (requirement.capability) {
     const f = requirement.capability;

@@ -300,6 +300,11 @@ const updateTicketSchema = z.object({
 const responsibleOwnerSchema = z.object({
   ownerId: z.string().uuid().nullable(),
   expectedOwnerId: z.string().uuid().nullable(),
+  capacityOverride: z.literal(true).optional(),
+}).strict();
+const routingProfileSchema = z.object({
+  available: z.boolean(),
+  assignmentCapacity: z.number().int().min(0).max(500).nullable(),
 }).strict();
 
 const supportStateDefinitionSchema = z.object({
@@ -1240,6 +1245,7 @@ dashboard.patch('/tickets/:id/responsible-owner', requestBounds(1024), async (c)
     const mutation = staffMutationService(c,d,'dashboard.ticket.update');
     const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId:id,data:{
       assigned_to:parsed.data.ownerId, responsibleOwnerAssignment:true, expectedAssignedTo:parsed.data.expectedOwnerId,
+      ...(parsed.data.capacityOverride ? { capacityOverride:true } : {}),
     } },key);
     if (prepared.replay) {
       c.header('Idempotency-Replayed', 'true');
@@ -1255,6 +1261,40 @@ dashboard.patch('/tickets/:id/responsible-owner', requestBounds(1024), async (c)
     const failure = staffMutationFailure(c,error); if (failure) return failure;
     if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard responsible-owner assignment failed');
     return c.json({ error:'Responsible-owner assignment failed' },500);
+  }
+});
+
+/**
+ * PUT /api/operators/:id/routing-profile
+ *
+ * Tenant administrators configure server-side routing facts. Assignment does
+ * not trust a dashboard copy of this profile: it reads this row again inside
+ * the canonical assignment batch.
+ */
+dashboard.put('/operators/:id/routing-profile', roleGuard(['admin']), permissionGuard('general'), requestBounds(1024), async (c) => {
+  try {
+    const parsed = routingProfileSchema.safeParse(await readMutationJson(c));
+    if (!parsed.success) return c.json({ error: 'Invalid routing profile', details: parsed.error.flatten().fieldErrors }, 400);
+    const permissionFailure = await revalidatePermission(c,'general'); if (permissionFailure) return permissionFailure;
+    const d = c.get('tenantDeps') as TenantRequestDeps;
+    const actor = c.get('jwtPayload') as JWTPayload;
+    if (!Number.isSafeInteger(actor.session_version)) return c.json({ error:'Unauthorized' },401);
+    const profile = await d.database.prepare(`INSERT INTO operator_routing_profiles
+      (tenant_id,user_id,is_available,assignment_capacity,updated_at)
+      SELECT ?,?,?,?,CURRENT_TIMESTAMP WHERE EXISTS (SELECT 1 FROM users actor
+        WHERE actor.tenant_id=? AND actor.id=? AND actor.role='admin' AND actor.session_version=? AND actor.mfa_enabled=1)
+        AND EXISTS (SELECT 1 FROM users target WHERE target.tenant_id=? AND target.id=? AND target.role IN ('admin','agent'))
+      ON CONFLICT(tenant_id,user_id) DO UPDATE SET is_available=excluded.is_available,
+        assignment_capacity=excluded.assignment_capacity,updated_at=CURRENT_TIMESTAMP
+      RETURNING is_available,assignment_capacity,updated_at`)
+      .bind(d.scope.tenantId,c.req.param('id'),parsed.data.available ? 1 : 0,parsed.data.assignmentCapacity,
+        d.scope.tenantId,actor.sub,actor.session_version,d.scope.tenantId,c.req.param('id'))
+      .first<{is_available:number;assignment_capacity:number|null;updated_at:string}>();
+    if (!profile) return c.json({ error:'Routing profile update is not authorized' },403);
+    return c.json({ available:profile.is_available === 1, assignmentCapacity:profile.assignment_capacity, updatedAt:profile.updated_at });
+  } catch (error) {
+    if (error instanceof MutationInputError) return c.json({ error:'Invalid routing profile' },400);
+    throw error;
   }
 });
 
