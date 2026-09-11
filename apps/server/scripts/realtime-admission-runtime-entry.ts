@@ -31,7 +31,7 @@ export class RealtimeAdmissionFixture extends NotificationDO {
       const count = body.count, expiresAt = body.expiresAt;
       if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0 || count > 1_024
         || typeof expiresAt !== 'number' || !Number.isSafeInteger(expiresAt)) return new Response('Invalid fixture receipt burst', { status: 400 });
-      await this.state.storage.put('realtime:lease-receipts:v1', Array.from({ length: count }, (_, index) => ({ leaseId: `fixture-receipt-${index}`, expiresAt })));
+      await this.state.storage.put('realtime:lease-receipts:v1', Array.from({ length: count }, (_, index) => [`${index}`.padStart(64, 'f'), expiresAt]));
       return new Response('OK');
     }
     return super.fetch(request);

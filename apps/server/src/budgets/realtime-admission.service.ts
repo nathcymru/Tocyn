@@ -22,6 +22,8 @@ export const MAX_REALTIME_ALARMS_PER_LEASE = 1;
 export const MAX_REALTIME_CLOSE_RECOVERIES_PER_LEASE = 1;
 /** Receipt retention outlives released sockets for one lease interval without blocking routine reconnects. */
 export const MAX_REALTIME_LEASE_RECEIPTS = 1_024;
+/** Matches the existing coordinator's conservative DO SQLite state ceiling. */
+export const MAX_REALTIME_RECEIPT_INDEX_BYTES = 120 * 1_024;
 
 export type RealtimeAdmissionMode = 'disabled' | 'enabled' | 'invalid';
 export type RealtimeLeaseClaim = Readonly<{
@@ -62,7 +64,12 @@ export function realtimeAdmissionMode(env: Env): RealtimeAdmissionMode {
 function hex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
 }
-function validId(value: string): boolean { return value.length > 0 && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value); }
+function validId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value);
+}
+function record(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
 function canonical(claim: RealtimeLeaseClaim): string {
   return JSON.stringify([claim.version, claim.leaseId, claim.tenantId, claim.actorId, claim.role, claim.sessionVersion,
     claim.expiresAt, claim.authorityExpiresAt, claim.authorityRevision, claim.policyId, claim.policyRevision,
@@ -70,6 +77,11 @@ function canonical(claim: RealtimeLeaseClaim): string {
 }
 function canonicalAmounts(amounts: ResourceAmounts): string {
   return JSON.stringify(Object.entries(amounts).sort(([left], [right]) => left.localeCompare(right)));
+}
+function validAmounts(value: unknown): value is ResourceAmounts {
+  const amounts = value as Record<string, unknown>;
+  return record(value) && Object.entries(amounts).every(([dimension, amount]) =>
+    /^[A-Za-z][A-Za-z0-9]*$/.test(dimension) && typeof amount === 'number' && Number.isSafeInteger(amount) && amount >= 0);
 }
 function envelopeCovers(actual: ResourceAmounts, expected: ResourceAmounts): boolean {
   return Object.entries(expected).every(([dimension, value]) =>
@@ -98,6 +110,22 @@ async function signingKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', text.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
+/** Fixed-width receipt keys bound input-controlled IDs before they enter DO storage. */
+export async function realtimeReceiptKey(domain: 'lease' | 'broadcast', ...parts: string[]): Promise<string | null> {
+  if (!parts.length || !parts.every(validId)) return null;
+  try { return hex(await crypto.subtle.digest('SHA-256', text.encode(`tocyn:realtime-receipt:v1:${domain}:${JSON.stringify(parts)}`))); }
+  catch { return null; }
+}
+
+/** Reject packed durable receipt records before a large value reaches SQLite storage. */
+export function realtimeReceiptIndexBytes(value: unknown): number | null {
+  if (!Array.isArray(value)) return null;
+  try {
+    const bytes = text.encode(JSON.stringify(value)).byteLength;
+    return Number.isSafeInteger(bytes) && bytes <= MAX_REALTIME_RECEIPT_INDEX_BYTES ? bytes : null;
+  } catch { return null; }
+}
+
 /** The Worker, not a websocket client, derives this domain-separated forwarding proof. */
 export async function signRealtimeLease(secret: string, claim: RealtimeLeaseClaim): Promise<SignedRealtimeLease | null> {
   if (!secret || !validRealtimeLease(claim, Date.now(), false)) return null;
@@ -107,7 +135,7 @@ export async function signRealtimeLease(secret: string, claim: RealtimeLeaseClai
 
 export async function verifyRealtimeLease(secret: string, claimHeader: string | null, signature: string | null, now: number): Promise<RealtimeLeaseClaim | null> {
   if (!secret || !claimHeader || !signature || !Number.isSafeInteger(now)) return null;
-  let claim: RealtimeLeaseClaim;
+  let claim: unknown;
   try { claim = JSON.parse(claimHeader); } catch { return null; }
   if (!validRealtimeLease(claim, now, true) || !/^[a-f0-9]{64}$/.test(signature)) return null;
   try {
@@ -144,13 +172,15 @@ export function canonicalBroadcastGrantAfterCommit(authority: BudgetCommitAuthor
   });
 }
 
-export function validCanonicalBroadcastGrant(grant: CanonicalBroadcastGrant, now: number): boolean {
-  return !!grant && grant.version === 1 && validId(grant.handoffId) && validId(grant.tenantId)
-    && [grant.operationId, grant.operationFingerprint, grant.reservationId, grant.holderId, grant.aggregateId, grant.policyId].every(validId)
-    && Number.isSafeInteger(grant.expiresAt) && now < grant.expiresAt
-    && [grant.authorityRevision, grant.policyRevision, grant.restrictionRevision].every(value => Number.isSafeInteger(value) && value > 0)
-    && canonicalAmounts(grant.notificationEnvelope) === canonicalAmounts(CANONICAL_BROADCAST_ENVELOPE)
-    && envelopeCovers(grant.operationEnvelope, CANONICAL_BROADCAST_ENVELOPE);
+export function validCanonicalBroadcastGrant(grant: unknown, now: number): grant is CanonicalBroadcastGrant {
+  const candidate = grant as CanonicalBroadcastGrant;
+  if (!record(grant) || candidate.version !== 1 || !validId(candidate.handoffId) || !validId(candidate.tenantId)
+    || ![candidate.operationId, candidate.operationFingerprint, candidate.reservationId, candidate.holderId, candidate.aggregateId, candidate.policyId].every(validId)
+    || !Number.isSafeInteger(candidate.expiresAt) || now >= candidate.expiresAt
+    || ![candidate.authorityRevision, candidate.policyRevision, candidate.restrictionRevision].every(value => Number.isSafeInteger(value) && value > 0)
+    || !validAmounts(candidate.notificationEnvelope) || !validAmounts(candidate.operationEnvelope)) return false;
+  return canonicalAmounts(candidate.notificationEnvelope) === canonicalAmounts(CANONICAL_BROADCAST_ENVELOPE)
+    && envelopeCovers(candidate.operationEnvelope, CANONICAL_BROADCAST_ENVELOPE);
 }
 
 /** BroadcastService signs the immutable wire body, preventing a capability from being repurposed for another event. */
@@ -165,9 +195,10 @@ export async function signCanonicalBroadcastHandoff(secret: string, grant: Canon
 
 export async function verifyCanonicalBroadcastHandoff(secret: string, encoded: string | null, signature: string | null, body: string, now: number): Promise<SignedCanonicalBroadcastHandoff | null> {
   if (!secret || !encoded || !signature || !/^[a-f0-9]{64}$/.test(signature) || !Number.isSafeInteger(now)) return null;
-  let signed: SignedCanonicalBroadcastHandoff;
+  let signed: unknown;
   try { signed = JSON.parse(encoded); } catch { return null; }
-  if (!signed || signed.signature !== signature || !validCanonicalBroadcastGrant(signed.grant, now) || !/^[a-f0-9]{64}$/.test(signed.payloadDigest)) return null;
+  if (!record(signed) || signed.signature !== signature || !validCanonicalBroadcastGrant(signed.grant, now)
+    || typeof signed.payloadDigest !== 'string' || !/^[a-f0-9]{64}$/.test(signed.payloadDigest)) return null;
   try {
     const digest = hex(await crypto.subtle.digest('SHA-256', text.encode(body)));
     if (digest !== signed.payloadDigest) return null;
@@ -178,15 +209,17 @@ export async function verifyCanonicalBroadcastHandoff(secret: string, encoded: s
   } catch { return null; }
 }
 
-export function validRealtimeLease(claim: RealtimeLeaseClaim, now: number, requireCurrent: boolean): boolean {
-  return !!claim && claim.version === 1 && validId(claim.leaseId) && validId(claim.tenantId) && validId(claim.actorId)
-    && (claim.role === 'agent' || claim.role === 'admin') && Number.isSafeInteger(claim.sessionVersion) && claim.sessionVersion >= 0
-    && Number.isSafeInteger(claim.expiresAt) && Number.isSafeInteger(claim.authorityExpiresAt)
-    && Number.isSafeInteger(claim.authorityRevision) && claim.authorityRevision > 0 && validId(claim.policyId)
-    && Number.isSafeInteger(claim.policyRevision) && claim.policyRevision > 0 && Number.isSafeInteger(claim.restrictionRevision) && claim.restrictionRevision > 0
-    && claim.frames === MAX_REALTIME_EVENTS_PER_LEASE && claim.typingEvents === MAX_REALTIME_TYPING_EVENTS_PER_LEASE
-    && claim.presenceEvents === MAX_REALTIME_PRESENCE_EVENTS_PER_LEASE && claim.alarms === MAX_REALTIME_ALARMS_PER_LEASE && claim.cleanups === MAX_REALTIME_CLOSE_RECOVERIES_PER_LEASE
-    && claim.expiresAt <= claim.authorityExpiresAt && (!requireCurrent || now < claim.expiresAt);
+export function validRealtimeLease(claim: unknown, now: number, requireCurrent: boolean): claim is RealtimeLeaseClaim {
+  const candidate = claim as RealtimeLeaseClaim;
+  if (!record(claim)) return false;
+  return candidate.version === 1 && validId(candidate.leaseId) && validId(candidate.tenantId) && validId(candidate.actorId)
+    && (candidate.role === 'agent' || candidate.role === 'admin') && Number.isSafeInteger(candidate.sessionVersion) && candidate.sessionVersion >= 0
+    && Number.isSafeInteger(candidate.expiresAt) && Number.isSafeInteger(candidate.authorityExpiresAt)
+    && Number.isSafeInteger(candidate.authorityRevision) && candidate.authorityRevision > 0 && validId(candidate.policyId)
+    && Number.isSafeInteger(candidate.policyRevision) && candidate.policyRevision > 0 && Number.isSafeInteger(candidate.restrictionRevision) && candidate.restrictionRevision > 0
+    && candidate.frames === MAX_REALTIME_EVENTS_PER_LEASE && candidate.typingEvents === MAX_REALTIME_TYPING_EVENTS_PER_LEASE
+    && candidate.presenceEvents === MAX_REALTIME_PRESENCE_EVENTS_PER_LEASE && candidate.alarms === MAX_REALTIME_ALARMS_PER_LEASE && candidate.cleanups === MAX_REALTIME_CLOSE_RECOVERIES_PER_LEASE
+    && candidate.expiresAt <= candidate.authorityExpiresAt && (!requireCurrent || now < candidate.expiresAt);
 }
 
 /**

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { CANONICAL_BROADCAST_ENVELOPE, MAX_REALTIME_EVENTS_PER_LEASE, MAX_REALTIME_PRESENCE_EVENTS_PER_LEASE, MAX_REALTIME_TYPING_EVENTS_PER_LEASE, realtimeConnectionEnvelope, signCanonicalBroadcastHandoff, signRealtimeLease, type CanonicalBroadcastGrant, type RealtimeLeaseClaim } from '../src/budgets/realtime-admission.service';
+import { CANONICAL_BROADCAST_ENVELOPE, MAX_REALTIME_EVENTS_PER_LEASE, MAX_REALTIME_LEASE_RECEIPTS, MAX_REALTIME_PRESENCE_EVENTS_PER_LEASE, MAX_REALTIME_TYPING_EVENTS_PER_LEASE, realtimeConnectionEnvelope, realtimeReceiptIndexBytes, realtimeReceiptKey, signCanonicalBroadcastHandoff, signRealtimeLease, verifyCanonicalBroadcastHandoff, verifyRealtimeLease, type CanonicalBroadcastGrant, type RealtimeLeaseClaim } from '../src/budgets/realtime-admission.service';
 
 const secret = 'synthetic-realtime-lease-secret-at-least-32-characters';
 
@@ -25,6 +25,18 @@ async function lease(tenantId: string, actorId: string, now: number, suffix: str
 test('real D1/DO realtime leases reject forged forwarding, isolate tenants, cap warm frames and fail closed after reconstruction/revocation', async () => {
   const reserved = realtimeConnectionEnvelope();
   assert.ok((reserved.d1RowsRead ?? 0) > 30_000, 'the lifecycle envelope contains every finite callback before admission');
+  const nowForBounds = Date.now();
+  await assert.doesNotReject(async () => {
+    assert.equal(await verifyRealtimeLease(secret, JSON.stringify({ leaseId: null }), '0'.repeat(64), nowForBounds), null);
+    assert.equal(await verifyCanonicalBroadcastHandoff(secret, JSON.stringify({ grant: null, signature: '0'.repeat(64), payloadDigest: '0'.repeat(64) }), '0'.repeat(64), '{}', nowForBounds), null);
+  }, 'decoded malformed claim and handoff shapes fail closed without escaping verification');
+  const maxLeaseKey = await realtimeReceiptKey('lease', 'l'.repeat(160));
+  const maxBroadcastKey = await realtimeReceiptKey('broadcast', 'h'.repeat(160), 'd'.repeat(64));
+  assert.ok(maxLeaseKey && maxBroadcastKey);
+  const maxLeaseReceipts = Array.from({ length: MAX_REALTIME_LEASE_RECEIPTS }, () => [maxLeaseKey, Number.MAX_SAFE_INTEGER]);
+  const maxBroadcastReceipts = Array.from({ length: MAX_REALTIME_LEASE_RECEIPTS }, () => [maxBroadcastKey, Number.MAX_SAFE_INTEGER, 3]);
+  assert.notEqual(realtimeReceiptIndexBytes(maxLeaseReceipts), null, '1,024 maximum-length lease IDs are fixed-width before durable storage');
+  assert.notEqual(realtimeReceiptIndexBytes(maxBroadcastReceipts), null, '1,024 maximum-length handoff IDs remain within the explicit receipt value ceiling');
   const bundle = await build({ entryPoints: ['scripts/realtime-admission-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'realtime-admission-proof', modules: true,
     script: bundle.outputFiles[0].text, compatibilityDate: '2024-04-03', durableObjects: { NOTIFICATION_DO: 'RealtimeAdmissionFixture' },
@@ -34,13 +46,19 @@ test('real D1/DO realtime leases reject forged forwarding, isolate tenants, cap 
     const now = Date.now();
     const db = await mf.getD1Database('DB');
     await db.exec(`CREATE TABLE users (tenant_id TEXT, id TEXT, role TEXT, password_hash TEXT, session_version INTEGER, mfa_enabled INTEGER, email TEXT, full_name TEXT, PRIMARY KEY (tenant_id,id));
-      INSERT INTO users VALUES ('A','alice','agent',NULL,0,1,'alice@example.test','Alice'), ('A','bob','agent',NULL,0,1,'bob@example.test','Bob'), ('B','alice','agent',NULL,0,1,'alice-b@example.test','Alice B');`);
+      INSERT INTO users VALUES ('A','alice','agent',NULL,0,1,'alice@example.test','Alice'), ('A','bob','agent',NULL,0,1,'bob@example.test','Bob'), ('A','carol','agent',NULL,0,1,'carol@example.test','Carol'), ('B','alice','agent',NULL,0,1,'alice-b@example.test','Alice B');`);
     const namespace: any = await mf.getDurableObjectNamespace('NOTIFICATION_DO');
     const [aliceA, bobA, aliceB] = await Promise.all([lease('A', 'alice', now, 'a'), lease('A', 'bob', now, 'b'), lease('B', 'alice', now, 'b-tenant')]);
     const objectA = namespace.get(namespace.idFromName('tenant:A'));
     const objectB = namespace.get(namespace.idFromName('tenant:B'));
     const forged = await objectA.fetch('http://do/connect', { headers: { ...headers(aliceA.claim, aliceA.signature), 'X-Realtime-Lease-Signature': '0'.repeat(64) } });
     assert.equal(forged.status, 401);
+    const concurrentClaim = await lease('A', 'carol', now, 'same-claim');
+    const concurrentConnections = await Promise.all([objectA.fetch('http://do/connect', { headers: headers(concurrentClaim.claim, concurrentClaim.signature) }),
+      objectA.fetch('http://do/connect', { headers: headers(concurrentClaim.claim, concurrentClaim.signature) })]);
+    assert.deepEqual(concurrentConnections.map(response => response.status).sort(), [101, 401], 'the input-gated lease ledger admits one same-claim upgrade');
+    const concurrentWinner = concurrentConnections.find(response => response.status === 101)!;
+    concurrentWinner.webSocket.accept(); clients.push(concurrentWinner.webSocket);
     const connect = async (object: any, signed: { claim: RealtimeLeaseClaim; signature: string }) => {
       const response = await object.fetch('http://do/connect', { headers: headers(signed.claim, signed.signature) });
       assert.equal(response.status, 101); response.webSocket.accept(); clients.push(response.webSocket);
@@ -57,7 +75,7 @@ test('real D1/DO realtime leases reject forged forwarding, isolate tenants, cap 
     await pause(40);
     a.client.send(JSON.stringify({ type: 'unknown', event: 'exhaust' }));
     await until(() => a.closeCode() === 1013);
-    assert.equal((await (await objectA.fetch('http://do/fixture-lease-count')).json() as { leases: number }).leases, 1, 'close cleanup releases its durable lease without a replacement');
+    assert.equal((await (await objectA.fetch('http://do/fixture-lease-count')).json() as { leases: number }).leases, 2, 'close cleanup releases its durable lease without a replacement');
     assert.equal((await objectA.fetch('http://do/connect', { headers: headers(aliceA.claim, aliceA.signature) })).status, 401,
       'a closed but still-current lease receipt cannot be replayed into the freed socket slot');
     const replacement = await lease('A', 'alice', now, 'a-replacement');
@@ -96,8 +114,9 @@ test('real D1/DO realtime leases reject forged forwarding, isolate tenants, cap 
     assert.ok(handoff);
     const canonicalHeaders = { 'Content-Type': 'application/json', 'X-Realtime-Canonical-Handoff': JSON.stringify(handoff), 'X-Realtime-Canonical-Handoff-Signature': handoff.signature };
     assert.equal((await objectA.fetch('http://do/broadcast', { method: 'POST', body })).status, 503, 'client-shaped canonical events have no prepaid authority');
-    assert.equal((await objectA.fetch('http://do/broadcast', { method: 'POST', body, headers: canonicalHeaders })).status, 200);
-    assert.equal((await objectA.fetch('http://do/broadcast', { method: 'POST', body, headers: canonicalHeaders })).status, 200);
+    const concurrentBroadcasts = await Promise.all([objectA.fetch('http://do/broadcast', { method: 'POST', body, headers: canonicalHeaders }),
+      objectA.fetch('http://do/broadcast', { method: 'POST', body, headers: canonicalHeaders })]);
+    assert.deepEqual(concurrentBroadcasts.map(response => response.status).sort(), [200, 200], 'the input-gated handoff ledger retains both bounded lost-ack retries');
     assert.equal((await objectA.fetch('http://do/broadcast', { method: 'POST', body, headers: canonicalHeaders })).status, 200);
     assert.equal((await objectA.fetch('http://do/broadcast', { method: 'POST', body, headers: canonicalHeaders })).status, 503, 'lost-ack retries are bounded to the existing three attempts');
     assert.equal((await objectA.fetch('http://do/broadcast', { method: 'POST', body: JSON.stringify({ type: 'ticket.updated', payload: { id: 'tampered' } }), headers: canonicalHeaders })).status, 503,

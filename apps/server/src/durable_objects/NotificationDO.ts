@@ -3,7 +3,7 @@ import { UserAuthResolver, type UserAuthResolution } from '../auth/user-auth-res
 import { createResourceOperationEmitter } from '../observability/resource-operation';
 import { authorizeNotificationTicket } from '../repositories/notification-ticket-access.repository';
 import { MAX_NOTIFICATION_BROADCAST_ATTEMPTS, MAX_NOTIFICATION_CONNECTIONS } from './notification-limits';
-import { MAX_REALTIME_LEASE_RECEIPTS, realtimeAdmissionMode, verifyCanonicalBroadcastHandoff, verifyRealtimeLease, validRealtimeLease, type RealtimeLeaseClaim } from '../budgets/realtime-admission.service';
+import { MAX_REALTIME_LEASE_RECEIPTS, realtimeAdmissionMode, realtimeReceiptIndexBytes, realtimeReceiptKey, verifyCanonicalBroadcastHandoff, verifyRealtimeLease, validRealtimeLease, type RealtimeLeaseClaim } from '../budgets/realtime-admission.service';
 import {
   COLLABORATION_MAX_ACTOR_ID_LENGTH,
   COLLABORATION_MAX_ACTOR_NAME_LENGTH,
@@ -43,8 +43,9 @@ type LeaseRecord = {
 const LEASE_INDEX_KEY = 'realtime:lease-index:v1';
 const LEASE_RECEIPT_INDEX_KEY = 'realtime:lease-receipts:v1';
 const leaseKey = (leaseId: string) => `realtime:lease:v1:${leaseId}`;
-type LeaseReceipt = { leaseId: string; expiresAt: number };
-type BroadcastReceipt = { handoffId: string; payloadDigest: string; expiresAt: number; attempts: number };
+/** Fixed-order tuples keep 1,024 retained records below the shared 120 KiB state ceiling. */
+type LeaseReceipt = readonly [receiptKey: string, expiresAt: number];
+type BroadcastReceipt = readonly [receiptKey: string, expiresAt: number, attempts: number];
 const BROADCAST_RECEIPTS_KEY = 'realtime:canonical-broadcast-receipts:v1';
 
 /** Revalidate before delivery and every 30s within the supported registry bound; legacy overcapacity denies delivery. */
@@ -69,10 +70,10 @@ export class NotificationDO {
   private async leaseReceipts(): Promise<LeaseReceipt[] | null> {
     const stored = await this.state.storage.get<unknown>(LEASE_RECEIPT_INDEX_KEY);
     if (stored === undefined) return [];
-    if (!Array.isArray(stored) || stored.length > MAX_REALTIME_LEASE_RECEIPTS
-      || !stored.every(value => !!value && typeof value.leaseId === 'string' && value.leaseId.length <= 160
-        && Number.isSafeInteger(value.expiresAt))) return null;
-    return stored.filter(value => value.expiresAt > this.now()) as LeaseReceipt[];
+    if (!Array.isArray(stored) || realtimeReceiptIndexBytes(stored) === null || stored.length > MAX_REALTIME_LEASE_RECEIPTS
+      || !stored.every(value => Array.isArray(value) && value.length === 2 && typeof value[0] === 'string' && /^[a-f0-9]{64}$/.test(value[0])
+        && Number.isSafeInteger(value[1]))) return null;
+    return stored.filter(value => value[1] > this.now()) as LeaseReceipt[];
   }
 
   /** A signed canonical handoff may cross the retry boundary at most three times. */
@@ -81,21 +82,25 @@ export class NotificationDO {
     const handoff = await verifyCanonicalBroadcastHandoff(this.env.JWT_SECRET,
       request.headers.get('X-Realtime-Canonical-Handoff'), request.headers.get('X-Realtime-Canonical-Handoff-Signature'), body, this.now());
     if (!handoff || !this.state.id.equals(this.env.NOTIFICATION_DO.idFromName(`tenant:${handoff.grant.tenantId}`))) return false;
-    const stored = await this.state.storage.get<unknown>(BROADCAST_RECEIPTS_KEY);
-    if (stored !== undefined && (!Array.isArray(stored) || stored.length > MAX_REALTIME_LEASE_RECEIPTS
-      || !stored.every(value => !!value && typeof value.handoffId === 'string' && value.handoffId.length <= 160
-        && typeof value.payloadDigest === 'string' && /^[a-f0-9]{64}$/.test(value.payloadDigest)
-        && Number.isSafeInteger(value.expiresAt) && Number.isSafeInteger(value.attempts) && value.attempts >= 1 && value.attempts <= MAX_NOTIFICATION_BROADCAST_ATTEMPTS))) return false;
-    const receipts = ((stored ?? []) as BroadcastReceipt[]).filter(receipt => receipt.expiresAt > this.now());
-    const existing = receipts.find(receipt => receipt.handoffId === handoff.grant.handoffId);
-    if (existing && (existing.payloadDigest !== handoff.payloadDigest || existing.attempts >= MAX_NOTIFICATION_BROADCAST_ATTEMPTS)) return false;
-    if (!existing && receipts.length >= MAX_REALTIME_LEASE_RECEIPTS) return false;
-    const next = existing
-      ? receipts.map(receipt => receipt === existing ? { ...receipt, attempts: receipt.attempts + 1 } : receipt)
-      : [...receipts, { handoffId: handoff.grant.handoffId, payloadDigest: handoff.payloadDigest, expiresAt: handoff.grant.expiresAt, attempts: 1 }];
-    // DO serialization plus this write closes the lost-ack/retry race before any recipient side effect.
-    await this.state.storage.put(BROADCAST_RECEIPTS_KEY, next);
-    return true;
+    const receiptKey = await realtimeReceiptKey('broadcast', handoff.grant.handoffId, handoff.payloadDigest);
+    if (!receiptKey) return false;
+    return this.state.blockConcurrencyWhile(async () => {
+      const stored = await this.state.storage.get<unknown>(BROADCAST_RECEIPTS_KEY);
+      if (stored !== undefined && (!Array.isArray(stored) || realtimeReceiptIndexBytes(stored) === null || stored.length > MAX_REALTIME_LEASE_RECEIPTS
+        || !stored.every(value => Array.isArray(value) && value.length === 3 && typeof value[0] === 'string' && /^[a-f0-9]{64}$/.test(value[0])
+          && Number.isSafeInteger(value[1]) && Number.isSafeInteger(value[2]) && value[2] >= 1 && value[2] <= MAX_NOTIFICATION_BROADCAST_ATTEMPTS))) return false;
+      const receipts = ((stored ?? []) as BroadcastReceipt[]).filter(receipt => receipt[1] > this.now());
+      const existing = receipts.find(receipt => receipt[0] === receiptKey);
+      if (existing && existing[2] >= MAX_NOTIFICATION_BROADCAST_ATTEMPTS) return false;
+      if (!existing && receipts.length >= MAX_REALTIME_LEASE_RECEIPTS) return false;
+      const next = existing
+        ? receipts.map(receipt => receipt === existing ? [receipt[0], receipt[1], receipt[2] + 1] as BroadcastReceipt : receipt)
+        : [...receipts, [receiptKey, handoff.grant.expiresAt, 1] as BroadcastReceipt];
+      if (realtimeReceiptIndexBytes(next) === null) return false;
+      // The explicit DO input gate and durable write precede recipient side effects.
+      await this.state.storage.put(BROADCAST_RECEIPTS_KEY, next);
+      return true;
+    });
   }
 
 
@@ -133,20 +138,26 @@ export class NotificationDO {
     const claim = await verifyRealtimeLease(this.env.JWT_SECRET, request.headers.get('X-Realtime-Lease'), request.headers.get('X-Realtime-Lease-Signature'), this.now());
     if (!claim || claim.tenantId !== session.tenantId || claim.actorId !== session.userId || claim.role !== session.role
       || claim.sessionVersion !== session.version || claim.expiresAt > session.expiresAt * 1_000) return false;
-    const index = await this.leaseIndex();
-    const receipts = await this.leaseReceipts();
-    if (!index || !receipts || index.includes(claim.leaseId) || receipts.some(receipt => receipt.leaseId === claim.leaseId)
-      || index.length >= MAX_NOTIFICATION_CONNECTIONS || receipts.length >= MAX_REALTIME_LEASE_RECEIPTS) return false;
-    session.leaseId = claim.leaseId;
-    session.leaseExpiresAt = claim.expiresAt;
-    const record: LeaseRecord = { claim, presence: this.presence(session), initialRemaining: 1, framesRemaining: claim.frames,
-      typingRemaining: claim.typingEvents, presenceRemaining: claim.presenceEvents, alarmsRemaining: claim.alarms,
-      cleanupsRemaining: claim.cleanups, cleanup: 'active' };
-    // The single DO request is serialized, and this paired write precedes
-    // acceptWebSocket. A replayed forwarded claim cannot install a second row.
-    await this.state.storage.put({ [leaseKey(claim.leaseId)]: record, [LEASE_INDEX_KEY]: [...index, claim.leaseId],
-      [LEASE_RECEIPT_INDEX_KEY]: [...receipts, { leaseId: claim.leaseId, expiresAt: claim.expiresAt }] });
-    return true;
+    const receiptKey = await realtimeReceiptKey('lease', claim.leaseId);
+    if (!receiptKey) return false;
+    return this.state.blockConcurrencyWhile(async () => {
+      const index = await this.leaseIndex();
+      const receipts = await this.leaseReceipts();
+      if (!index || !receipts || index.includes(claim.leaseId) || receipts.some(receipt => receipt[0] === receiptKey)
+        || index.length >= MAX_NOTIFICATION_CONNECTIONS || receipts.length >= MAX_REALTIME_LEASE_RECEIPTS) return false;
+      session.leaseId = claim.leaseId;
+      session.leaseExpiresAt = claim.expiresAt;
+      const record: LeaseRecord = { claim, presence: this.presence(session), initialRemaining: 1, framesRemaining: claim.frames,
+        typingRemaining: claim.typingEvents, presenceRemaining: claim.presenceEvents, alarmsRemaining: claim.alarms,
+        cleanupsRemaining: claim.cleanups, cleanup: 'active' };
+      const nextReceipts = [...receipts, [receiptKey, claim.expiresAt] as LeaseReceipt];
+      if (realtimeReceiptIndexBytes(nextReceipts) === null) return false;
+      // The input gate and paired write precede acceptWebSocket. A replayed
+      // forwarded claim cannot install a second row after an async boundary.
+      await this.state.storage.put({ [leaseKey(claim.leaseId)]: record, [LEASE_INDEX_KEY]: [...index, claim.leaseId],
+        [LEASE_RECEIPT_INDEX_KEY]: nextReceipts });
+      return true;
+    });
   }
 
   private async removeLease(leaseId: string): Promise<void> {
