@@ -9,7 +9,7 @@ import { useTickets, useCreateTicket } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useFilters } from '../hooks/useFilters';
 import { useSettings } from '../hooks/useSettings';
-import { useOperatorDraftIndicators, useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
+import { useOperatorDraftIndicators, useOperatorWorkspaceState, type WorkspacePreference } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import {
@@ -107,6 +107,7 @@ export function TicketListPage() {
 
   const { data: paginatedData, isLoading: isLoadingTickets, error: ticketsError, isFetching, isPlaceholderData, refetch } = useTickets({
     page: page.toString(),
+    sort: workspace.sort,
     ...(activeFilterId ? { filter_id: activeFilterId } : {}),
     ...(searchQuery ? { search: searchQuery } : {})
   });
@@ -168,7 +169,15 @@ export function TicketListPage() {
   };
 
   const handleFilterClick = (filterId: string) => {
-    workspace.update({ filters: { ...workspace.filters, filterId: filterId || null }, listAnchor: pageAnchor(1) });
+    workspace.update({
+      view: filterId ? 'custom' : 'all',
+      filters: { ...workspace.filters, filterId: filterId || null },
+      listAnchor: pageAnchor(1),
+    });
+  };
+
+  const handleSortChange = (sort: WorkspacePreference['sort']) => {
+    workspace.update({ sort, listAnchor: pageAnchor(1) });
   };
 
   return (
@@ -264,7 +273,7 @@ export function TicketListPage() {
         )}
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
             <div className="max-w-md w-full relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <TocynInput
@@ -282,8 +291,26 @@ export function TicketListPage() {
                 }}
               />
             </div>
-            <div className="text-sm text-slate-500 font-medium">
-              Total: {meta.total}
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-700">
+                <span>Sort tickets</span>
+                <TocynSelect
+                  aria-label="Sort tickets"
+                  value={workspace.sort}
+                  onChange={(event) => handleSortChange(event.target.value as WorkspacePreference['sort'])}
+                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="updated_desc">Recently updated</option>
+                  <option value="updated_asc">Least recently updated</option>
+                  <option value="created_desc">Newest created</option>
+                  <option value="created_asc">Oldest created</option>
+                  <option value="priority_desc">Highest priority</option>
+                  <option value="priority_asc">Lowest priority</option>
+                </TocynSelect>
+              </label>
+              <div className="text-sm text-slate-500 font-medium">
+                Total: {meta.total}
+              </div>
             </div>
           </div>
 

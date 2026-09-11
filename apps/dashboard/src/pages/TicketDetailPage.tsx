@@ -9,6 +9,7 @@ import { useSettings } from '../hooks/useSettings';
 import { useRealtime } from '../hooks/useRealtime';
 import { useTicketFields } from '../hooks/useTicketFields';
 import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue, type OperatorDraftVersion } from '../hooks/useOperatorDraft';
+import { useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { ApiError, dashboardApi } from '../api/client';
@@ -56,6 +57,7 @@ function TicketDetail({ id }: { id: string }) {
   const updateTicket = useUpdateTicket();
   const { presence, updateLocation, lastMessage } = useRealtime();
   const draft = useOperatorDraft(id);
+  const workspace = useOperatorWorkspaceState();
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
   const sessionGenerationRef = useRef(sessionGeneration);
   sessionGenerationRef.current = sessionGeneration;
@@ -82,6 +84,9 @@ function TicketDetail({ id }: { id: string }) {
   const changing = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
+  const contextTriggerRef = useRef<HTMLButtonElement>(null);
+  const contextHeadingRef = useRef<HTMLHeadingElement>(null);
+  const [focusContext, setFocusContext] = useState(false);
   const ticketSelectRefs = useRef<Record<TicketSelectControl, HTMLSelectElement | null>>({
     status: null,
     priority: null,
@@ -142,6 +147,17 @@ function TicketDetail({ id }: { id: string }) {
   // Filter presence to find other agents viewing this ticket and deduplicate by userId
   const rawViewers = presence.filter(p => p.location === `ticket:${id}`);
   const viewers = Array.from(new Map(rawViewers.map(v => [v.userId, v])).values());
+
+  useEffect(() => {
+    if (!ticket || error || (workspace.status !== 'restored' && workspace.status !== 'saved') || workspace.selectedTicketId === id) return;
+    workspace.update({ selectedTicketId: id });
+  }, [id, ticket, error, workspace]);
+
+  useEffect(() => {
+    if (!focusContext || workspace.panel !== 'details') return;
+    contextHeadingRef.current?.focus();
+    setFocusContext(false);
+  }, [focusContext, workspace.panel]);
 
   useEffect(() => {
     updateLocation(`ticket:${id}`);
@@ -286,10 +302,10 @@ function TicketDetail({ id }: { id: string }) {
 
   const flushDraftBeforeNavigation = async () => {
     if (submission.current || visiblePendingAttachments.length > 0) return false;
-    return draft.flushBeforeNavigation();
+    return (await draft.flushBeforeNavigation()) && workspace.flushBeforeNavigation();
   };
   const draftNavigationPending = isSubmitting || visiblePendingAttachments.length > 0 ||
-    draft.status === 'unsaved' || draft.status === 'saving' || draft.status === 'error' || draft.status === 'conflict';
+    draft.status === 'unsaved' || draft.status === 'saving' || draft.status === 'error' || draft.status === 'conflict' || workspace.hasUnsavedChanges;
 
   const retrySentDraftCleanup = async () => {
     if (!sentDraftVersion || submission.current) return;
@@ -362,7 +378,8 @@ function TicketDetail({ id }: { id: string }) {
 
   return (
     <>
-      <DraftNavigationGuard pending={draftNavigationPending} flush={flushDraftBeforeNavigation} />
+      <DraftNavigationGuard pending={draftNavigationPending} flush={flushDraftBeforeNavigation}
+        failureMessage="Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again." />
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
       <div className="lg:col-span-3 xl:col-span-4 space-y-6">
         {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="rounded border border-red-300 bg-red-50 p-3 text-red-900">
@@ -371,12 +388,27 @@ function TicketDetail({ id }: { id: string }) {
         </div>}
         {changeError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{changeError}</p>}
         {notice && <p role="status" className="text-slate-700">{notice}</p>}
+        {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="text-sm text-slate-700">
+          {workspace.status === 'saving' && 'Saving workspace preference…'}
+          {workspace.status === 'saved' && 'Workspace preference saved.'}
+          {workspace.status === 'error' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.retrySave()} className="underline">Retry workspace preference</TocynButton></>}
+          {workspace.status === 'conflict' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.restoreServerState()} className="underline">Restore server preferences</TocynButton></>}
+        </p>}
         <div className="flex items-center justify-between">
           <Link to="/tickets" className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors">
             <ArrowLeft className="w-4 h-4" />
             Back to Tickets
           </Link>
           <div className="flex items-center gap-2">
+            <TocynButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
+              onClick={() => {
+                const opening = workspace.panel !== 'details';
+                if (opening) setFocusContext(true);
+                else contextTriggerRef.current?.focus();
+                workspace.update({ panel: opening ? 'details' : 'conversation' });
+              }} className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium">
+              {workspace.panel === 'details' ? 'Hide ticket context' : 'Show ticket context'}
+            </TocynButton>
             <TocynSelect
               key={`ticket-status-${ticketSelectVersions.status}`}
               ref={node => { ticketSelectRefs.current.status = node; }}
@@ -770,9 +802,9 @@ function TicketDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="space-y-6">
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <h3 ref={contextHeadingRef} tabIndex={-1} className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
             <Info className="w-4 h-4 text-slate-400" />
             Ticket Details
           </h3>
@@ -929,7 +961,7 @@ function TicketDetail({ id }: { id: string }) {
             </div>
           </div>
         )}
-      </div>
+      </aside>
       </div>
     </>
   );

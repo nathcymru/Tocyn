@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { test } from 'node:test';
 import { chromium, type Route } from 'playwright';
 import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fixture';
-import { initializeLocalBetaFixture } from './local-beta-fixture';
+import { betaCounters, initializeLocalBetaFixture } from './local-beta-fixture';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const require = createRequire(import.meta.url);
@@ -126,9 +126,10 @@ async function initializeBrowserLocalBeta(fixture: LocalTenantFixture): Promise<
     invitations: Object.values(fixture.principals).map(principal => ({
       tenantId: principal.tenantId, id: principal.localId, kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
     })),
-    // This browser journey creates one synthetic navigation ticket, uploads one file,
-    // and reserves recovery capacity for the retained-draft path.
-    limits: { ticketLimit: 1, mutationLimit: 8, recoveryReserve: 2, uploadLimit: 1 },
+    // Eight expected positive writes cover selected ticket/panel/list preferences and
+    // attachment/body/recovery draft saves. Sixteen remains a bounded local guard while
+    // allowing serialized controller recovery writes to complete through the Worker.
+    limits: { ticketLimit: 1, mutationLimit: 16, recoveryReserve: 2, uploadLimit: 1 },
   });
 }
 
@@ -150,6 +151,8 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
       const externalRequests: string[] = [];
       const workspaceResponses: Array<{ method: string; status: number; injected: boolean }> = [];
+      const workspaceStateResponses: Array<{ method: string; status: number }> = [];
+      const ticketSortRequests: string[] = [];
       const attachmentUploadStatuses: number[] = [];
       await context.route('**/*', (route: Route) => {
         if (new URL(route.request().url()).origin !== server.origin) { externalRequests.push(route.request().resourceType()); return route.abort(); }
@@ -160,6 +163,12 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
         const url = new URL(response.url());
         if (url.origin === server.origin && url.pathname === '/api/workspace/drafts/fixture-ticket') {
           workspaceResponses.push({ method: response.request().method(), status: response.status(), injected: response.status() === 503 });
+        }
+        if (url.origin === server.origin && url.pathname === '/api/workspace/state') {
+          workspaceStateResponses.push({ method: response.request().method(), status: response.status() });
+        }
+        if (url.origin === server.origin && url.pathname === '/api/tickets') {
+          ticketSortRequests.push(url.searchParams.get('sort') ?? '');
         }
         if (url.origin === server.origin && url.pathname === '/api/attachments/upload') attachmentUploadStatuses.push(response.status());
       });
@@ -174,6 +183,7 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       const body = page.getByLabel('Reply message', { exact: true });
       await body.waitFor();
       await page.locator('#reply-message:not([readonly])').waitFor();
+      await page.getByText('Workspace preference saved.', { exact: true }).waitFor();
       await page.getByRole('button', { name: 'Internal Note', exact: true }).click();
       const savedPutsBeforeAttachment = workspaceResponses.filter(response => response.method === 'PUT' && response.status === 200).length;
       const uploadResponse = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
@@ -197,12 +207,61 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       assert.equal(await page.getByRole('button', { name: 'Internal Note', exact: true }).getAttribute('aria-pressed'), 'true', 'Reload must restore internal mode');
       await page.getByText('synthetic-draft-attachment.txt', { exact: true }).waitFor();
 
+      const openContextSave = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
+        new URL(response.url()).pathname === '/api/workspace/state' && response.request().method() === 'PUT' && response.status() === 200);
+      await page.getByRole('button', { name: 'Show ticket context', exact: true }).click();
+      await openContextSave;
+      await page.getByRole('heading', { name: 'Ticket Details', exact: true }).waitFor();
+      assert.equal(await page.locator('#ticket-context-panel').isVisible(), true, 'Opening ticket context must show its persisted details panel');
+
+      await page.reload();
+      await body.waitFor();
+      await page.getByRole('button', { name: 'Hide ticket context', exact: true }).waitFor();
+      assert.equal(await page.locator('#ticket-context-panel').isVisible(), true, 'Reload must restore the details panel preference');
+      const restoredInitialState = await fixture.request('/api/workspace/state', { token: sessionA.token });
+      assert.equal(restoredInitialState.status, 200, 'The real Worker must return the persisted workspace preference');
+      const initialState = await restoredInitialState.json<{ selectedTicketId?: unknown; panel?: unknown }>();
+      assert.equal(initialState.selectedTicketId, 'fixture-ticket', 'Reloaded current ticket must remain the server-backed selection');
+      assert.equal(initialState.panel, 'details', 'Reloaded context panel must remain the server-backed details preference');
+
       await page.getByRole('link', { name: 'Back to Tickets', exact: true }).click();
+      const sort = page.getByRole('combobox', { name: 'Sort tickets', exact: true });
+      await sort.waitFor();
+      const sortSave = page.waitForResponse(response => {
+        if (new URL(response.url()).origin !== server.origin || new URL(response.url()).pathname !== '/api/workspace/state' || response.request().method() !== 'PUT' || response.status() !== 200) return false;
+        try { return (response.request().postDataJSON() as { sort?: unknown }).sort === 'priority_asc'; } catch { return false; }
+      });
+      const sortedTicketRequest = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
+        new URL(response.url()).pathname === '/api/tickets' && new URL(response.url()).searchParams.get('sort') === 'priority_asc');
+      await sort.selectOption('priority_asc');
+      await Promise.all([sortSave, sortedTicketRequest]);
+      const savedSortState = await fixture.request('/api/workspace/state', { token: sessionA.token });
+      assert.equal(savedSortState.status, 200, 'The real Worker must return the acknowledged list sort preference');
+      assert.equal((await savedSortState.json<{ sort?: unknown }>()).sort, 'priority_asc',
+        'An acknowledged list sort save must persist through the real Worker before browser reload');
+      const restoredSortRequest = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
+        new URL(response.url()).pathname === '/api/tickets' && new URL(response.url()).searchParams.get('sort') === 'priority_asc');
+      await page.reload();
+      await sort.waitFor();
+      await restoredSortRequest;
+      await page.waitForFunction(() => (globalThis as any).document.querySelector('select[aria-label="Sort tickets"]')?.value === 'priority_asc');
+      assert.equal(await sort.inputValue(), 'priority_asc', 'Reload must restore the selected list sort');
+
+      const selectCreatedSave = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
+        new URL(response.url()).pathname === '/api/workspace/state' && response.request().method() === 'PUT' && response.status() === 200);
       await page.getByRole('link', { name: 'Synthetic browser navigation ticket', exact: true }).click();
       await page.waitForURL(new RegExp(`/tickets/${createdTicket.id}$`));
+      await selectCreatedSave;
+      const selectedCreatedState = await fixture.request('/api/workspace/state', { token: sessionA.token });
+      assert.equal(selectedCreatedState.status, 200, 'The real Worker must expose the selected-ticket preference to its scoped operator');
+      assert.equal((await selectedCreatedState.json<{ selectedTicketId?: unknown }>()).selectedTicketId, createdTicket.id,
+        'Opening a successfully loaded ticket must persist that ticket as the server-backed selection');
       await page.getByRole('link', { name: 'Back to Tickets', exact: true }).click();
+      const selectFixtureSave = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
+        new URL(response.url()).pathname === '/api/workspace/state' && response.request().method() === 'PUT' && response.status() === 200);
       await page.getByRole('link', { name: 'Fixture ticket A', exact: true }).click();
       await body.waitFor();
+      await selectFixtureSave;
       await page.getByText('Draft saved.', { exact: true }).waitFor();
       assert.equal(await body.inputValue(), 'Synthetic retained internal draft', 'Ticket navigation must restore the original draft body');
       assert.equal(await page.getByRole('button', { name: 'Internal Note', exact: true }).getAttribute('aria-pressed'), 'true', 'Ticket navigation must restore internal mode');
@@ -211,7 +270,7 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       await body.fill('Synthetic retained failed draft');
       await page.getByText('Draft was not saved. Retry to keep this version.', { exact: true }).waitFor();
       await page.getByRole('link', { name: 'Back to Tickets', exact: true }).click();
-      await page.getByText('Your draft is not saved. Stay on this ticket, retry saving, then navigate again.', { exact: true }).waitFor();
+      await page.getByText('Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again.', { exact: true }).waitFor();
       assert.match(page.url(), /\/tickets\/fixture-ticket$/, 'Failed autosave must retain ticket navigation');
       assert.equal(await body.inputValue(), 'Synthetic retained failed draft', 'Failed autosave must retain editable text');
       await page.getByRole('button', { name: 'Retry draft', exact: true }).click();
@@ -224,7 +283,12 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       assert.equal(externalRequests.length, 0, 'The browser must not reach a non-loopback origin');
       assert.ok(workspaceResponses.some(response => response.method === 'GET' && response.status === 200), 'The browser must restore through the real Worker route');
       assert.ok(workspaceResponses.some(response => response.method === 'PUT' && response.status === 200), 'The browser must persist through the real Worker route');
+      assert.ok(workspaceStateResponses.some(response => response.method === 'PUT' && response.status === 200), 'The browser must persist selected-ticket, panel, and sort preferences through the real Worker route');
+      assert.ok(ticketSortRequests.filter(sort => sort === 'priority_asc').length >= 2, 'Restored list sorting must be requested from the server before and after reload');
       assert.equal(workspaceResponses.filter(response => response.injected).length, 2, 'Only the documented bounded local failure injection may produce 503 responses');
+
+      const counters = await betaCounters(fixture);
+      assert.ok(counters && counters.mutations <= 16, 'The guarded local-beta mutation budget must remain enforced');
 
       const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repositoryRoot, encoding: 'utf8' }).trim();
       const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: repositoryRoot, encoding: 'utf8' }).trim().length > 0;
@@ -233,13 +297,15 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
         kind: 'tocyn-local-operator-draft-browser',
         revision,
         dirty,
-        scope: { worker: 'disposable-miniflare', tenants: 2, localBeta: { invitedPrincipals: 4, ticketLimit: 1, mutationLimit: 8, recoveryReserve: 2, uploadLimit: 1 }, dashboard: 'production-dist', remoteBindings: 0, externalNetworkRequests: 0 },
+        scope: { worker: 'disposable-miniflare', tenants: 2, localBeta: { invitedPrincipals: 4, ticketLimit: 1, mutationLimit: 16, recoveryReserve: 2, uploadLimit: 1, actualSuccessfulMutations: counters?.mutations ?? null }, dashboard: 'production-dist', remoteBindings: 0, externalNetworkRequests: 0 },
         artifact: { dashboardDistSha256: await digestDirectory(resolve(repositoryRoot, 'apps/dashboard/dist')) },
-        checks: { reloadRestoresTextModeAndAttachment: true, ticketNavigationRestoresDraft: true, failedAutosaveShowsFeedbackAndRetainsNavigation: true, wrongTenantHasNoDraft: true },
-        syntheticFault: { boundary: 'ephemeral loopback forwarding server', route: 'PUT /api/workspace/drafts/fixture-ticket', responses: 2, persistedWorkerRequests: true },
+        checks: { reloadRestoresTextModeAndAttachment: true, ticketNavigationRestoresDraft: true, reloadRestoresSelectedTicketAndContextPanel: true, restoredListSortDrivesServerPagination: true, failedAutosaveShowsFeedbackAndRetainsNavigation: true, wrongTenantHasNoDraft: true },
+        syntheticFault: { boundary: 'ephemeral loopback forwarding server', route: 'PUT /api/workspace/drafts/fixture-ticket', responses: 2, persistedWorkerRequests: true, capacityDenials: 0 },
         attachment: { uploadRoute: 'POST /api/attachments/upload', uploadStatuses: attachmentUploadStatuses, filenameRestored: true },
         tenantBProof: 'Operator B authenticates against the real local Worker and receives 204 from its scoped draft GET. This check does not render a second Tenant B dashboard browser session.',
         workspaceRouteStatuses: workspaceResponses,
+        workspaceStateRouteStatuses: workspaceStateResponses,
+        ticketSortRequests,
         limitations: ['Node application harness with disposable Miniflare D1/R2 bindings and an ephemeral loopback static server; this is not a Worker-hosted full-application runtime, deployed Worker, or provider evidence.', 'The two 503 responses are deliberately injected at the loopback forwarding boundary to prove browser recovery; all other observed draft requests use the real Worker route.', 'Synthetic tenant identities and fixture data only; no production credentials, customer data, remote bindings, or external network requests.'],
       })}\n`);
       await context.close();

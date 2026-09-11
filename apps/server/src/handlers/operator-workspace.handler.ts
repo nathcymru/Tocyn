@@ -8,6 +8,7 @@ import { MutationInputError, readMutationJson } from './mutation-request';
 import { OPERATOR_WORKSPACE_SORTS, OPERATOR_WORKSPACE_VIEWS } from '../types/operator-workspace';
 import { OperatorWorkspaceError, OperatorWorkspaceService } from '../services/operator-workspace.service';
 import { AttachmentReferenceError } from '../services/attachment-references';
+import { LOCAL_DRAFT_RETENTION } from '../types/operator-draft-retention';
 
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const generation = z.string().uuid();
@@ -38,7 +39,11 @@ workspace.use('*', async (c, next) => {
   await next();
 });
 workspace.use('*', requestBounds(64 * 1024));
-function service(c: any) { return new OperatorWorkspaceService(c.get('tenantDeps') as TenantRequestDeps); }
+function service(c: any) {
+  const localRetention = c.env.ENVIRONMENT === 'local' && c.env.LOCAL_BETA_ENABLED === 'true';
+  return new OperatorWorkspaceService(c.get('tenantDeps') as TenantRequestDeps,
+    localRetention ? { retention: LOCAL_DRAFT_RETENTION } : {});
+}
 function failure(c: any, error: unknown) {
   if (error instanceof MutationInputError) return c.json({ error: error.message, code: error.code }, error.status);
   if (error instanceof OperatorWorkspaceError) return c.json({ error: error.message }, error.status);

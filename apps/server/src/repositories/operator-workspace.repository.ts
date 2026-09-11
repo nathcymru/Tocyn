@@ -2,6 +2,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { VerifiedTenantScope } from '../types/tenant';
 import { BetaAdmissionError } from '../types/local-beta';
 import { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
+import { DRAFT_EXPIRY_SQL } from '../types/operator-draft-retention';
 import type {
   OperatorDraft, OperatorDraftAttachment, OperatorDraftMode, OperatorWorkspaceFilters,
   OperatorWorkspaceSort, OperatorWorkspaceState, OperatorWorkspaceView,
@@ -36,6 +37,7 @@ function stateFromRow(row: StateRow): OperatorWorkspaceState {
 export type DraftSaveInput = Readonly<{
   ticketId: string; expectedGeneration: string | null; expectedRevision: number; mode: OperatorDraftMode; body: string;
   attachments: readonly OperatorDraftAttachment[]; expiresAt: string | null;
+  notExpiredAt?: string;
 }>;
 export type WorkspaceStateSaveInput = Readonly<{
   expectedRevision: number; view: OperatorWorkspaceView; sort: OperatorWorkspaceSort;
@@ -64,22 +66,24 @@ export class OperatorWorkspaceRepository {
     }
   }
 
-  async getDraft(ticketId: string): Promise<OperatorDraft | null> {
-    const row = await this.db.prepare(`SELECT ${draftColumns} FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=?`)
-      .bind(this.scope.tenantId, this.scope.actorId, ticketId).first<DraftRow>();
+  async getDraft(ticketId: string, notExpiredAt?: string): Promise<OperatorDraft | null> {
+    const row = await this.db.prepare(`SELECT ${draftColumns} FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=?
+      AND (? IS NULL OR ${DRAFT_EXPIRY_SQL}>?)`)
+      .bind(this.scope.tenantId, this.scope.actorId, ticketId, notExpiredAt ?? null, notExpiredAt ?? null).first<DraftRow>();
     return row ? draftFromRow(row) : null;
   }
 
   /** Bounded, body-free input for Drafts views; current group membership is checked in the read. */
-  async listDrafts(afterTicketId = '', limit = 50): Promise<{ items: { ticketId: string; updatedAt: string }[]; next: string | null }> {
+  async listDrafts(afterTicketId = '', limit = 50, notExpiredAt?: string): Promise<{ items: { ticketId: string; updatedAt: string }[]; next: string | null }> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50 || afterTicketId.length > 128) throw new Error('Invalid draft page');
     const { results } = await this.db.prepare(`SELECT d.ticket_id,d.updated_at FROM operator_drafts d
       JOIN tickets t ON t.tenant_id=d.tenant_id AND t.id=d.ticket_id
       WHERE d.tenant_id=? AND d.user_id=? AND d.ticket_id>?
+        AND (? IS NULL OR ${DRAFT_EXPIRY_SQL.replaceAll('expires_at', 'd.expires_at').replaceAll('updated_at', 'd.updated_at')}>?)
         AND (?=0 OR t.group_id IS NULL OR EXISTS (
           SELECT 1 FROM user_groups ug WHERE ug.tenant_id=t.tenant_id AND ug.group_id=t.group_id AND ug.user_id=?
         )) ORDER BY d.ticket_id LIMIT ?`)
-      .bind(this.scope.tenantId, this.scope.actorId, afterTicketId, this.scope.roles.includes('agent') ? 1 : 0, this.scope.actorId, limit + 1)
+      .bind(this.scope.tenantId, this.scope.actorId, afterTicketId, notExpiredAt ?? null, notExpiredAt ?? null, this.scope.roles.includes('agent') ? 1 : 0, this.scope.actorId, limit + 1)
       .all<{ ticket_id: string; updated_at: string }>();
     const rows = results ?? [];
     const items = rows.slice(0, limit).map(row => ({ ticketId: row.ticket_id, updatedAt: row.updated_at }));
@@ -100,23 +104,26 @@ export class OperatorWorkspaceRepository {
         revision=operator_drafts.revision+1, mode=excluded.mode, body=excluded.body, attachments=excluded.attachments,
         expires_at=excluded.expires_at, updated_at=excluded.updated_at
       WHERE operator_drafts.revision=? AND operator_drafts.generation IS ?
+        AND (? IS NULL OR ${DRAFT_EXPIRY_SQL}>?)
       RETURNING ${draftColumns}`)
       .bind(
         this.scope.tenantId, this.scope.actorId, input.ticketId, generation, input.mode, input.body, attachments,
         this.scope.tenantId, input.ticketId, input.expiresAt, this.scope.tenantId, input.ticketId,
         input.expectedRevision, input.expectedGeneration, this.scope.tenantId, this.scope.actorId, input.ticketId,
         input.expectedRevision, input.expectedGeneration,
+        input.notExpiredAt ?? null, input.notExpiredAt ?? null,
       );
     const condition: MutationCondition = {
       sql: `EXISTS (SELECT 1 FROM tickets WHERE tenant_id=? AND id=?) AND (
         (?=0 AND ? IS NULL AND NOT EXISTS (SELECT 1 FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=?))
         OR EXISTS (SELECT 1 FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=?
-          AND revision=? AND generation IS ?)
+          AND revision=? AND generation IS ? AND (? IS NULL OR ${DRAFT_EXPIRY_SQL}>?))
       )`,
       values: [
         this.scope.tenantId, input.ticketId,
         input.expectedRevision, input.expectedGeneration, this.scope.tenantId, this.scope.actorId, input.ticketId,
         this.scope.tenantId, this.scope.actorId, input.ticketId, input.expectedRevision, input.expectedGeneration,
+        input.notExpiredAt ?? null, input.notExpiredAt ?? null,
       ],
     };
     const row = await this.runWorkspaceMutation<DraftRow>(statement, condition);
@@ -136,12 +143,13 @@ export class OperatorWorkspaceRepository {
   }
 
   /** Actor cleanup is bounded; cross-operator cleanup requires an explicit system scope. */
-  async purgeExpiredForActor(now: string, limit = 100): Promise<number> {
+  async purgeExpiredForActor(now: string, limit = 100, legacyCutoff?: string): Promise<number> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid operator draft cleanup limit');
     const result = await this.db.prepare(`DELETE FROM operator_drafts WHERE rowid IN (
-      SELECT rowid FROM operator_drafts WHERE tenant_id=? AND user_id=? AND expires_at IS NOT NULL AND expires_at <= ?
+      SELECT rowid FROM operator_drafts WHERE tenant_id=? AND user_id=?
+        AND ((expires_at IS NOT NULL AND expires_at <= ?) OR (expires_at IS NULL AND ? IS NOT NULL AND updated_at <= ?))
       ORDER BY expires_at LIMIT ?
-    )`).bind(this.scope.tenantId, this.scope.actorId, now, limit).run();
+    )`).bind(this.scope.tenantId, this.scope.actorId, now, legacyCutoff ?? null, legacyCutoff ?? null, limit).run();
     return result.meta.changes ?? 0;
   }
 

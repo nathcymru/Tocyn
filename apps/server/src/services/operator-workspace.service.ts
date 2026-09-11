@@ -2,6 +2,7 @@ import type { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { validateAttachmentReferences } from './attachment-references';
 import type { OperatorDraft, OperatorWorkspaceState } from '../types/operator-workspace';
 import type { DraftSaveInput, WorkspaceStateSaveInput } from '../repositories/operator-workspace.repository';
+import { legacyDraftCutoff } from '../types/operator-draft-retention';
 
 export class OperatorWorkspaceError extends Error {
   constructor(public readonly status: 400 | 403 | 404 | 409, message: string) { super(message); }
@@ -29,19 +30,23 @@ export class OperatorWorkspaceService {
   }
 
   async listDrafts(afterTicketId: string, limit: number) {
-    return this.deps.repositories.operatorWorkspace.listDrafts(afterTicketId, limit);
+    const now = await this.expireLocalDrafts();
+    return this.deps.repositories.operatorWorkspace.listDrafts(afterTicketId, limit, now);
   }
 
   async getDraft(ticketId: string): Promise<OperatorDraft | null> {
     await this.authorizeTicket(ticketId);
-    return this.deps.repositories.operatorWorkspace.getDraft(ticketId);
+    const now = await this.expireLocalDrafts();
+    return this.deps.repositories.operatorWorkspace.getDraft(ticketId, now);
   }
 
-  async saveDraft(input: Omit<DraftSaveInput, 'attachments' | 'expiresAt'> & { attachments: unknown }): Promise<OperatorDraft> {
+  async saveDraft(input: Omit<DraftSaveInput, 'attachments' | 'expiresAt' | 'notExpiredAt'> & { attachments: unknown }): Promise<OperatorDraft> {
     await this.authorizeTicket(input.ticketId);
     const attachments = await validateAttachmentReferences(this.deps, `agent-attachments/${this.deps.scope.actorId}/`, input.attachments);
-    const expiresAt = this.options.retention?.expiresAt(this.now()) ?? null;
-    const saved = await this.deps.repositories.operatorWorkspace.saveDraft({ ...input, attachments, expiresAt });
+    const now = this.now();
+    const notExpiredAt = await this.expireLocalDrafts(now);
+    const expiresAt = this.options.retention?.expiresAt(now) ?? null;
+    const saved = await this.deps.repositories.operatorWorkspace.saveDraft({ ...input, attachments, expiresAt, notExpiredAt });
     if (!saved) throw new OperatorWorkspaceError(409, 'Draft changed before it could be saved');
     return saved;
   }
@@ -84,9 +89,17 @@ export class OperatorWorkspaceService {
     return saved;
   }
 
-  /** Retention remains inactive until an owner injects a policy and invokes this method. */
+  private async expireLocalDrafts(now = this.now()): Promise<string | undefined> {
+    if (!this.options.retention) return undefined;
+    const timestamp = now.toISOString();
+    await this.deps.repositories.operatorWorkspace.purgeExpiredForActor(timestamp, 100, legacyDraftCutoff(now));
+    return timestamp;
+  }
+
+  /** Only explicitly configured retention performs bounded, scoped cleanup. */
   async purgeExpired(): Promise<number> {
     if (!this.options.retention) throw new Error('Operator draft retention is not configured');
-    return this.deps.repositories.operatorWorkspace.purgeExpiredForActor(this.now().toISOString());
+    const now = this.now();
+    return this.deps.repositories.operatorWorkspace.purgeExpiredForActor(now.toISOString(), 100, legacyDraftCutoff(now));
   }
 }

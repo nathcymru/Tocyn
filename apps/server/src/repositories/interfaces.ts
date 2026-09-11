@@ -3,6 +3,7 @@ import { SqlKnowledgeRepository } from './knowledge.repository';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { CapabilityWriteFence } from '../auth/capability-policy';
 import type { OperatorWorkspaceRepository } from './operator-workspace.repository';
+import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 
 export interface UserRepository {
   revokeSessions(id: string): Promise<void>;
@@ -38,7 +39,7 @@ export interface TicketRepository {
   completeRetention(id: string, token: string): Promise<boolean>;
   withExternalWrite<T>(id: string, operation: () => Promise<T>): Promise<T>;
 
-  list(options: {page?: number; limit?: number; filterId?: string; status?: string; priority?: string; assignedTo?: string; groupId?: string; ticketNo?: string; search?: string; customerEmail?: string}): Promise<{data:Ticket[]; total:number; meta:{total:number;page:number;limit:number;total_pages:number}}>;
+  list(options: {page?: number; limit?: number; filterId?: string; status?: string; priority?: string; assignedTo?: string; groupId?: string; ticketNo?: string; search?: string; customerEmail?: string; sort?: OperatorWorkspaceSort}): Promise<{data:Ticket[]; total:number; meta:{total:number;page:number;limit:number;total_pages:number}}>;
   dashboardStats(): Promise<any>;
   findBySubject(subject: string): Promise<Ticket | null>;
   get(id: string): Promise<Ticket | null>;
