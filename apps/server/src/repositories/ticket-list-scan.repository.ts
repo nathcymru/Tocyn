@@ -9,9 +9,10 @@ export type TicketListScanSnapshot = Readonly<{
   revision: number;
   filter?: Readonly<{ id: string; conditionBytes: number; revision: number; exists: boolean }>;
 }>;
+export type TicketListCurrentCredential = Readonly<{ role: 'admin' | 'agent' | 'customer'; sessionVersion: number; expiresAt: number; email?: string }>;
 
 export class TicketListScanError extends Error {
-  constructor(readonly code: 'unavailable' | 'fence_changed') {
+  constructor(readonly code: 'unavailable' | 'fence_changed' | 'authority_changed') {
     super(code === 'fence_changed' ? 'Ticket list changed while capacity was being reserved' : 'Ticket list accounting is unavailable');
     this.name = 'TicketListScanError';
   }
@@ -59,14 +60,14 @@ export function ticketListScanFenceSql(snapshot: TicketListScanSnapshot, tableAl
   const filter = snapshot.filter;
   const filterSql = !filter ? '' : filter.exists
     ? ` AND EXISTS (SELECT 1 FROM ticket_list_filter_scan_counters f
-        WHERE f.tenant_id=${tableAlias}.tenant_id AND f.filter_id=? AND f.condition_bytes<=?)`
+        WHERE f.tenant_id=${tableAlias}.tenant_id AND f.filter_id=? AND f.condition_bytes<=? AND f.revision=?)`
     : ` AND NOT EXISTS (SELECT 1 FROM ticket_list_filter_scan_counters f
         WHERE f.tenant_id=${tableAlias}.tenant_id AND f.filter_id=?)`;
   return {
     sql: `EXISTS (SELECT 1 FROM ticket_list_scan_counters c WHERE c.tenant_id=${tableAlias}.tenant_id
       AND c.ticket_rows<=? AND c.ticket_search_bytes<=? AND c.article_rows<=? AND c.article_search_bytes<=?)${filterSql}`,
     values: [snapshot.ticketRows, snapshot.ticketSearchBytes, snapshot.articleRows, snapshot.articleSearchBytes,
-      ...(!filter ? [] : filter.exists ? [filter.id, filter.conditionBytes] : [filter.id])],
+      ...(!filter ? [] : filter.exists ? [filter.id, filter.conditionBytes, filter.revision] : [filter.id])],
   };
 }
 
@@ -76,9 +77,18 @@ export function ticketListScanAssertionSql(tenantId: string, snapshot: TicketLis
   return {
     sql: `SELECT 1 AS admitted FROM ticket_list_scan_counters c WHERE c.tenant_id=?
       AND c.ticket_rows<=? AND c.ticket_search_bytes<=? AND c.article_rows<=? AND c.article_search_bytes<=?
-      ${!filter ? '' : filter.exists ? `AND EXISTS (SELECT 1 FROM ticket_list_filter_scan_counters f WHERE f.tenant_id=c.tenant_id AND f.filter_id=? AND f.condition_bytes<=?)` : `AND NOT EXISTS (SELECT 1 FROM ticket_list_filter_scan_counters f WHERE f.tenant_id=c.tenant_id AND f.filter_id=?)`}
+      ${!filter ? '' : filter.exists ? `AND EXISTS (SELECT 1 FROM ticket_list_filter_scan_counters f WHERE f.tenant_id=c.tenant_id AND f.filter_id=? AND f.condition_bytes<=? AND f.revision=?)` : `AND NOT EXISTS (SELECT 1 FROM ticket_list_filter_scan_counters f WHERE f.tenant_id=c.tenant_id AND f.filter_id=?)`}
       LIMIT 1`,
     values: [tenantId, snapshot.ticketRows, snapshot.ticketSearchBytes, snapshot.articleRows, snapshot.articleSearchBytes,
-      ...(!filter ? [] : filter.exists ? [filter.id, filter.conditionBytes] : [filter.id])],
+      ...(!filter ? [] : filter.exists ? [filter.id, filter.conditionBytes, filter.revision] : [filter.id])],
   };
+}
+
+/** Current credential predicate executed in the same D1 batch as count/page. */
+export function ticketListCurrentCredentialSql(tenantId: string, actorId: string, credential: TicketListCurrentCredential): { sql: string; values: readonly unknown[] } {
+  if (!Number.isSafeInteger(credential.sessionVersion) || credential.sessionVersion < 0 || !Number.isSafeInteger(credential.expiresAt)) return { sql: '0', values: [] };
+  if (credential.role === 'customer') return { sql: `EXISTS (SELECT 1 FROM users u WHERE u.tenant_id=? AND u.id=? AND u.role='customer'
+    AND u.session_version=? AND lower(trim(u.email))=lower(trim(?)) AND ? > unixepoch())`, values: [tenantId, actorId, credential.sessionVersion, credential.email ?? '', credential.expiresAt] };
+  return { sql: `EXISTS (SELECT 1 FROM users u WHERE u.tenant_id=? AND u.id=? AND u.role=? AND u.session_version=?
+    AND u.mfa_enabled=1 AND ? > unixepoch())`, values: [tenantId, actorId, credential.role, credential.sessionVersion, credential.expiresAt] };
 }

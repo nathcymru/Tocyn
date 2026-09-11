@@ -584,6 +584,8 @@ dashboard.get("/tickets", async (c) => {
       page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50),
       viewer: { role: payload.role === 'agent' ? 'agent' : 'admin', actorId: d.scope.actorId },
       ...(admission.snapshot ? { scanFence: admission.snapshot } : {}),
+      ...(admission.snapshot ? { currentCredential: { role: payload.role === 'agent' ? 'agent' : 'admin',
+        sessionVersion: payload.session_version ?? -1, expiresAt: payload.exp } } : {}),
     });
     return c.json(result);
   } catch (error) {

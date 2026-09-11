@@ -223,7 +223,8 @@ app.get('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddlew
   const limit = parseInt(c.req.query('limit') || '50');
   try {
     const tickets = await ticketService.findTickets({ page, limit, customerEmail: payload.email,
-      ...(admission.snapshot ? { scanFence: admission.snapshot } : {}) });
+      ...(admission.snapshot ? { scanFence: admission.snapshot, currentCredential: { role: 'customer',
+        sessionVersion: payload.session_version ?? -1, expiresAt: payload.exp, email: payload.email } } : {}) });
     return c.json(tickets);
   } catch (error) {
     if (error instanceof TicketListScanError) return c.json({ code: 'budget_admission_unavailable', error: 'Ticket list capacity changed; retry the request' }, 503);

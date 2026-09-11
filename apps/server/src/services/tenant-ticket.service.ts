@@ -9,7 +9,7 @@ import {
   CanonicalConversation,
 } from '../types/canonical-conversation';
 import { projectCanonicalConversation as project } from './canonical-conversation.service';
-import type { TicketListScanSnapshot } from '../repositories/ticket-list-scan.repository';
+import type { TicketListCurrentCredential, TicketListScanSnapshot } from '../repositories/ticket-list-scan.repository';
 
 export type InitialConversationInput = {
   subject: string;
@@ -31,8 +31,8 @@ export type InitialConversationInput = {
 export class TenantTicketService {
   constructor(private deps: TenantRequestDeps) {}
 
-  async findTickets({ page, limit, customerEmail, scanFence }: { page: number, limit: number, customerEmail: string, scanFence?: TicketListScanSnapshot }) {
-    return this.deps.repositories.tickets.findCustomerTickets(customerEmail, page, limit, scanFence);
+  async findTickets({ page, limit, customerEmail, scanFence, currentCredential }: { page: number, limit: number, customerEmail: string, scanFence?: TicketListScanSnapshot, currentCredential?: TicketListCurrentCredential }) {
+    return this.deps.repositories.tickets.findCustomerTickets(customerEmail, page, limit, scanFence, currentCredential);
   }
 
   async findTicketById(id: string): Promise<Ticket | null> {

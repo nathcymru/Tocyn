@@ -15,7 +15,7 @@ import { D1Database } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import { articleBodyFormat } from '@luminatick/shared';
-import { TicketListScanError, ticketListScanAssertionSql, ticketListScanFenceSql, type TicketListScanSnapshot } from './ticket-list-scan.repository';
+import { TicketListScanError, ticketListCurrentCredentialSql, ticketListScanAssertionSql, ticketListScanFenceSql, type TicketListCurrentCredential, type TicketListScanSnapshot } from './ticket-list-scan.repository';
 
 const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
 
@@ -215,6 +215,8 @@ export class SqlTicketRepository implements TicketRepository {
       viewer?: Readonly<{ role: 'admin' | 'agent'; actorId: string }>;
       /** Present only after the dynamic list reservation has been accepted. */
       scanFence?: TicketListScanSnapshot;
+      /** Rechecked atomically with the admitted count/page batch. */
+      currentCredential?: TicketListCurrentCredential;
     }
   ): Promise<{ data: Ticket[]; total: number; meta: { total: number; page: number; limit: number; total_pages: number } }> {
     const page = Math.max(1, Number.isFinite(options.page) ? options.page! : 1);
@@ -257,9 +259,14 @@ export class SqlTicketRepository implements TicketRepository {
     }
 
     if (options.filterId) {
-      const filter = await this.db.prepare("SELECT conditions FROM ticket_filters WHERE tenant_id = ? AND id = ?")
-        .bind(this.scope.tenantId, options.filterId)
-        .first<{ conditions: string }>();
+      const snapshotFilter = options.scanFence?.filter;
+      const filter = snapshotFilter?.exists
+        ? await this.db.prepare(`SELECT tf.conditions FROM ticket_filters tf WHERE tf.tenant_id=? AND tf.id=? AND EXISTS
+          (SELECT 1 FROM ticket_list_filter_scan_counters f WHERE f.tenant_id=tf.tenant_id AND f.filter_id=tf.id
+            AND f.condition_bytes<=? AND f.revision=?)`).bind(this.scope.tenantId, options.filterId, snapshotFilter.conditionBytes, snapshotFilter.revision).first<{ conditions: string }>()
+        : snapshotFilter ? null : await this.db.prepare("SELECT conditions FROM ticket_filters WHERE tenant_id = ? AND id = ?")
+          .bind(this.scope.tenantId, options.filterId).first<{ conditions: string }>();
+      if (snapshotFilter?.exists && !filter) throw new TicketListScanError('fence_changed');
 
       if (filter) {
         try {
@@ -337,6 +344,8 @@ export class SqlTicketRepository implements TicketRepository {
       countQuery += ` AND ${scanFence.sql}`;
       params.push(...scanFence.values);
     }
+    const current = options.currentCredential ? ticketListCurrentCredentialSql(this.scope.tenantId, this.scope.actorId, options.currentCredential) : undefined;
+    if (current) { query += ` AND ${current.sql}`; countQuery += ` AND ${current.sql}`; params.push(...current.values); }
 
     const sortClauses: Record<OperatorWorkspaceSort, string> = {
       updated_desc: 'tickets.updated_at DESC', updated_asc: 'tickets.updated_at ASC',
@@ -352,7 +361,9 @@ export class SqlTicketRepository implements TicketRepository {
     // D1 batches share one transaction snapshot. Both retained exact-total and
     // page statements carry the same counter fence, so a post-reservation
     // growth cannot execute list work beyond the admitted metadata.
-    const assertion = scanFence ? ticketListScanAssertionSql(this.scope.tenantId, options.scanFence!) : undefined;
+    const baseAssertion = scanFence ? ticketListScanAssertionSql(this.scope.tenantId, options.scanFence!) : undefined;
+    const assertion = baseAssertion ? { sql: `${baseAssertion.sql.replace(/\s+LIMIT 1\s*$/, '')}${current ? ` AND ${current.sql}` : ''} LIMIT 1`,
+      values: [...baseAssertion.values, ...(current?.values ?? [])] } : undefined;
     if (!assertion) {
       const countResult = await countStatement.first<{ total: number }>();
       const total = countResult?.total || 0;
@@ -361,7 +372,7 @@ export class SqlTicketRepository implements TicketRepository {
       return this.listResponse(results, total, page, limit, totalPages);
     }
     const batch = await this.db.batch([this.db.prepare(assertion.sql).bind(...assertion.values), countStatement, pageStatement]);
-    if (!batch[0]?.results?.[0]) throw new TicketListScanError('fence_changed');
+    if (!batch[0]?.results?.[0]) throw new TicketListScanError('authority_changed');
     const countResult = batch[1]?.results?.[0] as { total?: number } | undefined;
     const total = typeof countResult?.total === 'number' ? countResult.total : 0;
     const totalPages = Math.ceil(total / limit);
@@ -512,12 +523,15 @@ export class SqlTicketRepository implements TicketRepository {
       .run();
   }
 
-  async findCustomerTickets(customerEmail: string, page: number, limit: number, scanFence?: TicketListScanSnapshot): Promise<{ data: Ticket[], total: number }> {
+  async findCustomerTickets(customerEmail: string, page: number, limit: number, scanFence?: TicketListScanSnapshot, currentCredential?: TicketListCurrentCredential): Promise<{ data: Ticket[], total: number }> {
     const offset = (page - 1) * limit;
     const fence = scanFence ? ticketListScanFenceSql(scanFence) : undefined;
-    const where = `tenant_id = ? AND customer_email = ?${fence ? ` AND ${fence.sql}` : ''}`;
+    let where = `tenant_id = ? AND customer_email = ?${fence ? ` AND ${fence.sql}` : ''}`;
     const params = [this.scope.tenantId, customerEmail, ...(fence?.values ?? [])];
-    const assertion = scanFence ? ticketListScanAssertionSql(this.scope.tenantId, scanFence) : undefined;
+    const current = currentCredential ? ticketListCurrentCredentialSql(this.scope.tenantId, this.scope.actorId, currentCredential) : undefined;
+    if (current) { where += ` AND ${current.sql}`; params.push(...current.values); }
+    const baseAssertion = scanFence ? ticketListScanAssertionSql(this.scope.tenantId, scanFence) : undefined;
+    const assertion = baseAssertion ? { sql: `${baseAssertion.sql.replace(/\s+LIMIT 1\s*$/, '')}${current ? ` AND ${current.sql}` : ''} LIMIT 1`, values: [...baseAssertion.values, ...(current?.values ?? [])] } : undefined;
     if (!assertion) {
       const items = await this.db.prepare(`SELECT * FROM tickets WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
         .bind(...params, limit, offset).all<Ticket>();
@@ -530,7 +544,7 @@ export class SqlTicketRepository implements TicketRepository {
       this.db.prepare(`SELECT COUNT(*) as count FROM tickets WHERE ${where}`).bind(...params),
       this.db.prepare(`SELECT * FROM tickets WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...params, limit, offset),
     ]);
-    if (!batch[0]?.results?.[0]) throw new TicketListScanError('fence_changed');
+    if (!batch[0]?.results?.[0]) throw new TicketListScanError('authority_changed');
     const total = batch[1]?.results?.[0] as { count?: number } | undefined;
     const items = batch[2]?.results as Ticket[] | undefined;
     return { data: items || [], total: total?.count || 0 };

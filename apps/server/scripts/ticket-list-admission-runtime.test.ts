@@ -4,7 +4,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { ticketListEnvelope } from '../src/budgets/http-ticket-list-admission.service';
 import { SqlTicketRepository } from '../src/repositories';
-import { TicketListScanRepository } from '../src/repositories/ticket-list-scan.repository';
+import { TicketListScanError, TicketListScanRepository } from '../src/repositories/ticket-list-scan.repository';
 import { initializeLocalBetaFixture } from './local-beta-fixture';
 import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fixture';
 
@@ -140,5 +140,56 @@ test('tenant-maintained counters price a large same-tenant article history and f
     assert.equal(observations.length, 3, 'fence, exact count and page share one native D1 batch');
     assert.ok(actualReads > 0 && actualReads <= envelope!.d1RowsRead!, `actual native reads ${actualReads} fit admitted ${envelope!.d1RowsRead}`);
     t.diagnostic(`real local D1: ${snapshot.articleRows} same-tenant article rows, exact total ${result.total}, actual reads ${actualReads}, admitted reads ${envelope!.d1RowsRead}`);
+  });
+});
+
+test('admitted list count/page rejects a session or saved-filter revision changed after admission', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId = fixture.principals.operatorA.tenantId;
+    const scope = createVerifiedTenantScope(tenantId, fixture.principals.operatorA.localId, ['admin'], 1);
+    await fixture.db.prepare("INSERT INTO ticket_filters(tenant_id,id,name,conditions) VALUES(?,?,?,?)")
+      .bind(tenantId, 'list-fence-filter', 'fence', JSON.stringify([{ field: 'status', operator: 'equals', value: 'open' }])).run();
+    const snapshot = await new TicketListScanRepository(fixture.db, scope).snapshot('list-fence-filter');
+    const repository = new SqlTicketRepository(scope, fixture.db);
+    await fixture.db.prepare('UPDATE users SET session_version=999 WHERE tenant_id=? AND id=?')
+      .bind(tenantId, scope.actorId).run();
+    await assert.rejects(repository.list({ page: 1, limit: 50, filterId: 'list-fence-filter', scanFence: snapshot,
+      viewer: { role: 'admin', actorId: scope.actorId }, currentCredential: { role: 'admin', sessionVersion: 1,
+        expiresAt: Math.floor(Date.now() / 1000) + 3600 } }), (error: unknown) => error instanceof TicketListScanError && error.code === 'authority_changed');
+    await fixture.db.prepare('UPDATE users SET session_version=1 WHERE tenant_id=? AND id=?').bind(tenantId, scope.actorId).run();
+    await fixture.db.prepare('UPDATE ticket_filters SET conditions=? WHERE tenant_id=? AND id=?')
+      .bind(JSON.stringify([{ field: 'status', operator: 'equals', value: 'open' }, { field: 'priority', operator: 'equals', value: 'high' }]), tenantId, 'list-fence-filter').run();
+    await assert.rejects(repository.list({ page: 1, limit: 50, filterId: 'list-fence-filter', scanFence: snapshot,
+      viewer: { role: 'admin', actorId: scope.actorId }, currentCredential: { role: 'admin', sessionVersion: 1,
+        expiresAt: Math.floor(Date.now() / 1000) + 3600 } }), (error: unknown) => error instanceof TicketListScanError && error.code === 'fence_changed');
+  });
+});
+
+test('many current group-visible tickets, saved filters, and an all-miss substring stay within the dynamic reservation', async t => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId = fixture.principals.operatorA.tenantId;
+    const agent = await fixture.createAgentSession(tenantId);
+    await fixture.db.batch([
+      fixture.db.prepare('INSERT INTO groups(tenant_id,id,name) VALUES(?,?,?)').bind(tenantId, 'list-scale-group', 'Scale'),
+      fixture.db.prepare('INSERT INTO user_groups(tenant_id,user_id,group_id) VALUES(?,?,?)').bind(tenantId, agent.id, 'list-scale-group'),
+      fixture.db.prepare('INSERT INTO ticket_filters(tenant_id,id,name,conditions) VALUES(?,?,?,?)').bind(tenantId, 'list-scale-filter', 'scale', JSON.stringify([{ field: 'status', operator: 'equals', value: 'open' }])),
+    ]);
+    for (let offset = 0; offset < 4_200; offset += 100) {
+      await fixture.db.batch(Array.from({ length: 100 }, (_, index) => fixture.db.prepare(
+        "INSERT INTO tickets(tenant_id,id,subject,customer_email,group_id,source,status) VALUES(?,?,?,?,?,?,?)")
+        .bind(tenantId, `list-scale-${String(offset + index).padStart(5, '0')}`, 'scale candidate', fixture.principals.customerA.email, 'list-scale-group', 'fixture', 'open')));
+    }
+    const scope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 1);
+    const snapshot = await new TicketListScanRepository(fixture.db, scope).snapshot('list-scale-filter');
+    const envelope = ticketListEnvelope(snapshot, { search: 'all-miss-substring', groupRestricted: true });
+    const observations: D1Observation[] = [];
+    const result = await new SqlTicketRepository(scope, observeDatabase(fixture.db, observations)).list({ page: 1, limit: 50,
+      search: 'all-miss-substring', filterId: 'list-scale-filter', viewer: { role: 'agent', actorId: agent.id }, scanFence: snapshot,
+      currentCredential: { role: 'agent', sessionVersion: 1, expiresAt: Math.floor(Date.now() / 1000) + 3600 } });
+    assert.equal(result.total, 0);
+    const actualReads = observations.reduce((total, observation) => total + observation.rowsRead, 0);
+    assert.equal(observations.length, 3);
+    assert.ok(actualReads > 0 && actualReads <= envelope!.d1RowsRead!, `native group/filter/all-miss reads ${actualReads} fit ${envelope!.d1RowsRead}`);
+    t.diagnostic(`real local D1: ${snapshot.ticketRows} tickets, group/filter all-miss reads ${actualReads}, admitted ${envelope!.d1RowsRead}`);
   });
 });
