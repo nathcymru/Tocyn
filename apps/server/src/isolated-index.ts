@@ -1,10 +1,12 @@
 import { Env } from './bindings';
 import { NotificationDO } from './durable_objects/NotificationDO';
+import { BudgetCoordinatorDO } from './durable_objects/BudgetCoordinatorDO';
+import { BudgetGrantHolderDO } from './durable_objects/BudgetGrantHolderDO';
 import { EmailHandler } from './handlers/email.handler';
 import { validIsolatedRuntime } from './middleware/environment-guard';
 import { app } from './application';
 
-export { NotificationDO };
+export { BudgetCoordinatorDO, BudgetGrantHolderDO, NotificationDO };
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

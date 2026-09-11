@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "budget-coordinator-do-runtime.test.ts",
+    "budget-authority-runtime.test.ts",
+    "budget-grant-holder-runtime.test.ts",
+    "budget-admission-runtime.test.ts",
+    "session-budget-admission-runtime.test.ts",
+    "budget-admission-runtime-entry.ts"
+  ]
+}

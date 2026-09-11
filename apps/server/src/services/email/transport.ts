@@ -1,5 +1,6 @@
 import { SendEmailOptions } from '../../types';
 import { arrayBufferToBase64 } from '../../utils/encoding';
+import { sendTicketSources, type TicketEmailOptions, type TicketEmailSource } from './ticket-stream';
 
 export interface EmailTransportCredentials {
   apiKey: string;
@@ -8,6 +9,7 @@ export interface EmailTransportCredentials {
 
 export interface EmailTransport {
   send(options: SendEmailOptions, creds: EmailTransportCredentials): Promise<{ id: string }>;
+  sendTicketSources?(options: TicketEmailOptions, sources: readonly TicketEmailSource[], creds: EmailTransportCredentials): Promise<{ id: string }>;
 }
 
 export const LOCAL_AUTH_CAPTURE_RECIPIENT = 'tocyn-auth-test@example.invalid';
@@ -105,6 +107,12 @@ export function isLocalAuthCaptureTransport(transport: EmailTransport): transpor
 }
 
 export class HttpResendTransport implements EmailTransport {
+  constructor(private ticketInvoke?: typeof fetch) {}
+
+  async sendTicketSources(options: TicketEmailOptions, sources: readonly TicketEmailSource[], creds: EmailTransportCredentials): Promise<{ id: string }> {
+    return sendTicketSources(options, sources, creds, this.ticketInvoke ?? fetch);
+  }
+
   async send(options: SendEmailOptions, creds: EmailTransportCredentials): Promise<{ id: string }> {
     const fromAddress = options.from || creds.defaultFrom;
     const res = await fetch('https://api.resend.com/emails', {

@@ -64,7 +64,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
   const betaAdmission = guarded
     ? new LocalBetaAdmissionRepository(db, scope, { kind, id: scope.actorId }, credential)
     : undefined;
-  const repositories = createRepositories(scope, db, betaAdmission, canonicalMutationSli);
+  const repositories = createRepositories(scope, db, betaAdmission, canonicalMutationSli, env.DB);
   const attachmentStorage = betaAdmission
     ? new LocalBetaAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, betaAdmission, emitResourceOperation)
     : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation);

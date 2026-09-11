@@ -32,7 +32,8 @@ function assertPersistenceDisabled(config, label) {
 function assertLocalOnlyBindings(config, label) {
   assert.deepEqual(config.d1_databases.map(binding => [binding.binding, binding.remote]), [['DB', false]], `${label} D1 binding changed`);
   assert.deepEqual(config.r2_buckets.map(binding => [binding.binding, binding.remote]), [['ATTACHMENTS_BUCKET', false]], `${label} R2 binding changed`);
-  assert.deepEqual(config.durable_objects.bindings.map(binding => binding.name), ['NOTIFICATION_DO'], `${label} Durable Object binding changed`);
+  assert.deepEqual(config.durable_objects.bindings.map(binding => binding.name),
+    ['NOTIFICATION_DO', 'BUDGET_COORDINATOR_DO', 'BUDGET_GRANT_HOLDER_DO'], `${label} Durable Object binding changed`);
   assert.deepEqual(config.vectorize, [], `${label} must not add Vectorize`);
   assert.deepEqual(config.workflows, [], `${label} must not add Workflows`);
   assert.equal(config.ai, undefined, `${label} must not add an AI provider binding`);
@@ -62,7 +63,7 @@ test('local evidence profile is a runnable guarded local configuration with no p
   assertLocalOnlyBindings(evidence, 'evidence');
   assert.equal(evidence.main, resolve(serverRoot, 'src/local-index.ts'));
   assert.deepEqual(evidence.vars, {
-    ENVIRONMENT: 'local', OBSERVABILITY_MODE: 'isolated-evidence', LOCAL_BETA_ENABLED: 'true',
+    BUDGET_ADMISSION_POLICY: 'off', ENVIRONMENT: 'local', OBSERVABILITY_MODE: 'isolated-evidence', LOCAL_BETA_ENABLED: 'true',
     PORTAL_URL: 'http://localhost:5174',
     CORS_ORIGINS: 'http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174,http://127.0.0.1:5173',
   });
@@ -82,7 +83,8 @@ test('production configuration refuses every observability persistence or enable
 
 test('the parsed evidence profile serves guarded local health and emits a local-only request event', async () => {
   const config = readConfig('evidence');
-  const built = await build({ entryPoints: [config.main], bundle: true, format: 'esm', platform: 'neutral', external: ['node:crypto'], write: false });
+  const built = await build({ entryPoints: [config.main], bundle: true, format: 'esm', platform: 'neutral',
+    external: ['node:crypto', 'cloudflare:workers'], write: false });
   const logs = [];
   const miniflare = new Miniflare(convertV4MiniflareOptions({
     handleStructuredLogs: log => { logs.push(log); },
@@ -91,7 +93,11 @@ test('the parsed evidence profile serves guarded local health and emits a local-
       compatibilityFlags: config.compatibility_flags,
       d1Databases: { DB: '56046e55-5e61-48cd-9e82-6f1f2baf2d29' },
       r2Buckets: ['ATTACHMENTS_BUCKET'],
-      durableObjects: { NOTIFICATION_DO: 'NotificationDO' },
+      durableObjects: {
+        NOTIFICATION_DO: 'NotificationDO',
+        BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO',
+        BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO',
+      },
       unsafeEphemeralDurableObjects: true,
       bindings: config.vars,
     }],

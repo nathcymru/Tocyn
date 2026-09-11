@@ -12,6 +12,7 @@ import { TenantTicketService } from "../services/tenant-ticket.service";
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
 import { apiTicketCreateSchema, apiTicketReplySchema, MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { requestBounds } from '../middleware/request-bounds';
+import { admitConfiguredApiTicketMutation } from '../middleware/budget-admission.middleware';
 
 const updateTicketSchema = z.object({
   status: z.enum(["open", "pending", "resolved", "closed"]).optional(),
@@ -55,7 +56,13 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
   try {
     const mutation = deps.ticketMutationReplay({ kind: 'api-key', id: resolution!.apiKeyId });
     const prepared = await mutation.prepareMutation({ operation: 'api.ticket.create', data: validData }, key);
-    const outcome = prepared.replay || await mutation.commit(prepared);
+    if (prepared.replay) {
+      if (prepared.replay.keyed) c.header('Idempotency-Replayed', String(prepared.replay.replayed));
+      return c.json(prepared.replay.body, prepared.replay.status);
+    }
+    const budgetRejection = await admitConfiguredApiTicketMutation(c, 'api.ticket.create', mutation, prepared);
+    if (budgetRejection) return budgetRejection;
+    const outcome = await mutation.commit(prepared);
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
     return c.json(outcome.body, outcome.status);
   } catch (error) {
@@ -140,7 +147,13 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
   try {
     const mutation = deps.ticketMutationReplay({ kind: 'api-key', id: resolution!.apiKeyId });
     const prepared = await mutation.prepareMutation({ operation: 'api.ticket.reply', ticketId: id, data: parsed.data }, key);
-    const outcome = prepared.replay || await mutation.commit(prepared);
+    if (prepared.replay) {
+      if (prepared.replay.keyed) c.header('Idempotency-Replayed', String(prepared.replay.replayed));
+      return c.json(prepared.replay.body, prepared.replay.status);
+    }
+    const budgetRejection = await admitConfiguredApiTicketMutation(c, 'api.ticket.reply', mutation, prepared);
+    if (budgetRejection) return budgetRejection;
+    const outcome = await mutation.commit(prepared);
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
     return c.json(outcome.body, outcome.status);
   } catch (error) {

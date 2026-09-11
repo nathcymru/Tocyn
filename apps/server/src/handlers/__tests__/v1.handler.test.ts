@@ -25,7 +25,7 @@ const mockBucket = {
 const VALID_API_KEY = "lt_abcdefgh.12345678901234567890123456789012";
 
 const request = (path: string, init?: RequestInit, env?: any) => {
-  const mergedEnv = { ...env, NOTIFICATION_DO: mockDO, ATTACHMENTS_BUCKET: mockBucket };
+  const mergedEnv = { BUDGET_ADMISSION_POLICY: 'off', ...env, NOTIFICATION_DO: mockDO, ATTACHMENTS_BUCKET: mockBucket };
   return v1.request(path, init, mergedEnv, { waitUntil: vi.fn() } as any);
 };
 
@@ -194,6 +194,18 @@ describe("v1 Handler Integration Tests", () => {
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO tickets"));
       // Verify article creation
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO articles"));
+    });
+
+    it("fails closed before the mutation commit when configured budget authority is missing", async () => {
+      const res = await request("/tickets", {
+        method: "POST",
+        headers: { "X-API-Key": VALID_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: "Budgeted", customer_email: "user@example.com", body: "Synthetic" }),
+      }, { DB: mockDB as any, BUDGET_ADMISSION_POLICY: 'api-ticket-mutations-v1' });
+
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' });
+      expect(mockDB.batch).not.toHaveBeenCalled();
     });
 
     it("should return 400 if required fields are missing", async () => {

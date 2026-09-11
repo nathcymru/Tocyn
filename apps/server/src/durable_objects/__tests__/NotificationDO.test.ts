@@ -6,7 +6,7 @@ describe('realtime session lifecycle', () => {
   const socket = (overrides = {}) => {
     let attachment = { connectionId: 'c', userId: 'u', name: 'Agent', location: null,
       tenantId: 'A', role: 'agent', version: 0, expiresAt: Math.floor(Date.now() / 1000) + 60, ...overrides };
-    return { send: vi.fn(), close: vi.fn(), serializeAttachment: vi.fn(value => { attachment = value; }), deserializeAttachment: () => attachment };
+    return { readyState: 1, send: vi.fn(), close: vi.fn(), serializeAttachment: vi.fn(value => { attachment = value; }), deserializeAttachment: () => attachment };
   };
   beforeEach(() => {
     vi.useFakeTimers();
