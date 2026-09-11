@@ -82,6 +82,7 @@ function TicketDetail({ id }: { id: string }) {
   const replyCapability = replyCapabilities.data?.modes.find(mode => mode.visibility === draft.mode);
   const workspace = useOperatorWorkspaceState();
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
+  const currentUserId = useAuthStore(state => state.user?.id);
   const sessionGenerationRef = useRef(sessionGeneration);
   sessionGenerationRef.current = sessionGeneration;
   const draftRef = useRef(draft);
@@ -100,6 +101,8 @@ function TicketDetail({ id }: { id: string }) {
   const reply = draft.body;
   const isInternal = draft.mode === 'internal';
   const [suggestion, setSuggestion] = React.useState<string | null>(null);
+  const [mentionedUserIds, setMentionedUserIds] = React.useState<readonly string[]>([]);
+  const mentionCandidates = (agents ?? []).filter(agent => agent.id !== currentUserId).slice(0, replyCapabilities.data?.internalMentions?.maxRecipients ?? 0);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -525,13 +528,14 @@ function TicketDetail({ id }: { id: string }) {
         baseConversationRevision: sendingDraft.baseConversationRevision,
       } : undefined;
       const intent = JSON.stringify({ ticketId: id, draft: precondition, mode: sendingDraft.mode, body: sendingDraft.body,
-        bodyFormat: sendingDraft.bodyFormat, attachments: sendingDraft.attachments.map(({ storageKey, filename, size, contentType }) => ({ storageKey, filename, size, contentType })) });
+        bodyFormat: sendingDraft.bodyFormat, mentionedUserIds: sendingDraft.mode === 'internal' && replyCapabilities.data?.internalMentions ? mentionedUserIds : [], attachments: sendingDraft.attachments.map(({ storageKey, filename, size, contentType }) => ({ storageKey, filename, size, contentType })) });
       if (!idempotency.current || idempotency.current.intent !== intent) idempotency.current = { intent, key: crypto.randomUUID() };
       const article = await dashboardApi.post<{ id?: string }>(`/tickets/${id}/articles`, {
         body: sendingDraft.body,
         body_format: sendingDraft.bodyFormat,
         is_internal: sendingDraft.mode === 'internal',
         attachments: sendingDraft.attachments,
+        ...(sendingDraft.mode === 'internal' && replyCapabilities.data?.internalMentions && mentionedUserIds.length ? { mentioned_user_ids: mentionedUserIds } : {}),
         ...(precondition ? { draft: precondition } : {}),
       }, { headers: { 'Idempotency-Key': idempotency.current.key } });
       if (!article?.id) throw new Error('The reply was not confirmed.');
@@ -543,13 +547,14 @@ function TicketDetail({ id }: { id: string }) {
         ? isInternal ? 'Internal note added.' : 'Public reply added to the conversation.'
         : `${isInternal ? 'Internal note added.' : 'Public reply added to the conversation.'} Draft cleanup could not be confirmed; the draft is retained.`);
       setSuggestion(null);
+      setMentionedUserIds([]);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['ticket', id] }),
         queryClient.invalidateQueries({ queryKey: ['tickets'] }),
       ]);
     } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          if (error instanceof ApiError && error.status === 409 && replyCapabilities.data?.collision) {
+          if (error instanceof ApiError && error.status === 409 && error.code === 'staff_reply_stale' && replyCapabilities.data?.collision) {
           setStaleReplyReview('retry');
           setReplyError('The saved draft or conversation changed. Review and rebase before sending; your draft is retained.');
         } else setReplyError(`${error.message}. Your draft is retained. Refresh the conversation before trying again if delivery is uncertain.`);
@@ -939,6 +944,20 @@ function TicketDetail({ id }: { id: string }) {
               </div> : <p className="mb-2 text-sm text-slate-600">{replyCapability.channel === 'email'
                 ? `Email reply to ${ticket.customer_email}. Delivery is attempted after saving.`
                 : 'Internal note. No email is sent.'} Up to {replyCapability.attachments.maxCount} attachments, {replyCapability.attachments.maxBytesPerFile / 1024 / 1024} MB each.</p>}
+              {isInternal && replyCapabilities.data?.internalMentions && <fieldset className="mb-3 rounded border border-amber-200 bg-amber-50 p-3">
+                <legend className="px-1 text-sm font-semibold text-amber-950">Mention colleagues</legend>
+                <p id="mention-help" className="mb-2 text-sm text-amber-900">Mentioned colleagues with current ticket access receive a private activity after this note is saved. Up to 16.</p>
+                {mentionCandidates.length ? <div className="grid gap-2 sm:grid-cols-2">
+                  {mentionCandidates.map(agent => {
+                    const checked = mentionedUserIds.includes(agent.id);
+                    return <label key={agent.id} className="flex min-h-11 items-center gap-2 text-sm text-slate-900">
+                      <input type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
+                        onChange={() => setMentionedUserIds(current => checked ? current.filter(id => id !== agent.id) : current.length < 16 ? [...current, agent.id] : current)} />
+                      <span>{agent.full_name || agent.email}</span>
+                    </label>;
+                  })}
+                </div> : <p className="text-sm text-slate-700">No colleagues are available to mention.</p>}
+              </fieldset>}
               <label className="mb-2 block text-sm text-slate-700">
                 Message format
                 <select aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
