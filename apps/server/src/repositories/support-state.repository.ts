@@ -364,6 +364,13 @@ export class SupportStateRepository {
       'after',json_object('definitionId',d.id,'lifecycle',d.legacy_status,'waitingReason',?,'nextAction',?),'reason','definition_deactivated')`;
     const rows = `t.tenant_id=? AND s.definition_id=? AND ${old} AND ${target} AND ${guard.sql}`;
     const results = await this.db.batch([
+      // The service's count is advisory. This bounded in-batch assertion
+      // prevents a concurrent remap from turning the admitted operation into
+      // an unbounded tenant write.
+      this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+        VALUES (?,CASE WHEN (SELECT count(*) FROM ticket_support_state WHERE tenant_id=? AND definition_id=?)<=100 THEN 1 ELSE 0 END)
+        ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
+        .bind(this.scope.tenantId,this.scope.tenantId,id),
       this.db.prepare(`INSERT INTO support_state_events (tenant_id,id,ticket_id,definition_id,kind,actor_kind,actor_id,facts)
         SELECT t.tenant_id,${uuidSql},t.id,d.id,'ticket.transition',?,?,${facts}
         FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
@@ -393,6 +400,6 @@ export class SupportStateRepository {
           AND ${definitionTarget} AND ${guard.sql} RETURNING id`)
         .bind(this.scope.tenantId,id,input.replacementId,waitingReason,nextAction,...guard.values),
     ]);
-    if (!results[6]?.results?.[0]) throw new SupportStateError('conflict', 'Support-state deactivation conflicted or was invalid');
+    if (!results[7]?.results?.[0]) throw new SupportStateError('conflict', 'Support-state deactivation conflicted or was invalid');
   }
 }
