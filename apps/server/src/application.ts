@@ -17,6 +17,7 @@ import widget from './handlers/widget.handler';
 import customerHandler from './handlers/customer.handler';
 import { environmentGuard } from './middleware/environment-guard';
 import { operationalObservability } from './middleware/operational-observability';
+import { ownerIngressAdmission } from './middleware/owner-ingress-admission';
 import { measureResourceOperation } from './observability/resource-operation';
 import { AppVariables } from './types';
 import { admitRealtimeConnection } from './budgets/realtime-admission.service';
@@ -32,6 +33,7 @@ app.onError((error,c) => {
 });
 app.use('*', environmentGuard);
 app.use('*', operationalObservability);
+app.use('*', ownerIngressAdmission);
 app.use('*', localBetaGuard);
 
 app.get('/api/realtime', async (c) => {
@@ -48,7 +50,7 @@ app.get('/api/realtime', async (c) => {
   // a lost 101 is a distinct possible connection and is charged before the DO
   // can accept it; the signed lease prevents a client from forging that spend.
   const realtimeDeps = createTenantRequestDeps(user.realtimeScope, c.env, { sessionVersion: user.session_version, expiresAt: user.session_expires_at },
-    undefined, c.get('resourceOperationEmitter'));
+    undefined, c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
   const admission = await admitRealtimeConnection({ env: c.env, user, deps: realtimeDeps, now: () => c.env.localNow?.() ?? Date.now() });
   if (admission.status === 'rejected') {
     return c.json({ code: admission.reason === 'exhausted' ? 'budget_exhausted' : 'budget_admission_unavailable',
