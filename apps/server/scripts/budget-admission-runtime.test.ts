@@ -164,7 +164,8 @@ test('real local combined policy admits API and authenticated staff receipts wit
     assert.equal(conflict.status, 409); await conflict.body?.cancel();
     assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant' AND subject='Staff receipt'").first<{count:number}>())?.count, 1);
     assert.equal((await db.prepare("SELECT count(*) AS count FROM staff_ticket_mutation_receipts WHERE tenant_id='runtime-tenant'").first<{count:number}>())?.count, 1);
-    const bucket = await mf.getR2Bucket('ATTACHMENTS_BUCKET');
+    // Miniflare's prerelease binding proxy types currently infer Request here.
+    const bucket = await mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
     await bucket.put('runtime-tenant/agent-attachments/runtime-staff/retry.txt', 'retry attachment', { httpMetadata: { contentType: 'text/plain' } });
     const beforeRetry = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number };
     await mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ beforeCanonical: 'failure' }) });
