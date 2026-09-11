@@ -1,4 +1,5 @@
 import { apiBudgetMutationStatements, type ApiMutationCommit } from './budget-commit-fence';
+import { customerMutationStatement, type CustomerMutationCommit } from './customer-ticket-mutation.repository';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
 import { staffMutationStatements, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
 import { StaffReplyPreconditionConflictError, staffReplyPreconditionConstraint, staffReplyPreconditionMatches, type StaffReplyPrecondition } from './staff-reply-precondition.repository';
@@ -85,6 +86,22 @@ export class TicketMutationReplayRepository {
     return this.commitCanonical(candidate, ns, undefined, api);
   }
 
+  async commitCustomer(candidate: MutationCandidate, ns: MutationNamespace | undefined, customer: CustomerMutationCommit): Promise<string> {
+    const portalOperation = candidate.ticket ? 'portal.ticket.create' : 'portal.ticket.reply';
+    const email = customer.credential.email.trim().toLowerCase();
+    if (candidate.audit?.kind !== 'customer' || candidate.audit.id !== customer.credential.actorId
+      || (candidate.audit.source !== 'portal' && candidate.audit.source !== 'widget') || !candidate.articleId || !candidate.article
+      || candidate.article.sender_type !== 'customer' || candidate.article.sender_id !== customer.credential.actorId
+      || candidate.article.is_internal || (candidate.ticket
+        ? candidate.ticket.customer_id !== customer.credential.actorId || candidate.ticket.customer_email.trim().toLowerCase() !== email
+        : customer.requirements.ticket?.id !== candidate.ticketId)
+      || (ns && (ns.principalKind !== 'customer' || ns.principalId !== customer.credential.actorId || ns.operation !== portalOperation
+        || ns.keyHash !== customer.authority.operationId || ns.payloadHash !== customer.authority.operationFingerprint))) {
+      throw new Error('Invalid customer mutation');
+    }
+    return this.commitCanonical(candidate, ns, undefined, undefined, customer);
+  }
+
   async commitStaff(candidate: MutationCandidate, staff: StaffMutationCommit, precondition?: StaffReplyPrecondition): Promise<string> {
     if (candidate.audit?.kind !== 'staff' || candidate.audit.id !== staff.credential.actorId
       || candidate.audit.source !== 'dashboard' || !candidate.articleId || !candidate.article
@@ -93,16 +110,19 @@ export class TicketMutationReplayRepository {
       || (staff.namespace && staff.namespace.operation !== (candidate.ticket ? 'dashboard.ticket.create' : 'dashboard.ticket.reply'))) {
       throw new Error('Invalid staff mutation');
     }
-    return this.commitCanonical(candidate, undefined, staff, undefined, precondition);
+    return this.commitCanonical(candidate, undefined, staff, undefined, undefined, precondition);
   }
 
-  private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit, api?: ApiMutationCommit, precondition?: StaffReplyPrecondition): Promise<string> {
+  private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit,
+    api?: ApiMutationCommit, customer?: CustomerMutationCommit, precondition?: StaffReplyPrecondition): Promise<string> {
     // This is after caller authorization/admission preparation and before
     // constructing the authoritative D1 batch. No HTTP response establishes this.
     this.canonicalMutationSli?.recordAttempt();
     const operation=candidate.ticket?'create':'conversation';
     const staffPrecondition = staff && precondition ? staffReplyPreconditionConstraint(this.scope, candidate, precondition) : undefined;
-    const statements: D1PreparedStatement[] = [...(api ? apiBudgetMutationStatements(this.db,this.scope,api) : []), ...(staff ? staffMutationStatements(this.db,this.scope,staff,staffPrecondition) : []), ...(this.admission?.statements(operation)??[])];
+    const statements: D1PreparedStatement[] = [...(api ? apiBudgetMutationStatements(this.db,this.scope,api) : []),
+      ...(staff ? staffMutationStatements(this.db,this.scope,staff,staffPrecondition) : []),
+      ...(customer ? [customerMutationStatement(this.db,this.scope,customer)] : []), ...(this.admission?.statements(operation)??[])];
     if (ns) {
       // Exact expired-key reuse and at most 99 other expired rows: bounded 100.
       statements.push(this.db.prepare(`DELETE FROM ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at <= unixepoch()`)

@@ -9,6 +9,8 @@ export type VerifiedMutationAttachment = RequestedMutationAttachment & { size: n
 export type TicketMutationInput =
   | {
     operation: 'api.ticket.create' | 'portal.ticket.create';
+    /** Server-composed only; widget preserves its established intake attribution. */
+    source?: 'widget';
     data: {
       subject: string; customer_email?: string; body?: string;
       status?: Ticket['status']; priority?: Ticket['priority'];
