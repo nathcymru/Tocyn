@@ -22,3 +22,12 @@ Next: publish coherent draft PR, review exact-head CI/security, preserve require
 ## Closed-reservation final review correction
 
 Root found the exact operation check could accept a retained operation from a now-closed grant. It now also requires absence of the whole-grant closure. Native regression stages a retained exact operation and closes its reservation before the business batch: old code returned200; fixed code returns503 with no settings mutation. Complete native case passes, runtime types and focused lint pass. Logs /private/tmp/tocyn-admin-closed-grant{,-red}.log. Previous cancelled/superseded remote runs are not final evidence; exact new revision still requires all CI/security/signing gates.
+
+
+## Combined administration integration, 11September2026
+
+PR205 is now the single integration owner for settings/theme/permissions plus saved-filterPR209(cfcf802) and group/directoryPR208(fc6f4d1). Root merged accepted20274e0abf then both reviewed branches. Shared CI registrations preserve all three native suites plus accepted ticket-list coverage. Accepted knowledge budgetGrantOperationConstraint/Statements were preserved during helper conflict resolution; no source continuation fence was discarded.
+
+Combined head4f3baec passes shared runtime types and native12/12 (admin1,groups5,filters2,lists4), logs /private/tmp/tocyn-admin-combined-{types,native}.log. Full exact new-head CI/security remains required. PR208/209 stay draft evidence branches; do not merge them independently or close issue64. They can be superseded after205accepted. Root owns these frozen trees; workers implement separate API-key/configuration successors.
+
+Accepted main20274e0abf has valid signature and testedtreeb25f677c408dee35d03ddafc93c77804a09d6ea7, CI34610532368/CodeQL34610525898. Issue64receipt5636319853 and151receipt5636320126 record partial acceptance. No owner input missing, no Copilot request or deployment. Full140 remains open.
