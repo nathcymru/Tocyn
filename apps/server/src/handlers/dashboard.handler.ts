@@ -6,6 +6,7 @@ import { EmailService } from '../services/email/outbound.service';
 import { BroadcastService } from '../services/broadcast.service';
 import { Hono } from "hono";
 import { z } from "zod";
+import { OPERATOR_WORKSPACE_SORTS } from '../types/operator-workspace';
 import { Env } from "../bindings";
 import { authMiddleware } from "../middleware/auth.middleware";
 import { mfaGuard } from "../middleware/mfa.guard";
@@ -276,7 +277,10 @@ dashboard.post("/tickets", async (c) => {
  */
 dashboard.get("/tickets", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const sort = z.enum(OPERATOR_WORKSPACE_SORTS).optional().safeParse(c.req.query('sort'));
+  if (!sort.success) return c.json({ error: 'Invalid ticket sort' }, 400);
   const result = await d.repositories.tickets.list({
+    sort: sort.data,
     customerEmail:c.req.query('customer_email'), filterId:c.req.query('filter_id'),
     status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),
     groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:c.req.query('search'),

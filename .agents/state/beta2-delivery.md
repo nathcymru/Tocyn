@@ -2,7 +2,15 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 11 September 2026, 01:15 BST
+## Current state — 11 September 2026, 01:35 BST
+
+Combined PR174 candidate completes the current persistence consumers and approved local retention;187 dashboard/515 server tests and expanded guarded browser pass. Final exact-head CI/integration remains before accepting #129. Theme PR175/ecd2a35 includes a real synthetic Chromium CSP fixture; application integration remains. Root owns both integrations; native workers completed. #136 preparation is ready. No owner approval is missing. Accepted main33dfe0b, beta.2 incomplete and forecasts unchanged. See [workspace-129.md](workspace-129.md) for exact evidence, corrections and next actions. Account96%remaining; no paid usage/reset/Copilot.
+
+## Historical state — 11 September 2026, 01:25 BST
+
+Owner's 48-hour draft decision is implemented locally in PR174/8f17aca; build/types/lint/security pass, full tests pending. Existing Terra/medium worker is completing selected-ticket/panel interactions; existing Luna/medium worker completed theme scope and read-only #136 preparation. Theme PR175/362a0a0 remains partial. No outstanding owner approval. See [workspace-129.md](workspace-129.md) and [waiting-136-preparation.md](waiting-136-preparation.md). Accepted main/forecasts unchanged; beta.2 remains incomplete.
+
+## Historical state — 11 September 2026, 01:15 BST
 
 Owner approved 48-hour unsent draft retention from last saved edit. No outstanding approval blocks #129. Local-only implementation and targeted tests are in continuation PR174; exact-head CI and remaining preference interactions are still required. #66 is In progress from11September with its independent token foundation under coordinator review. See [workspace-129.md](workspace-129.md) for ownership, evidence and exact next actions. Main remains33dfe0b, beta.2 remains incomplete, and forecasts remain unchanged. Native worker concurrency was used for the theme foundation; further worker starts were rejected by the native thread limit, so root continues locally without a billing workaround.
 

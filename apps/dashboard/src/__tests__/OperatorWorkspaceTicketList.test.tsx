@@ -29,8 +29,8 @@ it('restores the scoped list query/filter/page, marks body-free draft results, a
   const ticketQueries: URLSearchParams[] = [];
   const workspaceWrites: unknown[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
-    if (url === '/api/workspace/state' && options.method === 'PUT') { workspaceWrites.push(JSON.parse(String(options.body))); return json({ revision: 5, view: 'all', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'private search text', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' }); }
-    if (url === '/api/workspace/state') return json({ revision: 4, view: 'all', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'server query', listAnchor: 'page:2', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
+    if (url === '/api/workspace/state' && options.method === 'PUT') { workspaceWrites.push(JSON.parse(String(options.body))); return json({ revision: 5, view: 'custom', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'private search text', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' }); }
+    if (url === '/api/workspace/state') return json({ revision: 4, view: 'custom', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'server query', listAnchor: 'page:2', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
     if (url === '/api/workspace/drafts?limit=50') return json({ items: [{ ticketId: ticket.id, updatedAt: '2026-09-11T00:00:00Z' }], next: null });
     if (url.startsWith('/api/tickets?')) { ticketQueries.push(new URL(url, 'http://localhost').searchParams); return json({ data: [ticket], meta: { page: Number(ticketQueries.at(-1)?.get('page')), limit: 1, total: 2, total_pages: 2 } }); }
     if (url === '/api/settings/filters') return json([{ id: 'open-filter', name: 'Awaiting response' }]);
@@ -42,6 +42,7 @@ it('restores the scoped list query/filter/page, marks body-free draft results, a
   await waitFor(() => expect(ticketQueries.at(-1)?.get('page')).toBe('2'));
   expect(ticketQueries.at(-1)?.get('filter_id')).toBe('open-filter');
   expect(ticketQueries.at(-1)?.get('search')).toBe('server query');
+  expect(ticketQueries.at(-1)?.get('sort')).toBe('updated_desc');
   expect(screen.getByRole('textbox', { name: 'Search tickets' })).toHaveValue('server query');
   expect(screen.getByRole('button', { name: 'Awaiting response' })).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByLabelText('Draft available')).toBeInTheDocument();
@@ -53,6 +54,45 @@ it('restores the scoped list query/filter/page, marks body-free draft results, a
   await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/tickets/${ticket.id}`));
   expect(workspaceWrites).toHaveLength(1);
   expect(workspaceWrites[0]).toMatchObject({ expectedRevision: 4, listQuery: 'private search text', listAnchor: 'page:1' });
+});
+
+it('restores sort, sends it with the server-paginated query, and saves custom and all filter views', async () => {
+  const ticketQueries: URLSearchParams[] = [];
+  const workspaceWrites: Record<string, unknown>[] = [];
+  let revision = 4;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (url === '/api/workspace/state' && options.method === 'PUT') {
+      const { expectedRevision: _expectedRevision, ...saved } = JSON.parse(String(options.body));
+      workspaceWrites.push(saved);
+      revision += 1;
+      return json({ revision, ...saved, updatedAt: '2026-09-11T00:00:00Z' });
+    }
+    if (url === '/api/workspace/state') return json({ revision, view: 'all', sort: 'priority_asc', filters: {}, listQuery: '', listAnchor: 'page:3', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
+    if (url === '/api/workspace/drafts?limit=50') return json({ items: [], next: null });
+    if (url.startsWith('/api/tickets?')) { ticketQueries.push(new URL(url, 'http://localhost').searchParams); return json({ data: [ticket], meta: { page: Number(ticketQueries.at(-1)?.get('page')), limit: 1, total: 3, total_pages: 3 } }); }
+    if (url === '/api/settings/filters') return json([{ id: 'priority-filter', name: 'Priority follow-up' }]);
+    if (url === '/api/settings') return json({ TICKET_PREFIX: '#' });
+    return json([]);
+  }));
+  showFeed();
+  const sort = await screen.findByRole('combobox', { name: 'Sort tickets' });
+  await waitFor(() => expect(ticketQueries.at(-1)?.get('page')).toBe('3'));
+  expect(sort).toHaveValue('priority_asc');
+  expect(ticketQueries.at(-1)?.get('sort')).toBe('priority_asc');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Priority follow-up' }));
+  await waitFor(() => expect(workspaceWrites.at(-1)).toMatchObject({ view: 'custom', filters: { filterId: 'priority-filter' }, listAnchor: 'page:1' }));
+  await waitFor(() => expect(ticketQueries.at(-1)?.get('filter_id')).toBe('priority-filter'));
+  expect(ticketQueries.at(-1)?.get('page')).toBe('1');
+  expect(ticketQueries.at(-1)?.get('sort')).toBe('priority_asc');
+
+  fireEvent.click(screen.getByRole('button', { name: 'All Tickets' }));
+  await waitFor(() => expect(workspaceWrites.at(-1)).toMatchObject({ view: 'all', filters: { filterId: null }, listAnchor: 'page:1' }));
+
+  fireEvent.change(sort, { target: { value: 'created_desc' } });
+  await waitFor(() => expect(ticketQueries.at(-1)?.get('sort')).toBe('created_desc'));
+  expect(ticketQueries.at(-1)?.get('page')).toBe('1');
+  await waitFor(() => expect(workspaceWrites.at(-1)).toMatchObject({ sort: 'created_desc', listAnchor: 'page:1', view: 'all' }));
 });
 
 it('applies a legacy search URL once without restoring it over a later operator edit', async () => {

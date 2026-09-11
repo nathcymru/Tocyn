@@ -1,4 +1,5 @@
 import { TicketMutationReplayRepository } from './ticket-mutation-replay.repository';
+import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 import { OperatorWorkspaceRepository } from './operator-workspace.repository';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
@@ -201,6 +202,7 @@ export class SqlTicketRepository implements TicketRepository {
       ticketNo?: string;
       search?: string;
       customerEmail?: string;
+      sort?: OperatorWorkspaceSort;
     }
   ): Promise<{ data: Ticket[]; total: number; meta: { total: number; page: number; limit: number; total_pages: number } }> {
     const page = Math.max(1, Number.isFinite(options.page) ? options.page! : 1);
@@ -316,7 +318,15 @@ export class SqlTicketRepository implements TicketRepository {
     const total = countResult?.total || 0;
     const totalPages = Math.ceil(total / limit);
 
-    query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?";
+    const sortClauses: Record<OperatorWorkspaceSort, string> = {
+      updated_desc: 'tickets.updated_at DESC', updated_asc: 'tickets.updated_at ASC',
+      created_desc: 'tickets.created_at DESC', created_asc: 'tickets.created_at ASC',
+      priority_desc: "CASE tickets.priority WHEN 'urgent' THEN 3 WHEN 'high' THEN 2 WHEN 'normal' THEN 1 ELSE 0 END DESC",
+      priority_asc: "CASE tickets.priority WHEN 'urgent' THEN 3 WHEN 'high' THEN 2 WHEN 'normal' THEN 1 ELSE 0 END ASC",
+    };
+    const sort = options.sort ?? 'updated_desc';
+    if (!Object.prototype.hasOwnProperty.call(sortClauses, sort)) throw new Error('Invalid ticket sort');
+    query += ` ORDER BY ${sortClauses[sort]}, tickets.id ASC LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
     const { results } = await this.db.prepare(query)

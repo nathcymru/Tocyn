@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": { "noEmit": true },
-  "include": ["operator-draft-retention.test.ts", "local-tenant-fixture.ts", "local-beta-operator.ts"]
+  "include": ["operator-draft-retention.test.ts", "operator-workspace-sort.test.ts", "local-tenant-fixture.ts", "local-beta-operator.ts"]
 }
