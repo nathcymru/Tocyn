@@ -303,7 +303,8 @@ export class TenantKnowledgeService {
         const content = current.body || '';
         if (!validKnowledgeSourceText(content)) throw new Error('Knowledge source exceeds 10 MiB');
         const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
-        const staged = await index.begin(articleId,current.body_r2_key || `article/${articleId}`,type,null,new TextEncoder().encode(content).byteLength,'article',commit?.fence);
+        const staged = await index.begin(articleId,current.body_r2_key || `article/${articleId}`,type,null,new TextEncoder().encode(content).byteLength,
+          'article',commit?.fence,[],!!commit);
         try {
           await commit?.authorizeCurrent();
           const fingerprint=crypto.createHash('sha256').update(content).digest('hex');

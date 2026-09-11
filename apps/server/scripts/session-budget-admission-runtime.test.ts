@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import type { DurableObjectNamespace } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement, DurableObjectNamespace } from '@cloudflare/workers-types';
 import { splitSql } from './split-sql';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
@@ -12,13 +12,60 @@ import { CapabilityPolicyService } from '../src/repositories/capability-policy.r
 import { SESSION_BUDGET_GROUP_CAPABILITY_SQL, SessionBudgetAuthorityRepository, type SessionBudgetCredential, type SessionBudgetRequirements } from '../src/repositories/session-budget-authority.repository';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
-import { admitKnowledgeSourceWrite } from '../src/budgets/knowledge-source-admission.service';
+import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_WRITE_ENVELOPE } from '../src/budgets/knowledge-source-admission.service';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
 import { TenantKnowledgeService } from '../src/services/tenant-knowledge.service';
 
 const NOW = Math.floor(Date.now()/1_000)*1_000;
 const root = resolve(import.meta.dirname, '..');
+
+type NativeD1WriteMeter = Readonly<{
+  database: D1Database;
+  reset: () => void;
+  rowsWritten: () => number;
+  samples: () => readonly (readonly number[])[];
+}>;
+
+/** Sums the native D1 rows_written metadata across every statement in a whole
+ * source attempt. Batch statement results are counted once at the DB boundary. */
+function meterNativeD1Writes(database: D1Database): NativeD1WriteMeter {
+  let rowsWritten = 0;
+  let samples: number[][] = [];
+  const rawStatements = new WeakMap<object, D1PreparedStatement>();
+  const record = (result: any): any => {
+    const results = Array.isArray(result) ? result : [result];
+    for (const item of results) {
+      const rows = item?.meta?.rows_written;
+      assert.equal(Number.isSafeInteger(rows) && rows >= 0, true, 'native D1 result exposes rows_written metadata');
+      rowsWritten += rows;
+    }
+    samples.push(results.map(item=>item.meta.rows_written));
+    return result;
+  };
+  const wrapStatement = (statement: D1PreparedStatement): D1PreparedStatement => {
+    const proxy = new Proxy(statement as any, {
+      get(target, property) {
+        const value = Reflect.get(target, property);
+        if (property === 'bind') return (...args: unknown[]) => wrapStatement(value.apply(target,args));
+        if (property === 'run' || property === 'all') return async (...args: unknown[]) => record(await value.apply(target,args));
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    }) as D1PreparedStatement;
+    rawStatements.set(proxy as object,statement);
+    return proxy;
+  };
+  const metered = new Proxy(database as any, {
+    get(target,property) {
+      const value = Reflect.get(target,property);
+      if (property === 'prepare') return (sql: string) => wrapStatement(value.call(target,sql));
+      if (property === 'batch') return async (statements: D1PreparedStatement[]) => record(await value.call(target,
+        statements.map(statement=>rawStatements.get(statement as object) ?? statement)));
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as D1Database;
+  return {database:metered,reset:()=>{rowsWritten=0;samples=[];},rowsWritten:()=>rowsWritten,samples:()=>samples};
+}
 
 /** Real D1/DO adapter proof; token signature verification and dashboard HTTP wiring are not claimed here. */
 async function fixture(workerLimit = 1_000) {
@@ -59,6 +106,8 @@ async function fixture(workerLimit = 1_000) {
     ]);
   }
   await db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES ('tenant-b','only-b','Synthetic B','customer@example.test','shared-group','dashboard')").run();
+  const writeMeter = meterNativeD1Writes(db);
+  const meteredDb = writeMeter.database;
   const rawNamespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
   const coordinator = rawNamespace.get(rawNamespace.idFromName('session-aggregate')) as unknown as BudgetCoordinatorDO;
   const calls = { refresh: 0, reserve: 0 };
@@ -81,12 +130,13 @@ async function fixture(workerLimit = 1_000) {
   const requirements: SessionBudgetRequirements = { ticket: { id: 'shared-ticket', groupId: 'shared-group' } };
   const admit = (operation: string, tenantId = 'tenant-a', credential = credentialFor(tenantId), needed = requirements) => {
     const scope = scopeFor(tenantId);
-    return service.admit({ repository: new BudgetAuthorityRepository(db, scope), sessions: new SessionBudgetAuthorityRepository(db, scope),
+    return service.admit({ repository: new BudgetAuthorityRepository(meteredDb, scope), sessions: new SessionBudgetAuthorityRepository(meteredDb, scope),
       namespace, scope, credential, requirements: needed, now: () => NOW,
       intent: { operationId: operation, operationFingerprint: `digest:${operation}`, workScopeKey: 'synthetic-ticket-work' },
       business: { d1RowsRead: 2_560, d1RowsWritten: 1, logEvents: 136 } });
   };
-  return { mf, db, coordinator, calls, cache, admit, scopeFor, credentialFor, requirements, namespace, loseAck: () => { loseAck = true; } };
+  return { mf, db:meteredDb, coordinator, calls, cache, admit, scopeFor, credentialFor, requirements, namespace, writeMeter,
+    loseAck: () => { loseAck = true; } };
   } catch (error) { await mf.dispose(); throw error; }
 }
 
@@ -215,17 +265,23 @@ test('article update rejects an owner policy edit after admission without changi
   } finally {await f.mf.dispose();}
 });
 
-test('knowledge source commit publishes one immutable source with durable exact-operation evidence',async()=>{
+test('knowledge source upload publishes one immutable source within its whole-attempt D1 write envelope',async t=>{
   const f=await fixture(); try {
     const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
     const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
     const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
       exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
     const admission=await admitKnowledgeSourceWrite({env:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:f.namespace} as any,
-      deps,payload,sourceBytes:12,sourceKind:'article',now:()=>NOW});
+      deps,payload,sourceBytes:12,sourceKind:'document',now:()=>NOW});
     assert.equal(admission.status,'admitted');
+    f.writeMeter.reset();
     const id=await new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array.from({length:1024},()=>0)} as any)
-      .createArticle('Admitted','source bytes',null,'answer',admission);
+      .uploadAndProcess('Admitted','source.txt',new TextEncoder().encode('source bytes'),'text/plain',undefined,'answer',admission);
+    const attemptRows=f.writeMeter.rowsWritten();
+    t.diagnostic(`native D1 rows_written for successful upload attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
+    assert.equal(attemptRows,20,'upload native D1 metadata changed');
+    assert.ok(attemptRows<=KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten,
+      `upload wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
     const document=await deps.repositories.knowledge.getDocument(id); assert.ok(document); assert.match(document.file_path,/\/versions\/1$/);
     assert.ok(await deps.attachmentStorage.getAttachment(document.file_path));
     assert.equal((await f.db.prepare("SELECT count(*) count FROM knowledge_index_versions WHERE tenant_id='tenant-a' AND document_id=? AND state='preparing'").bind(id).first<{count:number}>())?.count,1);
@@ -233,7 +289,30 @@ test('knowledge source commit publishes one immutable source with durable exact-
   } finally {await f.mf.dispose();}
 });
 
-test('QA staging carries the admitted fence through the retention claim, R2 source and article publication',async()=>{
+test('article update publishes within its whole-attempt D1 write envelope',async t=>{
+  const f=await fixture(); try {
+    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
+    await deps.repositories.knowledge.createDocument({id:'updated-doc',title:'Original',file_path:'knowledge/updated-doc/original',tier:'answer'});
+    const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
+      exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
+    const admission=await admitKnowledgeSourceWrite({env:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:f.namespace} as any,
+      deps,payload,sourceBytes:12,sourceKind:'article',now:()=>NOW});
+    assert.equal(admission.status,'admitted');
+    f.writeMeter.reset();
+    await new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array.from({length:1024},()=>0)} as any)
+      .updateArticle('updated-doc','Updated','source bytes',null,'answer',admission);
+    const attemptRows=f.writeMeter.rowsWritten();
+    t.diagnostic(`native D1 rows_written for successful article update attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
+    assert.equal(attemptRows,20,'article update native D1 metadata changed');
+    assert.ok(attemptRows<=KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten,
+      `article update wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
+    assert.deepEqual(await f.db.prepare("SELECT title,status FROM knowledge_docs WHERE tenant_id='tenant-a' AND id='updated-doc'").first(),
+      {title:'Updated',status:'pending'});
+  } finally {await f.mf.dispose();}
+});
+
+test('QA staging carries the admitted fence through the retention claim, R2 source and article publication',async t=>{
   const f=await fixture(); try {
     await f.db.batch([
       f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('tenant-a','qa-ticket','QA','customer@example.test','dashboard')"),
@@ -246,12 +325,44 @@ test('QA staging carries the admitted fence through the retention claim, R2 sour
     const admission=await admitKnowledgeSourceWrite({env:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:f.namespace} as any,
       deps,payload,sourceBytes:10*1024*1024,sourceKind:'qa',now:()=>NOW});
     assert.equal(admission.status,'admitted');
+    f.writeMeter.reset();
     await new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array.from({length:1024},()=>0)} as any)
       .markArticleAsQA('qa-article','answer',admission);
+    const attemptRows=f.writeMeter.rowsWritten();
+    t.diagnostic(`native D1 rows_written for successful QA attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
+    assert.equal(attemptRows,20,'QA native D1 metadata changed');
+    assert.ok(attemptRows<=KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten,
+      `QA staging wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT qa_type,chunk_count FROM articles WHERE tenant_id='tenant-a' AND id='qa-article'").first(),{qa_type:'answer',chunk_count:0});
     const version=await f.db.prepare("SELECT file_path,state FROM knowledge_index_versions WHERE tenant_id='tenant-a' AND document_id='qa-article'").first<{file_path:string;state:string}>();
     assert.equal(version?.state,'preparing'); assert.ok(version && await deps.attachmentStorage.getAttachment(version.file_path));
     assert.equal((await f.db.prepare("SELECT count(*) count FROM ticket_cleanup_claims WHERE tenant_id='tenant-a' AND ticket_id='qa-ticket'").first<{count:number}>())?.count,0);
+    assert.equal((await f.db.prepare("SELECT count(*) count FROM budget_grant_operations WHERE tenant_id='tenant-a'").first<{count:number}>())?.count,1);
+  } finally {await f.mf.dispose();}
+});
+
+test('failed source recovery remains within the whole-attempt D1 write envelope',async t=>{
+  const f=await fixture(); try {
+    const rawBucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const failingBucket={get:rawBucket.get.bind(rawBucket),delete:rawBucket.delete.bind(rawBucket),
+      put:async()=>{throw new Error('synthetic R2 source failure');}};
+    const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:failingBucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
+    const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
+      exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
+    const admission=await admitKnowledgeSourceWrite({env:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:f.namespace} as any,
+      deps,payload,sourceBytes:12,sourceKind:'document',now:()=>NOW});
+    assert.equal(admission.status,'admitted');
+    f.writeMeter.reset();
+    await assert.rejects(new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array.from({length:1024},()=>0)} as any)
+      .uploadAndProcess('Failed','source.txt',new TextEncoder().encode('source bytes'),'text/plain',undefined,'answer',admission));
+    const attemptRows=f.writeMeter.rowsWritten();
+    t.diagnostic(`native D1 rows_written for failed source recovery attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
+    assert.equal(attemptRows,16,'failed source recovery native D1 metadata changed');
+    assert.ok(attemptRows<=KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten,
+      `failed source recovery wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
+    assert.deepEqual(await f.db.prepare("SELECT v.state,j.state AS job_state FROM knowledge_index_versions v JOIN knowledge_index_jobs j ON j.tenant_id=v.tenant_id AND j.document_id=v.document_id AND j.version=v.version WHERE v.tenant_id='tenant-a'").first(),
+      {state:'failed',job_state:'failed_cleanup'});
+    assert.equal((await f.db.prepare("SELECT count(*) count FROM budget_grant_operations WHERE tenant_id='tenant-a'").first<{count:number}>())?.count,1);
   } finally {await f.mf.dispose();}
 });
 

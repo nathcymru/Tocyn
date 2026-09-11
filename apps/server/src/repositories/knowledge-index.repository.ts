@@ -2,7 +2,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { KnowledgeSourceCommitFence } from '../budgets/knowledge-source-admission.service';
 import { staffMutationStatements } from './staff-ticket-mutation.repository';
-import { budgetGrantOperationStatements } from './budget-commit-fence';
+import { budgetGrantOperationConstraint, budgetGrantOperationStatements } from './budget-commit-fence';
 
 export const KNOWLEDGE_INDEX_CHUNK_BYTES = 512;
 // 127 four-byte scalars plus one ASCII scalar consume 509 bytes; a following
@@ -20,7 +20,9 @@ export type KnowledgeManifestPreparation = Readonly<{ version: number; filePath:
 /** Current staff/session plus the exact locally-spent operation. Every source
  * D1 mutation places these predicates in its own atomic batch. */
 export function knowledgeSourceFenceStatements(db: D1Database, scope: VerifiedTenantScope,
-  fence: KnowledgeSourceCommitFence): readonly D1PreparedStatement[] {
+  fence: KnowledgeSourceCommitFence, operationAlreadyLinked = false): readonly D1PreparedStatement[] {
+  if (operationAlreadyLinked) return [staffMutationStatements(db,scope,fence,
+    budgetGrantOperationConstraint(scope,fence.authority))[0]];
   return [staffMutationStatements(db,scope,fence)[0],...budgetGrantOperationStatements(db,scope,fence.authority)];
 }
 
@@ -82,7 +84,7 @@ export class KnowledgeIndexRepository {
 
   async begin(documentId: string, filePath: string, tier: 'answer'|'sop', categoryId: string | null, sourceBytes: number,
     sourceKind: 'document'|'article' = 'document', fence?: KnowledgeSourceCommitFence,
-    sourceStatements: readonly D1PreparedStatement[] = []): Promise<{ version: number; filePath: string }> {
+    sourceStatements: readonly D1PreparedStatement[] = [], retentionClaimed = false): Promise<{ version: number; filePath: string }> {
     if (!validSourceBytes(sourceBytes)) throw new Error('Invalid knowledge source size');
     const latest = await this.db.prepare(`SELECT COALESCE(MAX(version),0) AS version FROM knowledge_index_versions
       WHERE tenant_id=? AND document_id=?`).bind(this.scope.tenantId, documentId).first<{ version: number }>();
@@ -94,13 +96,15 @@ export class KnowledgeIndexRepository {
     // claims; version history can therefore never enlarge this request.
     if (sourceStatements.length > 2) throw new Error('Knowledge source mutation statement bound exceeded');
     await this.db.batch([
-      ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence) : []),
+      ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence,retentionClaimed) : []),
       ...sourceStatements,
       this.db.prepare(`INSERT INTO knowledge_index_versions
         (tenant_id,document_id,version,file_path,tier,category_id,source_kind,state,chunk_count,source_bytes) VALUES (?,?,?,?,?,?,?,'source_pending',0,?)`)
         .bind(this.scope.tenantId, documentId, version, versionFilePath, tier, categoryId, sourceKind, sourceBytes),
-      this.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,state)
-        VALUES (?,?,?,'source_pending')`).bind(this.scope.tenantId, documentId, version),
+      // A QA attempt already owns a durable ticket write claim. Other source
+      // attempts persist their recovery job before the R2 operation starts.
+      ...(!retentionClaimed ? [this.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,state)
+        VALUES (?,?,?,'source_pending')`).bind(this.scope.tenantId, documentId, version)] : []),
     ]);
     return { version, filePath: versionFilePath };
   }
@@ -109,15 +113,17 @@ export class KnowledgeIndexRepository {
   async sourceCaptured(documentId: string, version: number, fence?: KnowledgeSourceCommitFence,
     sourceStatements: readonly D1PreparedStatement[] = []): Promise<boolean> {
     if (sourceStatements.length > 2) throw new Error('Knowledge source mutation statement bound exceeded');
-    const prefix = fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence) : [];
+    const prefix = fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence,true) : [];
     const result = await this.db.batch([
       ...prefix,
       this.db.prepare(`UPDATE knowledge_index_versions SET state='preparing'
         WHERE tenant_id=? AND document_id=? AND version=? AND state='source_pending'`).bind(this.scope.tenantId, documentId, version),
       this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
         ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId),
-      this.db.prepare(`UPDATE knowledge_index_jobs SET state='preparing',dispatch_attempts=0
-        WHERE tenant_id=? AND document_id=? AND version=? AND state='source_pending'`).bind(this.scope.tenantId, documentId, version),
+      this.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,state)
+        VALUES (?,?,?,'preparing')
+        ON CONFLICT(tenant_id,document_id,version) DO UPDATE SET state='preparing',dispatch_attempts=0
+          WHERE knowledge_index_jobs.state='source_pending'`).bind(this.scope.tenantId, documentId, version),
       this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
         ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId),
       ...sourceStatements,
@@ -180,11 +186,13 @@ export class KnowledgeIndexRepository {
    * in bounded batches; failure never performs an unbounded DELETE. */
   async sourceFailed(documentId: string, version: number, fence?: KnowledgeSourceCommitFence): Promise<void> {
     await this.db.batch([
-      ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence) : []),
+      ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence,true) : []),
       this.db.prepare(`UPDATE knowledge_index_versions SET state='failed'
         WHERE tenant_id=? AND document_id=? AND version=? AND state IN ('source_pending','preparing')`).bind(this.scope.tenantId, documentId, version),
-      this.db.prepare(`UPDATE knowledge_index_jobs SET state='failed_cleanup',dispatch_attempts=0
-        WHERE tenant_id=? AND document_id=? AND version=? AND state IN ('source_pending','preparing')`).bind(this.scope.tenantId, documentId, version),
+      this.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,state)
+        SELECT ?,?,?,'failed_cleanup' WHERE changes()=1
+        ON CONFLICT(tenant_id,document_id,version) DO UPDATE SET state='failed_cleanup',dispatch_attempts=0
+          WHERE knowledge_index_jobs.state IN ('source_pending','preparing')`).bind(this.scope.tenantId, documentId, version),
     ]);
   }
 

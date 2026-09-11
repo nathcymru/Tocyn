@@ -28,6 +28,20 @@ function grantLink(authority: BudgetCommitAuthority): { sql: string; values: unk
     || !identity(grant.operationId) || !identity(grant.operationFingerprint)) return { sql: '0', values: [] };
   return { sql: `?=? AND ?=? AND ?=?`, values: [grant.operationId,authority.operationId,grant.operationFingerprint,authority.operationFingerprint,grant.tenantId,authority.snapshot.tenant_id] };
 }
+
+/** Read-only continuation constraint for an operation linked by the first
+ * source mutation. It keeps later batches exact without rewriting the link. */
+export function budgetGrantOperationConstraint(scope: VerifiedTenantScope,
+  authority: BudgetCommitAuthority): { sql: string; values: unknown[] } {
+  const link=grantLink(authority),grant=authority.grant;
+  return {sql:`${link.sql} AND NOT EXISTS (SELECT 1 FROM budget_grant_closures
+      WHERE tenant_id=? AND reservation_id=? AND holder_id=?) AND EXISTS (SELECT 1 FROM budget_grant_operations
+      WHERE tenant_id=? AND reservation_id=? AND holder_id=? AND operation_id=? AND aggregate_id=?
+        AND operation_fingerprint=? AND operation_envelope_json=?)`,
+    values:[...link.values,scope.tenantId,grant?.reservationId ?? '',grant?.holderId ?? '',scope.tenantId,
+      grant?.reservationId ?? '',grant?.holderId ?? '',grant?.operationId ?? '',grant?.aggregateId ?? '',
+      grant?.operationFingerprint ?? '',JSON.stringify(grant?.operationEnvelope ?? {})]};
+}
 /** Links the exact locally-spent operation to durable closure evidence. The
  * caller must place a current-principal/policy assertion before these rows. */
 export function budgetGrantOperationStatements(db: D1Database, scope: VerifiedTenantScope,
