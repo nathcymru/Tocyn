@@ -1,3 +1,4 @@
+import type { R2Bucket } from '@cloudflare/workers-types';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -228,7 +229,7 @@ for (const [label, mutation] of [
   ['revoked staff session', "UPDATE users SET session_version=2 WHERE tenant_id='tenant-a' AND id='shared-actor'"],
 ] as const) test(`knowledge source commit rejects ${label} after admission with no source side effect`,async()=>{
   const f=await fixture(); try {
-    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET');
+    const bucket=(await f.mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket);
     const scope=f.scopeFor('tenant-a');
     const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
     const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
@@ -247,7 +248,7 @@ for (const [label, mutation] of [
 
 test('article update rejects an owner policy edit after admission without changing metadata or storage',async()=>{
   const f=await fixture(); try {
-    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const bucket=(await f.mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket),scope=f.scopeFor('tenant-a');
     const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
     await deps.repositories.knowledge.createDocument({id:'existing-doc',title:'Original',file_path:'knowledge/existing-doc/original',tier:'answer'});
     const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
@@ -267,7 +268,7 @@ test('article update rejects an owner policy edit after admission without changi
 
 test('knowledge source upload publishes one immutable source within its whole-attempt D1 write envelope',async t=>{
   const f=await fixture(); try {
-    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const bucket=(await f.mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket),scope=f.scopeFor('tenant-a');
     const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
     const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
       exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
@@ -280,7 +281,7 @@ test('knowledge source upload publishes one immutable source within its whole-at
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful upload attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
     assert.equal(attemptRows,20,'upload native D1 metadata changed');
-    assert.ok(attemptRows<=KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten,
+    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten ?? 0),
       `upload wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
     const document=await deps.repositories.knowledge.getDocument(id); assert.ok(document); assert.match(document.file_path,/\/versions\/1$/);
     assert.ok(await deps.attachmentStorage.getAttachment(document.file_path));
@@ -291,7 +292,7 @@ test('knowledge source upload publishes one immutable source within its whole-at
 
 test('article update publishes within its whole-attempt D1 write envelope',async t=>{
   const f=await fixture(); try {
-    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const bucket=(await f.mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket),scope=f.scopeFor('tenant-a');
     const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
     await deps.repositories.knowledge.createDocument({id:'updated-doc',title:'Original',file_path:'knowledge/updated-doc/original',tier:'answer'});
     const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
@@ -305,7 +306,7 @@ test('article update publishes within its whole-attempt D1 write envelope',async
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful article update attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
     assert.equal(attemptRows,20,'article update native D1 metadata changed');
-    assert.ok(attemptRows<=KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten,
+    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten ?? 0),
       `article update wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT title,status FROM knowledge_docs WHERE tenant_id='tenant-a' AND id='updated-doc'").first(),
       {title:'Updated',status:'pending'});
@@ -318,7 +319,7 @@ test('QA staging carries the admitted fence through the retention claim, R2 sour
       f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('tenant-a','qa-ticket','QA','customer@example.test','dashboard')"),
       f.db.prepare("INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,is_internal,intake_source) VALUES ('tenant-a','qa-article','qa-ticket','agent','qa source',0,'dashboard')"),
     ]);
-    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const bucket=(await f.mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket),scope=f.scopeFor('tenant-a');
     const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
     const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
       exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
@@ -331,7 +332,7 @@ test('QA staging carries the admitted fence through the retention claim, R2 sour
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful QA attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
     assert.equal(attemptRows,20,'QA native D1 metadata changed');
-    assert.ok(attemptRows<=KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten,
+    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten ?? 0),
       `QA staging wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT qa_type,chunk_count FROM articles WHERE tenant_id='tenant-a' AND id='qa-article'").first(),{qa_type:'answer',chunk_count:0});
     const version=await f.db.prepare("SELECT file_path,state FROM knowledge_index_versions WHERE tenant_id='tenant-a' AND document_id='qa-article'").first<{file_path:string;state:string}>();
@@ -343,7 +344,7 @@ test('QA staging carries the admitted fence through the retention claim, R2 sour
 
 test('failed source recovery remains within the whole-attempt D1 write envelope',async t=>{
   const f=await fixture(); try {
-    const rawBucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const rawBucket=(await f.mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket),scope=f.scopeFor('tenant-a');
     const failingBucket={get:rawBucket.get.bind(rawBucket),delete:rawBucket.delete.bind(rawBucket),
       put:async()=>{throw new Error('synthetic R2 source failure');}};
     const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:failingBucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
@@ -358,7 +359,7 @@ test('failed source recovery remains within the whole-attempt D1 write envelope'
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for failed source recovery attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
     assert.equal(attemptRows,16,'failed source recovery native D1 metadata changed');
-    assert.ok(attemptRows<=KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten,
+    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten ?? 0),
       `failed source recovery wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT v.state,j.state AS job_state FROM knowledge_index_versions v JOIN knowledge_index_jobs j ON j.tenant_id=v.tenant_id AND j.document_id=v.document_id AND j.version=v.version WHERE v.tenant_id='tenant-a'").first(),
       {state:'failed',job_state:'failed_cleanup'});
