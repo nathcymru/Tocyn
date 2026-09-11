@@ -4,6 +4,7 @@ import { certifiedGrantFingerprint, type ReconcileBudgetGrantInput } from '../bu
 import { decodeCoordinatorState, encodeCoordinatorState, encodedGrantBytes } from '../budgets/coordinator-storage';
 import {
   createBudgetOwnerAggregateState,
+  handoffOwnerIngressBatch,
   handoffOwnerIngress,
   OWNER_INGRESS_RESTRICTION_REVISION,
   reconcileOwnerAggregate,
@@ -14,6 +15,7 @@ import {
   reserveOwnerIngress,
   type BudgetOwnerAggregateState,
   type HandoffOwnerIngressInput,
+  type HandoffOwnerIngressBatchInput,
   type ReconcileOwnerAggregateInput,
   type ReconcileOwnerIngressInput,
   type ReserveOwnerAggregateInput,
@@ -175,6 +177,22 @@ export class BudgetCoordinatorDO extends DurableObject<Env> {
     if (result.outcome.status === 'handed-off') {
       try { assertGrowthCapacity(result.state); }
       catch { return { status: 'rejected', reason: 'capacity-exhausted' }; }
+    }
+    await this.write(result.state);
+    return result.outcome;
+  }
+
+  /** One warm-block settlement; all tenant transfers and owner closure commit together. */
+  async handoffIngressBatchFromTrustedAuthority(input: HandoffOwnerIngressBatchInput): Promise<ReturnType<typeof handoffOwnerIngressBatch>['outcome']> {
+    const digest = await certifiedDigest({ ...input.ownerClosure,
+      expectedRestrictionRevision: OWNER_INGRESS_RESTRICTION_REVISION });
+    const current = await this.read();
+    const result = handoffOwnerIngressBatch(current,{...input,ownerClosure:{
+      ...input.ownerClosure,certifiedCompletionDigest:digest,
+    }});
+    if (result.outcome.status === 'handed-off') {
+      try { assertGrowthCapacity(result.state); }
+      catch { return { status:'rejected',reason:'capacity-exhausted' }; }
     }
     await this.write(result.state);
     return result.outcome;

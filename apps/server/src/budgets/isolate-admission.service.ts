@@ -4,7 +4,7 @@ import type { VerifiedTenantScope } from '../types/tenant';
 import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO';
 import { BudgetAuthorityRepository, type BudgetCommitSnapshot } from '../repositories/budget-authority.repository';
 import type { CurrentBudgetAuthorityGate } from './budget-coordinator.service';
-import type { HandoffOwnerIngressInput, TrustedBudgetCoordinatorAuthority } from './owner-aggregate';
+import type { TrustedBudgetCoordinatorAuthority } from './owner-aggregate';
 import { IsolateBudgetGrantHolder, isolateWarmReservedEnvelope, type CurrentIsolateGrantAuthority, type IsolateGrantScope, type IsolateGrantSpendResult } from './isolate-grant-holder';
 
 export const MAX_ACTIVE_ISOLATE_SCOPES = 64;
@@ -222,40 +222,11 @@ export class IsolateBudgetAdmissionCache {
     if (!authority) { if (entry) this.retire(entry); return stale(); }
     const offeredIngress = ownerIngress?.tenantHandoff(input.scope.tenantId, input.now());
     if (offeredIngress) {
-      const coordinator = input.namespace.get(input.namespace.idFromName(authority.trusted.aggregateId)) as unknown as BudgetCoordinatorDO;
-      const handoff: HandoffOwnerIngressInput = {
-        tenantId: input.scope.tenantId,
-        expectedPolicyId: authority.policy.policyId,
-        expectedPolicyRevision: authority.policy.revision,
-        expectedRestrictionRevision: authority.policy.restrictionRevision,
-        ownerClosure: offeredIngress.closure,
-        now: offeredIngress.closure.now,
-      };
-      let transferred = false;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const outcome = await coordinator.handoffIngressFromTrustedAuthority({ authority: authority.trusted, handoff });
-          if (outcome.status === 'handed-off' || outcome.status === 'already-handed-off') {
-            transferred = true;
-            ownerIngress?.handoffToTenant(input.scope.tenantId);
-            // The ingress charge already accounts for this HTTP invocation.
-            // Keep downstream D1/DO/R2 work in the business grant, but do not
-            // reserve the same Worker invocation a second time.
-            const remainingWorkerRequests = (input.business.workerRequests ?? 0) - 1;
-            business = { ...input.business };
-            if (remainingWorkerRequests > 0) business.workerRequests = remainingWorkerRequests;
-            else delete business.workerRequests;
-            break;
-          }
-          if (outcome.reason === 'exhausted') return exhausted();
-          if (outcome.reason === 'capacity-exhausted') return { status: 'rejected', reason: 'capacity-exhausted' };
-          return stale();
-        } catch {
-          // The same immutable transfer is retried once. An unknown second
-          // response leaves the full transferred/owner charge unavailable.
-        }
-      }
-      if (!transferred) return stale();
+      // Owner preallocation already contains this Worker execution. Durable
+      // tenant proof is collected after the business grant is spent and the
+      // whole warm block is reconciled later without a per-request DO RPC.
+      const remainingWorkerRequests=(input.business.workerRequests??0)-1;
+      business={...input.business};if(remainingWorkerRequests>0)business.workerRequests=remainingWorkerRequests;else delete business.workerRequests;
     }
     if (entry && !this.observeAuthority(entry,authority)) return stale();
     if (entry?.blocked) {
@@ -290,12 +261,14 @@ export class IsolateBudgetAdmissionCache {
         operation.activeAttempts++;
         if (operation.state !== 'unknown') operation.state = 'in-flight';
       }
-      return { ...result, commitAuthority: Object.freeze({ snapshot: authority!.commitSnapshot,
+      const commitAuthority:BudgetCommitAuthority=Object.freeze({ snapshot: authority!.commitSnapshot,
         expiresAt: Math.min(held.expiresAt, authority!.trusted.authorityExpiresAt), purpose: holderScope.purpose,
         operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint,
         grant: Object.freeze({ tenantId: input.scope.tenantId, aggregateId: held.aggregateId, reservationId: held.reservationId,
           holderId: held.holder.holderId, operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint,
-          operationEnvelope: Object.freeze(structuredClone(operationEnvelope)) }) }) };
+          operationEnvelope: Object.freeze(structuredClone(operationEnvelope)) }) });
+      if(offeredIngress)ownerIngress?.handoffToTenant(input.scope.tenantId,commitAuthority);
+      return { ...result, commitAuthority };
     };
     const prior = entry.operations.get(input.intent.operationId);
     if (prior) return spend(prior);

@@ -27,6 +27,11 @@ app.post('/api/handoff', authMiddleware, async c => {
     scope, credentialKey: 'staff:actor-a:1',
     intent: { operationId, operationFingerprint: operationId, workScopeKey: 'native.owner-ingress.handoff' },
     business: { workerRequests: 1, d1RowsWritten: 1 }, now: c.env.localNow ?? Date.now });
+  const link=result.commitAuthority?.grant;
+  if(result.status==='spent'&&link)await c.env.DB.prepare(`INSERT INTO budget_grant_operations
+    (tenant_id,reservation_id,holder_id,operation_id,aggregate_id,operation_fingerprint,operation_envelope_json)
+    VALUES (?,?,?,?,?,?,?)`).bind(link.tenantId,link.reservationId,link.holderId,link.operationId,link.aggregateId,
+      link.operationFingerprint,JSON.stringify(link.operationEnvelope)).run();
   return c.json(result, result.status === 'spent' ? 200 : 503);
 });
 app.get('/email-readiness-guard', async c => {
