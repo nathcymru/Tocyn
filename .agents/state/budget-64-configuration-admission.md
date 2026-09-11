@@ -1,3 +1,13 @@
+# Combined administration successor — #64 / PR210
+
+Current integration supersedes the historical queue below. Combined application cfa931b includes210configuration,211API-key024fdcb and212channel27f58c8 on frozen205head54f0332. PR210 is the single integration owner;211/212 remain source evidence and must not merge independently. Accept205 first, then refresh210against acceptedmain and verify tested-tree/exact-headCI/security/signature. Knowledge0061, owner ingress0063 and ticket-email work remain separate.
+
+Root resolved shared registration conflicts by preserving every native suite and type entry. Dashboard conflicts contained adjacent configuration/group/API helper functions and imports; all three owners' functions are retained. Server TypeScript, shared runtime TypeScript, full server ESLint and combined native13/13 pass (configuration2/API4/channel2/groups5). Logs /private/tmp/tocyn-210-combined-{types,runtime-types,native,eslint}.log. No accepted integration or full64claim. Local ESLint needed an existing-dependency overlay link, not an install/shared mutation.
+
+Workers remain nativeSol/high: knowledgeDELETE lifecycle/recovery0061; owner ingress sameaggregate unchanged80/20 policy0063; ticket-email admission synthetic-only. No owner permission missing. No Copilot, paid usage, external provider or production activity. Current exact205CI34616345687 still running; earlier failed/superseded runs are not passes. Issue64partialreceipt5636801757. Historical schedules/progress preserved; full140 incomplete.
+
+## Historical queue — superseded
+
 # Configuration successor and frozen integration queue
 
 Root owns draftPR210, worker head67001522a3c2be6cf674269b20fadfec3ef4fe82, migration0059. Ticket-field and automation config now uses bounded metadata preflight, complete lists, current credential/capability/exactgrant/closure and immutable response receipts. Root reviewed service and repository; required native runtime registration added to package/sharedtypes/CI. Sharedruntime types andnative2/2 pass, logs /private/tmp/tocyn-210-{shared-types,root-native}.log. This candidate remains outside frozen205; refresh/combined migration proof and exactCI acceptance are pending. No full64claim.
