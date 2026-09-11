@@ -1,16 +1,25 @@
-import { lazy, useState } from 'react';
+import { lazy, useEffect } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, Link, MemoryRouter, Route, RouterProvider, Routes, useLocation } from 'react-router-dom';
 import { RouteContent } from '../components/RouteContent';
 import { useAuthStore } from '../store/authStore';
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
-it('preserves a loaded workspace layout when its child route changes', async () => {
-  function Layout() { const [value,setValue]=useState(''); return <><input aria-label="Workspace search" value={value} onChange={event=>setValue(event.target.value)}/><Link to="/other">Next route</Link></>; }
-  render(<MemoryRouter><RouteContent persistent><Layout/></RouteContent></MemoryRouter>);
-  fireEvent.change(screen.getByRole('textbox',{name:'Workspace search'}),{target:{value:'retained'}});
-  fireEvent.click(screen.getByRole('link',{name:'Next route'}));
-  expect(screen.getByRole('textbox',{name:'Workspace search'})).toHaveValue('retained');
+it('keeps the inbox route content mounted when selection navigation changes its pathname', async () => {
+  let mounts = 0;
+  function InboxRoute() {
+    const location = useLocation();
+    useEffect(() => { mounts += 1; }, []);
+    return <><p data-testid="inbox-location">{location.pathname}</p><Link to="/inbox/all/ticket-2">Open next conversation</Link></>;
+  }
+  const router = createMemoryRouter([
+    { path: '/inbox/*', element: <RouteContent persistent><InboxRoute /></RouteContent> },
+  ], { initialEntries: ['/inbox/all/ticket-1'] });
+  render(<RouterProvider router={router} />);
+  expect(screen.getByTestId('inbox-location')).toHaveTextContent('/inbox/all/ticket-1');
+  fireEvent.click(screen.getByRole('link', { name: 'Open next conversation' }));
+  expect(await screen.findByTestId('inbox-location')).toHaveTextContent('/inbox/all/ticket-2');
+  expect(mounts).toBe(1);
 });
 it('announces pending route code and then renders it',async()=>{
   let finish!:(module:{default:()=>React.JSX.Element})=>void;

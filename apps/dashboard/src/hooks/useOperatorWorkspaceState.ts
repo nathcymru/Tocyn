@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { createContext, createElement, useContext, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { ApiError, dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
@@ -165,17 +165,35 @@ function createController(identity: string | null) {
   };
 }
 
-/** Server-backed operator preferences; browser memory is only a transient editing surface. */
-export function useOperatorWorkspaceState() {
+type OperatorWorkspaceState = Snapshot & Readonly<{
+  hasUnsavedChanges:boolean;update:(patch:WorkspacePreferencePatch)=>void;saveNow:()=>Promise<void>;
+  flushBeforeNavigation:()=>Promise<boolean>;retrySave:()=>void;retryRestore:()=>void;restoreServerState:()=>void;
+}>;
+const OperatorWorkspaceContext=createContext<OperatorWorkspaceState|null>(null);
+
+function useOperatorWorkspaceController(enabled=true):OperatorWorkspaceState {
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
   const tenantId = useAuthStore(state => state.user?.tenant_id);
   const userId = useAuthStore(state => state.user?.id);
-  const identity = identityFor(sessionGeneration, tenantId, userId);
+  const identity = enabled ? identityFor(sessionGeneration, tenantId, userId) : null;
   const controller = useMemo(() => createController(identity), [identity]);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
-  useLayoutEffect(controller.start, [controller]);
+  useLayoutEffect(() => enabled ? controller.start() : undefined, [controller,enabled]);
   return { ...state, hasUnsavedChanges: controller.hasUnsavedChanges(), update: controller.update, saveNow: controller.saveNow, flushBeforeNavigation: controller.flushBeforeNavigation, retrySave: controller.retrySave,
     retryRestore: controller.retryRestore, restoreServerState: controller.restoreServerState };
+}
+
+/** One mounted inbox owns one preference controller shared by its list and conversation. */
+export function OperatorWorkspaceProvider({children}:{children:ReactNode}){
+  const value=useOperatorWorkspaceController();
+  return createElement(OperatorWorkspaceContext.Provider,{value},children);
+}
+
+/** Server-backed operator preferences; browser memory is only a transient editing surface. */
+export function useOperatorWorkspaceState() {
+  const shared=useContext(OperatorWorkspaceContext);
+  const standalone=useOperatorWorkspaceController(shared===null);
+  return shared??standalone;
 }
 
 /** Body-free draft query input for the legacy list; #130 owns complete Drafts-view semantics. */

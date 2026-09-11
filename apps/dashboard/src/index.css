@@ -120,6 +120,9 @@
 [data-tocyn-theme-mode] :where(.bg-white, .bg-slate-50) {
   background-color: var(--tocyn-app-surface);
 }
+[data-tocyn-theme-mode] :where(.bg-slate-100) {
+  background-color: var(--tocyn-app-surface-muted);
+}
 [data-tocyn-theme-mode] :where(.text-slate-900, .text-slate-700, .text-slate-600) {
   color: var(--tocyn-app-text);
 }

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useOperatorDraftIndicators, useOperatorWorkspaceState, type WorkspacePreference } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
 
+
 const user = (id = 'operator', tenant_id = 'tenant-a') => ({ id, tenant_id, email: `${id}@example.invalid`, full_name: id, role: 'admin', mfa_enabled: true });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
@@ -12,7 +13,7 @@ const stored = (revision = 7, listQuery = 'saved query'): WorkspacePreference =>
 let workspace!: ReturnType<typeof useOperatorWorkspaceState>;
 function Harness() {
   workspace = useOperatorWorkspaceState();
-  return <output data-testid="workspace">{JSON.stringify({ status: workspace.status, query: workspace.listQuery, anchor: workspace.listAnchor, view: workspace.view, sort: workspace.sort, filters: workspace.filters, revision: workspace.revision, error: workspace.error })}</output>;
+  return <output data-testid="workspace">{JSON.stringify({ status: workspace.status, query: workspace.listQuery, anchor: workspace.listAnchor, view: workspace.view, sort: workspace.sort, filters: workspace.filters, revision: workspace.revision, selectedTicketId: workspace.selectedTicketId, error: workspace.error })}</output>;
 }
 function current() { return JSON.parse(screen.getByTestId('workspace').textContent || '{}'); }
 function IndicatorHarness() {
@@ -68,6 +69,21 @@ it('keeps local state on CAS conflict until an explicit server restore', async (
   expect(current()).toMatchObject({ status: 'conflict', query: 'local work' });
   act(() => workspace.restoreServerState());
   await waitFor(() => expect(current()).toMatchObject({ status: 'restored', query: 'other operator', revision: 10 }));
+});
+
+it('retains selected ticket and list state across workspace conflict until explicit restore', async() => {
+  const localRestore = { revision: 6, view: 'mine', sort: 'created_desc', filters: { status: 'pending' }, listQuery: 'shared query', listAnchor: 'page:2', selectedTicketId: 'ticket-7', panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' };
+  const remoteRestore = { revision: 11, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'restored query', listAnchor: 'page:1', selectedTicketId: 'ticket-20', panel: 'conversation', updatedAt: '2026-09-11T00:02:00Z' };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(localRestore)).mockResolvedValueOnce(json({ error: 'Conflict' }, 409)).mockResolvedValueOnce(json(remoteRestore)));
+  render(<Harness />);
+  await waitFor(() => expect(current().status).toBe('restored'));
+  act(() => workspace.update({ selectedTicketId: 'ticket-20', listQuery: 'local draft query', listAnchor: 'page:4' }));
+  await act(async () => { await workspace.saveNow(); });
+  expect(current()).toMatchObject({ status: 'conflict', query: 'local draft query', anchor: 'page:4', selectedTicketId: 'ticket-20' });
+  await expect(workspace.flushBeforeNavigation()).resolves.toBe(false);
+  act(() => workspace.restoreServerState());
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', query: 'restored query', anchor: 'page:1', selectedTicketId: 'ticket-20', revision: 11 }));
+  await expect(workspace.flushBeforeNavigation()).resolves.toBe(true);
 });
 
 it('clears the prior authority immediately and fences its late restore', async () => {

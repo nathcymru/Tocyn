@@ -174,7 +174,7 @@ test('proves production dashboard and portal SLA workflow against disposable two
         if (origin !== dashboard.origin && origin !== portal.origin) { externalRequests.push(route.request().resourceType()); return route.abort(); }
         return route.continue();
       });
-      const page = await dashboardContext.newPage(); await seedDashboard(page, session);
+      let page = await dashboardContext.newPage(); await seedDashboard(page, session);
       const writer = await writerContext.newPage(); await seedDashboard(writer, session);
       const customer = await portalContext.newPage(); await seedPortal(customer, await customerToken(fixture), fixture.principals.customerA.widgetKey);
 
@@ -189,7 +189,7 @@ test('proves production dashboard and portal SLA workflow against disposable two
         if (new URL(response.url()).pathname === `/api/tickets/${legacyTicket.id}/sla`) legacySlaResponses.push({ status: response.status(), url: response.url() });
       });
       const legacy404 = page.waitForResponse(response => new URL(response.url()).pathname === `/api/tickets/${legacyTicket.id}/sla` && response.status() === 404);
-      await page.goto(`${dashboard.origin}/tickets/${legacyTicket.id}`);
+      await page.goto(`${dashboard.origin}/inbox/all/${legacyTicket.id}`);
       await legacy404;
       const legacyUnavailable = page.getByText('Service level is unavailable.', { exact: false }).first();
       await legacyUnavailable.waitFor();
@@ -246,13 +246,17 @@ test('proves production dashboard and portal SLA workflow against disposable two
       await page.getByRole('button', { name: 'Save SLA policy', exact: true }).click();
       await page.getByText('Saved. This policy applies only to clocks started after this revision.', { exact: true }).waitFor();
 
+      await page.close();
+      page = await dashboardContext.newPage();
+
       await fixture.db.prepare("UPDATE tickets SET assigned_to='fixture-operator' WHERE tenant_id='fixture-tenant-a' AND id='fixture-ticket'").run();
       const initialize = await fixture.request('/api/tickets/fixture-ticket/sla/initialize', { method: 'POST', token: session.token, body: {} });
       assert.equal(initialize.status, 201, 'The real Worker must initialize the existing fixture ticket after configured policy save');
       await fixture.db.prepare("INSERT INTO support_state_definitions (tenant_id,id,legacy_status,internal_label,public_label,waiting_reason_required,next_action_required) VALUES ('fixture-tenant-a','waiting-browser','pending','Private waiting label','Waiting for your reply',1,1)").run();
 
-      await page.goto(`${dashboard.origin}/tickets/fixture-ticket`);
-      await page.getByRole('button', { name: 'Manage support state', exact: true }).click();
+      const detailTheme = page.waitForResponse(response => new URL(response.url()).pathname === '/api/workspace/theme-preference');
+      await page.goto(`${dashboard.origin}/inbox/all/fixture-ticket`);
+      assert.equal((await detailTheme).status(), 200, 'The persistent inbox must restore the operator appearance before the support-state interaction');
       await page.getByRole('combobox', { name: 'Support state', exact: true }).selectOption('waiting-browser');
       await page.getByLabel('Waiting reason').fill('Private customer account evidence is needed');
       await page.getByLabel('Next action').fill('Private operator follow-up tomorrow');
@@ -273,8 +277,6 @@ test('proves production dashboard and portal SLA workflow against disposable two
       assert.equal(await customer.getByText('Private operator follow-up tomorrow', { exact: true }).count(), 0);
       assert.equal(await customer.getByText('Private waiting label', { exact: true }).count(), 0);
 
-      await page.goto(`${dashboard.origin}/tickets/fixture-ticket`);
-      await page.getByRole('button', { name: 'Manage support state', exact: true }).click();
       await page.getByRole('combobox', { name: 'Support state', exact: true }).selectOption('legacy-open');
       await page.getByRole('button', { name: 'Save support state', exact: true }).click();
       await page.getByText('Support state saved.', { exact: true }).waitFor();
@@ -282,24 +284,23 @@ test('proves production dashboard and portal SLA workflow against disposable two
       assert.equal(resumed.response.phase, 'running'); assert.equal(resumed.resolution.phase, 'running');
       assert.ok(resumed.response.dueAt && resumed.resolution.dueAt, 'Both configured clocks must be visible as real deadlines after resume');
 
-      await page.goto(`${dashboard.origin}/tickets/fixture-ticket`);
       await page.getByRole('heading', { name: 'Service level', exact: true }).waitFor();
       assert.match(await page.getByLabel('SLA status').innerText(), /First response:.*Resolution:/s);
       assert.match(await page.getByRole('region', { name: 'Service level' }).innerText(), /Handler: Synthetic operatorA/);
-      const stateControl = page.getByRole('button', { name: 'Manage support state', exact: true });
+      const stateControl = page.getByRole('combobox', { name: 'Support state', exact: true });
       await stateControl.focus();
-      await page.keyboard.press('Enter');
-      await page.getByRole('combobox', { name: 'Support state', exact: true }).waitFor();
+      await page.keyboard.press('ArrowDown');
+      await stateControl.waitFor();
 
       const breachedBatch = page.waitForResponse(response => new URL(response.url()).pathname === '/api/ticket-sla/projections');
-      await page.goto(`${dashboard.origin}/tickets`);
+      await page.goto(`${dashboard.origin}/inbox/all`);
       assert.equal((await breachedBatch).status(), 200, 'The real SLA projection batch must succeed before the list assertion');
-      const breachedRow = page.getByRole('link', { name: 'Synthetic breached SLA browser ticket', exact: true }).locator('xpath=ancestor::tr');
+      const breachedRow = page.getByRole('option', { name: /Synthetic breached SLA browser ticket/ });
       await breachedRow.waitFor();
       await breachedRow.getByText('Breached', { exact: false }).first().waitFor();
       assert.match(await breachedRow.innerText(), /Breached/, 'The conversation list must expose the breached SLA state in text');
       contrast.push(await renderedContrast('default dashboard breached SLA list', breachedRow.getByText('Breached', { exact: false }).first()));
-      await page.getByRole('link', { name: 'Synthetic breached SLA browser ticket', exact: true }).click();
+      await breachedRow.click();
       await page.getByLabel('SLA status').getByText('Breached', { exact: false }).first().waitFor();
       assert.match(await page.getByRole('region', { name: 'Service level' }).innerText(), /Breached/, 'The ticket detail panel must expose the breached state in text');
       contrast.push(await renderedContrast('default dashboard breached SLA action bar', page.getByLabel('SLA status').getByText('Breached', { exact: false }).first()));
@@ -315,17 +316,20 @@ test('proves production dashboard and portal SLA workflow against disposable two
       const currentTheme = await themePreference.json<{ revision: number }>();
       const darkTheme = await fixture.request('/api/workspace/theme-preference', { method: 'PUT', token: session.token, body: { expectedRevision: currentTheme.revision, mode: 'dark' } });
       assert.equal(darkTheme.status, 200, 'The real workspace theme preference must save dark mode before the dark-theme contrast check');
-      await page.goto(`${dashboard.origin}/tickets/${breachedTicket.id}`);
+      await page.close();
+      page = await dashboardContext.newPage();
+      const darkThemeRead = page.waitForResponse(response => new URL(response.url()).pathname === '/api/workspace/theme-preference');
+      await page.goto(`${dashboard.origin}/inbox/all/${breachedTicket.id}`);
+      assert.equal((await darkThemeRead).status(), 200, 'The persistent inbox must restore the saved dark appearance in a new authenticated page');
       await page.locator('[data-tocyn-theme-mode="dark"]').waitFor();
       const darkBreachedTarget = page.getByRole('region', { name: 'Service level' }).getByText('Breached', { exact: false }).first();
       await darkBreachedTarget.waitFor();
       contrast.push(await renderedContrast('dark dashboard breached SLA panel', darkBreachedTarget));
-      await page.goto(`${dashboard.origin}/tickets/fixture-ticket`);
+      await page.goto(`${dashboard.origin}/inbox/all/fixture-ticket`);
       const darkOnTrackTarget = page.getByRole('region', { name: 'Service level' }).locator('dd').first();
       await darkOnTrackTarget.waitFor();
       assert.match(await darkOnTrackTarget.innerText(), /Due|On track/, 'The dark-theme fixture clock must remain on track before the pause measurement');
       contrast.push(await renderedContrast('dark dashboard on-track SLA panel', darkOnTrackTarget));
-      await page.getByRole('button', { name: 'Manage support state', exact: true }).click();
       await page.getByRole('combobox', { name: 'Support state', exact: true }).selectOption('waiting-browser');
       await page.getByLabel('Waiting reason').fill('Synthetic contrast pause reason');
       await page.getByLabel('Next action').fill('Synthetic contrast next action');
