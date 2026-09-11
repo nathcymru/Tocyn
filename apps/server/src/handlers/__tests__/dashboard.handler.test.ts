@@ -110,7 +110,7 @@ describe("Dashboard Handler Integration Tests", () => {
       const body = await res.json();
       expect(body.data).toBeDefined();
       expect(body.total).toBe(0);
-      expect(mockDB.bind).toHaveBeenCalledWith("default-tenant", "test@example.com", 10, 10);
+      expect(mockDB.bind).toHaveBeenCalledWith("default-tenant", "agent-1", "test@example.com", 10, 10);
     });
 
     it("should apply status filter ", async () => {
