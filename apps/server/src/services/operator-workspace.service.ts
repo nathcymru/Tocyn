@@ -1,7 +1,7 @@
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { validateAttachmentReferences } from './attachment-references';
 import type { OperatorDraft, OperatorWorkspaceState } from '../types/operator-workspace';
-import type { DraftRebaseInput, DraftSaveInput, WorkspaceStateSaveInput } from '../repositories/operator-workspace.repository';
+import type { DraftRebaseInput, DraftSaveInput, OperatorWorkspaceCommit, WorkspaceStateSaveInput } from '../repositories/operator-workspace.repository';
 import { legacyDraftCutoff } from '../types/operator-draft-retention';
 
 const mentionId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -23,7 +23,7 @@ export type ExplicitDraftRetention = Readonly<{ expiresAt: (now: Date) => string
 export class OperatorWorkspaceService {
   constructor(
     private readonly deps: TenantRequestDeps,
-    private readonly options: Readonly<{ now?: () => Date; retention?: ExplicitDraftRetention }> = {},
+    private readonly options: Readonly<{ now?: () => Date; retention?: ExplicitDraftRetention; admission?: OperatorWorkspaceCommit }> = {},
   ) {}
 
   private now(): Date { return this.options.now?.() ?? new Date(); }
@@ -40,13 +40,13 @@ export class OperatorWorkspaceService {
 
   async listDrafts(afterTicketId: string, limit: number) {
     const now = await this.expireLocalDrafts();
-    return this.deps.repositories.operatorWorkspace.listDrafts(afterTicketId, limit, now);
+    return this.deps.repositories.operatorWorkspace.listDrafts(afterTicketId, limit, now, this.options.admission);
   }
 
   async getDraft(ticketId: string): Promise<OperatorDraft | null> {
     await this.authorizeTicket(ticketId);
     const now = await this.expireLocalDrafts();
-    return this.deps.repositories.operatorWorkspace.getDraft(ticketId, now);
+    return this.deps.repositories.operatorWorkspace.getDraft(ticketId, now, this.options.admission);
   }
 
   async saveDraft(input: Omit<DraftSaveInput, 'attachments' | 'expiresAt' | 'notExpiredAt'> & { attachments: unknown }): Promise<OperatorDraft> {
@@ -56,7 +56,7 @@ export class OperatorWorkspaceService {
     const now = this.now();
     const notExpiredAt = await this.expireLocalDrafts(now);
     const expiresAt = this.options.retention?.expiresAt(now) ?? null;
-    const saved = await this.deps.repositories.operatorWorkspace.saveDraft({ ...input, attachments, mentionedUserIds, expiresAt, notExpiredAt });
+    const saved = await this.deps.repositories.operatorWorkspace.saveDraft({ ...input, attachments, mentionedUserIds, expiresAt, notExpiredAt }, this.options.admission);
     if (!saved) throw new OperatorWorkspaceError(409, 'Draft changed before it could be saved');
     return saved;
   }
@@ -67,14 +67,14 @@ export class OperatorWorkspaceService {
     const now = this.now();
     const notExpiredAt = await this.expireLocalDrafts(now);
     const expiresAt = this.options.retention?.expiresAt(now) ?? null;
-    const saved = await this.deps.repositories.operatorWorkspace.rebaseDraft({ ...input, expiresAt, notExpiredAt });
+    const saved = await this.deps.repositories.operatorWorkspace.rebaseDraft({ ...input, expiresAt, notExpiredAt }, this.options.admission);
     if (!saved) throw new OperatorWorkspaceError(409, 'Draft or conversation changed before it could be rebased');
     return saved;
   }
 
   async deleteDraftIfVersion(ticketId: string, generation: string, revision: number): Promise<void> {
     await this.authorizeTicket(ticketId);
-    if (!await this.deps.repositories.operatorWorkspace.deleteDraftIfVersion(ticketId, generation, revision)) {
+    if (!await this.deps.repositories.operatorWorkspace.deleteDraftIfVersion(ticketId, generation, revision, this.options.admission)) {
       throw new OperatorWorkspaceError(409, 'Draft changed before it could be removed');
     }
   }
@@ -82,12 +82,12 @@ export class OperatorWorkspaceService {
   async getWorkspaceState(): Promise<OperatorWorkspaceState | null> {
     // One retry handles a concurrent normal state save without unbounded recursive work.
     for (let attempt = 0; attempt < 2; attempt++) {
-      const state = await this.deps.repositories.operatorWorkspace.getWorkspaceState();
+      const state = await this.deps.repositories.operatorWorkspace.getWorkspaceState(this.options.admission);
       if (!state?.selectedTicketId) return state;
       try { await this.authorizeTicket(state.selectedTicketId); return state; }
       catch (error) {
         if (!(error instanceof OperatorWorkspaceError) || (error.status !== 403 && error.status !== 404)) throw error;
-        const cleared = await this.deps.repositories.operatorWorkspace.clearSelectedTicketIfVersion(state.selectedTicketId, state.revision);
+        const cleared = await this.deps.repositories.operatorWorkspace.clearSelectedTicketIfVersion(state.selectedTicketId, state.revision, this.options.admission);
         if (cleared) return cleared;
       }
     }
@@ -105,7 +105,7 @@ export class OperatorWorkspaceService {
     if (input.filters.assignedTo && !await this.deps.repositories.users.get(input.filters.assignedTo)) {
       throw new OperatorWorkspaceError(400, 'Unknown workspace assignee');
     }
-    const saved = await this.deps.repositories.operatorWorkspace.saveWorkspaceState(input);
+    const saved = await this.deps.repositories.operatorWorkspace.saveWorkspaceState(input, this.options.admission);
     if (!saved) throw new OperatorWorkspaceError(409, 'Workspace state changed before it could be saved');
     return saved;
   }
@@ -113,7 +113,7 @@ export class OperatorWorkspaceService {
   private async expireLocalDrafts(now = this.now()): Promise<string | undefined> {
     if (!this.options.retention) return undefined;
     const timestamp = now.toISOString();
-    await this.deps.repositories.operatorWorkspace.purgeExpiredForActor(timestamp, 100, legacyDraftCutoff(now));
+    await this.deps.repositories.operatorWorkspace.purgeExpiredForActor(timestamp, 100, legacyDraftCutoff(now), this.options.admission);
     return timestamp;
   }
 

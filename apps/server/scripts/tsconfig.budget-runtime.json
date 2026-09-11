@@ -18,6 +18,8 @@
     "saved-filter-admission-runtime-entry.ts",
     "saved-filter-admission-runtime.test.ts",
     "group-directory-admission-runtime-entry.ts",
-    "group-directory-admission-runtime.test.ts"
+    "group-directory-admission-runtime.test.ts",
+    "operator-workspace-admission-runtime.test.ts",
+    "operator-workspace-admission-runtime-entry.ts"
   ]
 }
