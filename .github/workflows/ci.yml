@@ -63,6 +63,11 @@ jobs:
         run: npm exec -- playwright install --with-deps chromium
       - name: Validate
         run: ${{ matrix.command }}
+      - name: Verify support-state browser acceptance
+        if: matrix.check == 'build'
+        run: |
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-support-state-browser.json
+          node --import tsx --test apps/server/scripts/ui-support-state-browser.test.ts > "$RUNNER_TEMP/tocyn-support-state-browser.tap"
       - name: Verify durable drafts against the local Worker
         if: matrix.check == 'build'
         run: |
@@ -95,5 +100,6 @@ jobs:
             /tmp/tocyn-widget-visual-*.png
             ${{ runner.temp }}/tocyn-ui-authenticated.tap
             ${{ runner.temp }}/tocyn-operator-drafts.tap
+            ${{ runner.temp }}/tocyn-support-state-browser.tap
           retention-days: 3
           if-no-files-found: warn
