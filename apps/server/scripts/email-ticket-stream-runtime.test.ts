@@ -41,7 +41,9 @@ test('ticket source streaming is bounded, exact, isolated and recovers permits a
       assert.equal(result.sink.bytes, Number(result.sink.length));
     }
     const bodyA = JSON.parse(a.sink.body), bodyB = JSON.parse(b.sink.body);
-    assert.equal(bodyA.html, 'Text " quoted\n\\ and 😀'); assert.equal(bodyA.subject, '[#1] Subject 漢😀');
+    assert.equal(bodyA.html, '<p>Text &quot; quoted<br>\\ and 😀</p>');
+    assert.equal(bodyA.text, 'Text " quoted\n\\ and 😀');
+    assert.equal(bodyA.subject, '[#1] Subject 漢😀');
     assert.equal(bodyA.attachments[0].content, Buffer.from([1, 3, 4, 5, 6]).toString('base64'));
     assert.equal(bodyB.attachments[0].content, Buffer.from([2, 3, 4, 5, 6]).toString('base64'));
     assert.equal(bodyA.attachments.length, 2);
