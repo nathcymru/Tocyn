@@ -5,7 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { test } from 'node:test';
-import { chromium, type Page, type Route } from 'playwright';
+import { chromium, type Locator, type Page, type Route } from 'playwright';
 import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fixture';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
@@ -114,12 +114,56 @@ async function seedPortal(page: Page, token: string, widgetKey: string) {
   }, { token, widgetKey });
 }
 
+type RenderedContrast = Readonly<{ label: string; foreground: string; background: string; ratio: number; unsupported: string | null }>;
+
+/** Mirrors the computed-color compositing used by tools/ui-browser/widget-visual.mjs. */
+async function renderedContrast(label: string, locator: Locator): Promise<RenderedContrast> {
+  const evaluate = Function('element', 'label', `
+    const parse = value => {
+      const match = value.match(/^rgba?\\(([^)]+)\\)$/);
+      if (!match) return null;
+      const parts = match[1].split(',').map(part => Number(part.trim()));
+      return (parts.length === 3 || parts.length === 4) && parts.every(Number.isFinite)
+        ? { r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 1 } : null;
+    };
+    const composite = (front, back) => {
+      const alpha = front.a + back.a * (1 - front.a);
+      return alpha === 0 ? { r: 0, g: 0, b: 0, a: 0 } : { r: (front.r * front.a + back.r * back.a * (1 - front.a)) / alpha, g: (front.g * front.a + back.g * back.a * (1 - front.a)) / alpha, b: (front.b * front.a + back.b * back.a * (1 - front.a)) / alpha, a: alpha };
+    };
+    const luminance = color => [color.r, color.g, color.b].map(channel => {
+      const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+    const layers = [];
+    for (let node = element; node; node = node.parentElement) layers.push(getComputedStyle(node).backgroundColor);
+    let backdrop = { r: 255, g: 255, b: 255, a: 1 };
+    for (const layer of layers.reverse()) {
+      const color = parse(layer);
+      if (!color) return { label, foreground: getComputedStyle(element).color, background: layer, ratio: Number.NaN, unsupported: 'background:' + layer };
+      backdrop = composite(color, backdrop);
+    }
+    const foreground = parse(getComputedStyle(element).color);
+    if (!foreground) return { label, foreground: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor, ratio: Number.NaN, unsupported: 'foreground:' + getComputedStyle(element).color };
+    const compositedForeground = composite(foreground, backdrop);
+    const ratio = (Math.max(luminance(compositedForeground), luminance(backdrop)) + 0.05) / (Math.min(luminance(compositedForeground), luminance(backdrop)) + 0.05);
+    return { label, foreground: getComputedStyle(element).color, background: 'rgba(' + backdrop.r.toFixed(3) + ', ' + backdrop.g.toFixed(3) + ', ' + backdrop.b.toFixed(3) + ', ' + backdrop.a.toFixed(3) + ')', ratio, unsupported: null };
+  `) as (element: unknown, label: string) => RenderedContrast;
+  return locator.evaluate(evaluate, label);
+}
+
+function assertTextContrast(samples: readonly RenderedContrast[]) {
+  assert.ok(samples.every(Boolean), `Contrast measurements were not serializable: ${JSON.stringify(samples)}`);
+  const defects = samples.filter(sample => sample.unsupported || sample.ratio < 4.5)
+    .map(sample => `${sample.label}: ${sample.unsupported ?? `${sample.ratio.toFixed(2)}:1 (${sample.foreground} on ${sample.background})`}`);
+  assert.deepEqual(defects, [], `SLA text must meet 4.5:1 rendered contrast: ${defects.join('; ')}`);
+}
+
 test('proves production dashboard and portal SLA workflow against disposable two-tenant Worker/D1 state', async () => {
   await withTwoTenantFixture(async fixture => {
     const dashboard = await startServer(fixture, 'dashboard');
     const portal = await startServer(fixture, 'portal');
     const browser = await chromium.launch({ headless: true });
     const externalRequests: string[] = [];
+    const contrast: RenderedContrast[] = [];
     try {
       const session = await operatorSession(fixture);
       const dashboardContext = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -147,7 +191,9 @@ test('proves production dashboard and portal SLA workflow against disposable two
       const legacy404 = page.waitForResponse(response => new URL(response.url()).pathname === `/api/tickets/${legacyTicket.id}/sla` && response.status() === 404);
       await page.goto(`${dashboard.origin}/tickets/${legacyTicket.id}`);
       await legacy404;
-      await page.getByText('Service level is unavailable.', { exact: false }).waitFor();
+      const legacyUnavailable = page.getByText('Service level is unavailable.', { exact: false }).first();
+      await legacyUnavailable.waitFor();
+      contrast.push(await renderedContrast('default dashboard unavailable SLA panel', legacyUnavailable));
       assert.deepEqual(legacySlaResponses, [{ status: 404, url: `${dashboard.origin}/api/tickets/${legacyTicket.id}/sla` }], 'The explicit legacy negative scenario must retain one documented SLA 404');
       const legacyInitialized = await fixture.request(`/api/tickets/${legacyTicket.id}/sla/initialize`, { method: 'POST', token: session.token, body: {} });
       assert.equal(legacyInitialized.status, 201, 'An authorized administrator must recover the legacy clock before targets are configured');
@@ -164,10 +210,25 @@ test('proves production dashboard and portal SLA workflow against disposable two
       await failedPolicyRead;
       await page.getByRole('heading', { name: 'Service-level policy', exact: true }).waitFor();
       await expectDefaultPolicy(page);
+      contrast.push(await renderedContrast('default dashboard SLA settings response label', page.locator('label', { hasText: 'Response target (minutes, optional)' })));
+      contrast.push(await renderedContrast('default dashboard SLA settings response control', page.getByLabel('Response target (minutes, optional)')));
+      contrast.push(await renderedContrast('default dashboard SLA settings resolution label', page.locator('label', { hasText: 'Resolution target (minutes, optional)' })));
+      contrast.push(await renderedContrast('default dashboard SLA settings resolution control', page.getByLabel('Resolution target (minutes, optional)')));
       await page.getByLabel('Response target (minutes, optional)').fill('30');
       await page.getByLabel('Resolution target (minutes, optional)').fill('90');
       await page.getByRole('button', { name: 'Save SLA policy', exact: true }).click();
       await page.getByText('Saved. This policy applies only to clocks started after this revision.', { exact: true }).waitFor();
+
+      const breachedTicketResponse = await fixture.request('/api/tickets', { method: 'POST', token: session.token,
+        body: { subject: 'Synthetic breached SLA browser ticket', customer_email: fixture.principals.customerA.email, body: 'Synthetic breached SLA evidence' } });
+      assert.equal(breachedTicketResponse.status, 201);
+      const breachedTicket = await breachedTicketResponse.json<{ id?: string }>(); assert.equal(typeof breachedTicket.id, 'string');
+      await fixture.db.prepare(`UPDATE ticket_sla_clocks SET response_started_at=strftime('%Y-%m-%dT%H:%M:%fZ','now','-4 hours'),
+        resolution_started_at=strftime('%Y-%m-%dT%H:%M:%fZ','now','-4 hours') WHERE tenant_id=? AND ticket_id=?`)
+        .bind(fixture.principals.customerA.tenantId, breachedTicket.id).run();
+      const breachedProjection = await (await fixture.request(`/api/tickets/${breachedTicket.id}/sla`, { token: session.token })).json<{ response: { state: string; phase: string }; resolution: { state: string; phase: string } }>();
+      assert.equal(breachedProjection.response.state, 'breached'); assert.equal(breachedProjection.response.phase, 'running');
+      assert.equal(breachedProjection.resolution.state, 'breached'); assert.equal(breachedProjection.resolution.phase, 'running');
 
       await writer.goto(`${dashboard.origin}/settings/sla`);
       await writer.getByRole('heading', { name: 'Service-level policy', exact: true }).waitFor();
@@ -199,6 +260,10 @@ test('proves production dashboard and portal SLA workflow against disposable two
       await page.getByText('Support state saved.', { exact: true }).waitFor();
       const paused = await (await fixture.request('/api/tickets/fixture-ticket/sla', { token: session.token })).json<{ response: { phase: string }; resolution: { phase: string } }>();
       assert.equal(paused.response.phase, 'paused'); assert.equal(paused.resolution.phase, 'paused');
+      const pausedActionBar = page.getByLabel('SLA status').getByText('Paused', { exact: false }).first();
+      await pausedActionBar.waitFor();
+      contrast.push(await renderedContrast('default dashboard paused SLA action bar', pausedActionBar));
+      contrast.push(await renderedContrast('default dashboard paused SLA panel', page.getByRole('region', { name: 'Service level' }).getByText('Paused', { exact: false }).first()));
 
       await customer.goto(`${portal.origin}/tickets/fixture-ticket?key=${fixture.principals.customerA.widgetKey}`);
       await customer.getByRole('heading', { name: 'Service status', exact: true }).waitFor();
@@ -226,6 +291,51 @@ test('proves production dashboard and portal SLA workflow against disposable two
       await page.keyboard.press('Enter');
       await page.getByRole('combobox', { name: 'Support state', exact: true }).waitFor();
 
+      const breachedBatch = page.waitForResponse(response => new URL(response.url()).pathname === '/api/ticket-sla/projections');
+      await page.goto(`${dashboard.origin}/tickets`);
+      assert.equal((await breachedBatch).status(), 200, 'The real SLA projection batch must succeed before the list assertion');
+      const breachedRow = page.getByRole('link', { name: 'Synthetic breached SLA browser ticket', exact: true }).locator('xpath=ancestor::tr');
+      await breachedRow.waitFor();
+      await breachedRow.getByText('Breached', { exact: false }).first().waitFor();
+      assert.match(await breachedRow.innerText(), /Breached/, 'The conversation list must expose the breached SLA state in text');
+      contrast.push(await renderedContrast('default dashboard breached SLA list', breachedRow.getByText('Breached', { exact: false }).first()));
+      await page.getByRole('link', { name: 'Synthetic breached SLA browser ticket', exact: true }).click();
+      await page.getByLabel('SLA status').getByText('Breached', { exact: false }).first().waitFor();
+      assert.match(await page.getByRole('region', { name: 'Service level' }).innerText(), /Breached/, 'The ticket detail panel must expose the breached state in text');
+      contrast.push(await renderedContrast('default dashboard breached SLA action bar', page.getByLabel('SLA status').getByText('Breached', { exact: false }).first()));
+      contrast.push(await renderedContrast('default dashboard breached SLA panel', page.getByRole('region', { name: 'Service level' }).getByText('Breached', { exact: false }).first()));
+      await customer.goto(`${portal.origin}/tickets/${breachedTicket.id}?key=${fixture.principals.customerA.widgetKey}`);
+      await customer.getByRole('heading', { name: 'Service status', exact: true }).waitFor();
+      const customerBreachedTarget = customer.getByText('Running — target exceeded', { exact: true }).first();
+      await customerBreachedTarget.waitFor();
+      contrast.push(await renderedContrast('customer portal breached service target', customerBreachedTarget));
+
+      const themePreference = await fixture.request('/api/workspace/theme-preference', { token: session.token });
+      assert.equal(themePreference.status, 200, 'The real workspace theme preference must be readable before the dark-theme contrast check');
+      const currentTheme = await themePreference.json<{ revision: number }>();
+      const darkTheme = await fixture.request('/api/workspace/theme-preference', { method: 'PUT', token: session.token, body: { expectedRevision: currentTheme.revision, mode: 'dark' } });
+      assert.equal(darkTheme.status, 200, 'The real workspace theme preference must save dark mode before the dark-theme contrast check');
+      await page.goto(`${dashboard.origin}/tickets/${breachedTicket.id}`);
+      await page.locator('[data-tocyn-theme-mode="dark"]').waitFor();
+      const darkBreachedTarget = page.getByRole('region', { name: 'Service level' }).getByText('Breached', { exact: false }).first();
+      await darkBreachedTarget.waitFor();
+      contrast.push(await renderedContrast('dark dashboard breached SLA panel', darkBreachedTarget));
+      await page.goto(`${dashboard.origin}/tickets/fixture-ticket`);
+      const darkOnTrackTarget = page.getByRole('region', { name: 'Service level' }).locator('dd').first();
+      await darkOnTrackTarget.waitFor();
+      assert.match(await darkOnTrackTarget.innerText(), /Due|On track/, 'The dark-theme fixture clock must remain on track before the pause measurement');
+      contrast.push(await renderedContrast('dark dashboard on-track SLA panel', darkOnTrackTarget));
+      await page.getByRole('button', { name: 'Manage support state', exact: true }).click();
+      await page.getByRole('combobox', { name: 'Support state', exact: true }).selectOption('waiting-browser');
+      await page.getByLabel('Waiting reason').fill('Synthetic contrast pause reason');
+      await page.getByLabel('Next action').fill('Synthetic contrast next action');
+      await page.getByRole('button', { name: 'Save support state', exact: true }).click();
+      await page.getByText('Support state saved.', { exact: true }).waitFor();
+      const darkPausedTarget = page.getByRole('region', { name: 'Service level' }).locator('dd').first();
+      await darkPausedTarget.getByText('Paused', { exact: false }).waitFor();
+      contrast.push(await renderedContrast('dark dashboard paused SLA panel', darkPausedTarget));
+      assertTextContrast(contrast);
+
       const foreignTenant = await fixture.request('/api/v1/customer/tickets/fixture-ticket/sla', { token: await (async () => {
         const principal = fixture.principals.customerB;
         const requested = await fixture.request('/api/v1/customer/auth/request', { method: 'POST', body: { email: principal.email, type: 'magic_link', widgetKey: principal.widgetKey }, ip: `${fixture.rateLimitIdentity}-sla-foreign` });
@@ -242,8 +352,9 @@ test('proves production dashboard and portal SLA workflow against disposable two
         dirty: execFileSync('git', ['status', '--porcelain'], { cwd: repositoryRoot, encoding: 'utf8' }).trim().length > 0,
         scope: { dashboard: 'production-dist', portal: 'production-dist', worker: 'disposable-miniflare', tenants: 2, remoteBindings: 0, externalNetworkRequests: externalRequests.length },
         artifact: { dashboardDistSha256: await digestDirectory(resolve(repositoryRoot, 'apps/dashboard/dist')), portalDistSha256: await digestDirectory(resolve(repositoryRoot, 'apps/portal/dist')) },
-        checks: { legacyUnavailableUiAndAuthorizedRecovery: true, default24x7UtcPolicy: true, policyReadRetry: true, savedConfiguration: true, realCasConflictThenRefreshRetry: true, bothClockDeadlines: true, waitingPausesBothClocks: true, resumeRestartsBothClocks: true, customerHandlerDisplay: true, customerPrivateFactsAbsent: true, foreignTenantDenied: true, keyboardReachableControl: true },
+        checks: { legacyUnavailableUiAndAuthorizedRecovery: true, default24x7UtcPolicy: true, policyReadRetry: true, savedConfiguration: true, realCasConflictThenRefreshRetry: true, breachedRunningListDetailAndCustomer: true, bothClockDeadlines: true, waitingPausesBothClocks: true, resumeRestartsBothClocks: true, customerHandlerDisplay: true, customerPrivateFactsAbsent: true, foreignTenantDenied: true, keyboardReachableControl: true },
         legacySlaNegativeScenario: { route: `/api/tickets/${legacyTicket.id}/sla`, responses: legacySlaResponses },
+        contrast,
         limitations: ['Disposable Miniflare D1/R2 bindings and loopback static servers only; this is not deployed Worker or provider evidence.', 'Automated keyboard navigation is evidence for focus and readable labels, not a substitute for the separate native assistive-technology review.', 'Synthetic identities and fixture data only; no external network request, remote binding, customer data, or provider activation.'],
       })}\n`);
       await dashboardContext.close(); await writerContext.close(); await portalContext.close();

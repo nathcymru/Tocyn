@@ -1,3 +1,17 @@
+# Current SLA candidate — 11 September 2026, 06:13 BST
+
+This checkpoint supersedes earlier implementation-status notes below. #136 is accepted signed545bb189 (PR177; issueclosed/ProjectDone), not a pending approval. #73 fullclock/calendar/pause/reopen/customerhandler, list/detail/portal integration, boundedmetrics and negative recovery tests are implemented. #137 remains separate capacity/routing ownership.
+
+Final actualbrowser1/1 passes (14.89s): explicit legacy404→authorizedinitialize→200, policyreadretry/CASconflict, waitingpause/resume, deterministicrealDBbreach inlist/actionbar/panel/customer, no privatewaitingfacts, foreigntenantdenial and keyboard. ActualSafari/VoiceOver controls/savedfeedback/paused+runningdeadlines/customerhandler are recorded in docs/security/evidence/sla-73-voiceover-2026-09-11.md. No remote/providerresources.
+
+Browsercontrast caught darkbreach2.76:1. StaticCSScustomproperties now yield9.41:1 breach and11.71:1 on-track/paused ondefaultdark; defaultbreach6.47:1/defaultgreen5.48:1/portal10.31:1. Text labels preserve colorindependence. Dashboardhash39d0f3d1eacf1816edd1f865bdd9bc79fe1849000691dbee7bf362fe706a8d70; portal4b0aef6d5061b73b9b0ef80dc008390e04a572034c1746be02ff6b02034565a0.
+
+CIbuild failures corrected: missingstarterfavicon replacedwithcanonicalasset; focused draft/themefixture explicitlyinitializes SLA because this testasserts no unclassifiedconsoleerrors. DedicatedSLAnegativeflow preservesexactexpectedlegacy404 (noglobalfilter). Richerdetailsnowidentifyprimaryassertions beforecleanup-time disposed-stub messages. Buildmustinclude--manifest orinitialJSmeasurementfails; missingmanifestisnotabudgetfailure.
+
+Next: cleanfinalcandidateperformance, exactCI/security and reviewerthread/signature/treeverification, then acceptedissue/Project/forecast/Wikireceipts. Do notcloseuntilthesecomplete. ZeroCopilot.
+
+---
+
 # #73 calendar and clock foundation — 11 September 2026
 
 This branch adds the pure, server-only SLA calendar module at `apps/server/src/domain/sla-clock.ts` and synthetic unit coverage at `apps/server/src/domain/__tests__/sla-clock.test.ts`.

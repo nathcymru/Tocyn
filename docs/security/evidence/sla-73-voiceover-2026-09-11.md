@@ -13,3 +13,5 @@ Observed approximately05:46–05:54 BST on the owner Mac, against PR#180 applica
 ## Limits and cleanup
 
 This is focused local assistive-technology evidence for#73, not full#140 or production clearance. Automated two-tenant tests separately establish authorization and failure behavior. The temporary helper and test window were removed from the worktree; both ephemeral listener ports were checked closed. VoiceOver remains enabled and existing owner servers were preserved.
+
+Subsequent contrast-only correction: the final browser matrix found and fixed dark breach text. Interaction and spoken labels are unchanged; rendered browser measurements now evidence9.41:1 darkbreach and11.71:1 darkpaused/on-track. The actualVoiceOver receipt above remains scoped to its stated artifact, rather than being relabelled as a fresh AT run.

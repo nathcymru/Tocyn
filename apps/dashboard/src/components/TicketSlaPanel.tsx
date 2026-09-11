@@ -3,7 +3,7 @@ import { useTicketSla, type SlaTarget } from '../hooks/useTicketSla';
 import { slaTargetLabel } from './SlaTargetStatus';
 
 function Target({ label, target }: { label: string; target: SlaTarget }) {
-  const tone = target.state === 'breached' ? 'text-red-700' : target.state === 'on-track' ? 'text-emerald-700' : 'text-slate-600';
+  const tone = target.state === 'breached' ? 'text-[var(--tocyn-sla-breach-text)]' : target.state === 'on-track' ? 'text-[var(--tocyn-sla-on-track-text)]' : 'text-slate-600';
   return <div><dt className="text-sm font-medium text-slate-700">{label}</dt><dd className={tone}>{slaTargetLabel(target)}</dd></div>;
 }
 
