@@ -46,7 +46,6 @@ export function parseTocynTenantTheme(value: unknown): TocynTenantTheme {
   const dark = record.dark ?? {};
   // Null is malformed, rather than a request to discard a stored palette.
   if (record.light === null || record.dark === null) throw new TypeError('Invalid tenant palette');
-  validateOverrides(light); validateOverrides(dark);
   resolveTocynTheme({ mode: 'light', tenant: light });
   resolveTocynTheme({ mode: 'dark', tenant: dark });
   return Object.freeze({ version: TOCYN_THEME_CONTRACT_VERSION,
@@ -81,17 +80,9 @@ const DARK_DEFAULTS: TocynThemeTokens = {
   colorSelected: '#1e3a8a', colorCritical: '#fca5a5', colorQuiet: '#cbd5e1',
 };
 
-const TOKEN_NAMES: Record<keyof TocynThemeTokens, `--tocyn-${string}`> = {
-  colorSurface: '--tocyn-color-surface', colorSurfacePanel: '--tocyn-color-surface-panel', colorSurfaceMuted: '--tocyn-color-surface-muted',
-  colorDivider: '--tocyn-color-divider', colorText: '--tocyn-color-text', colorTextMuted: '--tocyn-color-text-muted',
-  colorFocus: '--tocyn-color-focus', colorSelected: '--tocyn-color-selected', colorCritical: '--tocyn-color-critical', colorQuiet: '--tocyn-color-quiet',
-  motionDurationFast: '--tocyn-motion-duration-fast', motionDurationNormal: '--tocyn-motion-duration-normal', motionDurationSlow: '--tocyn-motion-duration-slow',
-  motionEasingStandard: '--tocyn-motion-easing-standard', targetMin: '--tocyn-target-min', densityComfortable: '--tocyn-density-comfortable',
-  typeScaleBody: '--tocyn-type-scale-body', typeLineHeightBody: '--tocyn-type-line-height-body',
-};
+const tokenName = (key: string): `--tocyn-${string}` => `--tocyn-${key.replace(/[A-Z]/g, '-$&').toLowerCase()}`;
 
 // Deliberately conservative: CSS functions, URLs, delimiters and custom syntax are rejected.
-const COLOR_KEYS = ['colorSurface', 'colorSurfacePanel', 'colorSurfaceMuted', 'colorDivider', 'colorText', 'colorTextMuted', 'colorFocus', 'colorSelected', 'colorCritical', 'colorQuiet'] as const;
 const COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 const NUMBER = /^(\d+(?:\.\d+)?)$/;
 const DURATION = /^(\d+(?:\.\d+)?)(ms|s)$/i;
@@ -113,8 +104,7 @@ function validEasing(value: string): boolean {
   const values = match[1].split(',').map(item => item.trim());
   return values.length === 4 && values.every(item => NUMBER.test(item) && Number(item) >= 0 && Number(item) <= 1);
 }
-function hexRgb(value: string): [number, number, number] { const hex = value.length === 4 ? value.slice(1).split('').map(char => char + char).join('') : value.slice(1); return [0, 2, 4].map(offset => Number.parseInt(hex.slice(offset, offset + 2), 16)) as [number, number, number]; }
-function luminance(value: string): number { return hexRgb(value).map(channel => channel / 255).map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0); }
+function luminance(value: string): number { const hex = value.length === 4 ? value.slice(1).replace(/./g, '$&$&') : value.slice(1); const rgb = Number.parseInt(hex, 16); return [rgb >> 16, rgb >> 8 & 255, rgb & 255].map(channel => channel / 255).map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0); }
 function contrast(a: string, b: string): number { const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (light + 0.05) / (dark + 0.05); }
 function validateOverrides(overrides: unknown): asserts overrides is TocynThemeOverrides {
   if (overrides === undefined) return;
@@ -122,7 +112,7 @@ function validateOverrides(overrides: unknown): asserts overrides is TocynThemeO
   const prototype = Object.getPrototypeOf(overrides);
   if (prototype !== null && prototype !== Object.prototype) throw new TypeError('Theme overrides must be a plain record');
   for (const name of Reflect.ownKeys(overrides)) {
-    if (typeof name !== 'string' || !Object.prototype.hasOwnProperty.call(TOKEN_NAMES, name)) throw new TypeError('Unknown Tocyn theme token');
+    if (typeof name !== 'string' || !Object.prototype.hasOwnProperty.call(LIGHT_DEFAULTS, name)) throw new TypeError('Unknown Tocyn theme token');
     if (!('value' in Object.getOwnPropertyDescriptor(overrides, name)!)) throw new TypeError('Theme accessors are not supported');
   }
 }
@@ -134,7 +124,7 @@ export function resolveTocynTheme(input: TocynThemeInput = {}): ResolvedTocynThe
   const tokens = { ...(mode === 'dark' ? DARK_DEFAULTS : LIGHT_DEFAULTS), ...(input.tenant ?? {}), ...(input.instance ?? {}) };
   for (const [name, value] of Object.entries(tokens)) {
     if (typeof value !== 'string' || value.length > 80) throw new TypeError(`Invalid Tocyn theme value for ${name}`);
-    const valid = COLOR_KEYS.includes(name as typeof COLOR_KEYS[number]) ? COLOR.test(value)
+    const valid = name.startsWith('color') ? COLOR.test(value)
       : name.startsWith('motionDuration') ? milliseconds(value) >= 0 && milliseconds(value) <= 500
       : name === 'motionEasingStandard' ? validEasing(value)
       : name === 'targetMin' ? lengthBetween(value, 44, 96)
@@ -149,12 +139,12 @@ export function resolveTocynTheme(input: TocynThemeInput = {}): ResolvedTocynThe
     if ([tokens.colorText, tokens.colorTextMuted, tokens.colorCritical, tokens.colorQuiet].some(text => contrast(text, surface) < 4.5)
       || contrast(tokens.colorFocus, surface) < 3) throw new TypeError('Tocyn theme colours do not meet contrast requirements');
   }
-  const variables = Object.fromEntries(Object.entries(tokens).map(([key, value]) => [TOKEN_NAMES[key as keyof TocynThemeTokens], value])) as ResolvedTocynTheme['variables'];
+  const variables = Object.fromEntries(Object.entries(tokens).map(([key, value]) => [tokenName(key), value])) as ResolvedTocynTheme['variables'];
   return Object.freeze({ version: TOCYN_THEME_CONTRACT_VERSION, mode, tokens: Object.freeze(tokens), variables: Object.freeze(variables) });
 }
 
 /** Returns the contract's properties for removal when an override is cleared. */
 export function tocynThemePropertiesToReset(overrides: TocynThemeOverrides): string[] {
   validateOverrides(overrides);
-  return Object.keys(overrides).filter(key => Object.prototype.hasOwnProperty.call(TOKEN_NAMES, key)).map(key => TOKEN_NAMES[key as keyof TocynThemeTokens]);
+  return Object.keys(overrides).filter(key => Object.prototype.hasOwnProperty.call(LIGHT_DEFAULTS, key)).map(tokenName);
 }

@@ -31,6 +31,61 @@ type BrowserPolicyEvidence = Readonly<{
   unexpectedConsoleErrors: string[];
 }>;
 
+type RenderedContrast = Readonly<{
+  foreground: string;
+  background: string;
+  ratio: number;
+}>;
+
+async function renderedContrast(page: Page, selector: string, property: 'color' | 'outlineColor' = 'color'): Promise<RenderedContrast> {
+  return page.evaluate(`(() => {
+    const selector = ${JSON.stringify(selector)};
+    const propertyName = ${JSON.stringify(property)};
+    const element = document.querySelector(selector);
+    if (!(element instanceof HTMLElement)) throw new Error(\`No HTML element matches \${selector}\`);
+    const parse = value => {
+      if (!value.startsWith('rgb')) throw new Error('Expected a computed RGB colour, received ' + value);
+      const channels = value.slice(value.indexOf('(') + 1, -1).split(',').map(Number);
+      if (channels.length < 3 || channels.some(Number.isNaN)) throw new Error('Expected numeric RGB channels, received ' + value);
+      return { red: channels[0], green: channels[1], blue: channels[2], alpha: channels[3] ?? 1 };
+    };
+    const luminance = ({ red, green, blue }) => [red, green, blue]
+      .map(channel => channel / 255 <= 0.04045 ? channel / 255 / 12.92 : ((channel / 255 + 0.055) / 1.055) ** 2.4)
+      .reduce((total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index], 0);
+    const foreground = parse(getComputedStyle(element)[propertyName]);
+    if (foreground.alpha !== 1) throw new Error('Expected an opaque ' + propertyName);
+    let backgroundElement = element;
+    let background = null;
+    while (backgroundElement) {
+      const candidate = parse(getComputedStyle(backgroundElement).backgroundColor);
+      if (candidate.alpha === 1) { background = candidate; break; }
+      backgroundElement = backgroundElement.parentElement;
+    }
+    if (!background) throw new Error('No opaque ancestor background was rendered');
+    const ratio = (Math.max(luminance(foreground), luminance(background)) + 0.05) / (Math.min(luminance(foreground), luminance(background)) + 0.05);
+    return { foreground: getComputedStyle(element)[propertyName], background: getComputedStyle(backgroundElement).backgroundColor, ratio };
+  })()`);
+}
+
+async function assertRenderedContrast(page: Page, selector: string, minimum: number, description: string, property: 'color' | 'outlineColor' = 'color'): Promise<void> {
+  const evidence = await renderedContrast(page, selector, property);
+  assert.ok(evidence.ratio >= minimum, `${description} must render at least ${minimum}:1 contrast; got ${evidence.ratio.toFixed(2)}:1 (${evidence.foreground} on ${evidence.background})`);
+}
+
+async function assertFocusedOutlineContrast(page: Page, selector: string, description: string): Promise<void> {
+  const focused = await page.evaluate(`(() => {
+    const selector = ${JSON.stringify(selector)};
+    const element = document.querySelector(selector);
+    if (!(element instanceof HTMLElement)) throw new Error(\`No HTML element matches \${selector}\`);
+    const style = getComputedStyle(element);
+    return { focusVisible: element.matches(':focus-visible'), outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
+  })()`) as { focusVisible: boolean; outlineStyle: string; outlineWidth: string };
+  assert.equal(focused.focusVisible, true, `${description} must receive a keyboard-visible focus state`);
+  assert.notEqual(focused.outlineStyle, 'none', `${description} must render a focus outline`);
+  assert.notEqual(focused.outlineWidth, '0px', `${description} must render a non-zero focus outline`);
+  await assertRenderedContrast(page, selector, 3, `${description} focus outline`, 'outlineColor');
+}
+
 async function captureBrowserPolicyEvidence(page: Page): Promise<BrowserPolicyEvidence> {
   const cspViolations: string[] = [];
   const consoleErrors: string[] = [];
@@ -403,7 +458,23 @@ test('proves operator theme first paint, persistence, recovery and tenant separa
       await composer.fill('Synthetic theme continuity draft');
       await page.getByText('Draft saved.', { exact: true }).waitFor();
       await page.getByRole('button', { name: 'Account options', exact: true }).click();
+      assert.equal(await page.evaluate(`(() => {
+        const selector = '[role="dialog"][data-tocyn-inverse]';
+        const element = document.querySelector(selector);
+        return element instanceof HTMLElement ? getComputedStyle(element).getPropertyValue('color-scheme') : null;
+      })()`), 'dark',
+        'The account popover must retain its native dark colour scheme in a tenant-themed workspace');
+      await assertRenderedContrast(page, '[role="dialog"][data-tocyn-inverse] [data-tocyn-appearance] label', 4.5, 'Dark-workspace Appearance label');
+      await assertRenderedContrast(page, 'main h1', 4.5, 'Dark-workspace main headline');
+      await assertRenderedContrast(page, 'main .text-slate-700', 4.5, 'Dark-workspace common neutral text');
       await page.getByRole('radio', { name: 'Light', exact: true }).check();
+      await page.waitForFunction(() => (globalThis as any).document.documentElement.getAttribute('data-tocyn-theme-mode') === 'light');
+      await assertRenderedContrast(page, '[role="dialog"][data-tocyn-inverse] [data-tocyn-appearance] label', 4.5, 'Light-workspace Appearance label');
+      await assertRenderedContrast(page, 'main h1', 4.5, 'Light-workspace main headline');
+      await assertRenderedContrast(page, 'main .text-slate-700', 4.5, 'Light-workspace common neutral text');
+      await assertRenderedContrast(page, '[role="dialog"][data-tocyn-inverse] [data-tocyn-appearance] button', 4.5, 'Appearance save button');
+      await page.keyboard.press('Tab');
+      await assertFocusedOutlineContrast(page, '[role="dialog"][data-tocyn-inverse] [data-tocyn-appearance] button', 'Appearance save button');
       const save = page.waitForResponse(r => new URL(r.url()).pathname === '/api/workspace/theme-preference' && r.request().method() === 'PUT');
       await page.getByRole('button', { name: 'Save appearance', exact: true }).click();
       assert.equal((await save).status(), 200);

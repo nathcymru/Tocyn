@@ -32,12 +32,12 @@ export function OperatorThemeProvider({ children }: { children: React.ReactNode 
 
 export function OperatorThemeControl() {
   const theme = useOperatorThemeContext(); const busy = theme.status === 'loading' || theme.status === 'saving';
-  return <section aria-labelledby="appearance-title" className="border-t border-[var(--tocyn-app-border)] px-4 py-3" data-tocyn-appearance>
-    <h3 id="appearance-title" className="text-sm font-semibold text-[var(--tocyn-app-text)]">Appearance</h3>
-    <fieldset className="mt-2 space-y-1" disabled={busy}><legend className="sr-only">Theme mode</legend>
-      {(['system', 'light', 'dark'] as const).map(mode => <label key={mode} className="flex min-h-11 items-center gap-2 text-sm text-[var(--tocyn-app-text-muted)]"><input type="radio" name="operator-theme-mode" value={mode} checked={theme.mode === mode} onChange={() => theme.updateMode(mode as OperatorThemeMode)} />{mode === 'system' ? 'Use system setting' : mode === 'light' ? 'Light' : 'Dark'}</label>)}
+  return <section aria-labelledby="appearance-title" data-tocyn-appearance>
+    <h3 id="appearance-title">Appearance</h3>
+    <fieldset disabled={busy}><legend className="sr-only">Theme mode</legend>
+      {(['system', 'light', 'dark'] as const).map(mode => <label key={mode}><input type="radio" name="operator-theme-mode" value={mode} checked={theme.mode === mode} onChange={() => theme.updateMode(mode as OperatorThemeMode)} />{mode === 'system' ? 'Use system setting' : mode === 'light' ? 'Light' : 'Dark'}</label>)}
     </fieldset>
-    <div className="mt-2 flex flex-wrap gap-2"><TocynButton type="button" disabled={busy || theme.status !== 'unsaved'} onClick={() => void theme.save()} className="min-h-11 rounded border border-[var(--tocyn-app-border)] px-3 py-1 text-sm text-[var(--tocyn-app-text)]">Save appearance</TocynButton>{(theme.status === 'error' || theme.status === 'conflict') && <TocynButton type="button" onClick={theme.retry} className="min-h-11 rounded border border-[var(--tocyn-app-border)] px-3 py-1 text-sm text-[var(--tocyn-app-text)]">Retry appearance</TocynButton>}{theme.status === 'conflict' && <TocynButton type="button" onClick={theme.restore} className="min-h-11 rounded border border-[var(--tocyn-app-border)] px-3 py-1 text-sm text-[var(--tocyn-app-text)]">Restore server appearance</TocynButton>}</div>
-    <p role="status" aria-live="polite" className="mt-2 text-xs text-[var(--tocyn-app-text-muted)]">{theme.error || (theme.status === 'saved' ? 'Appearance saved.' : theme.status === 'saving' ? 'Saving appearance…' : theme.status === 'unsaved' ? 'Unsaved appearance choice.' : '')}</p>
+    <div><TocynButton type="button" disabled={busy || theme.status !== 'unsaved'} onClick={() => void theme.save()}>Save appearance</TocynButton>{(theme.status === 'error' || theme.status === 'conflict') && <TocynButton type="button" onClick={theme.retry}>Retry appearance</TocynButton>}{theme.status === 'conflict' && <TocynButton type="button" onClick={theme.restore}>Restore server appearance</TocynButton>}</div>
+    <p role="status" aria-live="polite">{theme.error || (theme.status === 'saved' ? 'Appearance saved.' : theme.status === 'saving' ? 'Saving appearance…' : theme.status === 'unsaved' ? 'Unsaved appearance choice.' : '')}</p>
   </section>;
 }

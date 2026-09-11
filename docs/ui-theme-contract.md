@@ -27,6 +27,8 @@ The resolver accepts only declared token keys on plain data objects: opaque thre
 
 `data-tocyn-theme-mode="light"` or `"dark"` declares the selected mode for a root/container and sets `color-scheme`. System colour-scheme following requires `data-tocyn-theme-system` on the root/host without an explicit mode. This opt-in prevents partially adapted applications from acquiring incompatible dark surfaces. Persistent mode and cognitive/workspace preferences belong to the authenticated operator state described in the [workspace interaction contract](workspace/operator-workspace-interaction-contract.md), not tenant branding data.
 
+`data-tocyn-inverse` marks an explicitly dark local context such as navigation or an account popover. It uses fixed dark surfaces, foregrounds and focus colour, and declares `color-scheme: dark`; it must not inherit tenant palette text or focus aliases. Tenant palette values continue to apply to the surrounding workspace root.
+
 ## CSP and integration boundary
 
 The package ships a static stylesheet (`@luminatick/ui/styles.css`) and standard custom properties. No CSS-in-JS, `<style>` text generation, URL-backed stylesheet, or browser-to-API-Worker UI import is part of this contract. A consumer may set validated properties through DOM CSSOM APIs under its existing CSP. The application adapter still needs to define first-paint bootstrapping, authenticated tenant loading, persistent preference restore, wrapper lifecycle, and the CSP directive/test for the deployed shell; those are outside this bounded foundation.

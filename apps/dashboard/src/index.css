@@ -22,12 +22,17 @@
     color-scheme: dark;
   }
   [data-tocyn-inverse] {
-    --tocyn-app-surface: var(--tocyn-color-surface, #0f172a);
-    --tocyn-app-surface-panel: var(--tocyn-color-surface-panel, #1e293b);
-    --tocyn-app-surface-muted: var(--tocyn-color-surface-muted, #334155);
-    --tocyn-app-text: var(--tocyn-color-text, #f8fafc);
-    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #cbd5e1);
-    --tocyn-app-border: var(--tocyn-color-divider, #475569);
+    /* Inverse containers use a fixed, independently validated dark context.
+       Tenant palette aliases remain scoped to the workspace root. */
+    --tocyn-app-surface: #0f172a;
+    --tocyn-app-surface-panel: #1e293b;
+    --tocyn-app-surface-muted: #334155;
+    --tocyn-app-text: #f8fafc;
+    --tocyn-app-text-muted: #cbd5e1;
+    --tocyn-app-border: #475569;
+    --tocyn-color-focus: #f8fafc;
+    color-scheme: dark;
+    color: var(--tocyn-app-text);
   }
   body {
     @apply antialiased;
@@ -38,6 +43,8 @@
 
 [data-tocyn-appearance] {
   font-size: var(--tocyn-type-scale-body, 1rem);
+  border-top: 1px solid var(--tocyn-app-border);
+  padding: 0.75rem 1rem;
 }
 [data-tocyn-appearance] button {
   min-height: var(--tocyn-target-min, 44px);
@@ -45,6 +52,42 @@
 }
 [data-tocyn-appearance] label {
   min-height: var(--tocyn-target-min, 44px);
+}
+[data-tocyn-appearance] h3 {
+  color: var(--tocyn-app-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+[data-tocyn-appearance] label + label { margin-top: 0.25rem; }
+[data-tocyn-appearance] fieldset { margin-top: 0.5rem; }
+[data-tocyn-appearance] label {
+  align-items: center;
+  color: var(--tocyn-app-text-muted);
+  display: flex;
+  font-size: 0.875rem;
+  gap: 0.5rem;
+  line-height: 1.25rem;
+}
+[data-tocyn-appearance] fieldset + div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+[data-tocyn-appearance] fieldset + div button {
+  border: 1px solid var(--tocyn-app-border);
+  border-radius: 0.25rem;
+  color: var(--tocyn-app-text);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  padding: 0.25rem 0.75rem;
+}
+[data-tocyn-appearance] > p[role="status"] {
+  color: var(--tocyn-app-text-muted);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  margin-top: 0.5rem;
 }
 @media (prefers-reduced-motion: reduce) {
   [data-tocyn-appearance], [data-tocyn-appearance] *, [data-tocyn-appearance] *::before, [data-tocyn-appearance] *::after {

@@ -44,11 +44,9 @@ function createController(identity: string | null) {
   let denied = false;
   let saving: Promise<void> | null = null;
   let restoreFlight: Promise<void> | null = null;
-  let restoreEpoch = 0;
   let restoreQueued = false;
   let restoreQueuedDiscard = false;
   let restoreDiscardLocal = false;
-  let restoreAuthorityValid = false;
   let saveQueued = false;
   const listeners = new Set<() => void>();
   const current = (requestEpoch = epoch) => {
@@ -63,9 +61,8 @@ function createController(identity: string | null) {
     editVersion++;
     restoreQueued = false;
     restoreQueuedDiscard = false;
-    restoreAuthorityValid = false;
     saveQueued = false;
-    replace(empty('error', prefersDark(), 'Theme preferences are no longer available for this session. Sign in again to restore them.'));
+    replace(empty('error', prefersDark(), 'Theme preferences are no longer available. Sign in again.'));
   };
 
   const restore = (discardLocal = false) => {
@@ -76,7 +73,7 @@ function createController(identity: string | null) {
       return;
     }
     if (restoreFlight) {
-      if (restoreEpoch !== epoch || discardLocal !== restoreDiscardLocal) {
+      if (discardLocal !== restoreDiscardLocal) {
         restoreQueued = true;
         restoreQueuedDiscard ||= discardLocal;
       }
@@ -85,7 +82,7 @@ function createController(identity: string | null) {
     const requestEpoch = epoch;
     const requestEditVersion = editVersion;
     const preserveLocal = dirty && !discardLocal;
-    restoreAuthorityValid = false;
+    revisionKnown = false;
     if (!dirty) replace({ ...state, status: 'loading', error: null });
     const flight = (async () => {
       try {
@@ -97,14 +94,13 @@ function createController(identity: string | null) {
         if (!validPreference(preferenceResponse)) {
           // Do not continue to write against a revision from an older, now untrusted read.
           revisionKnown = false;
-          replace({ ...state, status: 'error', error: 'Theme preference response is invalid. Restore before saving a choice.' });
+          replace({ ...state, status: 'error', error: 'Theme preference response is invalid. Restore before saving.' });
           return;
         }
         let tenant = FALLBACK;
         let themeError: string | null = null;
-        try { tenant = parseThemeResponse(themeResponse); } catch { themeError = 'Tenant theme is invalid; using the safe default palette.'; }
+        try { tenant = parseThemeResponse(themeResponse); } catch { themeError = 'Tenant theme is invalid; using safe defaults.'; }
         revisionKnown = true;
-        restoreAuthorityValid = true;
         const preference = preferenceResponse;
         if (preserveLocal || editVersion !== requestEditVersion) {
           // Local edits win, while the returned revision remains the base for their next CAS write.
@@ -117,11 +113,10 @@ function createController(identity: string | null) {
       } catch (error) {
         if (!current(requestEpoch)) return;
         if (error instanceof ApiError && error.status === 403) { clearUnauthorized(); return; }
-        replace({ ...state, status: 'error', error: 'Theme preferences could not be restored. Retry to try again.' });
+        replace({ ...state, status: 'error', error: 'Theme preferences could not be restored. Retry.' });
       }
     })();
     restoreFlight = flight;
-    restoreEpoch = requestEpoch;
     restoreDiscardLocal = discardLocal;
     void flight.finally(() => {
       if (restoreFlight !== flight) return;
@@ -131,7 +126,7 @@ function createController(identity: string | null) {
         restoreQueued = false;
         restoreQueuedDiscard = false;
         restore(discard);
-      } else if (saveQueued && restoreAuthorityValid && active && !denied) {
+      } else if (saveQueued && revisionKnown && active && !denied) {
         saveQueued = false;
         void save();
       } else {
@@ -150,7 +145,7 @@ function createController(identity: string | null) {
     replace({ ...state, status: 'saving', error: null });
     const flight = dashboardApi.put<unknown>('/workspace/theme-preference', { expectedRevision: submitted.revision, mode: submitted.mode }).then(response => {
       if (!current(requestEpoch)) return;
-      if (!validPreference(response) || response.revision <= submitted.revision || response.mode !== submitted.mode) throw new Error('Invalid saved theme preference');
+      if (!validPreference(response) || response.revision <= submitted.revision || response.mode !== submitted.mode) throw new Error('Invalid saved preference');
       revisionKnown = true;
       if (editVersion !== requestEditVersion) {
         // Only the captured choice committed; preserve a newer choice and its updated CAS base.
@@ -165,8 +160,8 @@ function createController(identity: string | null) {
       if (error instanceof ApiError && error.status === 403) { clearUnauthorized(); return; }
       const conflict = error instanceof ApiError && error.status === 409;
       replace({ ...state, status: conflict ? 'conflict' : 'error', error: conflict
-        ? 'Theme preference changed in another session. Restore before replacing it.'
-        : 'Theme preference was not saved. Retry to keep this choice.' });
+        ? 'Theme preference changed elsewhere. Restore before replacing it.'
+        : 'Theme preference was not saved. Retry.' });
     }).finally(() => {
       if (saving === flight) saving = null;
       if (restoreQueued && active && !denied) {
