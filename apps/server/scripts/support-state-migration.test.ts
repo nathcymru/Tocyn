@@ -128,6 +128,10 @@ test('support-state transitions stay tenant-scoped, preserve legacy clients, and
       (error: unknown) => error instanceof SupportStateError && error.code === 'conflict',
     );
     assert.equal((await db.prepare("SELECT count(*) AS n FROM support_state_events WHERE tenant_id='state-a' AND ticket_id='ticket-a'").first<{ n: number }>())!.n, eventsBeforeRequiredFieldFailure);
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM ticket_sla_clocks WHERE tenant_id='state-a' AND ticket_id='ticket-a'").first<{ n: number }>())!.n, 0,
+      'a rejected state CAS must not project a clock');
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM ticket_sla_events WHERE tenant_id='state-a' AND ticket_id='ticket-a'").first<{ n: number }>())!.n, 0,
+      'a rejected state CAS must not write SLA audit evidence');
 
     const transitioned = await serviceA.transition('ticket-a', {
       definitionId: pending.id, expectedRevision: initial.revision, waitingReason: 'Need account number',
@@ -142,6 +146,22 @@ test('support-state transitions stay tenant-scoped, preserve legacy clients, and
     });
     assert.equal((await db.prepare("SELECT status FROM tickets WHERE tenant_id='state-a' AND id='ticket-a'").first())?.status, 'pending');
     assert.equal((await db.prepare("SELECT transition_token FROM ticket_support_state WHERE tenant_id='state-a' AND ticket_id='ticket-a'").first())?.transition_token, null);
+    assert.deepEqual(await db.prepare(`SELECT response_target_ms,resolution_target_ms,calendar_json
+      FROM sla_policies WHERE tenant_id='state-a'`).first(), {
+      response_target_ms: null, resolution_target_ms: null,
+      calendar_json: '{"timeZone":"UTC","weekly":{"monday":[{"startMinute":0,"endMinute":1440}],"tuesday":[{"startMinute":0,"endMinute":1440}],"wednesday":[{"startMinute":0,"endMinute":1440}],"thursday":[{"startMinute":0,"endMinute":1440}],"friday":[{"startMinute":0,"endMinute":1440}],"saturday":[{"startMinute":0,"endMinute":1440}],"sunday":[{"startMinute":0,"endMinute":1440}]},"exceptions":[],"dst":{"ambiguousLocalTime":"earlier","nonexistentLocalTime":"next-valid"}}',
+    }, 'the baseline calendar creates no invented target duration');
+    assert.deepEqual(await db.prepare(`SELECT paused_at,pause_reason,last_support_state_revision,response_started_at,resolution_started_at
+      FROM ticket_sla_clocks WHERE tenant_id='state-a' AND ticket_id='ticket-a'`).first(), {
+      paused_at: transitioned.changed_at, pause_reason: 'waiting', last_support_state_revision: transitioned.revision,
+      response_started_at: (await db.prepare("SELECT created_at FROM tickets WHERE tenant_id='state-a' AND id='ticket-a'").first<{ created_at: string }>())!.created_at,
+      resolution_started_at: (await db.prepare("SELECT created_at FROM tickets WHERE tenant_id='state-a' AND id='ticket-a'").first<{ created_at: string }>())!.created_at,
+    }, 'the waiting transition and its durable pause projection share the CAS revision');
+    assert.deepEqual((await db.prepare(`SELECT kind,support_state_revision FROM ticket_sla_events
+      WHERE tenant_id='state-a' AND ticket_id='ticket-a'`).all<{ kind: string; support_state_revision: number }>()).results,
+      [{ kind: 'clock.initialized', support_state_revision: transitioned.revision }]);
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM sla_policies WHERE tenant_id='state-b'").first<{ n: number }>())!.n, 0,
+      'tenant A projection does not initialize a policy for tenant B');
 
     // Even if a clock collision produces the same timestamp, revision remains
     // strictly monotonic and therefore rejects an old optimistic write.
@@ -158,6 +178,16 @@ test('support-state transitions stay tenant-scoped, preserve legacy clients, and
       (error: unknown) => error instanceof SupportStateError && error.code === 'not_found',
     );
     assert.equal((await reposB.supportStates.getTicketState('ticket-b'))?.definition_id, 'legacy-open');
+
+    const resumeStart = await reposA.supportStates.getTicketState('ticket-a');
+    assert.ok(resumeStart);
+    const resumed = await serviceA.transition('ticket-a', { definitionId: working.id, expectedRevision: resumeStart.revision });
+    assert.equal((await db.prepare("SELECT paused_at,pause_reason,last_support_state_revision FROM ticket_sla_clocks WHERE tenant_id='state-a' AND ticket_id='ticket-a'").first())?.paused_at, null,
+      'a subsequent non-waiting transition resumes the persisted clock');
+    assert.deepEqual((await db.prepare("SELECT kind,support_state_revision FROM ticket_sla_events WHERE tenant_id='state-a' AND ticket_id='ticket-a' ORDER BY support_state_revision").all<{ kind: string; support_state_revision: number }>()).results,
+      [{ kind: 'clock.initialized', support_state_revision: transitioned.revision }, { kind: 'clock.resumed', support_state_revision: resumed.revision }]);
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM ticket_sla_pause_intervals WHERE tenant_id='state-a' AND ticket_id='ticket-a' AND ended_at IS NOT NULL").first<{ n: number }>())?.n, 1,
+      'waiting pause history is retained after a resume instead of being overwritten');
 
     // A legacy PATCH still changes only the compatibility projection and clears
     // the private facts; old API clients never need the new definition fields.

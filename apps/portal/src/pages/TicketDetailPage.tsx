@@ -8,6 +8,7 @@ import { Loader2, ArrowLeft, Paperclip, Send, X } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { ticketReference } from '../utils/ticket-reference';
+import { TicketSlaStatus } from '../components/TicketSlaStatus';
 
 type UploadedAttachment = { filename: string; size: number; contentType: string; storageKey: string };
 
@@ -334,6 +335,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
       </div>}
       {downloadError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-700">{downloadError}</p>}
       <p role="status" aria-label="Attachment download status" className="text-sm text-gray-700">{downloadStatus}</p>
+      <TicketSlaStatus ticketId={ticket.id} />
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         {/* Messages List */}
         <div ref={messagesRegion} id="conversation-messages" role="region" aria-label="Conversation messages" tabIndex={0} className="flex-1 overflow-y-auto p-6 space-y-6 max-h-[600px] bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">

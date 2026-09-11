@@ -86,6 +86,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
 export const portalApi = {
   get: <T>(path: string, options?: RequestInit) => request<T>(path, { ...options, method: 'GET' }),
+  getTicketSla: <T>(ticketId: string) => request<T>(`/tickets/${encodeURIComponent(ticketId)}/sla`, { method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: RequestInit) => 
     request<T>(path, { ...options, method: 'POST', body: JSON.stringify(body) }),
   postForm: <T>(path: string, body: FormData, options?: RequestInit) => {

@@ -9,6 +9,7 @@ const presence = vi.hoisted(() => ({current: [] as {userId:string;name:string;lo
 vi.mock('../hooks/useRealtime',()=>({useRealtime:()=>({presence:presence.current,updateLocation:()=>{},lastMessage:null})}));
 const article=(id:string,body:string)=>({id,body,sender_type:'customer',created_at:'2026-09-09 00:00:00',attachments:[]});
 const ticket={id:'ticket',subject:'A bounded staff conversation',status:'open',priority:'normal',ticket_no:1,created_at:'2026-09-09 00:00:00',updated_at:'2026-09-09 00:00:00',customer_email:'synthetic@example.invalid',custom_fields:{},articles:[]};
+const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 let request:(path:string,init:RequestInit)=>Promise<Response>|Response;
 function renderDetail(client:QueryClient) {
@@ -29,6 +30,7 @@ function setup(response:typeof request) {
     if(path==='/api/settings')return json({TICKET_PREFIX:'#'});
     if(path==='/api/ticket-fields')return json([]);
     if(path==='/api/workspace/drafts/ticket')return new Response(null,{status:204});
+    if(path==='/api/tickets/ticket/sla')return json(unavailableSla);
     return request(path,init);
   }));
 }

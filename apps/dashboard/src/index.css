@@ -10,6 +10,8 @@
     --tocyn-app-text: var(--tocyn-color-text, #0f172a);
     --tocyn-app-text-muted: var(--tocyn-color-text-muted, #475569);
     --tocyn-app-border: var(--tocyn-color-divider, #cbd5e1);
+    --tocyn-sla-breach-text: #b91c1c;
+    --tocyn-sla-on-track-text: #047857;
     color-scheme: light;
   }
   [data-tocyn-theme-mode="dark"] {
@@ -19,6 +21,8 @@
     --tocyn-app-text: var(--tocyn-color-text, #f8fafc);
     --tocyn-app-text-muted: var(--tocyn-color-text-muted, #cbd5e1);
     --tocyn-app-border: var(--tocyn-color-divider, #475569);
+    --tocyn-sla-breach-text: #fca5a5;
+    --tocyn-sla-on-track-text: #6ee7b7;
     color-scheme: dark;
   }
   [data-tocyn-inverse] {

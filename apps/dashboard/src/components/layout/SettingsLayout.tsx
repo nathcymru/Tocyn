@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Settings, Users, Shield, Zap, Key, LayoutTemplate, FormInput, Mail, CreditCard, Workflow } from 'lucide-react';
+import { Settings, Users, Shield, Zap, Key, LayoutTemplate, FormInput, Mail, CreditCard, Workflow, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { dashboardApi } from '../../api/client';
@@ -12,6 +12,7 @@ function cn(...inputs: any[]) {
 const settingsNavigation = [
   { name: 'General', href: '/settings/general', icon: Settings, permissionKey: 'general' },
   { name: 'Support States', href: '/settings/support-states', icon: Workflow, permissionKey: 'support_states' },
+  { name: 'Service Levels', href: '/settings/sla', icon: Clock, permissionKey: 'general' },
   { name: 'Users', href: '/settings/users', icon: Users, permissionKey: 'users' },
   { name: 'Groups', href: '/settings/groups', icon: Shield, permissionKey: 'groups' },
   { name: 'Ticket Fields', href: '/settings/ticket-fields', icon: FormInput, permissionKey: 'ticket_fields' },

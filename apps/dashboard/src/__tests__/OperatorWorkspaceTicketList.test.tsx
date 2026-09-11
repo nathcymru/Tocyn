@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/authStore';
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const operator = { id: 'operator', tenant_id: 'tenant-a', email: 'operator@example.invalid', full_name: 'Operator', role: 'admin', mfa_enabled: true };
 const ticket = { id: 'ticket-with-draft', ticket_no: 12, subject: 'Saved workspace result', customer_email: 'customer@example.invalid', status: 'open', priority: 'normal', created_at: '2026-09-11T00:00:00Z', updated_at: '2026-09-11T00:00:00Z' };
+const unavailableSla = { response: { state: 'unavailable', phase: 'unavailable', completedAt: null, dueAt: null, remainingWorkingMilliseconds: null, targetWorkingMilliseconds: null }, resolution: { state: 'unavailable', phase: 'unavailable', completedAt: null, dueAt: null, remainingWorkingMilliseconds: null, targetWorkingMilliseconds: null }, handlerName: null };
 let client: QueryClient;
 function Location() { const location = useLocation(); return <output data-testid="location">{`${location.pathname}${location.search}`}</output>; }
 function showFeed(entry = '/tickets') {
@@ -29,6 +30,7 @@ it('restores the scoped list query/filter/page, marks body-free draft results, a
   const ticketQueries: URLSearchParams[] = [];
   const workspaceWrites: unknown[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (url === '/api/ticket-sla/projections') return json({ [ticket.id]: unavailableSla });
     if (url === '/api/workspace/state' && options.method === 'PUT') { workspaceWrites.push(JSON.parse(String(options.body))); return json({ revision: 5, view: 'custom', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'private search text', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' }); }
     if (url === '/api/workspace/state') return json({ revision: 4, view: 'custom', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'server query', listAnchor: 'page:2', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
     if (url === '/api/workspace/drafts?limit=50') return json({ items: [{ ticketId: ticket.id, updatedAt: '2026-09-11T00:00:00Z' }], next: null });
@@ -39,6 +41,7 @@ it('restores the scoped list query/filter/page, marks body-free draft results, a
   }));
   showFeed();
   await screen.findByRole('link', { name: ticket.subject });
+  await waitFor(() => expect(screen.getAllByText('Not configured').length).toBe(2));
   await waitFor(() => expect(ticketQueries.at(-1)?.get('page')).toBe('2'));
   expect(ticketQueries.at(-1)?.get('filter_id')).toBe('open-filter');
   expect(ticketQueries.at(-1)?.get('search')).toBe('server query');
@@ -61,6 +64,7 @@ it('restores sort, sends it with the server-paginated query, and saves custom an
   const workspaceWrites: Record<string, unknown>[] = [];
   let revision = 4;
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (url === '/api/ticket-sla/projections') return json({ [ticket.id]: unavailableSla });
     if (url === '/api/workspace/state' && options.method === 'PUT') {
       const { expectedRevision: _expectedRevision, ...saved } = JSON.parse(String(options.body));
       workspaceWrites.push(saved);
@@ -98,6 +102,7 @@ it('restores sort, sends it with the server-paginated query, and saves custom an
 it('applies a legacy search URL once without restoring it over a later operator edit', async () => {
   const ticketQueries: URLSearchParams[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (url === '/api/ticket-sla/projections') return json({ [ticket.id]: unavailableSla });
     if (url === '/api/workspace/state' && options.method === 'PUT') return json({ revision: 5, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'later query', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
     if (url === '/api/workspace/state') return json({ revision: 4, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'server query', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
     if (url === '/api/workspace/drafts?limit=50') return json({ items: [], next: null });
@@ -117,6 +122,7 @@ it('applies a legacy search URL once without restoring it over a later operator 
 
 it('keeps navigation on the list after an autosave has already failed', async () => {
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (url === '/api/ticket-sla/projections') return json({ [ticket.id]: unavailableSla });
     if (url === '/api/workspace/state') return options.method === 'PUT' ? json({ error: 'Unavailable' }, 503) : json(null);
     if (url.startsWith('/api/workspace/drafts')) return json({ items: [], next: null });
     if (url.startsWith('/api/tickets?')) return json({ data: [ticket], meta: { page: 1, limit: 20, total: 1, total_pages: 1 } });
@@ -134,4 +140,18 @@ it('keeps navigation on the list after an autosave has already failed', async ()
   expect(screen.getByTestId('location')).toHaveTextContent('/tickets');
   expect(screen.getByTestId('location')).not.toHaveTextContent(ticket.id);
   expect(search).toHaveValue('retained query');
+});
+
+it('renders malformed batch data as unavailable instead of treating a ticket response as an SLA projection', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (url === '/api/workspace/state') return options.method === 'PUT' ? json({ revision: 2, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' }) : json({ revision: 1, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
+    if (url.startsWith('/api/workspace/drafts')) return json({ items: [], next: null });
+    if (url.startsWith('/api/tickets?')) return json({ data: [ticket], meta: { page: 1, limit: 20, total: 1, total_pages: 1 } });
+    if (url === '/api/ticket-sla/projections') return json({ [ticket.id]: ticket });
+    if (url === '/api/settings') return json({ TICKET_PREFIX: '#' });
+    return json([]);
+  }));
+  showFeed();
+  await screen.findByRole('link', { name: ticket.subject });
+  expect(await screen.findByText('Service level unavailable')).toBeTruthy();
 });

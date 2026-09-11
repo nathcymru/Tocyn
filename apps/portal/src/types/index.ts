@@ -47,3 +47,19 @@ export interface PaginatedResponse<T> {
     total_pages: number;
   };
 }
+
+export interface SlaTargetProjection {
+  state: 'unavailable' | 'on-track' | 'breached';
+  phase: 'unavailable' | 'running' | 'paused' | 'completed';
+  completedAt: string | null;
+  dueAt: string | null;
+  remainingWorkingMilliseconds: number | null;
+  targetWorkingMilliseconds: number | null;
+}
+
+/** Customer-safe SLA response returned only after the ticket ownership check. */
+export interface TicketSlaProjection {
+  response: SlaTargetProjection;
+  resolution: SlaTargetProjection;
+  handlerName: string | null;
+}

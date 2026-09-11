@@ -1,3 +1,5 @@
+import { TicketSlaPanel } from '../components/TicketSlaPanel';
+import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
@@ -529,6 +531,8 @@ function TicketDetail({ id }: { id: string }) {
           </div>
         </div>
 
+        <TicketSlaActionBar ticketId={ticket.id} />
+        <TicketSlaPanel ticketId={ticket.id} />
         {!showSupportState && <TocynButton type="button" onClick={() => setShowSupportState(true)} className="rounded border border-slate-300 px-3 py-2 text-sm">Manage support state</TocynButton>}
         {showSupportState && supportState.isLoading && <p role="status">Loading current support state…</p>}
         {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Support state">

@@ -23,6 +23,7 @@ import { rateLimiter } from "../middleware/rate-limiter";
 import { decryptString } from "../utils/crypto";
 import { verifyTurnstileToken } from "../utils/turnstile";
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
+import { SlaClockError } from '../repositories/sla-clock.repository';
 import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 import { MutationInputError, mutationInputErrorBody, normalizeAttachmentReferences, portalTicketCreateSchema, portalTicketReplySchema, readIdempotencyKey, readMutationJson } from './mutation-request';
 
@@ -300,6 +301,23 @@ app.get('/tickets/:id/support-state', widgetAuthMiddleware, roleGuard(['customer
   const state = await deps.repositories.supportStates.getTicketState(ticket.id);
   if (!state) return c.json({ error: 'Not found' }, 404);
   return c.json(publicSupportState(state));
+});
+
+app.get('/tickets/:id/sla', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+  const payload = c.get('jwtPayload');
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const id = c.req.param('id');
+  const ticket = id ? await deps.repositories.tickets.get(id) : null;
+  if (!ticket || ticket.customer_email !== payload.email || (ticket.customer_id !== null && ticket.customer_id !== payload.sub)) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+  try {
+    const projection = await deps.repositories.slaClocks.getProjection(ticket.id);
+    return projection ? c.json(projection) : c.json({ error: 'Not found' }, 404);
+  } catch (error) {
+    if (error instanceof SlaClockError && error.code === 'unavailable') return c.json({ error: error.message, code: 'sla_unavailable' }, 503);
+    throw error;
+  }
 });
 
 app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(5, 60000), async (c) => {
