@@ -11,6 +11,9 @@ try {
     page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/splash/')) splashRequests.push(request.url()); });
     await page.goto(url); await page.locator('.tocyn-auth-form input').first().waitFor();
     assert.equal(await page.locator('.tocyn-auth').getAttribute('data-auth-mode'), mode);
+    const logo = await page.locator('.tocyn-auth-logo').boundingBox();
+    const form = await page.locator('.tocyn-auth-form').boundingBox();
+    assert.ok(Math.abs((logo.x + logo.width / 2) - (form.x + form.width / 2)) < 1, 'Form logo must be centred');
     if (width < 768) {
       assert.equal(await page.locator('.tocyn-auth-splash').count(), 0);
       assert.equal(splashRequests.length, 0);
