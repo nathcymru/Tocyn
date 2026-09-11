@@ -22,6 +22,9 @@ export type SessionBudgetRequirements = Readonly<{
   readTicketId?: string;
   /** Optional existing capability fence; omitted for routes without a catalogue capability. */
   capability?: CapabilityWriteFence;
+  /** Authentication entrypoints may carry a verified challenge/enrollment
+   * credential before MFA is complete. Omission retains the active-MFA gate. */
+  authentication?: 'challenge' | 'enrollment';
 }>;
 
 /** Bounded live session gate for server-selected prepaid work, separate from budget policy authority. */
@@ -33,11 +36,14 @@ export class SessionBudgetAuthorityRepository {
       || !['admin', 'agent'].includes(credential.role) || !this.scope.roles.includes(credential.role)
       || !Number.isSafeInteger(credential.sessionVersion) || credential.sessionVersion !== this.scope.authVersion
       || !Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(credential.expiresAt)
-      || credential.expiresAt <= now / 1_000 || credential.mfaVerified !== true) return null;
+      || credential.expiresAt <= now / 1_000
+      || (requirements.authentication === 'challenge' ? credential.mfaVerified !== false
+        : requirements.authentication === 'enrollment' ? typeof credential.mfaVerified !== 'boolean'
+        : credential.mfaVerified !== true)) return null;
     const user = await this.db.prepare(`SELECT role,session_version,mfa_enabled FROM users WHERE tenant_id=? AND id=? LIMIT 1`)
       .bind(this.scope.tenantId, this.scope.actorId).first<{ role: string; session_version: number; mfa_enabled: number | boolean }>();
     if (!user || user.role !== credential.role || user.session_version !== credential.sessionVersion
-      || (user.mfa_enabled !== 1 && user.mfa_enabled !== true)) return null;
+      || (!requirements.authentication && user.mfa_enabled !== 1 && user.mfa_enabled !== true)) return null;
     if (requirements.ticket || requirements.readTicketId) {
       const ticket = await this.db.prepare(`SELECT group_id FROM tickets WHERE tenant_id=? AND id=? LIMIT 1`)
         .bind(this.scope.tenantId, requirements.ticket?.id ?? requirements.readTicketId).first<{ group_id: string | null }>();
