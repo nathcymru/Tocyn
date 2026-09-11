@@ -14,4 +14,6 @@ export type ConversationEvent = {
   source: ConversationActor['source']; visibility: 'public' | 'internal'; facts: string;
 };
 export type ConversationAuditReference = { eventId: string; articleId: string | null };
-export type AuditedTicketUpdate = Pick<Partial<Ticket>, 'status' | 'priority' | 'assigned_to' | 'group_id' | 'custom_fields'>;
+export type AuditedTicketUpdate = Pick<Partial<Ticket>, 'status' | 'priority' | 'assigned_to' | 'group_id'> & {
+  custom_fields?: Ticket['custom_fields'] | null;
+};

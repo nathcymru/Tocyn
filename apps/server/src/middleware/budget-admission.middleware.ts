@@ -16,7 +16,7 @@ import { SessionBudgetAdmissionService } from '../budgets/session-admission.serv
 
 export const API_TICKET_BUDGET_POLICY = 'api-ticket-mutations-v1' as const;
 export const TICKET_MUTATIONS_BUDGET_POLICY = 'ticket-mutations-v1' as const;
-export type ApiTicketBudgetOperation = 'api.ticket.create' | 'api.ticket.reply';
+export type ApiTicketBudgetOperation = 'api.ticket.create' | 'api.ticket.reply' | 'api.ticket.update';
 export type StaffTicketBudgetOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply';
 export type CustomerTicketBudgetOperation = 'portal.ticket.create' | 'portal.ticket.reply';
 
@@ -32,6 +32,10 @@ export const API_TICKET_ENVELOPES: Readonly<Record<ApiTicketBudgetOperation, Res
   'api.ticket.create': Object.freeze({ d1RowsRead: 2_560, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }), logEvents: (estimateDiagnosticEnvelope({ httpRequests: 2 }).logEvents ?? 0) + 2 }),
   'api.ticket.reply': Object.freeze({ d1RowsRead: 2_560, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
+    ...estimateDiagnosticEnvelope({ httpRequests: 2 }), logEvents: (estimateDiagnosticEnvelope({ httpRequests: 2 }).logEvents ?? 0) + 2 }),
+  // An update has the same durable authority, receipt, audit and recovery
+  // boundary as the other API mutations. It has no external provider work.
+  'api.ticket.update': Object.freeze({ d1RowsRead: 2_560, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }), logEvents: (estimateDiagnosticEnvelope({ httpRequests: 2 }).logEvents ?? 0) + 2 }),
 });
 

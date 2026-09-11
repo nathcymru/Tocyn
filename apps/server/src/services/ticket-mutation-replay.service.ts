@@ -12,7 +12,7 @@ import type { ConversationAuditReference } from '../types/conversation-audit';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { MutationNamespace, MutationOutcome, MutationPrincipal, MutationReceipt, MutationSnapshotV1,
-  PreparedTicketMutation, TicketMutationInput, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
+  MutationSnapshotV3, PreparedTicketMutation, TicketMutationInput, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import { TicketMutationReplayRepository, type MutationCandidate } from '../repositories/ticket-mutation-replay.repository';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import { projectCanonicalConversation } from './canonical-conversation.service';
@@ -44,7 +44,7 @@ async function digest(value: string): Promise<string> {
 }
 
 type MutationAdmissionIntent = Readonly<{ operationId: string; operationFingerprint: string; workScopeKey: string }>;
-type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; budgetIntent?: Promise<MutationAdmissionIntent>;
+type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; keyed: boolean; budgetIntent?: Promise<MutationAdmissionIntent>;
   budgetRequired?: boolean; budgetAuthority?: BudgetCommitAuthority; budgetCommitStarted?: boolean;
   customerBudgetRequired?: boolean; customerBudgetHandoff?: CustomerBudgetCommitHandoff; customerBudgetCommitStarted?: boolean;
   budgetLifecycle?: { cache: IsolateBudgetAdmissionCache; now: () => number } };
@@ -55,7 +55,7 @@ export const API_GRANT_IDLE_SEAL_MS = 30_000;
  * replay. Keep this renderer AND its canonical projector compatibility-frozen
  * for live v1 receipts; changed response behavior requires a new version.
  */
-export function renderMutationSnapshotV1(raw: string, operation: TicketMutationInput['operation'], replayed: boolean, keyed: boolean): MutationOutcome {
+export function renderMutationSnapshotV1(raw: string, operation: Exclude<TicketMutationInput['operation'], 'api.ticket.update'>, replayed: boolean, keyed: boolean): MutationOutcome {
   let snapshot: MutationSnapshotV1;
   try { snapshot = JSON.parse(raw) as MutationSnapshotV1; } catch { throw unavailable(); }
   if (snapshot.version !== 1 || !snapshot.ticket?.id || !Array.isArray(snapshot.attachments)) throw unavailable();
@@ -87,6 +87,7 @@ export function renderMutationSnapshotV2(raw: string, operation: TicketMutationI
     && snapshot.audit.length === 1 && snapshot.audit[0]
     && typeof snapshot.audit[0].eventId === 'string' && snapshot.audit[0].eventId;
   if (!validAudit) throw unavailable();
+  if (operation === 'api.ticket.update') throw unavailable();
   const result = renderMutationSnapshotV1(JSON.stringify({ ...snapshot, version: 1 }), operation, replayed, keyed);
   const reference = { status: 'known', value: { eventId: snapshot.audit[0].eventId } };
   if (operation.endsWith('.create')) {
@@ -99,6 +100,13 @@ export function renderMutationSnapshotV2(raw: string, operation: TicketMutationI
   } else result.body.audit = reference;
   return result;
 }
+export function renderMutationSnapshotV3(raw: string, operation: TicketMutationInput['operation'], replayed: boolean, keyed: boolean): MutationOutcome {
+  if (operation !== 'api.ticket.update') throw unavailable();
+  let snapshot: MutationSnapshotV3;
+  try { snapshot = JSON.parse(raw) as MutationSnapshotV3; } catch { throw unavailable(); }
+  if (snapshot.version !== 3 || !snapshot.ticket?.id) throw unavailable();
+  return { status: 200, body: snapshot.ticket as unknown as Record<string, unknown>, replayed, keyed, ticketId: snapshot.ticket.id };
+}
 function renderMutationSnapshot(raw: string, operation: TicketMutationInput['operation'], replayed: boolean, keyed: boolean) {
   let version: unknown;
   try {
@@ -106,8 +114,9 @@ function renderMutationSnapshot(raw: string, operation: TicketMutationInput['ope
   } catch {
     throw unavailable();
   }
-  if (version === 1) return renderMutationSnapshotV1(raw, operation, replayed, keyed);
+  if (version === 1 && operation !== 'api.ticket.update') return renderMutationSnapshotV1(raw, operation, replayed, keyed);
   if (version === 2) return renderMutationSnapshotV2(raw, operation, replayed, keyed);
+  if (version === 3) return renderMutationSnapshotV3(raw, operation, replayed, keyed);
   throw unavailable();
 }
 
@@ -174,6 +183,19 @@ export class TicketMutationReplayService {
         },
       };
     }
+    if (input.operation === 'api.ticket.update') {
+      if (this.principal.kind !== 'api-key' || !input.ticketId || !input.data || Object.getPrototypeOf(input.data) !== Object.prototype) throw invalid();
+      const allowed = ['status','priority','assigned_to','group_id','custom_fields'];
+      const supplied = Object.keys(input.data);
+      if (!supplied.length || supplied.some(key => !allowed.includes(key))) throw invalid();
+      const data = input.data;
+      if (data.status !== undefined && !['open','pending','resolved','closed'].includes(data.status)) throw invalid();
+      if (data.priority !== undefined && !['low','normal','high','urgent'].includes(data.priority)) throw invalid();
+      if (data.assigned_to !== undefined && data.assigned_to !== null && (typeof data.assigned_to !== 'string' || !data.assigned_to)) throw invalid();
+      if (data.group_id !== undefined && data.group_id !== null && (typeof data.group_id !== 'string' || !data.group_id)) throw invalid();
+      if (data.custom_fields !== undefined && data.custom_fields !== null && Object.getPrototypeOf(data.custom_fields) !== Object.prototype) throw invalid();
+      return { operation: 'api.ticket.update', ticketId: input.ticketId, data: { ...data } };
+    }
     if (input.operation !== 'api.ticket.reply' && input.operation !== 'portal.ticket.reply') throw invalid();
     if (typeof input.ticketId !== 'string' || !input.ticketId || typeof input.data.body !== 'string' || !input.data.body.trim()) throw invalid();
     const sender = portal ? 'customer' : input.data.sender_type ?? 'customer';
@@ -202,7 +224,7 @@ export class TicketMutationReplayService {
     const email = await this.authorize();
     if (receipt.payload_hash !== ns.payloadHash) throw new TicketMutationError(409, 'idempotency_conflict', 'Idempotency key was already used with a different payload');
     if (receipt.lifecycle === 'gone') throw new TicketMutationError(410, 'idempotency_result_gone', 'The original mutation result is no longer available');
-    if (![1,2].includes(receipt.response_version) || receipt.fingerprint_version !== 1 || !receipt.result_ticket_id || !receipt.response_snapshot) throw unavailable();
+    if (![1,2,3].includes(receipt.response_version) || receipt.fingerprint_version !== 1 || !receipt.result_ticket_id || !receipt.response_snapshot) throw unavailable();
     await this.authorizeTicket(receipt.result_ticket_id, email);
     if (receipt.result_article_id) {
       const article = await this.repository.articleVisibility(receipt.result_article_id, receipt.result_ticket_id);
@@ -225,9 +247,13 @@ export class TicketMutationReplayService {
       const serialized = canonicalMutationJson(normalized);
       // Routes bound raw bytes to 64 KiB; leave space here for derived fields.
       if (new TextEncoder().encode(serialized).byteLength > 128 * 1024) throw new TicketMutationError(413, 'payload_too_large', 'Payload too large');
-      const namespace = rawIdempotencyKey === undefined ? undefined : {
+      const keyed = rawIdempotencyKey !== undefined;
+      const namespace = rawIdempotencyKey === undefined && normalized.operation !== 'api.ticket.update' ? undefined : {
         principalKind: this.principal.kind, principalId: this.principal.id, operation: normalized.operation,
-        keyHash: await digest(rawIdempotencyKey), payloadHash: await digest(`ticket-mutation-v1\n${serialized}`),
+        // A compatibility PATCH without a client retry key still commits an
+        // atomic receipt/fence. Its random namespace cannot be replayed by a
+        // later caller and is never advertised as an idempotency contract.
+        keyHash: await digest(rawIdempotencyKey ?? `server:${crypto.randomUUID()}`), payloadHash: await digest(`ticket-mutation-v1\n${serialized}`),
       };
       let receipt = namespace ? await this.repository.findActive(namespace) : null;
       if (!receipt && this.admission) {
@@ -240,7 +266,7 @@ export class TicketMutationReplayService {
       }
       const prepared = Object.freeze({ replay: receipt && namespace ? await this.replay(receipt, namespace) : null });
       // Hold an owned copy: validated request objects cannot drift after hashing.
-      this.attempts.set(prepared, { input: JSON.parse(serialized) as TicketMutationInput, namespace });
+      this.attempts.set(prepared, { input: JSON.parse(serialized) as TicketMutationInput, namespace, keyed });
       return prepared;
     } catch (error) {
       this.recordDenied(error);
@@ -265,7 +291,7 @@ export class TicketMutationReplayService {
   /** The service executes admission and privately owns its result; callers cannot install a fence. */
   async admitApiBudget(prepared: PreparedTicketMutation, input: {
     cache: IsolateBudgetAdmissionCache; repository: BudgetAuthorityRepository; namespace: DurableObjectNamespace;
-    operation: 'api.ticket.create' | 'api.ticket.reply'; business: ResourceAmounts; now: () => number;
+    operation: 'api.ticket.create' | 'api.ticket.reply' | 'api.ticket.update'; business: ResourceAmounts; now: () => number;
   }) {
     const attempt = this.attempts.get(prepared);
     if (!attempt || this.principal.kind !== 'api-key' || attempt.input.operation !== input.operation) throw unavailable();
@@ -363,7 +389,9 @@ export class TicketMutationReplayService {
       const portal = input.operation.startsWith('portal.');
       const source = portal ? (('source' in input && input.source === 'widget') ? 'widget' : 'portal') : 'api';
       const candidate: MutationCandidate = { audit:{kind:this.principal.kind,id:this.principal.id,source}, ticketId: 'ticketId' in input ? input.ticketId : crypto.randomUUID(), attachments: [] };
-      if (!('ticketId' in input)) {
+      if (input.operation === 'api.ticket.update') {
+        // The auditable update batch is built by the repository below.
+      } else if (!('ticketId' in input)) {
         if (portal && input.data.customer_email !== email) throw unauthorized();
         candidate.ticket = {
           subject: input.data.subject, customer_email: input.data.customer_email!,
@@ -396,12 +424,15 @@ export class TicketMutationReplayService {
         if (attempt.customerBudgetRequired && attempt.customerBudgetCommitStarted) throw unavailable();
         attempt.budgetCommitStarted = true;
         attempt.customerBudgetCommitStarted = true;
-        const snapshot = attempt.customerBudgetRequired
+        const snapshot = input.operation === 'api.ticket.update'
+          ? await this.repository.commitUpdate(candidate.ticketId, input.data, candidate.audit!, attempt.namespace!,
+            attempt.budgetRequired ? { apiKeyId: this.principal.id, authority: attempt.budgetAuthority! } : undefined)
+          : attempt.customerBudgetRequired
           ? await this.repository.commitCustomer(candidate, attempt.namespace, attempt.customerBudgetHandoff!)
           : await this.repository.commit(candidate, attempt.namespace,
             attempt.budgetRequired ? { apiKeyId: this.principal.id, authority: attempt.budgetAuthority! } : undefined);
         if (attempt.budgetAuthority && attempt.budgetLifecycle) attempt.budgetLifecycle.cache.settleOperation(attempt.budgetAuthority,'committed',attempt.budgetLifecycle.now());
-        return renderMutationSnapshot(snapshot, input.operation, false, Boolean(attempt.namespace));
+        return renderMutationSnapshot(snapshot, input.operation, false, attempt.keyed);
       } catch {
         // A unique receipt collision rolls back all losing writes. Only an
         // authoritative committed receipt can establish a replay/conflict.

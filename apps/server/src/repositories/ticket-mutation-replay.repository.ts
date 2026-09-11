@@ -4,8 +4,8 @@ import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
 import { staffMutationStatements, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
-import { conversationMutationEvent } from './conversation-audit.repository';
-import type { ConversationActor } from '../types/conversation-audit';
+import { auditedTicketUpdateStatements, conversationMutationEvent } from './conversation-audit.repository';
+import type { AuditedTicketUpdate, ConversationActor } from '../types/conversation-audit';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { InitialTicketArticleData } from './interfaces';
@@ -75,6 +75,47 @@ export class TicketMutationReplayRepository {
   async articleVisibility(id: string, ticketId: string) {
     return this.db.prepare('SELECT is_internal FROM articles WHERE tenant_id = ? AND id = ? AND ticket_id = ?')
       .bind(this.scope.tenantId, id, ticketId).first<{ is_internal: number }>();
+  }
+
+  /**
+   * API ticket updates use the same receipt namespace and current-authority
+   * fence as API creates/replies. The receipt is deliberately last so a
+   * uniqueness collision rolls back its audit and ticket changes together.
+   */
+  async commitUpdate(ticketId: string, data: AuditedTicketUpdate, actor: ConversationActor,
+    ns: MutationNamespace, api?: ApiMutationCommit): Promise<string> {
+    if (actor.kind !== 'api-key' || actor.source !== 'api' || ns.principalKind !== 'api-key' || ns.operation !== 'api.ticket.update'
+      || (api && (api.apiKeyId !== actor.id || ns.principalId !== actor.id || ns.keyHash !== api.authority.operationId
+        || ns.payloadHash !== api.authority.operationFingerprint))) throw new Error('Invalid API update mutation');
+    const statements: D1PreparedStatement[] = [...(api ? apiBudgetMutationStatements(this.db,this.scope,api) : [])];
+    statements.push(this.db.prepare(`DELETE FROM ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at <= unixepoch()`)
+      .bind(...this.namespaceValues(ns)));
+    statements.push(this.db.prepare(`DELETE FROM ticket_mutation_receipts WHERE rowid IN
+      (SELECT rowid FROM ticket_mutation_receipts WHERE tenant_id = ? AND expires_at <= unixepoch() ORDER BY expires_at LIMIT 99)`)
+      .bind(this.scope.tenantId));
+    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor);
+    const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
+    statements.push(...audit.statements);
+    const snapshot = `json_object('version',3,'ticket',json((SELECT ${ticketJson} FROM tickets t WHERE t.tenant_id=? AND t.id=?)))`;
+    // The same bounded immutable response guard applies with or without an
+    // enabled coordinator policy. A failure rolls back the entire batch.
+    statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+      VALUES (?,CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END)
+      ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId,this.scope.tenantId,ticketId));
+    statements.push(this.db.prepare(`INSERT INTO ticket_mutation_receipts
+      (tenant_id,principal_kind,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,
+       result_ticket_id,result_article_id,response_status,response_snapshot)
+      VALUES (?,?,?,?,?,?,1,3,?,?,200,${snapshot}) RETURNING response_snapshot`)
+      .bind(...this.namespaceValues(ns),ns.payloadHash,ticketId,null,this.scope.tenantId,ticketId));
+    this.canonicalMutationSli?.recordAttempt();
+    let results;
+    try { results = await this.db.batch<{ response_snapshot: string }>(statements); }
+    catch (error) { this.canonicalMutationSli?.recordUncertain(); throw error; }
+    const value = results.at(-1)?.results[0]?.response_snapshot;
+    if (!value) throw new Error('Update result unavailable');
+    if (updateIndex !== undefined && results[updateIndex]?.results[0]) this.canonicalMutationSli?.recordDurablyCompleted();
+    else this.canonicalMutationSli?.recordNoOp();
+    return value;
   }
 
   async commit(candidate: MutationCandidate, ns?: MutationNamespace, api?: ApiMutationCommit): Promise<string> {

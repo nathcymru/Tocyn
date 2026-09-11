@@ -177,7 +177,10 @@ v1.patch("/tickets/:id", async (c) => {
   }
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
-  const body = await c.req.json();
+  let body: unknown;
+  let key: string | undefined;
+  try { body = await readMutationJson(c); key = readIdempotencyKey(c); }
+  catch (error) { if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status); throw error; }
   const deps = c.get('tenantDeps') as TenantRequestDeps;
 
   const ticket = await deps.repositories.tickets.get(id);
@@ -192,26 +195,25 @@ v1.patch("/tickets/:id", async (c) => {
   const validData = result.data;
   if (deps.betaAdmission) assertConversationResponseBounds({...ticket,...validData});
 
-  const updateData: Record<string, any> = {};
-  for (const [key, value] of Object.entries(validData)) {
-    if (value !== undefined) {
-      if (key === 'custom_fields') {
-        updateData[key] = value ? JSON.stringify(value) : null;
-      } else {
-        updateData[key] = value;
-      }
-    }
-  }
-
-  if (Object.keys(updateData).length === 0) {
+  if (Object.keys(validData).length === 0) {
     return c.json({ error: "No valid updates provided" }, 400);
   }
 
   try {
-    const outcome = await deps.conversationAudit.updateWithEvents(id, updateData, {kind:'api-key',id:resolution!.apiKeyId,source:'api'});
-    return c.json(outcome.ticket);
+    const mutation = deps.ticketMutationReplay({ kind: 'api-key', id: resolution!.apiKeyId });
+    const prepared = await mutation.prepareMutation({ operation: 'api.ticket.update', ticketId: id, data: validData }, key);
+    if (prepared.replay) {
+      if (prepared.replay.keyed) c.header('Idempotency-Replayed', String(prepared.replay.replayed));
+      return c.json(prepared.replay.body, prepared.replay.status);
+    }
+    const budgetRejection = await admitConfiguredApiTicketMutation(c, 'api.ticket.update', mutation, prepared);
+    if (budgetRejection) return budgetRejection;
+    const outcome = await mutation.commit(prepared);
+    if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
+    return c.json(outcome.body, outcome.status);
   } catch (error) {
     if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
     if (c.env.LOCAL_BETA_ENABLED!=='true') console.error("API Update Ticket Error:", error);
     return c.json({ error: "Failed to update ticket" }, 500);
   }
