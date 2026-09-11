@@ -47,12 +47,20 @@ export const GroupsPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [returnFocusToHeading, setReturnFocusToHeading] = useState(false);
   const [deleteGroup, setDeleteGroup] = useState<Group | null>(null);
   const [createError, setCreateError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [groupStatus, setGroupStatus] = useState('');
   const closeCreate = () => { if (!createGuard.current) setIsCreating(false); };
   const closeDelete = () => { if (!deleteGuard.current) setDeleteOpen(false); };
+
+  React.useEffect(() => {
+    if (returnFocusToHeading && !deleteOpen) {
+      pageHeading.current?.focus();
+      setReturnFocusToHeading(false);
+    }
+  }, [deleteOpen, returnFocusToHeading]);
 
   const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
@@ -81,7 +89,7 @@ export const GroupsPage: React.FC = () => {
     deleteGuard.current = true; setDeleting(true); setDeleteError(''); setGroupStatus('');
     try {
       await deleteGroupMutation.mutateAsync(deleteGroup.id);
-      deleteSucceeded.current = true; setDeleteOpen(false); setGroupStatus('Group deleted.');
+      deleteSucceeded.current = true; setReturnFocusToHeading(true); setDeleteOpen(false); setGroupStatus('Group deleted.');
     } catch {
       setDeleteError('Group could not be deleted. Check that no active tickets are assigned, then try again.');
     } finally { deleteGuard.current = false; setDeleting(false); }
@@ -211,7 +219,7 @@ export const GroupsPage: React.FC = () => {
                     </TocynButton>
                     {isAdmin && (
                       <TocynButton
-                        aria-label={`Delete ${group.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeleteGroup(group); setDeleteError(''); setDeleteOpen(true); }}
+                        aria-label={`Delete ${group.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setReturnFocusToHeading(false); setDeleteGroup(group); setDeleteError(''); setDeleteOpen(true); }}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete Group"
                       >
