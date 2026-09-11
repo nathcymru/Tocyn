@@ -38,6 +38,8 @@ import type { SupportSlaBudgetOperation } from '../middleware/budget-admission.m
 import { admitDashboardAttachment } from '../budgets/storage-admission.service';
 import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.service';
 import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
+import { admitHttpTicketList } from '../budgets/http-ticket-list-admission.service';
+import { TicketListScanError } from '../repositories/ticket-list-scan.repository';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -678,16 +680,31 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
  */
 dashboard.get("/tickets", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const payload = c.get('jwtPayload') as JWTPayload;
   const sort = z.enum(OPERATOR_WORKSPACE_SORTS).optional().safeParse(c.req.query('sort'));
   if (!sort.success) return c.json({ error: 'Invalid ticket sort' }, 400);
-  const result = await d.repositories.tickets.list({
-    sort: sort.data,
-    customerEmail:c.req.query('customer_email'), filterId:c.req.query('filter_id'),
-    status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),
-    groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:c.req.query('search'),
-    page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50)
-  });
-  return c.json(result);
+  const admission = await admitHttpTicketList({ env: c.env, deps: d, payload, operation: 'dashboard.ticket.list',
+    filterId: c.req.query('filter_id'), search: c.req.query('search'), now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
+    ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
+    : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
+  try {
+    const result = await d.repositories.tickets.list({
+      sort: sort.data,
+      customerEmail:c.req.query('customer_email'), filterId:c.req.query('filter_id'),
+      status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),
+      groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:c.req.query('search'),
+      page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50),
+      viewer: { role: payload.role === 'agent' ? 'agent' : 'admin', actorId: d.scope.actorId },
+      ...(admission.snapshot ? { scanFence: admission.snapshot } : {}),
+      ...(admission.snapshot ? { currentCredential: { role: payload.role === 'agent' ? 'agent' : 'admin',
+        sessionVersion: payload.session_version ?? -1, expiresAt: payload.exp } } : {}),
+    });
+    return c.json(result);
+  } catch (error) {
+    if (error instanceof TicketListScanError) return c.json({ code: 'budget_admission_unavailable', error: 'Ticket list capacity changed; retry the request' }, 503);
+    throw error;
+  }
 });
 
 /**
