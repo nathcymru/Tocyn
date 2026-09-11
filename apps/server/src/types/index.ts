@@ -6,6 +6,7 @@ import type { CapabilityDecision } from '../auth/capability-policy';
 import type { RequestAuthSli } from '../observability/request-auth-sli';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import type { ResourceOperationEmitter } from '../observability/resource-operation';
+import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
 export interface AppVariables {
   tenantScope?: VerifiedTenantScope;
   tenantDeps?: TenantRequestDeps;
@@ -21,6 +22,8 @@ export interface AppVariables {
   requestCanonicalMutationSli?: RequestCanonicalMutationSli;
   /** One bounded diagnostic emitter shared by the current HTTP request. */
   resourceOperationEmitter?: ResourceOperationEmitter;
+  /** Server-created pre-identity admission; never serialized or client supplied. */
+  ownerIngressAdmission?: OwnerIngressRequestAdmission;
 }
 
 export interface Ticket {

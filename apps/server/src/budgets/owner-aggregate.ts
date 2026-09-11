@@ -63,7 +63,8 @@ export type TrustedBudgetCoordinatorRevocation = Readonly<{
 }>;
 
 export type OwnerAggregateCapacityDefect = Readonly<{
-  tenantId: string;
+  /** Null identifies the server-only deployment ingress ledger. */
+  tenantId: string | null;
   defect: CoordinatorCapacityDefect;
 }>;
 
@@ -82,6 +83,11 @@ export type BudgetOwnerAggregateState = Readonly<{
   ownerAllocations: readonly CoordinatorAllocation[];
   /** Current owner allocation set; historical allocations remain above for reconciliation only. */
   activeOwnerAllocations: readonly CoordinatorAllocation[];
+  /**
+   * Server-only pre-identity accounting. It reuses the coordinator transition
+   * machinery, but is not a tenant allocation and is never request-selected.
+   */
+  ownerIngress: BudgetCoordinatorState;
   tenantStates: readonly BudgetCoordinatorState[];
   capacityDefects: readonly OwnerAggregateCapacityDefect[];
 }>;
@@ -93,6 +99,24 @@ export type ReserveOwnerAggregateInput = Readonly<ReserveBudgetGrantInput & {
 export type ReconcileOwnerAggregateInput = Readonly<ReconcileBudgetGrantInput & {
   /** Resolved from the trusted reservation record at the server boundary. */
   tenantId: string;
+}>;
+export type ReserveOwnerIngressInput = Readonly<Omit<ReserveBudgetGrantInput, 'expectedRestrictionRevision'> & {
+  expectedRestrictionRevision?: never;
+}>;
+export type ReconcileOwnerIngressInput = Readonly<Omit<ReconcileBudgetGrantInput, 'expectedRestrictionRevision'> & {
+  expectedRestrictionRevision?: never;
+}>;
+export type HandoffOwnerIngressInput = Readonly<{
+  tenantId: string;
+  expectedPolicyId: string;
+  expectedPolicyRevision: number;
+  expectedRestrictionRevision: number;
+  ownerClosure: ReconcileOwnerIngressInput;
+  now: number;
+}>;
+export type HandoffOwnerIngressOutcome = Readonly<{
+  status: 'handed-off' | 'already-handed-off' | 'rejected';
+  reason?: 'stale-policy' | 'exhausted' | 'capacity-exhausted' | 'capacity-defect' | 'invalid-closure';
 }>;
 
 function assertIdentity(value: unknown, description: string): asserts value is string {
@@ -132,6 +156,24 @@ function ownerAllocations(authority: TrustedBudgetCoordinatorAuthority): readonl
       },
     },
   }).allocations;
+}
+
+export const OWNER_INGRESS_RESTRICTION_REVISION = 1;
+function ownerIngressState(authority: TrustedBudgetCoordinatorAuthority): BudgetCoordinatorState {
+  return createBudgetCoordinatorState({
+    coordinatorId: `${authority.aggregateId}:owner-ingress`,
+    maxReservations: authority.maxReservations,
+    authority: {
+      authorityCheckedAt: authority.authorityCheckedAt,
+      effectivePolicy: {
+        ...authority.ownerPolicy,
+        // This identifier is private coordinator state, never a TenantBudgetRestriction.
+        tenantId: `deployment-ingress:${authority.ownerPolicy.deploymentId}`,
+        restrictionRevision: OWNER_INGRESS_RESTRICTION_REVISION,
+        disabledFeatures: [],
+      },
+    },
+  });
 }
 
 function assertTenantMatchesOwner(
@@ -194,6 +236,7 @@ export function createBudgetOwnerAggregateState(authority: TrustedBudgetCoordina
     maxReservations: authority.maxReservations,
     ownerAllocations: owners,
     activeOwnerAllocations: owners,
+    ownerIngress: ownerIngressState(authority),
     tenantStates,
     capacityDefects: [],
   };
@@ -217,7 +260,7 @@ function allocationMatchesClosedCharge(allocation: CoordinatorAllocation, charge
 
 function charged(state: BudgetOwnerAggregateState, allocation: CoordinatorAllocation, purpose: BudgetPurpose): number {
   let total = 0;
-  for (const tenant of state.tenantStates) {
+  for (const tenant of [state.ownerIngress, ...state.tenantStates]) {
     for (const grant of tenant.grants) {
       if (grant.compacted) continue;
       if (grant.purpose !== purpose || !grant.allocations.some(reference => allocationMatches(reference, allocation))) continue;
@@ -254,7 +297,15 @@ function replaceTenant(state: BudgetOwnerAggregateState, index: number, tenant: 
 }
 
 function totalGrants(state: BudgetOwnerAggregateState): number {
-  return state.tenantStates.reduce((total, tenant) => total + tenant.grants.filter(grant => !grant.compacted).length, 0);
+  return [state.ownerIngress, ...state.tenantStates].reduce((total, ledger) => total + ledger.grants.filter(grant => !grant.compacted).length, 0);
+}
+
+function detailedGrants(state: BudgetOwnerAggregateState): number {
+  return [state.ownerIngress, ...state.tenantStates].reduce((sum, ledger) => sum + ledger.grants.length, 0);
+}
+
+function newWorkGrants(state: BudgetOwnerAggregateState): number {
+  return [state.ownerIngress, ...state.tenantStates].reduce((sum, ledger) => sum + ledger.grants.filter(grant => !grant.compacted && grant.purpose === 'new-work').length, 0);
 }
 
 /** A grant cannot remain valid after the authority lease that approved it. */
@@ -292,14 +343,50 @@ export function reserveOwnerAggregate(state: BudgetOwnerAggregateState, input: R
     return { state: replaceTenant(state, index, result.state), outcome: result.outcome };
   }
   const expired = expireBudgetGrants(tenant, input.now);
-  const expiredState = { ...state, tenantStates: state.tenantStates.map((item, tenantIndex) => tenantIndex === index ? expired : expireBudgetGrants(item, input.now)) };
+  const expiredState = { ...state, ownerIngress: expireBudgetGrants(state.ownerIngress, input.now),
+    tenantStates: state.tenantStates.map((item, tenantIndex) => tenantIndex === index ? expired : expireBudgetGrants(item, input.now)) };
   if (state.capacityDefects.length > 0) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-defect' } };
   if (totalGrants(expiredState) >= state.maxReservations
-    || (input.purpose === 'new-work' && expiredState.tenantStates.reduce((sum, tenant) => sum + tenant.grants.filter(grant => !grant.compacted && grant.purpose === 'new-work').length, 0) >= state.maxReservations - 1)
-    || expiredState.tenantStates.reduce((sum, item) => sum + item.grants.length, 0) >= MAX_RETAINED_BUDGET_GRANTS) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
+    || (input.purpose === 'new-work' && newWorkGrants(expiredState) >= state.maxReservations - 1)
+    || detailedGrants(expiredState) >= MAX_RETAINED_BUDGET_GRANTS) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
   if (aggregateExhausted(expiredState, expired, input)) return { state: expiredState, outcome: { status: 'rejected', reason: 'exhausted' } };
   const result = clipGrantToAuthorityLease(reserveBudgetGrant(expired, request), expiredState.authorityExpiresAt);
   return { state: replaceTenant(expiredState, index, result.state), outcome: result.outcome };
+}
+
+/** Reserves only the existing owner allocation for server-derived pre-identity work. */
+export function reserveOwnerIngress(state: BudgetOwnerAggregateState, input: ReserveOwnerIngressInput): Readonly<{ state: BudgetOwnerAggregateState; outcome: ReserveBudgetGrantResult['outcome'] }> {
+  const request: ReserveBudgetGrantInput = { ...input, expectedRestrictionRevision: OWNER_INGRESS_RESTRICTION_REVISION };
+  if (!Number.isSafeInteger(input.now) || input.now < 0) throw new BudgetCoordinatorStateError('current time must be a non-negative safe integer');
+  const ingress = expireBudgetGrants(state.ownerIngress, input.now);
+  const expiredState = {
+    ...state,
+    ownerIngress: ingress,
+    tenantStates: state.tenantStates.map(tenant => expireBudgetGrants(tenant, input.now)),
+  };
+  const hasPrior = ingress.grants.some(grant => grant.holderId === input.holderId && grant.idempotencyKey === input.idempotencyKey && grant.purpose === input.purpose);
+  if (state.newAdmissionsBlocked || input.now >= state.authorityExpiresAt) {
+    return { state: expiredState, outcome: { status: 'rejected', reason: 'stale-policy' } };
+  }
+  if (input.expectedPolicyId !== ingress.policyId || input.expectedPolicyRevision !== ingress.policyRevision || hasPrior) {
+    const result = reserveBudgetGrant(ingress, request);
+    return { state: { ...expiredState, ownerIngress: result.state }, outcome: result.outcome };
+  }
+  if (state.capacityDefects.length > 0) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-defect' } };
+  if (totalGrants(expiredState) >= state.maxReservations
+    || (input.purpose === 'new-work' && newWorkGrants(expiredState) >= state.maxReservations - 1)
+    || detailedGrants(expiredState) >= MAX_RETAINED_BUDGET_GRANTS) {
+    return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
+  }
+  for (const [dimension, units] of Object.entries(input.envelope) as [ResourceDimension, number][]) {
+    const owner = state.activeOwnerAllocations.find(allocation => allocation.dimension === dimension
+      && ingress.activeAllocationKeys.includes(`${allocation.dimension}\u0000${allocation.allocationId}\u0000${allocation.window.id}`));
+    if (!owner || charged(expiredState, owner, input.purpose) + units > (input.purpose === 'new-work' ? owner.newWorkLimit : owner.recoveryLimit)) {
+      return { state: expiredState, outcome: { status: 'rejected', reason: 'exhausted' } };
+    }
+  }
+  const result = clipGrantToAuthorityLease(reserveBudgetGrant(ingress, request), expiredState.authorityExpiresAt);
+  return { state: { ...expiredState, ownerIngress: result.state }, outcome: result.outcome };
 }
 
 function currentAllocations(tenant: BudgetCoordinatorState): readonly CoordinatorAllocation[] {
@@ -313,6 +400,10 @@ function sameAuthorityShape(state: BudgetOwnerAggregateState, candidate: BudgetO
     || state.activeOwnerAllocations.length !== candidate.activeOwnerAllocations.length) return false;
   const sameJson = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
   if (!state.activeOwnerAllocations.every((allocation, index) => sameJson(allocation, candidate.activeOwnerAllocations[index]))) return false;
+  if (state.ownerIngress.coordinatorId !== candidate.ownerIngress.coordinatorId
+    || state.ownerIngress.policyId !== candidate.ownerIngress.policyId
+    || state.ownerIngress.policyRevision !== candidate.ownerIngress.policyRevision
+    || JSON.stringify(currentAllocations(state.ownerIngress)) !== JSON.stringify(currentAllocations(candidate.ownerIngress))) return false;
   return state.tenantStates.every((tenant, index) => tenant.tenantId === candidate.tenantStates[index]?.tenantId
     && tenant.coordinatorId === candidate.tenantStates[index]?.coordinatorId
     && tenant.policyId === candidate.tenantStates[index]?.policyId
@@ -353,11 +444,26 @@ function transitionBudgetOwnerAggregateAuthority(state: BudgetOwnerAggregateStat
       effectivePolicy: trustedTenant.effectivePolicy,
     });
   });
+  let nextIngress: BudgetCoordinatorState;
+  if (state.ownerIngress.policyRevision === candidate.ownerIngress.policyRevision) {
+    if (JSON.stringify(currentAllocations(state.ownerIngress)) !== JSON.stringify(currentAllocations(candidate.ownerIngress))) {
+      throw new BudgetCoordinatorStateError('material owner ingress allocation changed without a policy revision');
+    }
+    nextIngress = state.ownerIngress;
+  } else nextIngress = applyTrustedCoordinatorAuthority(state.ownerIngress, {
+      authorityCheckedAt: candidate.authorityCheckedAt,
+      effectivePolicy: {
+        ...authority.ownerPolicy,
+        tenantId: state.ownerIngress.tenantId,
+        restrictionRevision: OWNER_INGRESS_RESTRICTION_REVISION,
+        disabledFeatures: [],
+      },
+    });
   const ownerAllocations = mergeAllocations(state.ownerAllocations, candidate.activeOwnerAllocations)
     .filter(allocation => allocation.window.kind === 'stock' || authority.authorityCheckedAt < allocation.window.endsAt
-      || nextTenants.some(tenant => tenant.grants.some(grant => !grant.compacted && grant.allocations.some(reference => allocationMatches(reference, allocation)))));
-  if (ownerAllocations.length + nextTenants.reduce((sum, tenant) => sum + tenant.allocations.length, 0) > 8_192
-    || nextTenants.reduce((sum, tenant) => sum + (tenant.closedCharges?.length ?? 0), 0) > 8_192) {
+      || [nextIngress, ...nextTenants].some(ledger => ledger.grants.some(grant => !grant.compacted && grant.allocations.some(reference => allocationMatches(reference, allocation)))));
+  if (ownerAllocations.length + nextIngress.allocations.length + nextTenants.reduce((sum, tenant) => sum + tenant.allocations.length, 0) > 8_192
+    || (nextIngress.closedCharges?.length ?? 0) + nextTenants.reduce((sum, tenant) => sum + (tenant.closedCharges?.length ?? 0), 0) > 8_192) {
     throw new BudgetCoordinatorStateError('owner budget accounting metadata capacity exhausted');
   }
   return {
@@ -369,18 +475,24 @@ function transitionBudgetOwnerAggregateAuthority(state: BudgetOwnerAggregateStat
     newAdmissionsBlocked: false,
     ownerAllocations,
     activeOwnerAllocations: candidate.activeOwnerAllocations,
+    ownerIngress: nextIngress,
     tenantStates: nextTenants,
   };
 }
 
 /** Refreshes an identical authority lease or safely transitions a newer revision. */
 export function refreshBudgetOwnerAggregateAuthority(state: BudgetOwnerAggregateState, authority: TrustedBudgetCoordinatorAuthority): BudgetOwnerAggregateState {
+  // States written before the owner-ingress increment have no private ledger.
+  // The trusted current authority can add an empty one without changing or
+  // releasing any existing tenant/owner charge.
+  if (!state.ownerIngress) state = { ...state, ownerIngress: ownerIngressState(authority) };
   const candidate = createBudgetOwnerAggregateState(authority);
   if (authority.authorityRevision < state.authorityRevision) throw new BudgetCoordinatorStateError('trusted authority revision cannot move backwards');
   if (authority.authorityRevision > state.authorityRevision) return transitionBudgetOwnerAggregateAuthority(state, candidate, authority);
   if (!sameAuthorityShape(state, candidate)) throw new BudgetCoordinatorStateError('material authority changed without an authority revision');
   if (authority.authorityCheckedAt < state.authorityCheckedAt) throw new BudgetCoordinatorStateError('trusted authority check time cannot move backwards');
-  return { ...state, authorityCheckedAt: authority.authorityCheckedAt, authorityExpiresAt: authority.authorityExpiresAt };
+  return { ...state, authorityCheckedAt: authority.authorityCheckedAt, authorityExpiresAt: authority.authorityExpiresAt,
+    ownerIngress: { ...state.ownerIngress, authorityCheckedAt: authority.authorityCheckedAt } };
 }
 
 /** Delivers a newer deployment authority revocation without releasing any accepted charge. */
@@ -404,7 +516,8 @@ export function reconcileOwnerAggregate(state: BudgetOwnerAggregateState, input:
   if (index < 0) return { state, outcome: 'rejected' };
   const result = reconcileBudgetGrant(state.tenantStates[index], input);
   let next = replaceTenant(state, index, result.state);
-  if (next.tenantStates.reduce((sum, tenant) => sum + (tenant.closedCharges?.length ?? 0), 0) > 8_192) {
+  if ((next.ownerIngress.closedCharges?.length ?? 0)
+    + next.tenantStates.reduce((sum, tenant) => sum + (tenant.closedCharges?.length ?? 0), 0) > 8_192) {
     throw new BudgetCoordinatorStateError('owner budget accounting metadata capacity exhausted');
   }
   if (result.outcome === 'capacity-defect') {
@@ -413,6 +526,93 @@ export function reconcileOwnerAggregate(state: BudgetOwnerAggregateState, input:
     next = replaceTenant(next, index, result.state, { capacityDefects: [...state.capacityDefects, { tenantId: input.tenantId, defect }] });
   }
   return { state: next, outcome: result.outcome };
+}
+
+/** Closes an ingress block from server-owned terminal evidence; no tenant is debited. */
+export function reconcileOwnerIngress(state: BudgetOwnerAggregateState, input: ReconcileOwnerIngressInput): Readonly<{ state: BudgetOwnerAggregateState; outcome: ReturnType<typeof reconcileBudgetGrant>['outcome'] }> {
+  const result = reconcileBudgetGrant(state.ownerIngress, { ...input, expectedRestrictionRevision: OWNER_INGRESS_RESTRICTION_REVISION });
+  let next = { ...state, ownerIngress: result.state };
+  const closed = (next.ownerIngress.closedCharges?.length ?? 0) + next.tenantStates.reduce((sum, tenant) => sum + (tenant.closedCharges?.length ?? 0), 0);
+  if (closed > 8_192) throw new BudgetCoordinatorStateError('owner budget accounting metadata capacity exhausted');
+  if (result.outcome === 'capacity-defect') {
+    const defect = result.state.capacityDefects.at(-1);
+    if (!defect) throw new BudgetCoordinatorStateError('ingress reconciliation capacity defect was not retained');
+    next = { ...next, capacityDefects: [...state.capacityDefects, { tenantId: null, defect }] };
+  }
+  return { state: next, outcome: result.outcome };
+}
+
+/**
+ * Atomically moves one admitted pre-identity execution into its verified
+ * tenant ledger. The exact owner charge is released only in the same state
+ * transition that records the full tenant charge, so owner capacity is never
+ * duplicated or briefly made reusable.
+ */
+export function handoffOwnerIngress(state: BudgetOwnerAggregateState, input: HandoffOwnerIngressInput): Readonly<{
+  state: BudgetOwnerAggregateState;
+  outcome: HandoffOwnerIngressOutcome;
+}> {
+  const reject = (reason: NonNullable<HandoffOwnerIngressOutcome['reason']>) => ({ state, outcome: { status: 'rejected' as const, reason } });
+  const tenant = state.tenantStates.find(item => item.tenantId === input.tenantId);
+  if (!tenant || input.expectedPolicyId !== tenant.policyId || input.expectedPolicyRevision !== tenant.policyRevision
+    || input.expectedRestrictionRevision !== tenant.restrictionRevision || !Number.isSafeInteger(input.now) || input.now < 0) {
+    return reject('stale-policy');
+  }
+  const ingressGrant = state.ownerIngress.grants.find(grant => grant.reservationId === input.ownerClosure.reservationId);
+  if (!ingressGrant || ingressGrant.holderId !== input.ownerClosure.holderId
+    || Object.keys(input.ownerClosure.measured).length > 0 || Object.keys(input.ownerClosure.uncertain).length > 0
+    || !input.ownerClosure.certifiedClosure || input.ownerClosure.now !== input.now) return reject('invalid-closure');
+
+  const tenantPrior = tenant.grants.find(grant => grant.holderId === ingressGrant.holderId
+    && grant.idempotencyKey === ingressGrant.idempotencyKey && grant.purpose === ingressGrant.purpose);
+  const closeTenant = (candidate: NonNullable<typeof tenantPrior>, candidateState: BudgetOwnerAggregateState) => reconcileOwnerAggregate(candidateState, {
+    tenantId: input.tenantId,
+    reservationId: candidate.reservationId,
+    holderId: candidate.holderId,
+    expectedPolicyId: input.expectedPolicyId,
+    expectedPolicyRevision: input.expectedPolicyRevision,
+    expectedRestrictionRevision: input.expectedRestrictionRevision,
+    terminalEvidenceId: input.ownerClosure.terminalEvidenceId,
+    measured: candidate.envelope,
+    uncertain: {},
+    now: input.now,
+    certifiedClosure: {
+      operationSetFingerprint: input.ownerClosure.certifiedClosure!.operationSetFingerprint,
+      expiresAt: candidate.expiresAt,
+    },
+  });
+
+  if (ingressGrant.status === 'reconciled') {
+    if (!tenantPrior) return reject('invalid-closure');
+    const ownerReplay = reconcileOwnerIngress(state, input.ownerClosure);
+    if (ownerReplay.outcome !== 'already-reconciled') return reject('invalid-closure');
+    const tenantReplay = closeTenant(tenantPrior, ownerReplay.state);
+    return tenantReplay.outcome === 'already-reconciled'
+      ? { state: tenantReplay.state, outcome: { status: 'already-handed-off' } }
+      : reject('invalid-closure');
+  }
+
+  const ownerClosed = reconcileOwnerIngress(state, input.ownerClosure);
+  if (ownerClosed.outcome !== 'reconciled') return reject('invalid-closure');
+  const reserved = reserveOwnerAggregate(ownerClosed.state, {
+    tenantId: input.tenantId,
+    holderId: ingressGrant.holderId,
+    idempotencyKey: ingressGrant.idempotencyKey,
+    expectedPolicyId: input.expectedPolicyId,
+    expectedPolicyRevision: input.expectedPolicyRevision,
+    expectedRestrictionRevision: input.expectedRestrictionRevision,
+    purpose: ingressGrant.purpose,
+    envelope: ingressGrant.envelope,
+    now: input.now,
+  });
+  if (reserved.outcome.status !== 'granted' || !reserved.outcome.reservation) {
+    return reject(reserved.outcome.reason === 'exhausted' ? 'exhausted'
+      : reserved.outcome.reason === 'capacity-defect' ? 'capacity-defect'
+      : reserved.outcome.reason === 'stale-policy' ? 'stale-policy' : 'capacity-exhausted');
+  }
+  const tenantClosed = closeTenant(reserved.outcome.reservation, reserved.state);
+  if (tenantClosed.outcome !== 'reconciled') return reject(tenantClosed.outcome === 'capacity-defect' ? 'capacity-defect' : 'invalid-closure');
+  return { state: tenantClosed.state, outcome: { status: 'handed-off' } };
 }
 
 export const BUDGET_COORDINATOR_BOUNDS = Object.freeze({ maxTenantAllocations: MAX_TENANT_ALLOCATIONS, maxReservations: MAX_RESERVATIONS });

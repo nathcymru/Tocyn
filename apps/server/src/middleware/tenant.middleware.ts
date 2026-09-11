@@ -20,6 +20,8 @@ import { Repositories } from '../repositories/interfaces';
 import { createRepositories } from '../repositories';
 import { TenantAttachmentStorage, LegacyArticleBodyStorage, TenantVectorStorage } from '../storage/adapters';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
+import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
+import { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
 
 export type TenantRequestDeps = {
   /** Request-observed D1 boundary for fixed, server-composed mutation services. */
@@ -53,14 +55,14 @@ export const tenantMiddleware = async (c: Context, next: Next) => {
   // Trusted composition boundary
   const payload = c.get('jwtPayload') as { session_version?: number; exp?: number ;} | undefined;
   const credential = payload?.exp ? { sessionVersion: payload.session_version ?? 0, expiresAt: payload.exp } : undefined;
-  const deps = createTenantRequestDeps(scope, c.env, credential, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+  const deps = createTenantRequestDeps(scope, c.env, credential, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
 
   c.set('tenantDeps', deps);
   await next();
 };
 
 
-export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, credential?: BetaCredential, canonicalMutationSli?: RequestCanonicalMutationSli, sharedEmitter?: ResourceOperationEmitter): TenantRequestDeps {
+export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, credential?: BetaCredential, canonicalMutationSli?: RequestCanonicalMutationSli, sharedEmitter?: ResourceOperationEmitter, ownerIngressAdmission?: OwnerIngressRequestAdmission): TenantRequestDeps {
   const emitResourceOperation = sharedEmitter ?? createResourceOperationEmitter(env);
   const db = observeD1(env.DB, emitResourceOperation);
   const guarded = localBetaEnabled(env);
@@ -69,7 +71,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
   const betaAdmission = guarded
     ? new LocalBetaAdmissionRepository(db, scope, { kind, id: scope.actorId }, credential)
     : undefined;
-  const repositories = createRepositories(scope, db, betaAdmission, canonicalMutationSli, env.DB);
+  const repositories = createRepositories(scope, db, betaAdmission, canonicalMutationSli, env.DB, ownerIngressAdmission);
   const attachmentStorage = betaAdmission
     ? new LocalBetaAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, betaAdmission, emitResourceOperation)
     : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation);
@@ -124,4 +126,10 @@ export function createLocalBetaRuntimeRepository(env: Env, emit?: ResourceOperat
 
 export function createLocalBetaAdmission(env: Env, scope: VerifiedTenantScope, principal: BetaPrincipal, emit?: ResourceOperationEmitter) {
   return new LocalBetaAdmissionRepository(observeD1(env.DB, emit), scope, principal);
+}
+
+/** Server-only deployment authority composition; no request tenant is accepted. */
+export function createOwnerIngressBudgetAuthority(env: Env, emit?: ResourceOperationEmitter): BudgetAuthorityRepository {
+  if (!env.DB) throw new Error('Budget authority database unavailable');
+  return new BudgetAuthorityRepository(observeD1(env.DB, emit), undefined, env.DB);
 }

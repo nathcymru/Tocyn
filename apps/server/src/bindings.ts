@@ -10,6 +10,8 @@ export interface Env {
   BUDGET_COORDINATOR_DO: DurableObjectNamespace;
   /** Server deployment policy selects a bounded ticket-mutation admission boundary. */
   BUDGET_ADMISSION_POLICY?: string;
+  /** Explicit #64 switch for the server-derived HTTP owner-ingress boundary. */
+  OWNER_INGRESS_ADMISSION_POLICY?: string;
   /** Explicit #64 switch for the separately bounded realtime connection boundary. */
   REALTIME_BUDGET_ADMISSION_POLICY?: string;
   /** Server-derived durable warm-grant holder; never directly addressed by a client. */
