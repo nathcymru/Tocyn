@@ -19,3 +19,8 @@ Three actual dedicated Codex workers: Sol/high owns knowledgePR202 current-autho
 No owner approvals missing, no remote resources, no Copilotreview requested. Observed accountremaining32% at prior check; current per-task usage unknown. Last30minutehumanupdate14:38BST; next14:08UTC/15:08BST. Preserve existing forecasts until defensible evidence-based re-estimation.
 
 After realtime refresh, server typecheck and native list4/4 passed; logs /private/tmp/tocyn-list-realtime-integrated-{types,native}.log. Required PR203 CI still pending.
+
+
+## CI runtime correction
+
+Run34606030972 at395f9bb was cancelled at the20-minute job limit on11September14:05UTC, after native test122 passed. No failing assertion was reported; later tests were not completed. Increase only the test matrix runner allowance to35minutes; all commands, native serial execution, required check names and other20-minute limits remain intact. This is not passing evidence: the new exact-head full run is required. Log /private/tmp/tocyn-203-cancelled-test.log.

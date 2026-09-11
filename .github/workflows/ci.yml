@@ -18,7 +18,9 @@ jobs:
   validate:
     name: Tocyn / ${{ matrix.check }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Native admission coverage now exceeds20 minutes with the existing suite.
+    # Allow completion without dropping tests; other matrix jobs retain20 minutes.
+    timeout-minutes: ${{ matrix.check == 'test' && 35 || 20 }}
     strategy:
       fail-fast: false
       matrix:
