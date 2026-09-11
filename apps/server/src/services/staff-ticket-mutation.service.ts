@@ -24,6 +24,7 @@ const invalid = () => new TicketMutationError(400,'invalid_mutation','Invalid ti
 const unsupportedFormat = () => new TicketMutationError(400,'unsupported_article_format','Article format is not enabled');
 const staleDraft = () => new TicketMutationError(409,'staff_reply_stale','The saved draft or conversation changed. Review and rebase before sending.');
 const unavailableMention = () => new TicketMutationError(409,'mention_recipient_unavailable','A mentioned colleague no longer has access to this internal note. Review the mention selection; your draft is retained.');
+const ownerConflict = () => new TicketMutationError(409,'responsible_owner_conflict','The responsible owner changed. Refresh the ticket before assigning it.');
 // Match the current reply capability and dashboard request contract before
 // admission; Markdown rendering enforces the same character and byte bounds.
 const MAX_ARTICLE_BODY_SIZE = 16_000;
@@ -60,7 +61,7 @@ export class StaffTicketMutationService {
   private normalize(input: StaffMutationInput): StaffMutationInput {
     if (input.operation === 'dashboard.ticket.update') {
       if (typeof input.ticketId !== 'string' || !input.ticketId || !input.data || Object.getPrototypeOf(input.data) !== Object.prototype) throw invalid();
-      const allowed = ['status','priority','assigned_to','group_id','custom_fields'];
+      const allowed = ['status','priority','assigned_to','group_id','custom_fields','responsibleOwnerAssignment','expectedAssignedTo'];
       const supplied = Object.keys(input.data);
       if (!supplied.length || supplied.some(key => !allowed.includes(key))) throw invalid();
       const data = input.data;
@@ -69,6 +70,14 @@ export class StaffTicketMutationService {
       if (data.assigned_to !== undefined && data.assigned_to !== null && (typeof data.assigned_to !== 'string' || !data.assigned_to)) throw invalid();
       if (data.group_id !== undefined && data.group_id !== null && (typeof data.group_id !== 'string' || !data.group_id)) throw invalid();
       if (data.custom_fields !== undefined && data.custom_fields !== null && Object.getPrototypeOf(data.custom_fields) !== Object.prototype) throw invalid();
+      if (data.responsibleOwnerAssignment === true) {
+        if (supplied.length !== 3 || data.assigned_to === undefined || data.expectedAssignedTo === undefined
+          || (data.expectedAssignedTo !== null && (typeof data.expectedAssignedTo !== 'string' || !data.expectedAssignedTo))) throw invalid();
+        return { operation: input.operation, ticketId: input.ticketId, data: {
+          assigned_to:data.assigned_to, responsibleOwnerAssignment:true, expectedAssignedTo:data.expectedAssignedTo,
+        } };
+      }
+      if (data.responsibleOwnerAssignment !== undefined || data.expectedAssignedTo !== undefined) throw invalid();
       return { operation: input.operation, ticketId: input.ticketId, data: { ...data } };
     }
     const d = input.data;
@@ -154,6 +163,8 @@ export class StaffTicketMutationService {
       if (!ticket) throw denied();
       requirements.ticket = { id:ticket.id,groupId:ticket.group_id ?? null };
       await this.authorize(requirements);
+      if (normalized.operation === 'dashboard.ticket.update' && normalized.data.responsibleOwnerAssignment
+        && !await this.receipts.eligibleResponsibleOwner(normalized.ticketId,normalized.data.assigned_to ?? null)) throw denied();
     }
     const payloadHash = await digest(`staff-ticket-mutation-v1\n${serialized}`);
     const keyed = key !== undefined;
@@ -218,13 +229,20 @@ export class StaffTicketMutationService {
       if (verified.length || !attempt.namespace) throw invalid();
       attempt.commitStarted = true;
       try {
+        const responsibleOwner = input.data.responsibleOwnerAssignment
+          ? { ticketId:input.ticketId,ownerId:input.data.assigned_to ?? null } : undefined;
         const raw = await this.canonical.commitStaffUpdate(input.ticketId,input.data,{kind:'staff',id:this.credential.actorId,source:'dashboard'},
-          { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace });
+          { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace,responsibleOwner },
+          input.data.responsibleOwnerAssignment ? input.data.expectedAssignedTo : undefined);
         return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
       } catch (error) {
         await this.authorize(attempt.requirements);
         const winner = await this.receipts.findActive(attempt.namespace);
         if (winner) return this.replay(winner,attempt.namespace);
+        if (input.data.responsibleOwnerAssignment) {
+          const ticket = await this.receipts.ticket(input.ticketId);
+          if (ticket && ticket.assigned_to !== (input.data.expectedAssignedTo ?? null)) throw ownerConflict();
+        }
         throw unavailable();
       }
     }
