@@ -2,7 +2,11 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 11 September 2026, 01:35 BST
+## Current state — 11 September 2026, 01:49 BST
+
+Accepted maina412734 completes #129 via PR174, signature/trees/required CI verified and owner review-only bypass recorded. Issue closed, Project Done/100%, actual11September and immutable baseline retained. Owner's48-hour retention is implemented only for local beta; no unanswered owner request. Reforecast candidate: beta.2 18January2027, expanded scope5January2028; publication/readback follows on `codex/beta2-after129-forecast` under tracker49. Active pause-until126 source headers are being corrected to accepted/resumed direction. Theme PR175 remains partial with a current-worktree dependency-link fix and pure shared contract relocation pending its next push. #136 is prepared and ready; full #73/#137/#140 remain required. See [workspace-129.md](workspace-129.md). Last operational update01:40BST, next02:10BST.
+
+## Historical state — 11 September 2026, 01:35 BST
 
 Combined PR174 candidate completes the current persistence consumers and approved local retention;187 dashboard/515 server tests and expanded guarded browser pass. Final exact-head CI/integration remains before accepting #129. Theme PR175/ecd2a35 includes a real synthetic Chromium CSP fixture; application integration remains. Root owns both integrations; native workers completed. #136 preparation is ready. No owner approval is missing. Accepted main33dfe0b, beta.2 incomplete and forecasts unchanged. See [workspace-129.md](workspace-129.md) for exact evidence, corrections and next actions. Account96%remaining; no paid usage/reset/Copilot.
 

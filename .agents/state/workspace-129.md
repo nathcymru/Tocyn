@@ -1,4 +1,10 @@
-## Current candidate — 11 September 2026, 01:41 BST
+## Accepted completion — 11 September 2026, 01:49 BST
+
+PR174 merged at00:48:58UTC as a412734c261a510b1f53d7a263f6d61cf69f98d0. GitHub signature verified valid; reviewed97a9bae, CI merge ref94d3010 and accepted merge share tree17fea732aca034955fd31eeab8d15fd367c1c970. Required lint/types/build/test and CodeQL pass (34547554215/34547551868); no review threads/findings. Standing owner PR-only approving-review bypass used, no substantive-check bypass or independent human approval claimed; zero Copilot. Completion receipt5627669282: issue CLOSED, Project Done/100%, actual completion11September, remaining0h and variance−28 working days, preserving actual start10September and baseline2–14October.
+
+Current coordinator branch is `codex/beta2-after129-forecast` from accepteda412734 in this same worktree; do not reopen174. Reforecast under #49 yields beta.2 18January2027 and expanded scope5January2028 with unchanged capacity/baselines, preserving #129's historical forecast11–22September. Publication/readback is pending in the coordinating governance PR. Root also found stale paused-until126 authority text in79 source issue headers and tracker49 live; replace only active guidance, preserving historical sections. Next: publish/verify forecast and accepted-state Wiki/Project receipts, refresh theme175 from acceptedmain, then continue #66 and ready #136. Beta.2 remains incomplete; no owner approval is outstanding.
+
+## Historical candidate — 11 September 2026, 01:41 BST
 
 Combined application candidate23f2e23 is in ready PR174; build/lint/types/security pass, full test job still running. Final review found a late sorted-query listener in the browser harness that depended on the30-second polling refresh. Root registered it before selection; expanded acceptance now passes in12.8s with unchanged9 mutations/no denials and application dist hash6823ae54. Final local receipt preserves actual dirty23f2e23 source. Publish this bounded harness correction and require fresh exact-head CI before merge. No application scope change or new owner approval. All workers idle/completed; root owns integration and next #66/#136 work. Last operational update01:40BST; next02:10BST while active.
 

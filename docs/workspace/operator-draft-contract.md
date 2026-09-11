@@ -1,6 +1,6 @@
 # Operator draft and workspace storage contract
 
-Status: partial #129 delivery accepted in PR #173, signed main `33dfe0b`. PR #174 adds approved local retention, selected-ticket/context-panel interactions and current list sort/view preferences; final integration acceptance is pending. This candidate does not enable beta.2. The [operator workspace contract](operator-workspace-interaction-contract.md) remains product authority.
+Status: #129 completed through PR #173 and PR #174, accepted as signed `a412734c261a510b1f53d7a263f6d61cf69f98d0` on11September2026. Required checks passed and reviewed/CI/merge trees match. This persistence delivery does not enable beta.2. The [operator workspace contract](operator-workspace-interaction-contract.md) remains product authority.
 
 All routes are under `/api/workspace` and inherit current dashboard authentication, session-version checks, MFA, staff role and tenant scope. Tenant and operator come from verified scope, never request fields. Ticket access is rechecked, including agent group membership. Workspace responses are marked `Cache-Control: private, no-store`. Responses containing a draft or saved selection do not grant access to the underlying ticket.
 
@@ -40,7 +40,7 @@ The [final local receipt](../evidence/workspace-continuity-final-local-2026-09-1
 
 The local-beta profile admits only the specified workspace route/method combinations. Successful draft/state CAS writes and versioned deletes use atomic admission and mutation-budget statements. Same-content saves advance revision and therefore charge; stale CAS attempts do not write or charge. Stopped writes remain denied. This does not activate an external environment or remove other beta restrictions.
 
-After an acknowledged article creation, a failed draft deletion offers a cleanup-only retry and prevents a second send from that mounted composer. It does not provide durable article idempotency across reload or resolve an uncertain article response; collision/retry work remains required under #131. Conditional cleanup cannot erase a newer draft. Final candidate browser/CI and integration evidence remain required; the 48-hour retention decision is approved and is not an outstanding owner question.
+After an acknowledged article creation, a failed draft deletion offers a cleanup-only retry and prevents a second send from that mounted composer. It does not provide durable article idempotency across reload or resolve an uncertain article response; collision/retry work remains required under #131. Conditional cleanup cannot erase a newer draft. Final submitted-revision CI includes the expanded browser, retention and sort checks and passed before signed integration. The48-hour retention decision is implemented and is not an outstanding owner question.
 
 
 ## Drafts-view query input

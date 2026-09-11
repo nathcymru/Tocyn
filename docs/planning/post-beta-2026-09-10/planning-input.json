@@ -824,7 +824,8 @@
       "actualCompletion": null,
       "progress": 0,
       "milestone": null,
-      "new": false
+      "new": false,
+      "actualStart": "2026-09-08"
     },
     {
       "number": 48,
@@ -1099,8 +1100,8 @@
       "number": 129,
       "alias": "NEW-UX-03",
       "title": "Persist operator drafts, selection and workspace continuity",
-      "done": false,
-      "effort": 20,
+      "done": true,
+      "effort": 0,
       "dependencies": [
         127,
         60,
@@ -1109,10 +1110,14 @@
       ],
       "baselineStart": "2026-10-02",
       "baselineTarget": "2026-10-14",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualCompletion": "2026-09-11",
+      "progress": 100,
       "milestone": 37,
-      "new": true
+      "new": true,
+      "actualStart": "2026-09-10",
+      "forecastStart": "2026-09-11",
+      "forecastTarget": "2026-09-22",
+      "workstream": "W2"
     },
     {
       "number": 130,
