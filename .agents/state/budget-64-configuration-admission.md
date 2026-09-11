@@ -1,3 +1,7 @@
+## Coordinator focus correction — 11 September 2026, 17:20 BST
+
+The metadata-only uncertain API-key result closed the dialog toward a disabled opener. A focused regression failed before correction; focus now goes to the explanation heading. Reopening an unchanged uncertain request explicitly focuses Retry creation. API-key UI/client tests10/10 and dashboard build pass. Native admission logic is unchanged from the13-test combined proof. Actual browser evidence and exact current CI remain required; no acceptance claimed.
+
 ## Dashboard CI correction — 11 September 2026,17:00BST
 
 210CI34619016371 buildjob103328013095 failed TS18046 in ApiKeyClientMetadata.test.ts: conflict response was unknown. Added an actual ApiError instance check before body inspection; production behavior unchanged. Local affectedUI9/9 anddashboardbuildpass, logs/private/tmp/tocyn-210-api-ui-fix-{tests,build}.log. Local dependency overlay reused205packages withoutinstallation/sharedmutation; firstlaunchmissingvite didnotcountasatest. LocalVitest4.1.4; final exactlockfileCIremainsauthority. FreshheadCIrequired; don'tmergeearlierhead.

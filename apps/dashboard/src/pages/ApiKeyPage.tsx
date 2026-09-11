@@ -23,6 +23,8 @@ export function ApiKeyPage() {
   const createOpener = React.useRef<HTMLButtonElement>(null);
   const keyNameInput = React.useRef<HTMLInputElement>(null);
   const createdHeading = React.useRef<HTMLHeadingElement>(null);
+  const uncertainHeading = React.useRef<HTMLHeadingElement>(null);
+  const retryCreateButton = React.useRef<HTMLButtonElement>(null);
   const createGuard = React.useRef(false);
   const createSucceeded = React.useRef(false);
   const createIntent = React.useRef<{ name: string; key: string } | null>(null);
@@ -147,8 +149,8 @@ export function ApiKeyPage() {
         </TocynButton>
       </div>
 
-      <TocynDialog open={isCreating} busy={creating} labelledBy={createTitleId} initialFocusEl={() => keyNameInput.current}
-        finalFocusEl={() => createSucceeded.current ? createdHeading.current : createOpener.current} onOpenChange={next => { if (!next) closeCreate(); }}>
+      <TocynDialog open={isCreating} busy={creating} labelledBy={createTitleId} initialFocusEl={() => createUnresolved ? retryCreateButton.current : keyNameInput.current}
+        finalFocusEl={() => uncertainHeading.current ?? (createSucceeded.current ? createdHeading.current : createOpener.current)} onOpenChange={next => { if (!next) closeCreate(); }}>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-4">
           <h2 id={createTitleId} className="text-lg font-semibold mb-4">Create New API Key</h2>
           <form onSubmit={handleCreate} aria-labelledby={createTitleId}>
@@ -168,7 +170,7 @@ export function ApiKeyPage() {
             </div>
             <div className="flex gap-3">
               <TocynButton
-                type="submit"
+                type="submit" ref={retryCreateButton}
                 className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
               >
                 {creating ? 'Generating...' : createUnresolved ? 'Retry creation' : 'Generate Key'}
@@ -222,7 +224,7 @@ export function ApiKeyPage() {
 
       {uncertainKey && (
         <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl" role="alert">
-          <h2 className="font-semibold text-amber-900">API key created; plaintext unavailable</h2>
+          <h2 ref={uncertainHeading} tabIndex={-1} className="font-semibold text-amber-900">API key created; plaintext unavailable</h2>
           <p className="mt-1 text-sm text-amber-800">
             The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
             but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.

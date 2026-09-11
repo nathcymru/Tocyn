@@ -56,6 +56,7 @@ it('shows metadata-only uncertain creation and requires revocation before a repl
  api.delete.mockResolvedValue({});render(<ApiKeyPage/>);fireEvent.click(screen.getByRole('button',{name:'Create New Key'}));
  const input=await screen.findByRole('textbox',{name:'Key Name'});fireEvent.change(input,{target:{value:'Uncertain'}});fireEvent.submit(input.closest('form')!);
  const warning=await screen.findByRole('alert');expect(warning).toHaveTextContent('plaintext unavailable');expect(warning).toHaveTextContent('uncertain');
+ await waitFor(()=>expect(within(warning).getByRole('heading',{name:'API key created; plaintext unavailable'})).toHaveFocus());
  expect(warning).not.toHaveTextContent('synthetic-one-time-value');expect(screen.getByRole('button',{name:'Create New Key'})).toBeDisabled();
  fireEvent.click(within(warning).getByRole('button',{name:'Revoke unavailable key'}));const dialog=await screen.findByRole('dialog',{name:'Revoke API key: Uncertain'});
  fireEvent.click(within(dialog).getByRole('button',{name:'Revoke key'}));await waitFor(()=>expect(screen.queryByText(/plaintext unavailable/i)).not.toBeInTheDocument());
@@ -74,4 +75,13 @@ it('reports clipboard success only after resolution and keeps copy failures reco
 it('reports unavailable key metadata instead of claiming an empty key list',async()=>{
  api.get.mockRejectedValue(new Error('synthetic list failure'));render(<ApiKeyPage/>);
  expect(await screen.findByRole('alert')).toHaveTextContent('could not be refreshed');expect(screen.getByText('API key list unavailable.')).toBeInTheDocument();expect(screen.queryByText('No API keys found.')).not.toBeInTheDocument();
+});
+
+it('restores keyboard focus to retry when an uncertain creation is reopened',async()=>{
+ api.post.mockRejectedValue(new Error('synthetic lost response'));render(<ApiKeyPage/>);
+ fireEvent.click(screen.getByRole('button',{name:'Create New Key'}));
+ const input=await screen.findByRole('textbox',{name:'Key Name'});fireEvent.change(input,{target:{value:'Draft'}});fireEvent.submit(input.closest('form')!);
+ await screen.findByRole('button',{name:'Retry creation'});fireEvent.click(screen.getByRole('button',{name:'Cancel'}));
+ await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());fireEvent.click(screen.getByRole('button',{name:'Create New Key'}));
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Retry creation'})).toHaveFocus());
 });
