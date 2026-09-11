@@ -2,7 +2,21 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 11 September 2026, 05:46 BST
+## Current state — 11 September 2026, 06:36 BST
+
+Accepted main: `0db69bb00e4dd820e3b735c206bc008d22e6edca`, PR#180/#73 at05:29:26UTC. Reviewed `dcbc4753`, tested merge `02b0bf7d` and accepted signed commit share tree `3eb70c3442b1b8573f646f0b339db36e9d38c45f`; mandatoryCI/security passed, threads clear. Owner PR-only approval bypass used, not independent review. #73 closed; ProjectDone/100/actual11September/remaining0/variance−144, receipt5629957822. No owner permission outstanding.
+
+This #49 reconciliation candidate updates14sole-owner SLA traceability records and the conservative forecast: beta.2 **9December2026**, expanded **9December2027**. These supersede22December2026/18December2027 only after this governance PR is accepted and external records read back. Baselines, earlier actuals and shared-owner requirement status remain unchanged. Full#64 → #130 → #137 remains critical; beta.2#140 stays open.
+
+Active allocations (native dedicated Codex; no separately verified Work/Chat allowance): root integration/governance/MacAT; Astra/high #64 bounded admission/realtime/email security boundaries; Terra/medium #68 productionbrowser evidence. Terra/high #68 serverformat worker completed544server tests,6realtenant/formatruntime checks and14typecheck configurations. No API billing, purchases or Copilot reviews. Last observed allowance77%remaining, reset17September23:59:48BST; not task-specific consumption.
+
+- #68 `/private/tmp/tocyn-beta2-68`, PR183: pushed52c8ee5versioned article/draftformats + safechanneloutput; local1f67bb8integrates acceptedSLA and safe-only preview controls. Dashboard260tests pass; current combinedgzipJS569508 (<570000 unchanged). Actual browser uploadretry/inlineimage and MacVoiceOver are in progress. No complete#68claim; AI transforms/insertion and fullacceptance remain.
+- #64 `/private/tmp/tocyn-beta2-64`, PR182: pushedb0da100includes actual zeroDOwarmAPIcache, current-session adapter, bounded128socket admission/fanout/nonrecursivecleanup and typed bounded delivery outcomes. Root-CIruntime17/17, nativecapacity, focusedservice tests pass; exactCIrunning. Worker bounds indexed senderselection/providerpreflight;10×10MiBticketallowance preserved. Fulloperation memory/CPU/bytes, staffreceipts/dashboard and remainingchannels incomplete.0035formatowned68;0036staffreceiptreserved;0037senderindexesowned64.
+- #130/#137 preparatory contracts remain queued behind actualdependencies; no premature implementation/closure. #66/#136 already accepted through175/177. Ownercheckout remains preserved; historicalworktrees retained.
+
+Next: accept/publish thisforecast through#49 afterCI, finish68browser/AT and exactCI, integrate coherent64increment, then complete bounded staff/dashboard operation before130/routing. User updated at06:30BST on acceptedSLA; next full30minute update06:40BST. Persist checkpoints rather than rely on chat. Local-only fixtures, capturedmail, no remoteCloudflare/provider action. VoiceOver left enabled.
+
+## Historical branch checkpoint — 11 September 2026, 05:46 BST
 
 Accepted main is `5c5c31a75d99934021f489e55578be6791c0bfe2` (PR #184, 04:11:49 UTC). Reviewed head `3cf1c813`, tested merge `0b46ca00` and signed accepted commit share tree `a75328ef075acfb35a78eef3f9dd7ea381d83650`. All required CI/security passed; no unresolved review threads. Standing owner review-only bypass recorded honestly; zero Copilot requests.
 
@@ -23,6 +37,22 @@ Native agent/model controls are used explicitly. A specialist start once hit the
 Failure lessons: update traceability structurally, never with a regex spanning records (exactly 45 sole-owner #66/#136 requirements changed). Preserve both TypeScript and JavaScript Vite configs. Rejected minifier/chunk probes must not be reported as accepted performance evidence. Runtime script typechecks are separate from application typechecks. Preserve owner checkout, historical worktrees and servers on 8787/8899/5190.
 
 Next: preserve CI wiring in draft PRs; finish SLA browser/VoiceOver/resource evidence; integrate prepaid grants and remaining #64 paths; complete composer channel contracts and combined performance; then dependency-cleared #130/#137 work. Routing/mention sequencing is in [routing-137-preparation.md](routing-137-preparation.md). Last human operational update 05:40 BST; next due 06:10 BST.
+
+## Historical state — 11 September 2026, 04:45 BST
+
+Accepted main `545bb18924f2c25897ffc7941daedd056fa815e5` completes #136 via PR177 at03:42:32UTC. Reviewed headd25ccbc, tested merge31c182b and accepted commit share tree166e3e467e844e5387a46b59578b3f0c277a20c7; valid signature, all required CI/security and empty unresolved threads verified. Review-only owner bypass recorded in receipt5629118301. Issue closed/Project read-backDone100,Actual completion11September,remaining0,immutablebaseline27October,variance−39workingdays. Real keyboard/VoiceOver, combined browser3/3 and server529tests passed; disposableMacfixturecleaned, VoiceOverenabled. No owner permission outstanding.
+
+#66 completed via signed PR175/6b2c9da at03:24:31UTC, exacttree6ff1528705c7d9d0855ff8bb7efb9dbc12c66424; receipt5628989546,Done100actual11Septemberremaining0baseline31Decemberretainedvariance−95workingdays. Earlier159/162/129acceptance stands. Full73/64/68/130/137/140 remains incomplete.
+
+Published forecast remains22December2026 beta.2 /28December2027expanded, under acceptedPR181 and Wiki90afe1a (73issueparagraphs/269changedProjectfields/529expectedfields/38milestones/3Wikipagesverified). Root's governancebranch `codex/beta2-after66-forecast` in `/private/tmp/tocyn-beta2-162` is recalculating66+136; local candidate remains beta.2 unchanged / expanded18December2027 and is unpublished. Unpublished outputs must not replace published status before PR checks, merge and readback. Historical baselines remain immutable.
+
+Active allocation: root owns integration and acceptance; Astra/high73 focused correction completed and awaits UI/full acceptance; Terra/high64 admission corrections active; Terra/high68 performance probes complete with unresolved 2,406-byte over-cap result; Luna/low owns state/validation. Main `545bb18924f2c25897ffc7941daedd056fa815e5` accepted #136/PR177 and #66/PR175. Four active slots including root; no verified Work/Chat worker route or separate allowance.
+
+Failure lesson: a prior worker's regex crossed traceability records. Root restored the records structurally from HEAD; exactly 45 requirement records solely owned by #66/#136 were updated and all other records were preserved.
+
+Root owns PR183 composer `/private/tmp/tocyn-beta2-68`:88a5e92 preserves actualautocomplete, typedinsertionhooks and synchronous ten-upload admission; full217dashboardtests pass. Refreshedontoaccepted136 locally; fullintegratedbrowser/AT/channel/highlight/inline-imageacceptance remains. No sourceworklost. Workercomposer68_implementation completed; nooverlappingwrites. Migration0033SLA/0034budget remainreserved. Node22 explicitPATH/ABI127 is required; defaultNode26/ABI147 mismatch needs noinstall.
+
+Ready queue: finish full73/64/68, then 130 queues and 137 routing plus required workspace/activity. `.agents/state/routing-137-preparation.md` records verified reuse and staged 133 durable mention backend→130→128→remaining 133 UI sequencing for validation; never accept unavailable mentions as complete 130 or introduce whole-issue cycle. No Copilot reviews/paid API/purchase/overage/remote Cloudflare resources. Last operational update 04:40 BST; next human update 05:10 BST. Continue until legitimate 140 acceptance; foundations do not clear beta.2.
 
 ## Historical state — 11 September 2026, 03:38 BST
 
