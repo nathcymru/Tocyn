@@ -33,7 +33,13 @@ type AuditedUpdateEventId = Partial<Record<'ticket.assignment_changed' | 'ticket
  */
 export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTenantScope,
   admission: LocalBetaAdmissionRepository | undefined, id: string, data: AuditedTicketUpdate,
-  actor: ConversationActor, retainSystemNote = false, eventIds?: AuditedUpdateEventId): { statements: D1PreparedStatement[]; updateIndex?: number } {
+  actor: ConversationActor, retainSystemNote = false, expectedAssignedToOrEvents?: string | null | AuditedUpdateEventId): { statements: D1PreparedStatement[]; updateIndex?: number } {
+  const eventIds = typeof expectedAssignedToOrEvents === 'string' || expectedAssignedToOrEvents === null
+    ? undefined
+    : expectedAssignedToOrEvents;
+  const expectedAssignedTo = typeof expectedAssignedToOrEvents === 'string' || expectedAssignedToOrEvents === null
+    ? expectedAssignedToOrEvents
+    : undefined;
   const statements: D1PreparedStatement[] = [...(admission?.ticketChangeStatements(id,data as unknown as Partial<Pick<Ticket,
     'status' | 'priority' | 'assigned_to' | 'group_id' | 'custom_fields'>>)??[])];
   const createdEventIds: string[] = [];
@@ -53,9 +59,10 @@ export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTen
     statements.push(db.prepare(`INSERT INTO conversation_events (${columns})
       SELECT t.tenant_id,?,t.id,NULL,${sequence},?,?,?,?,?,'internal',
         json_object('before',json_object(${before}),'after',json_object(${after}))
-      FROM tickets t WHERE t.tenant_id=? AND t.id=? AND (${changes.map(key => `t.${key} IS NOT ?`).join(' OR ')})`)
+      FROM tickets t WHERE t.tenant_id=? AND t.id=?${expectedAssignedTo === undefined ? '' : ' AND t.assigned_to IS ?'} AND (${changes.map(key => `t.${key} IS NOT ?`).join(' OR ')})`)
       .bind(eventId,category.kind,actor.kind,actor.id,provenance(actor),actor.source,
-        ...category.keys.filter(key => data[key] !== undefined).map(value),scope.tenantId,id,...changes.map(value)));
+        ...category.keys.filter(key => data[key] !== undefined).map(value),scope.tenantId,id,
+        ...(expectedAssignedTo === undefined ? [] : [expectedAssignedTo]),...changes.map(value)));
   }
   if (retainSystemNote && createdEventIds.length) {
     statements.push(db.prepare(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,is_internal)
@@ -78,8 +85,8 @@ export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTen
   const updateIndex = supplied.length ? statements.length : undefined;
   if (updateIndex !== undefined) {
     statements.push(db.prepare(`UPDATE tickets SET ${supplied.map(key => `${key}=?`).join(',')},updated_at=CURRENT_TIMESTAMP
-      WHERE tenant_id=? AND id=? AND (${supplied.map(key => `${key} IS NOT ?`).join(' OR ')}) RETURNING id`)
-      .bind(...supplied.map(value),scope.tenantId,id,...supplied.map(value)));
+      WHERE tenant_id=? AND id=?${expectedAssignedTo === undefined ? '' : ' AND assigned_to IS ?'} AND (${supplied.map(key => `${key} IS NOT ?`).join(' OR ')}) RETURNING id`)
+      .bind(...supplied.map(value),scope.tenantId,id,...(expectedAssignedTo === undefined ? [] : [expectedAssignedTo]),...supplied.map(value)));
   }
   return { statements, updateIndex };
 }

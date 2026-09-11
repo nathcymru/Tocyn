@@ -15,7 +15,12 @@ export type StaffMutationInput =
     group_id?: string | null; assigned_to?: string | null; custom_fields?: Ticket['custom_fields'] } }
   | { operation: 'dashboard.ticket.reply'; ticketId: string; data: { body: string; bodyFormat?: StaffArticleFormat;
     is_internal?: boolean; attachments?: RequestedMutationAttachment[]; mentionedUserIds?: readonly string[]; draft?: AcknowledgedDraftReference } }
-  | { operation: 'dashboard.ticket.update'; ticketId: string; data: AuditedTicketUpdate };
+  | { operation: 'dashboard.ticket.update'; ticketId: string; data: AuditedTicketUpdate & {
+    /** Internal marker for the narrow #137 responsible-owner transition. */
+    responsibleOwnerAssignment?: true;
+    /** The owner observed by the dashboard before requesting the transition. */
+    expectedAssignedTo?: string | null;
+  } };
 export type StaffMutationNamespace = Readonly<{ principalId: string; operation: StaffMutationOperation; keyHash: string; payloadHash: string }>;
 export type StaffMutationOutcome = Readonly<{ status: 200 | 201; body: Record<string, unknown>; ticket: Ticket; article: Article;
   attachments: Attachment[]; replayed: boolean; keyed: boolean }>;
@@ -25,4 +30,6 @@ export type StaffMutationReceipt = { payload_hash: string; fingerprint_version: 
   response_status: 200 | 201; response_snapshot: string | null };
 /** Internal repository contract. A handler never supplies a commit authority. */
 export type StaffMutationCommit = Readonly<{ credential: SessionBudgetCredential; requirements: SessionBudgetRequirements;
-  authority: BudgetCommitAuthority; namespace?: StaffMutationNamespace }>;
+  authority: BudgetCommitAuthority; namespace?: StaffMutationNamespace;
+  /** Rechecked in the same D1 batch as an explicit responsible-owner change. */
+  responsibleOwner?: Readonly<{ ticketId: string; ownerId: string | null }> }>;

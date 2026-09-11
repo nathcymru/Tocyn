@@ -130,21 +130,32 @@ export class TicketMutationReplayRepository {
   /** Dashboard PATCH uses the staff current-session fence and its own receipt
    * namespace, while sharing the one audited field-update projection. */
   async commitStaffUpdate(ticketId: string, data: AuditedTicketUpdate, actor: ConversationActor,
-    staff: StaffMutationCommit, assignmentActivity?: Readonly<{ eventId: string; statement: D1PreparedStatement }>): Promise<string> {
+    staff: StaffMutationCommit, assignmentActivity?: Readonly<{ eventId: string; statement: D1PreparedStatement }>,
+    expectedAssignedTo?: string | null): Promise<string> {
     if (actor.kind !== 'staff' || actor.source !== 'dashboard' || actor.id !== staff.credential.actorId
       || !staff.namespace || staff.namespace.operation !== 'dashboard.ticket.update'
       || staff.requirements.ticket?.id !== ticketId
       || staff.authority.operationId !== staff.namespace.keyHash
       || staff.authority.operationFingerprint !== staff.namespace.payloadHash
-      || (assignmentActivity && (data.assigned_to === undefined || data.assigned_to === null))) throw new Error('Invalid staff update mutation');
+      || (assignmentActivity && (data.assigned_to === undefined || data.assigned_to === null))
+      || (expectedAssignedTo !== undefined && (!staff.responsibleOwner || staff.responsibleOwner.ticketId !== ticketId
+        || staff.responsibleOwner.ownerId !== (data.assigned_to ?? null)))
+      || (expectedAssignedTo === undefined && staff.responsibleOwner !== undefined)) throw new Error('Invalid staff update mutation');
     const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff)];
-    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,
-      assignmentActivity ? { 'ticket.assignment_changed': assignmentActivity.eventId } : undefined);
+    const audit = assignmentActivity
+      ? auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,
+        { 'ticket.assignment_changed': assignmentActivity.eventId })
+      : auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo);
     const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
     statements.push(...audit.statements);
-    // The activity statement itself SELECTs the preceding canonical audit row,
-    // including tenant, actor provenance, visibility, ticket and assignment.
-    if (assignmentActivity) statements.push(assignmentActivity.statement);
+    if (expectedAssignedTo !== undefined) {
+      // The expected owner check prevents stale dashboard observations from
+      // writing audit rows for already-advanced ownership. A request already at
+      // its requested owner is a safe, receipted no-op.
+      statements.push(this.db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN accepted=1 AND EXISTS
+        (SELECT 1 FROM tickets WHERE tenant_id=? AND id=? AND assigned_to IS ?) THEN 1 ELSE 0 END WHERE tenant_id=?`)
+        .bind(this.scope.tenantId,ticketId,data.assigned_to ?? null,this.scope.tenantId));
+    }
     const snapshot = `json_object('staffVersion',2,'ticket',json((SELECT ${ticketJson} FROM tickets t WHERE t.tenant_id=? AND t.id=?)))`;
     statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
       VALUES (?,CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END)
