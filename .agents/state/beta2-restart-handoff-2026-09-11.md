@@ -46,3 +46,11 @@ Customerworker6dfbdc3 is localonly, NOTaccepted/integrated: coordinator requeste
 Owner-ingress integration now includes customer correction aff4302 and final8cb30b2. Tenant-qualified OTP pointer cascade, attempt exhaustion and live fences are reviewed; native10/10 passes with measured D1 writes request11/32, verify19/24, session4/8 and logout5/8. Existing required CI already runs this native suite. Customer d1StorageBytes stock, CPU/provider and retention accounting remain explicit required64 gaps; no policy activation or completion claim. Customer worker Terra/high now prepares a bounded read-only stock contract.
 
 Guarded inbox5190/8899 stays live. Separate native API-key browser harness needs asset-serving correction before browser acceptance; a200API response alone did not prove its UI. Inbox worker Terra/medium owns that correction. PR210/220 full tests remain pending; no new integration accepted. Forecast range16December–5January low confidence unchanged, publication waits for accepted source. Zero Copilot reviews and no purchases.
+
+## Accepted Graphify and owner queue decision — 19:00 BST
+
+PR220 accepted as signed c4fe113f51605f20aa4f1b58728892ebf92e0a89, reviewed28510c938ddf57cb7dba0b17a62fe97e9cb5e0f3 and CI tested d5af9f7dd2df1581377754e2abb98a1ce09409c6 share tree385ada44f851633b51e1f892e5321a9f48b19725. CI34628117870 and CodeQL34628114880 passed; review threads empty. Standing PR-only review-count bypass used, not independent approval; zero Copilot. Integrated currentmain into this branch.
+
+Owner resolved #130 snooze scope: shared across operators, actor audit, resurfacing when due or on canonical customer reply. GitHub receipt5638637521. Queue implementation still awaits64; mention projection comes from70/133, not draft/presence.
+
+Correction to checkout shorthand: /Users/ty/Documents/Tocyn remains historical codex/beta2-permissions-acceptance at1c68430 with owner .codex config. Attempted fast-forward refused safely; no reset/switch performed. Currentmain means origin/main and accepted integration worktrees, not that historical checkout. Preserve it.
