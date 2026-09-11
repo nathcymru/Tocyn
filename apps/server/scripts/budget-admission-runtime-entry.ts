@@ -24,6 +24,11 @@ let notificationBroadcasts = 0;
 let historyEventQueries = 0;
 let historyEventRowsRead = 0;
 let historyRowsRead = 0;
+let detailArticleMetadataQueries = 0;
+let detailArticleRowsRead = 0;
+let detailAttachmentMetadataQueries = 0;
+let detailAttachmentRowsRead = 0;
+let detailReferenceRowsRead = 0;
 let revokeApiKeyAfterAuth: { tenantId: string; apiKeyId: string } | undefined;
 const localCapture = new LocalAuthCaptureTransport();
 const broadcast = BroadcastService.prototype.broadcast;
@@ -76,6 +81,13 @@ function instrumentDatabase(db: any): any {
       };
       if (property==='all') return async (...args:any[]) => {
         const result = await target.all(...args);
+        if (sql.includes('length(CAST(COALESCE(a.body')) {
+          detailArticleMetadataQueries++;
+          detailArticleRowsRead += result.meta?.rows_read ?? 0;
+        }
+        if (sql.includes('length(CAST(x.file_name AS BLOB))')) detailAttachmentMetadataQueries++;
+        if (sql.includes('SELECT x.* FROM attachments x')) detailAttachmentRowsRead += result.meta?.rows_read ?? 0;
+        if (sql.includes("SELECT e.id,e.article_id,e.kind FROM conversation_events e")) detailReferenceRowsRead += result.meta?.rows_read ?? 0;
         if (sql.includes('SELECT e.* FROM conversation_events e') || sql.includes('SELECT e.* FROM conversation_public_history p')) {
           historyEventQueries++;
           historyEventRowsRead += result.meta?.rows_read ?? 0;
@@ -203,7 +215,8 @@ export default {
         if (control.loseReconcileAcks && control.loseReconcileAcks <= 5) lostReconcileAcksRemaining = control.loseReconcileAcks;
       }
       return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, r2Puts, notificationBroadcasts,
-        historyEventQueries, historyEventRowsRead, historyRowsRead, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical,
+        historyEventQueries, historyEventRowsRead, historyRowsRead, detailArticleMetadataQueries, detailArticleRowsRead,
+        detailAttachmentMetadataQueries, detailAttachmentRowsRead, detailReferenceRowsRead, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical,
         cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), ATTACHMENTS_BUCKET: instrumentBucket(env.ATTACHMENTS_BUCKET), emailTransport: localCapture,

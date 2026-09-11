@@ -21,6 +21,7 @@ import { OperatorActivityService } from '../src/services/operator-activity.servi
 import type { TenantRequestDeps } from '../src/middleware/tenant.middleware';
 import { createRequestCanonicalMutationSli } from '../src/observability/request-canonical-mutation-sli';
 import type { StaffMutationCommit,StaffMutationInput } from '../src/types/staff-ticket-mutation';
+import type { AuditedTicketUpdate } from '../src/types/conversation-audit';
 import type { CapabilityWriteFence } from '../src/auth/capability-policy';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 
@@ -105,6 +106,13 @@ async function fixture() {
         if (loseResponse) {loseResponse=false;throw new Error('Synthetic lost committed response');}
         return result;
       }
+      override async commitStaffUpdate(...args: Parameters<TicketMutationReplayRepository['commitStaffUpdate']>) {
+        canonicalAttempts++;
+        const action = beforeCommit; beforeCommit = undefined; if (action) await action();
+        const result = await super.commitStaffUpdate(...args);
+        if (loseResponse) { loseResponse = false; throw new Error('Synthetic lost committed response'); }
+        return result;
+      }
     }
     const scope = (tenant='a',actor='staff') => createVerifiedTenantScope(tenant,actor,['agent'],1);
     const credential = (tenant='a',actor='staff') => ({tenantId:tenant,actorId:actor,role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600,mfaVerified:true});
@@ -144,6 +152,7 @@ async function fixture() {
 }
 const reply = (body='Synthetic reply'):StaffMutationInput => ({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body}});
 const create = ():StaffMutationInput => ({operation:'dashboard.ticket.create',data:{subject:'Staff intake',customer_email:'CUSTOMER-A@EXAMPLE.TEST',body:'Synthetic intake',group_id:'group'}});
+const update = (data: AuditedTicketUpdate = { status:'pending' }): StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data });
 async function accept(service:StaffTicketMutationService,input:StaffMutationInput,key:string) {
   const prepared = await service.prepareStaffMutation(input,key);assert.equal(prepared.replay,null);
   assert.equal((await service.admit(prepared)).status,'spent');return {prepared,outcome:await service.commit(prepared)};
@@ -186,6 +195,91 @@ test('same-key concurrency and lost committed response return one canonical muta
     assert.equal(lost.outcome.replayed,true);assert.equal((await f.counts()).articles,before.articles+1);
     assert.equal((await s.prepareStaffMutation(reply('Lost response'),'lost')).replay?.article.id,lost.outcome.article.id);
   } finally {await f.mf.dispose();}
+});
+
+test('staff update preserves the dashboard success contract with an atomic v2 receipt, no-op evidence, and replay conflict', async () => {
+  const f = await fixture(); try {
+    const s = f.service();
+    const first = await accept(s,update({ status:'pending',priority:'urgent',assigned_to:null,group_id:'group',custom_fields:{ long:'x'.repeat(60_000),flag:true } }),'update-retry');
+    assert.equal(first.outcome.status,200); assert.deepEqual(first.outcome.body,{success:true});
+    assert.equal(first.outcome.ticket.status,'pending'); assert.equal(first.outcome.ticket.priority,'urgent');
+    const receipt = await f.db.prepare(`SELECT response_version,response_status,result_article_id,response_snapshot FROM staff_ticket_mutation_receipts
+      WHERE tenant_id='a' AND principal_id='staff' AND operation='dashboard.ticket.update'`).first<{response_version:number;response_status:number;result_article_id:string|null;response_snapshot:string}>();
+    assert.deepEqual({ version:receipt?.response_version,status:receipt?.response_status,article:receipt?.result_article_id },{version:2,status:200,article:null});
+    assert.equal(JSON.parse(receipt!.response_snapshot).staffVersion,2);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM articles WHERE tenant_id='a' AND ticket_id='ticket' AND sender_type='system'").first<{n:number}>())?.n,2,
+      'state and custom-field changes retain their ordinary dashboard notes');
+    const replay = await s.prepareStaffMutation(update({ status:'pending',priority:'urgent',assigned_to:null,group_id:'group',custom_fields:{flag:true,long:'x'.repeat(60_000)} }),'update-retry');
+    assert.equal(replay.replay?.replayed,true); assert.deepEqual(replay.replay?.body,{success:true});
+    await assert.rejects(s.prepareStaffMutation(update({status:'resolved'}),'update-retry'),(error:any)=>error.status===409&&error.code==='idempotency_conflict');
+
+    const before = await f.counts();
+    const noOp = await accept(s,update({status:'pending'}),'update-noop');
+    assert.equal(noOp.outcome.status,200); assert.equal((await f.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,2);
+    assert.equal((await f.counts()).tickets,before.tickets,'a no-op commits only its durable receipt and leaves ticket data unchanged');
+  } finally { await f.mf.dispose(); }
+});
+
+test('staff update concurrent winner, lost response recovery, and tenant/group fences retain one ticket mutation', async () => {
+  const f = await fixture(); try {
+    f.clock(Date.now());
+    const s = f.service(); const input = update({status:'pending'});
+    const [left,right] = await Promise.all([s.prepareStaffMutation(input,'update-race'),s.prepareStaffMutation(input,'update-race')]);
+    const admissions = await Promise.all([s.admit(left),s.admit(right)]);
+    assert.deepEqual(admissions.map(value=>value.status).sort(),['idempotent','spent'],JSON.stringify(admissions));
+    const results = await Promise.all([s.commit(left),s.commit(right)]);
+    assert.deepEqual(results.map(result=>result.body),[{success:true},{success:true}]); assert.deepEqual(results.map(result=>result.replayed).sort(),[false,true]);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,1);
+    f.lose(); const lost = await accept(s,update({priority:'high'}),'update-lost'); assert.equal(lost.outcome.replayed,true);
+    assert.equal((await s.prepareStaffMutation(update({priority:'high'}),'update-lost')).replay?.replayed,true);
+    await assert.rejects(s.prepareStaffMutation({operation:'dashboard.ticket.update',ticketId:'foreign',data:{status:'resolved'}},'cross-tenant'),(error:any)=>error.status===403);
+    const fenced = await s.prepareStaffMutation(update({status:'resolved'}),'group-revoked'); assert.equal((await s.admit(fenced)).status,'spent'); const before=await f.counts();
+    f.before(async()=>{ await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='a' AND user_id='staff' AND group_id='group'").run(); });
+    await assert.rejects(s.commit(fenced),(error:any)=>error.status===403); assert.deepEqual(await f.counts(),before);
+  } finally { await f.mf.dispose(); }
+});
+
+test('staff update receipt cleanup and maximal field projection remain within the admitted canonical envelope', async () => {
+  const f = await fixture(); try {
+    const s = f.service(); await accept(s,update({status:'pending'}),'update-cleanup-seed');
+    await f.db.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<150)
+      INSERT INTO staff_ticket_mutation_receipts (tenant_id,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,result_ticket_id,result_article_id,response_status,response_snapshot,created_at,expires_at)
+      SELECT tenant_id,principal_id,operation,printf('%064d',x),payload_hash,1,2,result_ticket_id,NULL,200,response_snapshot,unixepoch()-100,unixepoch()-1
+      FROM staff_ticket_mutation_receipts,n WHERE tenant_id='a' AND principal_id='staff' AND operation='dashboard.ticket.update' LIMIT 150`).run();
+    const result = await accept(s,update({status:'resolved',priority:'urgent',assigned_to:null,group_id:'group',custom_fields:{payload:'x'.repeat(60_000),first:true,second:42,third:null}}),'update-envelope');
+    const measured = f.batches.at(-1)!;
+    console.log(JSON.stringify({fixture:'native-d1-staff-update-envelope',measured}));
+    assert.equal(result.outcome.status,200); assert.ok(measured.rowsWritten>100,'the exact 99-row bounded cleanup is exercised');
+    assert.ok(measured.rowsWritten<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+    assert.ok(measured.rowsRead<=2_570);
+  } finally { await f.mf.dispose(); }
+});
+
+test('0046 preserves legacy staff receipt bytes and permits only the dashboard update v2 shape', async () => {
+  const mf = new Miniflare(convertV4MiniflareOptions({ workers:[{name:'staff-update-migration',modules:true,compatibilityDate:'2024-04-03',
+    script:'export default { fetch() { return new Response("migration") } }',d1Databases:{DB:'staff-update-migration-d1'} }] }));
+  try {
+    const db = await mf.getD1Database('DB');
+    for (const file of readdirSync(join(root,'migrations')).filter(name => name.endsWith('.sql') && name < '0046_staff_ticket_update_receipts.sql').sort()) {
+      await db.batch(splitSql(readFileSync(join(root,'migrations',file),'utf8')).map(sql => db.prepare(sql)));
+    }
+    const legacy = JSON.stringify({staffVersion:1,staffBodyFormat:'plain',ticket:{id:'ticket'},article:{id:'article',body_format:'plain'},attachments:[]});
+    await db.prepare(`INSERT INTO staff_ticket_mutation_receipts
+      (tenant_id,principal_id,operation,key_hash,payload_hash,result_ticket_id,result_article_id,response_snapshot)
+      VALUES ('a','staff','dashboard.ticket.reply',printf('%064d',1),printf('%064d',2),'ticket','article',?)`).bind(legacy).run();
+    await db.batch(splitSql(readFileSync(join(root,'migrations','0046_staff_ticket_update_receipts.sql'),'utf8')).map(sql => db.prepare(sql)));
+    assert.equal((await db.prepare("SELECT response_snapshot FROM staff_ticket_mutation_receipts WHERE tenant_id='a'").first<{response_snapshot:string}>())?.response_snapshot,legacy);
+    const update = JSON.stringify({staffVersion:2,ticket:{id:'ticket'}});
+    await db.prepare(`INSERT INTO staff_ticket_mutation_receipts
+      (tenant_id,principal_id,operation,key_hash,payload_hash,response_version,result_ticket_id,response_status,response_snapshot)
+      VALUES ('a','staff','dashboard.ticket.update',printf('%064d',3),printf('%064d',4),2,'ticket',200,?)`).bind(update).run();
+    await assert.rejects(db.prepare(`INSERT INTO staff_ticket_mutation_receipts
+      (tenant_id,principal_id,operation,key_hash,payload_hash,response_version,result_ticket_id,response_status,response_snapshot)
+      VALUES ('a','staff','dashboard.ticket.reply',printf('%064d',5),printf('%064d',6),2,'ticket',200,?)`).bind(update).run());
+  } finally { await mf.dispose(); }
 });
 
 test('delayed older staff authority is rejected and a fresh bounded retry recovers behind one canonical receipt',async()=>{
@@ -428,18 +522,19 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
     assert.ok(measured.rowsWritten>100);assert.ok(measured.rowsRead>0);assert.ok(measured.rowsWritten<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     const inventory:Record<string,number>={}; const conversationEventIndexes = [
       'idx_conversation_events_article', 'idx_conversation_events_operational_metric_projection',
-      'idx_conversation_events_staff_reply_precondition', 'sqlite_autoindex_conversation_events_1',
+      'idx_conversation_events_staff_reply_precondition', 'idx_conversation_events_ticket_article_kind',
+      'idx_conversation_events_ticket_kind_visibility_sequence', 'sqlite_autoindex_conversation_events_1',
       'sqlite_autoindex_conversation_events_2',
     ].sort();
     for(const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','support_state_definitions','ticket_support_state','budget_mutation_assertion','local_beta_assertion','local_beta_runs','ticket_mutation_receipts','staff_ticket_mutation_receipts']) {
       const indexes=await f.db.prepare(`PRAGMA index_list(${table})`).all();inventory[table]=indexes.results.length;
       if (table === 'conversation_events') assert.deepEqual(indexes.results.map((index: { name: string }) => index.name).sort(), conversationEventIndexes,
-        'The material-event reread index is deliberate; any further event index needs an envelope review');
+        'The accepted staff and bounded-detail event indexes are accounted for');
       else assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
-    assert.equal(inventory.conversation_events,5, 'The two unique keys and three deliberate query indexes are accounted for');
-    assert.ok(100*5+50*9+4<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+    assert.equal(inventory.conversation_events,7, 'Two unique keys and five deliberate query indexes are accounted for');
+    assert.ok(100*5+50*9+(2*3*2)<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
 });

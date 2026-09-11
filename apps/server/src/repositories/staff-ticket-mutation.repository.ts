@@ -13,7 +13,7 @@ export class StaffTicketMutationRepository {
   constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope) {}
   async findActive(ns: StaffMutationNamespace): Promise<StaffMutationReceipt | null> {
     if (ns.principalId !== this.scope.actorId) return null;
-    return this.db.prepare(`SELECT payload_hash,fingerprint_version,response_version,lifecycle,result_ticket_id,result_article_id,response_snapshot
+    return this.db.prepare(`SELECT payload_hash,fingerprint_version,response_version,lifecycle,result_ticket_id,result_article_id,response_status,response_snapshot
       FROM staff_ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at>unixepoch()`)
       .bind(...namespaceValues(this.scope,ns)).first<StaffMutationReceipt>();
   }
@@ -82,9 +82,10 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
 }
 
 export function staffMutationReceiptStatement(db: D1Database, scope: VerifiedTenantScope, ns: StaffMutationNamespace,
-  ticketId: string, articleId: string, snapshot: string, values: unknown[]): D1PreparedStatement {
+  ticketId: string, articleId: string | null, responseVersion: 1 | 2, responseStatus: 200 | 201,
+  snapshot: string, values: unknown[]): D1PreparedStatement {
   return db.prepare(`INSERT INTO staff_ticket_mutation_receipts
-    (tenant_id,principal_id,operation,key_hash,payload_hash,result_ticket_id,result_article_id,response_snapshot)
-    VALUES (?,?,?,?,?,?,?,${snapshot}) RETURNING response_snapshot`)
-    .bind(...namespaceValues(scope,ns),ns.payloadHash,ticketId,articleId,...values);
+    (tenant_id,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,result_ticket_id,result_article_id,response_status,response_snapshot)
+    VALUES (?,?,?,?,?,1,?,?,?,?,${snapshot}) RETURNING response_snapshot`)
+    .bind(...namespaceValues(scope,ns),ns.payloadHash,responseVersion,ticketId,articleId,responseStatus,...values);
 }

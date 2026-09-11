@@ -56,8 +56,24 @@ export interface TicketRepository {
   findTicketsForRetention(cutoffStr: string): Promise<Ticket[]>;
 }
 
+export const AI_SUGGESTION_MAX_MESSAGES = 5;
+export const AI_SUGGESTION_MAX_INLINE_BODY_BYTES = 8_192;
+export const AI_SUGGESTION_MAX_R2_KEY_BYTES = 1_024;
+
+/** Deliberately projected rather than a general article: no full inline body or oversized R2 key crosses D1. */
+export type AiSuggestionMessage = Readonly<{
+  id: string;
+  sender_type: Article['sender_type'];
+  body: string | null;
+  body_r2_key: string | null;
+  body_bytes: number;
+  body_r2_key_bytes: number;
+}>;
+
 export interface ArticleRepository {
   listByTicket(ticketId: string): Promise<Article[]>;
+  /** Five newest rows, newest-first, with inline bytes projected before D1 returns them. */
+  listRecentAiSuggestionMessages(ticketId: string): Promise<AiSuggestionMessage[]>;
   updateQAState(id: string, type: string | null, chunkCount: number): Promise<void>;
   findByRawEmailId(rawEmailId: string): Promise<Article | null>;
   getRecentCustomerArticleCount(customerId: string, since: string): Promise<number>;

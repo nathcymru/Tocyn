@@ -1,5 +1,5 @@
 import { BetaAdmissionError } from '../types/local-beta';
-import { assertConversationResponseBounds } from '../services/conversation-read-bounds';
+import { articlePageQuery, assertConversationResponseBounds, ConversationReadError } from '../services/conversation-read-bounds';
 import { conversationHistory, conversationHistoryPage } from './conversation-history';
 import { ConversationHistoryError } from '../services/conversation-audit.service';
 import { Hono } from "hono";
@@ -9,12 +9,14 @@ import { apiAuthMiddleware } from "../middleware/api-auth.middleware";
 import { rateLimiter } from "../middleware/rate-limiter";
 import { AppVariables } from "../types";
 import { TenantRequestDeps } from "../middleware/tenant.middleware";
+import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
 import { TenantTicketService } from "../services/tenant-ticket.service";
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
 import { apiTicketCreateSchema, apiTicketReplySchema, MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { requestBounds } from '../middleware/request-bounds';
 import { admitConfiguredApiTicketMutation } from '../middleware/budget-admission.middleware';
 import { admitApiTicketHistory } from '../budgets/api-ticket-history-admission.service';
+import { admitApiTicketDetail } from '../budgets/api-ticket-detail-admission.service';
 
 const updateTicketSchema = z.object({
   status: z.enum(["open", "pending", "resolved", "closed"]).optional(),
@@ -87,37 +89,47 @@ v1.get("/tickets/:id", async (c) => {
 
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
+  let query: { limit?: string; cursor?: string };
+  try {
+    query = articlePageQuery({ limit: c.req.query('article_limit'), cursor: c.req.query('article_cursor') });
+  } catch (error) {
+    if (error instanceof ConversationReadError) return c.json({ code: error.code, error: error.message }, error.status);
+    throw error;
+  }
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const ticketService = new TenantTicketService(deps);
+  // This route owns bounded API detail reads. Other existing consumers keep
+  // their established local-beta branch until their own admission work lands.
+  const conversationRead = deps.boundedConversationRead ?? new BoundedConversationReadRepository(deps.database, deps.scope);
+
+  // Admission rechecks the active integration key and its current read
+  // permission before this route can reveal whether a tenant-scoped ticket
+  // exists or begin any article/attachment query.
+  const admission = await admitApiTicketDetail({ env: c.env, deps, apiKeyId: resolution!.apiKeyId,
+    ticketId: id, page: query, now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
+    ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
+    : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
 
   const ticket = await deps.repositories.tickets.get(id);
   if (!ticket) {
     return c.json({ error: "Ticket not found" }, 404);
   }
 
-  if (deps.boundedConversationRead) {
-    const page=await deps.boundedConversationRead.page(id,{publicOnly:true,limit:c.req.query('article_limit'),cursor:c.req.query('article_cursor')});
+  try {
+    const page=await conversationRead.page(id,{publicOnly:true,limit:query.limit,cursor:query.cursor});
     const response = {
       ...ticket,
       articles: page.articles.map(({ attachments, ...article }) => article),
-      canonical: await ticketService.projectAuditedConversation(ticket, page.articles),
+      canonical: await ticketService.projectAuditedConversation(ticket, page.articles, { boundedPage: true }),
       pagination: page.pagination,
     };
     assertConversationResponseBounds(response);
     return c.json(response);
+  } catch (error) {
+    if (error instanceof ConversationReadError) return c.json({ code: error.code, error: error.message }, error.status);
+    throw error;
   }
-
-  const articles = (await deps.repositories.articles.listByTicket(id)).filter(article => !article.is_internal);
-  const canonicalArticles = await Promise.all(articles.map(async article => ({
-    ...article,
-    attachments: await ticketService.getArticleAttachments(article.id),
-  })));
-
-  return c.json({
-    ...ticket,
-    articles,
-    canonical: await ticketService.projectAuditedConversation(ticket, canonicalArticles),
-  });
 });
 
 /**

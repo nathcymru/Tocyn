@@ -32,6 +32,17 @@ describe('PR 43 review regressions', () => {
     expect(result[0].body?.length).toBe(65536);
     expect(storage.getAttachment.mock.calls.length).toBeLessThan(20);
   });
+  it('keeps legacy canonical projections unbounded until their routes adopt a page', async () => {
+    const references = vi.fn().mockResolvedValue([]);
+    const service = new TenantTicketService({conversationAudit:{references}} as any);
+    const articles = Array.from({length:51},(_,index)=>({
+      id:`article-${index}`, ticket_id:'ticket', sender_type:'customer', body:'Synthetic reply', attachments:[], is_internal:false,
+    }));
+    await service.projectAuditedConversation({id:'ticket',source:'api',customer_email:'customer@example.test'} as any,articles as any);
+    expect(references).toHaveBeenCalledWith('ticket',undefined);
+    await service.projectAuditedConversation({id:'ticket',source:'api',customer_email:'customer@example.test'} as any,articles as any,{boundedPage:true});
+    expect(references).toHaveBeenLastCalledWith('ticket',articles.map(article=>article.id));
+  });
   it('keeps authentication valid when scoped usage telemetry fails', async () => {
     const usageBindings: unknown[][] = [];
     const DB = {prepare:(sql:string)=>({bind:(...args:unknown[])=>({

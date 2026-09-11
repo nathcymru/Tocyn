@@ -17,7 +17,7 @@ import { SessionBudgetAdmissionService } from '../budgets/session-admission.serv
 export const API_TICKET_BUDGET_POLICY = 'api-ticket-mutations-v1' as const;
 export const TICKET_MUTATIONS_BUDGET_POLICY = 'ticket-mutations-v1' as const;
 export type ApiTicketBudgetOperation = 'api.ticket.create' | 'api.ticket.reply' | 'api.ticket.update';
-export type StaffTicketBudgetOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply';
+export type StaffTicketBudgetOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply' | 'dashboard.ticket.update';
 export type CustomerTicketBudgetOperation = 'portal.ticket.create' | 'portal.ticket.reply';
 
 /**
@@ -56,6 +56,12 @@ export const STAFF_TICKET_ENVELOPES: Readonly<Record<StaffTicketBudgetOperation,
   'dashboard.ticket.reply': Object.freeze(sumResourceEnvelopes({
     workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     r2ClassBOperations: 30,
+    ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
+  }, estimateNotificationBroadcastWithCleanupEnvelope())),
+  // Ticket field changes can write two event categories, their retained system
+  // notes, the bounded receipt cleanup, and the dashboard notification.
+  'dashboard.ticket.update': Object.freeze(sumResourceEnvelopes({
+    workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
 });

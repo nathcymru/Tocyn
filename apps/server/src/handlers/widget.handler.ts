@@ -13,6 +13,10 @@ import { BetaAdmissionError } from '../types/local-beta';
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
 import { MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { admitConfiguredCustomerTicketMutation, customerTicketAdmissionMode } from '../middleware/budget-admission.middleware';
+import { admitHttpAi } from '../budgets/http-ai-admission.service';
+import { MAX_WIDGET_CONTEXT_BYTES, MAX_WIDGET_HISTORY_BYTES, MAX_WIDGET_MESSAGE_BYTES, boundRecentHistory, boundUntrustedAiText, truncateUtf8 } from '../services/ai-input-bounds';
+
+const widgetAiFallback = "I'm having trouble connecting to my brain. Please try again later.";
 
 const widget = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 widget.use('*', requestBounds(64 * 1024));
@@ -89,15 +93,25 @@ widget.post('/chat', rateLimiter(5, 60000), widgetAuthMiddleware, tenantRateLimi
   const { message, history, category_id } = result.data;
 
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitHttpAi({ env: c.env, deps, payload: c.get('jwtPayload'), operation: 'widget.chat',
+    now: () => c.env.localNow?.() ?? Date.now() });
+  // Disabled and denied AI are intentionally indistinguishable to the embed:
+  // neither path may expose allocation state or start retrieval/provider work.
+  if (admission.status !== 'admitted') return c.json({ response: widgetAiFallback });
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const reader = new WidgetKnowledgeReader(deps, aiService);
-
-  const contextResults = await reader.search(message, 3, category_id);
-  const context = contextResults.map(r => r.content).join('\n\n');
-
-  const response = await aiService.generateResponse(message, context, history || []);
-
-  return c.json({ response });
+  try {
+    const contextResults = await reader.search(message, 3, category_id);
+    const context = truncateUtf8(contextResults.map(r => r.content).join('\n\n'), MAX_WIDGET_CONTEXT_BYTES);
+    const response = await aiService.generateResponse(
+      boundUntrustedAiText(message, MAX_WIDGET_MESSAGE_BYTES), context, boundRecentHistory(history || [], MAX_WIDGET_HISTORY_BYTES),
+    );
+    return c.json({ response });
+  } catch {
+    // Admission already charged this bounded attempt. Do not retry embedding or
+    // retrieval after a provider failure; return the same manual fallback.
+    return c.json({ response: widgetAiFallback });
+  }
 });
 
 const createWidgetTicketSchema = z.object({

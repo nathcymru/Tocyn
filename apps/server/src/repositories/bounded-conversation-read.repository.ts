@@ -8,8 +8,25 @@ import {
 type ArticleMetadata = {
   id: string; created_at: string; body_bytes: number; legacy_body: number; metadata_bytes: number;
 };
+type AttachmentMetadata = {
+  id: string; article_id: string; created_at: string;
+  file_name_bytes: number; content_type_bytes: number; r2_key_bytes: number;
+};
 type PageOptions = { customerEmail?: string; publicOnly?: boolean; limit?: string; cursor?: string };
 const RAW_PAGE_BUDGET = 256 * 1024;
+
+// SQLite's default BINARY collation compares UTF-8 bytes, unlike localeCompare
+// (which can be locale-sensitive and puts lower case before upper case).
+const compareSqliteBinaryText = (left: string, right: string): number => {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  const length = Math.min(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index++) {
+    const difference = leftBytes[index] - rightBytes[index];
+    if (difference) return difference;
+  }
+  return leftBytes.length - rightBytes.length;
+};
 export type BoundedArticlePage = {
   articles: (Article & { attachments: Attachment[] })[];
   pagination: { limit: number; next_cursor: string | null; has_more: boolean };
@@ -23,10 +40,10 @@ export class BoundedConversationReadRepository {
     const limit = boundedInteger(options.limit, 50, 50);
     const cursor = decodeArticleCursor(options.cursor);
     const publicOnly = options.publicOnly || options.customerEmail !== undefined;
-    const owner = options.customerEmail !== undefined ? ' AND t.customer_email=?' : '';
+    const owner = options.customerEmail !== undefined ? ` AND EXISTS (SELECT 1 FROM tickets t
+      WHERE t.tenant_id=a.tenant_id AND t.id=a.ticket_id AND t.customer_email=?)` : '';
     const visibility = publicOnly ? ' AND a.is_internal=0' : '';
-    const scopeWhere = `a.tenant_id=? AND a.ticket_id=? AND EXISTS
-      (SELECT 1 FROM tickets t WHERE t.tenant_id=a.tenant_id AND t.id=a.ticket_id${owner})${visibility}`;
+    const scopeWhere = `a.tenant_id=? AND a.ticket_id=?${visibility}${owner}`;
     const baseValues = [this.scope.tenantId, ticketId, ...(options.customerEmail !== undefined ? [options.customerEmail] : [])];
     const cursorWhere = cursor ? ' AND (a.created_at>? OR (a.created_at=? AND a.id>?))' : '';
     const metadata = await this.db.prepare(`SELECT a.id,a.created_at,
@@ -56,26 +73,44 @@ export class BoundedConversationReadRepository {
     }
     const ids = selected.map(article => article.id);
     const placeholders = ids.map(() => '?').join(',');
-    // One aggregate and one result query, independently of page length. Never fetch legacy bodies.
-    const attachmentStats = await this.db.prepare(`SELECT count(*) AS count,
-      COALESCE(sum(length(CAST(x.file_name||x.content_type||x.r2_key AS BLOB))+512),0) AS bytes
-      FROM attachments x JOIN articles a ON a.tenant_id=x.tenant_id AND a.id=x.article_id
-      WHERE ${scopeWhere} AND a.id IN (${placeholders})`)
-      .bind(...baseValues, ...ids).first<{ count: number; bytes: number }>();
-    if (!attachmentStats || attachmentStats.count > 500 || attachmentStats.bytes > RAW_PAGE_BUDGET) {
+    // Inspect only fixed-width attachment metadata before materializing
+    // user-controlled names, media types, or storage keys. LIMIT keeps both
+    // statements finite; no aggregate is permitted over a whole article.
+    const attachmentMetadata = await this.db.prepare(`SELECT x.id,x.article_id,x.created_at,
+      length(CAST(x.file_name AS BLOB)) AS file_name_bytes,
+      length(CAST(x.content_type AS BLOB)) AS content_type_bytes,
+      length(CAST(x.r2_key AS BLOB)) AS r2_key_bytes
+      FROM attachments x
+      WHERE x.tenant_id=? AND x.article_id IN (${placeholders}) LIMIT 501`)
+      .bind(this.scope.tenantId, ...ids).all<AttachmentMetadata>();
+    const attachmentBytes = attachmentMetadata.results.reduce((total, attachment) => total +
+      attachment.file_name_bytes + attachment.content_type_bytes + attachment.r2_key_bytes + 512, 0);
+    if (attachmentMetadata.results.length > 500 || attachmentBytes > RAW_PAGE_BUDGET) {
       throw new ConversationReadError(413, 'conversation_page_too_large',
         'Attachment metadata exceeds the local beta page limit. Request fewer articles or contact the operator.');
     }
-    const articles = await this.db.prepare(`SELECT a.* FROM articles a
-      WHERE ${scopeWhere} AND a.id IN (${placeholders}) ORDER BY a.created_at,a.id`)
-      .bind(...baseValues, ...ids).all<Article>();
     const attachments = await this.db.prepare(`SELECT x.* FROM attachments x
-      JOIN articles a ON a.tenant_id=x.tenant_id AND a.id=x.article_id
-      WHERE ${scopeWhere} AND a.id IN (${placeholders}) ORDER BY x.article_id,x.created_at,x.id LIMIT 501`)
-      .bind(...baseValues, ...ids).all<Attachment>();
-    if (attachments.results.length > 500) {
-      throw new ConversationReadError(413, 'conversation_page_too_large', 'Attachment metadata exceeds the local beta page limit.');
+      WHERE x.tenant_id=? AND x.article_id IN (${placeholders}) LIMIT 501`)
+      .bind(this.scope.tenantId, ...ids).all<Attachment>();
+    // As with the final response guard, reject a concurrent metadata change
+    // between the bounded inspection and materialization rather than return a
+    // page outside its announced limit.
+    const hydratedBytes = attachments.results.reduce((total, attachment) => total +
+      new TextEncoder().encode(`${attachment.file_name}${attachment.content_type}${attachment.r2_key}`).byteLength + 512, 0);
+    if (attachments.results.length > 500 || hydratedBytes > RAW_PAGE_BUDGET) {
+      throw new ConversationReadError(413, 'conversation_page_too_large',
+        'Attachment metadata changed outside the local beta page limit. Request fewer articles or contact the operator.');
     }
+    const articles = await this.db.prepare(`SELECT a.* FROM articles a
+      WHERE ${scopeWhere} AND a.id IN (${placeholders})`)
+      .bind(...baseValues, ...ids).all<Article>();
+    // SQL ordering over an IN list can require a full temporary sort. These
+    // sets are independently bounded (50 articles, 500 attachments), so keep
+    // the stable public response order in memory instead.
+    attachments.results.sort((left, right) => compareSqliteBinaryText(left.article_id, right.article_id)
+      || compareSqliteBinaryText(left.created_at, right.created_at)
+      || compareSqliteBinaryText(left.id, right.id));
+    const articleById = new Map(articles.results.map(article => [article.id, article]));
     const byArticle = new Map<string, Attachment[]>();
     for (const attachment of attachments.results) {
       byArticle.set(attachment.article_id, [...(byArticle.get(attachment.article_id) ?? []), attachment]);
@@ -83,7 +118,7 @@ export class BoundedConversationReadRepository {
     const hasMore = metadata.results.length > selected.length;
     const last = selected.at(-1)!;
     return {
-      articles: articles.results.map(article => ({
+      articles: selected.map(metadata => articleById.get(metadata.id)).filter((article): article is Article => !!article).map(article => ({
         ...article,
         is_internal: Boolean(article.is_internal),
         attachments: byArticle.get(article.id) ?? [],

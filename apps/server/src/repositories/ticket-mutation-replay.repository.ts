@@ -124,6 +124,37 @@ export class TicketMutationReplayRepository {
     return value;
   }
 
+  /** Dashboard PATCH uses the staff current-session fence and its own receipt
+   * namespace, while sharing the one audited field-update projection. */
+  async commitStaffUpdate(ticketId: string, data: AuditedTicketUpdate, actor: ConversationActor,
+    staff: StaffMutationCommit): Promise<string> {
+    if (actor.kind !== 'staff' || actor.source !== 'dashboard' || actor.id !== staff.credential.actorId
+      || !staff.namespace || staff.namespace.operation !== 'dashboard.ticket.update'
+      || staff.requirements.ticket?.id !== ticketId
+      || staff.authority.operationId !== staff.namespace.keyHash
+      || staff.authority.operationFingerprint !== staff.namespace.payloadHash) throw new Error('Invalid staff update mutation');
+    const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff)];
+    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true);
+    const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
+    statements.push(...audit.statements);
+    const snapshot = `json_object('staffVersion',2,'ticket',json((SELECT ${ticketJson} FROM tickets t WHERE t.tenant_id=? AND t.id=?)))`;
+    statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+      VALUES (?,CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END)
+      ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId,this.scope.tenantId,ticketId));
+    // The receipt remains last: a same-key race rolls back every audit, note,
+    // ticket and local-beta write made by the losing attempt.
+    statements.push(staffMutationReceiptStatement(this.db,this.scope,staff.namespace,ticketId,null,2,200,snapshot,[this.scope.tenantId,ticketId]));
+    this.canonicalMutationSli?.recordAttempt();
+    let results;
+    try { results = await this.db.batch<{ response_snapshot: string }>(statements); }
+    catch (error) { this.canonicalMutationSli?.recordUncertain(); throw error; }
+    const value = results.at(-1)?.results[0]?.response_snapshot;
+    if (!value) throw new Error('Staff update result unavailable');
+    if (updateIndex !== undefined && results[updateIndex]?.results[0]) this.canonicalMutationSli?.recordDurablyCompleted();
+    else this.canonicalMutationSli?.recordNoOp();
+    return value;
+  }
+
   async commit(candidate: MutationCandidate, ns?: MutationNamespace, api?: ApiMutationCommit): Promise<string> {
     if (api && (candidate.audit?.kind !== 'api-key' || candidate.audit.id !== api.apiKeyId
       || (ns && (ns.principalKind !== 'api-key' || ns.principalId !== api.apiKeyId
@@ -263,7 +294,7 @@ export class TicketMutationReplayRepository {
       ...(staff ? [this.scope.tenantId, candidate.articleId ?? null] : []), ...candidate.attachments.flatMap(a => [this.scope.tenantId, a.id]), ...(eventId ? [eventId,candidate.articleId ?? null] : [])];
     const snapshot = rawSnapshot;
     if (staff?.namespace) {
-      statements.push(staffMutationReceiptStatement(this.db,this.scope,staff.namespace,candidate.ticketId,candidate.articleId!,snapshot,snapshotValues));
+      statements.push(staffMutationReceiptStatement(this.db,this.scope,staff.namespace,candidate.ticketId,candidate.articleId!,1,201,snapshot,snapshotValues));
     } else if (ns) {
       // Deliberately last: uniqueness failure rolls back every losing mutation.
       statements.push(this.db.prepare(`INSERT INTO ticket_mutation_receipts

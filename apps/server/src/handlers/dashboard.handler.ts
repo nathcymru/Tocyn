@@ -69,7 +69,7 @@ const staffReplySchema = z.object({
     baseConversationRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) }).strict().optional(),
 }).strict();
 
-function staffMutationService(c: any, d: TenantRequestDeps, operation: 'dashboard.ticket.create' | 'dashboard.ticket.reply') {
+function staffMutationService(c: any, d: TenantRequestDeps, operation: 'dashboard.ticket.create' | 'dashboard.ticket.reply' | 'dashboard.ticket.update') {
   const agent = c.get('jwtPayload') as JWTPayload;
   const sessionVersion = agent.session_version;
   if ((agent.role !== 'admin' && agent.role !== 'agent') || typeof sessionVersion !== 'number' || !Number.isSafeInteger(sessionVersion) || !Number.isSafeInteger(agent.exp)) {
@@ -778,11 +778,38 @@ dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10
  * PATCH /api/tickets/:id
  * Update ticket properties
  */
-dashboard.patch("/tickets/:id", async (c) => {
+dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
   const id = c.req.param("id");
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admissionMode = staffTicketAdmissionMode(c.env);
+  if (admissionMode === 'invalid') return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  if (admissionMode === 'enabled') {
+    try {
+      const payload = await readMutationJson(c);
+      const result = updateTicketSchema.safeParse(payload);
+      if (!result.success) return c.json({ error: "Validation failed", details: result.error.flatten().fieldErrors }, 400);
+      const updateFields = result.data;
+      if (!Object.keys(updateFields).length) return c.json({ error: "No valid fields to update" }, 400);
+      const mutation = staffMutationService(c,d,'dashboard.ticket.update');
+      const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId:id,data:updateFields },readIdempotencyKey(c));
+      if (prepared.replay) {
+        c.header('Idempotency-Replayed', 'true');
+        return c.json(prepared.replay.body, prepared.replay.status);
+      }
+      const rejection = await admitConfiguredStaffTicketMutation(c,'dashboard.ticket.update',mutation,prepared);
+      if (rejection) return rejection;
+      const outcome = await mutation.commit(prepared);
+      if (!outcome.replayed) await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket);
+      if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
+      return c.json(outcome.body,outcome.status);
+    } catch (error) {
+      const failure = staffMutationFailure(c,error); if (failure) return failure;
+      if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard budgeted ticket update failed');
+      return c.json({ error: 'Failed to update ticket' }, 500);
+    }
+  }
   const payload = await c.req.json();
   const agent = c.get("jwtPayload") as JWTPayload;
-  const d = c.get('tenantDeps') as TenantRequestDeps;
 
   const result = updateTicketSchema.safeParse(payload);
   if (!result.success) {
