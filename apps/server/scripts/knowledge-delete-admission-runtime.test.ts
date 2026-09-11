@@ -115,8 +115,9 @@ test('a closed exact grant after claim prevents the provider effect despite its 
     .first<{delete_token:string}>();assert.ok(job);await control(f,{beforeEffect:'closure'});
   assert.equal((await step(f,'closed',job!.delete_token)).outcome,'blocked');assert.ok(await f.bucket.get('delete-a/knowledge/closed/body'));
   assert.equal((await control(f)).r2Deletes,0);
-  assert.ok(await f.db.prepare("SELECT 1 FROM budget_grant_operations WHERE tenant_id='delete-a' AND operation_fingerprint LIKE '%' LIMIT 1").first());
-  assert.ok(await f.db.prepare("SELECT 1 FROM budget_grant_closures WHERE tenant_id='delete-a' LIMIT 1").first());
+  assert.ok(await f.db.prepare(`SELECT 1 FROM budget_grant_operations o JOIN budget_grant_closures c
+    ON c.tenant_id=o.tenant_id AND c.reservation_id=o.reservation_id AND c.holder_id=o.holder_id
+    WHERE o.tenant_id='delete-a' AND o.operation_fingerprint!='' LIMIT 1`).first());
   assert.equal((await f.db.prepare("SELECT state FROM knowledge_delete_work WHERE tenant_id='delete-a' AND document_id='closed'").first<{state:string}>())?.state,'uncertain');
 }finally{await f.mf.dispose();}});
 
