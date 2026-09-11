@@ -111,6 +111,9 @@ jobs:
       - name: Verify bounded budget admission and durable recovery
         if: matrix.check == 'test'
         run: |
+          set -euo pipefail
+          diagnostics="$RUNNER_TEMP/tocyn-budget-admission"
+          mkdir -p "$diagnostics"
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.budget-runtime.json
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.customer-budget-admission.json
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.staff-ticket-mutation.json
@@ -120,7 +123,33 @@ jobs:
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.email-ticket-stream.json
           node --import tsx --test apps/server/scripts/email-streaming-platform-runtime.test.ts apps/server/scripts/email-ticket-stream-runtime.test.ts
           node --import tsx --test apps/server/scripts/dashboard-summary-read-runtime.test.ts
-          node --import tsx --test --test-concurrency=1 apps/server/scripts/budget-coordinator-do-runtime.test.ts apps/server/scripts/budget-authority-runtime.test.ts apps/server/scripts/budget-grant-holder-runtime.test.ts apps/server/scripts/budget-admission-runtime.test.ts apps/server/scripts/customer-budget-admission-runtime.test.ts apps/server/scripts/storage-admission-runtime.test.ts apps/server/scripts/api-ticket-history-admission-runtime.test.ts apps/server/scripts/http-ai-admission-runtime.test.ts apps/server/scripts/http-ticket-read-admission-runtime.test.ts apps/server/scripts/support-sla-admission-runtime.test.ts apps/server/scripts/support-sla-mutation-receipts.test.ts apps/server/scripts/ticket-list-admission-runtime.test.ts apps/server/scripts/configuration-admission-runtime.test.ts apps/server/scripts/admin-settings-admission-runtime.test.ts apps/server/scripts/saved-filter-admission-runtime.test.ts apps/server/scripts/group-directory-admission-runtime.test.ts apps/server/scripts/operator-workspace-admission-runtime.test.ts apps/server/scripts/knowledge-read-admission-runtime.test.ts apps/server/scripts/knowledge-delete-admission-runtime.test.ts apps/server/scripts/knowledge-category-admission-runtime.test.ts apps/server/scripts/ticket-email-admission-runtime.test.ts
+          for test_file in \
+            apps/server/scripts/budget-coordinator-do-runtime.test.ts \
+            apps/server/scripts/budget-authority-runtime.test.ts \
+            apps/server/scripts/budget-grant-holder-runtime.test.ts \
+            apps/server/scripts/budget-admission-runtime.test.ts \
+            apps/server/scripts/customer-budget-admission-runtime.test.ts \
+            apps/server/scripts/storage-admission-runtime.test.ts \
+            apps/server/scripts/api-ticket-history-admission-runtime.test.ts \
+            apps/server/scripts/http-ai-admission-runtime.test.ts \
+            apps/server/scripts/http-ticket-read-admission-runtime.test.ts \
+            apps/server/scripts/support-sla-admission-runtime.test.ts \
+            apps/server/scripts/support-sla-mutation-receipts.test.ts \
+            apps/server/scripts/ticket-list-admission-runtime.test.ts \
+            apps/server/scripts/configuration-admission-runtime.test.ts \
+            apps/server/scripts/admin-settings-admission-runtime.test.ts \
+            apps/server/scripts/saved-filter-admission-runtime.test.ts \
+            apps/server/scripts/group-directory-admission-runtime.test.ts \
+            apps/server/scripts/operator-workspace-admission-runtime.test.ts \
+            apps/server/scripts/knowledge-read-admission-runtime.test.ts \
+            apps/server/scripts/knowledge-delete-admission-runtime.test.ts \
+            apps/server/scripts/knowledge-category-admission-runtime.test.ts \
+            apps/server/scripts/ticket-email-admission-runtime.test.ts
+          do
+            name="${test_file##*/}"
+            printf 'Running bounded admission test: %s\\n' "$test_file"
+            timeout --signal=TERM --kill-after=30s 90s node --import tsx --test --test-concurrency=1 "$test_file" 2>&1 | tee "$diagnostics/$name.log"
+          done
       - name: Verify operator theme preference isolation and recovery
         if: matrix.check == 'test'
         run: |
@@ -142,5 +171,13 @@ jobs:
             ${{ runner.temp }}/tocyn-sla-browser.tap
             ${{ runner.temp }}/tocyn-composer-browser.tap
             ${{ runner.temp }}/tocyn-theme-scope.json
+          retention-days: 3
+          if-no-files-found: warn
+      - name: Retain bounded admission diagnostics
+        if: always() && matrix.check == 'test'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bounded-admission-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/tocyn-budget-admission
           retention-days: 3
           if-no-files-found: warn
