@@ -19,7 +19,7 @@ export type IsolateAdmissionResult = IsolateGrantSpendResult & Readonly<{ commit
 type ActiveAuthority = { commitSnapshot: BudgetCommitSnapshot; trusted: TrustedBudgetCoordinatorAuthority; policy: EffectiveTenantCostPolicy; local: CurrentIsolateGrantAuthority };
 type HeldGrant = { holder: IsolateBudgetGrantHolder; reservationId: string; expiresAt: number; dimensions: readonly string[] };
 type CacheEntry = {
-  bindingIdentity: object; namespace: DurableObjectNamespace; key: string; epoch: string; expiresAt: number; refills: number;
+  bindingIdentity: object; namespace: DurableObjectNamespace; key: string; epoch: string; snapshot: BudgetCommitSnapshot; expiresAt: number; refills: number;
   holders: HeldGrant[]; operations: Map<string, HeldGrant>; blocked: boolean; pending?: Promise<HeldGrant | null>; failure?: IsolateGrantSpendResult;
 };
 
@@ -53,6 +53,13 @@ export function selectIsolateBlockSize(authority: TrustedBudgetCoordinatorAuthor
 function epoch(authority: ActiveAuthority): string {
   return JSON.stringify([authority.trusted.aggregateId, authority.trusted.authorityRevision, authority.policy.policyId,
     authority.policy.revision, authority.policy.restrictionRevision, authority.policy.budgets.map(budget => [budget.dimension, budget.allocationId, budget.window])]);
+}
+function sameEpoch(entry: CacheEntry, authority: ActiveAuthority): boolean {
+  // Retain the repository's frozen, size-bounded source snapshot by reference.
+  // Compare exact source values without copying its JSON into another cache key:
+  // an in-place edit must retire the paid holder even when revisions stay equal.
+  return entry.epoch === epoch(authority) && Object.entries(entry.snapshot).every(
+    ([key, value]) => value === authority.commitSnapshot[key as keyof BudgetCommitSnapshot]);
 }
 function localForGrant(authority: ActiveAuthority, grant: HeldGrant): CurrentIsolateGrantAuthority {
   return { ...authority.local, allocations: authority.local.allocations.filter(allocation => grant.dimensions.includes(allocation.dimension)) };
@@ -147,11 +154,11 @@ export class IsolateBudgetAdmissionCache {
     entry = this.entries.find(candidate => candidate.bindingIdentity === input.repository.bindingIdentity && candidate.namespace === input.namespace && candidate.key === key);
     if (!authority) { if (entry) this.retire(entry); return stale(); }
     if (entry?.blocked) return stale();
-    if (entry && entry.epoch !== epoch(authority)) { this.retire(entry); return stale(); }
+    if (entry && !sameEpoch(entry, authority)) { this.retire(entry); return stale(); }
     if (!entry) {
       if (this.entries.length >= MAX_ACTIVE_ISOLATE_SCOPES) return { status: 'rejected', reason: 'capacity-exhausted' };
       const intervalEnds = authority.policy.budgets.flatMap(budget => budget.window.kind === 'interval' ? [budget.window.endsAt] : []);
-      entry = { bindingIdentity: input.repository.bindingIdentity, namespace: input.namespace, key, epoch: epoch(authority), expiresAt: Math.min(Number.MAX_SAFE_INTEGER, ...intervalEnds),
+      entry = { bindingIdentity: input.repository.bindingIdentity, namespace: input.namespace, key, epoch: epoch(authority), snapshot: authority.commitSnapshot, expiresAt: Math.min(Number.MAX_SAFE_INTEGER, ...intervalEnds),
         refills: 0, holders: [], operations: new Map(), blocked: false };
       this.entries.push(entry);
     }
@@ -184,7 +191,7 @@ export class IsolateBudgetAdmissionCache {
     // epoch after that await, then decrement synchronously before returning.
     // The business envelope includes this one extra bounded authority lookup.
     authority = await resolve();
-    if (!authority || entry.blocked || entry.epoch !== epoch(authority)) { this.retire(entry); return stale(); }
+    if (!authority || entry.blocked || !sameEpoch(entry, authority)) { this.retire(entry); return stale(); }
     const outcome = spend(held);
     if (outcome.status === 'spent') entry.operations.set(input.intent.operationId, held);
     return outcome;

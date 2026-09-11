@@ -60,7 +60,7 @@ v1.post("/tickets", rateLimiter(10, 60000), async (c) => {
       if (prepared.replay.keyed) c.header('Idempotency-Replayed', String(prepared.replay.replayed));
       return c.json(prepared.replay.body, prepared.replay.status);
     }
-    const budgetRejection = await admitConfiguredApiTicketMutation(c, 'api.ticket.create', () => mutation.admissionIntent(prepared));
+    const budgetRejection = await admitConfiguredApiTicketMutation(c, 'api.ticket.create', mutation, prepared);
     if (budgetRejection) return budgetRejection;
     const outcome = await mutation.commit(prepared);
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
@@ -151,7 +151,7 @@ v1.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
       if (prepared.replay.keyed) c.header('Idempotency-Replayed', String(prepared.replay.replayed));
       return c.json(prepared.replay.body, prepared.replay.status);
     }
-    const budgetRejection = await admitConfiguredApiTicketMutation(c, 'api.ticket.reply', () => mutation.admissionIntent(prepared));
+    const budgetRejection = await admitConfiguredApiTicketMutation(c, 'api.ticket.reply', mutation, prepared);
     if (budgetRejection) return budgetRejection;
     const outcome = await mutation.commit(prepared);
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));

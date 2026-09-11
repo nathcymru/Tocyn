@@ -1,3 +1,7 @@
+import type { ResourceAmounts } from '@luminatick/shared';
+import type { DurableObjectNamespace } from '@cloudflare/workers-types';
+import type { IsolateBudgetAdmissionCache, BudgetCommitAuthority } from '../budgets/isolate-admission.service';
+import type { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from '../repositories/local-beta-admission.repository';
 import type { ConversationAuditReference } from '../types/conversation-audit';
@@ -36,7 +40,7 @@ async function digest(value: string): Promise<string> {
 }
 
 type MutationAdmissionIntent = Readonly<{ operationId: string; operationFingerprint: string; workScopeKey: string }>;
-type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; budgetIntent?: Promise<MutationAdmissionIntent> };
+type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; budgetIntent?: Promise<MutationAdmissionIntent>; budgetRequired?: boolean; budgetAuthority?: BudgetCommitAuthority; budgetCommitStarted?: boolean };
 
 /**
  * Version 1 renders the fixed original-row snapshot for both first success and
@@ -249,6 +253,32 @@ export class TicketMutationReplayService {
     return attempt.budgetIntent;
   }
 
+  /** The service executes admission and privately owns its result; callers cannot install a fence. */
+  async admitApiBudget(prepared: PreparedTicketMutation, input: {
+    cache: IsolateBudgetAdmissionCache; repository: BudgetAuthorityRepository; namespace: DurableObjectNamespace;
+    operation: 'api.ticket.create' | 'api.ticket.reply'; business: ResourceAmounts; now: () => number;
+  }) {
+    const attempt = this.attempts.get(prepared);
+    if (!attempt || this.principal.kind !== 'api-key' || attempt.input.operation !== input.operation) throw unavailable();
+    attempt.budgetRequired = true;
+    attempt.budgetAuthority = undefined;
+    if (attempt.namespace) {
+      const receipt = await this.repository.findActive(attempt.namespace);
+      if (receipt) return { status: 'replayed' as const, outcome: await this.replay(receipt,attempt.namespace) };
+    }
+    const intent = await this.admissionIntent(prepared);
+    const apiKeyId = this.principal.id;
+    const result = await input.cache.admit({ repository: input.repository, namespace: input.namespace, scope: this.scope,
+      authorization: { authorize: scope => input.repository.authorizeApiKeyTicket(scope,this.scope.tenantId,apiKeyId) },
+      credentialKey: `api-key:${apiKeyId}:tickets:write`, intent, business: input.business, now: input.now });
+    if (result.status !== 'rejected' && result.commitAuthority && result.commitAuthority.operationId === intent.operationId
+      && result.commitAuthority.operationFingerprint === intent.operationFingerprint) {
+      const authority = structuredClone(result.commitAuthority);
+      Object.freeze(authority.snapshot); attempt.budgetAuthority = Object.freeze(authority);
+    }
+    return result;
+  }
+
   async commit(prepared: PreparedTicketMutation, verifiedAttachments: VerifiedMutationAttachment[] = []): Promise<MutationOutcome> {
     const attempt = this.attempts.get(prepared);
     if (!attempt) throw unavailable();
@@ -269,6 +299,7 @@ export class TicketMutationReplayService {
           return await this.replay(current, attempt.namespace);
         }
       }
+      if (attempt.budgetRequired && (!attempt.budgetAuthority || Date.now() >= attempt.budgetAuthority.expiresAt || attempt.budgetCommitStarted)) throw unavailable();
       const observedAt = new Date().toISOString();
       const portal = input.operation.startsWith('portal.');
       const source = portal ? 'portal' : 'api';
@@ -302,7 +333,10 @@ export class TicketMutationReplayService {
       }
       if (candidate.article) candidate.articleId = crypto.randomUUID();
       try {
-        const snapshot = await this.repository.commit(candidate, attempt.namespace);
+        if (attempt.budgetRequired && attempt.budgetCommitStarted) throw unavailable();
+        attempt.budgetCommitStarted = true;
+        const snapshot = await this.repository.commit(candidate, attempt.namespace,
+          attempt.budgetRequired ? { apiKeyId: this.principal.id, authority: attempt.budgetAuthority! } : undefined);
         return renderMutationSnapshot(snapshot, input.operation, false, Boolean(attempt.namespace));
       } catch {
         // A unique receipt collision rolls back all losing writes. Only an

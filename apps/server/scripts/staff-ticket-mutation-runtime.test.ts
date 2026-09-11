@@ -1,3 +1,4 @@
+import { CANONICAL_MUTATION_ATTEMPT_D1_WRITES } from '../src/budgets/canonical-mutation-envelope';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync,readdirSync } from 'node:fs';
@@ -29,7 +30,7 @@ async function fixture() {
       await db.batch(splitSql(readFileSync(join(root,'migrations',file),'utf8')).map(sql => db.prepare(sql)));
     }
     const now = Date.now();
-    const limits = {workerRequests:1000,d1RowsRead:10_000_000,d1RowsWritten:10_000,doRequests:1000,doRowsRead:1000,doRowsWritten:1000,logEvents:100_000};
+    const limits = {workerRequests:1000,d1RowsRead:10_000_000,d1RowsWritten:100_000,doRequests:1000,doRowsRead:1000,doRowsWritten:1000,logEvents:100_000};
     const policy = {schemaVersion:1,policyId:'staff-policy',revision:1,deploymentId:'staff-deployment',mode:'conservative',catalogueVersion:'synthetic',maxGrantLifetimeMs:60_000,
       budgets:Object.entries(limits).map(([dimension,limit]) => ({dimension,limit,allocationId:`staff-${dimension}`,recoveryPercent:20,provenance:'owner-allocation',window:{kind:'interval',id:'staff-window',startsAt:now-1,endsAt:now+3_600_000}}))};
     await db.batch([
@@ -54,10 +55,29 @@ async function fixture() {
       reserveFromTrustedAuthority:async (input:Parameters<BudgetCoordinatorDO['reserveFromTrustedAuthority']>[0]) => {calls.reserve++;return coordinator.reserveFromTrustedAuthority(input);},
     }) } as unknown as DurableObjectNamespace;
     const admission = new SessionBudgetAdmissionService(new IsolateBudgetAdmissionCache());
+    let admissionNow:number|undefined;
+    let afterAuthority:(()=>Promise<void>)|undefined;
+    class Authority extends BudgetAuthorityRepository {
+      override async resolveForVerifiedPrincipal(...args:Parameters<BudgetAuthorityRepository['resolveForVerifiedPrincipal']>) {
+        const result=await super.resolveForVerifiedPrincipal(...args);
+        const action=afterAuthority;afterAuthority=undefined;if(action)await action();
+        return result;
+      }
+    }
     let beforeCommit: (() => Promise<void>) | undefined;
     let loseResponse = false;
+    let canonicalAttempts=0;
+    const batches: {rowsRead:number;rowsWritten:number;statements:number}[]=[];
+    const canonicalDb=new Proxy(db,{get(target,property){
+      if(property==='batch')return async(statements:any[])=>{
+        const results=await target.batch(statements);batches.push({statements:results.length,
+          rowsRead:results.reduce((n:number,r:any)=>n+r.meta.rows_read,0),rowsWritten:results.reduce((n:number,r:any)=>n+r.meta.rows_written,0)});return results;
+      };
+      const value=Reflect.get(target,property);return typeof value==='function'?value.bind(target):value;
+    }});
     class Canonical extends TicketMutationReplayRepository {
       override async commitStaff(candidate:MutationCandidate,commit:StaffMutationCommit) {
+        canonicalAttempts++;
         const action = beforeCommit;beforeCommit=undefined;if (action) await action();
         const result = await super.commitStaff(candidate,commit);
         if (loseResponse) {loseResponse=false;throw new Error('Synthetic lost committed response');}
@@ -66,8 +86,8 @@ async function fixture() {
     }
     const scope = (tenant='a',actor='staff') => createVerifiedTenantScope(tenant,actor,['agent'],1);
     const credential = (tenant='a',actor='staff') => ({tenantId:tenant,actorId:actor,role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600,mfaVerified:true});
-    const service = (tenant='a',actor='staff',capability?:CapabilityWriteFence) => new StaffTicketMutationService(db,scope(tenant,actor),credential(tenant,actor),new Canonical(db,scope(tenant,actor)),
-      {service:admission,repository:new BudgetAuthorityRepository(db,scope(tenant,actor)),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136}},capability);
+    const service = (tenant='a',actor='staff',capability?:CapabilityWriteFence) => new StaffTicketMutationService(db,scope(tenant,actor),credential(tenant,actor),new Canonical(canonicalDb,scope(tenant,actor)),
+      {service:admission,repository:new Authority(db,scope(tenant,actor)),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},capability);
     const counts = async () => {
       const result:Record<string,number> = {};
       for (const table of ['tickets','articles','attachments','conversation_events','ticket_sla_events','staff_ticket_mutation_receipts']) {
@@ -75,7 +95,8 @@ async function fixture() {
       }
       return result;
     };
-    return {mf,db,service,scope,credential,calls,counts,coordinator,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;}};
+    return {mf,db,service,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
+      clock:(value:number)=>{admissionNow=value;},afterAuthority:(action:()=>Promise<void>)=>{afterAuthority=action;},canonicalAttempts:()=>canonicalAttempts};
   } catch (error) {await mf.dispose();throw error;}
 }
 const reply = (body='Synthetic reply'):StaffMutationInput => ({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body}});
@@ -110,14 +131,44 @@ test('staff identity, response contracts, atomic receipts, warm zero-DO admissio
 
 test('same-key concurrency and lost committed response return one canonical mutation', async () => {
   const f=await fixture();try {
+    // Isolate simultaneous canonical collision from the separately tested
+    // monotonic-authority rejection of older reads completing out of order.
+    f.clock(Date.now());
     const s=f.service();const a=await s.prepare(reply(),'race'),b=await s.prepare(reply(),'race');
-    const results=await Promise.all([s.admit(a),s.admit(b)]);assert.deepEqual(results.map(r=>r.status).sort(),['idempotent','spent']);
+    const results=await Promise.all([s.admit(a),s.admit(b)]);assert.deepEqual(results.map(r=>r.status).sort(),['idempotent','spent'],
+      JSON.stringify(results.map(r=>({status:r.status,reason:'reason' in r?r.reason:undefined}))));
     const outcomes=await Promise.all([s.commit(a),s.commit(b)]);assert.equal(outcomes[0].article.id,outcomes[1].article.id);
     assert.deepEqual(outcomes.map(o=>o.replayed).sort(),[false,true]);
     const before=await f.counts();f.lose();const lost=await accept(s,reply('Lost response'),'lost');
     assert.equal(lost.outcome.replayed,true);assert.equal((await f.counts()).articles,before.articles+1);
     assert.equal((await s.prepare(reply('Lost response'),'lost')).replay?.article.id,lost.outcome.article.id);
   } finally {await f.mf.dispose();}
+});
+
+test('delayed older staff authority is rejected and a fresh bounded retry recovers behind one canonical receipt',async()=>{
+  const f=await fixture();try{
+    const s=f.service();await accept(s,reply('Warm'),'warm-ordering');
+    const older=await s.prepare(reply(),'ordered'),newer=await s.prepare(reply(),'ordered');
+    let release!:()=>void,observed!:()=>void;
+    const gate=new Promise<void>(resolve=>{release=resolve;}),read=new Promise<void>(resolve=>{observed=resolve;});
+    f.afterAuthority(async()=>{observed();await gate;});
+    const delayed=s.admit(older);await read;
+    // Advance the actual clock so this later current-authority read has a
+    // strictly newer timestamp, then deliver the older completed D1 snapshot.
+    await new Promise(resolve=>setTimeout(resolve,5));
+    const current=await s.admit(newer);assert.equal(current.status,'spent');
+    release();const stale=await delayed;assert.equal(stale.status,'rejected');assert.equal('reason' in stale?stale.reason:undefined,'stale-policy');
+    const calls={...f.calls},before=f.batches.length,attempts=f.canonicalAttempts();
+    const retried=await s.admit(older);assert.equal(retried.status,'idempotent');
+    const third=await s.prepare(reply(),'ordered');const exhausted=await s.admit(third);
+    assert.equal(exhausted.status,'rejected');assert.equal('reason' in exhausted?exhausted.reason:undefined,'replay-exhausted');
+    const outcomes=await Promise.all([s.commit(older),s.commit(newer)]);
+    assert.equal(outcomes[0].article.id,outcomes[1].article.id);assert.deepEqual(outcomes.map(o=>o.replayed).sort(),[false,true]);
+    assert.equal(f.batches.length-before,1,'only the winning batch commits');
+    assert.ok(f.canonicalAttempts()-attempts<=2,'one charged operation permits at most two canonical attempts');
+    assert.equal((await s.prepare(reply(),'ordered')).replay?.article.id,outcomes[0].article.id);
+    assert.deepEqual(f.calls,calls,'fresh retry and durable replay require no extra charged grant');
+  }finally{await f.mf.dispose();}
 });
 
 for (const [name,sql] of [
@@ -252,5 +303,30 @@ test('a failed staff batch requires fresh bounded admission, and exhausted admis
     assert.equal((await s.admit(exhausted)).status,'spent');assert.equal((await s.admit(exhausted)).status,'idempotent');
     assert.equal((await s.admit(exhausted)).status,'rejected');
     const after=await f.counts();await assert.rejects(s.commit(exhausted));assert.deepEqual(await f.counts(),after);
+  }finally{await f.mf.dispose();}
+});
+
+
+test('native staff metadata includes 100-receipt cleanup, ten attachments, audit, first-response SLA and assertion writes',async()=>{
+  const f=await fixture();try{
+    const s=f.service();await accept(s,{operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'Internal seed',is_internal:true}},'metadata-seed');
+    const key='metadata-ten',hash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key))).toString('hex');
+    await f.db.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<150)
+      INSERT INTO staff_ticket_mutation_receipts (tenant_id,principal_id,operation,key_hash,payload_hash,result_ticket_id,result_article_id,response_snapshot,created_at,expires_at)
+      SELECT tenant_id,principal_id,operation,CASE WHEN x=1 THEN ? ELSE printf('%064d',x) END,payload_hash,result_ticket_id,result_article_id,response_snapshot,
+        unixepoch()-100,unixepoch()-1 FROM staff_ticket_mutation_receipts,n WHERE tenant_id='a' AND principal_id='staff'`).bind(hash).run();
+    const attachments=Array.from({length:10},(_,index)=>({storageKey:`agent-attachments/staff/${index}`,filename:`${index}.txt`,size:10*1024*1024,contentType:'text/plain'}));
+    const p=await s.prepare({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'First public response',attachments}},key);
+    assert.equal((await s.admit(p)).status,'spent');const result=await s.commit(p,attachments);assert.equal(result.attachments.length,10);
+    const measured=f.batches.at(-1)!;console.log(JSON.stringify({fixture:'native-d1-canonical-metadata',operation:'staff-reply-ten-attachments',...measured}));
+    assert.ok(measured.rowsWritten>100);assert.ok(measured.rowsRead>0);assert.ok(measured.rowsWritten<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+    const inventory:Record<string,number>={};
+    for(const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','support_state_definitions','ticket_support_state','budget_mutation_assertion','local_beta_assertion','local_beta_runs','ticket_mutation_receipts','staff_ticket_mutation_receipts']) {
+      const indexes=await f.db.prepare(`PRAGMA index_list(${table})`).all();inventory[table]=indexes.results.length;
+      assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
+    }
+    assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
+    assert.ok(100*5+32*5<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+    console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
 });

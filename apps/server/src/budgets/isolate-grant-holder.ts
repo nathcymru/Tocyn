@@ -117,8 +117,9 @@ export function isolateWarmReservedEnvelope(business: ResourceAmounts): Resource
  *
  * This class does not authenticate. Each attempt needs a fresh credential and
  * coherent authority read before calling spend; failed/revoked reads must call
- * invalidate. 'idempotent' never authorizes re-execution. Durable application
- * receipts remain required across isolate loss. No method performs I/O or awaits.
+ * invalidate. 'idempotent' permits only the prepaid second attempt behind an
+ * atomic application receipt; it cannot establish that business work is absent.
+ * Durable receipts remain required across isolate loss. No method performs I/O or awaits.
  */
 export class IsolateBudgetGrantHolder {
   readonly holderId = `isolate:${crypto.randomUUID()}`;

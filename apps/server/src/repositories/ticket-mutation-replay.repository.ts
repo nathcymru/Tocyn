@@ -1,3 +1,4 @@
+import { apiBudgetMutationStatement, type ApiMutationCommit } from './budget-commit-fence';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
 import { staffMutationStatements, staffMutationSnapshot, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
@@ -74,8 +75,11 @@ export class TicketMutationReplayRepository {
       .bind(this.scope.tenantId, id, ticketId).first<{ is_internal: number }>();
   }
 
-  async commit(candidate: MutationCandidate, ns?: MutationNamespace): Promise<string> {
-    return this.commitCanonical(candidate, ns);
+  async commit(candidate: MutationCandidate, ns?: MutationNamespace, api?: ApiMutationCommit): Promise<string> {
+    if (api && (candidate.audit?.kind !== 'api-key' || candidate.audit.id !== api.apiKeyId
+      || (ns && (ns.principalKind !== 'api-key' || ns.principalId !== api.apiKeyId
+        || ns.keyHash !== api.authority.operationId || ns.payloadHash !== api.authority.operationFingerprint)))) throw new Error('Invalid API mutation');
+    return this.commitCanonical(candidate, ns, undefined, api);
   }
 
   async commitStaff(candidate: MutationCandidate, staff: StaffMutationCommit): Promise<string> {
@@ -89,12 +93,12 @@ export class TicketMutationReplayRepository {
     return this.commitCanonical(candidate, undefined, staff);
   }
 
-  private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit): Promise<string> {
+  private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit, api?: ApiMutationCommit): Promise<string> {
     // This is after caller authorization/admission preparation and before
     // constructing the authoritative D1 batch. No HTTP response establishes this.
     this.canonicalMutationSli?.recordAttempt();
     const operation=candidate.ticket?'create':'conversation';
-    const statements: D1PreparedStatement[] = [...(staff ? staffMutationStatements(this.db,this.scope,staff) : []), ...(this.admission?.statements(operation)??[])];
+    const statements: D1PreparedStatement[] = [...(api ? [apiBudgetMutationStatement(this.db,this.scope,api)] : []), ...(staff ? staffMutationStatements(this.db,this.scope,staff) : []), ...(this.admission?.statements(operation)??[])];
     if (ns) {
       // Exact expired-key reuse and at most 99 other expired rows: bounded 100.
       statements.push(this.db.prepare(`DELETE FROM ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at <= unixepoch()`)
@@ -188,7 +192,7 @@ export class TicketMutationReplayRepository {
         VALUES (?,?,?,?,?,?,1,${version},?,?,201,${snapshot}) RETURNING response_snapshot`)
         .bind(...this.namespaceValues(ns), ns.payloadHash, candidate.ticketId, candidate.articleId ?? null, ...snapshotValues));
     } else {
-      if (staff) statements.push(this.db.prepare(`UPDATE staff_mutation_assertion SET accepted=CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END WHERE tenant_id=?`).bind(...snapshotValues,this.scope.tenantId));
+      if (staff) statements.push(this.db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END WHERE tenant_id=?`).bind(...snapshotValues,this.scope.tenantId));
       statements.push(this.db.prepare(`SELECT ${snapshot} AS response_snapshot`).bind(...snapshotValues));
     }
     let results;

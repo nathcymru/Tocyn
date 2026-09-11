@@ -1,3 +1,4 @@
+import { CANONICAL_MUTATION_D1_WRITES } from '../budgets/canonical-mutation-envelope';
 import type { D1Database, DurableObjectNamespace } from '@cloudflare/workers-types';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { VerifiedTenantScope } from '../types/tenant';
@@ -125,7 +126,7 @@ export class StaffTicketMutationService {
       if (receipt) return { status:'replayed' as const,outcome:await this.replay(receipt,attempt.namespace) };
     }
     const result = await this.budget.service.admit({ repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,
-      scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:this.budget.business,now:() => this.now() });
+      scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:{...this.budget.business,d1RowsWritten:Math.max(this.budget.business.d1RowsWritten ?? 0,CANONICAL_MUTATION_D1_WRITES)},now:() => this.now() });
     const authority = result.status !== 'rejected' ? result.commitAuthority : undefined;
     attempt.authority = authority && authority.operationId === attempt.intent.operationId
       && authority.operationFingerprint === attempt.intent.operationFingerprint ? owned(authority) : undefined;

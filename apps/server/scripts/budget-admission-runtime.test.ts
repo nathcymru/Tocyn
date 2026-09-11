@@ -1,3 +1,4 @@
+import { CANONICAL_MUTATION_ATTEMPT_D1_WRITES, CANONICAL_MUTATION_D1_WRITES } from '../src/budgets/canonical-mutation-envelope';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -32,12 +33,12 @@ async function applyMigrations(db: D1Database): Promise<void> {
 
 function policy(overrides: Partial<Record<'workerRequests' | 'd1RowsRead' | 'd1RowsWritten' | 'doRequests' | 'doRowsWritten' | 'doRowsRead' | 'logEvents', number>> = {}) {
   const dimensions = ['workerRequests', 'd1RowsRead', 'd1RowsWritten', 'doRequests', 'doRowsWritten', 'doRowsRead', 'logEvents'] as const;
-  const limits = { workerRequests: 3, d1RowsRead: 8_000, d1RowsWritten: 100, doRequests: 10, doRowsWritten: 10, doRowsRead: 10, logEvents: 200, ...overrides };
+  const limits = { workerRequests: 3, d1RowsRead: 8_000, d1RowsWritten: 4_000, doRequests: 10, doRowsWritten: 10, doRowsRead: 10, logEvents: 200, ...overrides };
   return {
     schemaVersion: 1, policyId: 'runtime-owner-policy', revision: 1, deploymentId: 'runtime-deployment',
     mode: 'conservative', catalogueVersion: 'runtime-catalogue', maxGrantLifetimeMs: 60_000,
     budgets: dimensions.map(dimension => ({ dimension, allocationId: `runtime-${dimension}`,
-      window: { kind: 'interval', id: 'runtime-window', startsAt: now - 1_000, endsAt: now + 60_000 },
+      window: { kind: 'interval', id: 'runtime-window', startsAt: Date.now() - 1_000, endsAt: Date.now() + 60_000 },
       limit: limits[dimension], recoveryPercent: 20, provenance: 'owner-allocation' as const })),
   };
 }
@@ -120,7 +121,7 @@ test('real local API-key create reserves configured aggregate capacity before it
   }
 });
 
-async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1_000_000, d1RowsWritten: 10_000,
+async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1_000_000, d1RowsWritten: 100_000,
   doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 }), extraTenants = 0) {
   const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-warm-proof', modules: true,
@@ -133,7 +134,8 @@ async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1
   await applyMigrations(db); await seed(db, extraTenants, owner);
   const control = async (value?: object) => (await (await mf.dispatchFetch('http://runtime.test/__budget-control',
     value ? { method: 'POST', body: JSON.stringify(value) } : undefined)).json()) as any;
-  await control({ now: now + 1 });
+  const initialNow = Date.now() + 1;
+  await control({ now: initialNow });
   const create = (key: string, subject = key, token = apiKey) => mf.dispatchFetch('http://runtime.test/api/v1/tickets', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': token, 'idempotency-key': key },
     body: JSON.stringify({ subject, customer_email: 'runtime@example.test', body: 'synthetic' }),
@@ -142,7 +144,7 @@ async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1
   const coordinator = namespace.get(namespace.idFromName('runtime-owner-coordinator')) as unknown as BudgetCoordinatorDO;
   const grants = async () => (await coordinator.inspectForTrustedRuntime()).tenantStates.flatMap(state => state.grants);
   const count = async () => (await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant'").first<{ count: number }>())?.count;
-  return { mf, db, control, create, coordinator, grants, count };
+  return { mf, db, control, create, coordinator, grants, count, initialNow };
 }
 
 test('concurrent cold admission shares one allocation and warm canonical replay never repeats a mutation', async () => {
@@ -222,7 +224,7 @@ test('warm admission observes current credential and restriction revocation befo
 });
 
 for (const loss of ['discard', 'expiry'] as const) test(`${loss} retains the original central charge; one bounded smaller block can use only remaining capacity`, async () => {
-  const owner = policy({ workerRequests: 27, d1RowsRead: 200_000, d1RowsWritten: 2_000,
+  const owner = policy({ workerRequests: 27, d1RowsRead: 200_000, d1RowsWritten: 100_000,
     doRequests: 100, doRowsRead: 100, doRowsWritten: 100, logEvents: 10_000 });
   if (loss === 'expiry') owner.maxGrantLifetimeMs = 10_000;
   const h = await warmHarness(owner);
@@ -230,7 +232,7 @@ for (const loss of ['discard', 'expiry'] as const) test(`${loss} retains the ori
     const first = await h.create(`before-${loss}`); assert.equal(first.status, 201); await first.body?.cancel();
     const initial = (await h.grants())[0];
     assert.equal(initial.accounted.workerRequests, 16);
-    await h.control(loss === 'discard' ? { discard: true } : { now: now + 10_002 });
+    await h.control(loss === 'discard' ? { discard: true } : { now: initial.expiresAt + 1 });
     const second = await h.create(`after-${loss}`); assert.equal(second.status, 201); await second.body?.cancel();
     const grants = await h.grants();
     assert.equal(grants.length, 2);
@@ -256,14 +258,14 @@ test('four eight-operation blocks cap refill work while the owner recovery parti
     assert.equal((await h.grants()).every(grant => grant.purpose === 'new-work'), true);
     const recovery = await h.coordinator.reserveFromTrustedAuthority({ tenantId: 'runtime-tenant', holderId: 'synthetic-recovery-holder',
       idempotencyKey: 'synthetic-recovery', purpose: 'recovery', envelope: { workerRequests: 200 }, expectedPolicyId: 'runtime-owner-policy',
-      expectedPolicyRevision: 1, expectedRestrictionRevision: 1, now: now + 2 });
+      expectedPolicyRevision: 1, expectedRestrictionRevision: 1, now: h.initialNow + 2 });
     assert.equal(recovery.status, 'granted', 'active new-work blocks never borrow the 20% recovery reserve');
     assert.equal(await h.count(), 32);
   } finally { await h.mf.dispose(); }
 });
 
 test('the shared isolate registry rejects its 65th authorized scope before another DO call', async () => {
-  const h = await warmHarness(policy({ workerRequests: 10_000, d1RowsRead: 5_000_000, d1RowsWritten: 100_000,
+  const h = await warmHarness(policy({ workerRequests: 10_000, d1RowsRead: 5_000_000, d1RowsWritten: 2_000_000,
     doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 1_000_000 }));
   try {
     const first = await h.create('scope-fixture'); assert.equal(first.status, 201);
@@ -326,7 +328,7 @@ test('real local API creates and same-ticket replies reuse prepaid blocks withou
     }] }));
     const db = await mf.getD1Database('DB');
     await applyMigrations(db);
-    await seed(db, 0, policy({ workerRequests: 40, d1RowsRead: 120_000, d1RowsWritten: 2_000,
+    await seed(db, 0, policy({ workerRequests: 40, d1RowsRead: 120_000, d1RowsWritten: 100_000,
       doRequests: 40, doRowsWritten: 40, doRowsRead: 40, logEvents: 10_000 }));
     const request = (subject: string, key: string) => mf!.dispatchFetch('http://runtime.test/api/v1/tickets', {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'idempotency-key': key },
@@ -402,4 +404,139 @@ test('full 128-allocation authority that exceeds the bounded DO payload fails cl
     await response.body?.cancel();
     assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant'").first<{ count: number }>())?.count, 0);
   } finally { await mf?.dispose(); }
+});
+
+for (const operation of ['create','reply'] as const) for (const change of ['authority','policy','window','restriction','key','permission','expiry'] as const) {
+  test(`active API ${operation} fences ${change} after admission before canonical commit`,async()=>{
+    const h=await warmHarness();try{
+      const seedResponse=await h.create('fence-target');assert.equal(seedResponse.status,201);
+      const target=await seedResponse.json() as {id:string};
+      if(change==='expiry') {
+        await h.control({discard:true,now:Date.now()});
+        await h.db.prepare('UPDATE budget_owner_policies SET authority_max_age_ms=1000').run();
+      }
+      const counts=async()=>{
+        const result:Record<string,number>={};for(const table of ['tickets','articles','attachments','conversation_events','ticket_sla_events','ticket_mutation_receipts']) {
+          result[table]=(await h.db.prepare(`SELECT count(*) AS n FROM ${table} WHERE tenant_id='runtime-tenant'`).first<{n:number}>())!.n;
+        }return result;
+      };
+      const before=await counts();
+      await h.control(change==='expiry'?{canonicalDelayMs:1100}:{beforeCanonical:change});
+      const response=operation==='create'?await h.create('fenced'):await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}/articles`,{
+        method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':'fenced'},body:JSON.stringify({body:'Fenced reply',sender_type:'agent'}),
+      });
+      assert.ok([401,403,503].includes(response.status),`expected fenced failure, received ${response.status}`);await response.body?.cancel();
+      assert.deepEqual(await counts(),before);assert.ok((await h.grants()).every(grant=>grant.accounted.workerRequests!>0),'denial never refunds accepted grants');
+    }finally{await h.mf.dispose();}
+  });
+}
+
+test('active API create/reply recover one same-key failed or unacknowledged batch without another grant or duplicate canonical work',async()=>{
+  const h=await warmHarness();try{
+    const targetResponse=await h.create('recovery-target');const target=await targetResponse.json() as {id:string};
+    const reply=(key:string)=>h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}/articles`,{
+      method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':key},body:JSON.stringify({body:'Recovery reply'}),
+    });
+    for(const [name,send] of [['create',()=>h.create('recover-create')],['reply',()=>reply('recover-reply')]] as const){
+      await h.control({beforeCanonical:'failure'});const failed=await send();assert.equal(failed.status,503);await failed.body?.cancel();
+      const charged=(await h.control()).calls;const recovered=await send();assert.equal(recovered.status,201);await recovered.body?.cancel();
+      assert.deepEqual((await h.control()).calls,charged,`${name} recovery uses its bounded local receipt`);
+      const before=await h.control();const replayed=await send();assert.equal(replayed.status,201);assert.equal(replayed.headers.get('Idempotency-Replayed'),'true');await replayed.body?.cancel();
+      assert.deepEqual((await h.control()).calls,before.calls);assert.deepEqual((await h.control()).canonicalBatches,before.canonicalBatches);
+    }
+    await h.control({loseCanonicalAck:true});const lost=await h.create('lost-ack');assert.equal(lost.status,201);assert.equal(lost.headers.get('Idempotency-Replayed'),'true');await lost.body?.cancel();
+    assert.equal(await h.count(),3);
+  }finally{await h.mf.dispose();}
+});
+
+test('native API canonical metadata includes worst-case 100-receipt cleanup and indexed mutation writes',async()=>{
+  const h=await warmHarness();try{
+    const first=await h.create('metadata-seed');const target=await first.json() as {id:string};
+    for(const operation of ['create','reply'] as const){
+      const key=`measure-${operation}`,hash=await credentialDigest(key);
+      await h.db.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<150)
+        INSERT INTO ticket_mutation_receipts (tenant_id,principal_kind,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,
+          result_ticket_id,result_article_id,response_status,response_snapshot,created_at,expires_at)
+        SELECT tenant_id,principal_kind,principal_id,?,CASE WHEN x=1 THEN ? ELSE printf('%064d',x) END,payload_hash,fingerprint_version,response_version,
+          result_ticket_id,result_article_id,response_status,response_snapshot,unixepoch()-100,unixepoch()-1
+        FROM ticket_mutation_receipts,n WHERE tenant_id='runtime-tenant' AND key_hash=?`).bind(`api.ticket.${operation}`,hash,await credentialDigest('metadata-seed')).run();
+      const response=operation==='create'?await h.create(key):await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}/articles`,{
+        method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':key},body:JSON.stringify({body:'Measured first public staff response',sender_type:'agent'}),
+      });
+      assert.equal(response.status,201);await response.body?.cancel();
+      const measured=(await h.control()).canonicalBatches.at(-1);
+      console.log(JSON.stringify({fixture:'native-d1-canonical-metadata',operation,...measured}));
+      assert.ok(measured.rowsWritten>100);assert.ok(measured.rowsRead>0);
+      assert.ok(measured.rowsWritten<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+      assert.ok(2*measured.rowsWritten<=CANONICAL_MUTATION_D1_WRITES);
+    }
+  }finally{await h.mf.dispose();}
+});
+
+test('five concurrent and successive API retries cannot exceed two canonical attempts per charged operation across fresh prepared tokens',async()=>{
+  const h=await warmHarness();try{
+    for(const cycle of [0,1]){
+      if(cycle) await h.control({discard:true});
+      await h.control({failCanonicalAttempts:5});
+      const before=(await h.control()).canonicalAttempts;
+      const responses=await Promise.all(Array.from({length:5},()=>h.create('bounded-failure')));
+      assert.deepEqual(responses.map(response=>response.status),[503,503,503,503,503]);await Promise.all(responses.map(response=>response.body?.cancel()));
+      for(let i=0;i<3;i++){const denied=await h.create('bounded-failure');assert.equal(denied.status,503);await denied.body?.cancel();}
+      assert.equal((await h.control()).canonicalAttempts-before,2,'holder counter outlives individual prepared tokens');
+      assert.equal(await h.count(),0);
+      const grants=await h.grants();assert.equal(grants.length,cycle+1);assert.ok(grants.every(grant=>grant.accounted.workerRequests===16));
+      if(cycle)assert.notEqual(grants[0].holderId,grants[1].holderId,'lost isolate needs another fully charged grant');
+    }
+  }finally{await h.mf.dispose();}
+});
+
+
+for (const operation of ['create','reply'] as const) for (const change of ['policy','restriction','source-format','authority-lifetime'] as const) {
+  test(`warm API ${operation} invalidates an exact ${change} source edit with unchanged revisions`,async()=>{
+    const h=await warmHarness();try{
+      const target=await (await h.create('snapshot-target')).json() as {id:string};
+      const send=(key:string)=>operation==='create'?h.create(key):h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target.id}/articles`,{
+        method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'idempotency-key':key},body:JSON.stringify({body:'Snapshot reply'}),
+      });
+      const warm=await send('snapshot-warm');assert.equal(warm.status,201);await warm.body?.cancel();
+      const originalPolicy=await h.db.prepare('SELECT policy_json,authority_max_age_ms FROM budget_owner_policies').first<{policy_json:string;authority_max_age_ms:number}>();
+      const originalRestriction=await h.db.prepare("SELECT restriction_json FROM budget_tenant_allocations WHERE tenant_id='runtime-tenant'").first<{restriction_json:string}>();
+      const before=await h.control(),grants=await h.grants();
+      const edits={
+        policy:"UPDATE budget_owner_policies SET policy_json=json_set(policy_json,'$.budgets[0].recoveryPercent',21)",
+        restriction:"UPDATE budget_tenant_allocations SET restriction_json=json_set(restriction_json,'$.limits.workerRequests',999) WHERE tenant_id='runtime-tenant'",
+        'source-format':"UPDATE budget_owner_policies SET policy_json=policy_json||' '",
+        'authority-lifetime':'UPDATE budget_owner_policies SET authority_max_age_ms=59000',
+      };
+      await h.db.prepare(edits[change]).run();
+      const authority=await new BudgetAuthorityRepository(h.db).resolveForVerifiedPrincipal(createVerifiedTenantScope('runtime-tenant','runtime-key',['integration'],1),
+        {kind:'api-key',apiKeyId:'runtime-key',requiredPermission:'tickets:write'},h.initialNow);
+      assert.equal(authority.kind,'active','edited authority remains valid; rejection must be cache consistency');
+      if(authority.kind!=='active')throw new Error('Expected synthetic active authority');
+      assert.equal(authority.authority.authorityRevision,1);assert.equal(authority.authority.ownerPolicy.revision,1);
+      assert.equal(authority.authority.tenantAllocations[0].effectivePolicy.restrictionRevision,1);
+      const denied=await send('snapshot-denied');assert.equal(denied.status,503);await denied.body?.cancel();
+      assert.deepEqual((await h.control()).calls,before.calls);assert.equal((await h.control()).canonicalAttempts,before.canonicalAttempts);
+      assert.deepEqual(await h.grants(),grants,'retiring a holder does not release its prepaid charge');
+      await h.db.batch([
+        h.db.prepare('UPDATE budget_owner_policies SET policy_json=?,authority_max_age_ms=?').bind(originalPolicy!.policy_json,originalPolicy!.authority_max_age_ms),
+        h.db.prepare("UPDATE budget_tenant_allocations SET restriction_json=? WHERE tenant_id='runtime-tenant'").bind(originalRestriction!.restriction_json),
+      ]);
+      const stillRetired=await send('snapshot-denied');assert.equal(stillRetired.status,503);await stillRetired.body?.cancel();
+      const replay=await send('snapshot-warm');assert.equal(replay.status,201);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');await replay.body?.cancel();
+      assert.deepEqual((await h.control()).calls,before.calls);assert.equal((await h.control()).canonicalAttempts,before.canonicalAttempts);
+    }finally{await h.mf.dispose();}
+  });
+}
+
+test('cold allocation source edits retire the newly charged holder before its first local spend',async()=>{
+  const h=await warmHarness();try{
+    await h.control({editPolicyAfterReserve:true});
+    const denied=await h.create('changed-during-cold-grant');assert.equal(denied.status,503);await denied.body?.cancel();
+    const after=await h.control();assert.deepEqual(after.calls,{refresh:1,reserve:1,revoke:0});
+    assert.equal(after.cache.operations,0);assert.equal(after.canonicalAttempts,0);assert.equal(await h.count(),0);
+    const grants=await h.grants();assert.equal(grants.length,1);assert.equal(grants[0].accounted.workerRequests,16);
+    const retry=await h.create('changed-during-cold-grant');assert.equal(retry.status,503);await retry.body?.cancel();
+    assert.deepEqual((await h.control()).calls,after.calls);assert.deepEqual(await h.grants(),grants);
+  }finally{await h.mf.dispose();}
 });

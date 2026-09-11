@@ -66,7 +66,7 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
     values.push(same ? 1 : 0,c.role,scope.tenantId,c.role,f.capability,c.role,...groupValues,...groupValues,
       c.role,...groupValues,c.sessionVersion,f.policyFingerprint);
   }
-  const statements = [db.prepare(`INSERT INTO staff_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN ${sql.join(' AND ')} THEN 1 ELSE 0 END)
+  const statements = [db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN ${sql.join(' AND ')} THEN 1 ELSE 0 END)
     ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(scope.tenantId,...values)];
   if (commit.namespace) {
     statements.push(db.prepare(`DELETE FROM staff_ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at<=unixepoch()`)

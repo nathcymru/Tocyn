@@ -187,3 +187,21 @@ test('session adapter keeps finite cold retry and quota rejection before further
     assert.equal(f.cache.inspectForTrustedRuntime().operations, 1);
   } finally { await f.mf.dispose(); }
 });
+
+
+test('session warm admission retires an exact same-revision source edit without affecting another tenant',async()=>{
+  const f=await fixture();try{
+    assert.equal((await f.admit('original')).status,'spent');
+    assert.equal((await f.admit('original','tenant-b')).status,'spent');
+    const calls={...f.calls};
+    const original=(await f.db.prepare("SELECT restriction_json FROM budget_tenant_allocations WHERE tenant_id='tenant-a'").first<{restriction_json:string}>())!.restriction_json;
+    const before=await f.coordinator.inspectForTrustedRuntime();
+    await f.db.prepare("UPDATE budget_tenant_allocations SET restriction_json=restriction_json||' ' WHERE tenant_id='tenant-a'").run();
+    assert.equal((await f.admit('changed')).reason,'stale-policy');
+    assert.equal((await f.admit('still-current','tenant-b')).status,'spent');
+    assert.deepEqual(f.calls,calls,'current session checks and snapshot comparison add no warm DO calls');
+    await f.db.prepare("UPDATE budget_tenant_allocations SET restriction_json=? WHERE tenant_id='tenant-a'").bind(original).run();
+    assert.equal((await f.admit('changed')).reason,'stale-policy','restoring source does not reset a retired holder');
+    assert.deepEqual((await f.coordinator.inspectForTrustedRuntime()).tenantStates,before.tenantStates,'no centrally held grant was refunded or replaced');
+  }finally{await f.mf.dispose();}
+});

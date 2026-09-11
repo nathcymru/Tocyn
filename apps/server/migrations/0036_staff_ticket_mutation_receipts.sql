@@ -40,4 +40,4 @@ CREATE TRIGGER redact_staff_mutation_receipts_attachment AFTER DELETE ON attachm
     WHERE tenant_id=OLD.tenant_id AND result_article_id=OLD.article_id;
 END;
 -- One non-sensitive assertion row per tenant; a failed CHECK rolls back the full batch.
-CREATE TABLE staff_mutation_assertion (tenant_id TEXT PRIMARY KEY, accepted INTEGER NOT NULL CHECK (accepted=1));
+CREATE TABLE budget_mutation_assertion (tenant_id TEXT PRIMARY KEY, accepted INTEGER NOT NULL CHECK (accepted=1));
