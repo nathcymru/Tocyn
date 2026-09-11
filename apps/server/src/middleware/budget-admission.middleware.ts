@@ -1,8 +1,10 @@
 import { CANONICAL_MUTATION_D1_WRITES } from '../budgets/canonical-mutation-envelope';
-import type { TicketMutationReplayService, PreparedTicketMutation } from '../services/ticket-mutation-replay.service';
+import { TicketMutationError, type TicketMutationReplayService, type PreparedTicketMutation } from '../services/ticket-mutation-replay.service';
 import type { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
 import { CustomerCurrentCredentialRepository } from '../repositories/customer-current-credential.repository';
 import type { PreparedStaffMutation } from '../types/staff-ticket-mutation';
+import type { PreparedSupportSlaMutation, SupportSlaMutationOperation } from '../types/support-sla-mutation';
+import type { SupportSlaMutationService } from '../services/support-sla-mutation.service';
 import type { MutationOutcome } from '../types/ticket-mutation-replay';
 import type { Context } from 'hono';
 import type { ResourceAmounts } from '@luminatick/shared';
@@ -13,12 +15,14 @@ import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
 import { estimateNotificationBroadcastWithCleanupEnvelope } from '../durable_objects/notification-resource-envelope';
 import { sumResourceEnvelopes } from '../utils/cost-policy';
 import { SessionBudgetAdmissionService } from '../budgets/session-admission.service';
+import { MAX_ISOLATE_OPERATION_ATTEMPTS } from '../budgets/isolate-grant-holder';
 
 export const API_TICKET_BUDGET_POLICY = 'api-ticket-mutations-v1' as const;
 export const TICKET_MUTATIONS_BUDGET_POLICY = 'ticket-mutations-v1' as const;
 export type ApiTicketBudgetOperation = 'api.ticket.create' | 'api.ticket.reply' | 'api.ticket.update';
 export type StaffTicketBudgetOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply' | 'dashboard.ticket.update';
 export type CustomerTicketBudgetOperation = 'portal.ticket.create' | 'portal.ticket.reply';
+export type SupportSlaBudgetOperation = SupportSlaMutationOperation;
 
 /**
  * Conservative estimated business/retry envelope, excluding the separately
@@ -78,6 +82,31 @@ export const CUSTOMER_TICKET_ENVELOPES: Readonly<Record<CustomerTicketBudgetOper
     d1RowsWritten: CANONICAL_MUTATION_D1_WRITES, r2ClassBOperations: 30,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
+});
+/** Bounded support-state/SLA writes have no provider I/O. The remap can touch 100 tickets and its two audits. */
+// A receipt-free rollback permits the same isolate operation one more native
+// execution. Reserve both business attempts; isolate-grant-holder separately
+// reserves its finite authority/credential control work.
+const SUPPORT_SLA_BUSINESS_ATTEMPTS = MAX_ISOLATE_OPERATION_ATTEMPTS;
+// One 100-ticket remap measured 5,437 reads and 2,810 writes with 512-ticket
+// same-tenant and foreign-tenant history prefixes plus 150 expired receipts.
+// The two #0049 state indexes add exactly 300 writes at this cap: definition
+// update (+100), token set (+100), and token clear (+100).
+const SUPPORT_SLA_D1_READS = Object.freeze({
+  ordinary: 2_570 * SUPPORT_SLA_BUSINESS_ATTEMPTS,
+  deactivate: 8_192 * SUPPORT_SLA_BUSINESS_ATTEMPTS,
+});
+const SUPPORT_SLA_D1_WRITES = Object.freeze({
+  ordinary: 2_048 * SUPPORT_SLA_BUSINESS_ATTEMPTS,
+  deactivate: 4_096 * SUPPORT_SLA_BUSINESS_ATTEMPTS,
+});
+export const SUPPORT_SLA_ENVELOPES: Readonly<Record<SupportSlaBudgetOperation, ResourceAmounts>> = Object.freeze({
+  'dashboard.sla.policy.set': Object.freeze({ workerRequests: 2, d1RowsRead: SUPPORT_SLA_D1_READS.ordinary, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+  'dashboard.support-state.create': Object.freeze({ workerRequests: 2, d1RowsRead: SUPPORT_SLA_D1_READS.ordinary, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+  'dashboard.support-state.update': Object.freeze({ workerRequests: 2, d1RowsRead: SUPPORT_SLA_D1_READS.ordinary, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+  'dashboard.support-state.deactivate': Object.freeze({ workerRequests: 2, d1RowsRead: SUPPORT_SLA_D1_READS.deactivate, d1RowsWritten: SUPPORT_SLA_D1_WRITES.deactivate, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+  'dashboard.ticket.sla.initialize': Object.freeze({ workerRequests: 2, d1RowsRead: SUPPORT_SLA_D1_READS.ordinary, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+  'dashboard.ticket.support-state.transition': Object.freeze({ workerRequests: 2, d1RowsRead: SUPPORT_SLA_D1_READS.ordinary, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
 });
 /** One bounded registry across binding contexts in this isolate; no request creates a new cache. */
 export const apiTicketBudgetCache = new IsolateBudgetAdmissionCache();
@@ -175,6 +204,27 @@ export async function admitConfiguredStaffTicketMutation(
     return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   } catch {
     return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  }
+}
+
+/** Combined-policy admission for the six bounded dashboard support-state/SLA writes. */
+export async function admitConfiguredSupportSlaMutation(
+  c: Context<{ Bindings: Env; Variables: AppVariables }>, operation: SupportSlaBudgetOperation,
+  mutation: SupportSlaMutationService, prepared: PreparedSupportSlaMutation,
+): Promise<Response | null> {
+  const configured = staffTicketAdmissionMode(c.env);
+  if (configured === 'disabled') return null;
+  if (configured === 'invalid' || !c.env.BUDGET_COORDINATOR_DO) return c.json({ code:'budget_admission_unavailable', error:'Budget admission authority is unavailable' },503);
+  try {
+    const outcome=await mutation.admit(prepared);
+    if (outcome.status === 'replayed') { c.header('Idempotency-Replayed','true'); return c.json(outcome.outcome.body,outcome.outcome.status); }
+    if ((outcome.status === 'spent' || outcome.status === 'idempotent') && outcome.commitAuthority) return null;
+    return outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted'
+      ? c.json({code:'budget_exhausted',error:'Configured budget capacity is exhausted'},429)
+      : c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
+  } catch (error) {
+    if (error instanceof TicketMutationError) throw error;
+    return c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
   }
 }
 

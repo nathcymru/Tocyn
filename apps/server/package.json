@@ -55,7 +55,7 @@
     "typecheck:combined-collision-runtime": "tsc -p scripts/tsconfig.combined-collision-runtime.json",
     "test:ui-combined-collision-browser": "tsx --test scripts/ui-combined-collision-browser.test.ts",
     "typecheck:ui-combined-collision-browser": "tsc -p scripts/tsconfig.ui-combined-collision-browser.json",
-    "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts scripts/customer-budget-admission-runtime.test.ts scripts/storage-admission-runtime.test.ts scripts/api-ticket-history-admission-runtime.test.ts scripts/api-ticket-detail-admission-runtime.test.ts scripts/http-ai-admission-runtime.test.ts"
+    "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts scripts/customer-budget-admission-runtime.test.ts scripts/storage-admission-runtime.test.ts scripts/api-ticket-history-admission-runtime.test.ts scripts/api-ticket-detail-admission-runtime.test.ts scripts/http-ai-admission-runtime.test.ts scripts/http-ticket-read-admission-runtime.test.ts scripts/support-sla-admission-runtime.test.ts scripts/support-sla-mutation-receipts.test.ts"
   },
   "dependencies": {
     "@luminatick/shared": "*",

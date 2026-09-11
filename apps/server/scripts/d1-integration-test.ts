@@ -654,12 +654,13 @@ async function run() {
   // Real local admission preserves the original positive/negative AI isolation checks.
   const now = Date.now();
   const limit = 1_000_000_000_000;
-  const dimensions = ['workerRequests','d1RowsRead','r2ClassBOperations','doRequests','doRowsRead','doRowsWritten','logEvents','aiMicroNeurons','vectorQueriedDimensions'];
+  const dimensions = ['workerRequests','d1RowsRead','r2ClassBOperations','doRequests','doRowsRead','doRowsWritten','logEvents','aiMicroNeurons','vectorQueriedDimensions','d1RowsWritten','d1StorageBytes','workflowExecutions','workflowSteps','workflowStorageBytes','vectorStoredDimensions'];
     const limits = Object.fromEntries(dimensions.map(dimension => [dimension, limit]));
     const owner = { schemaVersion: 1, policyId: 'http-ai-policy', revision: 1, deploymentId: 'http-ai-deployment', mode: 'conservative',
       catalogueVersion: 'synthetic-2026-09-11', maxGrantLifetimeMs: 60_000,
       budgets: dimensions.map(dimension => ({ dimension, limit, allocationId: `ai-${dimension}`, recoveryPercent: 20,
-        provenance: 'owner-allocation', window: { kind: 'interval', id: 'ai-window', startsAt: now - 1, endsAt: now + 60_000 } })), };
+        provenance: 'owner-allocation', window: ['d1StorageBytes','workflowStorageBytes','vectorStoredDimensions'].includes(dimension)
+          ? {kind:'stock',id:'ai-stock'} : { kind: 'interval', id: 'ai-window', startsAt: now - 1, endsAt: now + 60_000 } })), };
   await db.batch([
       db.prepare("INSERT INTO budget_deployment_authority VALUES ('http-ai-deployment',1,'active',?)").bind(now),
       db.prepare(`INSERT INTO budget_owner_policies (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
@@ -1225,9 +1226,25 @@ async function run() {
   await assert.rejects(() => workflow.run({payload:{action:'create',documentId:'missing'}},step), /Scoped workflow identity/);
   await reposApiKeyA.knowledge.createDocument({id:'workflow-shared',title:'A workflow',file_path:'workflow-a',tier:'answer'});
   await reposApiKeyB.knowledge.createDocument({id:'workflow-shared',title:'B workflow',file_path:'workflow-b',tier:'answer'});
-  await depsA.attachmentStorage.putAttachment('workflow-a','A scoped content');
-  await reposApiKeyA.knowledge.updateDocument('workflow-shared',{status:'published'});
-  await workflow.run({payload:{tenantId:'tenant-A',action:'create',documentId:'workflow-shared'}},step);
+  await assert.rejects(() => workflow.run({payload:{tenantId:'tenant-A',action:'create',documentId:'workflow-shared'}},step), /durable manifest migration/);
+  const { TenantKnowledgeService } = await import('../src/services/tenant-knowledge.service');
+  const { StatelessAiService } = await import('../src/services/ai.service');
+  const pendingWorkflowJobs: any[] = [];
+  const workflowEnv = { ...aiEnv, AI: { run: async () => ({ data: [Array(1024).fill(0.1)] }) },
+    VECTORIZE_WORKFLOW: { create: async ({params}: any) => { pendingWorkflowJobs.push(params); return {id:'synthetic-continuation'}; } } };
+  const workflowDeps = createTenantRequestDeps(scopeA, workflowEnv as any);
+  const sourceService = new TenantKnowledgeService(workflowDeps, new StatelessAiService(workflowEnv.AI as any));
+  await sourceService.updateArticle('workflow-shared','A workflow','A scoped content');
+  const sourceVersion = await sourceService.pendingPreparationVersion('workflow-shared');
+  assert.ok(sourceVersion, 'Source publication must retain durable pending preparation');
+  workflow.env = workflowEnv;
+  pendingWorkflowJobs.push({tenantId:'tenant-A',action:'prepare',documentId:'workflow-shared',version:sourceVersion});
+  let completedJobs = 0;
+  while (pendingWorkflowJobs.length) {
+    assert.ok(++completedJobs <= 4, 'One source must use a finite preparation/index continuation');
+    await workflow.run({payload:pendingWorkflowJobs.shift()},step);
+  }
+  assert.strictEqual((await reposApiKeyA.knowledge.getDocument('workflow-shared'))?.status,'published', 'Actual admitted workflow must complete tenant A source');
   assert.strictEqual((await reposApiKeyB.knowledge.getDocument('workflow-shared'))?.status,'pending');
   console.log('SUCCESS: Scoped workflow rejects missing authority and preserves the other tenant document');
 
