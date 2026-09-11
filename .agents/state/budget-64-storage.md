@@ -42,3 +42,13 @@ The native regression observes the three reads, compares actual calls with the d
 ### Combined customer/dashboard storage increment — 11 September
 
 Existing PR #196 now includes customer storage commit a1e707a and coordinator tuple-framing fix ab79507, avoiding a separate overlapping storage PR. Customer authentication remains customer-specific (current session/email/tenant, no staff MFA); public attachment ownership is checked before R2. Customer identity hashes now use unambiguous JSON tuple encoding. Full native admission suite passed 95/95 before this one-line framing correction; all five storage-native tests passed afterward. The branch also incorporates #195 revision ee3194e and accepted login changes via a clean merge. Retargeting to main and exact required CI remain pending #195 acceptance. No full #64 completion is claimed.
+
+## Combined storage/recovery/history integration — 11 September 11:53 BST
+
+Local merge0f4d7e8 adds certified recovery/compaction0041 and bounded public-history0043 to existing PR196. No separate overlapping PR was created. The atomic pre-R2 correction68c0d7d passed local-beta17/17, adapter14/14, storage5/5, types/lint. A deterministic old-code regression failed with competing upload200 instead of429, then passed for staff/customer quota and stop boundaries after the fix. Marker-only attempts remain charged.
+
+Coordinator correction0f816c6 reserves2560 D1 reads and4 D1 writes per two-attempt upload. Actual cold and warm staff/customer metadata each reports one assertion plus one counter write; checked-in regression passes1/1 and asserts index inventory. Storage suite6/6 passed, and final four-write zero-capacity staff/customer denial proof passed1/1 with no R2 reads/writes. Types and scoped lint passed. Final combined native runtime passed110/110 in95.8seconds on0f4d7e8; log `/private/tmp/tocyn-196-storage-recovery-history-integrated.log`. No exact-head GitHub CI success is claimed yet.
+
+History projection worker passed5 history/9 audit/100 native tests before integration, including3000 hidden events, cursor and current-visibility/deletion isolation. Root review preserves current public semantics rather than accepting a fixed scan cap that rejects valid pages. Full64 remains open. No remote resource or Copilot action.
+
+Coordination correction: a worker's scoped regression commit finalized root's concurrently pending clean merge. Root verified both parents and all14 intended files, preserved the clean tree, and corrected only the unpublished merge title to0f4d7e8. Future handoffs must wait for worker mutation completion before root starts repository merge operations.
