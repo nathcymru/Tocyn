@@ -1,4 +1,4 @@
-Latest coordinating checkpoint: [11 September 11:46 BST](beta2-checkpoint-2026-09-11-1146.md). Full beta.2 acceptance remains open.
+Latest coordinating state: [11 September active budget integration and next paths](budget-64-next-paths.md). Full beta.2 acceptance remains open.
 
 Historical checkpoints: [08:55 BST](beta2-checkpoint-2026-09-11-0855.md), [08:25 BST](beta2-checkpoint-2026-09-11-0825.md).
 

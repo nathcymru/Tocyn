@@ -1,6 +1,6 @@
 # #64 next-path allocation — 11 September 2026, 11:58 BST
 
-Root remains sole integration/acceptance owner. Accepted main3dd9554; PR189 candidate9db9f5d and PR196 candidate87ac639 are under exact-head required CI. Full64 and140 remain open. No owner permission pending.
+Root remains sole integration/acceptance owner. Accepted main6497b55 (PR189). PR196 integrated application99165b4 is refreshed onto that main; final required CI is pending. Full64 and140 remain open. No owner permission pending.
 
 | Task | Actual dedicated Codex agent | Model/effort | Ownership and deliverable |
 | --- | --- | --- | --- |
@@ -30,3 +30,5 @@ PR189 accepted11September11:00:55UTC as6497b55c88948233d76b5cd15165fbbbb0bc15d5.
 Initial local integration typecheck discovered an ignored dependency-link error: the shared node_modules symlink resolved sibling-checkout shared types. Root replaced only its own symlink with lightweight package links and local@luminatick aliases; no install or shared dependency mutation. Current integrated native validation uses current sources.
 
 Combined collaboration/budget validation passed: servertypes; nativebudget110/110, staff28/28, collision1/1; fullserver676/676. Logs `/private/tmp/tocyn-196-collaboration-integrated-native.log` and `/private/tmp/tocyn-196-collaboration-server-tests.log`. Preserved0041/42/43 and allruntime scripts/counters; no guard, index, or recipient ceiling relaxed.
+
+Root refreshed onto accepted main6497b55 as99165b4 after proving acceptedmain tree equals integrated189head tree and that the merge index exactly equals prior tested9a30cc2. No test replay is needed solely for this identical-content ancestry refresh; required remote CI remains mandatory.
