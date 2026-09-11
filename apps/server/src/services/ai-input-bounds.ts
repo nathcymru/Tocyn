@@ -24,6 +24,21 @@ export function truncateUtf8(value: string, maxBytes: number): string {
   return result;
 }
 
+/** Preserve the tail so a bounded chronological history retains its newest message. */
+export function truncateUtf8Tail(value: string, maxBytes: number): string {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new Error('Invalid AI input byte bound');
+  let bytes = 0;
+  const characters: string[] = [];
+  const encoder = new TextEncoder();
+  for (const character of Array.from(value).reverse()) {
+    const size = encoder.encode(character).byteLength;
+    if (bytes + size > maxBytes) break;
+    bytes += size;
+    characters.push(character);
+  }
+  return characters.reverse().join('');
+}
+
 /** Match the provider adapter's delimiter escaping before byte accounting. */
 export function boundUntrustedAiText(value: string, maxBytes: number): string {
   return truncateUtf8(value.replace(/</g, '&lt;').replace(/>/g, '&gt;'), maxBytes);

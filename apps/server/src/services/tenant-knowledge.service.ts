@@ -1,12 +1,10 @@
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
+import { AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_R2_KEY_BYTES } from '../repositories/interfaces';
 import { StatelessAiService } from './ai.service';
 import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { KnowledgeDoc, KnowledgeCategory } from '../repositories/knowledge.repository';
 import crypto from 'node:crypto';
-import { MAX_BGE_REQUEST_BYTES, MAX_STAFF_CONTEXT_BYTES, MAX_STAFF_HISTORY_BYTES, boundUntrustedAiText, truncateUtf8 } from './ai-input-bounds';
-
-const MAX_AI_SUGGESTION_MESSAGES = 5;
-const MAX_AI_SUGGESTION_BODY_BYTES = 8_192;
+import { MAX_BGE_REQUEST_BYTES, MAX_STAFF_CONTEXT_BYTES, MAX_STAFF_HISTORY_BYTES, boundUntrustedAiText, truncateUtf8, truncateUtf8Tail } from './ai-input-bounds';
 
 export function stripTags(str: string): string {
   if (!str) return '';
@@ -216,12 +214,14 @@ export class TenantKnowledgeService {
 
     // The composite tenant/ticket/created-at index backs this fixed newest-five
     // read. It replaces the unbounded conversation read followed by slice().
-    const articles = await this.deps.repositories.articles.listRecentByTicket(ticketId, MAX_AI_SUGGESTION_MESSAGES);
+    const articles = await this.deps.repositories.articles.listRecentAiSuggestionMessages(ticketId);
     if (!articles || articles.length === 0) return 'No context found.';
 
     const hydratedMessages = await Promise.all(
       articles.map(async (m: any) => {
-        const bodyText = await this.hydrator.hydrate(m.body, m.body_r2_key, MAX_AI_SUGGESTION_BODY_BYTES, MAX_AI_SUGGESTION_BODY_BYTES);
+        const bodyText = m.body_r2_key_bytes > AI_SUGGESTION_MAX_R2_KEY_BYTES
+          ? '' // Explicitly reject an unbounded object key before it can reach R2.
+          : await this.hydrator.hydrate(m.body, m.body_r2_key, AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_INLINE_BODY_BYTES);
         return {
           body: bodyText,
           sender_type: m.sender_type
@@ -244,7 +244,7 @@ export class TenantKnowledgeService {
 
     const lastValidMessage = truncateUtf8(stripTags(validMessages[validMessages.length - 1].body.substring(0, 8000)).trim(), MAX_BGE_REQUEST_BYTES);
 
-    const chatHistory = truncateUtf8(orderedMessages.map((m: any) => {
+    const chatHistory = truncateUtf8Tail(orderedMessages.map((m: any) => {
       const cleanBody = stripTags(m.body).trim();
       return `${m.sender_type === 'customer' ? 'User' : 'Agent'}: ${cleanBody}`;
     }).join('\n'), MAX_STAFF_HISTORY_BYTES);
