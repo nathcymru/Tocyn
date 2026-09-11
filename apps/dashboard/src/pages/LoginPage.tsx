@@ -1,3 +1,5 @@
+import { ProductLogo } from '@luminatick/ui/brand';
+import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -44,9 +46,9 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-slate-200 p-8">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-brand-500 rounded-xl flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4">L</div>
+          <ProductLogo className="block w-56 max-w-full mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
-          <p className="text-slate-500 mt-1">Sign in to your Luminatick account</p>
+          <p className="text-slate-500 mt-1">Sign in to your {PRODUCT_BRAND.name} account</p>
         </div>
 
         {error && (

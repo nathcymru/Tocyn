@@ -1,3 +1,4 @@
+import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import React from 'react';
 import { useStats } from '../hooks/useStats';
 import { 
@@ -57,7 +58,7 @@ export const DashboardPage: React.FC = () => {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 text-sm">Welcome back to Luminatick. Here's what's happening today.</p>
+        <p className="text-slate-500 text-sm">Welcome back to {PRODUCT_BRAND.name}. Here's what's happening today.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

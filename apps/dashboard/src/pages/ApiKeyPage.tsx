@@ -1,3 +1,4 @@
+import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React, { useEffect, useState } from 'react';
@@ -109,7 +110,7 @@ export function ApiKeyPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">API Keys</h1>
-          <p className="text-slate-500 text-sm">Manage external access to the Luminatick API.</p>
+          <p className="text-slate-500 text-sm">Manage external access to the {PRODUCT_BRAND.name} API.</p>
         </div>
         <TocynButton
           ref={createOpener} onClick={() => {
