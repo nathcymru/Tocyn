@@ -99,12 +99,19 @@ export class KnowledgeIndexRepository {
       ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence,retentionClaimed) : []),
       ...sourceStatements,
       this.db.prepare(`INSERT INTO knowledge_index_versions
-        (tenant_id,document_id,version,file_path,tier,category_id,source_kind,state,chunk_count,source_bytes) VALUES (?,?,?,?,?,?,?,'source_pending',0,?)`)
-        .bind(this.scope.tenantId, documentId, version, versionFilePath, tier, categoryId, sourceKind, sourceBytes),
+        (tenant_id,document_id,version,file_path,tier,category_id,source_kind,state,chunk_count,source_bytes)
+        SELECT ?,?,?,?,?,?,?,'source_pending',0,? WHERE ?!='document' OR
+          (NOT EXISTS (SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id=? AND document_id=? AND source_kind='document')
+           AND NOT EXISTS (SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id=? AND document_id=? AND source_kind='document'))`)
+        .bind(this.scope.tenantId, documentId, version, versionFilePath, tier, categoryId, sourceKind, sourceBytes, sourceKind,
+          this.scope.tenantId,documentId,this.scope.tenantId,documentId),
+      this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
+        ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId),
       // A QA attempt already owns a durable ticket write claim. Other source
       // attempts persist their recovery job before the R2 operation starts.
-      ...(!retentionClaimed ? [this.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,state)
-        VALUES (?,?,?,'source_pending')`).bind(this.scope.tenantId, documentId, version)] : []),
+      ...(!retentionClaimed ? [this.db.prepare(`INSERT INTO knowledge_index_jobs
+        (tenant_id,document_id,version,state,provider_lease_expires_at)
+        VALUES (?,?,?,'source_pending',datetime('now','+5 minutes'))`).bind(this.scope.tenantId, documentId, version)] : []),
     ]);
     return { version, filePath: versionFilePath };
   }
@@ -117,12 +124,15 @@ export class KnowledgeIndexRepository {
     const result = await this.db.batch([
       ...prefix,
       this.db.prepare(`UPDATE knowledge_index_versions SET state='preparing'
-        WHERE tenant_id=? AND document_id=? AND version=? AND state='source_pending'`).bind(this.scope.tenantId, documentId, version),
+        WHERE tenant_id=? AND document_id=? AND version=? AND state='source_pending'
+          AND (source_kind!='document' OR (NOT EXISTS (SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id=? AND document_id=? AND source_kind='document')
+            AND NOT EXISTS (SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id=? AND document_id=? AND source_kind='document')))`)
+        .bind(this.scope.tenantId, documentId, version,this.scope.tenantId,documentId,this.scope.tenantId,documentId),
       this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
         ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId),
       this.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,state)
         VALUES (?,?,?,'preparing')
-        ON CONFLICT(tenant_id,document_id,version) DO UPDATE SET state='preparing',dispatch_attempts=0
+        ON CONFLICT(tenant_id,document_id,version) DO UPDATE SET state='preparing',dispatch_attempts=0,provider_lease_expires_at=NULL
           WHERE knowledge_index_jobs.state='source_pending'`).bind(this.scope.tenantId, documentId, version),
       this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
         ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId),
@@ -131,19 +141,37 @@ export class KnowledgeIndexRepository {
     return result[prefix.length].meta.changes === 1 && result[prefix.length + 2].meta.changes === 1;
   }
 
+  /** A live provider lease plus the deletion generation is the final ownership
+   * check before an immutable document source can be written to R2. */
+  async authorizeSourceEffect(documentId:string,version:number):Promise<boolean>{
+    return !!await this.db.prepare(`SELECT 1 FROM knowledge_index_versions v LEFT JOIN knowledge_index_jobs j
+      ON j.tenant_id=v.tenant_id AND j.document_id=v.document_id AND j.version=v.version
+      WHERE v.tenant_id=? AND v.document_id=? AND v.version=? AND v.state='source_pending'
+        AND (v.source_kind!='document' OR (j.state='source_pending' AND j.provider_lease_expires_at>CURRENT_TIMESTAMP))
+        AND (v.source_kind!='document' OR
+          (NOT EXISTS (SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id=v.tenant_id AND document_id=v.document_id AND source_kind='document')
+           AND NOT EXISTS (SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id=v.tenant_id AND document_id=v.document_id AND source_kind='document'))) LIMIT 1`)
+      .bind(this.scope.tenantId,documentId,version).first();
+  }
+
   async preparation(documentId: string, version: number): Promise<KnowledgeManifestPreparation | null> {
     return this.db.prepare(`SELECT v.version,v.file_path AS filePath,v.tier,v.category_id AS categoryId,v.source_kind AS sourceKind,
         v.source_bytes AS sourceBytes,j.next_source_offset AS sourceOffset,j.next_chunk_index AS chunkIndex
       FROM knowledge_index_versions v JOIN knowledge_index_jobs j
         ON j.tenant_id=v.tenant_id AND j.document_id=v.document_id AND j.version=v.version
-      WHERE v.tenant_id=? AND v.document_id=? AND v.version=? AND v.state='preparing' AND j.state='preparing' LIMIT 1`)
+      WHERE v.tenant_id=? AND v.document_id=? AND v.version=? AND v.state='preparing' AND j.state='preparing'
+        AND (v.source_kind!='document' OR (NOT EXISTS (SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id=v.tenant_id AND document_id=v.document_id AND source_kind='document')
+          AND NOT EXISTS (SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id=v.tenant_id AND document_id=v.document_id AND source_kind='document'))) LIMIT 1`)
       .bind(this.scope.tenantId, documentId, version).first<KnowledgeManifestPreparation>();
   }
 
   async latestPreparation(documentId: string): Promise<number | null> {
     const row = await this.db.prepare(`SELECT version FROM knowledge_index_versions
-      WHERE tenant_id=? AND document_id=? AND state='preparing' ORDER BY version DESC LIMIT 1`)
-      .bind(this.scope.tenantId, documentId).first<{ version: number }>();
+      WHERE tenant_id=? AND document_id=? AND state='preparing'
+        AND (source_kind!='document' OR (NOT EXISTS (SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id=? AND document_id=? AND source_kind='document')
+          AND NOT EXISTS (SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id=? AND document_id=? AND source_kind='document')))
+        ORDER BY version DESC LIMIT 1`)
+      .bind(this.scope.tenantId, documentId,this.scope.tenantId,documentId,this.scope.tenantId,documentId).first<{ version: number }>();
     return row?.version ?? null;
   }
 
@@ -166,8 +194,11 @@ export class KnowledgeIndexRepository {
       .bind(this.scope.tenantId, documentId, preparation.version, preparation.chunkIndex + offset, text,
         `${prefix}_${documentId}_v${preparation.version}_${preparation.chunkIndex + offset}`));
     statements.push(this.db.prepare(`UPDATE knowledge_index_jobs SET next_source_offset=?,next_chunk_index=?,state=?,dispatch_attempts=0
-      WHERE tenant_id=? AND document_id=? AND version=? AND state='preparing' AND next_source_offset=? AND next_chunk_index=?`)
-      .bind(nextOffset, ready ? 0 : nextIndex, ready ? 'pending' : 'preparing', this.scope.tenantId, documentId, preparation.version, preparation.sourceOffset, preparation.chunkIndex));
+      WHERE tenant_id=? AND document_id=? AND version=? AND state='preparing' AND next_source_offset=? AND next_chunk_index=?
+        AND (?!='document' OR (NOT EXISTS (SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id=? AND document_id=? AND source_kind='document')
+          AND NOT EXISTS (SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id=? AND document_id=? AND source_kind='document')))`)
+      .bind(nextOffset, ready ? 0 : nextIndex, ready ? 'pending' : 'preparing', this.scope.tenantId, documentId, preparation.version,
+        preparation.sourceOffset, preparation.chunkIndex,preparation.sourceKind,this.scope.tenantId,documentId,this.scope.tenantId,documentId));
     // A stale/superseded cursor must fail this transaction so the preceding
     // chunk inserts cannot survive without their cursor advancement.
     statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
@@ -188,11 +219,19 @@ export class KnowledgeIndexRepository {
     await this.db.batch([
       ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence,true) : []),
       this.db.prepare(`UPDATE knowledge_index_versions SET state='failed'
-        WHERE tenant_id=? AND document_id=? AND version=? AND state IN ('source_pending','preparing')`).bind(this.scope.tenantId, documentId, version),
+        WHERE tenant_id=? AND document_id=? AND version=? AND (state IN ('source_pending','preparing') OR
+          (state='withdrawn' AND source_kind='document' AND EXISTS (SELECT 1 FROM knowledge_delete_jobs
+            WHERE tenant_id=? AND document_id=? AND source_kind='document')))`)
+        .bind(this.scope.tenantId, documentId, version,this.scope.tenantId,documentId),
       this.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,state)
         SELECT ?,?,?,'failed_cleanup' WHERE changes()=1
-        ON CONFLICT(tenant_id,document_id,version) DO UPDATE SET state='failed_cleanup',dispatch_attempts=0
+        ON CONFLICT(tenant_id,document_id,version) DO UPDATE SET state='failed_cleanup',dispatch_attempts=0,provider_lease_expires_at=NULL
           WHERE knowledge_index_jobs.state IN ('source_pending','preparing')`).bind(this.scope.tenantId, documentId, version),
+      this.db.prepare(`UPDATE knowledge_delete_jobs SET state='active',updated_at=CURRENT_TIMESTAMP
+        WHERE tenant_id=? AND document_id=? AND source_kind='document' AND state='producer_unresolved'
+          AND EXISTS (SELECT 1 FROM knowledge_index_versions WHERE tenant_id=? AND document_id=? AND version=?
+            AND source_kind='document' AND state='failed')`)
+        .bind(this.scope.tenantId,documentId,this.scope.tenantId,documentId,version),
     ]);
   }
 
@@ -244,8 +283,11 @@ export class KnowledgeIndexRepository {
 
   async reserveDispatch(documentId: string, version: number): Promise<boolean> {
     const result = await this.db.prepare(`UPDATE knowledge_index_jobs SET dispatch_attempts=dispatch_attempts+1
-      WHERE tenant_id=? AND document_id=? AND version=? AND state IN ('preparing','pending','failed_cleanup') AND dispatch_attempts<2`)
-      .bind(this.scope.tenantId, documentId, version).run();
+      WHERE tenant_id=? AND document_id=? AND version=? AND state IN ('preparing','pending','failed_cleanup') AND dispatch_attempts<2
+        AND NOT EXISTS (SELECT 1 FROM knowledge_index_versions v JOIN knowledge_delete_jobs d
+          ON d.tenant_id=v.tenant_id AND d.document_id=v.document_id AND d.source_kind='document'
+          WHERE v.tenant_id=? AND v.document_id=? AND v.version=? AND v.source_kind='document')`)
+      .bind(this.scope.tenantId, documentId, version,this.scope.tenantId,documentId,version).run();
     return result.meta.changes === 1;
   }
 
@@ -257,9 +299,13 @@ export class KnowledgeIndexRepository {
   }
 
   async claim(documentId: string, version: number, chunkIndex: number): Promise<KnowledgeIndexChunk | null> {
-    const claimed = await this.db.prepare(`UPDATE knowledge_index_chunks SET state='claimed',attempts=attempts+1
-      WHERE tenant_id=? AND document_id=? AND version=? AND chunk_index=? AND state='pending' AND attempts < 2`)
-      .bind(this.scope.tenantId, documentId, version, chunkIndex).run();
+    const claimed = await this.db.prepare(`UPDATE knowledge_index_chunks SET state='claimed',attempts=attempts+1,
+      provider_lease_expires_at=datetime('now','+5 minutes')
+      WHERE tenant_id=? AND document_id=? AND version=? AND chunk_index=? AND state='pending' AND attempts < 2
+        AND NOT EXISTS (SELECT 1 FROM knowledge_index_versions v JOIN knowledge_delete_jobs d
+          ON d.tenant_id=v.tenant_id AND d.document_id=v.document_id AND d.source_kind='document'
+          WHERE v.tenant_id=? AND v.document_id=? AND v.version=? AND v.source_kind='document')`)
+      .bind(this.scope.tenantId, documentId, version, chunkIndex,this.scope.tenantId,documentId,version).run();
     if (claimed.meta.changes !== 1) return null;
     await this.db.prepare(`UPDATE knowledge_index_jobs SET dispatch_attempts=0
       WHERE tenant_id=? AND document_id=? AND version=? AND state='pending' AND next_chunk_index=?`)
@@ -270,13 +316,30 @@ export class KnowledgeIndexRepository {
     return row ? { index: row.chunkIndex, text: row.text, vectorId: row.vectorId } : null;
   }
 
-  async indexed(documentId: string, version: number, chunkIndex: number): Promise<void> {
-    await this.db.batch([
-      this.db.prepare(`UPDATE knowledge_index_chunks SET state='indexed' WHERE tenant_id=? AND document_id=? AND version=? AND chunk_index=? AND state='claimed'`)
-        .bind(this.scope.tenantId, documentId, version, chunkIndex),
+  async authorizeIndexEffect(documentId:string,version:number,chunkIndex:number):Promise<boolean>{
+    return !!await this.db.prepare(`SELECT 1 FROM knowledge_index_chunks c JOIN knowledge_index_versions v
+      ON v.tenant_id=c.tenant_id AND v.document_id=c.document_id AND v.version=c.version
+      WHERE c.tenant_id=? AND c.document_id=? AND c.version=? AND c.chunk_index=? AND c.state='claimed'
+        AND c.provider_lease_expires_at>CURRENT_TIMESTAMP AND (v.source_kind!='document' OR
+          (NOT EXISTS (SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id=c.tenant_id AND document_id=c.document_id AND source_kind='document')
+           AND NOT EXISTS (SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id=c.tenant_id AND document_id=c.document_id AND source_kind='document'))) LIMIT 1`)
+      .bind(this.scope.tenantId,documentId,version,chunkIndex).first();
+  }
+
+  async indexed(documentId: string, version: number, chunkIndex: number): Promise<boolean> {
+    const result=await this.db.batch([
+      this.db.prepare(`UPDATE knowledge_index_chunks SET state='indexed',provider_lease_expires_at=NULL
+        WHERE tenant_id=? AND document_id=? AND version=? AND chunk_index=? AND state='claimed'
+          AND NOT EXISTS (SELECT 1 FROM knowledge_index_versions v JOIN knowledge_delete_jobs d
+            ON d.tenant_id=v.tenant_id AND d.document_id=v.document_id AND d.source_kind='document'
+            WHERE v.tenant_id=? AND v.document_id=? AND v.version=? AND v.source_kind='document')`)
+        .bind(this.scope.tenantId, documentId, version, chunkIndex,this.scope.tenantId,documentId,version),
       this.db.prepare(`UPDATE knowledge_index_jobs SET next_chunk_index=next_chunk_index+1,state='pending'
-        WHERE tenant_id=? AND document_id=? AND version=? AND next_chunk_index=?`).bind(this.scope.tenantId, documentId, version, chunkIndex),
+        WHERE tenant_id=? AND document_id=? AND version=? AND next_chunk_index=?
+          AND EXISTS (SELECT 1 FROM knowledge_index_chunks WHERE tenant_id=? AND document_id=? AND version=? AND chunk_index=? AND state='indexed')`)
+        .bind(this.scope.tenantId, documentId, version, chunkIndex,this.scope.tenantId,documentId,version,chunkIndex),
     ]);
+    return result[0].meta.changes===1;
   }
 
   async completeIfFinished(documentId: string, version: number): Promise<boolean> {
@@ -299,12 +362,16 @@ export class KnowledgeIndexRepository {
 
   async uncertain(documentId: string, version: number, chunkIndex: number): Promise<void> {
     await this.db.batch([
-      this.db.prepare(`UPDATE knowledge_index_chunks SET state='uncertain' WHERE tenant_id=? AND document_id=? AND version=? AND chunk_index=? AND state='claimed'`)
+      this.db.prepare(`UPDATE knowledge_index_chunks SET state='uncertain',provider_lease_expires_at=NULL WHERE tenant_id=? AND document_id=? AND version=? AND chunk_index=? AND state='claimed'`)
         .bind(this.scope.tenantId, documentId, version, chunkIndex),
       this.db.prepare(`UPDATE knowledge_index_jobs SET state='uncertain' WHERE tenant_id=? AND document_id=? AND version=?`)
         .bind(this.scope.tenantId, documentId, version),
       this.db.prepare(`UPDATE knowledge_index_versions SET state='failed' WHERE tenant_id=? AND document_id=? AND version=?`)
         .bind(this.scope.tenantId, documentId, version),
+      this.db.prepare(`UPDATE knowledge_delete_jobs SET state='active',updated_at=CURRENT_TIMESTAMP
+        WHERE tenant_id=? AND document_id=? AND source_kind='document' AND state='producer_unresolved'
+          AND EXISTS (SELECT 1 FROM knowledge_index_versions WHERE tenant_id=? AND document_id=? AND version=? AND source_kind='document')`)
+        .bind(this.scope.tenantId,documentId,this.scope.tenantId,documentId,version),
     ]);
   }
 
@@ -330,8 +397,12 @@ export class KnowledgeIndexRepository {
     const rows = await this.db.prepare(`SELECT c.version,c.chunk_index AS chunkIndex,c.vector_id AS vectorId
       FROM knowledge_index_chunks c JOIN knowledge_index_cleanup_jobs j
         ON j.tenant_id=c.tenant_id AND j.document_id=c.document_id
+      JOIN knowledge_index_versions v ON v.tenant_id=c.tenant_id AND v.document_id=c.document_id AND v.version=c.version
       WHERE c.tenant_id=? AND c.document_id=? AND j.source_kind=? AND c.version<=j.target_version
-        AND c.state='indexed' ORDER BY c.version,c.chunk_index LIMIT ?`)
+        AND v.source_kind=j.source_kind AND c.state='indexed'
+        AND (j.source_kind!='document' OR NOT EXISTS (SELECT 1 FROM knowledge_delete_jobs d
+          WHERE d.tenant_id=c.tenant_id AND d.document_id=c.document_id AND d.source_kind='document'))
+        ORDER BY c.version,c.chunk_index LIMIT ?`)
       .bind(this.scope.tenantId, documentId, sourceKind, limit).all<{ version: number; chunkIndex: number; vectorId: string }>();
     const selected = rows.results;
     if (!selected.length) return [];
@@ -367,8 +438,9 @@ export class KnowledgeIndexRepository {
   private async hasPendingCleanup(documentId: string, sourceKind: 'document'|'article'): Promise<boolean> {
     return !!await this.db.prepare(`SELECT 1 FROM knowledge_index_chunks c JOIN knowledge_index_cleanup_jobs j
       ON j.tenant_id=c.tenant_id AND j.document_id=c.document_id
+      JOIN knowledge_index_versions v ON v.tenant_id=c.tenant_id AND v.document_id=c.document_id AND v.version=c.version
       WHERE c.tenant_id=? AND c.document_id=? AND j.source_kind=? AND c.version<=j.target_version
-        AND c.state IN ('indexed','cleanup_claimed') LIMIT 1`).bind(this.scope.tenantId, documentId, sourceKind).first();
+        AND v.source_kind=j.source_kind AND c.state IN ('indexed','cleanup_claimed') LIMIT 1`).bind(this.scope.tenantId, documentId, sourceKind).first();
   }
   async hasPendingArticleCleanup(documentId: string) { return this.hasPendingCleanup(documentId, 'article'); }
   async hasPendingDocumentCleanup(documentId: string) { return this.hasPendingCleanup(documentId, 'document'); }

@@ -16,6 +16,7 @@ import { StaffTicketMutationRepository } from '../repositories/staff-ticket-muta
 import type { OperatorActivityService } from './operator-activity.service';
 import { TicketMutationError, canonicalMutationJson } from './ticket-mutation-replay.service';
 import { canonicalBroadcastGrantAfterCommit, type CanonicalBroadcastGrant } from '../budgets/realtime-admission.service';
+import { canonicalTicketEmailGrantAfterCommit, type TicketEmailCanonicalGrant } from './email/ticket-email-admission.service';
 
 const unavailable = () => new TicketMutationError(503,'staff_mutation_unavailable','Ticket mutation unavailable; retry with the same key');
 const denied = () => new TicketMutationError(403,'staff_mutation_denied','Ticket mutation is not authorized');
@@ -36,7 +37,7 @@ function owned<T>(value: T): T {
 }
 type Attempt = { input: StaffMutationInput; namespace?: StaffMutationNamespace; requirements: SessionBudgetRequirements;
   intent: CanonicalBudgetIntent; authority?: BudgetCommitAuthority; commitStarted: boolean; keyed: boolean;
-  broadcastGrant?: CanonicalBroadcastGrant };
+  broadcastGrant?: CanonicalBroadcastGrant; ticketEmailGrant?: TicketEmailCanonicalGrant; committedOutcome?: StaffMutationOutcome };
 
 /** Staff canonical mutations and receipts used by the configured dashboard admission path. */
 export class StaffTicketMutationService {
@@ -190,9 +191,18 @@ export class StaffTicketMutationService {
     const attempt = this.attempts.get(prepared);
     return attempt && !outcome.replayed ? attempt.broadcastGrant ?? null : null;
   }
+  /** One exact public-email capability from this in-memory canonical winner. */
+  ticketEmailGrant(prepared: PreparedStaffMutation, outcome: StaffMutationOutcome): TicketEmailCanonicalGrant | null {
+    const attempt = this.attempts.get(prepared);
+    return attempt?.committedOutcome === outcome && !outcome.replayed ? attempt.ticketEmailGrant ?? null : null;
+  }
   private committed(prepared: PreparedStaffMutation, outcome: StaffMutationOutcome): StaffMutationOutcome {
     const attempt = this.attempts.get(prepared);
-    if (attempt && !outcome.replayed) attempt.broadcastGrant = canonicalBroadcastGrantAfterCommit(attempt.authority, this.scope.tenantId, this.now()) ?? undefined;
+    if (attempt && !outcome.replayed) {
+      attempt.committedOutcome = outcome;
+      attempt.broadcastGrant = canonicalBroadcastGrantAfterCommit(attempt.authority, this.scope.tenantId, this.now()) ?? undefined;
+      attempt.ticketEmailGrant = canonicalTicketEmailGrantAfterCommit(attempt.authority,this.credential,attempt.input.operation,outcome) ?? undefined;
+    }
     return outcome;
   }
   async commit(prepared: PreparedStaffMutation, verified: VerifiedMutationAttachment[] = []): Promise<StaffMutationOutcome> {
