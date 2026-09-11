@@ -351,7 +351,7 @@ describe("Customer Handler Integration Tests", () => {
           body: JSON.stringify({ subject: "Help", message: "I need help", turnstileToken: "valid-token" }),
           headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": "127.0.0.1" },
         },
-        { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any }
+        { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any, BUDGET_ADMISSION_POLICY: 'off' }
       );
 
       expect(res.status).toBe(201);
@@ -387,7 +387,7 @@ describe("Customer Handler Integration Tests", () => {
           body: JSON.stringify({ subject: "Help", message: "I need help", turnstileToken: "invalid-token" }),
           headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
-        { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any }
+        { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any, BUDGET_ADMISSION_POLICY: 'off' }
       );
 
       expect(res.status).toBe(400);
@@ -417,7 +417,7 @@ describe("Customer Handler Integration Tests", () => {
           body: JSON.stringify({ subject: "Help", message: "I need help" }), // NO turnstileToken
           headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
-        { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any }
+        { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any, BUDGET_ADMISSION_POLICY: 'off' }
       );
 
       expect(res.status).toBe(400);
@@ -448,7 +448,7 @@ describe("Customer Handler Integration Tests", () => {
           body: JSON.stringify({ subject: "Help", message: "I need help" }), // NO turnstileToken needed
           headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
-        { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any }
+        { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY: masterKey, NOTIFICATION_DO: mockDO as any, BUDGET_ADMISSION_POLICY: 'off' }
       );
 
       expect(res.status).toBe(201);
@@ -469,7 +469,7 @@ describe("Customer Handler Integration Tests", () => {
           body: JSON.stringify({ subject: "Help", message: "I need help" }),
           headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
-        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any }
+        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any, BUDGET_ADMISSION_POLICY: 'off' }
       );
 
       expect(res.status).toBe(201);
@@ -538,7 +538,7 @@ describe("Customer Handler Integration Tests", () => {
           }),
           headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
-        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any }
+        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any, BUDGET_ADMISSION_POLICY: 'off' }
       );
 
       expect(res.status).toBe(201);
@@ -567,7 +567,7 @@ describe("Customer Handler Integration Tests", () => {
           body: JSON.stringify({ message: "Hello" }),
           headers: { "Content-Type": "application/json", "X-Widget-Key": "test-key", "Authorization": `Bearer ${token}`, "CF-Connecting-IP": `127.0.0.${Math.floor(Math.random() * 255)}` },
         },
-        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any }
+        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any, BUDGET_ADMISSION_POLICY: 'off' }
       );
 
       expect(res.status).toBe(404);
