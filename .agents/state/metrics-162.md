@@ -1,0 +1,9 @@
+# #162 operational metric foundation
+
+Branch: `codex/162-operational-metrics` from `0206645`.
+
+The implementation adds a read-only, tenant-derived current-work projection. It uses current ticket state for `open` and `pending` work and uses canonical conversation events only as a reconciled event denominator. One D1 statement rechecks the live staff role/session and group membership while reading both aggregates, so it cannot combine separate snapshots or retain a revoked staff scope. It caps visible tickets/events and returns explicit truncated receipts with null totals instead of partial tenant totals. `asOf`/`freshThrough` use a repository-owned clock. It deliberately returns unavailable SLA/routing values until their owning issues supply authoritative inputs, while publishing their versioned numerator, denominator, and time-basis contracts.
+
+Local synthetic D1 evidence is in `apps/server/scripts/operational-metrics.test.ts`: A/B tenant isolation, canonical intake totals, a replay that adds no event, a deliberately late persisted event included on rebuild, customer-scope denial, stale-role/session denial, and bounded null-total receipts.
+
+Validation on 11 September 2026: `npm run test:operational-metrics --workspace=apps/server` passed 5 real Miniflare/D1 checks; `npm run typecheck --workspace=apps/server` and `vitest run src/middleware/__tests__/auth.middleware.test.ts` passed. The worktree-local `better-sqlite3` package was rebuilt from its included source with npm's bundled node-gyp after confirming it was not shared with another worktree. The full server suite then passed: 58 files, 515 tests. Both npm audit variants reported zero current advisories.

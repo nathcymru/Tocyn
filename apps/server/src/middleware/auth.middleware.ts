@@ -101,7 +101,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
     activeRole = userRes.role;
 
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
-    const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
+    const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], userRes.sessionVersion);
     // Live identity, role, session, and tenant scope are authoritative here.
     // Admission and MFA remain separate gates; HTTP status is not consulted.
     record(payload.mfa_verified === true ? 'accepted' : 'challenge');
@@ -178,7 +178,7 @@ export const mfaChallengeMiddleware = async (
     activeRole = userRes.role;
 
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
-    const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], 1);
+    const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], userRes.sessionVersion);
     challengeVerified = true;
     await authorizeLocalBeta(c.env, scope);
     c.set("tenantScope", scope as any);
@@ -274,7 +274,7 @@ export async function authenticateRealtimeToken(env: Env, token: string, record?
     return null;
   }
   try { record?.('accepted'); } catch { /* Evidence cannot affect authentication. */ }
-  const scope = createVerifiedTenantScope(user.tenant_id!, user.id, [user.role], 1);
+  const scope = createVerifiedTenantScope(user.tenant_id!, user.id, [user.role], user.session_version ?? 0);
   await authorizeLocalBeta(env, scope);
   return user;
 }

@@ -38,6 +38,7 @@
     "test:operator-workflow": "tsx --test scripts/operator-workflow.test.ts",
     "typecheck:operator-workflow": "tsc -p scripts/tsconfig.operator-workflow.json",
     "test:operational-performance": "tsx --test scripts/operational-performance.test.ts",
+    "test:operational-metrics": "tsx --test scripts/operational-metrics.test.ts",
     "test:observability-config": "node --test scripts/observability-config.test.mjs",
     "test:local-observability-collector": "tsx --test scripts/local-observability-collector.test.ts",
     "typecheck:local-observability-collector": "tsc -p scripts/tsconfig.local-observability-collector.json",
