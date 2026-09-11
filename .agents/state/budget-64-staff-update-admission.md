@@ -1,0 +1,8 @@
+# #64 dashboard ticket update admission
+
+- Branch: `codex/64-staff-update-admission`, based on `5d76d2a` (draft PR #197 base).
+- Scope delivered: dashboard `PATCH /api/tickets/:id` only. Support-state, SLA, preferences, admin, API detail, and HTTP AI routes remain outside this increment.
+- Enabled `ticket-mutations-v1` now uses a staff-current-session/MFA/tenant/group-fenced reservation before the canonical D1 update. It persists a tenant/principal/operation/key receipt atomically with audited field events, retained system notes, local-beta assertions, bounded cleanup, and the exact legacy `{ "success": true }` 200 response. Unkeyed dashboard updates receive an internal random receipt namespace but do not advertise replay; keyed retries replay only after fresh current authorization.
+- Migration `0046_staff_ticket_update_receipts.sql` preserves v1 create/reply receipts and adds the constrained v2 ticket-only dashboard-update receipt shape.
+- Native evidence: maximal 60 KiB custom fields plus 99 expired receipt cleanup observed 10 statements, 437 D1 reads, and 122 writes, inside the 2,570-read and canonical-write envelope. Tests cover same-key races, lost response recovery, conflicts, no-op, tenant/group denial, current membership revocation, legacy migration preservation, and policy-off compatibility.
+- Validation on Node 22.19.0: `npm run test:budget-admission-runtime` (118), `npm run test:staff-ticket-mutation-runtime` (32), `npm test` (69 files/676 tests), `npm run typecheck`, `npm run test:conversation-audit` (9), `npm run typecheck:conversation-audit`, `npm run test:combined-collision-runtime` (1), `npm run typecheck:combined-collision-runtime`, and scoped `npx eslint` all passed. The final staff runtime run includes the 0046 migration case.

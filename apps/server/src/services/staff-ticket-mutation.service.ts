@@ -34,7 +34,7 @@ function owned<T>(value: T): T {
   freeze(clone); return clone;
 }
 type Attempt = { input: StaffMutationInput; namespace?: StaffMutationNamespace; requirements: SessionBudgetRequirements;
-  intent: CanonicalBudgetIntent; authority?: BudgetCommitAuthority; commitStarted: boolean };
+  intent: CanonicalBudgetIntent; authority?: BudgetCommitAuthority; commitStarted: boolean; keyed: boolean };
 
 /** Staff canonical mutations and receipts used by the configured dashboard admission path. */
 export class StaffTicketMutationService {
@@ -55,6 +55,19 @@ export class StaffTicketMutationService {
     if (!await this.sessions.authorize(this.credential,requirements,this.now())) throw denied();
   }
   private normalize(input: StaffMutationInput): StaffMutationInput {
+    if (input.operation === 'dashboard.ticket.update') {
+      if (typeof input.ticketId !== 'string' || !input.ticketId || !input.data || Object.getPrototypeOf(input.data) !== Object.prototype) throw invalid();
+      const allowed = ['status','priority','assigned_to','group_id','custom_fields'];
+      const supplied = Object.keys(input.data);
+      if (!supplied.length || supplied.some(key => !allowed.includes(key))) throw invalid();
+      const data = input.data;
+      if (data.status !== undefined && !['open','pending','resolved','closed'].includes(data.status)) throw invalid();
+      if (data.priority !== undefined && !['low','normal','high','urgent'].includes(data.priority)) throw invalid();
+      if (data.assigned_to !== undefined && data.assigned_to !== null && (typeof data.assigned_to !== 'string' || !data.assigned_to)) throw invalid();
+      if (data.group_id !== undefined && data.group_id !== null && (typeof data.group_id !== 'string' || !data.group_id)) throw invalid();
+      if (data.custom_fields !== undefined && data.custom_fields !== null && Object.getPrototypeOf(data.custom_fields) !== Object.prototype) throw invalid();
+      return { operation: input.operation, ticketId: input.ticketId, data: { ...data } };
+    }
     const d = input.data;
     let bodyFormat: ArticleBodyFormat;
     try { bodyFormat = articleBodyFormat(d.bodyFormat); } catch { throw unsupportedFormat(); }
@@ -92,15 +105,21 @@ export class StaffTicketMutationService {
       }) } };
   }
   private render(raw: string, operation: StaffMutationInput['operation'], replayed: boolean, keyed: boolean): StaffMutationOutcome {
-    let snapshot: { staffVersion: number; staffBodyFormat?: unknown; ticket: Ticket; article: Article; attachments: Attachment[] };
+    let snapshot: { staffVersion: number; staffBodyFormat?: unknown; ticket: Ticket; article?: Article; attachments?: Attachment[] };
     try { snapshot = JSON.parse(raw); } catch { throw unavailable(); }
+    if (operation === 'dashboard.ticket.update') {
+      if (snapshot.staffVersion !== 2 || !snapshot.ticket?.id) throw unavailable();
+      // The update route never reads an article. Keep the established common
+      // internal outcome shape so create/reply callers stay source-compatible.
+      return { status: 200,body:{success:true},ticket:snapshot.ticket,article:null as unknown as Article,attachments:[],replayed,keyed };
+    }
     if (snapshot.staffVersion !== 1 || !snapshot.ticket?.id || !snapshot.article?.id || !Array.isArray(snapshot.attachments)) throw unavailable();
     let bodyFormat: ArticleBodyFormat;
     try { bodyFormat = articleBodyFormat(snapshot.article.body_format); } catch { throw unavailable(); }
     // Existing plain receipts remain readable. New snapshots obtain this value
     // from the just-written canonical article, and must agree with it on replay.
     if (snapshot.staffBodyFormat !== undefined && snapshot.staffBodyFormat !== bodyFormat) throw unavailable();
-    const article = { ...snapshot.article, body_format: bodyFormat, is_internal: Boolean(snapshot.article.is_internal) };
+    const article = { ...snapshot.article, body_format: bodyFormat, is_internal: Boolean(snapshot.article.is_internal) } as Article;
     const attachments = snapshot.attachments;
     const body = operation.endsWith('.create') ? { ...snapshot.ticket } : { ...article,
       attachments: attachments.map(a => ({ id: a.id, filename: a.file_name, size: a.file_size, contentType: a.content_type, storageKey: a.r2_key })) };
@@ -110,11 +129,14 @@ export class StaffTicketMutationService {
     await this.authorize({ capability: this.capability });
     if (receipt.payload_hash !== ns.payloadHash) throw new TicketMutationError(409,'idempotency_conflict','Idempotency key was already used with a different payload');
     if (receipt.lifecycle === 'gone') throw new TicketMutationError(410,'idempotency_result_gone','The original mutation result is no longer available');
-    if (receipt.fingerprint_version !== 1 || receipt.response_version !== 1 || !receipt.result_ticket_id || !receipt.result_article_id || !receipt.response_snapshot) throw unavailable();
+    const update = ns.operation === 'dashboard.ticket.update';
+    if (receipt.fingerprint_version !== 1 || !receipt.result_ticket_id || !receipt.response_snapshot
+      || (update ? receipt.response_version !== 2 || receipt.response_status !== 200 || receipt.result_article_id !== null
+        : receipt.response_version !== 1 || receipt.response_status !== 201 || !receipt.result_article_id)) throw unavailable();
     const ticket = await this.receipts.ticket(receipt.result_ticket_id);
     if (!ticket) throw denied();
     await this.authorize({ capability: this.capability,ticket:{id:ticket.id,groupId:ticket.group_id ?? null} });
-    if (!await this.receipts.articleExists(ticket.id,receipt.result_article_id)) throw denied();
+    if (!update && !await this.receipts.articleExists(ticket.id,receipt.result_article_id!)) throw denied();
     return this.render(receipt.response_snapshot,ns.operation,true,true);
   }
   async prepareStaffMutation(input: StaffMutationInput, key?: string): Promise<PreparedStaffMutation> {
@@ -131,10 +153,12 @@ export class StaffTicketMutationService {
       await this.authorize(requirements);
     }
     const payloadHash = await digest(`staff-ticket-mutation-v1\n${serialized}`);
-    const ns: StaffMutationNamespace | undefined = key === undefined ? undefined : { principalId:this.credential.actorId,operation:normalized.operation,keyHash:await digest(key),payloadHash };
+    const keyed = key !== undefined;
+    const ns: StaffMutationNamespace | undefined = key === undefined && normalized.operation !== 'dashboard.ticket.update' ? undefined
+      : { principalId:this.credential.actorId,operation:normalized.operation,keyHash:await digest(key ?? `server:${crypto.randomUUID()}`),payloadHash };
     const receipt = ns ? await this.receipts.findActive(ns) : null;
     const prepared = Object.freeze({ replay: receipt && ns ? await this.replay(receipt,ns) : null });
-    this.attempts.set(prepared,{ input:owned(normalized),namespace:ns && owned(ns),requirements:owned(requirements),commitStarted:false,
+    this.attempts.set(prepared,{ input:owned(normalized),namespace:ns && owned(ns),requirements:owned(requirements),commitStarted:false,keyed,
       intent:Object.freeze({ operationId:ns?.keyHash ?? `server:${crypto.randomUUID()}`,operationFingerprint:payloadHash,
         workScopeKey:`${normalized.operation}:${await digest('ticketId' in normalized ? normalized.ticketId : normalized.data.group_id ?? 'new')}` }) });
     return prepared;
@@ -164,6 +188,20 @@ export class StaffTicketMutationService {
     }
     if (!attempt.authority || this.now() >= attempt.authority.expiresAt || attempt.commitStarted) throw unavailable();
     const input = attempt.input, now = new Date(this.now()).toISOString();
+    if (input.operation === 'dashboard.ticket.update') {
+      if (verified.length || !attempt.namespace) throw invalid();
+      attempt.commitStarted = true;
+      try {
+        const raw = await this.canonical.commitStaffUpdate(input.ticketId,input.data,{kind:'staff',id:this.credential.actorId,source:'dashboard'},
+          { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace });
+        return this.render(raw,input.operation,false,attempt.keyed);
+      } catch (error) {
+        await this.authorize(attempt.requirements);
+        const winner = await this.receipts.findActive(attempt.namespace);
+        if (winner) return this.replay(winner,attempt.namespace);
+        throw unavailable();
+      }
+    }
     const candidate: MutationCandidate = { ticketId:'ticketId' in input ? input.ticketId : crypto.randomUUID(),articleId:crypto.randomUUID(),
       audit:{kind:'staff',id:this.credential.actorId,source:'dashboard'},attachments:[],
       ...('ticketId' in input ? { mentionedUserIds: input.data.mentionedUserIds ?? [] } : {}) };
@@ -201,7 +239,7 @@ export class StaffTicketMutationService {
     try {
       const raw = await this.canonical.commitStaff(candidate,{ credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace },
         input.operation === 'dashboard.ticket.reply' && input.data.draft ? { ticketId: candidate.ticketId, ...input.data.draft } : undefined);
-      return this.render(raw,input.operation,false,Boolean(attempt.namespace));
+      return this.render(raw,input.operation,false,attempt.keyed);
     } catch (error) {
       await this.authorize(attempt.requirements);
       const winner = attempt.namespace ? await this.receipts.findActive(attempt.namespace) : null;
