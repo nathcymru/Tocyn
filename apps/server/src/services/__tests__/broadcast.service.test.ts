@@ -2,6 +2,7 @@ import { createVerifiedTenantScope } from '../../auth/scope';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BroadcastService } from '../broadcast.service';
 import { Env } from '../../bindings';
+import { CANONICAL_BROADCAST_ENVELOPE, type CanonicalBroadcastGrant } from '../../budgets/realtime-admission.service';
 
 describe('BroadcastService', () => {
   let service: BroadcastService;
@@ -44,6 +45,21 @@ describe('BroadcastService', () => {
     await expect(service.broadcast('test.event', { foo: 'bar' }, 3)).resolves.toEqual({ status: 'accepted', attempts: 3 });
 
     expect(mockDO.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('requires a signed post-commit grant when realtime admission is enabled', async () => {
+    mockEnv.REALTIME_BUDGET_ADMISSION_POLICY = 'realtime-v1';
+    mockEnv.JWT_SECRET = 'synthetic-realtime-secret-at-least-32-characters';
+    await expect(service.broadcast('ticket.updated', { id: 'ticket' })).resolves.toEqual({ status: 'failed', attempts: 0 });
+    expect(mockDO.fetch).not.toHaveBeenCalled();
+    const grant: CanonicalBroadcastGrant = { version: 1, handoffId: 'canonical-unit-handoff', tenantId: 'tenant-A', operationId: 'operation-unit', operationFingerprint: 'a'.repeat(64),
+      reservationId: 'reservation-unit', holderId: 'holder-unit', aggregateId: 'aggregate-unit', expiresAt: Date.now() + 30_000,
+      authorityRevision: 1, policyId: 'policy-unit', policyRevision: 1, restrictionRevision: 1,
+      notificationEnvelope: CANONICAL_BROADCAST_ENVELOPE, operationEnvelope: CANONICAL_BROADCAST_ENVELOPE };
+    await expect(service.broadcast('ticket.updated', { id: 'ticket' }, 2, grant)).resolves.toEqual({ status: 'accepted', attempts: 1 });
+    const [, init] = mockDO.fetch.mock.calls[0];
+    expect(init.headers['X-Realtime-Canonical-Handoff-Signature']).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.parse(init.headers['X-Realtime-Canonical-Handoff']).grant.reservationId).toBe('reservation-unit');
   });
 
   it('measures each fetch attempt without exposing payloads and preserves failures', async () => {
