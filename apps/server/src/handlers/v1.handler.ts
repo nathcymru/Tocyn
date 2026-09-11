@@ -1,6 +1,7 @@
 import { BetaAdmissionError } from '../types/local-beta';
 import { assertConversationResponseBounds } from '../services/conversation-read-bounds';
-import { conversationHistory } from './conversation-history';
+import { conversationHistory, conversationHistoryPage } from './conversation-history';
+import { ConversationHistoryError } from '../services/conversation-audit.service';
 import { Hono } from "hono";
 import { z } from "zod";
 import { Env } from "../bindings";
@@ -13,6 +14,7 @@ import { TicketMutationError } from '../services/ticket-mutation-replay.service'
 import { apiTicketCreateSchema, apiTicketReplySchema, MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { requestBounds } from '../middleware/request-bounds';
 import { admitConfiguredApiTicketMutation } from '../middleware/budget-admission.middleware';
+import { admitApiTicketHistory } from '../budgets/api-ticket-history-admission.service';
 
 const updateTicketSchema = z.object({
   status: z.enum(["open", "pending", "resolved", "closed"]).optional(),
@@ -215,6 +217,25 @@ v1.patch("/tickets/:id", async (c) => {
   }
 });
 
-v1.get('/tickets/:id/history', c => conversationHistory(c,'api'));
+v1.get('/tickets/:id/history', async c => {
+  if (!c.get('apiKeyResolution')?.permissions.includes('tickets:read')) return c.json({error:'Forbidden'},403);
+  let page;
+  try { page = conversationHistoryPage({ limit: c.req.query('limit'), cursor: c.req.query('cursor') }); }
+  catch (error) {
+    if (error instanceof ConversationHistoryError) return c.json({ error: error.message }, error.status);
+    return c.json({ error: 'Conversation history unavailable' }, 503);
+  }
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const ticket = await deps.repositories.tickets.get(c.req.param('id')!);
+  // Preserve the existing tenant-qualified not-found response without spending
+  // capacity on a target the principal cannot read.
+  if (!ticket) return c.json({ error: 'Ticket not found' }, 404);
+  const admission = await admitApiTicketHistory({ env: c.env, deps, apiKeyId: c.get('apiKeyResolution')!.apiKeyId,
+    ticketId: ticket.id, page, now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
+    ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
+    : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
+  return conversationHistory(c, 'api', page);
+});
 
 export default v1;

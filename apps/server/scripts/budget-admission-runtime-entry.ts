@@ -21,6 +21,9 @@ let r2Gets = 0;
 let r2Puts = 0;
 let loseR2PutAcknowledgement = false;
 let notificationBroadcasts = 0;
+let historyEventQueries = 0;
+let historyEventRowsRead = 0;
+let revokeApiKeyAfterAuth: { tenantId: string; apiKeyId: string } | undefined;
 const localCapture = new LocalAuthCaptureTransport();
 const broadcast = BroadcastService.prototype.broadcast;
 BroadcastService.prototype.broadcast = async function(...args) {
@@ -50,6 +53,10 @@ function instrumentDatabase(db: any): any {
         // A local competing canonical winner commits after this lookup has
         // observed null, then the caller continues into admission.
         const result = await target.first(...args);
+        if (revokeApiKeyAfterAuth && sql.includes('SELECT tenant_id, id, name, permissions FROM api_keys WHERE key_hash')) {
+          const key = revokeApiKeyAfterAuth; revokeApiKeyAfterAuth = undefined;
+          await db.prepare('UPDATE api_keys SET is_active=0 WHERE tenant_id=? AND id=?').bind(key.tenantId, key.apiKeyId).run();
+        }
         if (nextMutationReceiptWinner && sql.includes('SELECT * FROM ticket_mutation_receipts')) {
           const winner=nextMutationReceiptWinner;nextMutationReceiptWinner=undefined;
           await db.batch([
@@ -63,6 +70,14 @@ function instrumentDatabase(db: any): any {
               VALUES (?,'customer',?,?,?, ?,1,1,?,?,201,?)`)
               .bind(winner.tenantId,winner.principalId,winner.operation,winner.keyHash,winner.payloadHash,winner.ticket.id,winner.article.id,winner.snapshot),
           ]);
+        }
+        return result;
+      };
+      if (property==='all') return async (...args:any[]) => {
+        const result = await target.all(...args);
+        if (sql.includes('SELECT e.* FROM conversation_events e')) {
+          historyEventQueries++;
+          historyEventRowsRead += result.meta?.rows_read ?? 0;
         }
         return result;
       };
@@ -162,7 +177,7 @@ export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     if (new URL(request.url).pathname === '/__budget-control') {
       if (request.method === 'POST') {
-        const control = await request.json() as { pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown };
+        const control = await request.json() as { pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown; revokeApiKeyAfterAuth?: { tenantId?: unknown; apiKeyId?: unknown } };
         if (control.pauseNextCanonical) pauseNextCanonical = true;
         if (control.releaseCanonical) releaseCanonical?.();
         if (control.pauseNextReserve) pauseNextReserve=true;
@@ -174,13 +189,18 @@ export default {
         if (control.canonicalDelayMs && control.canonicalDelayMs<=1500) canonicalDelayMs=control.canonicalDelayMs;
         if (control.loseCanonicalAck) loseCanonicalAck=true;
         if (control.loseR2PutAcknowledgement) loseR2PutAcknowledgement=true;
+        if (typeof control.revokeApiKeyAfterAuth?.tenantId === 'string' && typeof control.revokeApiKeyAfterAuth.apiKeyId === 'string') {
+          revokeApiKeyAfterAuth = { tenantId: control.revokeApiKeyAfterAuth.tenantId, apiKeyId: control.revokeApiKeyAfterAuth.apiKeyId };
+        }
         if (control.discard) apiTicketBudgetCache.discardForTrustedRuntime();
         if (control.now !== undefined) clock = control.now;
         if (control.loseReserveAck) lostReserveAcksRemaining = 1;
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
         if (control.loseReconcileAcks && control.loseReconcileAcks <= 5) lostReconcileAcksRemaining = control.loseReconcileAcks;
       }
-      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, r2Puts, notificationBroadcasts, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
+      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, r2Puts, notificationBroadcasts,
+        historyEventQueries, historyEventRowsRead, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical,
+        cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), ATTACHMENTS_BUCKET: instrumentBucket(env.ATTACHMENTS_BUCKET), emailTransport: localCapture,
       BUDGET_COORDINATOR_DO: instrument(env.BUDGET_COORDINATOR_DO, env.DB),
