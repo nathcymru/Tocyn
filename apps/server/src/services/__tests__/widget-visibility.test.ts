@@ -17,5 +17,18 @@ describe('widget current document visibility', () => {
     Object.assign(deps, { attachmentStorage: { getAttachment: vi.fn().mockResolvedValue({ body: new Response('Public answer').body }) } });
     const reader = new WidgetKnowledgeReader(deps as any, { generateEmbeddings: vi.fn().mockResolvedValue([1]) } as any);
     expect(await reader.search('question', 3)).toEqual([{ content: 'Public answer' }]);
+    expect(deps.vectorStorage.query).toHaveBeenCalledWith([1], expect.objectContaining({ topK: 3 }));
+  });
+  it('hydrates no more than the three current public answers selected by the bounded query', async () => {
+    const getDocument = vi.fn().mockResolvedValue({ status: 'published', tier: 'answer', file_path: 'current-body' });
+    const getAttachment = vi.fn().mockImplementation(async () => ({ body: new Response('Public answer').body }));
+    const query = vi.fn().mockResolvedValue({ matches: Array.from({ length: 3 }, (_, index) => ({
+      score: 1, metadata: { source_id: `doc-${index}`, type: 'document' },
+    })) });
+    const reader = new WidgetKnowledgeReader({ repositories: { knowledge: { getDocument } }, attachmentStorage: { getAttachment }, vectorStorage: { query } } as any,
+      { generateEmbeddings: vi.fn().mockResolvedValue([1]) } as any);
+    await expect(reader.search('question', 3)).resolves.toHaveLength(3);
+    expect(getDocument).toHaveBeenCalledTimes(3);
+    expect(getAttachment).toHaveBeenCalledTimes(3);
   });
 });

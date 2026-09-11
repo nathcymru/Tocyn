@@ -10,7 +10,7 @@ import { conversationMutationEvent } from './conversation-audit.repository';
 import { normalizeSupportEmail } from '../utils/email-normalize';
 import { CapabilityFenceError, capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
 import { VerifiedTenantScope } from '../types/tenant';
-import { UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
+import { AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_MESSAGES, AI_SUGGESTION_MAX_R2_KEY_BYTES, UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
 import { D1Database } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
@@ -523,6 +523,21 @@ export class SqlArticleRepository implements ArticleRepository {
   async listByTicket(ticketId: string): Promise<Article[]> {
     return this.db.prepare("SELECT * FROM articles WHERE tenant_id = ? AND ticket_id = ? ORDER BY created_at ASC")
       .bind(this.scope.tenantId, ticketId).all<Article>().then(r => r.results);
+  }
+
+  async listRecentAiSuggestionMessages(ticketId: string): Promise<import('./interfaces').AiSuggestionMessage[]> {
+    // Cast to BLOB before substr so D1 never materializes more than the fixed
+    // UTF-8 body prefix. An overlong R2 key is represented as null and skipped
+    // by the caller; it is never truncated into a different object key.
+    return this.db.prepare(`SELECT id, sender_type,
+      CASE WHEN body IS NULL THEN NULL ELSE CAST(substr(CAST(body AS BLOB), 1, ?) AS TEXT) END AS body,
+      CASE WHEN body_r2_key IS NULL THEN NULL
+        WHEN length(CAST(body_r2_key AS BLOB)) <= ? THEN body_r2_key ELSE NULL END AS body_r2_key,
+      COALESCE(length(CAST(body AS BLOB)), 0) AS body_bytes,
+      COALESCE(length(CAST(body_r2_key AS BLOB)), 0) AS body_r2_key_bytes
+      FROM articles WHERE tenant_id = ? AND ticket_id = ?
+      ORDER BY created_at DESC, id DESC LIMIT ?`).bind(AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_R2_KEY_BYTES, this.scope.tenantId, ticketId, AI_SUGGESTION_MAX_MESSAGES)
+      .all<import('./interfaces').AiSuggestionMessage>().then(result => result.results);
   }
 
   async get(id: string): Promise<Article | null> {

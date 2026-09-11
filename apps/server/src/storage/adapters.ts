@@ -171,8 +171,9 @@ export class TenantArticleBodyHydrator {
     private legacyArticleStorage?: LegacyArticleBodyStorage
   ) {}
 
-  async hydrate(body: string | null, bodyR2Key: string | null, maxLength: number = 8192): Promise<string> {
-    if (body) return body.substring(0, maxLength);
+  async hydrate(body: string | null, bodyR2Key: string | null, maxLength: number = 8192, maxBytes: number = maxLength * 4): Promise<string> {
+    if (!Number.isSafeInteger(maxLength) || maxLength < 1 || !Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error('Invalid article body bounds');
+    if (body) return new TextDecoder().decode(new TextEncoder().encode(body).subarray(0, maxBytes)).substring(0, maxLength);
     if (!bodyR2Key) return '';
 
     try {
@@ -187,7 +188,7 @@ export class TenantArticleBodyHydrator {
         const reader = obj.body.getReader();
         const decoder = new TextDecoder();
         let text = '';
-        let remaining = maxLength * 4;
+        let remaining = maxBytes;
         try {
           while (remaining > 0) {
             const { done, value } = await reader.read();

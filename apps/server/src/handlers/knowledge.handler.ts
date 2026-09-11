@@ -8,6 +8,9 @@ import { StatelessAiService } from '../services/ai.service';
 import { tenantMiddleware, TenantRequestDeps } from '../middleware/tenant.middleware';
 import { AppVariables } from '../types';
 import { z } from 'zod';
+import { admitHttpAi } from '../budgets/http-ai-admission.service';
+
+const staffSuggestionFallback = "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
 
 const knowledgeHandler = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 const qaMarkerSchema = z.object({ type: z.enum(['answer', 'sop']).nullable() });
@@ -115,10 +118,22 @@ knowledgeHandler.post('/', async (c) => {
 knowledgeHandler.get('/tickets/:id/ai-suggest', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitHttpAi({ env: c.env, deps, payload: c.get('jwtPayload'), operation: 'dashboard.ticket.ai-suggest', targetId: id,
+    now: () => c.env.localNow?.() ?? Date.now() });
+  // Do not disclose budget state to staff callers. In particular, a rejected
+  // grant must not read a ticket, hydrate an R2 body, or retrieve private SOPs.
+  if (admission.status !== 'admitted') return c.json({ suggestion: staffSuggestionFallback });
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
-  const suggestion = await service.getAiSuggestion(id);
-  return c.json({ suggestion });
+  try {
+    const suggestion = await service.getAiSuggestion(id);
+    return c.json({ suggestion });
+  } catch (error) {
+    // Preserve the explicit malformed-markup response while keeping a charged
+    // provider/storage failure to its single admitted attempt.
+    if (error instanceof Error && error.message === 'Maximum tag stripping depth exceeded: possible malicious input') throw error;
+    return c.json({ suggestion: staffSuggestionFallback });
+  }
 });
 
 // Zod schemas for new endpoints - using snake_case to match frontend

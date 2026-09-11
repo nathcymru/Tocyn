@@ -73,6 +73,25 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     sqlite.close();
   });
 
+  it('reads the newest bounded article window through the tenant/ticket recent index', async () => {
+    sqlite.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_email,source) VALUES ('tenant-A','ai-ticket','Bounded','a@example.test','dashboard')").run();
+    const insert = sqlite.prepare(`INSERT INTO articles(tenant_id,id,ticket_id,sender_type,body,is_internal,created_at)
+      VALUES ('tenant-A',?,'ai-ticket','customer',?,0,?)`);
+    for (let index = 0; index < 20; index++) insert.run(`article-${String(index).padStart(2, '0')}`, `message-${index}`, `2026-09-11T00:00:${String(index).padStart(2, '0')}.000Z`);
+    insert.run('legacy-large-inline', 'legacy-inline-'.repeat(2_000), '2026-09-11T00:01:00.000Z');
+    sqlite.prepare("UPDATE articles SET body_r2_key=? WHERE tenant_id='tenant-A' AND id='legacy-large-inline'")
+      .run('r'.repeat(1_025));
+    const recent = await reposA.articles.listRecentAiSuggestionMessages('ai-ticket');
+    expect(recent.map(article => article.id)).toEqual(['legacy-large-inline', 'article-19', 'article-18', 'article-17', 'article-16']);
+    expect(new TextEncoder().encode(recent[0].body || '').byteLength).toBeLessThanOrEqual(8_192);
+    expect(recent[0]).toMatchObject({ body_bytes: 28_000, body_r2_key: null, body_r2_key_bytes: 1_025 });
+    const plan = sqlite.prepare(`EXPLAIN QUERY PLAN SELECT id, sender_type,
+      CASE WHEN body IS NULL THEN NULL ELSE CAST(substr(CAST(body AS BLOB), 1, ?) AS TEXT) END AS body
+      FROM articles WHERE tenant_id = ? AND ticket_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`)
+      .all(8_192, 'tenant-A', 'ai-ticket', 5) as { detail: string }[];
+    expect(plan.some(row => /SEARCH articles USING INDEX idx_articles_tenant_ticket_recent/.test(row.detail))).toBe(true);
+  });
+
   it('completes mandatory enrollment from issued credentials and revokes the consumed challenge without changing another tenant', async () => {
     const JWT_SECRET = 'synthetic-enrollment-jwt-secret';
     const env = { DB: d1, JWT_SECRET, MFA_ENCRYPTION_KEY: 'synthetic-enrollment-key' } as any;

@@ -10,7 +10,9 @@ vi.mock("jose", async (importOriginal) => {
         email: "agent@example.com",
         role: "admin",
         tenant_id: "default-tenant",
-        mfa_verified: true
+        mfa_verified: true,
+        session_version: 0,
+        exp: 2_000_000_000
       }
     })
   };
@@ -34,6 +36,7 @@ const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
 let validToken: string;
 
 import { TenantKnowledgeService } from "../../services/tenant-knowledge.service";
+import { IsolateBudgetAdmissionCache } from '../../budgets/isolate-admission.service';
 describe("Knowledge Handler Integration Tests", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -183,9 +186,35 @@ describe("Knowledge Handler Integration Tests", () => {
   });
   it('returns a controlled error when knowledge tag stripping rejects excessive depth', async () => {
     vi.spyOn(TenantKnowledgeService.prototype, 'getAiSuggestion').mockRejectedValueOnce(new Error('Maximum tag stripping depth exceeded: possible malicious input'));
-    const response = await knowledgeHandler.request('/tickets/ticket/ai-suggest', {headers:{Authorization:`Bearer ${validToken}`}}, {DB:mockDB,JWT_SECRET} as any);
+    vi.spyOn(IsolateBudgetAdmissionCache.prototype, 'admit').mockResolvedValueOnce({ status: 'spent' } as any);
+    const response = await knowledgeHandler.request('/tickets/ticket/ai-suggest', {headers:{Authorization:`Bearer ${validToken}`}}, {
+      DB:mockDB, JWT_SECRET, BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: {},
+    } as any);
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({error:'Content exceeds supported markup depth'});
+  });
+
+  it('returns the manual suggestion fallback before ticket, Vectorize, R2, or AI work when AI is off', async () => {
+    const suggestion = vi.spyOn(TenantKnowledgeService.prototype, 'getAiSuggestion');
+    const response = await knowledgeHandler.request('/tickets/ticket/ai-suggest', {
+      headers: { Authorization: `Bearer ${validToken}` },
+    }, { DB: mockDB, JWT_SECRET, BUDGET_ADMISSION_POLICY: 'off', AI: { run: vi.fn() },
+      VECTOR_INDEX: { query: vi.fn() }, ATTACHMENTS_BUCKET: { get: vi.fn() } } as any);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ suggestion: "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response." });
+    expect(suggestion).not.toHaveBeenCalled();
+  });
+
+  it('does not retry an admitted provider failure', async () => {
+    const suggestion = vi.spyOn(TenantKnowledgeService.prototype, 'getAiSuggestion').mockRejectedValueOnce(new Error('synthetic provider failure'));
+    const admission = vi.spyOn(IsolateBudgetAdmissionCache.prototype, 'admit').mockResolvedValueOnce({ status: 'spent' } as any);
+    const response = await knowledgeHandler.request('/tickets/ticket/ai-suggest', {
+      headers: { Authorization: `Bearer ${validToken}` },
+    }, { DB: mockDB, JWT_SECRET, BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: {} } as any);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ suggestion: "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response." });
+    expect(admission).toHaveBeenCalledTimes(1);
+    expect(suggestion).toHaveBeenCalledTimes(1);
   });
 
 });
