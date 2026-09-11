@@ -140,7 +140,7 @@ describe("Settings Handler Integration Tests", () => {
         ['{', 'application/json', 400],
         ['{}', 'text/plain', 415],
         ['x'.repeat(8193), 'application/json', 413],
-        [JSON.stringify({ version: '2', tenant: {} }), 'application/json', 400],
+        [JSON.stringify({ version: '2', light: {} }), 'application/json', 400],
       ] as const) {
         const response = await settings.request('/theme', {
           method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': type }, body,
@@ -162,14 +162,21 @@ describe("Settings Handler Integration Tests", () => {
       const token = await generateAdminToken();
       const invalid = await settings.request('/theme', {
         method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: '1', tenant: { colorSurface: 'url(https://invalid.test)' } }),
+        body: JSON.stringify({ version: '1', light: { colorSurface: 'url(https://invalid.test)' } }),
       }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
       expect(invalid.status).toBe(400);
       expect(mockDB.run).not.toHaveBeenCalled();
 
+      const invalidDark = await settings.request('/theme', {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: '1', light: {}, dark: { colorText: '#0f172a' } }),
+      }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
+      expect(invalidDark.status).toBe(400);
+      expect(mockDB.run).not.toHaveBeenCalled();
+
       const valid = await settings.request('/theme', {
         method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: '1', tenant: { colorSurface: '#ffffff', colorText: '#0f172a' } }),
+        body: JSON.stringify({ version: '1', light: { colorSurface: '#ffffff', colorText: '#0f172a' } }),
       }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
       expect(valid.status).toBe(200);
       const themeBind = vi.mocked(mockDB.bind).mock.calls.find(call => call[1] === 'ui.theme.v1');
@@ -180,7 +187,7 @@ describe("Settings Handler Integration Tests", () => {
       const token = await generateAdminToken();
       const invalid = await settings.request('/theme', {
         method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: '1', tenant: { madeUp: '#fff' } }),
+        body: JSON.stringify({ version: '1', light: { madeUp: '#fff' } }),
       }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
       expect(invalid.status).toBe(400);
       const normalRead = mockDB.first.getMockImplementation()!;
@@ -191,7 +198,7 @@ describe("Settings Handler Integration Tests", () => {
       });
       const read = await settings.request('/theme', { headers: { Authorization: `Bearer ${token}` } }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
       expect(read.status).toBe(200);
-      expect(await read.json()).toEqual({ version: '1', tenant: {}, fallback: true });
+      expect(await read.json()).toEqual({ version: '1', light: {}, dark: {}, fallback: true });
     });
 
     it("rejects unknown suffixed keys before writing any setting", async () => {

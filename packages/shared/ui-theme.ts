@@ -26,6 +26,33 @@ export interface TocynThemeTokens {
 
 export type TocynThemeOverrides = Partial<TocynThemeTokens>;
 
+/** Tenant branding is validated for both palettes before either is persisted. */
+export type TocynTenantTheme = Readonly<{
+  version: typeof TOCYN_THEME_CONTRACT_VERSION;
+  light: TocynThemeOverrides;
+  dark: TocynThemeOverrides;
+}>;
+
+export function parseTocynTenantTheme(value: unknown): TocynTenantTheme {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || ![null, Object.prototype].includes(Object.getPrototypeOf(value))) throw new TypeError('Invalid tenant theme');
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== 'string' || !['version', 'light', 'dark'].includes(key)
+      || !('value' in Object.getOwnPropertyDescriptor(value, key)!)) throw new TypeError('Invalid tenant theme field');
+  }
+  const record = value as Record<string, unknown>;
+  if (record.version !== TOCYN_THEME_CONTRACT_VERSION) throw new TypeError('Unsupported tenant theme version');
+  const light = record.light ?? {};
+  const dark = record.dark ?? {};
+  // Null is malformed, rather than a request to discard a stored palette.
+  if (record.light === null || record.dark === null) throw new TypeError('Invalid tenant palette');
+  validateOverrides(light); validateOverrides(dark);
+  resolveTocynTheme({ mode: 'light', tenant: light });
+  resolveTocynTheme({ mode: 'dark', tenant: dark });
+  return Object.freeze({ version: TOCYN_THEME_CONTRACT_VERSION,
+    light: Object.freeze({ ...light }), dark: Object.freeze({ ...dark }) });
+}
+
 export interface TocynThemeInput {
   mode?: TocynThemeMode;
   tenant?: TocynThemeOverrides;

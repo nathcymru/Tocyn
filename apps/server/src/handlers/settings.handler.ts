@@ -10,7 +10,7 @@ import filters from "./filters.handler";
 import { CloudflareService } from "../services/cloudflare.service";
 import { encryptString } from "../utils/crypto";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
-import { resolveTocynTheme, TOCYN_THEME_CONTRACT_VERSION, type TocynThemeOverrides } from "@luminatick/shared/ui-theme";
+import { parseTocynTenantTheme, TOCYN_THEME_CONTRACT_VERSION, type TocynTenantTheme } from "@luminatick/shared/ui-theme";
 import { requestBounds } from '../middleware/request-bounds';
 import { MutationInputError, readMutationJson } from './mutation-request';
 
@@ -61,21 +61,17 @@ const updateSettingsSchema = z.record(
 const settingsPayloadSchema = z.record(z.unknown()).refine(data => Object.keys(data).length <= 50, {
   message: "Too many settings provided",
 });
-const themePayloadSchema = z.object({
-  version: z.literal(TOCYN_THEME_CONTRACT_VERSION),
-  tenant: z.record(z.unknown()).default({}),
-}).strict();
 const THEME_CONFIG_KEY = 'ui.theme.v1';
 
-function parseTenantTheme(value: string | null): { version: typeof TOCYN_THEME_CONTRACT_VERSION; tenant: TocynThemeOverrides; fallback: boolean } {
-  if (!value) return { version: TOCYN_THEME_CONTRACT_VERSION, tenant: {}, fallback: false };
+function parseTenantTheme(value: string | null): TocynTenantTheme & { fallback: boolean } {
+  const fallback = { version: TOCYN_THEME_CONTRACT_VERSION, light: {}, dark: {} } as const;
+  if (!value) return { ...fallback, fallback: false };
   try {
-    const parsed = themePayloadSchema.parse(JSON.parse(value));
-    resolveTocynTheme({ tenant: parsed.tenant as TocynThemeOverrides });
-    return { version: parsed.version, tenant: parsed.tenant as TocynThemeOverrides, fallback: false };
+    if (new TextEncoder().encode(value).length > 8192) throw new TypeError('Stored theme exceeds limit');
+    return { ...parseTocynTenantTheme(JSON.parse(value)), fallback: false };
   } catch {
     // Never expose corrupt or unsafe stored values; package defaults remain the safe result.
-    return { version: TOCYN_THEME_CONTRACT_VERSION, tenant: {}, fallback: true };
+    return { ...fallback, fallback: true };
   }
 }
 
@@ -115,17 +111,16 @@ settings.put('/theme', roleGuard(["admin", "agent"]), permissionGuard("general")
     if (error instanceof MutationInputError) return c.json({ error: error.message }, error.status);
     throw error;
   }
-  const parsed = themePayloadSchema.safeParse(body);
-  if (!parsed.success) return c.json({ error: 'Invalid tenant theme' }, 400);
+  let parsed: TocynTenantTheme;
   try {
-    resolveTocynTheme({ tenant: parsed.data.tenant as TocynThemeOverrides });
+    parsed = parseTocynTenantTheme(body);
   } catch {
     return c.json({ error: 'Invalid tenant theme' }, 400);
   }
   const revalidationFailure = await revalidatePermission(c, "general");
   if (revalidationFailure) return revalidationFailure;
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  await d.repositories.config.set(THEME_CONFIG_KEY, JSON.stringify(parsed.data), permissionWriteFence(c, "general"));
+  await d.repositories.config.set(THEME_CONFIG_KEY, JSON.stringify(parsed), permissionWriteFence(c, "general"));
   return c.json({ success: true, version: TOCYN_THEME_CONTRACT_VERSION });
 });
 
