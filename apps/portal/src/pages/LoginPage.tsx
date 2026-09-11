@@ -1,8 +1,9 @@
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { VerifyPage } from './VerifyPage';
 import { portalApi } from '../api/client';
-import { Ticket, Mail, Loader2, ArrowRight } from 'lucide-react';
+import { Mail, Loader2, ArrowRight } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
 
 export function LoginPage() {
@@ -13,7 +14,9 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [siteKey, setSiteKey] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const location = useLocation();
   const navigate = useNavigate();
+  const [challenge, setChallenge] = useState<{ email: string; challengeId?: string } | null>(() => location.state?.authStep === 'verify' ? location.state.challenge : null);
   const successHeading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -51,9 +54,9 @@ export function LoginPage() {
       setSuccess(true);
 
       if (type === 'otp') {
-        setTimeout(() => {
-          navigate('/verify', { state: { email, challengeId: result.challengeId } });
-        }, 1500);
+        const next = { email, challengeId: result.challengeId };
+        setChallenge(next);
+        navigate('/login' + location.search, { replace: true, state: { authStep: 'verify', challenge: next } });
       }
     } catch (err: unknown) {
       const error = err as Error;
@@ -63,9 +66,11 @@ export function LoginPage() {
     }
   };
 
+  if (challenge) return <VerifyPage challenge={challenge} onBack={() => { setChallenge(null); setSuccess(false); setTurnstileToken(null); navigate('/login' + location.search, { replace: true, state: null }); }} />;
+
   if (success && type === 'magic_link') {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="w-full">
         <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
           <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
             <Mail className="w-8 h-8 text-green-600" />
@@ -81,13 +86,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="w-full">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-12 h-12 bg-brand-600 rounded-xl flex items-center justify-center">
-            <Ticket className="w-8 h-8 text-white" />
-          </div>
-        </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           Sign in to Support
         </h2>
@@ -97,7 +97,7 @@ export function LoginPage() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
+        <div className="py-8">
           {error && (
             <div id="portal-login-error" role="alert" aria-atomic="true" className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md">
               {error}
@@ -168,8 +168,10 @@ export function LoginPage() {
                 <Turnstile
                   siteKey={siteKey}
                   onSuccess={(token) => setTurnstileToken(token)}
+                  onExpire={() => setTurnstileToken(null)}
+                  onError={() => setTurnstileToken(null)}
                   options={{
-                    theme: 'light',
+                    theme: 'auto',
                   }}
                 />
               </div>

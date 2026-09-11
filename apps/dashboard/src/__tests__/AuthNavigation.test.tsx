@@ -41,7 +41,7 @@ it('keeps a rejected password login mounted with its associated error and permit
   fireEvent.change(password, { target: { value: 'correct-synthetic-password' } });
   fireEvent.click(submit);
   await screen.findByRole('textbox', { name: 'Authentication Code' });
-  expect(window.location.pathname).toBe('/mfa');
+  expect(window.location.pathname).toBe('/login');
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
@@ -63,7 +63,7 @@ it('continues from actual login through MFA to the dashboard when the auth bound
   fireEvent.change(screen.getByPlaceholderText('••••••••'),{target:{value:'synthetic-password'}});
   fireEvent.click(screen.getByRole('button',{name:'Sign In'}));
   const code = await screen.findByPlaceholderText('000000');
-  expect(window.location.pathname).toBe('/mfa');
+  expect(window.location.pathname).toBe('/login');
   fireEvent.change(code,{target:{value:'123456'}});
   fireEvent.submit(code.closest('form')!);
   await screen.findByRole('heading',{name:'Dashboard ready'});
