@@ -82,10 +82,10 @@ filters.put('/:id',roleGuard(['admin','agent']),permissionGuard('filters'),reque
   try {
     const prepared=await service.prepareMutation('dashboard.filter.update',parsed,capability,readIdempotencyKey(c),id);
     const outcome=await service.commit(prepared,async(repo,commit,snapshot:SavedFilterSnapshot)=>{
-      if(!snapshot.target?.exists||!snapshot.target.row)throw new SavedFilterAdmissionError(404,'filter_not_found','Filter not found');
-      if(snapshot.target.row.is_system===1||snapshot.target.row.is_system===true)throw new SavedFilterAdmissionError(403,'system_filter_immutable','Cannot modify system filters');
-      const row:SavedFilterRow={...snapshot.target.row,name:parsed.name,conditions:JSON.stringify(parsed.conditions),updated_at:new Date(c.env.localNow?.()??Date.now()).toISOString()};
-      return repo.update(commit,id,snapshot,row,JSON.stringify(savedFilterResponse(row)));
+      if(!snapshot.target?.exists)throw new SavedFilterAdmissionError(404,'filter_not_found','Filter not found');
+      if(snapshot.target.isSystem)throw new SavedFilterAdmissionError(403,'system_filter_immutable','Cannot modify system filters');
+      return repo.update(commit,id,snapshot,{name:parsed.name,conditions:JSON.stringify(parsed.conditions),
+        updatedAt:new Date(c.env.localNow?.()??Date.now()).toISOString()});
     });
     if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body);
   } catch(error){const response=failure(c,error);if(response)return response;throw error;}
@@ -100,8 +100,8 @@ filters.delete('/:id',roleGuard(['admin']),permissionGuard('filters'),async c=>{
   try {
     const prepared=await service.prepareMutation('dashboard.filter.delete',{id},capability,readIdempotencyKey(c),id);
     const outcome=await service.commit(prepared,async(repo,commit,snapshot)=>{
-      if(!snapshot.target?.exists||!snapshot.target.row)throw new SavedFilterAdmissionError(404,'filter_not_found','Filter not found');
-      if(snapshot.target.row.is_system===1||snapshot.target.row.is_system===true)throw new SavedFilterAdmissionError(403,'system_filter_immutable','Cannot delete system filters');
+      if(!snapshot.target?.exists)throw new SavedFilterAdmissionError(404,'filter_not_found','Filter not found');
+      if(snapshot.target.isSystem)throw new SavedFilterAdmissionError(403,'system_filter_immutable','Cannot delete system filters');
       return repo.delete(commit,id,snapshot,JSON.stringify({success:true}));
     });
     if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body);

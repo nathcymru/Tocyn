@@ -13,7 +13,7 @@ export type SavedFilterCommit = Readonly<{ credential: SessionBudgetCredential; 
 export type SavedFilterRow = Readonly<{ tenant_id: string; id: string; name: string; conditions: string;
   is_system: number | boolean; created_at: string | null; updated_at: string | null }>;
 export type SavedFilterPopulation = Readonly<{ exists: boolean; filterRows: number; conditionBytes: number; revision: number }>;
-export type SavedFilterTarget = Readonly<{ exists: boolean; conditionBytes: number; revision: number; row?: SavedFilterRow }>;
+export type SavedFilterTarget = Readonly<{ exists: boolean; conditionBytes: number; revision: number; isSystem?: boolean }>;
 export type SavedFilterSnapshot = Readonly<{ population: SavedFilterPopulation; target?: SavedFilterTarget }>;
 export type SavedFilterReceipt = Readonly<{ payload_hash: string; response_status: 200 | 201; response_snapshot: string }>;
 
@@ -86,9 +86,9 @@ export class SavedFilterAdmissionRepository {
       : {exists:false,filterRows:0,conditionBytes:0,revision:0};
     if (![population.filterRows,population.conditionBytes,population.revision].every(safeCount)) throw new Error('Invalid saved-filter population');
     if (id===undefined) return {population};
-    const row=await this.db.prepare(`SELECT f.*,c.condition_bytes AS counter_condition_bytes,c.revision AS counter_revision
+    const row=await this.db.prepare(`SELECT f.is_system,c.condition_bytes AS counter_condition_bytes,c.revision AS counter_revision
       FROM ticket_filters f LEFT JOIN ticket_list_filter_scan_counters c ON c.tenant_id=f.tenant_id AND c.filter_id=f.id
-      WHERE f.tenant_id=? AND f.id=? LIMIT 1`).bind(this.scope.tenantId,id).first<SavedFilterRow & {counter_condition_bytes:number|null;counter_revision:number|null}>();
+      WHERE f.tenant_id=? AND f.id=? LIMIT 1`).bind(this.scope.tenantId,id).first<{is_system:number|boolean;counter_condition_bytes:number|null;counter_revision:number|null}>();
     if (!row) {
       const stray=await this.db.prepare(`SELECT 1 AS present FROM ticket_list_filter_scan_counters WHERE tenant_id=? AND filter_id=? LIMIT 1`)
         .bind(this.scope.tenantId,id).first();
@@ -96,8 +96,8 @@ export class SavedFilterAdmissionRepository {
       return {population,target:{exists:false,conditionBytes:0,revision:0}};
     }
     if (!safeCount(row.counter_condition_bytes)||!safeCount(row.counter_revision)) throw new Error('Invalid saved-filter target counter');
-    const {counter_condition_bytes,counter_revision,...filter}=row;
-    return {population,target:{exists:true,conditionBytes:counter_condition_bytes,revision:counter_revision,row:filter}};
+    return {population,target:{exists:true,conditionBytes:row.counter_condition_bytes,revision:row.counter_revision,
+      isSystem:row.is_system===1||row.is_system===true}};
   }
 
   async findActive(ns: SavedFilterNamespace): Promise<SavedFilterReceipt|null> {
@@ -171,17 +171,23 @@ export class SavedFilterAdmissionRepository {
     return value;
   }
 
-  async update(commit: SavedFilterCommit, id: string, measured: SavedFilterSnapshot, row: SavedFilterRow, response: string): Promise<string> {
+  async update(commit: SavedFilterCommit, id: string, measured: SavedFilterSnapshot,
+    data: Readonly<{name:string;conditions:string;updatedAt:string}>): Promise<string> {
     if (!commit.namespace||!measured.target) throw new Error('Missing mutation namespace');
     const target=targetConstraint(this.scope,id,measured.target), statements=this.fence(commit,measured);
     statements.push(this.db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN accepted=1 AND (${target.sql}) THEN 1 ELSE 0 END WHERE tenant_id=?`)
       .bind(...target.values,this.scope.tenantId),...this.cleanup(commit.namespace));
     statements.push(this.db.prepare(`UPDATE ticket_filters SET name=?,conditions=?,updated_at=? WHERE tenant_id=? AND id=? AND is_system=0
       AND EXISTS (SELECT 1 FROM budget_mutation_assertion WHERE tenant_id=? AND accepted=1)`)
-      .bind(row.name,row.conditions,row.updated_at,this.scope.tenantId,id,this.scope.tenantId));
-    statements.push(this.receipt(commit.namespace,200,response,
-      `EXISTS (SELECT 1 FROM ticket_filters WHERE tenant_id=? AND id=? AND name=? AND conditions=? AND is_system=0 AND updated_at=?)`,
-      [this.scope.tenantId,id,row.name,row.conditions,row.updated_at]));
+      .bind(data.name,data.conditions,data.updatedAt,this.scope.tenantId,id,this.scope.tenantId));
+    statements.push(this.db.prepare(`INSERT INTO saved_filter_mutation_receipts
+      (tenant_id,principal_id,operation,key_hash,payload_hash,response_status,response_snapshot)
+      SELECT ?,?,?,?,?,200,json_object('tenant_id',f.tenant_id,'id',f.id,'name',f.name,'conditions',json(f.conditions),
+        'is_system',f.is_system,'created_at',f.created_at,'updated_at',f.updated_at)
+      FROM ticket_filters f WHERE f.tenant_id=? AND f.id=? AND f.name=? AND f.conditions=? AND f.is_system=0 AND f.updated_at=?
+        AND EXISTS (SELECT 1 FROM budget_mutation_assertion WHERE tenant_id=? AND accepted=1)
+      RETURNING response_snapshot`).bind(...nsValues(this.scope,commit.namespace),commit.namespace.payloadHash,
+        this.scope.tenantId,id,data.name,data.conditions,data.updatedAt,this.scope.tenantId));
     const results=await this.db.batch<{response_snapshot:string}>(statements),value=results.at(-1)?.results[0]?.response_snapshot;
     if (!value) throw new Error('Saved-filter update changed');
     return value;

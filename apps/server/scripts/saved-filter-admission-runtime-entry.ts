@@ -4,7 +4,8 @@ export { NotificationDO } from '../src/durable_objects/NotificationDO';
 import { app } from '../src/application';
 import { apiTicketBudgetCache } from '../src/middleware/budget-admission.middleware';
 
-type Metric={path:string;method:string;d1RowsRead:number;d1RowsWritten:number;d1Calls:number;maxBatchRead:number;maxBatchWritten:number};
+type Metric={path:string;method:string;d1RowsRead:number;d1RowsWritten:number;d1Calls:number;maxBatchRead:number;maxBatchWritten:number;
+  preAdmissionConditionLoads:number};
 const attempts:Metric[]=[];
 let pauseCanonical=false,releaseCanonical:(()=>void)|undefined;
 let beforeCanonical:''|'session'|'capability'|'authority'|'population-growth'|'target-update'='';
@@ -13,12 +14,15 @@ function instrumentDatabase(db:any,metric:Metric):any {
   const statements=new WeakMap<object,{raw:any;sql:string}>();
   const add=(meta:any)=>{metric.d1Calls++;const read=meta?.rows_read??0,written=meta?.rows_written??0;
     metric.d1RowsRead+=read;metric.d1RowsWritten+=written;metric.maxBatchRead=Math.max(metric.maxBatchRead,read);metric.maxBatchWritten=Math.max(metric.maxBatchWritten,written);};
+  const loadsConditions=(sql:string)=>{const normalized=sql.replace(/\s+/g,' ');
+    return /SELECT (?:f\.\*|\*) FROM ticket_filters/i.test(normalized)||/SELECT [^;]*conditions[^;]* FROM ticket_filters/i.test(normalized);};
+  const before=(sql:string)=>{if(loadsConditions(sql))metric.preAdmissionConditionLoads++;};
   const wrap=(raw:any,sql:string):any=>{const proxy=new Proxy(raw,{get(target,property){
     if(property==='bind')return(...values:any[])=>wrap(target.bind(...values),sql);
-    if(property==='first')return async(column?:string)=>{const result=await target.all();add(result.meta);const row=result.results?.[0]??null;return column&&row?row[column]:row;};
-    if(property==='all')return async()=>{const result=await target.all();add(result.meta);return result;};
+    if(property==='first')return async(column?:string)=>{before(sql);const result=await target.all();add(result.meta);const row=result.results?.[0]??null;return column&&row?row[column]:row;};
+    if(property==='all')return async()=>{before(sql);const result=await target.all();add(result.meta);return result;};
     if(property==='run')return async()=>{const result=await target.run();add(result.meta);return result;};
-    if(property==='raw')return async(options?:any)=>{const result=await target.all();add(result.meta);const keys=result.results?.[0]?Object.keys(result.results[0]):[];
+    if(property==='raw')return async(options?:any)=>{before(sql);const result=await target.all();add(result.meta);const keys=result.results?.[0]?Object.keys(result.results[0]):[];
       const rows=(result.results??[]).map((row:any)=>keys.map(key=>row[key]));return options?.columnNames?[keys,...rows]:rows;};
     const value=Reflect.get(target,property);return typeof value==='function'?value.bind(target):value;
   }});statements.set(proxy,{raw,sql});return proxy;};
@@ -53,6 +57,7 @@ export default {async fetch(request:Request,env:any,ctx:ExecutionContext):Promis
       if(control.discard)apiTicketBudgetCache.discardForTrustedRuntime();}
     return Response.json({attempts,canonicalPaused:!!releaseCanonical});
   }
-  const metric:Metric={path:url.pathname,method:request.method,d1RowsRead:0,d1RowsWritten:0,d1Calls:0,maxBatchRead:0,maxBatchWritten:0};
+  const metric:Metric={path:url.pathname,method:request.method,d1RowsRead:0,d1RowsWritten:0,d1Calls:0,maxBatchRead:0,maxBatchWritten:0,
+    preAdmissionConditionLoads:0};
   try{return await app.fetch(request,{...env,DB:instrumentDatabase(env.DB,metric)},ctx);}finally{attempts.push(metric);}
 }};

@@ -60,6 +60,17 @@ test('native Worker/D1/DO saved-filter admission is current, replayable and popu
     const foreign=await request('/api/settings/filters/filter_other','GET',agent);assert.equal(foreign.status,404);await foreign.body?.cancel();
     const foreignWrite=await request('/api/settings/filters/filter_other','PUT',admin,{name:'Cross tenant write',conditions:[]},'cross-tenant');assert.equal(foreignWrite.status,404);await foreignWrite.body?.cancel();
     assert.equal((await db.prepare("SELECT name FROM ticket_filters WHERE tenant_id=? AND id='filter_other'").bind(other).first<any>()).name,'Other tenant');
+    const largeDeniedConditions=JSON.stringify([{field:'subject',operator:'contains',value:'x'.repeat(900_000)}]);
+    await db.prepare("INSERT INTO ticket_filters(tenant_id,id,name,conditions,is_system) VALUES(?,'limited-large','Denied large history',?,0)").bind(limited,largeDeniedConditions).run();
+    const deniedLarge=await request('/api/settings/filters/limited-large','GET',await token('admin','admin',1,limited));assert.equal(deniedLarge.status,429);await deniedLarge.body?.cancel();
+    const deniedLargeControl=await (await mf.dispatchFetch('http://runtime.test/__filter-control')).json() as any,deniedLargeMetric=deniedLargeControl.attempts.at(-1);
+    assert.equal(deniedLargeMetric.preAdmissionConditionLoads,0,'Denied target admission must not load stored conditions');
+    assert.ok(deniedLargeMetric.d1RowsRead<100,'Metadata-only denial must stay independent of the 900KB body');
+    const deniedLargeUpdate=await request('/api/settings/filters/limited-large','PUT',await token('admin','admin',1,limited),{name:'Must remain denied',conditions:[]},'large-denied-update');
+    assert.equal(deniedLargeUpdate.status,429);await deniedLargeUpdate.body?.cancel();
+    const deniedUpdateControl=await (await mf.dispatchFetch('http://runtime.test/__filter-control')).json() as any,deniedUpdateMetric=deniedUpdateControl.attempts.at(-1);
+    assert.equal(deniedUpdateMetric.preAdmissionConditionLoads,0,'Denied update must not load stored conditions');
+    assert.equal((await db.prepare("SELECT name FROM ticket_filters WHERE tenant_id=? AND id='limited-large'").bind(limited).first<any>()).name,'Denied large history');
     const limitedRead=await request('/api/settings/filters','GET',await token('admin','admin',1,limited));assert.equal(limitedRead.status,429);await limitedRead.body?.cancel();
     const oversized=await request('/api/settings/filters','POST',admin,{name:'Oversized',conditions:[{field:'subject',operator:'contains',value:'x'.repeat(70_000)}]},'oversized');
     assert.ok(oversized.status===400||oversized.status===413);await oversized.body?.cancel();
@@ -67,8 +78,10 @@ test('native Worker/D1/DO saved-filter admission is current, replayable and popu
     const systemDelete=await request('/api/settings/filters/filter_system','DELETE',admin,undefined,'system-delete');assert.equal(systemDelete.status,403);await systemDelete.body?.cancel();
     assert.equal((await db.prepare("SELECT count(*) n FROM saved_filter_mutation_receipts WHERE tenant_id=? AND operation IN ('dashboard.filter.update','dashboard.filter.delete')").bind(tenant).first<any>()).n,0);
 
+    const mutableCreatedAt=(await db.prepare("SELECT created_at FROM ticket_filters WHERE tenant_id=? AND id='filter_mutable'").bind(tenant).first<any>()).created_at;
     const update=await request('/api/settings/filters/filter_mutable','PUT',agent,{name:'Agent edit',conditions:[{field:'status',operator:'eq',value:'open'}]},'agent-update');
-    assert.equal(update.status,200,await update.clone().text());assert.equal((await update.json() as any).name,'Agent edit');
+    assert.equal(update.status,200,await update.clone().text());const updateBody=await update.json() as any;
+    assert.equal(updateBody.name,'Agent edit');assert.equal(updateBody.created_at,mutableCreatedAt);
     await db.prepare("UPDATE tenant_role_capability_policies SET revision=revision+1,enabled=0 WHERE tenant_id=? AND role='agent' AND capability='filters.manage'").bind(tenant).run();
     const denied=await request('/api/settings/filters/filter_mutable','PUT',agent,{name:'Denied',conditions:[]},'denied');assert.equal(denied.status,403);await denied.body?.cancel();
     assert.equal((await db.prepare("SELECT name FROM ticket_filters WHERE tenant_id=? AND id='filter_mutable'").bind(tenant).first<any>()).name,'Agent edit');
