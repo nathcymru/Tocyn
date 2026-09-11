@@ -55,25 +55,4 @@
     "typecheck:combined-collision-runtime": "tsc -p scripts/tsconfig.combined-collision-runtime.json",
     "test:ui-combined-collision-browser": "tsx --test scripts/ui-combined-collision-browser.test.ts",
     "typecheck:ui-combined-collision-browser": "tsc -p scripts/tsconfig.ui-combined-collision-browser.json",
-    "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts scripts/customer-budget-admission-runtime.test.ts scripts/storage-admission-runtime.test.ts scripts/api-ticket-history-admission-runtime.test.ts scripts/api-ticket-detail-admission-runtime.test.ts scripts/http-ai-admission-runtime.test.ts"
-  },
-  "dependencies": {
-    "@luminatick/shared": "*",
-    "hono": "^4.13.7",
-    "jose": "^6.2.2",
-    "otpauth": "^9.5.0",
-    "postal-mime": "^2.1.0",
-    "re2js": "^2.8.6",
-    "zod": "^3.0.0"
-  },
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240101.0",
-    "@faker-js/faker": "^10.4.0",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.9.5",
-    "better-sqlite3": "^12.9.0",
-    "tsx": "^4.23.13",
-    "typescript": "^5.6.2",
-    "vitest": "^4.1.11"
-  }
-}
+    "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts scripts/customer-budget-admission-runtime.test.ts scripts/storage-admission-runtime.test.ts scripts/api-ticket-history-admission-runtime.test.ts scripts/api-ticket-detail-admission-runtime.test.ts scripts/http-ai-admission-runtime.test.ts scripts/http-ticket-read-admission-runtime.test.ts"
