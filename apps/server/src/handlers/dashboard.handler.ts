@@ -43,8 +43,16 @@ import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.servi
 import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
 import { admitHttpTicketList } from '../budgets/http-ticket-list-admission.service';
 import { TicketListScanError } from '../repositories/ticket-list-scan.repository';
+import { ConfigurationAdmissionError, ConfigurationAdmissionService, CONFIGURATION_REQUEST_BYTES } from '../services/configuration-admission.service';
+import type { SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
+import type { AutomationRow, TicketFieldRow } from '../repositories/configuration-admission.repository';
 import { admitGroupDirectory, settleGroupDirectory, type GroupDirectoryAdmission } from '../budgets/group-directory-admission.service';
 import { GroupDirectoryFenceError, GroupDirectoryRepository, type GroupDirectoryCommit } from '../repositories/group-directory.repository';
+import { admitApiKeyAdmin, apiKeyCandidate, settleApiKeyAdmin, type ApiKeyAdminAdmission } from '../budgets/api-key-admin-admission.service';
+import { ApiKeyAdminFenceError, ApiKeyAdminRepository, type ApiKeyAdminCommit,
+  type ApiKeyCreationReceipt } from '../repositories/api-key-admin.repository';
+import { admitDashboardSummaryRead, settleDashboardSummaryRead, type DashboardSummaryReadAdmission } from '../budgets/dashboard-summary-read-admission.service';
+import { DashboardSummaryReadFenceError, DashboardSummaryReadRepository, projectDashboardSlaRows, type DashboardSummaryReadCommit } from '../repositories/dashboard-summary-read.repository';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -54,6 +62,10 @@ const createGroupSchema = z.object({
 const addMemberSchema = z.object({
   userId: z.string().uuid("Invalid User ID format"),
 });
+
+const createApiKeySchema = z.object({
+  name: z.string().min(1, 'Name is required').max(120).refine(value => new TextEncoder().encode(value).length <= 512),
+}).strict();
 
 const createTicketSchema = z.object({
   subject: z.string().min(1, "Subject is required"),
@@ -142,10 +154,54 @@ function supportSlaAdmissionConfigurationFailure(c: any): Response | null {
     : null;
 }
 
+function configurationAdmission(c:any):ConfigurationAdmissionService|Response|null {
+  if(c.env.BUDGET_ADMISSION_POLICY===undefined)return null;
+  const mode=staffTicketAdmissionMode(c.env);if(mode==='disabled')return null;
+  const d=c.get('tenantDeps') as TenantRequestDeps|undefined,payload=c.get('jwtPayload') as JWTPayload|undefined;
+  if(mode!=='enabled'||!c.env.BUDGET_COORDINATOR_DO||!d||!payload||payload.sub!==d.scope.actorId||payload.tenant_id!==d.scope.tenantId
+    ||(payload.role!=='admin'&&payload.role!=='agent')||payload.mfa_verified!==true||!Number.isSafeInteger(payload.session_version)||!Number.isSafeInteger(payload.exp))
+    return c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
+  const credential:SessionBudgetCredential={tenantId:d.scope.tenantId,actorId:payload.sub,role:payload.role,
+    sessionVersion:payload.session_version!,expiresAt:payload.exp,mfaVerified:true};
+  return new ConfigurationAdmissionService(d.database,d.scope,credential,{service:sessionTicketBudgetAdmission,
+    repository:d.repositories.budgetAuthority,namespace:c.env.BUDGET_COORDINATOR_DO,now:()=>c.env.localNow?.()??Date.now(),
+    settle:(authority,outcome,now)=>apiTicketBudgetCache.settleOperation(authority,outcome,now)});
+}
+
+function configurationFailure(c:any,error:unknown):Response|null {
+  if(error instanceof MutationInputError)return c.json(mutationInputErrorBody(error),error.status);
+  if(error instanceof ConfigurationAdmissionError)return c.json({code:error.code,error:error.message},error.status);
+  return null;
+}
+
+async function readConfigurationBody(c:any):Promise<unknown|Response>{
+  try{return await readMutationJson(c);}
+  catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
+}
+
 function groupDirectoryBudgetFailure(c: any, reason: 'exhausted'|'unavailable') {
   return reason === 'exhausted'
     ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
     : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+
+function dashboardSummaryBudgetFailure(c: any, reason: 'exhausted'|'unavailable') {
+  return reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+async function admittedDashboardSummary<T>(c:any,d:TenantRequestDeps,admission:DashboardSummaryReadAdmission,
+  work:(repository:DashboardSummaryReadRepository,commit:DashboardSummaryReadCommit)=>Promise<T>):Promise<T|Response> {
+  const commit=admission.commit!;
+  try {
+    const result=await work(new DashboardSummaryReadRepository(d.database,d.scope),commit);
+    settleDashboardSummaryRead(commit,'committed',c.env.localNow?.()??Date.now());
+    return result;
+  } catch(error) {
+    settleDashboardSummaryRead(commit,'unknown',c.env.localNow?.()??Date.now());
+    if(error instanceof DashboardSummaryReadFenceError)return dashboardSummaryBudgetFailure(c,'unavailable');
+    throw error;
+  }
 }
 
 async function admittedGroupDirectoryWork<T>(c:any,d:TenantRequestDeps,admission:GroupDirectoryAdmission,
@@ -180,6 +236,50 @@ function groupDirectoryPermissionGuard(key:'users'|'groups') {
       capability:fence.capability,policyFingerprint:fence.policyFingerprint}});
     await next();
   };
+}
+
+function apiKeyAdminFailure(c: any, reason: 'exhausted' | 'unavailable' | 'conflict', receipt?: ApiKeyCreationReceipt) {
+  if (reason === 'exhausted') return c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429);
+  if (reason === 'conflict') return c.json({ code: 'idempotency_conflict', error: 'Idempotency-Key was already used with a different API-key name' }, 409);
+  if (receipt) return c.json({ code: 'api_key_plaintext_unavailable',
+    error: 'The API key was created, but its one-time plaintext cannot be shown again',
+    key: { id: receipt.api_key_id, name: receipt.name, prefix: receipt.prefix, created_at: receipt.created_at } }, 409);
+  return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+
+function apiKeyAdminPermissionGuard() {
+  return async (c: any, next: () => Promise<void>) => {
+    if (staffTicketAdmissionMode(c.env) !== 'enabled') return permissionGuard('api_keys')(c, next);
+    const deps = c.get('tenantDeps') as TenantRequestDeps | undefined;
+    const payload = c.get('jwtPayload') as JWTPayload | undefined;
+    const sessionVersion = payload?.session_version;
+    if (!deps || !payload || (payload.role !== 'admin' && payload.role !== 'agent')
+      || typeof sessionVersion !== 'number' || !Number.isSafeInteger(sessionVersion)) {
+      return c.json({ error: 'Unauthorized', message: 'No session found' }, 401);
+    }
+    const credential = { tenantId: deps.scope.tenantId, actorId: payload.sub, role: payload.role, sessionVersion,
+      expiresAt: payload.exp, mfaVerified: payload.mfa_verified === true } as const;
+    const fence = await new ApiKeyAdminRepository(deps.scope, deps.database).capabilityFence(credential);
+    if (!fence) return c.json({ error: 'Forbidden', message: 'Capability denied: api-keys.manage' }, 403);
+    c.set('permissionFences', { ...(c.get('permissionFences') ?? {}), [fence.capability]: {
+      allowed: true, reason: 'allowed', capability: fence.capability, policyFingerprint: fence.policyFingerprint,
+    } });
+    await next();
+  };
+}
+
+async function admittedApiKeyWork<T>(c: any, deps: TenantRequestDeps, admission: ApiKeyAdminAdmission,
+  work: (repository: ApiKeyAdminRepository, commit: ApiKeyAdminCommit) => Promise<T>): Promise<T | Response> {
+  const commit = admission.commit!;
+  try {
+    const result = await work(new ApiKeyAdminRepository(deps.scope, deps.database), commit);
+    settleApiKeyAdmin(commit, 'committed', c.env.localNow?.() ?? Date.now());
+    return result;
+  } catch (error) {
+    settleApiKeyAdmin(commit, 'unknown', c.env.localNow?.() ?? Date.now());
+    if (error instanceof ApiKeyAdminFenceError) return apiKeyAdminFailure(c, 'unavailable');
+    throw error;
+  }
 }
 
 const createTicketFieldSchema = z.object({
@@ -285,17 +385,18 @@ dashboard.route("/workspace", workspace);
  * List all custom ticket fields
  */
 dashboard.get("/ticket-fields", async (c) => {
-  const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const results = await deps.repositories.ticketFields.list();
-  return c.json(results);
+  const deps = c.get('tenantDeps') as TenantRequestDeps,admission=configurationAdmission(c);
+  if(admission instanceof Response)return admission;
+  try{return c.json(admission?await admission.read('dashboard.ticket-field.list',{}):await deps.repositories.ticketFields.list());}
+  catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
  * POST /api/ticket-fields
  * Create a new custom ticket field
  */
-dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard("ticket_fields"), async (c) => {
-  const body = await c.req.json();
+dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard("ticket_fields"), requestBounds(CONFIGURATION_REQUEST_BYTES), async (c) => {
+  const body = await readConfigurationBody(c);if(body instanceof Response)return body;
   const result = createTicketFieldSchema.safeParse(body);
 
   if (!result.success) {
@@ -308,11 +409,20 @@ dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard(
   if (revalidationFailure) return revalidationFailure;
 
   try {
+    const capability=permissionWriteFence(c,"ticket_fields"),admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+    if(admission){
+      const prepared=await admission.prepareMutation('dashboard.ticket-field.create',result.data,capability,readIdempotencyKey(c));
+      const outcome=await admission.commit(prepared,(repo,commit,snapshot)=>repo.createTicketField(commit,snapshot,{
+        tenant_id:d.scope.tenantId,id:crypto.randomUUID(),name,label,field_type,options:options||null,is_active:is_active?1:0,
+      } satisfies TicketFieldRow));
+      if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body,201);
+    }
     const field = await d.repositories.ticketFields.create({
       name, label, field_type, options: options || null, is_active
-    }, permissionWriteFence(c, "ticket_fields"));
+    }, capability);
     return c.json(field, 201);
   } catch (error: any) {
+    const response=configurationFailure(c,error);if(response)return response;
     if (error.message.includes("UNIQUE constraint failed")) {
       return c.json({ error: "Ticket field with this name already exists" }, 409);
     }
@@ -326,6 +436,14 @@ dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard(
  */
 dashboard.get("/stats", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'dashboard.stats.read',target:{},now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+  if(admission.status==='admitted'){
+    const result=await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.stats(commit));
+    if(result instanceof Response)return result;
+    return c.json(result);
+  }
   return c.json(await d.repositories.tickets.dashboardStats());
 });
 
@@ -336,6 +454,15 @@ dashboard.get('/support-states', async (c) => {
   const cursor = c.req.query('cursor') || undefined;
   const includeInactive = c.req.query('include_inactive') === 'true';
   try {
+    const d=c.get('tenantDeps') as TenantRequestDeps;
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.support-states.read',target:{limit,cursor:cursor??null,includeInactive},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    if(admission.status==='admitted'){
+      const page=await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.supportStates({limit,cursor:cursor??null,includeInactive},commit));
+      if(page instanceof Response)return page;
+      const response=c.json(page.results);if(page.nextCursor)response.headers.set('X-Next-Cursor',page.nextCursor);return response;
+    }
     const page = await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).listDefinitionsPage(limit, cursor, includeInactive);
     const response = c.json(page.results);
     if (page.nextCursor) response.headers.set('X-Next-Cursor', page.nextCursor);
@@ -345,7 +472,18 @@ dashboard.get('/support-states', async (c) => {
 });
 
 dashboard.get('/sla-policy', async (c) => {
-  try { return c.json(await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getPolicy()); }
+  try {
+    const d=c.get('tenantDeps') as TenantRequestDeps;
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.sla-policy.read',target:{},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    if(admission.status==='admitted'){
+      const policy=await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.policy(commit));
+      if(policy instanceof Response)return policy;
+      return c.json(policy);
+    }
+    return c.json(await new SlaClockService(d).getPolicy());
+  }
   catch (error) { return slaFailure(c, error); }
 });
 
@@ -463,7 +601,14 @@ dashboard.post('/support-states/:id/deactivate', requestBounds(64 * 1024), roleG
 
 dashboard.get('/tickets/:id/support-state', async (c) => {
   try {
-    const state = await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).getTicketState(c.req.param('id'));
+    const d=c.get('tenantDeps') as TenantRequestDeps,id=c.req.param('id');
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.ticket.support-state.read',target:{ticketId:id},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    const state=admission.status==='admitted'
+      ?await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.ticketSupportState(id,commit))
+      :await new SupportStateService(d).getTicketState(id);
+    if(state instanceof Response)return state;
     if (!state) return c.json({ error: 'Ticket not found' }, 404);
     return c.json(state);
   } catch (error) { return supportStateFailure(c, error); }
@@ -471,7 +616,14 @@ dashboard.get('/tickets/:id/support-state', async (c) => {
 
 dashboard.get('/tickets/:id/sla', async (c) => {
   try {
-    const projection = await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getTicketProjection(c.req.param('id'));
+    const d=c.get('tenantDeps') as TenantRequestDeps,id=c.req.param('id');
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.ticket.sla.read',target:{ticketId:id},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    const projection=admission.status==='admitted'
+      ?await admittedDashboardSummary(c,d,admission,async(repository,commit)=>{const rows=await repository.sla({ticketIds:[id]},'dashboard.ticket.sla.read',commit);const row=rows.get(id);return row?projectDashboardSlaRows(row,new Date(c.env.localNow?.()??Date.now())):null;})
+      :await new SlaClockService(d).getTicketProjection(id);
+    if(projection instanceof Response)return projection;
     return projection ? c.json(projection) : c.json({ error: 'SLA clock unavailable' }, 404);
   } catch (error) { return slaFailure(c, error); }
 });
@@ -510,7 +662,22 @@ dashboard.post('/ticket-sla/projections', requestBounds(16 * 1024), async (c) =>
   if ('response' in mutation) return mutation.response;
   const parsed = z.object({ ticketIds: z.array(z.string().min(1).max(120)).min(1).max(25) }).strict().safeParse(mutation.body);
   if (!parsed.success) return c.json({ error: 'Invalid SLA projection batch' }, 400);
-  try { return c.json(await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getTicketProjections(parsed.data.ticketIds)); }
+  try {
+    const d=c.get('tenantDeps') as TenantRequestDeps,ids=parsed.data.ticketIds;
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.ticket.sla-batch.read',target:{ticketIds:ids},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    if(admission.status==='admitted'){
+      const projections=await admittedDashboardSummary(c,d,admission,async(repository,commit)=>{
+        const rows=await repository.sla({ticketIds:ids},'dashboard.ticket.sla-batch.read',commit),result:Record<string,unknown>={};
+        for(const id of ids){const row=rows.get(id);if(row)result[id]=projectDashboardSlaRows(row,new Date(c.env.localNow?.()??Date.now()));}
+        return result;
+      });
+      if(projections instanceof Response)return projections;
+      return c.json(projections);
+    }
+    return c.json(await new SlaClockService(d).getTicketProjections(ids));
+  }
   catch (error) { return slaFailure(c, error); }
 });
 
@@ -544,16 +711,19 @@ dashboard.patch('/tickets/:id/support-state', requestBounds(64 * 1024), async (c
  */
 dashboard.get("/automations", permissionGuard("automations"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  const results = await d.repositories.automations.list();
-  return c.json(results);
+  const admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+  if(!admission)return c.json(await d.repositories.automations.list());
+  const revalidationFailure=await revalidatePermission(c,"automations");if(revalidationFailure)return revalidationFailure;
+  try{return c.json(await admission.read('dashboard.automation.list',{capability:permissionWriteFence(c,'automations')}));}
+  catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
  * POST /api/automations
  * Create a new automation rule.
  */
-dashboard.post("/automations", permissionGuard("automations"), async (c) => {
-  const payload = await c.req.json();
+dashboard.post("/automations", permissionGuard("automations"), requestBounds(CONFIGURATION_REQUEST_BYTES), async (c) => {
+  const payload = await readConfigurationBody(c) as Record<string,any>|Response;if(payload instanceof Response)return payload;
   const { name, event_type, conditions, action_type, action_config, is_active } = payload;
 
   if (!name || !event_type || !action_type) {
@@ -563,29 +733,37 @@ dashboard.post("/automations", permissionGuard("automations"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "automations");
   if (revalidationFailure) return revalidationFailure;
-  const rule = await d.repositories.automations.create({
-    name, event_type, conditions: conditions || undefined,
-    action_type, action_config: action_config || undefined,
-    is_active: is_active ? true : false
-  }, permissionWriteFence(c, "automations"));
-
-  return c.json(rule, 201);
+  const capability=permissionWriteFence(c,"automations"),admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+  if(!admission){const rule=await d.repositories.automations.create({name,event_type,conditions:conditions||undefined,
+    action_type,action_config:action_config||undefined,is_active:is_active?true:false},capability);return c.json(rule,201);}
+  try{
+    const prepared=await admission.prepareMutation('dashboard.automation.create',payload,capability,readIdempotencyKey(c));
+    const outcome=await admission.commit(prepared,(repo,commit,snapshot)=>repo.createAutomation(commit,snapshot,{
+      tenant_id:d.scope.tenantId,id:crypto.randomUUID(),name,event_type,conditions:conditions||null,action_type,
+      action_config:action_config||null,is_active:is_active?1:0,
+    } satisfies Omit<AutomationRow,'created_at'>));
+    if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body,201);
+  }catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
  * PATCH /api/automations/:id
  * Update an automation rule.
  */
-dashboard.patch("/automations/:id", permissionGuard("automations"), async (c) => {
+dashboard.patch("/automations/:id", permissionGuard("automations"), requestBounds(CONFIGURATION_REQUEST_BYTES), async (c) => {
   const id = c.req.param("id");
   if (!id) return c.json({ error: "Missing ID" }, 400);
-  const payload = await c.req.json();
+  const payload = await readConfigurationBody(c) as Record<string,any>|Response;if(payload instanceof Response)return payload;
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "automations");
   if (revalidationFailure) return revalidationFailure;
-
-  const rule = await d.repositories.automations.update(id, payload, permissionWriteFence(c, "automations"));
-  return c.json(rule);
+  const capability=permissionWriteFence(c,"automations"),admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+  if(!admission)return c.json(await d.repositories.automations.update(id,payload,capability));
+  try{
+    const prepared=await admission.prepareMutation('dashboard.automation.update',payload,capability,readIdempotencyKey(c),id);
+    const outcome=await admission.commit(prepared,(repo,commit,snapshot)=>repo.updateAutomation(commit,id,snapshot,payload));
+    if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body);
+  }catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
@@ -598,17 +776,29 @@ dashboard.delete("/automations/:id", permissionGuard("automations"), async (c) =
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "automations");
   if (revalidationFailure) return revalidationFailure;
-  await d.repositories.automations.delete(id, permissionWriteFence(c, "automations"));
-  return c.json({ success: true });
+  const capability=permissionWriteFence(c,"automations"),admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+  if(!admission){await d.repositories.automations.delete(id,capability);return c.json({success:true});}
+  try{
+    const prepared=await admission.prepareMutation('dashboard.automation.delete',{id},capability,readIdempotencyKey(c),id);
+    const outcome=await admission.commit(prepared,(repo,commit,snapshot)=>repo.deleteAutomation(commit,id,snapshot));
+    if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body);
+  }catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
  * GET /api/api-keys
  * List all API keys for management (metadata only, never hashes/secrets).
  */
-dashboard.get("/api-keys", permissionGuard("api_keys"), async (c) => {
+dashboard.get("/api-keys", apiKeyAdminPermissionGuard(), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  const keys = await d.repositories.apiKeys.list();
+  const admission = await admitApiKeyAdmin({ env: c.env, deps: d, payload: c.get('jwtPayload') as JWTPayload,
+    operation: 'api-key.list', target: {}, capability: permissionWriteFence(c, 'api_keys'),
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return apiKeyAdminFailure(c, admission.reason!);
+  const keys = admission.status === 'admitted'
+    ? await admittedApiKeyWork(c, d, admission, (repository, commit) => repository.list(commit))
+    : await d.repositories.apiKeys.list();
+  if (keys instanceof Response) return keys;
   return c.json(keys);
 });
 
@@ -616,13 +806,37 @@ dashboard.get("/api-keys", permissionGuard("api_keys"), async (c) => {
  * POST /api/api-keys
  * Generate a new API key. Plaintext returned once only.
  */
-dashboard.post("/api-keys", permissionGuard("api_keys"), async (c) => {
-  const { name } = await c.req.json();
-  if (!name) {
-    return c.json({ error: "Name is required" }, 400);
+dashboard.post("/api-keys", requestBounds(2 * 1024), apiKeyAdminPermissionGuard(), async (c) => {
+  let body: unknown;
+  let idempotencyKey: string | undefined;
+  try { body = await readMutationJson(c); idempotencyKey = readIdempotencyKey(c); }
+  catch (error) {
+    if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
+    throw error;
   }
-
+  const parsed = createApiKeySchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: parsed.error.errors[0].message }, 400);
+  const { name } = parsed.data;
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitApiKeyAdmin({ env: c.env, deps: d, payload: c.get('jwtPayload') as JWTPayload,
+    operation: 'api-key.create', target: { name }, capability: permissionWriteFence(c, 'api_keys'), idempotencyKey,
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') {
+    if (!idempotencyKey && staffTicketAdmissionMode(c.env) === 'enabled') {
+      return c.json({ error: 'Idempotency-Key is required', code: 'invalid_idempotency_key' }, 400);
+    }
+    return apiKeyAdminFailure(c, admission.reason!);
+  }
+  if (admission.status === 'admitted') {
+    const candidate = await apiKeyCandidate(name);
+    const outcome = await admittedApiKeyWork(c, d, admission, (repository, commit) =>
+      repository.create(candidate, admission.idempotencyHash!, admission.payloadHash!, commit));
+    if (outcome instanceof Response) return outcome;
+    if (outcome.kind === 'conflict') return apiKeyAdminFailure(c, 'conflict');
+    if (outcome.kind === 'unavailable') return apiKeyAdminFailure(c, 'unavailable', outcome.receipt);
+    return c.json({ apiKey: outcome.value.apiKey, id: outcome.value.id, name: outcome.value.name,
+      prefix: outcome.value.prefix, permissions: [...outcome.value.permissions] }, 201);
+  }
   const revalidationFailure = await revalidatePermission(c, "api_keys");
   if (revalidationFailure) return revalidationFailure;
   const result = await d.repositories.apiKeys.create(name, undefined, permissionWriteFence(c, "api_keys"));
@@ -633,10 +847,19 @@ dashboard.post("/api-keys", permissionGuard("api_keys"), async (c) => {
  * DELETE /api/api-keys/:id
  * Revoke/Delete an API key.
  */
-dashboard.delete("/api-keys/:id", permissionGuard("api_keys"), async (c) => {
+dashboard.delete("/api-keys/:id", apiKeyAdminPermissionGuard(), async (c) => {
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitApiKeyAdmin({ env: c.env, deps: d, payload: c.get('jwtPayload') as JWTPayload,
+    operation: 'api-key.delete', target: { id }, capability: permissionWriteFence(c, 'api_keys'),
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return apiKeyAdminFailure(c, admission.reason!);
+  if (admission.status === 'admitted') {
+    const result = await admittedApiKeyWork(c, d, admission, (repository, commit) => repository.delete(id, commit));
+    if (result instanceof Response) return result;
+    return c.json({ success: true });
+  }
   const revalidationFailure = await revalidatePermission(c, "api_keys");
   if (revalidationFailure) return revalidationFailure;
   await d.repositories.apiKeys.delete(id, permissionWriteFence(c, "api_keys"));
@@ -859,6 +1082,16 @@ dashboard.get('/tickets/:id/reply-capability', async (c) => {
   const ticketId = c.req.param('id');
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const agent = c.get('jwtPayload') as JWTPayload;
+  const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:agent,
+    operation:'dashboard.ticket.reply-capability.read',target:{ticketId},now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+  if(admission.status==='admitted'){
+    const capability=await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.replyCapability(ticketId,commit));
+    if(capability instanceof Response)return capability;
+    if(capability.status==='missing')return c.json({ error: 'Ticket not found' },404);
+    if(capability.status==='forbidden')return c.json({ error: 'Forbidden', message: 'You do not have access to this ticket\'s group' },403);
+    return c.json(replyCapability(ticketId,{version:1,conversationRevision:capability.revision ?? 0,protocol:'draft-precondition-v1'}));
+  }
   const ticket = await d.repositories.tickets.get(ticketId);
   if (!ticket) return c.json({ error: 'Ticket not found' }, 404);
 

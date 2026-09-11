@@ -7,7 +7,7 @@ if (import.meta.env.VITE_API_URL) {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public code?: string) {
+  constructor(message: string, public status: number, public code?: string, public body?: unknown) {
     super(message);
     this.name = 'ApiError';
   }
@@ -54,15 +54,19 @@ async function sessionRequest<T>(path: string, options: RequestInit, read: (resp
     if (!response.ok) {
       let message = `Request failed with status ${response.status}`;
       let code: string | undefined;
+      let errorBody: unknown;
       try {
         const error = await response.json();
+        // Only the API-key uncertain-create response exposes structured error
+        // details to callers, and that payload is metadata-only by contract.
+        errorBody = error?.code === 'api_key_plaintext_unavailable' ? error : undefined;
         message = error.error || error.message || message;
         code = typeof error.code === 'string' ? error.code : undefined;
       } catch {
         if (response.status === 404) message = 'Resource not found (404)';
       }
       assertCurrent();
-      throw new ApiError(message,response.status,code);
+      throw new ApiError(message,response.status,code,errorBody);
     }
     const value = await read(response);
     assertCurrent();
