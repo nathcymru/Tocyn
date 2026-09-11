@@ -358,6 +358,16 @@ test('customer credential issuance atomically rechecks tenant identity and the c
     assert.equal(await f.db.prepare("SELECT id FROM users WHERE tenant_id='tenant-a' AND id='planned-shadow'").first(), null);
     assert.equal(await f.db.prepare("SELECT id FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='identity-race-token'").first(), null);
 
+    // A different tenant can win the globally unique login after preflight.
+    const globalRace = await admit('tenant-a');
+    await f.db.prepare("INSERT INTO users(tenant_id,id,email,role) VALUES ('tenant-b','global-racer','global-race@example.test','customer')").run();
+    await assert.rejects(() => globalRace.deps.repositories.users.issueCustomerAuthCredential(
+      issue('global-race@example.test', 'global-shadow', 'global-race-token'), globalRace.admission.fence), /UNIQUE constraint failed/);
+    globalRace.admission.settle('unknown');
+    assert.equal(await f.db.prepare("SELECT id FROM users WHERE tenant_id='tenant-a' AND id='global-shadow'").first(), null);
+    assert.equal(await f.db.prepare("SELECT id FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='global-race-token'").first(), null);
+    assert.ok(await f.db.prepare("SELECT id FROM users WHERE tenant_id='tenant-b' AND id='global-racer'").first());
+
     // A changed OTP pointer invalidates the issue snapshot before the token insert.
     const pointerRace = await admit('tenant-a');
     await f.db.batch([
@@ -403,6 +413,34 @@ test('customer credential issuance atomically rechecks tenant identity and the c
     assert.equal((await f.db.prepare("SELECT count(*) AS count FROM users WHERE tenant_id='tenant-a' AND id='lost-ack-user'").first<{ count: number }>())?.count, 1);
     assert.equal((await f.db.prepare("SELECT count(*) AS count FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='lost-ack-token'").first<{ count: number }>())?.count, 1);
     t.diagnostic('native customer credential issue preserves durable effects when acknowledgement is lost; no storage-stock credit is inferred');
+  } finally { await f.mf.dispose(); }
+});
+
+test('admission-off customer credential issuance keeps identity/credential writes atomic on token collisions', async () => {
+  const f = await fixture();
+  try {
+    const scope = createVerifiedTenantScope('tenant-a', 'widget-anonymous', ['customer'], 1);
+    const deps = createTenantRequestDeps(scope, { DB: f.db } as any);
+    const collisionToken = 'admission-off-token-collision';
+    await f.db.prepare("INSERT INTO customer_auth_tokens (tenant_id,id,user_id,token_hash,type,expires_at) VALUES ('tenant-a',?,?,?,?,?)")
+      .bind(collisionToken, 'shared-customer', 'existing-token-hash', 'magic_link', '2099-01-01').run();
+    await assert.rejects(() => deps.repositories.users.issueCustomerAuthCredential({
+      email: 'admission-off-atomic@example.test',
+      fullName: 'atomic-offline',
+      expectedUserId: null,
+      userId: 'admission-off-shadow-user',
+      tokenId: collisionToken,
+      tokenHash: 'shadow-token-hash',
+      type: 'magic_link',
+      expiresAt: '2099-01-01',
+      expectedCurrentOtpTokenId: null,
+      expectedCurrentOtpTokenHash: null,
+    }), /UNIQUE constraint failed/);
+
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM users WHERE tenant_id='tenant-a' AND id='admission-off-shadow-user'").first<{ count: number }>())?.count,
+      0, 'no shadow user remains after a token-insert collision without admission');
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id=?").bind(collisionToken)
+      .first<{ count: number }>())?.count, 1, 'the preexisting token is untouched by the failed issuance');
   } finally { await f.mf.dispose(); }
 });
 
