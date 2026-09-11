@@ -107,7 +107,7 @@ describe('budget coordinator pure state', () => {
       expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: 'certified-terminal', measured: { queueOperations: 30 }, uncertain: {}, now: 2,
       certifiedClosure: { operationSetFingerprint: 'synthetic-closure-fingerprint', expiresAt: grant.expiresAt } });
     expect(reconciled.outcome).toBe('reconciled');
-    expect(reconciled.state.grants).toHaveLength(0);
+    expect(reconciled.state.grants.filter(grant => !grant.compacted)).toHaveLength(0);
     expect(reconciled.state.closedCharges).toMatchObject([{ dimension: 'queueOperations', purpose: 'new-work', units: 30 }]);
     expect(reserve(reconciled.state, 'holder-b', 'slot-is-free', 'new-work', { queueOperations: 50 }, 2).outcome).toMatchObject({ status: 'granted' });
     expect(reserve(reconciled.state, 'holder-b', 'charge-is-not-free', 'new-work', { queueOperations: 51 }, 2).outcome).toMatchObject({ status: 'rejected', reason: 'exhausted' });
@@ -115,7 +115,7 @@ describe('budget coordinator pure state', () => {
       expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: 'certified-terminal', measured: {}, uncertain: {}, now: 2 }).outcome).toBe('rejected');
     const rehydrated = JSON.parse(JSON.stringify(reconciled.state));
     expect(reconcileBudgetGrant(rehydrated, { reservationId: grant.reservationId, holderId: 'holder-a', expectedPolicyId: 'owner-policy',
-      expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: 'certified-terminal', measured: {}, uncertain: {}, now: 2,
+      expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: 'certified-terminal', measured: { queueOperations: 30 }, uncertain: {}, now: 2,
       certifiedClosure: { operationSetFingerprint: 'synthetic-closure-fingerprint', expiresAt: grant.expiresAt } }).outcome).toBe('already-reconciled');
   });
 
@@ -132,7 +132,7 @@ describe('budget coordinator pure state', () => {
       expect(reconciled.outcome).toBe('reconciled');
       state = reconciled.state;
     }
-    expect(state.grants).toHaveLength(0);
+    expect(state.grants.filter(grant => !grant.compacted)).toHaveLength(0);
     expect(state.closedCharges).toMatchObject([{ dimension: 'queueOperations', purpose: 'new-work', units: 50 }]);
     expect(reserve(state, 'holder-next', 'sustained-next', 'new-work', { queueOperations: 31 }, 2).outcome)
       .toMatchObject({ status: 'rejected', reason: 'exhausted' });

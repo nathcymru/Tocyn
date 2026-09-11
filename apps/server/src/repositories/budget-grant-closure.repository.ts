@@ -4,7 +4,7 @@ import type { SealedIsolateBudgetGrant } from '../budgets/isolate-admission.serv
 import { ISOLATE_COLD_ENVELOPE, MAX_ISOLATE_BLOCK_OPERATIONS } from '../budgets/isolate-admission.service';
 
 type OperationRow = { operation_id: string; operation_fingerprint: string; operation_envelope_json: string; aggregate_id: string };
-type ClosureRow = { aggregate_id: string; terminal_evidence_id: string; operation_set_fingerprint: string; operation_count: number; measured_json: string; uncertain_json: string; expires_at: number };
+type ClosureRow = { aggregate_id: string; terminal_evidence_id: string; operation_set_fingerprint: string; operation_count: number; measured_json: string; uncertain_json: string; expires_at: number | null };
 export type DurableGrantClosure = Readonly<{ terminalEvidenceId: string; uncertain: ResourceAmounts; operationSetFingerprint: string }>;
 
 function amounts(value: readonly ResourceAmounts[]): ResourceAmounts {

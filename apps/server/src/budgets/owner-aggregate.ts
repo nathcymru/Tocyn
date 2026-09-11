@@ -18,6 +18,7 @@ import {
   createBudgetCoordinatorState,
   expireBudgetGrants,
   reconcileBudgetGrant,
+  MAX_RETAINED_BUDGET_GRANTS,
   reserveBudgetGrant,
   type BudgetCoordinatorState,
   type CoordinatorAllocation,
@@ -218,6 +219,7 @@ function charged(state: BudgetOwnerAggregateState, allocation: CoordinatorAlloca
   let total = 0;
   for (const tenant of state.tenantStates) {
     for (const grant of tenant.grants) {
+      if (grant.compacted) continue;
       if (grant.purpose !== purpose || !grant.allocations.some(reference => allocationMatches(reference, allocation))) continue;
       const next = total + (grant.accounted[allocation.dimension] ?? 0);
       if (!Number.isSafeInteger(next)) throw new BudgetCoordinatorStateError('owner aggregate charge overflow');
@@ -252,7 +254,7 @@ function replaceTenant(state: BudgetOwnerAggregateState, index: number, tenant: 
 }
 
 function totalGrants(state: BudgetOwnerAggregateState): number {
-  return state.tenantStates.reduce((total, tenant) => total + tenant.grants.length, 0);
+  return state.tenantStates.reduce((total, tenant) => total + tenant.grants.filter(grant => !grant.compacted).length, 0);
 }
 
 /** A grant cannot remain valid after the authority lease that approved it. */
@@ -290,29 +292,31 @@ export function reserveOwnerAggregate(state: BudgetOwnerAggregateState, input: R
     return { state: replaceTenant(state, index, result.state), outcome: result.outcome };
   }
   const expired = expireBudgetGrants(tenant, input.now);
-  const expiredState = replaceTenant(state, index, expired);
+  const expiredState = { ...state, tenantStates: state.tenantStates.map((item, tenantIndex) => tenantIndex === index ? expired : expireBudgetGrants(item, input.now)) };
   if (state.capacityDefects.length > 0) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-defect' } };
-  if (totalGrants(state) >= state.maxReservations) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
+  if (totalGrants(expiredState) >= state.maxReservations || expiredState.tenantStates.reduce((sum, item) => sum + item.grants.length, 0) >= MAX_RETAINED_BUDGET_GRANTS) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
   if (aggregateExhausted(expiredState, expired, input)) return { state: expiredState, outcome: { status: 'rejected', reason: 'exhausted' } };
   const result = clipGrantToAuthorityLease(reserveBudgetGrant(expired, request), expiredState.authorityExpiresAt);
   return { state: replaceTenant(expiredState, index, result.state), outcome: result.outcome };
+}
+
+function currentAllocations(tenant: BudgetCoordinatorState): readonly CoordinatorAllocation[] {
+  return tenant.allocations.filter(allocation => tenant.activeAllocationKeys.includes(`${allocation.dimension}\u0000${allocation.allocationId}\u0000${allocation.window.id}`));
 }
 
 function sameAuthorityShape(state: BudgetOwnerAggregateState, candidate: BudgetOwnerAggregateState): boolean {
   if (state.aggregateId !== candidate.aggregateId || state.deploymentId !== candidate.deploymentId
     || state.ownerPolicyId !== candidate.ownerPolicyId || state.ownerPolicyRevision !== candidate.ownerPolicyRevision
     || state.maxReservations !== candidate.maxReservations || state.tenantStates.length !== candidate.tenantStates.length
-    || state.ownerAllocations.length !== candidate.ownerAllocations.length
     || state.activeOwnerAllocations.length !== candidate.activeOwnerAllocations.length) return false;
   const sameJson = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
-  if (!state.ownerAllocations.every((allocation, index) => sameJson(allocation, candidate.ownerAllocations[index]))) return false;
   if (!state.activeOwnerAllocations.every((allocation, index) => sameJson(allocation, candidate.activeOwnerAllocations[index]))) return false;
   return state.tenantStates.every((tenant, index) => tenant.tenantId === candidate.tenantStates[index]?.tenantId
     && tenant.coordinatorId === candidate.tenantStates[index]?.coordinatorId
     && tenant.policyId === candidate.tenantStates[index]?.policyId
     && tenant.policyRevision === candidate.tenantStates[index]?.policyRevision
     && tenant.restrictionRevision === candidate.tenantStates[index]?.restrictionRevision
-    && sameJson(tenant.allocations, candidate.tenantStates[index]?.allocations));
+    && sameJson(currentAllocations(tenant), currentAllocations(candidate.tenantStates[index])));
 }
 
 function mergeAllocations(existing: readonly CoordinatorAllocation[], current: readonly CoordinatorAllocation[]): readonly CoordinatorAllocation[] {
@@ -336,7 +340,7 @@ function transitionBudgetOwnerAggregateAuthority(state: BudgetOwnerAggregateStat
     const next = candidate.tenantStates.find(tenant => tenant.tenantId === current.tenantId && tenant.coordinatorId === current.coordinatorId);
     if (!next) throw new BudgetCoordinatorStateError('material authority transition changes a tenant reservation namespace');
     if (next.policyRevision === current.policyRevision && next.restrictionRevision === current.restrictionRevision) {
-      if (JSON.stringify(next.allocations) !== JSON.stringify(current.allocations)) throw new BudgetCoordinatorStateError('material authority allocation changed without a policy or restriction revision');
+      if (JSON.stringify(currentAllocations(next)) !== JSON.stringify(currentAllocations(current))) throw new BudgetCoordinatorStateError('material authority allocation changed without a policy or restriction revision');
       return current;
     }
     const trustedTenant = authority.tenantAllocations.find(tenant => tenant.effectivePolicy.tenantId === current.tenantId
@@ -347,6 +351,13 @@ function transitionBudgetOwnerAggregateAuthority(state: BudgetOwnerAggregateStat
       effectivePolicy: trustedTenant.effectivePolicy,
     });
   });
+  const ownerAllocations = mergeAllocations(state.ownerAllocations, candidate.activeOwnerAllocations)
+    .filter(allocation => allocation.window.kind === 'stock' || authority.authorityCheckedAt < allocation.window.endsAt
+      || nextTenants.some(tenant => tenant.grants.some(grant => !grant.compacted && grant.allocations.some(reference => allocationMatches(reference, allocation)))));
+  if (ownerAllocations.length + nextTenants.reduce((sum, tenant) => sum + tenant.allocations.length, 0) > 8_192
+    || nextTenants.reduce((sum, tenant) => sum + (tenant.closedCharges?.length ?? 0), 0) > 8_192) {
+    throw new BudgetCoordinatorStateError('owner budget accounting metadata capacity exhausted');
+  }
   return {
     ...state,
     ownerPolicyRevision: candidate.ownerPolicyRevision,
@@ -354,7 +365,7 @@ function transitionBudgetOwnerAggregateAuthority(state: BudgetOwnerAggregateStat
     authorityExpiresAt: candidate.authorityExpiresAt,
     authorityRevision: candidate.authorityRevision,
     newAdmissionsBlocked: false,
-    ownerAllocations: mergeAllocations(state.ownerAllocations, candidate.activeOwnerAllocations),
+    ownerAllocations,
     activeOwnerAllocations: candidate.activeOwnerAllocations,
     tenantStates: nextTenants,
   };
@@ -391,6 +402,9 @@ export function reconcileOwnerAggregate(state: BudgetOwnerAggregateState, input:
   if (index < 0) return { state, outcome: 'rejected' };
   const result = reconcileBudgetGrant(state.tenantStates[index], input);
   let next = replaceTenant(state, index, result.state);
+  if (next.tenantStates.reduce((sum, tenant) => sum + (tenant.closedCharges?.length ?? 0), 0) > 8_192) {
+    throw new BudgetCoordinatorStateError('owner budget accounting metadata capacity exhausted');
+  }
   if (result.outcome === 'capacity-defect') {
     const defect = result.state.capacityDefects.at(-1);
     if (!defect) throw new BudgetCoordinatorStateError('reconciliation capacity defect was not retained');
