@@ -24,4 +24,20 @@ describe('localBetaRoute', () => {
       ['POST', '/api/tickets/sla/initialize/bulk'],
     ] as const) expect(localBetaRoute(method, path)).toBe('disabled');
   });
+
+  it('admits the responsible-owner transition as a bounded conversation write', () => {
+    expect(localBetaRoute('PATCH', '/api/tickets/ticket-1/responsible-owner')).toBe('conversation-write');
+  });
+
+  it('admits the route POST as bounded conversation write and rejects non-dashboard variants', () => {
+    expect(localBetaRoute('POST', '/api/tickets/ticket-1/route')).toBe('conversation-write');
+    expect(localBetaRoute('POST', '/api/v1/tickets/ticket-1/route')).toBe('disabled');
+    expect(localBetaRoute('POST', '/api/v1/customer/tickets/ticket-1/route')).toBe('disabled');
+  });
+
+  it('rejects unsupported verbs for /api/tickets/:id/route', () => {
+    expect(localBetaRoute('PUT', '/api/tickets/ticket-1/route')).toBe('disabled');
+    expect(localBetaRoute('GET', '/api/tickets/ticket-1/route')).toBe('disabled');
+    expect(localBetaRoute('DELETE', '/api/tickets/ticket-1/route')).toBe('disabled');
+  });
 });
