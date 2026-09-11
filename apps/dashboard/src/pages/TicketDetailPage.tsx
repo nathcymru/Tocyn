@@ -60,6 +60,7 @@ function TicketDetail({ id }: { id: string }) {
     data: supportStates = [],
     loadMore: loadMoreSupportStates,
     hasMore: hasMoreSupportStates,
+    isLoading: isLoadingSupportStates,
     isLoadingMore: isLoadingMoreSupportStates,
     isLoadMoreError: isLoadMoreSupportStatesError,
   } = useSupportStates();
@@ -514,11 +515,12 @@ function TicketDetail({ id }: { id: string }) {
         {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Support state">
           <div><h2 className="font-semibold text-slate-900">Support state</h2><p className="text-sm text-slate-600">Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
           <label className="block text-sm font-medium text-slate-700">State
-            <TocynSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+            <TocynSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} aria-disabled={isSupportStateSubmitting || isLoadingSupportStates} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="mt-1 w-full rounded border border-slate-300 px-3 py-2">
               {!selectedSupportStateDefinition && supportState.data?.definition_id === supportStateDraft.definitionId && <option value={supportStateDraft.definitionId}>{supportState.data.internal_label} ({supportState.data.lifecycle}) — state details loading</option>}
               {supportStates.map(state => <option key={state.id} value={state.id}>{state.internal_label} ({state.legacy_status})</option>)}
             </TocynSelect>
           </label>
+          {isLoadingSupportStates && <p role="status" className="text-sm text-slate-700">Loading support-state definitions…</p>}
           <div className="grid gap-3 md:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
             <label className="text-sm font-medium text-slate-700">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
