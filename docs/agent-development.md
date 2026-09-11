@@ -45,15 +45,24 @@ excluded. It is a navigation aid, not a secret scanner; do not commit secrets in
 Generated output contains no source bodies, comments or literal values, and is not uploaded
 as a workflow artifact. It can be deleted and rebuilt at any time.
 
-## Why this instead of Graphify
+## Hosted Graphify and local fallback
 
-[Graphify](https://github.com/Graphify-Labs/graphify) offers broader language and semantic
-knowledge-graph features. Its inspected `graphifyy` 0.9.55 manifest brings a separate Python
-stack and many language parsers, with optional model/service integrations. For Tocyn's
-current TypeScript monorepo, the smaller alternative meets the immediate need without
-that additional installation and maintenance surface. This is not Graphify installed or a
-claim of feature parity. Revisit it when cross-language or semantic navigation is needed,
-with a pinned dependency lock, reviewed sources and explicit model-cost controls.
+The owner has enabled hosted Graphify for Tocyn through project-scoped
+[Codex configuration](../.codex/config.toml). Its full server tool catalogue is exposed,
+including repository discovery, semantic queries, call paths, impact/test navigation,
+workspace selection and durable memory. OAuth credentials remain in Codex's credential
+storage, outside this repository. Existing sessions may require a tool refresh or reopening;
+existing worktrees need this configuration and project trust before discovery succeeds.
+
+Use the [Graphify skill](../.agents/skills/tocyn-graphify/SKILL.md) and its detailed
+[workflow reference](../.agents/skills/tocyn-graphify/references/hosted-workflow.md).
+They replace the earlier recommendation to defer Graphify adoption. The earlier decision
+concerned installing the local Python/parser stack; hosted access does not install that
+stack, change application dependencies, or require a second graph build.
+
+The deterministic index described above remains useful offline, in clients without the
+connection, and for checkout-specific navigation when the hosted graph is stale. Do not
+routinely run both. Graph-derived risk and linked tests do not execute validation.
 
 Querying before broad reads is intended to reduce context consumption. There is no measured
 claim about Copilot credits saved: provider billing and model behavior differ. Compare
