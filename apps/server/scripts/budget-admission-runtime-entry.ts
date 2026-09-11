@@ -8,6 +8,8 @@ let wrappedNamespace: any;
 let wrappedDatabase: any;
 let beforeCanonical: string | undefined;
 let canonicalDelayMs = 0;
+let pauseNextCanonical = false;
+let releaseCanonical: (() => void) | undefined;
 let loseCanonicalAck = false;
 let failCanonicalAttempts = 0;
 let canonicalAttempts = 0;
@@ -36,6 +38,13 @@ function instrumentDatabase(db: any): any {
       const canonical=batch.some(statement=>statements.get(statement)?.sql.includes('INSERT INTO budget_mutation_assertion'));
       if (canonical) {
         canonicalAttempts++;
+        if (pauseNextCanonical) {
+          pauseNextCanonical = false;
+          let released = false; releaseCanonical = () => { released = true; };
+          for (let tick = 0; tick < 500 && !released; tick++) await new Promise(resolve => setTimeout(resolve, 10));
+          releaseCanonical = undefined;
+          if (!released) throw new Error('Synthetic canonical gate timed out');
+        }
         if (failCanonicalAttempts>0) {failCanonicalAttempts--;throw new Error('Synthetic bounded canonical interruption');}
         const action=beforeCanonical;beforeCanonical=undefined;
         const actions:Record<string,string>={
@@ -115,7 +124,9 @@ export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     if (new URL(request.url).pathname === '/__budget-control') {
       if (request.method === 'POST') {
-        const control = await request.json() as { discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean };
+        const control = await request.json() as { pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean };
+        if (control.pauseNextCanonical) pauseNextCanonical = true;
+        if (control.releaseCanonical) releaseCanonical?.();
         if (control.pauseNextReserve) pauseNextReserve=true;
         if (control.releaseReserve) releaseReserve?.();
         if (control.editPolicyAfterReserve) editPolicyAfterReserve=true;
@@ -129,7 +140,7 @@ export default {
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
         if (control.loseReconcileAcks && control.loseReconcileAcks <= 5) lostReconcileAcksRemaining = control.loseReconcileAcks;
       }
-      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, reservePaused:!!releaseReserve, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
+      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), ATTACHMENTS_BUCKET: instrumentBucket(env.ATTACHMENTS_BUCKET), emailTransport: localCapture,
       BUDGET_COORDINATOR_DO: instrument(env.BUDGET_COORDINATOR_DO, env.DB),

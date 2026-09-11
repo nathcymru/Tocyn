@@ -23,12 +23,13 @@ export type BudgetCommitAuthority = Readonly<{ snapshot: BudgetCommitSnapshot; e
   purpose: 'new-work'; operationId: string; operationFingerprint: string; grant?: BudgetGrantOperationLink }>;
 export type IsolateAdmissionResult = IsolateGrantSpendResult & Readonly<{ commitAuthority?: BudgetCommitAuthority }>;
 type ActiveAuthority = { commitSnapshot: BudgetCommitSnapshot; trusted: TrustedBudgetCoordinatorAuthority; policy: EffectiveTenantCostPolicy; local: CurrentIsolateGrantAuthority };
-type HeldOperation = { fingerprint: string; envelope: ResourceAmounts; state: 'in-flight' | 'committed' | 'unknown'; settledAt?: number };
+type HeldOperation = { activeAttempts: number; fingerprint: string; envelope: ResourceAmounts; state: 'in-flight' | 'committed' | 'unknown'; settledAt?: number };
 type HeldGrant = { holder: IsolateBudgetGrantHolder; reservationId: string; expiresAt: number; dimensions: readonly string[];
   aggregateId: string; tenantId: string; credentialKey: string; envelope: ResourceAmounts; operations: Map<string,HeldOperation>; sealed: boolean;
   sealedGrant?: SealedIsolateBudgetGrant; recoveryAttempts: number; recoveryCompleted: boolean; lastSettledAt?: number };
 export type SealedIsolateBudgetGrant = Readonly<{ tenantId: string; aggregateId: string; reservationId: string; holderId: string;
   policyId: string; policyRevision: number; restrictionRevision: number;
+  credentialKey: string; snapshot: BudgetCommitSnapshot; expiresAt: number;
   terminalEvidenceId: string; operations: readonly Readonly<{ operationId: string; operationFingerprint: string; operationEnvelope: ResourceAmounts }>[];
   operationIds: readonly string[]; operationFingerprint: string; operationEnvelopes: readonly ResourceAmounts[]; envelope: ResourceAmounts }>;
 type RevisionFloor = { deploymentId: string; policyId: string; authorityRevision: number; policyRevision: number; restrictionRevision: number };
@@ -96,6 +97,7 @@ const exhausted = (): IsolateGrantSpendResult => ({ status: 'rejected', reason: 
  * and fail closed at the refill cap until isolate replacement.
  */
 export class IsolateBudgetAdmissionCache {
+  private readonly settledAttempts = new WeakSet<BudgetCommitAuthority>();
   private entries: CacheEntry[] = [];
 
   private retire(entry: CacheEntry): void {
@@ -239,7 +241,13 @@ export class IsolateBudgetAdmissionCache {
       const operationEnvelope = isolateWarmReservedEnvelope(input.business);
       if (!operationEnvelope) return { status: 'rejected', reason: 'invalid-request' };
       if (result.status === 'spent' && !held.operations.has(input.intent.operationId)) {
-        held.operations.set(input.intent.operationId, { fingerprint: input.intent.operationFingerprint, envelope: structuredClone(operationEnvelope), state: 'in-flight' });
+        held.operations.set(input.intent.operationId, { activeAttempts: 1, fingerprint: input.intent.operationFingerprint, envelope: structuredClone(operationEnvelope), state: 'in-flight' });
+      }
+      if (result.status === 'idempotent') {
+        const operation = held.operations.get(input.intent.operationId);
+        if (!operation) return { status: 'rejected', reason: 'invalid-request' };
+        operation.activeAttempts++;
+        if (operation.state !== 'unknown') operation.state = 'in-flight';
       }
       return { ...result, commitAuthority: Object.freeze({ snapshot: authority!.commitSnapshot,
         expiresAt: Math.min(held.expiresAt, authority!.trusted.authorityExpiresAt), purpose: 'new-work',
@@ -281,13 +289,15 @@ export class IsolateBudgetAdmissionCache {
   /** The only transition after canonical commit. Any unconfirmed result poisons the whole local grant. */
   settleOperation(authority: BudgetCommitAuthority, outcome: 'committed' | 'unknown', now: number): void {
     const link = authority.grant;
-    if (!link || !Number.isSafeInteger(now) || now < 0) return;
+    if (!link || !Number.isSafeInteger(now) || now < 0 || this.settledAttempts.has(authority)) return;
     for (const entry of this.entries) for (const held of entry.holders) {
       if (held.tenantId !== link.tenantId || held.aggregateId !== link.aggregateId || held.reservationId !== link.reservationId || held.holder.holderId !== link.holderId) continue;
       const operation = held.operations.get(link.operationId);
       if (!operation || operation.fingerprint !== link.operationFingerprint || held.sealed) return;
+      this.settledAttempts.add(authority);
+      operation.activeAttempts = Math.max(0, operation.activeAttempts - 1);
       if (outcome === 'unknown') operation.state = 'unknown';
-      else if (operation.state === 'in-flight') { operation.state = 'committed'; operation.settledAt = now; held.lastSettledAt = now; }
+      else if (operation.state === 'in-flight' && operation.activeAttempts === 0) { operation.state = 'committed'; operation.settledAt = now; held.lastSettledAt = now; }
       return;
     }
   }
@@ -308,12 +318,13 @@ export class IsolateBudgetAdmissionCache {
         }
         if (held.sealed || held.operations.size < 1 || held.tenantId !== tenantId || held.credentialKey !== credentialKey || !held.lastSettledAt || now - held.lastSettledAt < idleMs) continue;
         const operations = [...held.operations.entries()];
-        if (operations.some(([, operation]) => operation.state !== 'committed')) continue;
+        if (operations.some(([, operation]) => operation.state !== 'committed' || operation.activeAttempts !== 0)) continue;
         // Irreversible before I/O: any concurrent/reentrant admission sees it.
         held.sealed = true;
         const ids = operations.map(([id]) => id).sort();
         const fingerprint = JSON.stringify(ids.map(id => [id, held.operations.get(id)!.fingerprint, JSON.stringify(held.operations.get(id)!.envelope)]));
         const sealed = Object.freeze({ tenantId, aggregateId: held.aggregateId, reservationId: held.reservationId, holderId: held.holder.holderId,
+          credentialKey: held.credentialKey, snapshot: entry.snapshot, expiresAt: held.expiresAt,
           policyId: entry.snapshot.policy_id, policyRevision: entry.snapshot.policy_revision, restrictionRevision: JSON.parse(entry.snapshot.restriction_json).revision,
           terminalEvidenceId: `closure:${crypto.randomUUID()}`,
           operations: Object.freeze(ids.map(id => Object.freeze({ operationId: id, operationFingerprint: held.operations.get(id)!.fingerprint,

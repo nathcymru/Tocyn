@@ -24,13 +24,29 @@ async function digest(value: string): Promise<string> {
   return [...bytes].map(byte => byte.toString(16).padStart(2,'0')).join('');
 }
 
+function validAmounts(value: ResourceAmounts): boolean {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0
+    && Object.entries(value).every(([dimension,units]) => (RESOURCE_DIMENSIONS as readonly string[]).includes(dimension)
+      && Number.isSafeInteger(units) && units >= 0) && Object.values(value).some(units => units > 0);
+}
+function identity(value: string): boolean {
+  return typeof value === 'string' && value.length > 0 && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value);
+}
+
 /** Durable, bounded proof that one sealed isolate grant has exactly its local operation set. */
 export class BudgetGrantClosureRepository {
   constructor(private readonly db: D1Database) {}
 
   async close(sealed: SealedIsolateBudgetGrant): Promise<DurableGrantClosure | null> {
-    if (sealed.operationIds.length < 1 || sealed.operationIds.length > MAX_ISOLATE_BLOCK_OPERATIONS) return null;
-    const expected = [...sealed.operations].sort((left,right) => left.operationId.localeCompare(right.operationId));
+    if (![sealed.tenantId,sealed.aggregateId,sealed.reservationId,sealed.holderId,sealed.terminalEvidenceId].every(identity)
+      || !Array.isArray(sealed.operations) || !Array.isArray(sealed.operationIds) || !Array.isArray(sealed.operationEnvelopes)
+      || sealed.operations.length < 1 || sealed.operations.length > MAX_ISOLATE_BLOCK_OPERATIONS
+      || sealed.operationIds.length !== sealed.operations.length || sealed.operationEnvelopes.length !== sealed.operations.length
+      || new Set(sealed.operationIds).size !== sealed.operations.length || !validAmounts(sealed.envelope)
+      || sealed.operations.some((operation,index) => !operation || !identity(operation.operationId) || !identity(operation.operationFingerprint)
+        || !validAmounts(operation.operationEnvelope) || operation.operationId !== sealed.operationIds[index]
+        || JSON.stringify(operation.operationEnvelope) !== JSON.stringify(sealed.operationEnvelopes[index]))) return null;
+    const expected = [...sealed.operations].sort((left,right) => left.operationId < right.operationId ? -1 : left.operationId > right.operationId ? 1 : 0);
     // The independent durable rows, not the local receipt map, are the closure proof.
     const result = await this.db.prepare(`SELECT operation_id,operation_fingerprint,operation_envelope_json,aggregate_id
       FROM budget_grant_operations WHERE tenant_id=? AND reservation_id=? AND holder_id=? ORDER BY operation_id LIMIT ?`)
@@ -43,7 +59,9 @@ export class BudgetGrantClosureRepository {
     const operationSetFingerprint = await digest(JSON.stringify(durableSet));
     let envelopes: ResourceAmounts[];
     try { envelopes = rows.map(row => JSON.parse(row.operation_envelope_json) as ResourceAmounts); } catch { return null; }
-    const uncertain = amounts([ISOLATE_COLD_ENVELOPE,...envelopes]);
+    let uncertain: ResourceAmounts;
+    try { uncertain = amounts([ISOLATE_COLD_ENVELOPE,...envelopes]); } catch { return null; }
+    if (RESOURCE_DIMENSIONS.some(dimension => (uncertain[dimension] ?? 0) > (sealed.envelope[dimension] ?? 0))) return null;
     const measured: ResourceAmounts = {};
     const existing = await this.db.prepare(`SELECT aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json
       FROM budget_grant_closures WHERE tenant_id=? AND reservation_id=? AND holder_id=?`)
@@ -59,7 +77,7 @@ export class BudgetGrantClosureRepository {
     await this.db.prepare(`INSERT INTO budget_grant_closures
       (tenant_id,reservation_id,holder_id,aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json)
       SELECT ?,?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM budget_grant_operations
-        WHERE tenant_id=? AND reservation_id=? AND holder_id=?)=?`)
+        WHERE tenant_id=? AND reservation_id=? AND holder_id=?)=? ON CONFLICT DO NOTHING`)
       .bind(sealed.tenantId,sealed.reservationId,sealed.holderId,sealed.aggregateId,sealed.terminalEvidenceId,operationSetFingerprint,rows.length,
         canonical(measured),canonical(uncertain),sealed.tenantId,sealed.reservationId,sealed.holderId,rows.length).run();
     // D1's changes count for INSERT…SELECT is not portable evidence of an

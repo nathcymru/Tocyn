@@ -1,7 +1,7 @@
 import type { DurableObjectNamespace, D1Database } from '@cloudflare/workers-types';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { VerifiedTenantScope } from '../types/tenant';
-import { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
+import { BudgetAuthorityRepository, type BudgetCommitSnapshot } from '../repositories/budget-authority.repository';
 import { BudgetGrantClosureRepository } from '../repositories/budget-grant-closure.repository';
 import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO';
 import type { SealedIsolateBudgetGrant } from './isolate-admission.service';
@@ -17,12 +17,16 @@ export class BudgetGrantRecoveryService {
     private readonly scope: VerifiedTenantScope, private readonly apiKeyId: string) {}
 
   async recover(sealed: SealedIsolateBudgetGrant, now: number): Promise<'reconciled' | 'pending' | 'rejected'> {
+    if (sealed.tenantId !== this.scope.tenantId || this.scope.actorId !== this.apiKeyId
+      || sealed.credentialKey !== `api-key:${this.apiKeyId}:tickets:write`
+      || !Number.isSafeInteger(now) || !Number.isSafeInteger(sealed.expiresAt) || now >= sealed.expiresAt) return 'rejected';
     const principal = await this.repository.authorizeApiKeyTicket(this.scope,this.scope.tenantId,this.apiKeyId);
     if (!principal) return 'rejected';
     const current = await this.repository.resolveForVerifiedPrincipal(this.scope,principal,now);
     if (current.kind !== 'active' || current.authority.aggregateId !== sealed.aggregateId) return 'rejected';
     const policy = current.authority.tenantAllocations.find(item => item.effectivePolicy.tenantId === sealed.tenantId)?.effectivePolicy;
-    if (!policy || current.commitSnapshot.policy_id !== sealed.policyId || current.commitSnapshot.policy_revision !== sealed.policyRevision) return 'rejected';
+    if (!sealed.snapshot || Object.entries(current.commitSnapshot).some(([key,value]) => sealed.snapshot[key as keyof BudgetCommitSnapshot] !== value)) return 'rejected';
+    if (!policy || policy.restrictionRevision !== sealed.restrictionRevision || current.commitSnapshot.policy_id !== sealed.policyId || current.commitSnapshot.policy_revision !== sealed.policyRevision) return 'rejected';
     const coordinator = this.namespace.get(this.namespace.idFromName(sealed.aggregateId)) as unknown as BudgetCoordinatorDO;
     try {
       await coordinator.refreshFromTrustedAuthority(current.authority);
