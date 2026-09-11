@@ -94,7 +94,7 @@ describe("Ticket Detail Fixes Verification", () => {
           group_id: validGroupUuid
         })
       },
-      { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: { put: vi.fn(), get: vi.fn(), delete: vi.fn() } }
+      { BUDGET_ADMISSION_POLICY: 'off', DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: { put: vi.fn(), get: vi.fn(), delete: vi.fn() } }
     );
 
     expect(res.status).toBe(200);

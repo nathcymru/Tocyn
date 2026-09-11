@@ -219,7 +219,7 @@ describe("Dashboard Handler Integration Tests", () => {
             assigned_to: validUuid
           })
         },
-        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
+        { BUDGET_ADMISSION_POLICY: 'off', DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
       );
 
       expect(res.status).toBe(200);
@@ -245,7 +245,7 @@ describe("Dashboard Handler Integration Tests", () => {
           },
           body: JSON.stringify({ invalid_field: "value" })
         },
-        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
+        { BUDGET_ADMISSION_POLICY: 'off', DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
       );
 
       expect(res.status).toBe(400);

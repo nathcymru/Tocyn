@@ -193,6 +193,16 @@ test('real local combined policy admits API, staff, portal and widget mutations 
     assert.equal(conflict.status, 409); await conflict.body?.cancel();
     assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant' AND subject='Staff receipt'").first<{count:number}>())?.count, 1);
     assert.equal((await db.prepare("SELECT count(*) AS count FROM staff_ticket_mutation_receipts WHERE tenant_id='runtime-tenant'").first<{count:number}>())?.count, 1);
+    const update = (key: string, body: object) => mf!.dispatchFetch(`http://runtime.test/api/tickets/${ticket.id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json', authorization: `Bearer ${staffToken}`, 'idempotency-key': key }, body: JSON.stringify(body),
+    });
+    const updated = await update('staff-update',{status:'pending',priority:'high',custom_fields:{synthetic:'x'.repeat(60_000)}});
+    assert.equal(updated.status,200); assert.deepEqual(await updated.json(),{success:true}); assert.equal(updated.headers.get('Idempotency-Replayed'),'false');
+    const updateReplay = await update('staff-update',{priority:'high',status:'pending',custom_fields:{synthetic:'x'.repeat(60_000)}});
+    assert.equal(updateReplay.status,200); assert.deepEqual(await updateReplay.json(),{success:true}); assert.equal(updateReplay.headers.get('Idempotency-Replayed'),'true');
+    const updateConflict = await update('staff-update',{status:'resolved'}); assert.equal(updateConflict.status,409); await updateConflict.body?.cancel();
+    assert.equal((await db.prepare("SELECT count(*) AS count FROM staff_ticket_mutation_receipts WHERE tenant_id='runtime-tenant' AND operation='dashboard.ticket.update'").first<{count:number}>())?.count,1);
+    assert.equal((await db.prepare("SELECT count(*) AS count FROM conversation_events WHERE tenant_id='runtime-tenant' AND ticket_id=? AND kind='ticket.state_changed'").bind(ticket.id).first<{count:number}>())?.count,1);
     // Miniflare's prerelease binding proxy types currently infer Request here.
     const bucket = await mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
     await bucket.put('runtime-tenant/agent-attachments/runtime-staff/retry.txt', 'retry attachment', { httpMetadata: { contentType: 'text/plain' } });
