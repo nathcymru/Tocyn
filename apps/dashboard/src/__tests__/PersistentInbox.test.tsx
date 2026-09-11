@@ -93,6 +93,23 @@ it('keeps the 20-result list node, scroll position and roving focus while conver
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
 });
 
+it('labels filtering as current-view, clears it with a button or Escape, and resets to page one',async()=>{
+  showInbox();
+  const input=await screen.findByRole('textbox',{name:'Filter this view'});
+  expect(input).toHaveAttribute('placeholder','Filter this view');
+  fireEvent.change(input,{target:{value:'billing'}});
+  fireEvent.submit(input.closest('form')!);
+  await waitFor(()=>expect(input).toHaveValue('billing'));
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter applied.');
+  fireEvent.click(screen.getByRole('button',{name:'Clear current-view filter'}));
+  await waitFor(()=>expect(input).toHaveValue(''));
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter cleared.');
+  fireEvent.change(input,{target:{value:'urgent'}});
+  fireEvent.keyDown(input,{key:'Escape'});
+  expect(input).toHaveValue('');
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter cleared.');
+});
+
 it('does not persist a view switch before an unsaved conversation draft permits navigation',async()=>{
   savedSelection='ticket-1';
   detailNavigation.pending=true;

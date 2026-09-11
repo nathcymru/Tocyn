@@ -963,10 +963,12 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
 dashboard.get("/tickets", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const payload = c.get('jwtPayload') as JWTPayload;
+  const search = z.string().trim().max(256).refine(value => !/[\u0000-\u001f\u007f]/.test(value), 'Invalid ticket search').optional().safeParse(c.req.query('search'));
+  if (!search.success) return c.json({ error: 'Invalid ticket search' }, 400);
   const sort = z.enum(OPERATOR_WORKSPACE_SORTS).optional().safeParse(c.req.query('sort'));
   if (!sort.success) return c.json({ error: 'Invalid ticket sort' }, 400);
   const admission = await admitHttpTicketList({ env: c.env, deps: d, payload, operation: 'dashboard.ticket.list',
-    filterId: c.req.query('filter_id'), search: c.req.query('search'), now: () => c.env.localNow?.() ?? Date.now() });
+    filterId: c.req.query('filter_id'), search: search.data, now: () => c.env.localNow?.() ?? Date.now() });
   if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
     ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
     : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
@@ -975,7 +977,7 @@ dashboard.get("/tickets", async (c) => {
       sort: sort.data,
       customerEmail:c.req.query('customer_email'), filterId:c.req.query('filter_id'),
       status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),
-      groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:c.req.query('search'),
+      groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:search.data,
       page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50),
       viewer: { role: payload.role === 'agent' ? 'agent' : 'admin', actorId: d.scope.actorId },
       ...(admission.snapshot ? { scanFence: admission.snapshot } : {}),
