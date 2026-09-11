@@ -22,6 +22,7 @@ const TicketFieldsPage = lazy(() => import('./pages/TicketFieldsPage').then(modu
 const FiltersSettingsPage = lazy(() => import('./pages/FiltersSettingsPage').then(module => ({ default: module.FiltersSettingsPage })));
 const SecurityProfilePage = lazy(() => import('./pages/SecurityProfilePage').then(module => ({ default: module.SecurityProfilePage })));
 const UsagePage = lazy(() => import('./pages/UsagePage').then(module => ({ default: module.UsagePage })));
+const SupportStatesPage = lazy(() => import('./pages/SupportStatesPage').then(module => ({ default: module.SupportStatesPage })));
 import { useAuthStore } from './store/authStore';
 
 function ProtectedRoute({ children, requireMfa = true }: { children: React.ReactNode, requireMfa?: boolean }) {
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<RouteContent><SettingsPage /></RouteContent>} />
+            <Route path="support-states" element={<RouteContent><SupportStatesPage /></RouteContent>} />
             <Route path="agent-permissions" element={<RouteContent><AgentPermissionsPage /></RouteContent>} />
             <Route path="users" element={<RouteContent><UsersPage /></RouteContent>} />
             <Route path="groups" element={<RouteContent><GroupsPage /></RouteContent>} />

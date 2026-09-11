@@ -537,17 +537,20 @@
       "number": 66,
       "alias": "#66",
       "title": "Apply tenant themes through standard CSS variables",
-      "done": false,
-      "effort": 16.0,
+      "done": true,
+      "effort": 0,
       "dependencies": [
         48
       ],
       "baselineStart": "2026-12-24",
       "baselineTarget": "2026-12-31",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualCompletion": "2026-09-11",
+      "progress": 100,
       "milestone": 16,
-      "new": false
+      "new": false,
+      "actualStart": "2026-09-11",
+      "forecastStart": "2026-09-11",
+      "forecastTarget": "2026-09-18"
     },
     {
       "number": 65,
@@ -1234,8 +1237,8 @@
       "number": 136,
       "alias": "NEW-UX-10",
       "title": "Add explicit waiting reasons and configurable support workflow states",
-      "done": false,
-      "effort": 24,
+      "done": true,
+      "effort": 0,
       "dependencies": [
         127,
         60,
@@ -1244,10 +1247,13 @@
       ],
       "baselineStart": "2026-10-15",
       "baselineTarget": "2026-10-27",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualCompletion": "2026-09-11",
+      "progress": 100,
       "milestone": 37,
-      "new": true
+      "new": true,
+      "actualStart": "2026-09-11",
+      "forecastStart": "2026-09-11",
+      "forecastTarget": "2026-09-23"
     },
     {
       "number": 137,

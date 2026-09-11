@@ -12,6 +12,7 @@ import { Env } from "../bindings";
 import { AppVariables, Article } from "../types";
 import { CustomerAuthService } from "../services/customer-auth.service";
 import { TenantTicketService } from "../services/tenant-ticket.service";
+import { publicSupportState } from '../types/support-state';
 import { tenantMiddleware, TenantRequestDeps, createTenantRequestDeps, createCustomerAuthResolvers } from "../middleware/tenant.middleware";
 import { createVerifiedTenantScope } from "../auth/scope";
 import { BroadcastService } from "../services/broadcast.service";
@@ -277,6 +278,21 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
       articlesWithAttachments.map(article => article.canonical),
     ),
   });
+});
+
+/** Customer projection deliberately excludes operator labels and waiting facts. */
+app.get('/tickets/:id/support-state', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
+  const payload = c.get('jwtPayload');
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'Not found' }, 404);
+  const ticket = await deps.repositories.tickets.get(id);
+  if (!ticket || ticket.customer_email !== payload.email || (ticket.customer_id !== null && ticket.customer_id !== payload.sub)) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+  const state = await deps.repositories.supportStates.getTicketState(ticket.id);
+  if (!state) return c.json({ error: 'Not found' }, 404);
+  return c.json(publicSupportState(state));
 });
 
 app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(5, 60000), async (c) => {
