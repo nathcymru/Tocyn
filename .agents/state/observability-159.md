@@ -1,6 +1,10 @@
 # #159 implementation checkpoint
 
-## Current next actions (supersedes earlier queues below)
+## Integration checkpoint — 11 September 2026, 03:36 BST
+
+Coordinator integrated the continuation onto accepted main `8ef397c716802a50d7ba1be835f438148eb2e4c0`. Application revision `da9e3fd` preserves #162's live session version and the shared request observer; the one textual merge conflict was resolved to retain both. Integrated Node 22.19.0 server typecheck and 525 tests / 58 files pass. Required exact-head CI/security and final acceptance remain pending. #159 is open; no production telemetry activation or Copilot review requested.
+
+## Prior checkpoint (historical; latest integration above takes precedence)
 
 Owning issue #159; foundation PR #170 merged at `9cee350c36f49b9459fad3db42aadc8d25de848b`, with valid GitHub signature and exact reviewed tree. Coordinator owns integration and acceptance; continue remaining work from current main in a new bounded issue branch. Latest implementation `277cb3a` includes fixed HTTP/resource envelopes, local collector/configuration, cost bounds, credential decisions and canonical mutation summaries. All later sections are chronological evidence, not competing ready queues. No worker remains active on #159 at this checkpoint.
 
