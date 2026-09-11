@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { Profiler, type ProfilerOnRenderCallback } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
+import { CollaborationProvider } from '../components/CollaborationContext';
 import { useAuthStore } from '../store/authStore';
 
 class Socket {
@@ -49,7 +50,7 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
 }
 function showDetail(onRender?: ProfilerOnRenderCallback){
   const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> }], { initialEntries: ['/tickets/workflow-ticket'] });
-  render(<QueryClientProvider client={client}><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><CollaborationProvider><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></CollaborationProvider></QueryClientProvider>);
 }
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});

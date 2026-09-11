@@ -3,6 +3,8 @@ export const ARTICLE_BODY_FORMATS = ['plain', 'markdown-v1'] as const;
 export type ArticleBodyFormat = typeof ARTICLE_BODY_FORMATS[number];
 export const DEFAULT_ARTICLE_BODY_FORMAT: ArticleBodyFormat = 'plain';
 
+export * from './src/collaboration';
+
 /**
  * Converts storage values into the explicit format contract. Only a missing
  * legacy value receives the historical plain-text default; unknown markers

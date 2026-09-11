@@ -6,12 +6,30 @@ export interface RealtimeMessage {
   payload: any;
 }
 
-export function useRealtime() {
+export interface RealtimePresence {
+  connectionId: string;
+  userId: string;
+  name: string;
+  location: string | null;
+}
+
+export interface RealtimeConnection {
+  isConnected: boolean;
+  lastMessage: RealtimeMessage | null;
+  presence: RealtimePresence[];
+  updateLocation: (location: string | null) => void;
+  connectionDetails: { latency: number; reconnectCount: number };
+  /** Optional during test doubles; the provider safely treats absence as offline. */
+  sendRealtime?: (message: RealtimeMessage) => boolean;
+  manualReconnect: () => void;
+}
+
+export function useRealtime(): RealtimeConnection {
   const { token } = useAuthStore();
   
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<RealtimeMessage | null>(null);
-  const [presence, setPresence] = useState<any[]>([]);
+  const [presence, setPresence] = useState<RealtimePresence[]>([]);
   const [connectionDetails, setConnectionDetails] = useState<{
     latency: number;
     reconnectCount: number;
@@ -53,7 +71,7 @@ export function useRealtime() {
           const data = JSON.parse(event.data);
           
           if (data.type === 'presence.sync') {
-            setPresence(data.payload);
+            if (Array.isArray(data.payload)) setPresence(data.payload as RealtimePresence[]);
           } else if (data.type === 'presence.update') {
             setPresence(prev => {
               if (data.payload.status === 'offline') {
@@ -115,6 +133,12 @@ export function useRealtime() {
     }
   }, []);
 
+  const sendRealtime = useCallback((message: RealtimeMessage) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return false;
+    wsRef.current.send(JSON.stringify(message));
+    return true;
+  }, []);
+
   const manualReconnect = useCallback(() => {
     if (wsRef.current) wsRef.current.close(); // Triggers reconnect
   }, []);
@@ -125,6 +149,7 @@ export function useRealtime() {
     presence, 
     updateLocation, 
     connectionDetails,
+    sendRealtime,
     manualReconnect 
   };
 }

@@ -9,7 +9,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useTicket, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
-import { useRealtime } from '../hooks/useRealtime';
+import { useCollaboration } from '../components/CollaborationContext';
 import { useTicketFields } from '../hooks/useTicketFields';
 import { useSupportStates, useTicketSupportState, useTransitionSupportState } from '../hooks/useSupportStates';
 import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue, type OperatorDraftVersion } from '../hooks/useOperatorDraft';
@@ -73,7 +73,7 @@ function TicketDetail({ id }: { id: string }) {
   const [showSupportState, setShowSupportState] = useState(false);
   const supportState = useTicketSupportState(id, showSupportState);
   const transitionSupportState = useTransitionSupportState();
-  const { presence, updateLocation, lastMessage } = useRealtime();
+  const { updateLocation, lastMessage, viewersForTicket, typingForTicket, announceTyping, stopTyping } = useCollaboration();
   const draft = useOperatorDraft(id);
   const replyCapabilities = useReplyCapability(id);
   const replyCapability = replyCapabilities.data?.modes.find(mode => mode.visibility === draft.mode);
@@ -200,8 +200,8 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   // Filter presence to find other agents viewing this ticket and deduplicate by userId
-  const rawViewers = presence.filter(p => p.location === `ticket:${id}`);
-  const viewers = Array.from(new Map(rawViewers.map(v => [v.userId, v])).values());
+  const viewers = viewersForTicket(id);
+  const typing = typingForTicket(id);
 
   useEffect(() => {
     if (!ticket || error || (workspace.status !== 'restored' && workspace.status !== 'saved') || workspace.selectedTicketId === id) return;
@@ -216,8 +216,8 @@ function TicketDetail({ id }: { id: string }) {
 
   useEffect(() => {
     updateLocation(`ticket:${id}`);
-    return () => updateLocation(null);
-  }, [id, updateLocation]);
+    return () => { updateLocation(null); stopTyping(id, draft.baseConversationRevision); };
+  }, [draft.baseConversationRevision, id, stopTyping, updateLocation]);
 
   useEffect(() => {
     if (lastMessage?.type === 'article.created' && String(lastMessage.payload?.ticket_id ?? lastMessage.payload?.ticketId) === String(id)) {
@@ -326,6 +326,7 @@ function TicketDetail({ id }: { id: string }) {
       attachments: changes.attachments ?? current.attachments,
       baseConversationRevision: current.baseConversationRevision,
     }));
+    if (changes.body !== undefined) announceTyping({ ticketId: id, baseConversationRevision: draft.baseConversationRevision, active: changes.body.trim().length > 0 });
   };
 
   const uploadAttachment = async (pending: PendingAttachment) => {
@@ -394,6 +395,7 @@ function TicketDetail({ id }: { id: string }) {
     activeUploads.current.clear();
     setPendingAttachments(current => current.map(attachment => ({ ...attachment, status: 'error' })));
     const result = await draft.discard();
+    stopTyping(id, draft.baseConversationRevision);
     if (result === 'cleared') {
       setSentDraftVersion(null);
       setPendingAttachments(current => current.filter(attachment => attachment.sessionGeneration !== sessionGeneration));
@@ -453,6 +455,7 @@ function TicketDetail({ id }: { id: string }) {
         attachments: sendingDraft.attachments
       });
       if (!article?.id) throw new Error('The reply was not confirmed.');
+      stopTyping(id, sendingDraft.baseConversationRevision);
       setSentDraftVersion(sendingDraft.version);
       const cleanup = await draft.cleanupAfterConfirmedSend(sendingDraft.version);
       if (cleanup === 'cleared') setSentDraftVersion(null);
@@ -616,6 +619,11 @@ function TicketDetail({ id }: { id: string }) {
                       Live Viewers
                     </span>
                   </div>
+                )}
+                {typing.length > 0 && (
+                  <p className="text-xs text-slate-600">
+                    {typing.map(candidate => candidate.actor.name).join(', ')} {typing.length === 1 ? 'is' : 'are'} typing…
+                  </p>
                 )}
               </div>
             </div>

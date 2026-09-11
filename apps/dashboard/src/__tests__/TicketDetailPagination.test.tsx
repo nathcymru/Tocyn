@@ -4,6 +4,7 @@ import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/reac
 import {createMemoryRouter,RouterProvider} from 'react-router-dom';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {TicketDetailPage} from '../pages/TicketDetailPage';
+import {CollaborationProvider} from '../components/CollaborationContext';
 import {useAuthStore} from '../store/authStore';
 const presence = vi.hoisted(() => ({current: [] as {userId:string;name:string;location:string}[]}));
 vi.mock('../hooks/useRealtime',()=>({useRealtime:()=>({presence:presence.current,updateLocation:()=>{},lastMessage:null})}));
@@ -14,7 +15,7 @@ const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,
 let request:(path:string,init:RequestInit)=>Promise<Response>|Response;
 function renderDetail(client:QueryClient) {
   const router=createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage/>}],{initialEntries:['/tickets/ticket']});
-  render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
 }
 function calls(path:string) { return vi.mocked(fetch).mock.calls.filter(([url])=>String(url).includes(path)); }
 afterEach(()=>{cleanup();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();presence.current=[];});

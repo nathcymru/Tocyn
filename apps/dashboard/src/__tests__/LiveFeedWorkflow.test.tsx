@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Layout } from '../components/layout/Layout';
+import { CollaborationProvider } from '../components/CollaborationContext';
 import { TicketListPage } from '../pages/TicketListPage';
 import { useAuthStore } from '../store/authStore';
 
@@ -22,7 +23,7 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
 function renderFeed() {
   const router = createMemoryRouter([{ path: '/', element: <Layout/>, children: [{ path: 'tickets', element: <TicketListPage/> }] }], { initialEntries: ['/tickets'] });
-  render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
 }
 
 it.each(['ticket.created','ticket.updated','article.created'])('reloads authoritative feed data for %s without trusting event contents',async type=>{
