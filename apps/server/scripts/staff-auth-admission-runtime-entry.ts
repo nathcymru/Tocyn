@@ -3,7 +3,7 @@ export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO'
 export { NotificationDO } from '../src/durable_objects/NotificationDO';
 import { app } from '../src/application';
 
-type Action='session'|'role'|'policy'|'mfa';
+type Action='session'|'role'|'policy'|'mfa'|'customer-session';
 let beforeFence:Action|undefined;
 let loseEnrollmentAcknowledgement=false;
 let loseConfirmationResponse=false;
@@ -15,6 +15,7 @@ async function mutate(db:any,action:Action){
   if(action==='role')await db.prepare("UPDATE users SET role='customer' WHERE tenant_id='staff-a' AND id='staff-admin'").run();
   if(action==='policy')await db.prepare("UPDATE budget_owner_policies SET policy_json=policy_json||' ' WHERE deployment_id='staff-deployment'").run();
   if(action==='mfa')await db.prepare("UPDATE users SET mfa_enabled=1 WHERE tenant_id='staff-a' AND id='staff-enroll'").run();
+  if(action==='customer-session')await db.prepare("UPDATE users SET session_version=session_version+1 WHERE tenant_id='staff-a' AND id='customer-disable'").run();
 }
 
 function instrumentDatabase(db:any){
@@ -30,7 +31,9 @@ function instrumentDatabase(db:any){
       const entries=batch.map(statement=>statements.get(statement));
       const staff=entries.some(entry=>entry?.sql.includes('budget_grant_operations'))
         &&entries.some(entry=>entry?.sql.includes('budget_mutation_assertion'));
+      const customer=entries.some(entry=>entry?.sql.includes('customer_auth_budget_assertions'));
       if(staff&&beforeFence){const action=beforeFence;beforeFence=undefined;await mutate(target,action);}
+      if(customer&&beforeFence){const action=beforeFence;beforeFence=undefined;await mutate(target,action);}
       const enrollment=entries.some(entry=>entry?.sql.includes('SET mfa_secret=COALESCE'));
       const results=await target.batch(batch.map(statement=>statements.get(statement)?.raw??statement));
       if(staff){staffRowsRead+=results.reduce((sum:number,result:any)=>sum+(result.meta?.rows_read??0),0);

@@ -9,6 +9,8 @@ import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middle
 import { UserAuthResolution } from "../auth/user-auth-resolver";
 import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 import { admitStaffAuthEffect, type StaffAuthCommit, type StaffAuthOperation } from '../budgets/staff-auth-admission.service';
+import { admitCustomerAuthEffect } from '../budgets/customer-auth-admission.service';
+import { CustomerAuthBudgetFenceError } from '../repositories/customer-auth-budget-fence';
 
 const auth = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -38,6 +40,12 @@ async function staffAuthAdmission(c: AuthContext, operation: StaffAuthOperation)
 function staffAuthUnavailable(c: AuthContext, commit: StaffAuthCommit): Response {
   commit.settle('unknown');
   return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+
+function customerAuthUnavailable(c: AuthContext, reason: 'exhausted' | 'unavailable'): Response {
+  return reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
 }
 
 
@@ -416,13 +424,38 @@ auth.post("/mfa/disable", authMiddleware, tenantMiddleware, async (c) => {
   }
 
   const d = c.get("tenantDeps") as TenantRequestDeps;
-  const user = await d.repositories.users.get(payload.sub);
+  const admission = await admitCustomerAuthEffect({
+    env: c.env,
+    deps: d,
+    operation: 'mfa.disable',
+    principal: { kind: 'session', sessionVersion: payload.session_version ?? -1 },
+    credentialKey: `customer:${payload.sub}:${payload.session_version ?? -1}`,
+    now: c.env.localNow,
+  });
+  if (admission.status === 'rejected') return customerAuthUnavailable(c, admission.reason!);
+
+  let user;
+  try {
+    user = await d.repositories.users.get(payload.sub, admission.admission?.fence);
+  } catch (error) {
+    admission.admission?.settle('unknown');
+    if (error instanceof CustomerAuthBudgetFenceError) return customerAuthUnavailable(c, 'unavailable');
+    throw error;
+  }
 
   if (!user) {
+    admission.admission?.settle('committed');
     return c.json({ error: "User not found" }, 404);
   }
 
-  await d.repositories.users.update(user.id, { mfa_enabled: false, mfa_secret: null });
+  try {
+    await d.repositories.users.update(user.id, { mfa_enabled: false, mfa_secret: null }, admission.admission?.fence);
+    admission.admission?.settle('committed');
+  } catch (error) {
+    admission.admission?.settle('unknown');
+    if (error instanceof CustomerAuthBudgetFenceError) return customerAuthUnavailable(c, 'unavailable');
+    throw error;
+  }
 
   return c.json({
     user: {
