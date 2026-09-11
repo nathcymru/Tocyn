@@ -1,3 +1,7 @@
+# Current #136 acceptance pointer
+
+PR177 application revision3ba4537 has passed required CI including the real browser fixture. Actual Mac keyboard/VoiceOver acceptance is recorded in `docs/security/evidence/support-state-136-voiceover-2026-09-11.md`. Root owns final acceptance/integration and issue/Project synchronization. Historical preparation below is superseded as current implementation status; #73 full SLA and #137 routing remain separate incomplete work.
+
 # #136 implementation handoff — 11 September 2026
 
 Backend foundation started in `/private/tmp/tocyn-beta2-136` on `codex/136-support-state-foundation` from accepted main `0206645`. Root owns integration and GitHub. The live #136 authority confirms additive tenant-defined support-state definitions, legacy projection, waiting/next-action semantics, labels, audit and safe deactivation; #73 owns SLA policy. `0030_support_state_foundation.sql` now adds tenant-qualified definitions and ticket facts while preserving `tickets.status` and compatibility seeds. Repository/API/audit wiring and full integration tests remain unfinished; do not claim issue completion or UI delivery.
