@@ -6,6 +6,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { splitSql } from './split-sql';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { SupportStateRepository } from '../src/repositories/support-state.repository';
+import { SUPPORT_SLA_RECEIPT_SNAPSHOTS, supportSlaReceiptStatement } from '../src/repositories/support-sla-mutation.repository';
 
 test('support/SLA receipt migration bounds snapshots, keys, expiry cleanup and ticket redaction', async () => {
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
@@ -27,6 +28,20 @@ test('support/SLA receipt migration bounds snapshots, keys, expiry cleanup and t
         (tenant_id,principal_id,operation,key_hash,payload_hash,result_ticket_id,response_status,response_snapshot)
         VALUES ('receipt-a','staff','dashboard.ticket.support-state.transition',?,?,'ticket',200,'{"ticket_id":"ticket","revision":2}')`).bind(key,payload),
     ]);
+    await db.prepare("UPDATE ticket_support_state SET snoozed_until='2099-01-01T00:00:00.000Z',resurface_reason='due' WHERE tenant_id='receipt-a' AND ticket_id='ticket'").run();
+    const scope = createVerifiedTenantScope('receipt-a', 'staff', ['admin'], 1);
+    const namespace = { principalId: 'staff', operation: 'dashboard.ticket.support-state.transition' as const,
+      keyHash: 'd'.repeat(64), payloadHash: 'e'.repeat(64), ticketId: 'ticket' };
+    await db.batch([supportSlaReceiptStatement(db, scope, namespace, 200, SUPPORT_SLA_RECEIPT_SNAPSHOTS.state,
+      [scope.tenantId, 'ticket'])]);
+    const replaySnapshot = await db.prepare(`SELECT response_snapshot FROM support_sla_mutation_receipts
+      WHERE tenant_id='receipt-a' AND key_hash=?`).bind(namespace.keyHash).first<{ response_snapshot: string }>();
+    assert.deepEqual(JSON.parse(replaySnapshot?.response_snapshot ?? '{}'), {
+      ticket_id: 'ticket', definition_id: 'legacy-open', lifecycle: 'open', internal_label: 'Open', public_label: 'Open',
+      waiting_reason: null, next_action: null, snoozed_until: '2099-01-01T00:00:00.000Z', resurface_reason: 'due',
+      changed_at: (await db.prepare("SELECT changed_at FROM ticket_support_state WHERE tenant_id='receipt-a' AND ticket_id='ticket'").first<{ changed_at: string }>())?.changed_at,
+      revision: 1,
+    }, 'a lost-response retry retains the same durable snooze facts as the winning transition');
     assert.deepEqual(await db.prepare(`SELECT response_status,response_snapshot FROM support_sla_mutation_receipts
       WHERE tenant_id='receipt-a'`).first(), { response_status: 200, response_snapshot: '{"ticket_id":"ticket","revision":2}' });
     await db.prepare("DELETE FROM tickets WHERE tenant_id='receipt-a' AND id='ticket'").run();

@@ -210,7 +210,7 @@ export class DashboardSummaryReadRepository{
   async ticketSupportState(ticketId:string,commit:DashboardSummaryReadCommit):Promise<TicketSupportState|null>{
     const target={ticketId},c=commit.credential;
     const rows=await this.batch(commit,'dashboard.ticket.support-state.read',target,[this.db.prepare(`SELECT s.ticket_id,s.definition_id,d.legacy_status AS lifecycle,
-      d.internal_label,d.public_label,s.waiting_reason,s.next_action,s.changed_at,s.revision
+      d.internal_label,d.public_label,s.waiting_reason,s.next_action,s.snoozed_until,s.resurface_reason,s.changed_at,s.revision
       FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
       JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
       WHERE t.tenant_id=? AND t.id=? AND ${this.staffTicket('t')} AND ${this.admitted()}`)

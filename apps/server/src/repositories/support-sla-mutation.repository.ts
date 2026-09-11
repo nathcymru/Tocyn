@@ -49,7 +49,7 @@ const definitionSnapshot = `json((SELECT json_object('tenant_id',tenant_id,'id',
   'created_at',created_at,'updated_at',updated_at) FROM support_state_definitions WHERE tenant_id=? AND id=?))`;
 const stateSnapshot = `json((SELECT json_object('ticket_id',s.ticket_id,'definition_id',s.definition_id,'lifecycle',d.legacy_status,
   'internal_label',d.internal_label,'public_label',d.public_label,'waiting_reason',s.waiting_reason,'next_action',s.next_action,
-  'changed_at',s.changed_at,'revision',s.revision) FROM ticket_support_state s JOIN support_state_definitions d
+  'snoozed_until',s.snoozed_until,'resurface_reason',s.resurface_reason,'changed_at',s.changed_at,'revision',s.revision) FROM ticket_support_state s JOIN support_state_definitions d
   ON d.tenant_id=s.tenant_id AND d.id=s.definition_id WHERE s.tenant_id=? AND s.ticket_id=?))`;
 const policySnapshot = `json_object('calendar',json(calendar_json),'responseTargetMs',response_target_ms,
   'resolutionTargetMs',resolution_target_ms,'reopenPolicy',json_object('response',response_reopen_policy,'resolution',resolution_reopen_policy),'revision',revision)`;
