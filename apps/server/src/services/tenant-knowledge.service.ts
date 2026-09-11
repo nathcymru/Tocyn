@@ -135,7 +135,7 @@ export class TenantKnowledgeService {
     const fingerprint = crypto.createHash('sha256').update(bytes).digest('hex');
     const put = await this.deps.attachmentStorage.putAttachment(staged.filePath,source,{ httpMetadata:{contentType},
       customMetadata:{tocynKnowledgeSourceFingerprint:fingerprint},onlyIf:{etagDoesNotMatch:'*'} });
-    if (put.res === null) throw new Error('Knowledge source capture conflicted');
+    if (put?.res === null) throw new Error('Knowledge source capture conflicted');
     if (!await index.sourceCaptured(documentId,staged.version,commit?.fence,
       this.deps.repositories.knowledge.updateDocumentRequiredStatements(documentId,{file_path:staged.filePath,chunk_count:0,status:'pending'}))) {
       throw new Error('Knowledge source capture was superseded');
@@ -303,7 +303,7 @@ export class TenantKnowledgeService {
         const fingerprint=crypto.createHash('sha256').update(content).digest('hex');
         const put=await this.deps.attachmentStorage.putAttachment(staged.filePath,content,{httpMetadata:{contentType:'text/plain'},
           customMetadata:{tocynKnowledgeSourceFingerprint:fingerprint},onlyIf:{etagDoesNotMatch:'*'}});
-        if(put.res===null)throw new Error('Knowledge source capture conflicted');
+        if(put?.res===null)throw new Error('Knowledge source capture conflicted');
         if(!await index.sourceCaptured(articleId,staged.version,commit?.fence,
           this.deps.repositories.articles.updateQAStateRequiredStatements(articleId,type,0)))throw new Error('Knowledge source capture was superseded');
       } else {
