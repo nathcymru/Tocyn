@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { Env } from "../bindings";
 import { authService } from "../services/auth/auth.service";
 import { mfaService } from "../services/auth/mfa.service";
@@ -8,11 +8,36 @@ import { rateLimiter } from "../middleware/rate-limiter";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { UserAuthResolution } from "../auth/user-auth-resolver";
 import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
+import { admitStaffAuthEffect, type StaffAuthCommit, type StaffAuthOperation } from '../budgets/staff-auth-admission.service';
 
 const auth = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
 function recordCredentialDecision(c: { get: (key: 'requestAuthSli') => AppVariables['requestAuthSli'] }, decision: RequestCredentialAuthDecision): void {
   try { c.get('requestAuthSli')?.record(decision); } catch { /* Evidence cannot affect authentication. */ }
+}
+
+type AuthContext = Context<{ Bindings: Env; Variables: AppVariables }>;
+
+async function staffAuthAdmission(c: AuthContext, operation: StaffAuthOperation): Promise<StaffAuthCommit | Response | null> {
+  const payload = c.get('jwtPayload') as JWTPayload | undefined;
+  if (!payload || !['admin', 'agent'].includes(payload.role)) return null;
+  const outcome = await admitStaffAuthEffect({
+    env: c.env,
+    deps: c.get('tenantDeps')!,
+    payload,
+    operation,
+    now: () => c.env.localNow?.() ?? Date.now(),
+  });
+  if (outcome.status === 'disabled') return null;
+  if (outcome.status === 'admitted') return outcome.commit;
+  return outcome.reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+
+function staffAuthUnavailable(c: AuthContext, commit: StaffAuthCommit): Response {
+  commit.settle('unknown');
+  return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
 }
 
 
@@ -127,15 +152,19 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
   }
 
   const d = c.get("tenantDeps") as TenantRequestDeps;
+  const admission = await staffAuthAdmission(c, 'staff.auth.mfa.verify');
+  if (admission instanceof Response) return admission;
   let user;
   try {
-    user = await d.repositories.users.get(payload.sub);
+    user = admission ? await admission.user() : await d.repositories.users.get(payload.sub);
   } catch {
+    if (admission) return staffAuthUnavailable(c, admission);
     recordCredentialDecision(c, 'unavailable');
     return c.json({ error: "Unauthorized: Invalid or expired MFA challenge token" }, 401);
   }
 
   if (!user || !user.mfa_secret || !user.mfa_enabled) {
+    admission?.settle('committed');
     recordCredentialDecision(c, 'denied');
     return c.json({ error: "MFA is not set up for this user" }, 400);
   }
@@ -144,6 +173,7 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
   try {
     decryptedSecret = await mfaService.decryptSecret(user.mfa_secret, c.env.MFA_ENCRYPTION_KEY);
   } catch (err) {
+    admission?.settle('committed');
     recordCredentialDecision(c, 'unavailable');
     return c.json({ error: "Failed to decrypt MFA secret" }, 500);
   }
@@ -152,10 +182,12 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
   try {
     isValid = mfaService.verifyCode(code, decryptedSecret);
   } catch (error) {
+    if (admission) return staffAuthUnavailable(c, admission);
     recordCredentialDecision(c, 'unavailable');
     throw error;
   }
   if (!isValid) {
+    admission?.settle('committed');
     recordCredentialDecision(c, 'denied');
     return c.json({ error: "Invalid MFA code" }, 400);
   }
@@ -170,11 +202,14 @@ auth.post("/mfa/verify", mfaChallengeMiddleware, rateLimiter(10, 60000), async (
 
   let fullToken: string;
   try {
+    if (admission) await admission.authorizeCurrent();
     fullToken = await authService.generateToken(userPayload, c.env.JWT_SECRET, true);
   } catch (error) {
+    if (admission) return staffAuthUnavailable(c, admission);
     recordCredentialDecision(c, 'unavailable');
     throw error;
   }
+  admission?.settle('committed');
   recordCredentialDecision(c, 'accepted');
 
   return c.json({
@@ -197,22 +232,66 @@ auth.post("/mfa/setup", mfaEnrollmentMiddleware, tenantMiddleware, async (c) => 
   const payload = c.get("jwtPayload") as JWTPayload;
   const d = c.get("tenantDeps") as TenantRequestDeps;
 
-  const user = await d.repositories.users.get(payload.sub);
+  const admission = await staffAuthAdmission(c, 'staff.auth.mfa.setup');
+  if (admission instanceof Response) return admission;
+  let user;
+  try {
+    user = admission ? await admission.user() : await d.repositories.users.get(payload.sub);
+  } catch (error) {
+    if (admission) return staffAuthUnavailable(c, admission);
+    throw error;
+  }
 
   if (!user) {
+    admission?.settle('committed');
     return c.json({ error: "User not found" }, 404);
   }
 
   if (user.mfa_enabled) {
+    admission?.settle('committed');
     return c.json({ error: "MFA is already enabled" }, 400);
   }
 
-  const secret = mfaService.generateSecret();
-  const uri = mfaService.getProvisioningUri(user.email, secret);
-  const encryptedSecret = await mfaService.encryptSecret(secret, c.env.MFA_ENCRYPTION_KEY);
+  if (admission && user.mfa_secret) {
+    try {
+      const retainedSecret = await mfaService.decryptSecret(user.mfa_secret, c.env.MFA_ENCRYPTION_KEY);
+      admission.settle('committed');
+      return c.json({ provisioning_uri: mfaService.getProvisioningUri(user.email, retainedSecret) });
+    } catch {
+      return staffAuthUnavailable(c, admission);
+    }
+  }
+  let secret: string;
+  let uri: string;
+  let encryptedSecret: string;
+  try {
+    secret = mfaService.generateSecret();
+    uri = mfaService.getProvisioningUri(user.email, secret);
+    encryptedSecret = await mfaService.encryptSecret(secret, c.env.MFA_ENCRYPTION_KEY);
+  } catch (error) {
+    if (admission) return staffAuthUnavailable(c, admission);
+    throw error;
+  }
 
-  const started = await d.repositories.users.beginMfaEnrollment(user.id, encryptedSecret, payload.session_version ?? 0);
+  let started: boolean;
+  if (admission) {
+    try {
+      const enrolled = await admission.beginMfaEnrollment(encryptedSecret);
+      started = !!enrolled;
+      if (started) {
+        if (!enrolled?.mfa_secret) return staffAuthUnavailable(c, admission);
+        const actual = await mfaService.decryptSecret(enrolled.mfa_secret, c.env.MFA_ENCRYPTION_KEY);
+        admission.settle('committed');
+        return c.json({ provisioning_uri: mfaService.getProvisioningUri(enrolled.email, actual) });
+      }
+    } catch {
+      return staffAuthUnavailable(c, admission);
+    }
+  } else {
+    started = await d.repositories.users.beginMfaEnrollment(user.id, encryptedSecret, payload.session_version ?? 0);
+  }
   if (!started) {
+    admission?.settle('committed');
     return c.json({ error: "MFA enrollment changed. Sign in again to continue." }, 409);
   }
 
@@ -233,13 +312,23 @@ auth.post("/mfa/confirm", mfaEnrollmentMiddleware, tenantMiddleware, async (c) =
   }
 
   const d = c.get("tenantDeps") as TenantRequestDeps;
-  const user = await d.repositories.users.get(payload.sub);
+  const admission = await staffAuthAdmission(c, 'staff.auth.mfa.confirm');
+  if (admission instanceof Response) return admission;
+  let user;
+  try {
+    user = admission ? await admission.user() : await d.repositories.users.get(payload.sub);
+  } catch (error) {
+    if (admission) return staffAuthUnavailable(c, admission);
+    throw error;
+  }
 
   if (!user || !user.mfa_secret) {
+    admission?.settle('committed');
     return c.json({ error: "MFA setup has not been initiated" }, 400);
   }
 
   if (user.mfa_enabled) {
+    admission?.settle('committed');
     return c.json({ error: "MFA is already enabled" }, 400);
   }
 
@@ -247,36 +336,61 @@ auth.post("/mfa/confirm", mfaEnrollmentMiddleware, tenantMiddleware, async (c) =
   try {
     decryptedSecret = await mfaService.decryptSecret(user.mfa_secret, c.env.MFA_ENCRYPTION_KEY);
   } catch (err) {
+    admission?.settle('committed');
     return c.json({ error: "Failed to decrypt MFA secret" }, 500);
   }
 
-  const isValid = mfaService.verifyCode(code, decryptedSecret);
+  let isValid: boolean;
+  try {
+    isValid = mfaService.verifyCode(code, decryptedSecret);
+  } catch (error) {
+    if (admission) return staffAuthUnavailable(c, admission);
+    throw error;
+  }
   if (!isValid) {
+    admission?.settle('committed');
     return c.json({ error: "Invalid MFA code" }, 400);
   }
 
   const previousVersion = payload.session_version ?? 0;
-  const confirmed = await d.repositories.users.completeMfaEnrollment(user.id, user.mfa_secret, previousVersion);
-  if (!confirmed) {
-    return c.json({ error: "MFA enrollment changed. Sign in again to continue." }, 409);
-  }
-  // Migration 0022 advances this version once when MFA becomes enabled. Do not
-  // adopt a later version from a concurrent logout or authority change.
-  user.session_version = previousVersion + 1;
-
   const userPayload = {
     id: user.id,
     email: user.email,
     role: user.role,
     tenant_id: user.tenant_id || (payload as any).tenant_id,
-    session_version: user.session_version ?? 0,
+    session_version: previousVersion + 1,
   };
-
-  const fullToken = await authService.generateToken(
-    userPayload,
-    c.env.JWT_SECRET,
-    true
-  );
+  let fullToken: string | undefined;
+  if (admission) {
+    try {
+      // Sign before the one-way session-version mutation. A signing failure
+      // therefore cannot enable MFA without returning its usable credential.
+      fullToken = await authService.generateToken(userPayload, c.env.JWT_SECRET, true);
+    } catch {
+      return staffAuthUnavailable(c, admission);
+    }
+  }
+  let confirmed: boolean;
+  if (admission) {
+    try {
+      confirmed = await admission.completeMfaEnrollment(user.mfa_secret);
+    } catch {
+      return staffAuthUnavailable(c, admission);
+    }
+  } else {
+    confirmed = await d.repositories.users.completeMfaEnrollment(user.id, user.mfa_secret, previousVersion);
+  }
+  if (!confirmed) {
+    admission?.settle('committed');
+    return c.json({ error: "MFA enrollment changed. Sign in again to continue." }, 409);
+  }
+  // Migration 0022 advances this version once when MFA becomes enabled. Do not
+  // adopt a later version from a concurrent logout or authority change.
+  user.session_version = previousVersion + 1;
+  if (!fullToken) {
+    fullToken = await authService.generateToken({ ...userPayload, session_version: user.session_version ?? 0 }, c.env.JWT_SECRET, true);
+  }
+  admission?.settle('committed');
 
   return c.json({
     token: fullToken,
@@ -325,7 +439,18 @@ auth.post("/mfa/disable", authMiddleware, tenantMiddleware, async (c) => {
 // Revoke all sessions for the authenticated account.
 auth.post("/logout", authMiddleware, tenantMiddleware, async (c) => {
   const d = c.get("tenantDeps") as TenantRequestDeps;
-  await d.repositories.users.revokeSessions((c.get("jwtPayload") as JWTPayload).sub);
+  const admission = await staffAuthAdmission(c, 'staff.auth.logout');
+  if (admission instanceof Response) return admission;
+  if (admission) {
+    try {
+      if (!await admission.revokeSessions()) return staffAuthUnavailable(c, admission);
+      admission.settle('committed');
+    } catch {
+      return staffAuthUnavailable(c, admission);
+    }
+  } else {
+    await d.repositories.users.revokeSessions((c.get("jwtPayload") as JWTPayload).sub);
+  }
   return c.json({ success: true });
 });
 
@@ -334,12 +459,22 @@ auth.get("/me", authMiddleware, tenantMiddleware, async (c) => {
   const payload = c.get("jwtPayload") as JWTPayload;
   const d = c.get("tenantDeps") as TenantRequestDeps;
 
-  const user = await d.repositories.users.get(payload.sub);
+  const admission = await staffAuthAdmission(c, 'staff.auth.me');
+  if (admission instanceof Response) return admission;
+  let user;
+  try {
+    user = admission ? await admission.user() : await d.repositories.users.get(payload.sub);
+  } catch (error) {
+    if (admission) return staffAuthUnavailable(c, admission);
+    throw error;
+  }
 
   if (!user) {
+    admission?.settle('committed');
     return c.json({ error: "User not found" }, 404);
   }
 
+  admission?.settle('committed');
   return c.json({
     user: {
       id: user.id,
