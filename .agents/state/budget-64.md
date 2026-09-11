@@ -60,3 +60,10 @@ NotificationDO authenticates before synchronous admission to a128-registered-soc
 BroadcastService now returns accepted/failed/disabled outcomes, with at most3attempts, fixed diagnostics and terminal4xx/redirects. It never converts postcommit delivery failure into a failed canonical mutation response.61focusedtests and native/types/lint pass. This is service-visible outcome only; user-visible delivery receipts/recovery remain outstanding.
 
 CI uncovered runtime entrypoints dependent on working directory. Root made four existing budget scripts resolve their bundled entries relative to the script and reran the exact repository-root CI invocation:17/17pass. No test suppression, changed production algorithm, resource limit increase or Copilot request. Batch this with the session prerequisite in PR182; full#64 remains open.
+
+
+## Outbound preparation prerequisite — 11 September 2026
+
+Migration0037 adds exact tenant/group/default ordering indexes; bounded selection replaces full support-email scans. Local D1 fixture with1000 unrelated rows proves indexed searches with no scan/temp sort and<=1read row perquery. Complete JSON UTF-8 plus Base64-size preflight rejects oversized whole email beforeR2reads. Ticket storage remains10×10MiB; no split-message or authenticated-link fallback is invented. Accepted attachment reads are sequential and metadata rechecked.62focusedtests,26finalemailtests, nativeD1/types/lint passed; rootwired nativecheck intoCI.
+
+Limits: providerMIMEprocessing maystillreject; bufferedbase64/JSON and concurrentrequests remain memory-unproven. Redundant handler attachment listing must use canonical returnedattachments before fulloperation admission. #68integration must retain `renderPublicArticleForEmail` and pass renderedhtml/text into preflight.0035format remains68,0036staffreceipt reserved. This partial work does not close#64 or activateemail.

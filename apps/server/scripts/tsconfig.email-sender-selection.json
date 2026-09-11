@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["email-sender-selection-runtime.test.ts"]
+}

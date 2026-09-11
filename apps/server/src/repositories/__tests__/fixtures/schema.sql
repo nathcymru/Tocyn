@@ -214,3 +214,7 @@ CREATE TABLE IF NOT EXISTS customer_auth_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_customer_auth_tokens_token_hash ON customer_auth_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_customer_auth_tokens_user ON customer_auth_tokens(tenant_id, user_id);
+
+-- Keep the sender selection plans aligned with migration 0037.
+CREATE INDEX IF NOT EXISTS idx_support_emails_tenant_group_created ON support_emails(tenant_id, group_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_support_emails_tenant_default_created ON support_emails(tenant_id, is_default, created_at, id);

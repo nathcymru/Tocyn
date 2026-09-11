@@ -19,6 +19,9 @@ const createMockDB = (mockGroupEmail: string | null = null, mockDefaultEmail: st
             if (boundKey === 'TICKET_PREFIX') return { value: '#' };
             return { value: encryptedTestKey };
           }
+          if (query.includes('normalized_email = ?') && [mockGroupEmail, mockDefaultEmail].includes(boundKey || null) && boundKey) {
+            return { email_address: boundKey };
+          }
           if (query.includes('group_id = ?') && mockGroupEmail) {
             return { email_address: mockGroupEmail };
           }

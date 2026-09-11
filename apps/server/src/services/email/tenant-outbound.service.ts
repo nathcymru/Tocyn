@@ -2,6 +2,7 @@ import { Ticket, Article, Attachment, SendEmailOptions } from '../../types';
 import { decryptString } from '../../utils/crypto';
 import { TenantRequestDeps } from '../../middleware/tenant.middleware';
 import { EmailTransport, HttpResendTransport, isLocalAuthCaptureTransport } from './transport';
+import { estimateProviderEmailRequestBytes, MAX_TICKET_EMAIL_ATTACHMENTS, OutboundEmailPreparationError } from './request-envelope';
 
 export class TenantOutboundEmailService {
   constructor(
@@ -40,21 +41,20 @@ export class TenantOutboundEmailService {
     return this.getResendCredentials();
   }
 
-  async send(options: SendEmailOptions): Promise<{ id: string }> {
+  private async prepareSend(options: SendEmailOptions) {
     this.assertIsolatedRecipientAllowlist(options.to);
     const creds = await this.getTransportCredentials();
     const fromAddress = options.from || creds.defaultFrom;
-
-    // Sender ownership check
-    const allChannels = (await this.deps.repositories.channels.listSupportEmails()) || [];
-    {
-      const owned = allChannels.some(c => c.email_address.toLowerCase() === fromAddress.toLowerCase());
-      if (!owned && fromAddress.toLowerCase() !== creds.defaultFrom.toLowerCase()) {
-        throw new Error(`Unauthorized: The from address ${fromAddress} does not belong to the active tenant.`);
-      }
+    if (fromAddress.toLowerCase() !== creds.defaultFrom.toLowerCase() &&
+        !await this.deps.repositories.channels.findByEmail(fromAddress)) {
+      throw new Error('Unauthorized: The from address does not belong to the active tenant.');
     }
+    return { options: { ...options, from: fromAddress }, creds };
+  }
 
-    return this.transport.send({ ...options, from: fromAddress }, creds);
+  async send(options: SendEmailOptions): Promise<{ id: string }> {
+    const prepared = await this.prepareSend(options);
+    return this.transport.send(prepared.options, prepared.creds);
   }
 
   async sendTicketReply(
@@ -63,6 +63,8 @@ export class TenantOutboundEmailService {
     attachments: Attachment[] = [],
     replyToEmailId?: string
   ): Promise<void> {
+    if (attachments.length > MAX_TICKET_EMAIL_ATTACHMENTS) throw new OutboundEmailPreparationError();
+    const savedAttachments = attachments.map(attachment => ({ ...attachment }));
     const prefixResult = await this.deps.repositories.config.get('TICKET_PREFIX');
     const prefix = prefixResult || '#';
 
@@ -76,40 +78,31 @@ export class TenantOutboundEmailService {
       headers['References'] = replyToEmailId;
     }
 
-    let fromEmail: string | undefined;
+    const selectedSender = await this.deps.repositories.channels.findReplySender(ticket.group_id);
+    const fromEmail = selectedSender?.email_address || ticket.source_email || undefined;
+    const prepared = await this.prepareSend({ from: fromEmail, to: [ticket.customer_email],
+      subject, html: article.body || '', headers });
+    // Validate the complete submitted message before any attachment body reads.
+    // Keep the shared ticket capability unchanged; an oversized email fails whole.
+    estimateProviderEmailRequestBytes(prepared.options, savedAttachments.map(a => ({
+      filename: a.file_name, contentType: a.content_type, size: a.file_size,
+    })));
 
-    const allEmails = (await this.deps.repositories.channels.listSupportEmails()) || [];
-    const groupEmail = ticket.group_id ? allEmails.find(e => e.group_id === ticket.group_id) : undefined;
-    const defaultEmail = allEmails.find(e => e.is_default);
-
-    if (groupEmail) {
-      fromEmail = groupEmail.email_address;
-    } else if (defaultEmail) {
-      fromEmail = defaultEmail.email_address;
-    } else if (ticket.source_email) {
-      fromEmail = ticket.source_email;
+    // Read one object at a time. The transport still retains/encodes the full
+    // accepted payload, so this alone does not establish isolate memory safety.
+    const resendAttachments: NonNullable<SendEmailOptions['attachments']> = [];
+    for (const a of savedAttachments) {
+      const obj = await this.deps.attachmentStorage.getAttachment(a.r2_key);
+      if (!obj) throw new Error('Attachment unavailable for outbound email');
+      if (obj.size !== a.file_size || obj.httpMetadata?.contentType !== a.content_type) {
+        await obj.body?.cancel();
+        throw new OutboundEmailPreparationError();
+      }
+      const content = await obj.arrayBuffer();
+      if (content.byteLength !== a.file_size) throw new OutboundEmailPreparationError();
+      resendAttachments.push({ filename: a.file_name, content: new Uint8Array(content), contentType: a.content_type });
     }
 
-    const resendAttachments = await Promise.all(
-      attachments.map(async (a) => {
-        const obj = await this.deps.attachmentStorage.getAttachment(a.r2_key);
-        if (!obj) throw new Error(`Attachment not found: ${a.r2_key}`);
-        const content = await obj.arrayBuffer();
-        return {
-          filename: a.file_name,
-          content: new Uint8Array(content),
-          contentType: a.content_type,
-        };
-      })
-    );
-
-    await this.send({
-      from: fromEmail || undefined,
-      to: [ticket.customer_email],
-      subject: subject,
-      html: article.body || '',
-      headers: headers,
-      attachments: resendAttachments,
-    });
+    await this.transport.send({ ...prepared.options, attachments: resendAttachments }, prepared.creds);
   }
 }

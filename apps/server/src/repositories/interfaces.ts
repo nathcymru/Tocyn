@@ -78,6 +78,7 @@ export interface AttachmentRepository {
 
 export interface ChannelsRepository {
   listSupportEmails(): Promise<any[]>;
+  findReplySender(groupId?: string | null): Promise<{ email_address: string } | null>;
   createSupportEmail(data: { id: string, email_address: string, name?: string, group_id?: string, is_default: boolean }, fence?: CapabilityWriteFence): Promise<any>;
   deleteSupportEmail(id: string, fence?: CapabilityWriteFence): Promise<void>;
   getSupportEmail(id: string): Promise<any>;
