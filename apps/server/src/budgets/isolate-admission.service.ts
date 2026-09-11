@@ -16,11 +16,19 @@ const MAX_OBSERVED_POLICY_IDENTITIES = 1 + 2 * MAX_ISOLATE_SCOPE_REFILLS;
 /** Estimated bound: two allocation sizes, each with one lost-response retry; four refresh/reserve pairs. */
 export const ISOLATE_COLD_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({ doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 8 });
 export type CanonicalBudgetIntent = Readonly<{ operationId: string; operationFingerprint: string; workScopeKey: string }>;
+export type BudgetGrantOperationLink = Readonly<{ tenantId: string; aggregateId: string; reservationId: string; holderId: string;
+  operationId: string; operationFingerprint: string; operationEnvelope: ResourceAmounts }>;
 export type BudgetCommitAuthority = Readonly<{ snapshot: BudgetCommitSnapshot; expiresAt: number;
-  purpose: 'new-work'; operationId: string; operationFingerprint: string }>;
+  purpose: 'new-work'; operationId: string; operationFingerprint: string; grant?: BudgetGrantOperationLink }>;
 export type IsolateAdmissionResult = IsolateGrantSpendResult & Readonly<{ commitAuthority?: BudgetCommitAuthority }>;
 type ActiveAuthority = { commitSnapshot: BudgetCommitSnapshot; trusted: TrustedBudgetCoordinatorAuthority; policy: EffectiveTenantCostPolicy; local: CurrentIsolateGrantAuthority };
-type HeldGrant = { holder: IsolateBudgetGrantHolder; reservationId: string; expiresAt: number; dimensions: readonly string[] };
+type HeldOperation = { fingerprint: string; envelope: ResourceAmounts; state: 'in-flight' | 'committed' | 'unknown'; settledAt?: number };
+type HeldGrant = { holder: IsolateBudgetGrantHolder; reservationId: string; expiresAt: number; dimensions: readonly string[];
+  aggregateId: string; tenantId: string; credentialKey: string; envelope: ResourceAmounts; operations: Map<string,HeldOperation>; sealed: boolean; sealedGrant?: SealedIsolateBudgetGrant; lastSettledAt?: number };
+export type SealedIsolateBudgetGrant = Readonly<{ tenantId: string; aggregateId: string; reservationId: string; holderId: string;
+  policyId: string; policyRevision: number; restrictionRevision: number;
+  terminalEvidenceId: string; operations: readonly Readonly<{ operationId: string; operationFingerprint: string; operationEnvelope: ResourceAmounts }>[];
+  operationIds: readonly string[]; operationFingerprint: string; operationEnvelopes: readonly ResourceAmounts[]; envelope: ResourceAmounts }>;
 type RevisionFloor = { deploymentId: string; policyId: string; authorityRevision: number; policyRevision: number; restrictionRevision: number };
 type CacheEntry = {
   bindingIdentity: object; namespace: DurableObjectNamespace; key: string; epoch: string; snapshot: BudgetCommitSnapshot; expiresAt: number; refills: number;
@@ -154,7 +162,8 @@ export class IsolateBudgetAdmissionCache {
             expectedRestrictionRevision: authority.policy.restrictionRevision, now: now() });
           if (!this.currentGeneration(entry,generation)) { holder.invalidate(); entry.failure = stale(); return null; }
           if ((outcome.status === 'granted' || outcome.status === 'idempotent') && outcome.reservation) {
-            const held = { holder, reservationId: outcome.reservation.reservationId, expiresAt: outcome.reservation.expiresAt, dimensions: Object.keys(envelope) };
+            const held: HeldGrant = { holder, reservationId: outcome.reservation.reservationId, expiresAt: outcome.reservation.expiresAt, dimensions: Object.keys(envelope),
+              aggregateId: authority.trusted.aggregateId, tenantId: scope.tenantId, credentialKey: scope.credentialKey, envelope: structuredClone(envelope), operations: new Map(), sealed: false };
             if (!holder.install(outcome.reservation, localForGrant(authority, held), now())) { holder.invalidate(); entry.failure = stale(); return null; }
             // Delivery only to this isolate instance: never seed BudgetGrantHolderDO.
             entry.holders.push(held);
@@ -220,12 +229,21 @@ export class IsolateBudgetAdmissionCache {
     }
     const generation = entry.generation;
     const spend = (held: HeldGrant): IsolateAdmissionResult => {
+      if (held.sealed) return exhausted();
       const result = held.holder.spend({ holderId: held.holder.holderId, reservationId: held.reservationId,
         operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint, envelope: input.business }, localForGrant(authority!, held), input.now());
       if (result.status === 'rejected') return result;
+      const operationEnvelope = isolateWarmReservedEnvelope(input.business);
+      if (!operationEnvelope) return { status: 'rejected', reason: 'invalid-request' };
+      if (result.status === 'spent' && !held.operations.has(input.intent.operationId)) {
+        held.operations.set(input.intent.operationId, { fingerprint: input.intent.operationFingerprint, envelope: structuredClone(operationEnvelope), state: 'in-flight' });
+      }
       return { ...result, commitAuthority: Object.freeze({ snapshot: authority!.commitSnapshot,
         expiresAt: Math.min(held.expiresAt, authority!.trusted.authorityExpiresAt), purpose: 'new-work',
-        operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint }) };
+        operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint,
+        grant: Object.freeze({ tenantId: input.scope.tenantId, aggregateId: held.aggregateId, reservationId: held.reservationId,
+          holderId: held.holder.holderId, operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint,
+          operationEnvelope: Object.freeze(structuredClone(operationEnvelope)) }) }) };
     };
     const prior = entry.operations.get(input.intent.operationId);
     if (prior) return spend(prior);
@@ -255,5 +273,50 @@ export class IsolateBudgetAdmissionCache {
     const outcome = spend(held);
     if (outcome.status === 'spent') entry.operations.set(input.intent.operationId, held);
     return outcome;
+  }
+
+  /** The only transition after canonical commit. Any unconfirmed result poisons the whole local grant. */
+  settleOperation(authority: BudgetCommitAuthority, outcome: 'committed' | 'unknown', now: number): void {
+    const link = authority.grant;
+    if (!link || !Number.isSafeInteger(now) || now < 0) return;
+    for (const entry of this.entries) for (const held of entry.holders) {
+      if (held.tenantId !== link.tenantId || held.aggregateId !== link.aggregateId || held.reservationId !== link.reservationId || held.holder.holderId !== link.holderId) continue;
+      const operation = held.operations.get(link.operationId);
+      if (!operation || operation.fingerprint !== link.operationFingerprint || held.sealed) return;
+      if (outcome === 'unknown') operation.state = 'unknown';
+      else if (operation.state === 'in-flight') { operation.state = 'committed'; operation.settledAt = now; held.lastSettledAt = now; }
+      return;
+    }
+  }
+
+  /**
+   * Synchronously seals a quiescent API holder before any later spend. The
+   * caller performs durable closure/reconciliation afterwards; lost, failed
+   * or in-flight operations never satisfy this predicate and stay charged.
+   */
+  sealIdleApiGrant(tenantId: string, credentialKey: string, now: number, idleMs: number): SealedIsolateBudgetGrant | null {
+    if (!Number.isSafeInteger(now) || !Number.isSafeInteger(idleMs) || idleMs < 1) return null;
+    for (const entry of this.entries) {
+      for (const held of entry.holders) {
+        if (held.sealed && held.sealedGrant && held.tenantId === tenantId && held.credentialKey === credentialKey) return held.sealedGrant;
+        if (held.sealed || held.operations.size < 1 || held.tenantId !== tenantId || held.credentialKey !== credentialKey || !held.lastSettledAt || now - held.lastSettledAt < idleMs) continue;
+        const operations = [...held.operations.entries()];
+        if (operations.some(([, operation]) => operation.state !== 'committed')) continue;
+        // Irreversible before I/O: any concurrent/reentrant admission sees it.
+        held.sealed = true;
+        const ids = operations.map(([id]) => id).sort();
+        const fingerprint = JSON.stringify(ids.map(id => [id, held.operations.get(id)!.fingerprint, JSON.stringify(held.operations.get(id)!.envelope)]));
+        const sealed = Object.freeze({ tenantId, aggregateId: held.aggregateId, reservationId: held.reservationId, holderId: held.holder.holderId,
+          policyId: entry.snapshot.policy_id, policyRevision: entry.snapshot.policy_revision, restrictionRevision: JSON.parse(entry.snapshot.restriction_json).revision,
+          terminalEvidenceId: `closure:${crypto.randomUUID()}`,
+          operations: Object.freeze(ids.map(id => Object.freeze({ operationId: id, operationFingerprint: held.operations.get(id)!.fingerprint,
+            operationEnvelope: Object.freeze(structuredClone(held.operations.get(id)!.envelope)) }))),
+          operationIds: Object.freeze(ids), operationFingerprint: fingerprint,
+          operationEnvelopes: Object.freeze(ids.map(id => Object.freeze(structuredClone(held.operations.get(id)!.envelope)))), envelope: Object.freeze(structuredClone(held.envelope)) });
+        held.sealedGrant = sealed;
+        return sealed;
+      }
+    }
+    return null;
   }
 }
