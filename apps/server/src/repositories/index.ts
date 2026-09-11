@@ -1,3 +1,5 @@
+import { SessionBudgetAuthorityRepository } from './session-budget-authority.repository';
+import { BudgetAuthorityRepository } from './budget-authority.repository';
 import { TicketMutationReplayRepository } from './ticket-mutation-replay.repository';
 import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 import { OperatorWorkspaceRepository } from './operator-workspace.repository';
@@ -623,8 +625,19 @@ export class SqlChannelsRepository implements ChannelsRepository {
     return this.db.prepare("SELECT * FROM support_emails WHERE tenant_id = ? ORDER BY created_at ASC").bind(this.scope.tenantId).all().then(r => r.results);
   }
 
+  async findReplySender(groupId?: string | null): Promise<{ email_address: string } | null> {
+    if (groupId) {
+      const group = await this.db.prepare(`SELECT email_address FROM support_emails
+        WHERE tenant_id = ? AND group_id = ? ORDER BY created_at ASC, id ASC LIMIT 1`)
+        .bind(this.scope.tenantId, groupId).first<{ email_address: string }>();
+      if (group) return group;
+    }
+    return this.db.prepare(`SELECT email_address FROM support_emails
+      WHERE tenant_id = ? AND is_default = 1 ORDER BY created_at ASC, id ASC LIMIT 1`)
+      .bind(this.scope.tenantId).first<{ email_address: string }>();
+  }
+
   async createSupportEmail(data: { id: string, email_address: string, name?: string, group_id?: string, is_default: boolean }, fence?: CapabilityWriteFence): Promise<any> {
-    const { normalizeSupportEmail } = require('../utils/email-normalize');
     const normalized_email = normalizeSupportEmail(data.email_address);
     const guard = capabilityWriteConstraint(fence);
     if (data.is_default) {
@@ -657,7 +670,6 @@ export class SqlChannelsRepository implements ChannelsRepository {
   }
 
   async findByEmail(email_address: string): Promise<any> {
-    const { normalizeSupportEmail } = require('../utils/email-normalize');
     const normalized = normalizeSupportEmail(email_address);
     return this.db.prepare("SELECT * FROM support_emails WHERE tenant_id = ? AND normalized_email = ?").bind(this.scope.tenantId, normalized).first();
   }
@@ -1025,8 +1037,10 @@ export class SqlRequestLimitRepository {
   }
 }
 
-export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli): Repositories {
+export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli, budgetBindingIdentity: object = db): Repositories {
   return {
+    budgetAuthority: new BudgetAuthorityRepository(db, scope, budgetBindingIdentity),
+    sessionBudgetAuthority: new SessionBudgetAuthorityRepository(db, scope),
     requestLimits: new SqlRequestLimitRepository(scope, db),
     knowledge: new SqlKnowledgeRepository(scope, db),
     users: new SqlUserRepository(scope, db),

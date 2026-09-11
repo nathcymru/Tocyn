@@ -3,6 +3,7 @@
         "main": "src/index.ts",
         "compatibility_date": "2024-04-01",
         "compatibility_flags": ["nodejs_compat"],
+        "vars": { "BUDGET_ADMISSION_POLICY": "off" },
         "d1_databases": [
                 {
                         "binding": "DB",
@@ -29,6 +30,14 @@
                         {
                                 "name": "NOTIFICATION_DO",
                                 "class_name": "NotificationDO"
+                        },
+                        {
+                                "name": "BUDGET_COORDINATOR_DO",
+                                "class_name": "BudgetCoordinatorDO"
+                        },
+                        {
+                                "name": "BUDGET_GRANT_HOLDER_DO",
+                                "class_name": "BudgetGrantHolderDO"
                         }
                 ]
         },
@@ -37,6 +46,18 @@
                         "tag": "v1",
                         "new_sqlite_classes": [
                                 "NotificationDO"
+                        ]
+                },
+                {
+                        "tag": "v2-budget-coordinator",
+                        "new_sqlite_classes": [
+                                "BudgetCoordinatorDO"
+                        ]
+                },
+                {
+                        "tag": "v3-budget-grant-holder",
+                        "new_sqlite_classes": [
+                                "BudgetGrantHolderDO"
                         ]
                 }
         ],

@@ -1,3 +1,5 @@
+import type { SessionBudgetAuthorityRepository } from './session-budget-authority.repository';
+import type { BudgetAuthorityRepository } from './budget-authority.repository';
 import type { ConversationActor } from '../types/conversation-audit';
 import { SqlKnowledgeRepository } from './knowledge.repository';
 import { User, Ticket, Article, Attachment } from '../types';
@@ -77,6 +79,7 @@ export interface AttachmentRepository {
 
 export interface ChannelsRepository {
   listSupportEmails(): Promise<any[]>;
+  findReplySender(groupId?: string | null): Promise<{ email_address: string } | null>;
   createSupportEmail(data: { id: string, email_address: string, name?: string, group_id?: string, is_default: boolean }, fence?: CapabilityWriteFence): Promise<any>;
   deleteSupportEmail(id: string, fence?: CapabilityWriteFence): Promise<void>;
   getSupportEmail(id: string): Promise<any>;
@@ -131,6 +134,8 @@ export interface FilterRepository {
 }
 
 export interface Repositories {
+  budgetAuthority: BudgetAuthorityRepository;
+  sessionBudgetAuthority: SessionBudgetAuthorityRepository;
   requestLimits: { consume(bucket: string, limit: number, windowMs: number, now?: number): Promise<boolean> };
   knowledge: SqlKnowledgeRepository;
   users: UserRepository;
