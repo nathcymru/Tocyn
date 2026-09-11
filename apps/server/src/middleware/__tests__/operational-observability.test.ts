@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono, type Context } from 'hono';
 import type { Env } from '../../bindings';
 import { operationalObservability } from '../operational-observability';
+import { UserAuthResolver } from '../../auth/user-auth-resolver';
 
 const enabled = { LOCAL_BETA_ENABLED: 'true', OBSERVABILITY_MODE: 'isolated-evidence', ENVIRONMENT: 'test' };
 function context(env: Partial<Env>) {
@@ -90,6 +91,24 @@ describe('optional diagnostics preserve request behavior', () => {
     const serialized = log.mock.calls[0][0] as string;
     expect(serialized).not.toContain(secret);
     expect(JSON.parse(serialized)).toMatchObject({route:'/api/auth',method:'POST',status:403,outcome:'client_error'});
+  });
+
+  it('shares one request-owned emitter with a pre-scope D1 read', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const secret='synthetic-pre-scope-secret';
+    const statement={bind:vi.fn(function(this:unknown){return this;}),first:vi.fn(async()=>({tenant_id:secret}))};
+    const db={prepare:vi.fn(()=>statement)} as any;
+    const app = new Hono<{Bindings: Env; Variables: import('../../types').AppVariables}>();
+    app.use('*', operationalObservability);
+    app.get('/api/other', async c => {
+      await UserAuthResolver.fromEnvironment({ ...c.env, DB: db }, c.get('resourceOperationEmitter')).resolveCredentialsByEmail(secret);
+      return c.text('ok');
+    });
+    const response=await app.request('/api/other',{},enabled as Env);
+    expect(response.status).toBe(200);
+    const events=log.mock.calls.map(([entry])=>JSON.parse(entry as string));
+    expect(events).toEqual(expect.arrayContaining([expect.objectContaining({type:'resource.operation',resource:'d1',operation:'invoke',outcome:'success'})]));
+    expect(JSON.stringify(events)).not.toContain(secret);
   });
 
 });

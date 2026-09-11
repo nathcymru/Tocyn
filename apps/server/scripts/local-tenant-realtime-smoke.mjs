@@ -51,16 +51,17 @@ function localEnvironment() {
   return env;
 }
 
-async function requireLocalRealtimePort() {
+async function reserveEphemeralRealtimePort() {
   const probe = createServer();
   await new Promise((resolvePromise, reject) => {
     probe.once('error', reject);
-    probe.listen(8787, '127.0.0.1', resolvePromise);
+    probe.listen(0, '127.0.0.1', resolvePromise);
   });
   const address = probe.address();
-  assert.ok(address && typeof address !== 'string' && address.port === 8787, 'Local realtime port is unavailable');
+  assert.ok(address && typeof address !== 'string' && Number.isInteger(address.port) && address.port > 0,
+    'Unable to reserve an ephemeral local realtime port');
   await new Promise(resolvePromise => probe.close(resolvePromise));
-  return 8787;
+  return address.port;
 }
 
 function localWrangler(args) {
@@ -198,6 +199,33 @@ async function openSocket(url) {
   return { socket, messages, closeCode: () => closed };
 }
 
+async function rejectSocket(url) {
+  assert.equal(typeof WebSocket, 'function', 'Node 22 WebSocket client is unavailable');
+  const socket = new WebSocket(url);
+  sockets.add(socket);
+  const result = await new Promise((resolvePromise, reject) => {
+    let settled = false;
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(result);
+    };
+    const fail = error => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    };
+    const timer = setTimeout(() => fail(new Error('Rejected local WebSocket did not fail')), 5_000);
+    // Node reports an HTTP upgrade rejection as an error and may not emit close.
+    socket.addEventListener('error', () => finish({ rejected: true }));
+    socket.addEventListener('close', event => finish({ rejected: event.code !== 1000 }));
+    socket.addEventListener('open', () => fail(new Error('Invalid local WebSocket credential was accepted')), { once: true });
+  });
+  assert.equal(result.rejected, true, 'Invalid local WebSocket credential was not rejected');
+}
+
 async function waitFor(predicate, reason) {
   for (let attempt = 0; attempt < 80; attempt++) {
     if (predicate()) return;
@@ -207,14 +235,15 @@ async function waitFor(predicate, reason) {
 }
 
 try {
-  phase = 'checking local loopback port';
-  const port = await requireLocalRealtimePort();
+  phase = 'reserving an ephemeral local loopback port';
+  const port = await reserveEphemeralRealtimePort();
   const origin = `http://127.0.0.1:${port}`;
   const config = JSON.parse(readFileSync(join(serverRoot, 'wrangler.local.json'), 'utf8'));
   assert.equal(config.vars?.ENVIRONMENT, 'local');
   assert.ok(config.d1_databases?.every(binding => binding.remote === false));
   assert.ok(config.r2_buckets?.every(binding => binding.remote === false));
   assert.ok(config.durable_objects?.bindings?.some(binding => binding.name === 'NOTIFICATION_DO' && binding.class_name === 'NotificationDO'));
+  config.vars.LOCAL_RUNTIME_ORIGIN = origin;
   config.main = join(serverRoot, 'src/local-index.ts');
   config.d1_databases[0].migrations_dir = join(serverRoot, 'migrations');
   writeFileSync(configPath, JSON.stringify(config), { mode: 0o600 });
@@ -235,6 +264,8 @@ try {
   await waitForHealth(origin, worker);
   const operators = bootstrap.credentials.filter(credential => credential.provisioningUri);
   assert.equal(operators.length, 2, 'Expected two synthetic MFA operators');
+  phase = 'checking rejected realtime credential';
+  await rejectSocket(`ws://127.0.0.1:${port}/api/realtime?token=synthetic-invalid-token`);
   phase = 'issuing local MFA tokens';
   const [tokenA, tokenB] = await Promise.all(operators.map(credential => operatorToken(origin, credential)));
   phase = 'opening local WebSockets';
@@ -265,10 +296,15 @@ try {
   assert.equal(a.messages.some(message => message?.type === 'presence.update' && ['revoked-a', 'synthetic-b'].includes(message?.payload?.location)), false,
     'Revoked tenant A socket received an event after its authorization ended');
 
+  phase = 'stopping the owned local Worker';
+  await stop(worker);
+  await waitFor(() => b.closeCode() !== undefined, 'Local realtime socket remained open after its owned Worker stopped');
+
   report = {
     result: 'passed', runtime: 'local-only', realtimeBinding: 'local', tenants: 2,
     mfaIssuedTokens: 2, isolatedRealtimeDelivery: true, revokedSocketClosed: true,
-    unaffectedTenantContinued: true, credentialOutput: false, elapsedMs: Date.now() - started,
+    unaffectedTenantContinued: true, invalidCredentialRejected: true, ownedWorkerStopped: true,
+    credentialOutput: false, elapsedMs: Date.now() - started,
   };
 } catch {
   console.error(`Local tenant realtime rehearsal failed during ${phase}; ${JSON.stringify(redactedWorkerDiagnostic())}; credentials, tokens, and socket URLs were not reported`);

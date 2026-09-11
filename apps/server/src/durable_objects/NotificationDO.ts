@@ -1,5 +1,6 @@
 import { Env } from '../bindings';
 import { UserAuthResolver } from '../auth/user-auth-resolver';
+import { createResourceOperationEmitter } from '../observability/resource-operation';
 
 interface SessionAttachment {
   connectionId: string;
@@ -23,7 +24,11 @@ export class NotificationDO {
           Number.isSafeInteger(session.version) && session.version >= 0 &&
           ['agent', 'admin'].includes(session.role) && session.tenantId &&
           this.state.id.equals(this.env.NOTIFICATION_DO.idFromName(`tenant:${session.tenantId}`))) {
-        const user = await UserAuthResolver.fromEnvironment(this.env).resolveUserById(session.tenantId, session.userId);
+        // A Durable Object callback is a separate active composition from the
+        // ingress request. Its revalidation read retains the same bounded,
+        // privacy-safe D1 envelope and cannot affect delivery authorization.
+        const user = await UserAuthResolver.fromEnvironment(this.env, createResourceOperationEmitter(this.env))
+          .resolveUserById(session.tenantId, session.userId);
         if (user && user.role === session.role && user.sessionVersion === session.version) return true;
       }
     } catch { /* Database failures deny delivery, including after hibernation. */ }

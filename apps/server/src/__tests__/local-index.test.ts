@@ -36,4 +36,13 @@ describe('local-only capture entrypoint', () => {
     } as any, context);
     expect(result.status).toBe(503);
   });
+
+  it('permits one validated temporary loopback origin for an isolated rehearsal', async () => {
+    const env = { ...localEnv, LOCAL_RUNTIME_ORIGIN: 'http://127.0.0.1:49152' } as any;
+    expect((await localWorker.fetch(new Request('http://127.0.0.1:49152/health'), env, context)).status).toBe(200);
+    expect((await localWorker.fetch(new Request('http://localhost:8787/health'), env, context)).status).toBe(403);
+    for (const invalid of ['https://127.0.0.1:49152', 'http://example.test:49152', 'http://127.0.0.1:0', 'http://127.0.0.1:49152/path']) {
+      expect((await localWorker.fetch(new Request('http://localhost:8787/health'), { ...localEnv, LOCAL_RUNTIME_ORIGIN: invalid } as any, context)).status).toBe(403);
+    }
+  });
 });

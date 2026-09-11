@@ -27,6 +27,18 @@ describe('realtime session lifecycle', () => {
     expect(valid.send).toHaveBeenCalledOnce();
     for (const ws of [foreign, legacy]) { expect(ws.send).not.toHaveBeenCalled(); expect(ws.close).toHaveBeenCalled(); }
   });
+  it('records a fixed D1 outcome for a revalidation without exposing its session data', async () => {
+    const log=vi.spyOn(console,'log').mockImplementation(()=>{});
+    env.ENVIRONMENT='test'; env.OBSERVABILITY_MODE='isolated-evidence';
+    const ws=socket({userId:'private-user',tenantId:'private-tenant'}); sockets.push(ws);
+    state.id.equals=(id:string)=>id==='tenant:private-tenant';
+    env.NOTIFICATION_DO.idFromName=(name:string)=>name;
+    await instance.broadcast({type:'private-event',payload:{private:'content'}});
+    const emitted=log.mock.calls.map(([value])=>JSON.parse(value));
+    expect(emitted).toEqual(expect.arrayContaining([expect.objectContaining({type:'resource.operation',resource:'d1',operation:'invoke',outcome:'success'})]));
+    expect(JSON.stringify(emitted)).not.toContain('private-user');
+    expect(JSON.stringify(emitted)).not.toContain('content');
+  });
   it.each(['logout', 'demotion', 'deletion', 'expiry', 'database'])('denies outbound and inbound activity after %s, including a fresh DO instance', async reason => {
     const ws = socket(); sockets.push(ws);
     await instance.broadcast({ type: 'before' }); expect(ws.send).toHaveBeenCalledOnce(); ws.send.mockClear();
@@ -63,5 +75,20 @@ describe('realtime session lifecycle', () => {
     } }));
     expect(response.status).toBe(101); expect(state.storage.setAlarm).toHaveBeenCalled();
     expect(server.send).toHaveBeenCalledWith(expect.stringContaining('presence.sync'));
+  });
+  it('counts each fresh-session revalidation as its own bounded DO composition', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    log.mockClear();
+    env.ENVIRONMENT = 'test'; env.OBSERVABILITY_MODE = 'isolated-evidence';
+    const server = socket();
+    vi.stubGlobal('WebSocketPair', class { 0 = {}; 1 = server; });
+    vi.stubGlobal('Response', class { status: number; constructor(_body: any, init: any) { this.status = init.status; } });
+    await instance.fetch(new Request('https://internal/api/realtime', { headers: {
+      Upgrade: 'websocket', 'X-User-ID': 'u', 'X-User-Name': 'Agent', 'X-Tenant-ID': 'A',
+      'X-Session-Role': 'agent', 'X-Session-Version': '0', 'X-Session-Expiry': String(Math.floor(Date.now() / 1000) + 60),
+    } }));
+    const d1Revalidations = log.mock.calls.map(([value]) => JSON.parse(value))
+      .filter(event => event.type === 'resource.operation' && event.resource === 'd1' && event.operation === 'invoke');
+    expect(d1Revalidations).toHaveLength(3);
   });
 });

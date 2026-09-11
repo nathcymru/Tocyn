@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createVerifiedTenantScope } from '../../auth/scope';
 import { createTenantRequestDeps } from '../../middleware/tenant.middleware';
-import { TenantR2Adapter } from '../adapters';
+import { LegacyArticleBodyStorage, TenantR2Adapter } from '../adapters';
 import { LocalBetaAttachmentStorage } from '../local-beta-attachments';
 import type { LocalBetaAdmissionRepository } from '../../repositories/local-beta-admission.repository';
 import { MAX_RESOURCE_EVENTS_PER_COMPOSITION } from '../../observability/resource-operation';
@@ -24,6 +24,22 @@ it('preserves the exact R2 failure and never retries or compensates an uncertain
   await expect(new TenantR2Adapter(scope,bucket,emit).put('object','body')).rejects.toBe(error);
   expect(bucket.put).toHaveBeenCalledTimes(1);expect(bucket.delete).not.toHaveBeenCalled();
   expect(emit).toHaveBeenCalledWith(expect.objectContaining({operation:'write',outcome:'failure'}));
+});
+it('measures the default-tenant legacy R2 fallback without exposing its key or result', async () => {
+  const legacyScope=createVerifiedTenantScope('default-tenant','synthetic-actor',['agent'],1);
+  const result={private:'legacy body'}; const bucket={get:vi.fn(async()=>result),put:vi.fn(),delete:vi.fn()}; const emit=vi.fn();
+  const storage=new LegacyArticleBodyStorage(legacyScope,bucket,emit);
+  await expect(storage.getLegacyUnscopedAttachment('tickets/00000000-0000-4000-8000-000000000000/articles/00000000-0000-4000-8000-000000000001/body.txt')).resolves.toBe(result);
+  expect(emit).toHaveBeenCalledWith(expect.objectContaining({resource:'r2',operation:'read',outcome:'success'}));
+  expect(JSON.stringify(emit.mock.calls)).not.toContain('legacy body');
+});
+it('preserves a legacy R2 failure while recording only its fixed outcome', async () => {
+  const legacyScope=createVerifiedTenantScope('default-tenant','synthetic-actor',['agent'],1);
+  const failure={private:'legacy failure'}; const bucket={get:vi.fn(async()=>{throw failure;}),put:vi.fn(),delete:vi.fn()}; const emit=vi.fn();
+  const storage=new LegacyArticleBodyStorage(legacyScope,bucket,emit);
+  await expect(storage.getLegacyUnscopedAttachment('tickets/00000000-0000-4000-8000-000000000000/articles/00000000-0000-4000-8000-000000000001/body.txt')).rejects.toBe(failure);
+  expect(emit).toHaveBeenCalledWith(expect.objectContaining({resource:'r2',operation:'read',outcome:'failure'}));
+  expect(JSON.stringify(emit.mock.calls)).not.toContain('legacy failure');
 });
 it('keeps durable admission ahead of R2 and emits no R2 event when admission rejects', async () => {
   const error=new Error('admission denied');const chargeUploadAttempt=vi.fn(async()=>{throw error;});

@@ -29,6 +29,8 @@ export type ResourceOperationOptions<T> = {
   resource: ResourceKind;
   operation: string;
   execute: () => T | Promise<T>;
+  /** A platform result classifier that never changes the returned value. */
+  isFailureResult?: (result: T) => boolean;
   emit?: (event: ResourceOperationEvent) => void | Promise<void>;
   now?: () => number;
 };
@@ -53,7 +55,9 @@ export async function measureResourceOperation<T>(options: ResourceOperationOpti
   };
   try {
     const result = await options.execute();
-    finish('success');
+    let outcome: ResourceOperationOutcome = 'success';
+    try { if (options.isFailureResult?.(result)) outcome = 'failure'; } catch { /* Keep the original result. */ }
+    finish(outcome);
     return result;
   } catch (error) {
     finish('failure');

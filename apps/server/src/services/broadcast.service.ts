@@ -19,7 +19,7 @@ export class BroadcastService {
         method: 'POST',
         body: JSON.stringify({ type, payload }),
         headers: { 'Content-Type': 'application/json' },
-      }) });
+      }), isFailureResult: response => response.status >= 500 });
     } catch (err) {
       console.error('Broadcast failed');
       if (retries > 0) {

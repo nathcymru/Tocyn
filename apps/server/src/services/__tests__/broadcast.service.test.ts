@@ -53,6 +53,14 @@ describe('BroadcastService', () => {
     expect(JSON.stringify(emit.mock.calls)).not.toContain('secret');
   });
 
+  it('records a returned Durable Object server error without changing retry behavior', async () => {
+    const emit = vi.fn(); mockDO.fetch.mockResolvedValue(new Response('private failure', {status: 503}));
+    await new BroadcastService(mockEnv, createVerifiedTenantScope('tenant-A','agent',['agent'],1), emit).broadcast('ticket.updated', {private:'payload'}, 2);
+    expect(mockDO.fetch).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({resource:'durable_object',operation:'invoke',outcome:'failure'}));
+    expect(JSON.stringify(emit.mock.calls)).not.toContain('private');
+  });
+
   it('does not retry a successful broadcast when the diagnostic sink throws', async () => {
     mockDO.fetch.mockResolvedValue(new Response('ok'));
     await new BroadcastService(mockEnv, createVerifiedTenantScope('tenant-A','agent',['agent'],1), () => { throw new Error('sink unavailable'); }).broadcast('ticket.updated', {}, 2);

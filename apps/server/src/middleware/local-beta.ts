@@ -7,11 +7,13 @@ import { createCustomerAuthResolvers, createLocalBetaAdmission, createLocalBetaR
 import { isLocalAuthCaptureTransport } from '../services/email/transport';
 import { ConversationReadError, parseListPage } from '../services/conversation-read-bounds';
 import { requestBounds } from './request-bounds';
+import type { AppVariables } from '../types';
+import type { ResourceOperationEmitter } from '../observability/resource-operation';
 
-export async function authorizeLocalBeta(env: Env, scope: VerifiedTenantScope, principal?: BetaPrincipal): Promise<void> {
+export async function authorizeLocalBeta(env: Env, scope: VerifiedTenantScope, principal?: BetaPrincipal, emit?: ResourceOperationEmitter): Promise<void> {
   if (!localBetaEnabled(env)) return;
   const kind = scope.roles.includes('integration') ? 'api-key' : scope.roles.includes('customer') ? 'customer' : 'staff';
-  await createLocalBetaAdmission(env, scope, principal ?? { kind, id: scope.actorId }).authorize();
+  await createLocalBetaAdmission(env, scope, principal ?? { kind, id: scope.actorId }, emit).authorize();
 }
 
 export type BetaRouteClass = 'health' | 'auth' | 'configuration' | 'conversation-read' | 'conversation-write' | 'upload' | 'attachment' | 'disabled';
@@ -46,7 +48,7 @@ function permitsEmptyAuthAction(method: string, path: string): boolean {
   ].includes(path);
 }
 
-export const localBetaGuard: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
+export const localBetaGuard: MiddlewareHandler<{ Bindings: Env; Variables: AppVariables }> = async (c, next) => {
   if (c.env.LOCAL_BETA_ENABLED === undefined || c.env.LOCAL_BETA_ENABLED === 'false') return next();
   const invalidRuntime = !localBetaEnabled(c.env) || c.env.ENVIRONMENT !== 'local'
     || !c.env.emailTransport || !isLocalAuthCaptureTransport(c.env.emailTransport);
@@ -60,7 +62,7 @@ export const localBetaGuard: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
     return c.json({ code: 'feature_disabled', error: 'This feature is disabled in the local beta.' }, 503);
   }
   // The guarded profile never falls through without initialized durable policy.
-  const runtimePolicy = createLocalBetaRuntimeRepository(c.env);
+  const runtimePolicy = createLocalBetaRuntimeRepository(c.env, c.get('resourceOperationEmitter'));
   let revision = 0;
   try {
     const policy = await runtimePolicy.currentPolicy();
@@ -76,7 +78,7 @@ export const localBetaGuard: MiddlewareHandler<{ Bindings: Env }> = async (c, ne
   if (route === 'configuration' && c.req.method === 'GET' && c.req.path === '/api/v1/customer/config') {
     const key = c.req.header('X-Widget-Key') || c.req.query('key');
     if (key) {
-      const resolved = await createCustomerAuthResolvers(c.env).widget.resolveTenantByKey(key.trim());
+      const resolved = await createCustomerAuthResolvers(c.env, c.get('resourceOperationEmitter')).widget.resolveTenantByKey(key.trim());
       if (resolved) {
         const admitted = await runtimePolicy.admitsTenant(resolved.tenantId);
         if (!admitted) return c.json({ error: 'Widget configuration not found' }, 404);

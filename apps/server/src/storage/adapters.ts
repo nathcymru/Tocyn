@@ -137,7 +137,7 @@ export class TenantAttachmentStorage {
 }
 
 export class LegacyArticleBodyStorage {
-  constructor(private scope: VerifiedTenantScope, private rawBucket: R2Bucket) {
+  constructor(private scope: VerifiedTenantScope, private rawBucket: R2Bucket, private emit?: ResourceOperationEmitter) {
     if (scope.tenantId !== 'default-tenant') {
       throw new Error("LegacyArticleBodyStorage is only available to the default legacy tenant");
     }
@@ -147,7 +147,7 @@ export class LegacyArticleBodyStorage {
     if (!/^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/.test(legacyKey)) {
       throw new Error('Invalid legacy article body key format');
     }
-    return this.rawBucket.delete(legacyKey);
+    return measureResourceOperation({ resource: 'r2', operation: 'delete', emit: this.emit, execute: () => this.rawBucket.delete(legacyKey) });
   }
 
   async getLegacyUnscopedAttachment(legacyKey: string) {
@@ -155,7 +155,7 @@ export class LegacyArticleBodyStorage {
     if (!legacyPattern.test(legacyKey)) {
       throw new Error("Invalid legacy article body key format.");
     }
-    return this.rawBucket.get(legacyKey);
+    return measureResourceOperation({ resource: 'r2', operation: 'read', emit: this.emit, execute: () => this.rawBucket.get(legacyKey) });
   }
 }
 

@@ -31,6 +31,19 @@ describe('observed D1 boundary', () => {
     expect(emit.mock.calls.map(([event])=>event.outcome)).toEqual(['success','failure']);
     expect(JSON.stringify(emit.mock.calls)).not.toMatch(/private|SQL|argument|failure"\s*:/);
   });
+  it('records a D1 result envelope failure without changing the result or copying its details', async () => {
+    const {db,statement}=database(); const emit=vi.fn(); const result={success:false,error:'private D1 result'};
+    statement.run.mockResolvedValue(result);
+    await expect(observeD1(db,emit).prepare('private SQL').bind('private binding').run()).resolves.toBe(result);
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({resource:'d1',operation:'invoke',outcome:'failure'}));
+    expect(JSON.stringify(emit.mock.calls)).not.toContain('private');
+  });
+  it('records a failed D1 batch result without changing the batch result', async () => {
+    const {db}=database(); const emit=vi.fn(); const result=[{success:true},{success:false,error:'private batch result'}]; db.batch.mockResolvedValue(result);
+    await expect(observeD1(db,emit).batch([])).resolves.toBe(result);
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({resource:'d1',operation:'batch',outcome:'failure'}));
+    expect(JSON.stringify(emit.mock.calls)).not.toContain('private');
+  });
   it('keeps uninstrumented exec/dump methods bound to their native receiver', async () => {
     const {db}=database();const emit=vi.fn();db.exec.mockImplementation(function(this:unknown){expect(this).toBe(db);return 'exec-result';});db.dump.mockImplementation(function(this:unknown){expect(this).toBe(db);return 'dump-result';});
     const observed=observeD1(db,emit);expect(observed.exec('sql')).toBe('exec-result');expect(observed.dump()).toBe('dump-result');expect(emit).not.toHaveBeenCalled();

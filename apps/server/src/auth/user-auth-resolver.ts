@@ -1,5 +1,7 @@
 import { Env } from '../bindings';
 import { D1Database } from '@cloudflare/workers-types';
+import { observeD1 } from '../repositories/observed-d1';
+import type { ResourceOperationEmitter } from '../observability/resource-operation';
 
 export interface UserAuthResolution {
   tenantId: string;
@@ -13,8 +15,8 @@ export interface UserAuthResolution {
 }
 
 export class UserAuthResolver {
-  static fromEnvironment(env: Env): UserAuthResolver {
-    return new UserAuthResolver(env.DB);
+  static fromEnvironment(env: Env, emit?: ResourceOperationEmitter): UserAuthResolver {
+    return new UserAuthResolver(observeD1(env.DB, emit));
   }
 
   constructor(private db: D1Database) {}

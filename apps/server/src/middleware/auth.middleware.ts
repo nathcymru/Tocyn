@@ -9,6 +9,8 @@ import { getCookie } from "hono/cookie";
 import { createVerifiedTenantScope } from "../auth/scope";
 import { createTenantRequestDeps } from "./tenant.middleware";
 import { UserAuthResolver, UserAuthResolution } from "../auth/user-auth-resolver";
+import { observeD1 } from '../repositories/observed-d1';
+import type { ResourceOperationEmitter } from '../observability/resource-operation';
 import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 
 function recordCredentialDecision(c: Context<{ Bindings: Env; Variables: AppVariables }>, decision: RequestCredentialAuthDecision): void {
@@ -84,7 +86,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
       return c.json({ error: "Unauthorized: Database unavailable" }, 401);
     }
 
-    const resolver = new UserAuthResolver(c.env.DB);
+    const resolver = new UserAuthResolver(observeD1(c.env.DB, c.get('resourceOperationEmitter')));
     const userRes = await resolver.resolveUserById(tenantId, sub);
     if (userRes && (!Number.isSafeInteger(payload.session_version ?? 0) || (payload.session_version ?? 0) !== userRes.sessionVersion)) {
       record('denied');
@@ -105,10 +107,10 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
     // Live identity, role, session, and tenant scope are authoritative here.
     // Admission and MFA remain separate gates; HTTP status is not consulted.
     record(payload.mfa_verified === true ? 'accepted' : 'challenge');
-    await authorizeLocalBeta(c.env, scope);
+    await authorizeLocalBeta(c.env, scope, undefined, c.get('resourceOperationEmitter'));
     c.set("tenantScope", scope as any);
 
-    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'));
+    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
     c.set("tenantDeps", deps as any);
 
     await next();
@@ -161,7 +163,7 @@ export const mfaChallengeMiddleware = async (
       return c.json({ error: "Unauthorized: Database unavailable" }, 401);
     }
 
-    const resolver = new UserAuthResolver(c.env.DB);
+    const resolver = new UserAuthResolver(observeD1(c.env.DB, c.get('resourceOperationEmitter')));
     const userRes = await resolver.resolveUserById(tenantId, sub);
     if (userRes && (!Number.isSafeInteger(payload.session_version ?? 0) || (payload.session_version ?? 0) !== userRes.sessionVersion)) {
       record('denied');
@@ -180,10 +182,10 @@ export const mfaChallengeMiddleware = async (
     c.set("jwtPayload", { ...payload, sub, tenant_id: tenantId, role: activeRole } as any);
     const scope = createVerifiedTenantScope(tenantId, sub, [activeRole], userRes.sessionVersion);
     challengeVerified = true;
-    await authorizeLocalBeta(c.env, scope);
+    await authorizeLocalBeta(c.env, scope, undefined, c.get('resourceOperationEmitter'));
     c.set("tenantScope", scope as any);
 
-    const deps = createTenantRequestDeps(scope, c.env);
+    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
     c.set("tenantDeps", deps as any);
 
     await next();
@@ -236,7 +238,7 @@ export const loginAuthResolverMiddleware = async (c: Context<{ Bindings: Env; Va
 
   if (body.email && typeof body.email === "string") {
     try {
-      authUser = await new UserAuthResolver(c.env.DB).resolveCredentialsByEmail(body.email);
+      authUser = await new UserAuthResolver(observeD1(c.env.DB, c.get('resourceOperationEmitter'))).resolveCredentialsByEmail(body.email);
     } catch (error) {
       recordCredentialDecision(c, 'unavailable');
       throw error;
@@ -244,7 +246,7 @@ export const loginAuthResolverMiddleware = async (c: Context<{ Bindings: Env; Va
   }
 
   if (authUser) {
-    try { await authorizeLocalBeta(c.env, createVerifiedTenantScope(authUser.tenantId, authUser.userId, [authUser.role], 1)); }
+    try { await authorizeLocalBeta(c.env, createVerifiedTenantScope(authUser.tenantId, authUser.userId, [authUser.role], 1), undefined, c.get('resourceOperationEmitter')); }
     catch (error) {
       if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') {
         // Preserve the enumeration-safe response without turning an admission
@@ -262,8 +264,8 @@ export const loginAuthResolverMiddleware = async (c: Context<{ Bindings: Env; Va
 };
 
 /** WebSocket query tokens use the same current session verifier before constructing scope. */
-export async function authenticateRealtimeToken(env: Env, token: string, record?: (decision: RequestCredentialAuthDecision) => void) {
-  const verification = await new AuthService(env).verifyCurrentAppCredential(token);
+export async function authenticateRealtimeToken(env: Env, token: string, record?: (decision: RequestCredentialAuthDecision) => void, emit?: ResourceOperationEmitter) {
+  const verification = await new AuthService(emit ? { ...env, DB: observeD1(env.DB, emit) } : env).verifyCurrentAppCredential(token);
   if (verification.decision !== 'accepted') {
     try { record?.(verification.decision); } catch { /* Evidence cannot affect authentication. */ }
     return null;
@@ -275,6 +277,6 @@ export async function authenticateRealtimeToken(env: Env, token: string, record?
   }
   try { record?.('accepted'); } catch { /* Evidence cannot affect authentication. */ }
   const scope = createVerifiedTenantScope(user.tenant_id!, user.id, [user.role], user.session_version ?? 0);
-  await authorizeLocalBeta(env, scope);
+  await authorizeLocalBeta(env, scope, undefined, emit);
   return user;
 }
