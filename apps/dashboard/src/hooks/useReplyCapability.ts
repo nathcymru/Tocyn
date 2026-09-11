@@ -26,6 +26,16 @@ export function parseReplyCapability(value: unknown, ticketId: string): ReplyCap
       || !Array.isArray(attachments.contentTypes) || !attachments.contentTypes.length || attachments.contentTypes.length > contentTypes.size
       || attachments.contentTypes.some(type => typeof type !== 'string' || !contentTypes.has(type))) return invalid();
   }
+  if (value.collision !== undefined) {
+    const collision = value.collision;
+    if (!record(collision) || collision.version !== 1 || collision.protocol !== 'draft-precondition-v1'
+      || !Number.isSafeInteger(collision.conversationRevision) || Number(collision.conversationRevision) < 0) return invalid();
+  }
+  if (value.internalMentions !== undefined) {
+    const internalMentions = value.internalMentions;
+    if (!record(internalMentions) || internalMentions.version !== 1 || internalMentions.protocol !== 'internal-activity-v1'
+      || internalMentions.maxRecipients !== 16) return invalid();
+  }
   return value as unknown as ReplyCapabilityV1;
 }
 

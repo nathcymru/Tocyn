@@ -5,6 +5,7 @@ import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service
 import type { ArticleBodyFormat } from '@luminatick/shared';
 
 export type StaffMutationOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply';
+export type AcknowledgedDraftReference = Readonly<{ generation: string; revision: number; baseConversationRevision: number }>;
 /** Stored article formats share the composer contract. */
 export type StaffArticleFormat = ArticleBodyFormat;
 export type StaffMutationInput =
@@ -12,7 +13,7 @@ export type StaffMutationInput =
     bodyFormat?: StaffArticleFormat; status?: Ticket['status']; priority?: Ticket['priority'];
     group_id?: string | null; assigned_to?: string | null; custom_fields?: Ticket['custom_fields'] } }
   | { operation: 'dashboard.ticket.reply'; ticketId: string; data: { body: string; bodyFormat?: StaffArticleFormat;
-    is_internal?: boolean; attachments?: RequestedMutationAttachment[] } };
+    is_internal?: boolean; attachments?: RequestedMutationAttachment[]; mentionedUserIds?: readonly string[]; draft?: AcknowledgedDraftReference } };
 export type StaffMutationNamespace = Readonly<{ principalId: string; operation: StaffMutationOperation; keyHash: string; payloadHash: string }>;
 export type StaffMutationOutcome = Readonly<{ status: 201; body: Record<string, unknown>; ticket: Ticket; article: Article;
   attachments: Attachment[]; replayed: boolean; keyed: boolean }>;

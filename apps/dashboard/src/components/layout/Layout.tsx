@@ -27,7 +27,7 @@ import {
   FileText
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { useRealtime } from '../../hooks/useRealtime';
+import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
 import { OperatorThemeControl, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
 
@@ -172,7 +172,7 @@ function LayoutContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
-  const { isConnected, lastMessage, connectionDetails, manualReconnect } = useRealtime();
+  const { isConnected, lastMessage, connectionDetails, manualReconnect } = useCollaboration();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showConnDetails, setShowConnDetails] = useState(false);
   const connectionTrigger = useRef<HTMLButtonElement>(null);

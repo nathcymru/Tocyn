@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { Profiler, type ProfilerOnRenderCallback } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
+import { CollaborationProvider } from '../components/CollaborationContext';
 import { useAuthStore } from '../store/authStore';
 
 class Socket {
@@ -18,9 +19,9 @@ const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,
 function deferred<T>() {let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return{promise,resolve};}
 let client:QueryClient;
 let ticket:ReturnType<typeof initialTicket>;
-function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'assigned-agent' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
+function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'22222222-2222-4222-8222-222222222222' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
 const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
-function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined, sla: (path: string, options: RequestInit) => Response | Promise<Response> = () => json(unavailableSla)) {
+function transport(handle:(path:string,options:RequestInit,url:string)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined, sla: (path: string, options: RequestInit) => Response | Promise<Response> = () => json(unavailableSla), collision: boolean | (() => number) = false) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
     if(path==='/api/workspace/state') {
@@ -32,16 +33,17 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
       if(options.method === 'GET' || !options.method) return new Response(null,{status:204});
       if(options.method === 'DELETE') return new Response(null,{status:204});
       const body=JSON.parse(String(options.body));
-      return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,bodyFormat:body.bodyFormat,attachments:body.attachments,baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
+      return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,bodyFormat:body.bodyFormat,attachments:body.attachments,mentionedUserIds:body.mentionedUserIds ?? [],baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
     }
     if(path === '/api/tickets/workflow-ticket/reply-capability') return json({version:1,ticketId:'workflow-ticket',modes:[
       {visibility:'public',channel:'email',delivery:'email_attempted',recipient:'ticket_customer',record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}},
       {visibility:'internal',channel:'internal',delivery:'recorded_only',recipient:null,record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}}
-    ]});
+    ], ...(collision ? { collision: { version: 1, protocol: 'draft-precondition-v1', conversationRevision: typeof collision === 'function' ? collision() : 0 },
+      internalMentions: { version: 1, protocol: 'internal-activity-v1', maxRecipients: 16 } } : {})});
     if(path===`/api/tickets/${ticket.id}/sla`) return sla(path,options);
-    if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/'))return handle(path,options);
+    if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/'))return handle(path,options,url);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
-    if(path==='/api/users/agents')return json([{id:'assigned-agent',full_name:'Assigned agent'}]);
+    if(path==='/api/users/agents')return json([{id:'22222222-2222-4222-8222-222222222222',full_name:'Assigned agent'}]);
     if(path==='/api/settings')return json({});
     if(path==='/api/ticket-fields')return json(fields);
     return json([]);
@@ -49,7 +51,7 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
 }
 function showDetail(onRender?: ProfilerOnRenderCallback){
   const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> }], { initialEntries: ['/tickets/workflow-ticket'] });
-  render(<QueryClientProvider client={client}><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><CollaborationProvider><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></CollaborationProvider></QueryClientProvider>);
 }
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
@@ -513,6 +515,102 @@ it('preserves a rejected reply draft and recovers once, refreshing both detail a
   expect(window.alert).not.toHaveBeenCalled();
 });
 
+it('does not expose or send mention fields when the route has not advertised durable mentions', async () => {
+  const requests: RequestInit[] = [];
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) { requests.push(options); return json({ id: 'legacy-internal-note' }, 201); }
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  expect(screen.queryByRole('group', { name: 'Mention colleagues' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Legacy private note' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(JSON.parse(String(requests[0].body))).not.toHaveProperty('mentioned_user_ids');
+});
+
+it('restores selected internal mentions from the acknowledged draft and retains them through a lost-response retry', async () => {
+  const requests: RequestInit[] = []; let sends = 0;
+  const restored = { ticketId: ticket.id, generation: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', revision: 3,
+    mode: 'internal', body: 'Restored private handoff', bodyFormat: 'plain', attachments: [],
+    mentionedUserIds: ['22222222-2222-4222-8222-222222222222'], baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-11T00:00:00Z' };
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) {
+      requests.push(options); sends++;
+      return sends === 1 ? json({ error: 'Reply temporarily unavailable' }, 503) : json({ id: 'restored-mention-note' }, 201);
+    }
+    return json(ticket);
+  }, [], options => (!options.method || options.method === 'GET') ? json(restored) : undefined, undefined, true);
+  showDetail();
+  const mention = await screen.findByRole('checkbox', { name: 'Assigned agent' });
+  expect(mention).toBeChecked();
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Restored private handoff');
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await screen.findByRole('alert');
+  expect(mention).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(JSON.parse(String(requests[0].body))).toMatchObject({ mentioned_user_ids: restored.mentionedUserIds });
+  expect(JSON.parse(String(requests[1].body))).toMatchObject({ mentioned_user_ids: restored.mentionedUserIds });
+  expect(new Headers(requests[1].headers).get('Idempotency-Key')).toBe(new Headers(requests[0].headers).get('Idempotency-Key'));
+});
+
+it('keeps the bounded roster discoverable beyond sixteen while limiting selected recipients', async () => {
+  const lateId = '29999999-0000-4000-8000-000000000099';
+  const roster = Array.from({ length: 17 }, (_, index) => ({
+    id: index === 16 ? lateId : `2${index.toString(16).padStart(7, '0')}-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
+    full_name: index === 16 ? 'Late colleague' : `Colleague ${index + 1}`,
+  }));
+  const requests: RequestInit[] = [];
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) { requests.push(options); return json({ id: 'late-mention-note' }, 201); }
+    return json(ticket);
+  }, [], undefined, undefined, true);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (url, options) => new URL(String(url), 'http://localhost').pathname === '/api/users/agents'
+    ? json(roster) : original(url, options));
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  const late = await screen.findByRole('checkbox', { name: 'Late colleague' });
+  late.focus(); expect(late).toHaveFocus(); fireEvent.click(late);
+  expect(late).toBeChecked();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Late roster mention' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(JSON.parse(String(requests[0].body))).toMatchObject({ mentioned_user_ids: [lateId] });
+});
+
+it('keeps a selected internal mention through recipient denial and retries the same acknowledged intent', async () => {
+  const requests: RequestInit[] = []; let sends = 0;
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) {
+      requests.push(options); sends++;
+      return sends === 1 ? json({ error: 'Mention recipient access changed', code: 'mention_recipient_unavailable' }, 409) : json({ id: 'private-mention-note' }, 201);
+    }
+    return json(ticket);
+  }, [], undefined, undefined, true);
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  const mention = await screen.findByRole('checkbox', { name: 'Assigned agent' });
+  mention.focus(); expect(mention).toHaveFocus(); fireEvent.click(mention);
+  expect(mention).toBeChecked();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Private handoff' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await screen.findByRole('alert');
+  expect(screen.getByRole('alert')).toHaveTextContent('Mention recipient access changed');
+  expect(screen.queryByRole('button', { name: 'Rebase saved draft' })).not.toBeInTheDocument();
+  expect(mention).toBeChecked();
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Private handoff');
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(JSON.parse(String(requests[0].body))).toMatchObject({ is_internal: true,
+    mentioned_user_ids: ['22222222-2222-4222-8222-222222222222'] });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(new Headers(requests[1].headers).get('Idempotency-Key')).toBe(new Headers(requests[0].headers).get('Idempotency-Key'));
+});
+
 it('refreshes the conversation and feed for the server article.created payload',async()=>{
   let reads=0;client.setQueryData(['tickets',{}],{data:[]});
   transport(()=>{reads++;return json(ticket);});
@@ -775,4 +873,139 @@ it('retains the draft and prevents send until reply-capability failure is recove
   unavailable = false; fireEvent.click(retry);
   await waitFor(() => expect(send).toHaveAttribute('aria-disabled', 'false'));
   expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Retained while options unavailable');
+});
+
+
+it('sends an acknowledged collision-safe draft with one stable idempotency key', async () => {
+  const requests: RequestInit[] = [];
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) { requests.push(options); return json({ id: 'collision-reply' }); }
+    return json(ticket);
+  }, [], undefined, undefined, true);
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Acknowledged collision-safe reply' } });
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
+  fireEvent.click(screen.getByRole('button', { name: /send reply/i }));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  const body = JSON.parse(String(requests[0].body));
+  expect(body.draft).toMatchObject({ generation: '99999999-9999-4999-8999-999999999999', revision: 1, baseConversationRevision: 0 });
+  expect(new Headers(requests[0].headers).get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/);
+});
+
+it('requires manually loading the bounded newest conversation page before a stale draft can be rebased', async () => {
+  let conversationRevision = 0;
+  let materialAvailable = false;
+  let sendAttempts = 0;
+  let cursorReads = 0;
+  const rebaseRequests: unknown[] = [];
+  const olderPage = { ...ticket, pagination: { limit: 1, next_cursor: 'page-2', has_more: true } };
+  const newestPage = { ...ticket, articles: [{
+    id: 'newest-customer-material', body: 'Newest customer material', sender_type: 'customer', is_internal: false, created_at: '2026-09-10T00:00:00Z',
+  }], pagination: { limit: 1, next_cursor: null, has_more: false } };
+  transport((path, options, url) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) {
+      sendAttempts++;
+      if (sendAttempts === 1) { materialAvailable = true; conversationRevision = 1; return json({ code: 'staff_reply_stale', error: 'stale' }, 409); }
+      return json({ id: 'manual-reviewed-send' });
+    }
+    if (path === `/api/tickets/${ticket.id}`) {
+      if (url.includes('article_cursor=page-2')) { cursorReads++; return json(newestPage); }
+      return json(materialAvailable ? olderPage : ticket);
+    }
+    return json(ticket);
+  }, [], options => {
+    if (!options.body) return undefined;
+    const body = JSON.parse(String(options.body));
+    if ('expectedReviewedConversationRevision' in body) {
+      rebaseRequests.push(body);
+      return json({ ticketId: ticket.id, generation: '99999999-9999-4999-8999-999999999999', revision: 2,
+        mode: 'public', body: 'Retain paginated draft', bodyFormat: 'plain', attachments: [], baseConversationRevision: 1, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
+    }
+    return json({ ticketId: ticket.id, generation: '99999999-9999-4999-8999-999999999999', revision: 1,
+      mode: body.mode, body: body.body, bodyFormat: body.bodyFormat, attachments: body.attachments, baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
+  }, undefined, () => conversationRevision);
+  showDetail(); await screen.findByText('Customer question');
+  const message = screen.getByRole('textbox', { name: 'Reply message' });
+  fireEvent.change(message, { target: { value: 'Retain paginated draft' } });
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
+  fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
+  await screen.findByText(/Review and rebase before sending/);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
+  await screen.findByText(/More messages are available\. Load them/i);
+  expect(screen.queryByRole('button', { name: 'Rebase saved draft' })).not.toBeInTheDocument();
+  expect(rebaseRequests).toHaveLength(0);
+  expect(message).toHaveValue('Retain paginated draft');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Load more messages' }));
+  await screen.findByText('Newest customer material');
+  expect(cursorReads).toBe(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
+  await screen.findByRole('button', { name: 'Rebase saved draft' });
+  fireEvent.click(screen.getByRole('button', { name: 'Rebase saved draft' }));
+  await screen.findByText(/Draft rebased to the reviewed conversation/);
+  expect(rebaseRequests).toEqual([expect.objectContaining({ expectedReviewedConversationRevision: 1, expectedRevision: 1 })]);
+  expect(message).toHaveValue('Retain paginated draft');
+});
+
+it('requires a rendered conversation review and explicit CAS rebase after a stale reply before manual resend', async () => {
+  let conversationRevision = 0;
+  let injectMaterialBetweenTicketAndRevisionRead = false;
+  let sendAttempts = 0;
+  const replyRequests: RequestInit[] = [];
+  const material = { ...ticket, articles: [...ticket.articles, {
+    id: 'new-customer-material', body: 'A newer customer reply', sender_type: 'customer', is_internal: false, created_at: '2026-09-10T00:00:00Z',
+  }] };
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) {
+      replyRequests.push(options);
+      sendAttempts++;
+      return sendAttempts === 1 ? json({ code: 'staff_reply_stale', error: 'stale' }, 409) : json({ id: 'manual-reviewed-send' });
+    }
+    if (path === `/api/tickets/${ticket.id}`) {
+      if (injectMaterialBetweenTicketAndRevisionRead) {
+        injectMaterialBetweenTicketAndRevisionRead = false;
+        conversationRevision = 1;
+        return json(ticket);
+      }
+      return json(conversationRevision === 1 ? material : ticket);
+    }
+    return json(ticket);
+  }, [], options => {
+    if (!options.body) return undefined;
+    const body = JSON.parse(String(options.body));
+    if ('expectedReviewedConversationRevision' in body) {
+      expect(body).toMatchObject({ expectedReviewedConversationRevision: 1, expectedRevision: 1 });
+      return json({ ticketId: ticket.id, generation: '99999999-9999-4999-8999-999999999999', revision: 2,
+        mode: 'public', body: 'Keep this draft through review', bodyFormat: 'plain', attachments: [], baseConversationRevision: 1, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
+    }
+    return json({ ticketId: ticket.id, generation: '99999999-9999-4999-8999-999999999999', revision: 1,
+      mode: body.mode, body: body.body, bodyFormat: body.bodyFormat, attachments: body.attachments, baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
+  }, undefined, () => conversationRevision);
+  showDetail(); await screen.findByText('Customer question');
+  const message = screen.getByRole('textbox', { name: 'Reply message' });
+  fireEvent.change(message, { target: { value: 'Keep this draft through review' } });
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
+  fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
+  await screen.findByText(/Review and rebase before sending/);
+  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('button', { name: 'Send Reply' })).toHaveAttribute('aria-disabled', 'true');
+
+  injectMaterialBetweenTicketAndRevisionRead = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
+  await screen.findByText(/conversation changed while it was being refreshed/i);
+  expect(screen.queryByText('A newer customer reply')).not.toBeInTheDocument();
+  expect(message).toHaveValue('Keep this draft through review');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
+  await screen.findByText('A newer customer reply');
+  await screen.findByRole('button', { name: 'Rebase saved draft' });
+  expect(message).toHaveValue('Keep this draft through review');
+  fireEvent.click(screen.getByRole('button', { name: 'Rebase saved draft' }));
+  await screen.findByText(/Draft rebased to the reviewed conversation/);
+  expect(message).toHaveValue('Keep this draft through review');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
+  await waitFor(() => expect(replyRequests).toHaveLength(2));
+  expect(JSON.parse(String(replyRequests[1].body)).draft).toMatchObject({ revision: 2, baseConversationRevision: 1 });
 });

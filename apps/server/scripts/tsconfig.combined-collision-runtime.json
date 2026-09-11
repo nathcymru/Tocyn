@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": [
+    "combined-collision-runtime.test.ts",
+    "local-beta-fixture.ts",
+    "local-tenant-fixture.ts"
+  ]
+}

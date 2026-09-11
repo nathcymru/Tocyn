@@ -4,6 +4,7 @@ import type { Ticket } from '../types';
 import type { StaffMutationCommit, StaffMutationNamespace, StaffMutationReceipt } from '../types/staff-ticket-mutation';
 import { MAX_SESSION_BUDGET_GROUPS } from './session-budget-authority.repository';
 import { budgetCommitConstraint } from './budget-commit-fence';
+import type { StaffReplyPreconditionConstraint } from './staff-reply-precondition.repository';
 
 const namespaceWhere = 'tenant_id=? AND principal_id=? AND operation=? AND key_hash=?';
 const namespaceValues = (scope: VerifiedTenantScope, ns: StaffMutationNamespace) => [scope.tenantId,ns.principalId,ns.operation,ns.keyHash];
@@ -30,7 +31,8 @@ export class StaffTicketMutationRepository {
 }
 
 /** Fixed guard only: no request-provided SQL or assertion callbacks. */
-export function staffMutationStatements(db: D1Database, scope: VerifiedTenantScope, commit: StaffMutationCommit): D1PreparedStatement[] {
+export function staffMutationStatements(db: D1Database, scope: VerifiedTenantScope, commit: StaffMutationCommit,
+  precondition?: StaffReplyPreconditionConstraint): D1PreparedStatement[] {
   const c = commit.credential, requirement = commit.requirements;
   const valid = c.tenantId === scope.tenantId && c.actorId === scope.actorId && scope.roles.includes(c.role)
     && c.sessionVersion === scope.authVersion && c.mfaVerified === true && ['admin','agent'].includes(c.role)
@@ -39,6 +41,7 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
   const budget = budgetCommitConstraint(commit.authority, scope.tenantId);
   const sql = [`?=1`, `EXISTS (SELECT 1 FROM users WHERE tenant_id=? AND id=? AND role=? AND session_version=? AND mfa_enabled=1 AND ?>unixepoch())`, budget.sql];
   const values: unknown[] = [valid ? 1 : 0,scope.tenantId,c.actorId,c.role,c.sessionVersion,c.expiresAt,...budget.values];
+  if (precondition) { sql.push(`(${precondition.sql})`); values.push(...precondition.values); }
   if (requirement.ticket) {
     sql.push(`EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=? AND t.group_id IS ?
       AND (?='admin' OR t.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups WHERE tenant_id=t.tenant_id AND user_id=? AND group_id=t.group_id)))`);

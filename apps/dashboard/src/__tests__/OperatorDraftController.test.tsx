@@ -37,7 +37,7 @@ it('restores the server draft, debounces edits, and only reports Saved after its
   await waitFor(() => expect(current()).toMatchObject({ status: 'saved', body: 'latest', base: 3, version: { generation: restored.generation, revision: 5 } }));
   const savedRequest = vi.mocked(fetch).mock.calls[1]?.[1] as RequestInit;
   expect(JSON.parse(String(savedRequest.body))).toEqual({
-    expectedGeneration: restored.generation, expectedRevision: 4, mode: 'internal', body: 'latest', bodyFormat: 'markdown-v1', attachments: edited('latest').attachments,
+    expectedGeneration: restored.generation, expectedRevision: 4, mode: 'internal', body: 'latest', bodyFormat: 'markdown-v1', attachments: edited('latest').attachments, mentionedUserIds: [],
   });
   expect(localStorage.getItem('lumina-auth')).not.toContain('latest');
 });
