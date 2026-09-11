@@ -13,7 +13,7 @@ export type StaffMutationInput =
     bodyFormat?: StaffArticleFormat; status?: Ticket['status']; priority?: Ticket['priority'];
     group_id?: string | null; assigned_to?: string | null; custom_fields?: Ticket['custom_fields'] } }
   | { operation: 'dashboard.ticket.reply'; ticketId: string; data: { body: string; bodyFormat?: StaffArticleFormat;
-    is_internal?: boolean; attachments?: RequestedMutationAttachment[]; draft?: AcknowledgedDraftReference } };
+    is_internal?: boolean; attachments?: RequestedMutationAttachment[]; mentionedUserIds?: readonly string[]; draft?: AcknowledgedDraftReference } };
 export type StaffMutationNamespace = Readonly<{ principalId: string; operation: StaffMutationOperation; keyHash: string; payloadHash: string }>;
 export type StaffMutationOutcome = Readonly<{ status: 201; body: Record<string, unknown>; ticket: Ticket; article: Article;
   attachments: Attachment[]; replayed: boolean; keyed: boolean }>;

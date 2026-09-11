@@ -20,6 +20,7 @@ const attachment = z.object({ storageKey: z.string().min(1).max(1024), filename:
 const draftInput = z.object({
   expectedGeneration: generation.nullable(), expectedRevision: revision, mode: z.enum(['public', 'internal']),
   body: boundedText(16000, 16000), bodyFormat: z.enum(ARTICLE_BODY_FORMATS).default(DEFAULT_ARTICLE_BODY_FORMAT), attachments: z.array(attachment).max(10),
+  mentionedUserIds: z.array(z.string().uuid()).max(16).default([]),
 }).strict().superRefine((value, ctx) => {
   if ((value.expectedRevision === 0) !== (value.expectedGeneration === null)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Draft version must be empty only for a new draft' });

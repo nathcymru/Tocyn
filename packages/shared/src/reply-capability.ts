@@ -31,10 +31,13 @@ export type ReplyModeCapability = Readonly<{
 
 /** Advertised only when the current authorized dashboard route enforces it. */
 export type ReplyCollisionCapabilityV1 = Readonly<{ version: 1; protocol: 'draft-precondition-v1'; conversationRevision: number }>;
+/** Present only when this exact dashboard route atomically authorizes durable internal mentions. */
+export type ReplyInternalMentionCapabilityV1 = Readonly<{ version: 1; protocol: 'internal-activity-v1'; maxRecipients: 16 }>;
 
 export type ReplyCapabilityV1 = Readonly<{
   version: 1;
   ticketId: string;
   modes: readonly ReplyModeCapability[];
   collision?: ReplyCollisionCapabilityV1;
+  internalMentions?: ReplyInternalMentionCapabilityV1;
 }>;

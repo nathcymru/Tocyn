@@ -13,6 +13,7 @@ import { SessionBudgetAuthorityRepository, type SessionBudgetCredential, type Se
 import { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
 import { TicketMutationReplayRepository, StaffReplyPreconditionConflictError, type MutationCandidate } from '../repositories/ticket-mutation-replay.repository';
 import { StaffTicketMutationRepository } from '../repositories/staff-ticket-mutation.repository';
+import type { OperatorActivityService } from './operator-activity.service';
 import { TicketMutationError, canonicalMutationJson } from './ticket-mutation-replay.service';
 
 const unavailable = () => new TicketMutationError(503,'staff_mutation_unavailable','Ticket mutation unavailable; retry with the same key');
@@ -20,6 +21,7 @@ const denied = () => new TicketMutationError(403,'staff_mutation_denied','Ticket
 const invalid = () => new TicketMutationError(400,'invalid_mutation','Invalid ticket mutation');
 const unsupportedFormat = () => new TicketMutationError(400,'unsupported_article_format','Article format is not enabled');
 const staleDraft = () => new TicketMutationError(409,'staff_reply_stale','The saved draft or conversation changed. Review and rebase before sending.');
+const unavailableMention = () => new TicketMutationError(409,'mention_recipient_unavailable','A mentioned colleague no longer has access to this internal note. Review the mention selection; your draft is retained.');
 // Match the current reply capability and dashboard request contract before
 // admission; Markdown rendering enforces the same character and byte bounds.
 const MAX_ARTICLE_BODY_SIZE = 16_000;
@@ -44,7 +46,7 @@ export class StaffTicketMutationService {
   constructor(db: D1Database, private readonly scope: VerifiedTenantScope, credential: SessionBudgetCredential,
     private readonly canonical: TicketMutationReplayRepository,
     private readonly budget: { service: SessionBudgetAdmissionService; repository: BudgetAuthorityRepository;
-      namespace: DurableObjectNamespace; business: ResourceAmounts; now?: () => number }, capability?: CapabilityWriteFence) {
+      namespace: DurableObjectNamespace; business: ResourceAmounts; now?: () => number }, capability?: CapabilityWriteFence, private readonly activity?: OperatorActivityService) {
     this.credential = owned(credential); this.capability = capability && owned(capability);
     this.receipts = new StaffTicketMutationRepository(db,scope); this.sessions = new SessionBudgetAuthorityRepository(db,scope);
   }
@@ -69,13 +71,18 @@ export class StaffTicketMutationService {
     }
     if (input.operation !== 'dashboard.ticket.reply' || typeof input.ticketId !== 'string' || !input.ticketId) throw invalid();
     const attachments = input.data.attachments ?? [];
-    if (!Array.isArray(attachments) || attachments.length > 10 || (input.data.is_internal !== undefined && typeof input.data.is_internal !== 'boolean')) throw invalid();
+    const rawMentions = input.data.mentionedUserIds ?? [];
+    if (!Array.isArray(attachments) || attachments.length > 10 || !Array.isArray(rawMentions) || rawMentions.length > 16
+      || (input.data.is_internal !== undefined && typeof input.data.is_internal !== 'boolean')) throw invalid();
+    const mentionedUserIds = [...new Set(rawMentions)].sort();
+    if (mentionedUserIds.some(id => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))
+      || mentionedUserIds.some(id => id === this.credential.actorId) || (mentionedUserIds.length && input.data.is_internal !== true)) throw invalid();
     const seen = new Set<string>();
     const draft = input.data.draft;
     if (draft && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(draft.generation)
       || !Number.isSafeInteger(draft.revision) || draft.revision < 1 || !Number.isSafeInteger(draft.baseConversationRevision) || draft.baseConversationRevision < 0)) throw invalid();
     return { operation: input.operation, ticketId: input.ticketId, data: { body: input.data.body, bodyFormat, is_internal: input.data.is_internal ?? false,
-      ...(draft ? { draft } : {}), attachments: attachments.map(a => {
+      ...(draft ? { draft } : {}), ...(mentionedUserIds.length ? { mentionedUserIds } : {}), attachments: attachments.map(a => {
         if (!a || typeof a.storageKey !== 'string' || a.storageKey.length > 1024 || !a.storageKey.startsWith(`agent-attachments/${this.credential.actorId}/`)
           || seen.has(a.storageKey) || typeof a.filename !== 'string') throw invalid();
         seen.add(a.storageKey);
@@ -158,7 +165,8 @@ export class StaffTicketMutationService {
     if (!attempt.authority || this.now() >= attempt.authority.expiresAt || attempt.commitStarted) throw unavailable();
     const input = attempt.input, now = new Date(this.now()).toISOString();
     const candidate: MutationCandidate = { ticketId:'ticketId' in input ? input.ticketId : crypto.randomUUID(),articleId:crypto.randomUUID(),
-      audit:{kind:'staff',id:this.credential.actorId,source:'dashboard'},attachments:[] };
+      audit:{kind:'staff',id:this.credential.actorId,source:'dashboard'},attachments:[],
+      ...('ticketId' in input ? { mentionedUserIds: input.data.mentionedUserIds ?? [] } : {}) };
     if (input.operation === 'dashboard.ticket.create') {
       if (verified.length) throw invalid();
       const customer = await this.receipts.customer(input.data.customer_email);
@@ -179,6 +187,15 @@ export class StaffTicketMutationService {
     }
     // At most one canonical batch per prepared attempt, after all validation
     // awaits. A retry needs fresh admission; an existing receipt returns above.
+    if (input.operation === 'dashboard.ticket.reply' && input.data.mentionedUserIds?.length) {
+      const activity = this.activity;
+      if (!candidate.article?.is_internal || !activity) throw invalid();
+      candidate.activityStatements = await Promise.all(input.data.mentionedUserIds.map(recipientUserId => activity.prepareTrustedAppend({
+        id: crypto.randomUUID(), ticketId: candidate.ticketId, recipientUserId, kind: 'mention',
+        sourceId: `article:${candidate.articleId}:mention:${recipientUserId}`, producer: { kind: 'staff', id: this.credential.actorId },
+        facts: { articleId: candidate.articleId! },
+      }).then(prepared => prepared.statement)));
+    }
     if (attempt.commitStarted) throw unavailable();
     attempt.commitStarted = true;
     try {
@@ -190,6 +207,7 @@ export class StaffTicketMutationService {
       const winner = attempt.namespace ? await this.receipts.findActive(attempt.namespace) : null;
       if (winner && attempt.namespace) return this.replay(winner,attempt.namespace);
       if (error instanceof StaffReplyPreconditionConflictError) throw staleDraft();
+      if (String(error).includes('operator_activity_recipient_unavailable')) throw unavailableMention();
       throw unavailable();
     }
   }

@@ -114,7 +114,7 @@ test('explicit rebase preserves the exact retained draft only when the reviewed 
       attachmentStorage: new TenantAttachmentStorage(scope, fixture.r2.bucket) } as TenantRequestDeps,
     { now: () => now, retention: LOCAL_DRAFT_RETENTION });
     const saved = await service.saveDraft({ ticketId: 'fixture-ticket', expectedGeneration: null, expectedRevision: 0,
-      mode: 'internal', body: 'retain body', bodyFormat: 'markdown-v1', attachments: [] });
+      mode: 'internal', body: 'retain body', bodyFormat: 'markdown-v1', attachments: [], mentionedUserIds: ['22222222-2222-4222-8222-222222222222'] });
     const insertEvent = async (sequence: number, kind: 'ticket.state_changed' | 'message.reply') => fixture.db.prepare(`INSERT INTO conversation_events
       (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
       VALUES (?,?,?,?,?,'staff',?,'mfa-staff','dashboard','internal','{}')`).bind(scope.tenantId,crypto.randomUUID(),'fixture-ticket',sequence,kind,scope.actorId).run();
@@ -123,8 +123,8 @@ test('explicit rebase preserves the exact retained draft only when the reviewed 
       expectedRevision: saved.revision, expectedReviewedConversationRevision: 1 });
     assert.equal(rebased.baseConversationRevision, 1);
     assert.equal(rebased.revision, saved.revision + 1);
-    assert.deepEqual({ body: rebased.body, mode: rebased.mode, bodyFormat: rebased.bodyFormat, attachments: rebased.attachments },
-      { body: saved.body, mode: saved.mode, bodyFormat: saved.bodyFormat, attachments: saved.attachments });
+    assert.deepEqual({ body: rebased.body, mode: rebased.mode, bodyFormat: rebased.bodyFormat, attachments: rebased.attachments, mentionedUserIds: rebased.mentionedUserIds },
+      { body: saved.body, mode: saved.mode, bodyFormat: saved.bodyFormat, attachments: saved.attachments, mentionedUserIds: saved.mentionedUserIds });
 
     await insertEvent(2, 'message.reply');
     const before = await repositories.operatorWorkspace.getDraft('fixture-ticket', now.toISOString());

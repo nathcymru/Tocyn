@@ -11,7 +11,7 @@ import type {
 } from '../types/operator-workspace';
 
 type DraftRow = {
-  ticket_id: string; generation: string; revision: number; mode: OperatorDraftMode; body: string; body_format?: ArticleBodyFormat; attachments: string;
+  ticket_id: string; generation: string; revision: number; mode: OperatorDraftMode; body: string; body_format?: ArticleBodyFormat; attachments: string; mentioned_user_ids: string;
   base_conversation_revision: number; expires_at: string | null; updated_at: string;
 };
 type StateRow = {
@@ -19,14 +19,14 @@ type StateRow = {
   list_query: string; list_anchor: string; selected_ticket_id: string | null; panel: 'conversation' | 'details'; updated_at: string;
 };
 
-const draftColumns = 'ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,expires_at,updated_at';
+const draftColumns = 'ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,expires_at,updated_at';
 const stateColumns = 'revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,updated_at';
 
 function draftFromRow(row: DraftRow): OperatorDraft {
   return {
     ticketId: row.ticket_id, generation: row.generation, revision: row.revision, mode: row.mode, body: row.body,
     bodyFormat: articleBodyFormat(row.body_format),
-    attachments: JSON.parse(row.attachments) as OperatorDraftAttachment[], baseConversationRevision: row.base_conversation_revision,
+    attachments: JSON.parse(row.attachments) as OperatorDraftAttachment[], mentionedUserIds: JSON.parse(row.mentioned_user_ids) as string[], baseConversationRevision: row.base_conversation_revision,
     expiresAt: row.expires_at, updatedAt: row.updated_at,
   };
 }
@@ -41,7 +41,7 @@ export type DraftSaveInput = Readonly<{
   ticketId: string; expectedGeneration: string | null; expectedRevision: number; mode: OperatorDraftMode; body: string;
   /** Omitted legacy callers remain stored as plain text. */
   bodyFormat?: ArticleBodyFormat;
-  attachments: readonly OperatorDraftAttachment[]; expiresAt: string | null;
+  attachments: readonly OperatorDraftAttachment[]; mentionedUserIds?: readonly string[]; expiresAt: string | null;
   notExpiredAt?: string;
 }>;
 export type WorkspaceStateSaveInput = Readonly<{
@@ -141,21 +141,22 @@ export class OperatorWorkspaceRepository {
   async saveDraft(input: DraftSaveInput): Promise<OperatorDraft | null> {
     const generation = crypto.randomUUID();
     const attachments = JSON.stringify(input.attachments);
+    const mentionedUserIds = JSON.stringify(input.mentionedUserIds ?? []);
     const bodyFormat = articleBodyFormat(input.bodyFormat);
     const statement = this.db.prepare(`INSERT INTO operator_drafts
-      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,expires_at,created_at,updated_at)
-      SELECT ?,?,?,?,1,?,?,?,?,COALESCE((SELECT MAX(sequence) FROM conversation_events
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,expires_at,created_at,updated_at)
+      SELECT ?,?,?,?,1,?,?,?,?,?,COALESCE((SELECT MAX(sequence) FROM conversation_events
         WHERE tenant_id=? AND ticket_id=?),0),?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
       WHERE EXISTS (SELECT 1 FROM tickets WHERE tenant_id=? AND id=?)
         AND ((?=0 AND ? IS NULL) OR EXISTS (SELECT 1 FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=?))
       ON CONFLICT(tenant_id,user_id,ticket_id) DO UPDATE SET
-        revision=operator_drafts.revision+1, mode=excluded.mode, body=excluded.body, body_format=excluded.body_format, attachments=excluded.attachments,
+        revision=operator_drafts.revision+1, mode=excluded.mode, body=excluded.body, body_format=excluded.body_format, attachments=excluded.attachments, mentioned_user_ids=excluded.mentioned_user_ids,
         expires_at=excluded.expires_at, updated_at=excluded.updated_at
       WHERE operator_drafts.revision=? AND operator_drafts.generation IS ?
         AND (? IS NULL OR ${DRAFT_EXPIRY_SQL}>?)
       RETURNING ${draftColumns}`)
       .bind(
-        this.scope.tenantId, this.scope.actorId, input.ticketId, generation, input.mode, input.body, bodyFormat, attachments,
+        this.scope.tenantId, this.scope.actorId, input.ticketId, generation, input.mode, input.body, bodyFormat, attachments, mentionedUserIds,
         this.scope.tenantId, input.ticketId, input.expiresAt, this.scope.tenantId, input.ticketId,
         input.expectedRevision, input.expectedGeneration, this.scope.tenantId, this.scope.actorId, input.ticketId,
         input.expectedRevision, input.expectedGeneration,

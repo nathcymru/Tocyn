@@ -19,7 +19,7 @@ const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,
 function deferred<T>() {let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return{promise,resolve};}
 let client:QueryClient;
 let ticket:ReturnType<typeof initialTicket>;
-function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'assigned-agent' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
+function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'22222222-2222-4222-8222-222222222222' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
 const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
 function transport(handle:(path:string,options:RequestInit,url:string)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined, sla: (path: string, options: RequestInit) => Response | Promise<Response> = () => json(unavailableSla), collision: boolean | (() => number) = false) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
@@ -33,16 +33,17 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
       if(options.method === 'GET' || !options.method) return new Response(null,{status:204});
       if(options.method === 'DELETE') return new Response(null,{status:204});
       const body=JSON.parse(String(options.body));
-      return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,bodyFormat:body.bodyFormat,attachments:body.attachments,baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
+      return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,bodyFormat:body.bodyFormat,attachments:body.attachments,mentionedUserIds:body.mentionedUserIds ?? [],baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
     }
     if(path === '/api/tickets/workflow-ticket/reply-capability') return json({version:1,ticketId:'workflow-ticket',modes:[
       {visibility:'public',channel:'email',delivery:'email_attempted',recipient:'ticket_customer',record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}},
       {visibility:'internal',channel:'internal',delivery:'recorded_only',recipient:null,record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}}
-    ], ...(collision ? { collision: { version: 1, protocol: 'draft-precondition-v1', conversationRevision: typeof collision === 'function' ? collision() : 0 } } : {})});
+    ], ...(collision ? { collision: { version: 1, protocol: 'draft-precondition-v1', conversationRevision: typeof collision === 'function' ? collision() : 0 },
+      internalMentions: { version: 1, protocol: 'internal-activity-v1', maxRecipients: 16 } } : {})});
     if(path===`/api/tickets/${ticket.id}/sla`) return sla(path,options);
     if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/'))return handle(path,options,url);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
-    if(path==='/api/users/agents')return json([{id:'assigned-agent',full_name:'Assigned agent'}]);
+    if(path==='/api/users/agents')return json([{id:'22222222-2222-4222-8222-222222222222',full_name:'Assigned agent'}]);
     if(path==='/api/settings')return json({});
     if(path==='/api/ticket-fields')return json(fields);
     return json([]);
@@ -512,6 +513,102 @@ it('preserves a rejected reply draft and recovers once, refreshing both detail a
   expect(posts).toBe(2);
   expect(client.getQueryState(['tickets',{}])?.isInvalidated).toBe(true);
   expect(window.alert).not.toHaveBeenCalled();
+});
+
+it('does not expose or send mention fields when the route has not advertised durable mentions', async () => {
+  const requests: RequestInit[] = [];
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) { requests.push(options); return json({ id: 'legacy-internal-note' }, 201); }
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  expect(screen.queryByRole('group', { name: 'Mention colleagues' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Legacy private note' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(JSON.parse(String(requests[0].body))).not.toHaveProperty('mentioned_user_ids');
+});
+
+it('restores selected internal mentions from the acknowledged draft and retains them through a lost-response retry', async () => {
+  const requests: RequestInit[] = []; let sends = 0;
+  const restored = { ticketId: ticket.id, generation: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', revision: 3,
+    mode: 'internal', body: 'Restored private handoff', bodyFormat: 'plain', attachments: [],
+    mentionedUserIds: ['22222222-2222-4222-8222-222222222222'], baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-11T00:00:00Z' };
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) {
+      requests.push(options); sends++;
+      return sends === 1 ? json({ error: 'Reply temporarily unavailable' }, 503) : json({ id: 'restored-mention-note' }, 201);
+    }
+    return json(ticket);
+  }, [], options => (!options.method || options.method === 'GET') ? json(restored) : undefined, undefined, true);
+  showDetail();
+  const mention = await screen.findByRole('checkbox', { name: 'Assigned agent' });
+  expect(mention).toBeChecked();
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Restored private handoff');
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await screen.findByRole('alert');
+  expect(mention).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(JSON.parse(String(requests[0].body))).toMatchObject({ mentioned_user_ids: restored.mentionedUserIds });
+  expect(JSON.parse(String(requests[1].body))).toMatchObject({ mentioned_user_ids: restored.mentionedUserIds });
+  expect(new Headers(requests[1].headers).get('Idempotency-Key')).toBe(new Headers(requests[0].headers).get('Idempotency-Key'));
+});
+
+it('keeps the bounded roster discoverable beyond sixteen while limiting selected recipients', async () => {
+  const lateId = '29999999-0000-4000-8000-000000000099';
+  const roster = Array.from({ length: 17 }, (_, index) => ({
+    id: index === 16 ? lateId : `2${index.toString(16).padStart(7, '0')}-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
+    full_name: index === 16 ? 'Late colleague' : `Colleague ${index + 1}`,
+  }));
+  const requests: RequestInit[] = [];
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) { requests.push(options); return json({ id: 'late-mention-note' }, 201); }
+    return json(ticket);
+  }, [], undefined, undefined, true);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (url, options) => new URL(String(url), 'http://localhost').pathname === '/api/users/agents'
+    ? json(roster) : original(url, options));
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  const late = await screen.findByRole('checkbox', { name: 'Late colleague' });
+  late.focus(); expect(late).toHaveFocus(); fireEvent.click(late);
+  expect(late).toBeChecked();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Late roster mention' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(JSON.parse(String(requests[0].body))).toMatchObject({ mentioned_user_ids: [lateId] });
+});
+
+it('keeps a selected internal mention through recipient denial and retries the same acknowledged intent', async () => {
+  const requests: RequestInit[] = []; let sends = 0;
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) {
+      requests.push(options); sends++;
+      return sends === 1 ? json({ error: 'Mention recipient access changed', code: 'mention_recipient_unavailable' }, 409) : json({ id: 'private-mention-note' }, 201);
+    }
+    return json(ticket);
+  }, [], undefined, undefined, true);
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  const mention = await screen.findByRole('checkbox', { name: 'Assigned agent' });
+  mention.focus(); expect(mention).toHaveFocus(); fireEvent.click(mention);
+  expect(mention).toBeChecked();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Private handoff' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await screen.findByRole('alert');
+  expect(screen.getByRole('alert')).toHaveTextContent('Mention recipient access changed');
+  expect(screen.queryByRole('button', { name: 'Rebase saved draft' })).not.toBeInTheDocument();
+  expect(mention).toBeChecked();
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Private handoff');
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(JSON.parse(String(requests[0].body))).toMatchObject({ is_internal: true,
+    mentioned_user_ids: ['22222222-2222-4222-8222-222222222222'] });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(new Headers(requests[1].headers).get('Idempotency-Key')).toBe(new Headers(requests[0].headers).get('Idempotency-Key'));
 });
 
 it('refreshes the conversation and feed for the server article.created payload',async()=>{

@@ -25,3 +25,9 @@ describe('replyCapability', () => {
     expect(REPLY_ATTACHMENT_CONTENT_TYPES).toEqual(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/csv']);
   });
 });
+
+it('advertises bounded internal mentions only when the current route enforces the durable activity contract', () => {
+  const mentions = { version: 1 as const, protocol: 'internal-activity-v1' as const, maxRecipients: 16 as const };
+  expect(replyCapability('ticket-1', undefined, mentions).internalMentions).toEqual(mentions);
+  expect(replyCapability('ticket-1').internalMentions).toBeUndefined();
+});

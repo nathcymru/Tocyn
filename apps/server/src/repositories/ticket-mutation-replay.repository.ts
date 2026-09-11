@@ -36,6 +36,10 @@ export type MutationCandidate = {
   ticket?: InitialTicketArticleData['ticket'];
   article?: InitialTicketArticleData['article'];
   attachments: (VerifiedMutationAttachment & { id: string })[];
+  /** Prepared #133 projections that must commit with this canonical mutation. */
+  activityStatements?: readonly D1PreparedStatement[];
+  /** Normalized internal mention IDs bound to the acknowledged draft precondition. */
+  mentionedUserIds?: readonly string[];
 };
 
 /** Only fixed ticket mutations; all SQL authority comes from the verified scope. */
@@ -107,7 +111,9 @@ export class TicketMutationReplayRepository {
       || candidate.audit.source !== 'dashboard' || !candidate.articleId || !candidate.article
       || (staff.requirements.ticket?.id !== (candidate.ticket ? undefined : candidate.ticketId))
       || (staff.namespace && (staff.authority.operationId !== staff.namespace.keyHash || staff.authority.operationFingerprint !== staff.namespace.payloadHash))
-      || (staff.namespace && staff.namespace.operation !== (candidate.ticket ? 'dashboard.ticket.create' : 'dashboard.ticket.reply'))) {
+      || (staff.namespace && staff.namespace.operation !== (candidate.ticket ? 'dashboard.ticket.create' : 'dashboard.ticket.reply'))
+      || (candidate.activityStatements && (!candidate.article.is_internal || candidate.activityStatements.length > 16))
+      || (candidate.mentionedUserIds?.length && (!candidate.article.is_internal || candidate.mentionedUserIds.length > 16))) {
       throw new Error('Invalid staff mutation');
     }
     return this.commitCanonical(candidate, undefined, staff, undefined, undefined, precondition);
@@ -197,6 +203,10 @@ export class TicketMutationReplayRepository {
       id:eventId,ticketId:candidate.ticketId,articleId:candidate.articleId,actor:candidate.audit,
       intake:Boolean(candidate.ticket),internal:Boolean(candidate.article?.is_internal),
     }));
+    // Activity statements are prepared only by #133's repository. Keeping them
+    // before the mutation receipt makes a losing idempotency race roll back both
+    // the note and every durable mention projection.
+    if (candidate.activityStatements?.length) statements.push(...candidate.activityStatements);
     const version = candidate.audit ? 2 : 1;
     const attachmentSnapshots = candidate.attachments.map(() => `json((SELECT ${attachmentJson} FROM attachments x WHERE x.tenant_id = ? AND x.id = ?))`);
     // Staff receipts record the format selected from the canonical article row,
