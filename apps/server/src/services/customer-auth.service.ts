@@ -75,6 +75,7 @@ export class CustomerAuthService {
     }
 
     let userId: string;
+    let expectedUserId: string | null;
 
     if (existingUser) {
       // Existing identity MUST belong to active tenant
@@ -86,16 +87,12 @@ export class CustomerAuthService {
         return { challengeId: type === 'otp' ? crypto.randomUUID() : undefined };
       }
       userId = existingUser.userId;
+      expectedUserId = existingUser.userId;
     } else {
-      // Create shadow customer user under active tenant scope
-      const createdUser = await this.deps.repositories.users.create({
-        tenant_id: this.deps.scope.tenantId,
-        email: lowerEmail,
-        full_name: lowerEmail.split('@')[0],
-        role: 'customer',
-        mfa_enabled: false,
-      }, this.customerAuthFence);
-      userId = createdUser.id;
+      // Reserve the ID now; the repository creates the shadow user only in
+      // the same guarded D1 batch that writes this credential.
+      userId = crypto.randomUUID();
+      expectedUserId = null;
     }
 
     // 2. Generate Token
@@ -107,8 +104,33 @@ export class CustomerAuthService {
     const requestedAt = this.now();
     const expiresAt = new Date(requestedAt + 15 * 60 * 1000).toISOString();
 
-    // 3. Store Token securely via repository
-    if (type === 'magic_link') await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, tokenHash, type, expiresAt, this.customerAuthFence);
+    let storedTokenHash = tokenHash;
+    let otp: string | undefined;
+    const expectedCurrentOtp = type === 'otp'
+      ? (expectedUserId === null ? null : await this.deps.repositories.users.getCurrentCustomerOtpChallenge(userId))
+      : null;
+    if (type === 'otp') {
+      const array = new Uint32Array(1);
+      crypto.getRandomValues(array);
+      otp = Math.floor(100000 + (array[0] % 900000)).toString();
+      storedTokenHash = await this.hashToken(`${tokenId}\0${otp}`);
+    }
+
+    // Recheck the resolved identity and OTP pointer while atomically creating
+    // any shadow user and credential.  A stale snapshot becomes an unknown
+    // outcome; it never leaves a user without its requested credential.
+    await this.deps.repositories.users.issueCustomerAuthCredential({
+      email: lowerEmail,
+      fullName: lowerEmail.split('@')[0],
+      expectedUserId,
+      userId,
+      tokenId,
+      tokenHash: storedTokenHash,
+      type,
+      expiresAt,
+      expectedCurrentOtpTokenId: expectedCurrentOtp?.tokenId ?? null,
+      expectedCurrentOtpTokenHash: expectedCurrentOtp?.tokenHash ?? null,
+    }, this.customerAuthFence);
 
     // 4. Send Email via Tenant EmailService
     const emailSvc = this.emailService || new EmailService(this.env, this.deps, this.transport);
@@ -130,18 +152,11 @@ export class CustomerAuthService {
         text: `Hello,\n\nClick the link below to log in to your portal:\n${url}\n\nThis link expires in 15 minutes.`,
       });
     } else {
-      const array = new Uint32Array(1);
-      crypto.getRandomValues(array);
-      const otp = Math.floor(100000 + (array[0] % 900000)).toString();
-      const otpHash = await this.hashToken(`${tokenId}\0${otp}`);
-
-      await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, otpHash, type, expiresAt, this.customerAuthFence);
-
       await emailSvc.send({
         to: [lowerEmail],
         subject: 'Your Login Code',
-        html: `<p>Hello,</p><p>Your login code is: <strong>${otp}</strong></p><p>This code expires in 15 minutes.</p>`,
-        text: `Hello,\n\nYour login code is: ${otp}\n\nThis code expires in 15 minutes.`,
+        html: `<p>Hello,</p><p>Your login code is: <strong>${otp!}</strong></p><p>This code expires in 15 minutes.</p>`,
+        text: `Hello,\n\nYour login code is: ${otp!}\n\nThis code expires in 15 minutes.`,
       });
     }
     return { challengeId: type === 'otp' ? tokenId : undefined };
