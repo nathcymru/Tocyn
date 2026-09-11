@@ -57,6 +57,7 @@
     "test:ui-combined-collision-browser": "tsx --test scripts/ui-combined-collision-browser.test.ts",
     "typecheck:ui-combined-collision-browser": "tsc -p scripts/tsconfig.ui-combined-collision-browser.json",
     "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts scripts/customer-budget-admission-runtime.test.ts scripts/storage-admission-runtime.test.ts scripts/api-ticket-history-admission-runtime.test.ts scripts/api-ticket-detail-admission-runtime.test.ts scripts/http-ai-admission-runtime.test.ts scripts/http-ticket-read-admission-runtime.test.ts scripts/support-sla-admission-runtime.test.ts scripts/support-sla-mutation-receipts.test.ts scripts/ticket-list-admission-runtime.test.ts scripts/admin-settings-admission-runtime.test.ts scripts/saved-filter-admission-runtime.test.ts scripts/group-directory-admission-runtime.test.ts scripts/operator-workspace-admission-runtime.test.ts scripts/knowledge-read-admission-runtime.test.ts",
+    "test:dashboard-summary-admission-runtime": "tsx --test scripts/dashboard-summary-read-runtime.test.ts",
     "test:group-directory-admission-runtime": "tsx --test scripts/group-directory-admission-runtime.test.ts"
   },
   "dependencies": {
