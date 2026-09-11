@@ -15,6 +15,7 @@ export type OperatorDraft = Readonly<{
   revision: number;
   mode: OperatorDraftMode;
   body: string;
+  bodyFormat: ArticleBodyFormat;
   attachments: readonly OperatorDraftAttachment[];
   /** Server-derived canonical event sequence; zero means no canonical event exists yet. */
   baseConversationRevision: number;
@@ -43,3 +44,4 @@ export type OperatorWorkspaceState = Readonly<{
   panel: 'conversation' | 'details';
   updatedAt: string;
 }>;
+import type { ArticleBodyFormat } from '@luminatick/shared';

@@ -1,4 +1,5 @@
 import { Article, Attachment, Ticket } from '.';
+import type { ArticleBodyFormat } from '@luminatick/shared';
 
 /** Facts that Tocyn has recorded, rather than assumptions about a channel. */
 export type CanonicalFact<T> =
@@ -33,6 +34,7 @@ export type CanonicalMessage = {
   state: { persistence: 'persisted' };
   content: {
     body: CanonicalFact<string>;
+    format: CanonicalFact<ArticleBodyFormat>;
     localReference: CanonicalFact<string>;
   };
   attachments: CanonicalAttachmentReference[];

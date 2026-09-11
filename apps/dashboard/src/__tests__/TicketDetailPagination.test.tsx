@@ -53,7 +53,8 @@ describe('dashboard conversation pagination',()=>{
     await screen.findByText('Later staff-visible reply');
     expect(screen.getByText('Accepted initial message')).toBeTruthy();
     expect(calls('/api/tickets/ticket?article_cursor=opaque-cursor')).toHaveLength(1);
-    await waitFor(()=>expect(screen.getByRole('status').textContent).toContain('Showing 2 messages. All messages are loaded.'));
+    await waitFor(()=>expect(screen.getByText('Showing 2 messages. All messages are loaded.').textContent).toContain('Showing 2 messages. All messages are loaded.'));
+    expect(screen.getByText('Showing 2 messages. All messages are loaded.').getAttribute('role')).toBe('status');
     expect(screen.getByRole('button',{name:'All messages loaded'})).toBe(button);expect(document.activeElement).toBe(button);
     expect(button.hasAttribute('disabled')).toBe(false);
     expect(button.getAttribute('aria-disabled')).toBe('true');

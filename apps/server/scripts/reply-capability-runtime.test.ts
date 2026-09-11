@@ -39,10 +39,9 @@ test('reply capability remains tenant-, session-, MFA-, and group-fenced in the 
 
     const initial = await fixture.request('/api/tickets/fixture-ticket/reply-capability', { token: adminA });
     await expectStatus(initial, 200, 'Current tenant admin may read the contract');
-    const capability = await initial.json<{ ticketId: string; modes: Array<{ body: { format: string }; recipient: unknown; delivery: string }> }>();
+    const capability = await initial.json<{ ticketId: string; modes: Array<{ body: { acceptedFormats: string[] }; recipient: unknown; delivery: string }> }>();
     assert.equal(capability.ticketId, 'fixture-ticket');
-    assert.deepEqual(capability.modes.map(mode => mode.body.format), ['stored_text', 'stored_text']);
-    assert.ok(capability.modes.every(mode => mode.body.format !== 'markdown'), 'The contract must not claim Markdown acceptance');
+    assert.deepEqual(capability.modes.map(mode => mode.body.acceptedFormats), [['plain', 'markdown-v1'], ['plain', 'markdown-v1']]);
     assert.deepEqual(capability.modes.map(mode => mode.recipient), ['ticket_customer', null]);
     assert.deepEqual(capability.modes.map(mode => mode.delivery), ['email_attempted', 'recorded_only']);
 
@@ -78,6 +77,6 @@ test('reply capability remains tenant-, session-, MFA-, and group-fenced in the 
     await fixture.revokePrincipalSessions('operatorA');
     await expectStatus(await fixture.request('/api/tickets/fixture-ticket/reply-capability', { token: adminA }), 401,
       'Revoked staff sessions cannot read the capability');
-    t.diagnostic(JSON.stringify({ tenants: 2, remoteProviderCalls: 0, storedTextFormat: true, markdownClaimed: false }));
+    t.diagnostic(JSON.stringify({ tenants: 2, remoteProviderCalls: 0, markdownV1Accepted: true }));
   });
 });

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { ApiError, dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
+import { articleBodyFormat, type ArticleBodyFormat } from '@luminatick/shared';
 
 export type OperatorDraftAttachment = Readonly<{ storageKey: string; filename: string; size: number; contentType: string }>;
 export type OperatorDraftMode = 'public' | 'internal';
@@ -8,6 +9,7 @@ export type OperatorDraftVersion = Readonly<{ generation: string; revision: numb
 export type OperatorDraftValue = Readonly<{
   mode: OperatorDraftMode;
   body: string;
+  bodyFormat: ArticleBodyFormat;
   attachments: readonly OperatorDraftAttachment[];
   baseConversationRevision: number;
 }>;
@@ -16,7 +18,7 @@ type DraftStatus = 'idle' | 'loading' | 'unsaved' | 'saving' | 'saved' | 'error'
 type DraftState = OperatorDraftValue & { status: DraftStatus; error: string | null; version: OperatorDraftVersion | null };
 type CleanupResult = 'cleared' | 'conflict' | 'error';
 
-const EMPTY_DRAFT: OperatorDraftValue = Object.freeze({ mode: 'public', body: '', attachments: [], baseConversationRevision: 0 });
+const EMPTY_DRAFT: OperatorDraftValue = Object.freeze({ mode: 'public', body: '', bodyFormat: 'markdown-v1', attachments: [], baseConversationRevision: 0 });
 function empty(status: DraftStatus = 'idle'): DraftState {
   return { ...EMPTY_DRAFT, status, error: null, version: null };
 }
@@ -27,7 +29,7 @@ function sameVersion(a: OperatorDraftVersion | null, b: OperatorDraftVersion) {
   return a?.generation === b.generation && a.revision === b.revision;
 }
 function toStored(value: StoredDraft): DraftState {
-  return { mode: value.mode, body: value.body, attachments: [...value.attachments],
+  return { mode: value.mode, body: value.body, bodyFormat: articleBodyFormat(value.bodyFormat), attachments: [...value.attachments],
     baseConversationRevision: value.baseConversationRevision, status: 'saved', error: null,
     version: { generation: value.generation, revision: value.revision } };
 }
@@ -80,8 +82,8 @@ function createController(identity: string | null, ticketId: string | null) {
     try {
       const draft = await dashboardApi.getOptional<StoredDraft>(path);
       if (!isCurrent(requestEpoch)) return;
-      known = true;
       const restored = draft ? toStored(draft) : empty();
+      known = true;
       if (dirty) {
         // Edits made while restoring retain their content but must use the fetched CAS version.
         replace({ ...state, version: restored.version, baseConversationRevision: restored.baseConversationRevision,
@@ -111,14 +113,15 @@ function createController(identity: string | null, ticketId: string | null) {
       try {
         const saved = await dashboardApi.put<StoredDraft>(path, {
           expectedGeneration: snapshot.version?.generation ?? null, expectedRevision: snapshot.version?.revision ?? 0,
-          mode: snapshot.mode, body: snapshot.body, attachments: snapshot.attachments,
+          mode: snapshot.mode, body: snapshot.body, bodyFormat: snapshot.bodyFormat, attachments: snapshot.attachments,
         });
         if (!isCurrent(requestEpoch)) return;
+        const restored = toStored(saved);
+        if (restored.bodyFormat !== snapshot.bodyFormat) throw new Error('Draft format was not confirmed');
         succeeded = true;
         uncertainWrite = false;
         savedEdit = submittedEdit;
         dirty = edit !== submittedEdit;
-        const restored = toStored(saved);
         replace(dirty ? { ...state, version: restored.version, baseConversationRevision: restored.baseConversationRevision,
           status: withinBounds(state) ? 'unsaved' : 'error', error: withinBounds(state) ? null : 'Draft exceeds the server size limit.' } : restored);
       } catch (error) {

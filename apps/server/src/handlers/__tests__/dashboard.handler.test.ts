@@ -427,8 +427,8 @@ describe("Dashboard Handler Integration Tests", () => {
         version: 1,
         ticketId: 't-1',
         modes: [
-          { visibility: 'public', channel: 'email', delivery: 'email_attempted', recipient: 'ticket_customer', body: { format: 'stored_text', maxCharacters: 16000 } },
-          { visibility: 'internal', channel: 'internal', delivery: 'recorded_only', recipient: null, body: { format: 'stored_text', maxCharacters: 16000 } },
+          { visibility: 'public', channel: 'email', delivery: 'email_attempted', recipient: 'ticket_customer', body: { maxCharacters: 16000, acceptedFormats: ['plain', 'markdown-v1'] } },
+          { visibility: 'internal', channel: 'internal', delivery: 'recorded_only', recipient: null, body: { maxCharacters: 16000, acceptedFormats: ['plain', 'markdown-v1'] } },
         ],
       });
       expect(JSON.stringify(body)).not.toContain('private@example.test');
@@ -460,6 +460,17 @@ describe("Dashboard Handler Integration Tests", () => {
   });
 
   describe("POST /tickets/:id/articles", () => {
+    it('rejects unknown article body formats before any ticket or email side effect', async () => {
+      const res = await request('/tickets/t-1/articles', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${validToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: 'Synthetic', body_format: 'markdown-v2' }),
+      });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'Invalid bounded reply' });
+      expect(mockDB.prepare).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO articles'));
+    });
+
     it("should create an article with attachments", async () => {
       const mockTicket = { id: "t-1", group_id: "g-1", customer_id: "c-1" };
       const mockArticle = { id: "art-1", ticket_id: "t-1", body: "Here is the requested file." };

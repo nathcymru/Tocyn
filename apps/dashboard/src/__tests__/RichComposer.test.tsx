@@ -134,3 +134,13 @@ it('keeps cursor insertion scoped to its own composer instance', () => {
   expect(first).toHaveValue('✅first');
   expect(screen.getAllByRole('textbox', { name: 'Reply message' })[1]).toHaveValue('second');
 });
+
+
+it('keeps a declared plain draft literal and offers no Markdown toolbar or autocomplete', () => {
+  render(<RichComposer id="plain-draft" value="**literal** /code" format="plain" onChange={() => undefined}
+    onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />);
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('**literal** /code');
+  expect(screen.queryByRole('button', { name: /bold/i })).toBeNull();
+  expect(screen.queryByRole('listbox')).toBeNull();
+  expect(screen.getByText('**literal** /code', { selector: 'div' }).querySelector('strong')).toBeNull();
+});

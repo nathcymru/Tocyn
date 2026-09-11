@@ -1,3 +1,19 @@
+/** Persisted article encodings. Missing fields on pre-versioned rows mean plain text. */
+export const ARTICLE_BODY_FORMATS = ['plain', 'markdown-v1'] as const;
+export type ArticleBodyFormat = typeof ARTICLE_BODY_FORMATS[number];
+export const DEFAULT_ARTICLE_BODY_FORMAT: ArticleBodyFormat = 'plain';
+
+/**
+ * Converts storage values into the explicit format contract. Only a missing
+ * legacy value receives the historical plain-text default; unknown markers
+ * are never silently reinterpreted.
+ */
+export function articleBodyFormat(value: unknown): ArticleBodyFormat {
+  if (value === undefined || value === null) return DEFAULT_ARTICLE_BODY_FORMAT;
+  if (value === 'plain' || value === 'markdown-v1') return value;
+  throw new TypeError('Unsupported article body format');
+}
+
 export interface Ticket {
   id: string;
   ticket_no: number;
@@ -22,6 +38,8 @@ export interface Article {
   sender_id?: string;
   sender_type: 'customer' | 'agent' | 'system';
   body?: string;
+  /** Missing is the legacy plain-text representation. */
+  body_format?: ArticleBodyFormat;
   body_r2_key?: string;
   snippet?: string;
   raw_email_id?: string;

@@ -1,3 +1,4 @@
+import type { ArticleBodyFormat } from '@luminatick/shared';
 import MDEditor from '@uiw/react-md-editor';
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
@@ -96,7 +97,7 @@ export function SafeMarkdown({ children, className = '' }: { children: string; c
 }
 
 export function RichComposer({
-  id, value, onChange, onImageFiles, onRejectedImageFiles, readOnly, mode,
+  id, value, onChange, onImageFiles, onRejectedImageFiles, readOnly, mode, format = 'markdown-v1',
   knowledge, savedResponses, onKnowledgeInserted, onSavedResponseInserted,
 }: {
   id: string;
@@ -106,6 +107,7 @@ export function RichComposer({
   onRejectedImageFiles: (count: number) => void;
   readOnly: boolean;
   mode: 'public' | 'internal';
+  format?: ArticleBodyFormat;
 } & ComposerInsertionHooks) {
   const hooks = { knowledge, savedResponses, onKnowledgeInserted, onSavedResponseInserted };
   const [autocomplete, setAutocomplete] = useState<Autocomplete | null>(null);
@@ -113,10 +115,10 @@ export function RichComposer({
   const rootRef = useRef<HTMLElement | null>(null);
   const selectionRef = useRef({ start: value.length, end: value.length });
   const listboxId = useId();
-  useEffect(() => { if (readOnly) setAutocomplete(null); }, [readOnly]);
+  useEffect(() => { if (readOnly || format === 'plain') setAutocomplete(null); }, [readOnly, format]);
   const captureSelection = (textarea: HTMLTextAreaElement) => {
     selectionRef.current = { start: textarea.selectionStart, end: textarea.selectionEnd };
-    const next = readOnly ? null : findComposerAutocomplete(value, textarea.selectionStart, hooks);
+    const next = readOnly || format === 'plain' ? null : findComposerAutocomplete(value, textarea.selectionStart, hooks);
     setAutocomplete(next);
     setActiveIndex(0);
   };
@@ -199,9 +201,12 @@ export function RichComposer({
 
   return <section ref={rootRef} aria-label="Rich message composer" onDragOver={event => { if (!readOnly && event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={receiveDrop} onPaste={receivePaste}
     className={`rounded-xl border p-2 ${mode === 'internal' ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}>
-    <p className="mb-2 text-xs text-slate-600">Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Markdown toolbar supports headings, emphasis, links, lists and code.</p>
+    {format === 'markdown-v1' && <p className="mb-2 text-xs text-slate-600">Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Markdown toolbar supports headings, emphasis, links, lists and code.</p>}
     <div onClickCapture={event => { if (readOnly) event.stopPropagation(); }} onKeyDownCapture={event => { if (readOnly) event.stopPropagation(); }}>
-      <MDEditor
+      {format === 'plain' ? <textarea id={id} aria-label="Reply message" value={value} readOnly={readOnly}
+        onChange={event => { if (!readOnly) onChange(event.target.value); }}
+        className="min-h-44 w-full rounded border border-slate-300 bg-white p-3 text-slate-900 focus-visible:outline focus-visible:outline-2"
+      /> : <MDEditor
         value={value}
         onChange={(next, event) => updateFromEditor(next ?? '', event?.currentTarget)}
         preview="edit"
@@ -211,7 +216,7 @@ export function RichComposer({
         textareaProps={{ id, 'aria-label': 'Reply message', 'aria-autocomplete': 'list', 'aria-controls': autocomplete ? listboxId : undefined, 'aria-activedescendant': autocomplete ? `${listboxId}-option-${activeIndex}` : undefined, 'aria-busy': readOnly, readOnly, onSelect: event => captureSelection(event.currentTarget), onClick: event => captureSelection(event.currentTarget), onKeyUp: event => captureSelection(event.currentTarget) }}
         data-color-mode="light"
         className="overflow-hidden rounded border border-slate-300 bg-white"
-      />
+      />}
     </div>
     {autocomplete && <div id={listboxId} role="listbox" aria-label={autocomplete.kind === 'slash' ? 'Slash command suggestions' : 'Emoji suggestions'} className="mt-1 rounded border border-slate-300 bg-white p-1 shadow">
       {autocomplete.options.map((option, index) => <button id={`${listboxId}-option-${index}`} key={`${option.kind}-${option.id}`} type="button" role="option" aria-selected={activeIndex === index}
@@ -223,7 +228,7 @@ export function RichComposer({
     <p className="mt-2 text-xs text-slate-600">Drop or paste a JPEG, PNG, GIF, or WebP image to attach it (10 MB each).</p>
     <details className="mt-2 rounded border border-slate-200 bg-white p-2 text-sm">
       <summary className="cursor-pointer font-medium">Safe preview</summary>
-      <SafeMarkdown className="mt-2">{value}</SafeMarkdown>
+      {format === 'plain' ? <div className="mt-2 whitespace-pre-wrap break-words">{value}</div> : <SafeMarkdown className="mt-2">{value}</SafeMarkdown>}
     </details>
   </section>;
 }

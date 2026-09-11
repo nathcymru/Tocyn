@@ -30,8 +30,12 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
       if(options.method === 'GET' || !options.method) return new Response(null,{status:204});
       if(options.method === 'DELETE') return new Response(null,{status:204});
       const body=JSON.parse(String(options.body));
-      return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,attachments:body.attachments,baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
+      return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,bodyFormat:body.bodyFormat,attachments:body.attachments,baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
     }
+    if(path === '/api/tickets/workflow-ticket/reply-capability') return json({version:1,ticketId:'workflow-ticket',modes:[
+      {visibility:'public',channel:'email',delivery:'email_attempted',recipient:'ticket_customer',record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}},
+      {visibility:'internal',channel:'internal',delivery:'recorded_only',recipient:null,record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}}
+    ]});
     if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/'))return handle(path,options);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
     if(path==='/api/users/agents')return json([{id:'assigned-agent',full_name:'Assigned agent'}]);
@@ -405,7 +409,8 @@ it('advertises and guards the separate confirmation read after mutation pending 
   const priority = screen.getByRole('combobox', { name: 'Priority' });
   priority.focus(); fireEvent.change(priority, { target: { value: 'high' } });
   await waitFor(() => expect(postPatchReads).toBe(2));
-  for (const select of screen.getAllByRole('combobox')) expect(select).toHaveAttribute('aria-disabled', 'true');
+  for (const select of screen.getAllByRole('combobox').filter(element => element.getAttribute('aria-label') !== 'Message format')) expect(select).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('combobox', { name: 'Message format' })).not.toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
   expect(priority).toHaveFocus();
   fireEvent.change(priority, { target: { value: 'urgent' } });
@@ -509,7 +514,7 @@ it('does not restore an attachment removed while its upload is pending', async (
   const upload = deferred<Response>();
   transport(path => path === '/api/attachments/upload' ? upload.promise : json(ticket));
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'removed.txt')] } });
+  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'removed.txt', { type: 'text/plain' })] } });
   fireEvent.click(screen.getByRole('button', { name: 'Remove removed.txt' }));
   await act(async () => { upload.resolve(json({ key: 'synthetic/removed' })); });
   expect(screen.queryByText('removed.txt')).not.toBeInTheDocument();
@@ -556,7 +561,7 @@ it('preserves both attachments when two uploads complete in the same turn', asyn
   const first = deferred<Response>(); const second = deferred<Response>(); let count = 0;
   transport(path => path === '/api/attachments/upload' ? (++count === 1 ? first.promise : second.promise) : json(ticket));
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'one.txt'), new File(['b'], 'two.txt')] } });
+  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'one.txt', { type: 'text/plain' }), new File(['b'], 'two.txt', { type: 'text/plain' })] } });
   await act(async () => { first.resolve(json({ key: 'synthetic/one' })); second.resolve(json({ key: 'synthetic/two' })); });
   expect(screen.queryByText('Uploading…')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Remove one.txt' })).toBeInTheDocument();
@@ -636,7 +641,7 @@ it('waits for all pending attachment outcomes before unlocking a partial-failure
     return json(ticket);
   });
   showDetail();await screen.findByText('Customer question');
-  fireEvent.change(screen.getByLabelText('Reply attachments'),{target:{files:[new File(['a'],'a.txt'),new File(['b'],'b.txt')]}});
+  fireEvent.change(screen.getByLabelText('Reply attachments'),{target:{files:[new File(['a'], 'a.txt', { type: 'text/plain' }),new File(['b'], 'b.txt', { type: 'text/plain' })]}});
   fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Partial attachment retry'}});
   const send=screen.getByRole('button',{name:'Send Reply'});send.focus();fireEvent.click(send);
   await waitFor(()=>expect(uploads).toBe(2));
@@ -708,4 +713,33 @@ it('bounds two same-turn image drops to ten admitted uploads', async () => {
   });
   await waitFor(() => expect(uploads).toBe(10));
   expect(screen.getAllByRole('button', { name: /^Remove image-/ })).toHaveLength(10);
+});
+
+
+it('renders only explicitly versioned articles as Markdown and preserves legacy literal text', async () => {
+  const data = { ...ticket, articles: [
+    { ...ticket.articles[0], id: 'legacy', body: '**legacy literal**' },
+    { ...ticket.articles[0], id: 'versioned', body: '**formatted reply**', body_format: 'markdown-v1' },
+  ] };
+  transport(() => json(data)); showDetail();
+  expect(await screen.findByText('**legacy literal**')).not.toHaveProperty('tagName', 'STRONG');
+  expect(await screen.findByText('formatted reply')).toHaveProperty('tagName', 'STRONG');
+});
+
+it('retains the draft and prevents send until reply-capability failure is recovered', async () => {
+  let posts = 0;
+  transport((_path, options) => { if (options.method === 'POST') posts++; return json(ticket); });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let unavailable = true;
+  vi.mocked(fetch).mockImplementation((input, options) => String(input).endsWith('/reply-capability') && unavailable
+    ? Promise.resolve(json({ error: 'Unavailable' }, 503)) : original(input, options));
+  showDetail(); await screen.findByText('Customer question');
+  const retry = await screen.findByRole('button', { name: 'Retry reply options' });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Retained while options unavailable' } });
+  const send = screen.getByRole('button', { name: 'Send Reply' });
+  expect(send).toHaveAttribute('aria-disabled', 'true'); fireEvent.click(send);
+  expect(posts).toBe(0);
+  unavailable = false; fireEvent.click(retry);
+  await waitFor(() => expect(send).toHaveAttribute('aria-disabled', 'false'));
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Retained while options unavailable');
 });

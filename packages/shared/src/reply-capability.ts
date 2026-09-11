@@ -1,4 +1,6 @@
-/** A reply body has no persisted format version; `stored_text` is not Markdown or HTML acceptance. */
+import { ARTICLE_BODY_FORMATS, type ArticleBodyFormat } from '../index';
+
+/** Reply capability names the persisted article formats accepted by the server. */
 export const REPLY_ATTACHMENT_CONTENT_TYPES = [
   'image/jpeg',
   'image/png',
@@ -23,7 +25,7 @@ export type ReplyModeCapability = Readonly<{
   delivery: 'email_attempted' | 'recorded_only';
   recipient: 'ticket_customer' | null;
   record: 'ticket_article';
-  body: Readonly<{ format: 'stored_text'; maxCharacters: 16000 }>;
+  body: Readonly<{ maxCharacters: 16000; acceptedFormats: readonly ArticleBodyFormat[] }>;
   attachments: typeof REPLY_ATTACHMENT_RULES;
 }>;
 

@@ -1,4 +1,5 @@
 import { Article, Attachment, Ticket } from '../types';
+import { articleBodyFormat } from '@luminatick/shared';
 import {
   ArticleWithCanonicalAttachments,
   CanonicalAttachmentReference,
@@ -120,6 +121,7 @@ function projectMessage(ticket: Ticket, article: ArticleWithCanonicalAttachments
       body: typeof article.body === 'string'
         ? known(article.body)
         : article.body_r2_key ? unknown() : notRecorded(),
+      format: known(articleBodyFormat(article.body_format)),
       localReference: known(article.id),
     },
     attachments: (article.attachments || []).map(attachmentReference),
