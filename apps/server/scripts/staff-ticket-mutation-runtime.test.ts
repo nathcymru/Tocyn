@@ -25,6 +25,7 @@ import type { CapabilityWriteFence } from '../src/auth/capability-policy';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 
 const root = resolve(import.meta.dirname,'..');
+const mentionRecipientIds = Array.from({ length: 16 }, (_, index) => `2${index.toString(16).padStart(7, '0')}-0000-4000-8000-${index.toString(16).padStart(12, '0')}`);
 async function fixture() {
   const bundle = await build({ absWorkingDir:root,entryPoints:['scripts/budget-coordinator-do-runtime-entry.ts'],bundle:true,write:false,
     format:'esm',platform:'neutral',external:['cloudflare:workers'] });
@@ -46,10 +47,12 @@ async function fixture() {
     for (const tenant of ['a','b']) await db.batch([
       db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'staff',?,'agent',1,1)").bind(tenant,`staff-${tenant}@example.test`),
       db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'customer',?,'customer',1,0)").bind(tenant,`customer-${tenant}@example.test`),
-      db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'22222222-2222-4222-8222-222222222222',?,'agent',1,1)").bind(tenant,`mentionee-${tenant}@example.test`),
       db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES (?,'group','Synthetic group')").bind(tenant),
       db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES (?,'staff','group')").bind(tenant),
-      db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES (?,'22222222-2222-4222-8222-222222222222','group')").bind(tenant),
+      ...mentionRecipientIds.flatMap((recipient, index) => [
+        db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,?,?,'agent',1,1)").bind(tenant,recipient,`mentionee-${index}-${tenant}@example.test`),
+        db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES (?,?,'group')").bind(tenant,recipient),
+      ]),
       db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES (?,'ticket','Synthetic',?,'group','dashboard')").bind(tenant,`customer-${tenant}@example.test`),
       db.prepare("INSERT INTO budget_tenant_allocations VALUES ('staff-deployment',?,'staff-policy',1,1,?,?,'active')").bind(tenant,`staff-${tenant}`,JSON.stringify({schemaVersion:1,tenantId:tenant,ownerPolicyId:'staff-policy',ownerPolicyRevision:1,revision:1,mode:'conservative',limits,disabledFeatures:[]})),
       db.prepare("INSERT INTO tenant_role_capability_policies (tenant_id,role,capability,enabled,revision) VALUES (?,'agent','ticket-fields.manage',1,1)").bind(tenant),
@@ -460,7 +463,7 @@ test('native stale-reply precondition is tenant-and-actor scoped, ignores metada
 
 
 test('internal mentions are bounded, authorized in the winning batch, and idempotent with their canonical note', async () => {
-  const recipient = '22222222-2222-4222-8222-222222222222';
+  const recipient = mentionRecipientIds[0];
   const foreignRecipient = '33333333-3333-4333-8333-333333333333';
   const mentioned = (body = 'Private note', recipients: readonly string[] = [recipient]): StaffMutationInput => ({
     operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: { body, is_internal: true, mentionedUserIds: recipients },
@@ -501,6 +504,26 @@ test('internal mentions are bounded, authorized in the winning batch, and idempo
     assert.deepEqual(await revoked.counts(), before,
       'recipient revocation rejects the entire final D1 batch: no note, receipt, audit, SLA, or activity remains');
   } finally { await revoked.mf.dispose(); }
+});
+
+test('a full bounded mention list remains within the existing staff reservation with observed projection cost', async () => {
+  const internal = (recipients: readonly string[]): StaffMutationInput => ({
+    operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: { body: 'Projection envelope', is_internal: true, mentionedUserIds: recipients },
+  });
+  const baseline = await fixture(); const projected = await fixture(); try {
+    await accept(baseline.service(), internal([]), 'mention-envelope-base');
+    await accept(projected.service(), internal(mentionRecipientIds), 'mention-envelope-max');
+    const baseBatch = baseline.batches.at(-1)!; const mentionBatch = projected.batches.at(-1)!;
+    assert.equal((await projected.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a'").first<{n:number}>())!.n, 16);
+    console.log(JSON.stringify({ fixture: 'native-d1-internal-mention-envelope', baseBatch, mentionBatch,
+      projectionStatements: mentionBatch.statements - baseBatch.statements, projectionRowsWritten: mentionBatch.rowsWritten - baseBatch.rowsWritten }));
+    assert.equal(mentionBatch.statements - baseBatch.statements, 16,
+      'the canonical batch contains one prepared activity statement per bounded recipient');
+    assert.ok(mentionBatch.rowsWritten <= CANONICAL_MUTATION_ATTEMPT_D1_WRITES,
+      'the observed final batch remains inside the existing 128-row staff reservation');
+    assert.ok(mentionBatch.rowsRead <= 2_570,
+      'the observed recipient authorization reads remain inside the existing staff envelope');
+  } finally { await baseline.mf.dispose(); await projected.mf.dispose(); }
 });
 
 test('staff reply precondition stays in the fingerprint and atomically retains a stale acknowledged draft', async () => {
