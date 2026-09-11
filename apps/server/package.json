@@ -61,8 +61,8 @@
     "test:group-directory-admission-runtime": "tsx --test scripts/group-directory-admission-runtime.test.ts",
     "test:api-key-admin-admission-runtime": "tsx --test scripts/api-key-admin-admission-runtime.test.ts",
     "test:channel-configuration-admission-runtime": "tsx --test scripts/channel-configuration-admission-runtime.test.ts",
-    "typecheck:channel-configuration-admission-runtime": "tsc -p scripts/tsconfig.channel-configuration-admission-runtime.json"
-    "test:dashboard-summary-admission-runtime": "tsx --test scripts/dashboard-summary-read-runtime.test.ts",
+    "typecheck:channel-configuration-admission-runtime": "tsc -p scripts/tsconfig.channel-configuration-admission-runtime.json",
+    "test:dashboard-summary-admission-runtime": "tsx --test scripts/dashboard-summary-read-runtime.test.ts"
   },
   "dependencies": {
     "@luminatick/shared": "*",

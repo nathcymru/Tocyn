@@ -1,5 +1,23 @@
 ## Coordinator focus correction — 11 September 2026, 17:20 BST
 
+## PR210 integration refresh — 11 September 2026
+
+PR210 now combines accepted main `263479f` with reviewed dashboard-summary
+source commits through `7aec3ae`. Conflict resolution retained configuration,
+API-key, channel and dashboard-summary runtime registration plus migrations
+0060, 0062 and 0065. The required CI runtime step now executes the dashboard
+summary native proof.
+
+Under explicit Node 22.19.0: server typecheck, budget-runtime typecheck and
+channel-runtime typecheck passed; the thirteen native configuration/API-key/
+channel/group/dashboard cases passed; dashboard-handler tests (22) and
+dashboard API-key client tests (10) passed. The dashboard maximum-25 SLA
+projection proof retained foreign-ticket opacity, live-session revocation and
+pause-history growth rejection/retry checks. Vite emitted its existing module
+type warning only. Full #64/#140 acceptance, exact-head CI/security/signature,
+and the approved owner-ingress/lifecycle gates remain open. PR221 is source
+evidence and is not superseded until acceptance.
+
 The metadata-only uncertain API-key result closed the dialog toward a disabled opener. A focused regression failed before correction; focus now goes to the explanation heading. Reopening an unchanged uncertain request explicitly focuses Retry creation. API-key UI/client tests10/10 and dashboard build pass. Native admission logic is unchanged from the13-test combined proof. Actual browser evidence and exact current CI remain required; no acceptance claimed.
 
 ## Dashboard CI correction — 11 September 2026,17:00BST
