@@ -3,7 +3,7 @@ import { RETENTION_TENANT_BATCH } from '../repositories/retention-admission.repo
 
 /**
  * Narrow pre-scope D1 boundary for CRON automation.
- * Only enumerates tenant IDs that have active automation rules.
+ * Only enumerates a maintained, one-row-per-tenant active-retention projection.
  * Does NOT construct scopes, list rules, or expose generic D1 access.
  */
 export class AutomationTenantResolver {
@@ -11,7 +11,7 @@ export class AutomationTenantResolver {
 
   async getActiveTenantIds(after: string | null = null): Promise<string[]> {
     const { results } = await this.db.prepare(
-      "SELECT DISTINCT tenant_id FROM automation_rules WHERE is_active = 1 AND (? IS NULL OR tenant_id > ?) ORDER BY tenant_id LIMIT ?"
+      "SELECT tenant_id FROM retention_scheduler_tenants WHERE active_retention_rules>0 AND (? IS NULL OR tenant_id > ?) ORDER BY tenant_id LIMIT ?"
     ).bind(after, after, RETENTION_TENANT_BATCH).all<{ tenant_id: string }>();
 
     return results.map(r => r.tenant_id);

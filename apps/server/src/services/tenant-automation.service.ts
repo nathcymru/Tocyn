@@ -262,11 +262,24 @@ export class TenantAutomationService {
     const now = input.now ?? Date.now;
     let deleted_tickets = 0, deleted_attachments = 0;
     const work = new RetentionAdmissionRepository(this.deps.database, this.deps.scope);
-    const ruleAfter = await work.ruleCursor();
-    let rules = await work.nextRules(ruleAfter);
-    if (!rules.length && ruleAfter) {
-      await work.setRuleCursor(null);
-      rules = await work.nextRules(null);
+    // Every scheduler turn reserves its bounded cursor/rule/candidate scan
+    // before D1 discovery. A missing policy retains the established local
+    // scheduler behavior; a configured policy never performs free metadata
+    // work before it can decide to deny.
+    const discovery = await admitRetentionStep({ env: input.env, deps: this.deps, ticketId: 'scheduler', itemKey: 'discovery', attempt: 1, resource: 'd1', now });
+    if (discovery.status === 'rejected') return { deleted_tickets, deleted_attachments };
+    let rules: readonly { id: string; conditions?: string; action_config: string }[];
+    try {
+      const ruleAfter = await work.ruleCursor();
+      rules = await work.nextRules(ruleAfter);
+      if (!rules.length && ruleAfter) {
+        await work.setRuleCursor(null);
+        rules = await work.nextRules(null);
+      }
+      if (discovery.authority) apiTicketBudgetCache.settleOperation(discovery.authority,'committed',now());
+    } catch {
+      if (discovery.authority) apiTicketBudgetCache.settleOperation(discovery.authority,'unknown',now());
+      return { deleted_tickets, deleted_attachments };
     }
     for (const rule of rules) {
       let config: RetentionConfig;
@@ -280,6 +293,11 @@ export class TenantAutomationService {
         const candidates = resumed.length ? resumed : await work.nextTickets(cutoff, cursor);
         if (!candidates.length) { await work.setTicketCursor(rule.id, null); continue; }
         for (const candidate of candidates) {
+          const materialization = await admitRetentionStep({ env: input.env, deps: this.deps, ticketId: candidate.id,
+            itemKey: `materialize:${rule.id}`, attempt: 1, resource: 'd1', now });
+          if (materialization.status === 'rejected') continue;
+          let materialized = true;
+          try {
           if (!('token' in candidate)) await work.setTicketCursor(rule.id, candidate);
           // Never create a durable freeze for a ticket that this rule does not
           // currently select. The claim itself blocks updates, so the second
@@ -297,6 +315,12 @@ export class TenantAutomationService {
           const result = await this.processRetentionWork(work, candidate.id, claim.token, rule, config, input.env, now);
           deleted_attachments += result.deleted_attachments;
           deleted_tickets += result.deleted_tickets;
+          } catch {
+            if (materialization.authority) apiTicketBudgetCache.settleOperation(materialization.authority,'unknown',now());
+            continue;
+          } finally {
+            if (materialization.authority) apiTicketBudgetCache.settleOperation(materialization.authority,materialized ? 'committed' : 'unknown',now());
+          }
         }
       } catch { console.error('Tenant retention rule failed'); }
       await work.setRuleCursor(rule.id);

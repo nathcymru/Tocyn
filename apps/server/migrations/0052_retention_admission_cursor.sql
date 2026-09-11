@@ -50,6 +50,37 @@ CREATE INDEX idx_tickets_retention_cursor ON tickets(tenant_id,julianday(updated
 CREATE INDEX idx_articles_retention_cursor ON articles(tenant_id,ticket_id,id);
 CREATE INDEX idx_attachments_retention_cursor ON attachments(tenant_id,article_id,id);
 
+-- The scheduler never discovers tenants through an unbounded DISTINCT scan of
+-- arbitrary automation history. This trusted projection has one row per
+-- tenant and is maintained with the rule mutation that changes eligibility.
+CREATE TABLE retention_scheduler_tenants (
+  tenant_id TEXT PRIMARY KEY,
+  active_retention_rules INTEGER NOT NULL CHECK (active_retention_rules >= 0),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO retention_scheduler_tenants (tenant_id,active_retention_rules)
+SELECT tenant_id,COUNT(*) FROM automation_rules
+WHERE is_active=1 AND event_type='scheduled.retention' GROUP BY tenant_id;
+CREATE INDEX idx_retention_scheduler_tenants_active ON retention_scheduler_tenants(active_retention_rules,tenant_id);
+CREATE TRIGGER retention_scheduler_rule_insert AFTER INSERT ON automation_rules BEGIN
+  INSERT INTO retention_scheduler_tenants (tenant_id,active_retention_rules)
+  SELECT NEW.tenant_id,COUNT(*) FROM automation_rules WHERE tenant_id=NEW.tenant_id AND is_active=1 AND event_type='scheduled.retention'
+  ON CONFLICT(tenant_id) DO UPDATE SET active_retention_rules=excluded.active_retention_rules,updated_at=CURRENT_TIMESTAMP;
+END;
+CREATE TRIGGER retention_scheduler_rule_update AFTER UPDATE OF tenant_id,is_active,event_type ON automation_rules BEGIN
+  INSERT INTO retention_scheduler_tenants (tenant_id,active_retention_rules)
+  SELECT OLD.tenant_id,COUNT(*) FROM automation_rules WHERE tenant_id=OLD.tenant_id AND is_active=1 AND event_type='scheduled.retention'
+  ON CONFLICT(tenant_id) DO UPDATE SET active_retention_rules=excluded.active_retention_rules,updated_at=CURRENT_TIMESTAMP;
+  INSERT INTO retention_scheduler_tenants (tenant_id,active_retention_rules)
+  SELECT NEW.tenant_id,COUNT(*) FROM automation_rules WHERE tenant_id=NEW.tenant_id AND is_active=1 AND event_type='scheduled.retention'
+  ON CONFLICT(tenant_id) DO UPDATE SET active_retention_rules=excluded.active_retention_rules,updated_at=CURRENT_TIMESTAMP;
+END;
+CREATE TRIGGER retention_scheduler_rule_delete AFTER DELETE ON automation_rules BEGIN
+  INSERT INTO retention_scheduler_tenants (tenant_id,active_retention_rules)
+  SELECT OLD.tenant_id,COUNT(*) FROM automation_rules WHERE tenant_id=OLD.tenant_id AND is_active=1 AND event_type='scheduled.retention'
+  ON CONFLICT(tenant_id) DO UPDATE SET active_retention_rules=excluded.active_retention_rules,updated_at=CURRENT_TIMESTAMP;
+END;
+
 -- A finalization gate exists only inside one trusted repository D1 batch. It
 -- permits that batch to remove one already-owned relational row while every
 -- ordinary insert/update/delete remains frozen by the original claim trigger.
