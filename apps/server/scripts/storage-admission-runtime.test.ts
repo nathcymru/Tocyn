@@ -12,7 +12,7 @@ import { customerAttachmentEnvelope } from '../src/budgets/customer-storage-admi
 const root = resolve(import.meta.dirname, '..');
 const now = Date.now();
 const jwtSecret = 'synthetic-storage-admission-secret-at-least-32-chars';
-const dimensions = ['workerRequests', 'd1RowsRead', 'r2StorageBytes', 'r2ClassAOperations', 'r2ClassBOperations',
+const dimensions = ['workerRequests', 'd1RowsRead', 'd1RowsWritten', 'r2StorageBytes', 'r2ClassAOperations', 'r2ClassBOperations',
   'doRequests', 'doRowsRead', 'doRowsWritten', 'logEvents'] as const;
 
 async function applyMigrations(db: D1Database): Promise<void> {
@@ -64,8 +64,8 @@ async function fixture() {
         (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
         VALUES ('storage-deployment','storage-policy',1,1,'storage-coordinator',64,30000,?)`).bind(JSON.stringify(owner)),
     ]);
-    for (const tenantId of ['storage-a', 'storage-b', 'storage-low']) {
-      const limits = { ...ownerLimits, ...(tenantId === 'storage-low' ? { r2ClassAOperations: 1 } : {}) };
+    for (const tenantId of ['storage-a', 'storage-b', 'storage-low', 'storage-no-writes']) {
+      const limits = { ...ownerLimits, ...(tenantId === 'storage-low' ? { r2ClassAOperations: 1 } : {}), ...(tenantId === 'storage-no-writes' ? { d1RowsWritten: 0 } : {}) };
       const restriction = { schemaVersion: 1, tenantId, ownerPolicyId: owner.policyId, ownerPolicyRevision: 1, revision: 1,
         mode: 'conservative', limits, disabledFeatures: [] };
       await db.batch([
@@ -242,5 +242,24 @@ test('customer storage rejects exhausted and revoked sessions before R2 work', a
     assert.equal((await bucket.list()).objects.length, 0);
     const envelope = customerAttachmentEnvelope('customer.attachment.upload', 20)!;
     assert.equal(envelope.r2ClassAOperations, 2); assert.equal(envelope.r2ClassBOperations, 4);
+  } finally { await f.mf.dispose(); }
+});
+
+// The local guard writes before R2; an owner allocation without D1 write
+// capacity must reject both callers before any storage side effect.
+test('upload admission reserves D1 writes for both staff and customer attempts', async () => {
+  const f = await fixture();
+  try {
+    const before = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number; r2Puts: number };
+    for (const response of await Promise.all([
+      upload(f.mf, await staffToken('storage-no-writes'), 'no-write-staff'),
+      customerUpload(f.mf, await customerToken('storage-no-writes'), 'no-write-customer'),
+    ])) {
+      assert.equal(response.status, 429);
+      await response.body?.cancel();
+    }
+    const after = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number; r2Puts: number };
+    assert.equal(after.r2Gets, before.r2Gets);
+    assert.equal(after.r2Puts, before.r2Puts);
   } finally { await f.mf.dispose(); }
 });

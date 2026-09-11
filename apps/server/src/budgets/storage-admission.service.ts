@@ -15,13 +15,16 @@ export type DashboardAttachmentBudgetOperation = 'dashboard.attachment.upload' |
  * ambiguous R2 result remains charged. `r2StorageBytes` is a workload guard,
  * not a claim about R2's average-peak billing.
  * Both permitted HTTP attempts are prepaid. An extra 1,536 D1 reads cover
- * the authority refresh after a cold grant; two cover attachment metadata.
+ * the authority refresh after a cold grant. Uploads reserve another 1,024
+ * for bounded beta guard/attempt composition; downloads reserve two metadata reads.
+ * Two atomic upload charges write one rowid assertion and one unindexed counter
+ * each: four D1 writes total, verified by native metadata and index inventory.
  */
 export function dashboardAttachmentEnvelope(operation: DashboardAttachmentBudgetOperation, bytes = 0): ResourceAmounts | null {
   if (!Number.isSafeInteger(bytes) || bytes < 0) return null;
   const diagnostics = estimateDiagnosticEnvelope({ httpRequests: 2, canonicalMutationRequests: 0 });
   if (operation === 'dashboard.attachment.upload') {
-    return Object.freeze({ workerRequests: 2, d1RowsRead: 1_538, r2StorageBytes: bytes,
+    return Object.freeze({ workerRequests: 2, d1RowsRead: 2_560, d1RowsWritten: 4, r2StorageBytes: bytes,
       r2ClassAOperations: 2, r2ClassBOperations: 4, ...diagnostics });
   }
   if (operation === 'dashboard.attachment.download') {

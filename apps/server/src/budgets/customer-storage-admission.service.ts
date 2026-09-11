@@ -12,11 +12,14 @@ export type CustomerAttachmentBudgetOperation = 'customer.attachment.upload' | '
  * writes and four metadata reads: existing marker, conditional-race recovery,
  * then the same bounded sequence after a lost HTTP response. The 1,536 reads
  * cover the cold-authority refresh and the customer credential recheck.
+ * Uploads additionally reserve 1,024 for bounded beta guard/attempt composition.
+ * Two atomic upload charges write one rowid assertion and one unindexed counter
+ * each: four D1 writes total, verified by native metadata and index inventory.
  */
 export function customerAttachmentEnvelope(operation: CustomerAttachmentBudgetOperation, bytes = 0): ResourceAmounts | null {
   if (!Number.isSafeInteger(bytes) || bytes < 0) return null;
   const diagnostics = estimateDiagnosticEnvelope({ httpRequests: 2, canonicalMutationRequests: 0 });
-  if (operation === 'customer.attachment.upload') return Object.freeze({ workerRequests: 2, d1RowsRead: 1_538,
+  if (operation === 'customer.attachment.upload') return Object.freeze({ workerRequests: 2, d1RowsRead: 2_560, d1RowsWritten: 4,
     r2StorageBytes: bytes, r2ClassAOperations: 2, r2ClassBOperations: 4, ...diagnostics });
   if (operation === 'customer.attachment.download') return Object.freeze({ workerRequests: 2, d1RowsRead: 1_538,
     r2ClassBOperations: 2, ...diagnostics });
