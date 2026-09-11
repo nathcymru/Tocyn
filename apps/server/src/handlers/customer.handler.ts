@@ -489,6 +489,7 @@ app.post('/attachments/upload', widgetAuthMiddleware, roleGuard(['customer']), t
   if (admission.status === 'rejected') return attachmentBudgetFailure(c, admission.reason!);
 
   try {
+    await deps.attachmentStorage.prepareUploadAttempt();
     if (idempotencyKey) {
       const existing = await deps.attachmentStorage.getAttachment(key);
       if (existing) {
@@ -507,6 +508,7 @@ app.post('/attachments/upload', widgetAuthMiddleware, roleGuard(['customer']), t
       });
       if (put.res !== null) return c.json({ key });
     } catch (error) {
+      if (error instanceof BetaAdmissionError) throw error;
       const winner = await deps.attachmentStorage.getAttachment(key);
       if (winner) {
         try {

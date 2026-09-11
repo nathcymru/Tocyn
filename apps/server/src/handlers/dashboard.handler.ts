@@ -1063,7 +1063,8 @@ dashboard.post('/attachments/upload', async (c) => {
     // A retry with an Idempotency-Key first verifies its own bounded marker.
     // We never delete after an ambiguous write: provider acceptance remains
     // charged until a later lifecycle operation owns cleanup evidence.
-    const existing = await d.attachmentStorage.getAttachment(logicalKey);
+    await d.attachmentStorage.prepareUploadAttempt();
+    const existing = idempotencyKey ? await d.attachmentStorage.getAttachment(logicalKey) : null;
     if (existing) {
       try {
         if ((existing.customMetadata as Record<string, string> | undefined)?.tocynUploadFingerprint !== fingerprint) {
@@ -1083,6 +1084,7 @@ dashboard.post('/attachments/upload', async (c) => {
       // before checking its marker would permit a conflicting overwrite race.
       if (put.res !== null) return c.json({ key: logicalKey });
     } catch (error) {
+      if (error instanceof BetaAdmissionError) throw error;
       // A conditional collision can be the original write winning while this
       // request lost its response. One bounded second metadata read proves a
       // same-fingerprint recovery; every other ambiguous error stays charged.

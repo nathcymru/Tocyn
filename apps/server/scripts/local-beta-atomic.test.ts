@@ -88,7 +88,7 @@ test('integrated beta: stopped and exhausted uploads make zero R2 calls; uncerta
   await withTwoTenantFixture(async f => {
     await guardedFixture(f);
     const token = await staffToken(f);
-    const upload = () => { const form = new FormData(); form.append('file', new Blob(['synthetic safe attachment'], { type: 'text/plain' }), 'safe.txt'); return f.request('/api/attachments/upload', { method: 'POST', token, rawBody: form, contentType: null }); };
+    const upload = (idempotencyKey?: string) => { const form = new FormData(); form.append('file', new Blob(['synthetic safe attachment'], { type: 'text/plain' }), 'safe.txt'); return f.request('/api/attachments/upload', { method: 'POST', token, rawBody: form, contentType: null, idempotencyKey }); };
     const accepted = await upload(); assert.equal(accepted.status, 200); const key = (await accepted.json<{ key: string ;}>()).key;
     const beforeAttachment = await effects(f);
     await f.db.prepare("CREATE TRIGGER beta_attachment_failure BEFORE INSERT ON attachments BEGIN SELECT RAISE(ABORT,'synthetic attachment failure'); END").run();
@@ -102,17 +102,93 @@ test('integrated beta: stopped and exhausted uploads make zero R2 calls; uncerta
     await f.db.prepare('DROP TRIGGER beta_attachment_failure').run();
     const reply = await f.request('/api/tickets/fixture-ticket/articles', { method: 'POST', token, body: { body: 'Preserve this attachment', attachments: [{ filename: 'safe.txt', storageKey: key }] }, ip: f.rateLimitIdentity + '-attach' }); assert.equal(reply.status, 201);
     const saved = await effects(f);
-    f.r2.failNextPut(true); assert.equal((await upload()).status, 500);
+    f.r2.failNextPut(true);
+    const recoveredUpload = await upload();
+    assert.equal(recoveredUpload.status, 200, 'a matching durable marker confirms the accepted write after a lost acknowledgement');
+    assert.ok((await recoveredUpload.json<{ key: string }>()).key);
     assert.equal((await betaCounters(f))!.upload_attempts, 2);
     const before = f.r2.operationCounts(); assert.equal((await upload()).status, 429); assert.deepEqual(f.r2.operationCounts(), before);
+    assert.equal((await upload('exhausted-keyed-upload')).status, 429);
+    assert.deepEqual(f.r2.operationCounts(), before, 'keyed marker lookup also respects exhausted beta upload admission');
     assert.equal(before.delete, 0, 'Ambiguous put failure must never delete a potentially accepted object');
     const persisted = await f.db.prepare("SELECT id FROM attachments WHERE tenant_id=? AND r2_key=?").bind(f.principals.operatorA.tenantId, key).first<{ id: string ;}>(); assert.ok(persisted);
     assert.equal((await f.request('/api/attachments/' + persisted.id + '/download', { token })).status, 200);
     assert.deepEqual((await effects(f)).counts, saved.counts);
     await f.db.prepare("UPDATE local_beta_policy SET state='writes_stopped',revision=revision+1 WHERE singleton=1").run();
     const after = f.r2.operationCounts(); assert.equal((await upload()).status, 503); assert.deepEqual(f.r2.operationCounts(), after);
+    assert.equal((await upload('stopped-keyed-upload')).status, 503);
+    assert.deepEqual(f.r2.operationCounts(), after, 'stopped uploads cannot probe keyed storage markers');
   });
 });
+
+test('integrated beta: marker-only replay and conflict retain their prepaid upload attempts', async () => {
+  await withTwoTenantFixture(async f => {
+    await guardedFixture(f, { ticketLimit: 2, mutationLimit: 4, recoveryReserve: 2, uploadLimit: 3 });
+    const token = await staffToken(f);
+    const upload = (body: string) => {
+      const form = new FormData();
+      form.append('file', new Blob([body], { type: 'text/plain' }), 'safe.txt');
+      return f.request('/api/attachments/upload', { method: 'POST', token, rawBody: form,
+        contentType: null, idempotencyKey: 'marker-only-upload' });
+    };
+    const before = f.r2.operationCounts();
+    assert.equal((await upload('original')).status, 200);
+    assert.equal((await upload('original')).status, 200);
+    assert.equal((await upload('conflicting content')).status, 409);
+    assert.equal((await betaCounters(f))!.upload_attempts, 3);
+    const after = { ...before, get: before.get + 3, put: before.put + 1 };
+    assert.deepEqual(f.r2.operationCounts(), after);
+    assert.equal((await upload('original')).status, 429);
+    assert.deepEqual(f.r2.operationCounts(), after, 'An exhausted replay cannot read even its own marker');
+  });
+});
+
+for (const channel of ['staff', 'customer'] as const) {
+  for (const boundary of ['last-slot', 'stop'] as const) {
+    test(`integrated beta: ${channel} upload charges before a concurrent ${boundary} marker read`, { timeout: 30_000 }, async () => {
+      await withTwoTenantFixture(async f => {
+        await guardedFixture(f, { ticketLimit: 2, mutationLimit: 4, recoveryReserve: 2, uploadLimit: 1 });
+        let token: string;
+        if (channel === 'staff') token = await staffToken(f);
+        else {
+          const principal = f.principals.customerA;
+          const challenge = await f.request('/api/v1/customer/auth/request', { method: 'POST',
+            body: { email: principal.email, widgetKey: principal.widgetKey }, ip: f.rateLimitIdentity + '-upload-auth' });
+          assert.equal(challenge.status, 200);
+          const messages = await (await f.request('/__local/auth-capture/messages')).json<{ loginLink: string }[]>();
+          const verified = await f.request('/api/v1/customer/auth/verify', { method: 'POST',
+            body: { token: new URL(messages[0].loginLink).searchParams.get('token'), widgetKey: principal.widgetKey },
+            ip: f.rateLimitIdentity + '-upload-verify' });
+          assert.equal(verified.status, 200);
+          token = (await verified.json<{ token: string }>()).token;
+        }
+        const upload = (idempotencyKey: string) => {
+          const form = new FormData();
+          form.append('file', new Blob(['synthetic concurrent upload'], { type: 'text/plain' }), 'safe.txt');
+          return f.request(channel === 'staff' ? '/api/attachments/upload' : '/api/v1/customer/attachments/upload', {
+            method: 'POST', token, rawBody: form, contentType: null, idempotencyKey,
+          });
+        };
+        const before = f.r2.operationCounts();
+        const pause = f.r2.pauseNextGet();
+        const first = upload('first-prepaid-upload');
+        try {
+          await Promise.race([pause.started, first.then(response => { throw new Error(`Upload ended before marker read: ${response.status}`); })]);
+          // The first upload is admitted, but has not put any object. A second
+          // upload must not consume the same slot or observe a storage marker.
+          if (boundary === 'stop') await f.db.prepare("UPDATE local_beta_policy SET state='writes_stopped',revision=revision+1 WHERE singleton=1").run();
+          const second = await upload('second-competing-upload');
+          assert.equal(second.status, boundary === 'stop' ? 503 : 429);
+          assert.equal((await betaCounters(f))!.upload_attempts, 1);
+          assert.deepEqual(f.r2.operationCounts(), { ...before, get: before.get + 1 });
+        } finally { pause.release(); await first; }
+        assert.equal((await first).status, 200, 'An attempt charged before the boundary can finish without being charged twice');
+        assert.equal((await betaCounters(f))!.upload_attempts, 1);
+        assert.deepEqual(f.r2.operationCounts(), { ...before, get: before.get + 1, put: before.put + 1 });
+      });
+    });
+  }
+}
 
 test('integrated bounded detail preserves page-independent visible intake audit and exposes only display user fields', async () => {
   await withTwoTenantFixture(async f => {

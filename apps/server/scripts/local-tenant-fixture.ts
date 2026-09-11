@@ -65,6 +65,8 @@ export type FixtureR2 = Readonly<{
   operationCounts: () => R2OperationCounts;
   /** Synthetic R2 failure; uncertain mode stores the object before reporting failure. */
   failNextPut: (uncertain?: boolean) => void;
+  /** Pause one actual marker read to exercise upload admission ordering. */
+  pauseNextGet: () => Readonly<{ started: Promise<void>; release: () => void }>;
 }>;
 
 export type LocalTenantFixture = Readonly<{
@@ -283,12 +285,18 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
 function countedR2Bucket(bucket: R2Bucket): FixtureR2 {
   const counts = { get: 0, put: 0, delete: 0, list: 0 };
   let nextPutFailure: boolean | undefined;
+  let nextGetPause: { started: () => void; released: Promise<void> } | undefined;
   const counted = new Proxy(bucket, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver);
       if (typeof value !== 'function' || !['get', 'put', 'delete', 'list'].includes(String(property))) return value;
       return (...args: unknown[]) => {
         counts[property as keyof typeof counts]++;
+        if (property === 'get' && nextGetPause) {
+          const pause = nextGetPause; nextGetPause = undefined;
+          pause.started();
+          return pause.released.then(() => value.apply(target, args));
+        }
         if (property === 'put' && nextPutFailure !== undefined) {
           const uncertain = nextPutFailure; nextPutFailure = undefined;
           return (async () => { if (uncertain) await value.apply(target,args); throw new Error('Synthetic local storage failure'); })();
@@ -301,6 +309,15 @@ function countedR2Bucket(bucket: R2Bucket): FixtureR2 {
     bucket: counted,
     operationCounts: () => Object.freeze({ ...counts }),
     failNextPut: (uncertain = false) => { nextPutFailure = uncertain; },
+    pauseNextGet: () => {
+      assert.equal(nextGetPause, undefined, 'Only one synthetic read pause may be pending');
+      let started!: () => void;
+      let release!: () => void;
+      const entered = new Promise<void>(resolve => { started = resolve; });
+      const released = new Promise<void>(resolve => { release = resolve; });
+      nextGetPause = { started, released };
+      return Object.freeze({ started: entered, release });
+    },
   });
 }
 
