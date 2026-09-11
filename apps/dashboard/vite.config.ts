@@ -1,9 +1,10 @@
+import { productBranding } from '../../tools/branding/vite';
 /// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), productBranding('Operator')],
   build: {
     // Multi-pass production minification retains supported syntax and language grammars.
     minify: 'terser',
