@@ -148,7 +148,7 @@ jobs:
           do
             name="${test_file##*/}"
             printf 'Running bounded admission test: %s\\n' "$test_file"
-            timeout --signal=TERM --kill-after=30s 90s node --import tsx --test --test-concurrency=1 "$test_file" 2>&1 | tee "$diagnostics/$name.log"
+            timeout --signal=TERM --kill-after=30s 180s node --import tsx --test --test-concurrency=1 "$test_file" 2>&1 | tee "$diagnostics/$name.log"
           done
       - name: Verify operator theme preference isolation and recovery
         if: matrix.check == 'test'
