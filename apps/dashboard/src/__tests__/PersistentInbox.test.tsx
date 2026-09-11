@@ -95,12 +95,12 @@ it('keeps the 20-result list node, scroll position and roving focus while conver
 
 it('uses the authoritative actionable and snoozed queue views without losing the inbox surface',async()=>{
   showInbox();
-  await screen.findByRole('option',{name:/Fixture conversation 1/});
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
 
   fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=snoozed'))).toBe(true));
   expect(screen.getByRole('button',{name:'Snoozed'})).toHaveAttribute('aria-pressed','true');
-  expect(screen.getByRole('option',{name:/Fixture conversation 1/})).toHaveTextContent('Snoozed');
+  expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed');
 
   fireEvent.click(screen.getByRole('button',{name:'Actionable'}));
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
