@@ -1,4 +1,4 @@
-# Beta.2 checkpoint — 11 September 2026, 07:10 BST
+# Beta.2 checkpoint — 11 September 2026, 07:03 BST
 
 This checkpoint supersedes older delivery status, including unpublished forecast and Node 26 compression measurements. The approved master package and issue acceptance remain authoritative. No owner response or permission is outstanding. Beta.2 #140 is not ready.
 

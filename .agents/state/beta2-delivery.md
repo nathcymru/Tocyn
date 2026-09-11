@@ -4,7 +4,7 @@ Active goal: complete #140, including full SLA, ownership/routing, durable works
 
 ## Current checkpoint
 
-Read [the 07:10 BST checkpoint](beta2-checkpoint-2026-09-11-0710.md) first. It supersedes the historical status below.
+Read [the 07:03 BST checkpoint](beta2-checkpoint-2026-09-11-0703.md) first. It supersedes the historical status below.
 
 ## Historical state — 11 September 2026, 06:36 BST
 
