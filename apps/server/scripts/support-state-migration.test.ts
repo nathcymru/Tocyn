@@ -8,6 +8,7 @@ import { createVerifiedTenantScope } from '../src/auth/scope';
 import { createRepositories } from '../src/repositories';
 import { SupportStateError } from '../src/repositories/support-state.repository';
 import { SupportStateService } from '../src/services/support-state.service';
+import { TicketMutationReplayService } from '../src/services/ticket-mutation-replay.service';
 import { publicSupportState, supportStateSlaInput } from '../src/types/support-state';
 
 test('support-state migration preserves legacy rows and enforces tenant-qualified references', async () => {
@@ -227,6 +228,87 @@ test('support-state transitions stay tenant-scoped, preserve legacy clients, and
       'large remaps require a bounded background job rather than an unbounded transaction',
     );
     assert.equal((await reposA.supportStates.getDefinition(working.id))?.is_active, 1);
+    assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, []);
+  } finally { await mf.dispose(); }
+});
+
+test('shared snooze is CAS-audited, tenant-qualified, and resurfaces only from controlled due ticks or canonical customer replies', async () => {
+  const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
+    name: 'shared-snooze', modules: true,
+    script: 'export default { fetch() { return new Response("shared snooze fixture") } }',
+    d1Databases: { DB: '39d0d9f8-b9f8-429b-b281-79d93be685e6' },
+  }] }));
+  try {
+    const db = await mf.getD1Database('DB');
+    const dir = join(import.meta.dirname, '..', 'migrations');
+    for (const file of readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
+      await db.batch(splitSql(readFileSync(join(dir, file), 'utf8')).map(sql => db.prepare(sql)));
+    }
+    await db.batch([
+      db.prepare("INSERT INTO users (tenant_id,id,email,role,mfa_enabled) VALUES ('snooze-a','agent','agent-a@example.invalid','admin',1)"),
+      db.prepare("INSERT INTO users (tenant_id,id,email,role) VALUES ('snooze-a','customer','customer-a@example.invalid','customer')"),
+      db.prepare("INSERT INTO users (tenant_id,id,email,role,mfa_enabled) VALUES ('snooze-b','agent','agent-b@example.invalid','admin',1)"),
+      db.prepare("INSERT INTO tickets (tenant_id,id,subject,status,customer_id,customer_email,source) VALUES ('snooze-a','shared-id','A','open','customer','customer-a@example.invalid','portal')"),
+      db.prepare("INSERT INTO tickets (tenant_id,id,subject,status,customer_email,source) VALUES ('snooze-b','shared-id','B','open','customer-b@example.invalid','portal')"),
+    ]);
+    const scopeA = createVerifiedTenantScope('snooze-a', 'agent', ['admin'], 1);
+    const scopeB = createVerifiedTenantScope('snooze-b', 'agent', ['admin'], 1);
+    const reposA = createRepositories(scopeA, db);
+    const reposB = createRepositories(scopeB, db);
+    const serviceA = new SupportStateService({ scope: scopeA, repositories: reposA } as any);
+    const actor = { kind: 'staff' as const, id: 'agent', source: 'dashboard' as const };
+    const initial = await reposA.supportStates.getTicketState('shared-id');
+    assert.ok(initial);
+    const deadline = '2099-01-01T00:00:00.000Z';
+    const snoozed = await serviceA.transition('shared-id', {
+      definitionId: initial.definition_id, expectedRevision: initial.revision, snoozedUntil: deadline,
+    });
+    assert.deepEqual({ until: snoozed.snoozed_until, reason: snoozed.resurface_reason }, { until: deadline, reason: null });
+    assert.deepEqual(await db.prepare(`SELECT actor_kind,actor_id,json_extract(facts,'$.after.snoozedUntil') AS snoozed
+      FROM support_state_events WHERE tenant_id='snooze-a' AND ticket_id='shared-id'`).first(),
+    { actor_kind: 'staff', actor_id: 'agent', snoozed: deadline }, 'the initiating operator is recorded with the shared state change');
+    await assert.rejects(
+      serviceA.transition('shared-id', { definitionId: initial.definition_id, expectedRevision: initial.revision, snoozedUntil: null }),
+      (error: unknown) => error instanceof SupportStateError && error.code === 'conflict',
+      'a stale operator cannot clear a newer shared snooze',
+    );
+    assert.equal((await reposA.supportStates.getTicketState('shared-id'))?.snoozed_until, deadline);
+    assert.deepEqual(await reposB.supportStates.resurfaceDue('2100-01-01T00:00:00.000Z'), [],
+      'a colliding ticket identifier in another tenant never exposes or wakes tenant A state');
+    assert.equal((await reposA.supportStates.getTicketState('shared-id'))?.snoozed_until, deadline);
+    assert.deepEqual(await reposA.supportStates.resurfaceDue('2098-12-31T23:59:59.999Z'), [], 'early ticks do not wake a snooze');
+    assert.deepEqual(await reposA.supportStates.resurfaceDue('2099-01-01T00:00:00.000Z'), ['shared-id']);
+    assert.deepEqual(await reposA.supportStates.resurfaceDue('2100-01-01T00:00:00.000Z'), [], 'a retry does not emit a second resurface');
+    assert.deepEqual(await db.prepare(`SELECT snoozed_until,resurface_reason,transition_token FROM ticket_support_state
+      WHERE tenant_id='snooze-a' AND ticket_id='shared-id'`).first(), { snoozed_until: null, resurface_reason: 'due', transition_token: null });
+    const afterDue = await reposA.supportStates.getTicketState('shared-id');
+    assert.ok(afterDue);
+    const resnoozed = await serviceA.transition('shared-id', {
+      definitionId: afterDue.definition_id, expectedRevision: afterDue.revision, snoozedUntil: '2101-01-01T00:00:00.000Z',
+    });
+    const customerScope = createVerifiedTenantScope('snooze-a', 'customer', ['customer'], 0);
+    const customerMutation = new TicketMutationReplayService(db, customerScope,
+      { kind: 'customer', id: 'customer', sessionVersion: 0, expiresAt: 2_000_000_000 });
+    const customerPrepared = await customerMutation.prepareMutation({
+      operation: 'portal.ticket.reply', ticketId: 'shared-id', data: { body: 'Synthetic canonical reply' },
+    }, 'shared-snooze-reply');
+    const customerReply = await customerMutation.commit(customerPrepared);
+    const audit = customerReply.body.audit as { status: 'known'; value: { eventId: string } };
+    assert.equal(customerReply.replayed, false);
+    assert.equal(audit.status, 'known');
+    assert.deepEqual(await db.prepare(`SELECT snoozed_until,resurface_reason,revision,transition_token FROM ticket_support_state
+      WHERE tenant_id='snooze-a' AND ticket_id='shared-id'`).first(),
+    { snoozed_until: null, resurface_reason: 'customer_reply', revision: resnoozed.revision + 1, transition_token: null });
+    assert.equal((await db.prepare(`SELECT count(*) AS n FROM support_state_events WHERE tenant_id='snooze-a' AND ticket_id='shared-id'
+      AND actor_kind='system' AND json_extract(facts,'$.trigger.conversationEventId')=?`).bind(audit.value.eventId).first<{ n: number }>())?.n, 1);
+    const revisionAfterReply = (await reposA.supportStates.getTicketState('shared-id'))!.revision;
+    const retry = await customerMutation.prepareMutation({
+      operation: 'portal.ticket.reply', ticketId: 'shared-id', data: { body: 'Synthetic canonical reply' },
+    }, 'shared-snooze-reply');
+    const replay = await customerMutation.commit(retry);
+    assert.equal(replay.replayed, true, 'the original canonical reply receipt wins a lost-response retry');
+    assert.equal((await reposA.supportStates.getTicketState('shared-id'))?.revision, revisionAfterReply,
+      'a retry cannot resurface an already-awake ticket twice');
     assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, []);
   } finally { await mf.dispose(); }
 });
