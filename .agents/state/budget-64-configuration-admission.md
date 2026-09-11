@@ -1,3 +1,9 @@
+## Coordinator check — 11 September 2026, 16:39 BST
+
+30-minute human update delivered; next17:09BST.205head54f0332 equals candidate merge9455b3bb91a80cbb5c74dbbbb7c14b1e710b0a13 tree83f78a765065d6c394246d5c3adf0893896ea367. CodeQL/build/lint/types pass; testjob103319402858 in run34616345687 remains actively in Validate. No unresolved review threads. Rules read back: required checks strict/no bypass; review role5PR-only bypass;22454811 retains deletion/force-push protections without automatic review. Final check completion and signed accepted-tree verification remain mandatory; this is not acceptance.
+
+210 is stacked on205 and its full main-target CI must run after205acceptance/retarget; current branch setup run alone is not substantive validation. Redundant211CI34616173984 cancelled after consolidation, not a pass. Source211comment5636851259 and212comment5636851446 preserve integration ownership. All three workers confirmed running. No new owner permission, percentage or forecast date invented.
+
 # Combined administration successor — #64 / PR210
 
 Current integration supersedes the historical queue below. Combined application cfa931b includes210configuration,211API-key024fdcb and212channel27f58c8 on frozen205head54f0332. PR210 is the single integration owner;211/212 remain source evidence and must not merge independently. Accept205 first, then refresh210against acceptedmain and verify tested-tree/exact-headCI/security/signature. Knowledge0061, owner ingress0063 and ticket-email work remain separate.
