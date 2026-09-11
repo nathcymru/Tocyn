@@ -1,5 +1,23 @@
 # #68 composer continuation
 
+## Current acceptance candidate — 11 September 2026
+
+Root owns acceptance. The current implementation covers rich Markdown/slash/emoji/code composition, versioned draft/article format and safe channel output, authenticated raster previews, upload failure/retry, durable draft/CAS/retention integration and server-derived current reply capabilities. Final exact-revision CI remains required; #68 is not yet closed.
+
+Evidence includes actual Safari/VoiceOver composition and internal-note submission, five combined production browser scenarios, prior full dashboard/server/portal suites and real tenant/format runtime tests. See `docs/security/evidence/composer-68-voiceover-2026-09-11.md` and `composer-68-build-layout-2026-09-11.md`. The static-entry chunk ownership correction preserved full editor/language support and passed all 16 controlled CI resource/timing checks at tested merge `50d15d9b39795952101c05e5218589b1684f1a5d` (PR head `d08809f`).
+
+That CI run then caught a transient duplicate pending/saved attachment row in the strict draft browser test. Promotion now uses one synchronous React commit across the external draft store and local pending state. The strict browser assertion is unchanged. The per-commit unit invariant passes (39 workflow tests), and the rebuilt composer/draft browser suite passes 3/3. The unit environment did not reproduce the original race; CI supplied the original failure evidence. New artifact: 567,075 total / 99,196 initial gzip JavaScript, unchanged ceilings. Final CI must validate this correction before integration.
+
+### Scope correction: extension contracts and downstream consumers
+
+Older coordinator status paragraphs incorrectly treated concrete saved-response/AI providers as new #68 prerequisites. The approved issue requires KB/saved-response **insertion hooks** and a same-draft integration surface. Those hooks are present, bounded in their displayed suggestions and tested for actual insertion/callback behavior. #69 owns saved responses and depends on #68; #76 owns summaries; #77 owns transform providers and also depends on #68. They remain outstanding under their own accepted scope. Do not create a circular dependency or claim their provider features are implemented.
+
+Approved evidence: `docs/planning/post-beta-2026-09-10/issue-bodies/68.md` expanded scope; COMP-08 / UX-F03-L014 and UX-F07-L073 for #69; COMP-17–19 / UX-F03-L023–025 for #76/#77; UX-F09-L278 retires the old AI card only after #68/#77 parity. COMP-16 remains shared with contextual support ownership; #68 does not claim a completed contextual retrieval provider. The beta.2 #140 critical workspace/context, AI-off, full SLA and routing gates remain intact.
+
+Future concrete KB insertion must authorize the current ticket/group and derive public Answer versus internal SOP visibility on the server. Existing tenant-wide knowledge endpoints are not a substitute for that context boundary. Preserve this integration warning for the owning future work; it is not a fabricated #68 blocker.
+
+## Historical continuation — status superseded by the current candidate above
+
 Current status: partial implementation; the dated continuation sections supersede earlier capability-status statements. Historical articles remain literal text.
 
 Root owns integration; native Terra/medium implemented bounded frontend work in `/private/tmp/tocyn-beta2-68`, based on accepted #66 application. Server-backed #129 drafts, attachment queue/retry, explicit public/internal mode, send CAS/cleanup and navigation guard remain the same controller.

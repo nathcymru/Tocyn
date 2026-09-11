@@ -6,8 +6,8 @@ Measured from freshly built clients with Node 22.19.0 and the repository snapsho
 
 | Dashboard resource | Measured bytes | Existing ceiling |
 | --- | ---: | ---: |
-| All JavaScript | 567,028 | 570,000 |
-| Initial JavaScript | 99,178 | 135,000 |
+| All JavaScript | 567,075 | 570,000 |
+| Initial JavaScript | 99,196 | 135,000 |
 | All CSS | 15,603 | Unchanged policy; final CI verifies |
 
 The initial graph consists of the entry, runtime and static entry closure. Ticket detail, Markdown editor and administration page code remain lazy. All three client builds succeeded. The combined production browser suite passed 5/5 in 46.43 seconds: composer, two durable-draft scenarios, SLA and support-state recovery. No feature, grammar, target-browser or budget changes were made. Final browser and required CI timing/resource evidence must be read against the submitted revision before integration; the table alone is not full acceptance.
@@ -15,3 +15,7 @@ The initial graph consists of the entry, runtime and static entry closure. Ticke
 Rejected approaches included minifier settings, broad vendor/route grouping, partial ownership of shared authentication dependencies and an editor entry-point substitution. Some improved total bytes while worsening initial bytes. The lighter editor entry would remove highlighting behavior and was not adopted. The retained layout assigns the entire static dependency closure, rather than selecting shared dependencies individually.
 
 Earlier 569,508-byte measurements used Node 26 gzip and must not be compared with Node 22 CI. The pre-correction Node 22 artifact measured 573,414 bytes. Build and compression runtime must match when comparing evidence.
+
+## Attachment-promotion correction
+
+PR head `d08809f` passed all 16 controlled CI performance checks, but a later strict browser assertion observed both pending and saved attachment rows during promotion. A synchronous React commit now publishes the external draft and pending-list changes together. The unchanged composer/draft browser assertions pass 3/3 after rebuilding; 39 workflow tests pass. The added per-commit unit invariant did not reproduce the original browser race, so CI remains the original failure evidence. The table above reflects the corrected artifact; its final exact-revision CI is pending.

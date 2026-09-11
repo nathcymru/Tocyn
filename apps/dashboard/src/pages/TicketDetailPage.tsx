@@ -4,6 +4,7 @@ import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
 import { useTicket, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
@@ -340,10 +341,14 @@ function TicketDetail({ id }: { id: string }) {
         size: pending.file.size,
         storageKey: response.key,
       };
-      draft.update(current => ({ ...current, attachments: current.attachments.some(attachment => attachment.storageKey === uploaded.storageKey)
-        ? current.attachments : [...current.attachments, uploaded] }));
-      activeUploads.current.delete(pending.id);
-      setPendingAttachments(currentAttachments => currentAttachments.filter(attachment => attachment.id !== pending.id));
+      // Draft subscriptions can render before ordinary component state. Promote
+      // the pending and saved lists together, without an intermediate duplicate.
+      flushSync(() => {
+        draft.update(current => ({ ...current, attachments: current.attachments.some(attachment => attachment.storageKey === uploaded.storageKey)
+          ? current.attachments : [...current.attachments, uploaded] }));
+        activeUploads.current.delete(pending.id);
+        setPendingAttachments(currentAttachments => currentAttachments.filter(attachment => attachment.id !== pending.id));
+      });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       if (sessionGenerationRef.current !== pending.sessionGeneration || !activeUploads.current.has(pending.id)) return;

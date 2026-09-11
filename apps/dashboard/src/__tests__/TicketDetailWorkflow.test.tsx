@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { Profiler, type ProfilerOnRenderCallback } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
 import { useAuthStore } from '../store/authStore';
@@ -46,9 +47,9 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
     return json([]);
   }));
 }
-function showDetail(){
+function showDetail(onRender?: ProfilerOnRenderCallback){
   const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> }], { initialEntries: ['/tickets/workflow-ticket'] });
-  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></QueryClientProvider>);
 }
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
@@ -551,6 +552,25 @@ it('uploads dropped and pasted images through the existing authenticated attachm
   await waitFor(() => expect(uploaded).toEqual([dropped, pasted]));
   expect(screen.getByRole('button', { name: 'Remove dropped.png' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Remove pasted.webp' })).toBeInTheDocument();
+});
+
+it('promotes a completed upload in one committed attachment row and keeps it after draft save', async () => {
+  const upload = deferred<Response>();
+  const commits: Array<{ filename: number; remove: number }> = [];
+  transport(path => path === '/api/attachments/upload' ? upload.promise : json(ticket));
+  showDetail(() => {
+    const filename = Array.from(document.querySelectorAll('span')).filter(element => element.textContent === 'promote.txt').length;
+    const remove = document.querySelectorAll('button[aria-label="Remove promote.txt"]').length;
+    commits.push({ filename, remove });
+  });
+  await screen.findByText('Customer question');
+  fireEvent.change(screen.getByLabelText('Reply attachments'), { target: { files: [new File(['a'], 'promote.txt', { type: 'text/plain' })] } });
+  expect(await screen.findByText('Uploading…')).toBeInTheDocument();
+  await act(async () => { upload.resolve(json({ key: 'synthetic/promote' })); });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Remove promote.txt' })).toBeInTheDocument());
+  await screen.findByText('Draft saved.');
+  expect(screen.getByRole('button', { name: 'Remove promote.txt' })).toBeInTheDocument();
+  expect(commits.every(commit => commit.filename <= 1 && commit.remove <= 1)).toBe(true);
 });
 
 it('retains a failed dropped image and retries it without changing the draft attachment path', async () => {
