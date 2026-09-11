@@ -1,3 +1,15 @@
+# Frozen integration batch — 11September2026,16:09BST
+
+This section supersedes the earlier queue below. Root froze all reviewed increments in PR205: workspace204, retention206, knowledge reads207, groups208 and filters209 plus originaladministration205, based on accepted202. New configuration210, API-key0060, knowledgeDELETE0061 and channelconfiguration0062 remain outside this batch. Source drafts remain evidence and must not merge independently; supersede after205acceptance.
+
+Combined application head342c34c passed server types, shared budget-runtime types, storage/background runtime types and69/69 native tests across eight suites. Logs /private/tmp/tocyn-64-frozen-{types,server-types,storage-types,native}.log. All0051–0058 migration effects are included. Source attempts24/23/21/failure19writes; retention260turns totals54761reads/2600writes, maximum403reads/11writes; discovery[2,3,2,8,1,2,3]. Complete4201-ticket all-miss16811/18801reads;1201-article projection2410/6671reads. No owner ceiling increased. Required exact pushed-head CI/security/signature acceptance is still pending.
+
+Redundant source CI runs34613541240(204),34612976247(206),34613373619(207),34612715945(208),34611861463(209) were cancelled after consolidation; none count as passes. FullCI stays required on combined205. Preserve all source validation/receipts and immutable baselines; no issue closure or newpercentage/ETA.
+
+Active native Sol/high workers: API-key security/UI; knowledgeDELETE lifecycle/recovery; channelconfiguration after completing210. Root owns210review and frozen205integration. No new model/environment/allowance assumed. Last30minutehumanupdate15:40BST; next16:10BST. Full140 remains incomplete, no ownerapprovalmissing.
+
+## Historical16:00 queue (superseded)
+
 # Coordinating checkpoint — 11September2026,16:00BST
 
 Full goal remains beta.2#140, including full SLA/ownership/routing and master-baseline dependencies. Incomplete, no owner permission missing. This current checkpoint supersedes earlier active queues, preserving their historical evidence.
