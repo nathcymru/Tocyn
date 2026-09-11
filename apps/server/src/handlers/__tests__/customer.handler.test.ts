@@ -91,6 +91,7 @@ vi.mock("../../middleware/tenant.middleware", async (importOriginal) => {
           }
         },
         attachmentStorage: {
+          prepareUploadAttempt: vi.fn().mockResolvedValue(undefined),
           putAttachment: async (key: string) => {
             putCalledWithKey = key;
             return {};

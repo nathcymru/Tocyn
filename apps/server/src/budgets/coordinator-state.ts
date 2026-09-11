@@ -15,6 +15,9 @@ import { RESOURCE_DIMENSIONS, type BudgetPurpose, type EffectiveTenantCostPolicy
 
 const STATE_VERSION = 1 as const;
 const MAX_RESERVATIONS = 4_096;
+/** Hard metadata bounds are separate from an owner's concurrent reservation-slot limit. */
+export const MAX_RETAINED_BUDGET_GRANTS = 4_096;
+export const MAX_TENANT_BUDGET_ALLOCATIONS = 256;
 /** Initial holder delivery plus exactly one crash-recovery delivery. */
 export const MAX_HOLDER_SEED_ATTEMPTS = 2;
 
@@ -39,11 +42,15 @@ export type CoordinatorGrant = Readonly<{
   holderId: string;
   idempotencyKey: string;
   purpose: BudgetPurpose;
+  /** Optional trusted link for prepaid whole-grant recovery metadata. */
+  recoversReservationId?: string;
   policyRevision: number;
   restrictionRevision: number;
   createdAt: number;
   expiresAt: number;
   status: CoordinatorGrantStatus;
+  /** Certified accounting is rolled up; this bounded record retains exact retry identity until expiry. */
+  compacted?: boolean;
   /**
    * Delivery is deliberately finite. The coordinator commits this before each
    * holder RPC, so a lost seed acknowledgement cannot turn one reservation
@@ -61,6 +68,7 @@ export type CoordinatorGrant = Readonly<{
     measured: ResourceAmounts;
     uncertain: ResourceAmounts;
     reconciledAt: number;
+    certifiedFingerprint?: string;
   }>;
 }>;
 export type CoordinatorCapacityDefect = Readonly<{
@@ -70,6 +78,18 @@ export type CoordinatorCapacityDefect = Readonly<{
   measured: ResourceAmounts;
   uncertain: ResourceAmounts;
   overrun: ResourceAmounts;
+}>;
+/**
+ * A certified whole-grant closure releases its slot, but its observed charge
+ * remains in this bounded allocation/window rollup. Stock keys intentionally
+ * ignore a later allocation-id replacement: stock never resets.
+ */
+export type ClosedGrantCharge = Readonly<{
+  dimension: ResourceDimension;
+  allocationId: string;
+  window: ResourceWindow;
+  purpose: BudgetPurpose;
+  units: number;
 }>;
 export type BudgetCoordinatorState = Readonly<{
   schemaVersion: typeof STATE_VERSION;
@@ -86,6 +106,7 @@ export type BudgetCoordinatorState = Readonly<{
   allocations: readonly CoordinatorAllocation[];
   activeAllocationKeys: readonly string[];
   grants: readonly CoordinatorGrant[];
+  closedCharges: readonly ClosedGrantCharge[];
   /** An observed overrun blocks new reservations until a later authority remediates it. */
   capacityDefects: readonly CoordinatorCapacityDefect[];
 }>;
@@ -107,6 +128,8 @@ export type ReserveBudgetGrantInput = Readonly<{
   expectedPolicyRevision: number;
   expectedRestrictionRevision: number;
   purpose: BudgetPurpose;
+  /** Existing grant whose whole-grant recovery is prepaid by this reservation. */
+  recoversReservationId?: string;
   envelope: ResourceAmounts;
   now: number;
 }>;
@@ -136,6 +159,10 @@ export type ReconcileBudgetGrantInput = Readonly<{
   measured: ResourceAmounts;
   uncertain: ResourceAmounts;
   now: number;
+  /** Derived inside the DO from the normalized complete certificate; caller values are overwritten. */
+  certifiedCompletionDigest?: string;
+  /** Supplied only after the existing 0040 closure journal has accepted the exact whole-grant set. */
+  certifiedClosure?: Readonly<{ operationSetFingerprint: string; expiresAt: number; recoveryReservationId?: string; recoveryHolderId?: string }>;
 }>;
 
 function assertIdentity(value: unknown, description: string): asserts value is string {
@@ -273,8 +300,60 @@ function cloneState(state: BudgetCoordinatorState, patch: Partial<BudgetCoordina
     allocations: patch.allocations ?? state.allocations,
     activeAllocationKeys: patch.activeAllocationKeys ?? state.activeAllocationKeys,
     grants: patch.grants ?? state.grants,
+    closedCharges: patch.closedCharges ?? state.closedCharges ?? [],
     capacityDefects: patch.capacityDefects ?? state.capacityDefects,
   };
+}
+
+function closedChargeKey(allocation: CoordinatorAllocation, purpose: BudgetPurpose): string {
+  // A stock allocation is lifetime capacity. A policy revision cannot turn an
+  // allocation-id change into a fresh stock balance.
+  return allocation.window.kind === 'stock'
+    ? `${allocation.dimension}\u0000stock\u0000${purpose}`
+    : `${allocation.dimension}\u0000${allocation.allocationId}\u0000${allocation.window.id}\u0000${purpose}`;
+}
+
+function allocationMatchesCharge(allocation: CoordinatorAllocation, charge: ClosedGrantCharge, purpose: BudgetPurpose): boolean {
+  if (charge.purpose !== purpose || charge.dimension !== allocation.dimension) return false;
+  if (allocation.window.kind === 'stock') return charge.window.kind === 'stock';
+  return charge.window.kind === 'interval' && charge.allocationId === allocation.allocationId && charge.window.id === allocation.window.id;
+}
+
+function compactCharges(state: BudgetCoordinatorState, grant: CoordinatorGrant, now: number): BudgetCoordinatorState {
+  const byKey = new Map((state.closedCharges ?? []).map(charge => [closedChargeKey({ dimension: charge.dimension,
+    allocationId: charge.allocationId, window: charge.window, limit: 0, newWorkLimit: 0, recoveryLimit: 0 }, charge.purpose), charge]));
+  for (const reference of grant.allocations) {
+    const allocation = state.allocations.find(candidate => allocationReferenceKey(candidate.dimension, candidate.allocationId, candidate.window.id)
+      === allocationReferenceKey(reference.dimension, reference.allocationId, reference.windowId));
+    if (!allocation) throw new BudgetCoordinatorStateError('certified grant allocation is unavailable for compaction');
+    const units = grant.accounted[reference.dimension] ?? 0;
+    if (!units) continue;
+    const key = closedChargeKey(allocation, grant.purpose);
+    const prior = byKey.get(key);
+    const next = (prior?.units ?? 0) + units;
+    if (!Number.isSafeInteger(next)) throw new BudgetCoordinatorStateError('closed grant charge overflow');
+    byKey.set(key, { dimension: allocation.dimension, allocationId: allocation.allocationId, window: allocation.window,
+      purpose: grant.purpose, units: next });
+  }
+  return pruneHistoricalAccounting(cloneState(state, {
+    grants: state.grants.map(candidate => candidate.reservationId === grant.reservationId ? { ...grant, compacted: true } : candidate),
+    closedCharges: [...byKey.values()],
+  }), now);
+}
+
+/** Retain only current interval accounting; stock stays charged for its lifetime. */
+function pruneHistoricalAccounting(state: BudgetCoordinatorState, now: number): BudgetCoordinatorState {
+  const charges = (state.closedCharges ?? []).filter(charge => charge.window.kind === 'stock' || now < charge.window.endsAt);
+  const liveReferences = new Set(state.grants.flatMap(grant => grant.allocations.map(reference =>
+    allocationReferenceKey(reference.dimension, reference.allocationId, reference.windowId))));
+  const active = new Set(state.activeAllocationKeys);
+  const allocations = state.allocations.filter(allocation => active.has(allocationKey(allocation))
+    || liveReferences.has(allocationKey(allocation)) || (allocation.window.kind === 'interval' && now < allocation.window.endsAt));
+  if (allocations.length > MAX_TENANT_BUDGET_ALLOCATIONS || charges.length > 2 * MAX_TENANT_BUDGET_ALLOCATIONS) {
+    throw new BudgetCoordinatorStateError('tenant budget accounting metadata capacity exhausted');
+  }
+  return cloneState(state, { closedCharges: charges, allocations,
+    grants: state.grants.filter(grant => !grant.compacted || now < grant.expiresAt) });
 }
 
 function expire(state: BudgetCoordinatorState, now: number): BudgetCoordinatorState {
@@ -287,17 +366,24 @@ function expire(state: BudgetCoordinatorState, now: number): BudgetCoordinatorSt
     }
     return grant;
   });
-  return changed ? cloneState(state, { grants }) : state;
+  return pruneHistoricalAccounting(changed ? cloneState(state, { grants }) : state, now);
 }
 
 function charged(state: BudgetCoordinatorState, key: string, purpose: BudgetPurpose): number {
   let total = 0;
   for (const grant of state.grants) {
+    if (grant.compacted) continue;
     if (grant.purpose !== purpose) continue;
     const allocation = grant.allocations.find(item => allocationReferenceKey(item.dimension, item.allocationId, item.windowId) === key);
     if (!allocation) continue;
     total += amountFor(grant.accounted, allocation.dimension);
     if (!Number.isSafeInteger(total)) throw new BudgetCoordinatorStateError('durable budget charge overflow');
+  }
+  const allocation = state.allocations.find(candidate => allocationKey(candidate) === key);
+  if (allocation) for (const charge of state.closedCharges ?? []) {
+    if (!allocationMatchesCharge(allocation, charge, purpose)) continue;
+    total += charge.units;
+    if (!Number.isSafeInteger(total)) throw new BudgetCoordinatorStateError('durable closed charge overflow');
   }
   return total;
 }
@@ -327,6 +413,7 @@ export function createBudgetCoordinatorState(input: CreateBudgetCoordinatorState
     allocations,
     activeAllocationKeys: allocations.map(allocationKey),
     grants: [],
+    closedCharges: [],
     capacityDefects: [],
   };
 }
@@ -353,10 +440,18 @@ export function reserveBudgetGrant(state: BudgetCoordinatorState, input: Reserve
   if (input.expectedPolicyId !== expired.policyId || input.expectedPolicyRevision !== expired.policyRevision || input.expectedRestrictionRevision !== expired.restrictionRevision) {
     return { state: expired, outcome: { status: 'rejected', reason: 'stale-policy' } };
   }
+  if (input.recoversReservationId !== undefined) {
+    assertIdentity(input.recoversReservationId, 'recovered reservation id');
+    const original = expired.grants.find(grant => grant.reservationId === input.recoversReservationId);
+    if (input.purpose !== 'recovery' || !original || original.purpose !== 'new-work'
+      || original.policyRevision !== input.expectedPolicyRevision || original.restrictionRevision !== input.expectedRestrictionRevision) {
+      return { state: expired, outcome: { status: 'rejected', reason: 'stale-policy' } };
+    }
+  }
   const scope = idempotencyScope(expired, input.holderId, input.purpose, input.idempotencyKey);
   const prior = expired.grants.find(grant => idempotencyScope(expired, grant.holderId, grant.purpose, grant.idempotencyKey) === scope);
   if (prior) {
-    if (fingerprint(prior.envelope) !== fingerprint(envelope)) throw new BudgetCoordinatorStateError('idempotency key was already used with a different envelope');
+    if (fingerprint(prior.envelope) !== fingerprint(envelope) || prior.recoversReservationId !== input.recoversReservationId) throw new BudgetCoordinatorStateError('idempotency key was already used with a different envelope');
     // A state written by an older implementation has no bounded delivery
     // record. Treat it as exhausted instead of reopening an unbounded retry.
     const deliveryAttempts = Number.isSafeInteger(prior.holderSeedAttempts) && prior.holderSeedAttempts >= 1
@@ -371,8 +466,18 @@ export function reserveBudgetGrant(state: BudgetCoordinatorState, input: Reserve
     grants[grants.indexOf(prior)] = recovered;
     return { state: cloneState(expired, { grants }), outcome: { status: 'idempotent', reservation: recovered } };
   }
+  if (input.recoversReservationId !== undefined && expired.grants.find(grant => grant.reservationId === input.recoversReservationId)?.status === 'reconciled') {
+    return { state: expired, outcome: { status: 'rejected', reason: 'delivery-exhausted' } };
+  }
+  if (input.recoversReservationId !== undefined && expired.grants.filter(grant => grant.recoversReservationId === input.recoversReservationId).length >= 2) {
+    return { state: expired, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
+  }
   if (expired.capacityDefects.length > 0) return { state: expired, outcome: { status: 'rejected', reason: 'capacity-defect' } };
-  if (expired.grants.length >= expired.maxReservations) return { state: expired, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
+  // maxReservations remains the total ceiling. One of those slots is reserved
+  // for recovery; a total-one configuration therefore cannot intake new work.
+  if (expired.grants.filter(grant => !grant.compacted).length >= expired.maxReservations
+    || (input.purpose === 'new-work' && expired.grants.filter(grant => !grant.compacted && grant.purpose === 'new-work').length >= expired.maxReservations - 1)
+    || expired.grants.length >= MAX_RETAINED_BUDGET_GRANTS) return { state: expired, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
   const allocations: CoordinatorAllocation[] = [];
   for (const [key, units] of Object.entries(envelope)) {
     const dimension = key as ResourceDimension;
@@ -397,6 +502,7 @@ export function reserveBudgetGrant(state: BudgetCoordinatorState, input: Reserve
   const reservationId = `${expired.coordinatorId}:${expired.nextReservationSequence}`;
   const grant: CoordinatorGrant = {
     reservationId, holderId: input.holderId, idempotencyKey: input.idempotencyKey, purpose: input.purpose,
+    ...(input.recoversReservationId ? { recoversReservationId: input.recoversReservationId } : {}),
     policyRevision: expired.policyRevision, restrictionRevision: expired.restrictionRevision,
     createdAt: input.now, expiresAt, status: 'reserved', holderSeedAttempts: 1, envelope, remaining: { ...envelope }, accounted: { ...envelope },
     allocations: allocations.map(allocation => ({ dimension: allocation.dimension, allocationId: allocation.allocationId, windowId: allocation.window.id })),
@@ -437,6 +543,14 @@ export function markBudgetGrantUncertain(state: BudgetCoordinatorState, reservat
   return { state: cloneState(expired, { grants }), marked: true };
 }
 
+export function certifiedGrantFingerprint(input: ReconcileBudgetGrantInput): string {
+  return fingerprint({ reservationId: input.reservationId, holderId: input.holderId, expectedPolicyId: input.expectedPolicyId,
+    expectedPolicyRevision: input.expectedPolicyRevision, expectedRestrictionRevision: input.expectedRestrictionRevision,
+    evidenceFingerprint: fingerprint({ terminalEvidenceId: input.terminalEvidenceId,
+      measured: normalizedAmounts(input.measured, 'measured reconciliation amounts', true),
+      uncertain: normalizedAmounts(input.uncertain, 'uncertain reconciliation amounts', true) }), certified: input.certifiedClosure });
+}
+
 /** Applies trusted terminal evidence; only its unaccounted remainder becomes reusable. */
 export function reconcileBudgetGrant(state: BudgetCoordinatorState, input: ReconcileBudgetGrantInput): Readonly<{ state: BudgetCoordinatorState; outcome: 'reconciled' | 'already-reconciled' | 'capacity-defect' | 'rejected' }> {
   assertIdentity(input.reservationId, 'reservation id'); assertIdentity(input.holderId, 'holder id'); assertIdentity(input.expectedPolicyId, 'expected policy id');
@@ -445,24 +559,53 @@ export function reconcileBudgetGrant(state: BudgetCoordinatorState, input: Recon
   const measured = normalizedAmounts(input.measured, 'measured reconciliation amounts', true);
   const uncertain = normalizedAmounts(input.uncertain, 'uncertain reconciliation amounts', true);
   const expired = expire(state, input.now);
+  const certified = input.certifiedClosure;
+  if (certified && (typeof certified.operationSetFingerprint !== 'string' || certified.operationSetFingerprint.length === 0
+    || certified.operationSetFingerprint.length > 160 || /[\u0000-\u001f\u007f]/.test(certified.operationSetFingerprint)
+    || !Number.isSafeInteger(certified.expiresAt) || certified.expiresAt <= input.now)) {
+    return { state: expired, outcome: 'rejected' };
+  }
   const index = expired.grants.findIndex(grant => grant.reservationId === input.reservationId);
+  // Absence is never completion evidence, even for a well-shaped certificate.
   if (index < 0) return { state: expired, outcome: 'rejected' };
   const grant = expired.grants[index];
   if (grant.holderId !== input.holderId || input.expectedPolicyId !== expired.policyId || input.expectedPolicyRevision !== grant.policyRevision
-    || input.expectedRestrictionRevision !== grant.restrictionRevision) return { state: expired, outcome: 'rejected' };
+    || input.expectedRestrictionRevision !== grant.restrictionRevision || (certified && certified.expiresAt !== grant.expiresAt)) return { state: expired, outcome: 'rejected' };
   const evidenceFingerprint = fingerprint({ terminalEvidenceId: input.terminalEvidenceId, measured, uncertain });
+  const certifiedFingerprint = certified ? input.certifiedCompletionDigest ?? certifiedGrantFingerprint(input) : undefined;
   if (grant.status === 'reconciled') {
-    return { state: expired, outcome: grant.reconciliation?.fingerprint === evidenceFingerprint ? 'already-reconciled' : 'rejected' };
+    return { state: expired, outcome: certified
+      ? (grant.reconciliation?.certifiedFingerprint === certifiedFingerprint ? 'already-reconciled' : 'rejected')
+      : (!grant.compacted && grant.reconciliation?.fingerprint === evidenceFingerprint && !grant.reconciliation.certifiedFingerprint ? 'already-reconciled' : 'rejected') };
+  }
+  let recovery: CoordinatorGrant | undefined;
+  if (certified?.recoveryReservationId !== undefined || certified?.recoveryHolderId !== undefined) {
+    recovery = expired.grants.find(candidate => candidate.reservationId === certified.recoveryReservationId);
+    if (!recovery || recovery.compacted || recovery.purpose !== 'recovery' || recovery.status !== 'reserved'
+      || recovery.recoversReservationId !== grant.reservationId || grant.purpose !== 'new-work' || recovery.holderId !== certified.recoveryHolderId
+      || recovery.holderId !== `recovery:${input.terminalEvidenceId}` || recovery.idempotencyKey !== input.terminalEvidenceId
+      || recovery.policyRevision !== grant.policyRevision || recovery.restrictionRevision !== grant.restrictionRevision) {
+      return { state: expired, outcome: 'rejected' };
+    }
   }
   const accounted = sumAmounts(measured, uncertain);
   const overrun = overrunAmounts(grant.envelope, accounted);
   const grants = [...expired.grants];
-  grants[index] = { ...grant, status: 'reconciled', accounted, reconciliation: { terminalEvidenceId: input.terminalEvidenceId, fingerprint: evidenceFingerprint, measured, uncertain, reconciledAt: input.now } };
+  grants[index] = { ...grant, status: 'reconciled', accounted, reconciliation: { terminalEvidenceId: input.terminalEvidenceId, fingerprint: evidenceFingerprint, measured, uncertain, reconciledAt: input.now, ...(certifiedFingerprint ? { certifiedFingerprint } : {}) } };
   if (Object.keys(overrun).length > 0) {
     const capacityDefect: CoordinatorCapacityDefect = { reservationId: grant.reservationId, observedAt: input.now, envelope: grant.envelope, measured, uncertain, overrun };
     return { state: cloneState(expired, { grants, capacityDefects: [...expired.capacityDefects, capacityDefect] }), outcome: 'capacity-defect' };
   }
-  return { state: cloneState(expired, { grants }), outcome: 'reconciled' };
+  const reconciled = cloneState(expired, { grants });
+  let next = certified ? compactCharges(reconciled, grants[index], input.now) : reconciled;
+  if (recovery) {
+    // The entire two-attempt recovery envelope stays charged. Both reservation
+    // slots retire atomically, but their exact retry identities remain bounded.
+    next = compactCharges(next, { ...recovery, status: 'reconciled', accounted: recovery.envelope,
+      reconciliation: { terminalEvidenceId: input.terminalEvidenceId, fingerprint: evidenceFingerprint,
+        measured: {}, uncertain: recovery.envelope, reconciledAt: input.now, certifiedFingerprint } }, input.now);
+  }
+  return { state: next, outcome: 'reconciled' };
 }
 
 /**
@@ -483,7 +626,7 @@ export function applyTrustedCoordinatorAuthority(state: BudgetCoordinatorState, 
   for (const allocation of nextAllocations) byKey.set(allocationKey(allocation), allocation);
   const grants = current.grants.map(grant => grant.status === 'reserved' || grant.status === 'consumed'
     ? { ...grant, status: 'uncertain' as const } : grant);
-  return cloneState(current, {
+  return pruneHistoricalAccounting(cloneState(current, {
     policyRevision: policy.revision,
     restrictionRevision: policy.restrictionRevision,
     maxGrantLifetimeMs: policy.maxGrantLifetimeMs,
@@ -491,5 +634,5 @@ export function applyTrustedCoordinatorAuthority(state: BudgetCoordinatorState, 
     allocations: [...byKey.values()],
     activeAllocationKeys: nextAllocations.map(allocationKey),
     grants,
-  });
+  }), authority.authorityCheckedAt);
 }

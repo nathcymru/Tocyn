@@ -66,8 +66,46 @@ describe('owner aggregate budget state', () => {
   });
 
   it('bounds retained grants across all tenant allocations', () => {
-    const first = reserveOwnerAggregate(createBudgetOwnerAggregateState(authority(1)), reserve('tenant-a', 'holder-a', 'grant-a', 1));
+    const first = reserveOwnerAggregate(createBudgetOwnerAggregateState(authority(2)), reserve('tenant-a', 'holder-a', 'grant-a', 1));
     expect(reserveOwnerAggregate(first.state, reserve('tenant-b', 'holder-b', 'grant-b', 1)).outcome).toEqual({ status: 'rejected', reason: 'capacity-exhausted' });
+  });
+
+  it('counts compacted certified charges across tenants without retaining a permanent reservation slot', () => {
+    const first = reserveOwnerAggregate(createBudgetOwnerAggregateState(authority(2)), reserve('tenant-a', 'holder-a', 'grant-a', 50));
+    const grant = first.outcome.reservation!;
+    const reconciled = reconcileOwnerAggregate(first.state, {
+      tenantId: 'tenant-a', reservationId: grant.reservationId, holderId: 'holder-a', expectedPolicyId: 'owner-policy', expectedPolicyRevision: 7,
+      expectedRestrictionRevision: 3, terminalEvidenceId: 'certified-owner-terminal', measured: { workerRequests: 30 }, uncertain: {}, now: NOW + 1,
+      certifiedClosure: { operationSetFingerprint: 'synthetic-owner-closure', expiresAt: grant.expiresAt },
+    });
+    expect(reconciled.outcome).toBe('reconciled');
+    expect(reconciled.state.tenantStates.find(tenant => tenant.tenantId === 'tenant-a')?.grants.filter(grant => !grant.compacted)).toHaveLength(0);
+    expect(reserveOwnerAggregate(reconciled.state, reserve('tenant-b', 'holder-b', 'grant-b', 50)).outcome.status).toBe('granted');
+    expect(reserveOwnerAggregate(reconciled.state, reserve('tenant-b', 'holder-b', 'owner-charge-not-reset', 71)).outcome).toEqual({ status: 'rejected', reason: 'exhausted' });
+  });
+
+  it('retains closed stock charges across grant expiry and owner allocation replacement', () => {
+    const configured = authority(2);
+    const budgets: CostPolicy['budgets'] = [{ dimension: 'r2StorageBytes', allocationId: 'stock-original', window: { kind: 'stock', id: 'stock' },
+      limit: 100, recoveryPercent: 20, provenance: 'owner-allocation' }];
+    const stock = { ...configured, ownerPolicy: { ...configured.ownerPolicy, budgets },
+      tenantAllocations: configured.tenantAllocations.map(tenant => ({ ...tenant, effectivePolicy: { ...tenant.effectivePolicy, budgets } })) };
+    const first = reserveOwnerAggregate(createBudgetOwnerAggregateState(stock), { ...reserve('tenant-a', 'holder-stock', 'stock-a', 1), envelope: { r2StorageBytes: 50 } });
+    const grant = first.outcome.reservation!;
+    const closed = reconcileOwnerAggregate(first.state, { tenantId: 'tenant-a', reservationId: grant.reservationId, holderId: grant.holderId,
+      expectedPolicyId: 'owner-policy', expectedPolicyRevision: 7, expectedRestrictionRevision: 3, terminalEvidenceId: 'stock-terminal',
+      measured: { r2StorageBytes: 30 }, uncertain: { r2StorageBytes: 10 }, now: NOW + 1,
+      certifiedClosure: { operationSetFingerprint: 'stock-set', expiresAt: grant.expiresAt } });
+    expect(closed.outcome).toBe('reconciled');
+    const replacement = budgets.map(budget => ({ ...budget, allocationId: 'stock-replacement' }));
+    const next = refreshBudgetOwnerAggregateAuthority(closed.state, { ...stock, authorityRevision: 2,
+      authorityCheckedAt: NOW + 30_001, authorityExpiresAt: NOW + 60_000, ownerPolicy: { ...stock.ownerPolicy, revision: 8, budgets: replacement },
+      tenantAllocations: stock.tenantAllocations.map(tenant => ({ ...tenant, effectivePolicy: { ...tenant.effectivePolicy, revision: 8, budgets: replacement } })) });
+    expect(next.tenantStates[0].grants).toHaveLength(0);
+    expect(next.tenantStates[0].closedCharges[0].units).toBe(40);
+    const request = { ...reserve('tenant-b', 'holder-next', 'stock-next', 1, NOW + 30_001), expectedPolicyRevision: 8, envelope: { r2StorageBytes: 41 } };
+    expect(reserveOwnerAggregate(next, request).outcome).toMatchObject({ status: 'rejected', reason: 'exhausted' });
+    expect(reserveOwnerAggregate(next, { ...request, envelope: { r2StorageBytes: 40 } }).outcome.status).toBe('granted');
   });
 
   it('preserves an owner-approved tenant aggressive restriction without changing shared capacity', () => {

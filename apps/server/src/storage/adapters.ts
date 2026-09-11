@@ -122,6 +122,11 @@ export class TenantAttachmentStorage {
     this.r2Adapter = new TenantR2Adapter(scope, bucket, emit);
   }
 
+  /** Prepare one upload attempt before any marker read or put. */
+  prepareUploadAttempt(): Promise<void> {
+    return Promise.resolve();
+  }
+
   async getAttachment(objectId: string) {
     return this.r2Adapter.get(objectId);
   }

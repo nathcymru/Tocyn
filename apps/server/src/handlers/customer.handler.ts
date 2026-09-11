@@ -27,8 +27,32 @@ import { SlaClockError } from '../repositories/sla-clock.repository';
 import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 import { MutationInputError, mutationInputErrorBody, normalizeAttachmentReferences, portalTicketCreateSchema, portalTicketReplySchema, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { admitConfiguredCustomerTicketMutation, customerTicketAdmissionMode } from '../middleware/budget-admission.middleware';
+import { admitCustomerAttachment } from '../budgets/customer-storage-admission.service';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+
+function boundedStorageIdempotencyKey(value: string | undefined): string | null {
+  return value && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : null;
+}
+
+async function storageDigest(parts: readonly string[]): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(parts));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function storageByteDigest(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function attachmentBudgetFailure(c: any, reason: string): Response {
+  return reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : reason === 'conflict'
+      ? c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409)
+      : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
 
 function recordCredentialDecision(c: { get: (key: 'requestAuthSli') => AppVariables['requestAuthSli'] }, decision: RequestCredentialAuthDecision): void {
   try { c.get('requestAuthSli')?.record(decision); } catch { /* Evidence cannot affect authentication. */ }
@@ -386,11 +410,16 @@ app.get('/attachments/:id/download', widgetAuthMiddleware, roleGuard(['customer'
   const attachmentId = c.req.param('id');
   const payload = c.get('jwtPayload');
 
+  if (!attachmentId) return c.json({ error: 'Missing attachment ID' }, 400);
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const attachment = await deps.repositories.attachments.getAttachmentWithMeta(attachmentId!);
+  const attachment = await deps.repositories.attachments.getAttachmentWithMeta(attachmentId);
   if (!attachment || attachment.is_internal || attachment.customer_email !== payload.email) {
     return c.json({ error: 'Not found or unauthorized' }, 404);
   }
+  const digest = await storageDigest(['customer-attachment-download-v1', deps.scope.tenantId, payload.sub, attachmentId, crypto.randomUUID()]);
+  const admission = await admitCustomerAttachment({ env: c.env, deps, payload, operation: 'customer.attachment.download',
+    operationId: `storage-download:${digest}`, operationFingerprint: `storage-download:${digest}`, now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return attachmentBudgetFailure(c, admission.reason!);
   const r2Object = await deps.attachmentStorage.getAttachment(attachment.r2_key);
   if (!r2Object) return c.json({ error: 'File not found in storage' }, 404);
 
@@ -443,13 +472,60 @@ app.post('/attachments/upload', widgetAuthMiddleware, roleGuard(['customer']), t
   const fileExt = rawExt.replace(/[^a-zA-Z0-9]/g, '');
   const extPart = fileExt ? `.${fileExt}` : '';
 
-  const key = `customer-attachments/${payload.sub}/${crypto.randomUUID()}${extPart}`;
+  const requestedIdempotency = c.req.header('idempotency-key');
+  const idempotencyKey = boundedStorageIdempotencyKey(requestedIdempotency);
+  if (requestedIdempotency !== undefined && !idempotencyKey) return c.json({ error: 'Invalid Idempotency-Key' }, 400);
+  const uploadSeed = idempotencyKey ?? crypto.randomUUID();
+  const digest = await storageDigest(['customer-attachment-upload-v1', deps.scope.tenantId, payload.sub, uploadSeed]);
+  // Parsing is already capped at ten MiB. Bind durable retry identity to the
+  // exact content before the budget spend so a same-size replacement conflicts.
+  const fileBytes = await file.arrayBuffer();
+  const byteDigest = await storageByteDigest(fileBytes);
+  const fingerprint = await storageDigest(['customer-attachment-upload-content-v2', file.name, file.type, String(file.size), byteDigest]);
+  const key = idempotencyKey ? `customer-attachments/${payload.sub}/${digest}` : `customer-attachments/${payload.sub}/${digest}${extPart}`;
+  const admission = await admitCustomerAttachment({ env: c.env, deps, payload, operation: 'customer.attachment.upload',
+    operationId: `storage-upload:${digest}`, operationFingerprint: `storage-upload:${fingerprint}`, bytes: file.size,
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return attachmentBudgetFailure(c, admission.reason!);
 
   try {
-    await deps.attachmentStorage.putAttachment(key, c.env.LOCAL_BETA_ENABLED==='true' ? await file.arrayBuffer() : file.stream(), {
-      httpMetadata: { contentType: file.type || 'application/octet-stream' }
-    });
-    return c.json({ key });
+    await deps.attachmentStorage.prepareUploadAttempt();
+    if (idempotencyKey) {
+      const existing = await deps.attachmentStorage.getAttachment(key);
+      if (existing) {
+        try {
+          if ((existing.customMetadata as Record<string, string> | undefined)?.tocynUploadFingerprint !== fingerprint) {
+            return c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409);
+          }
+        } finally { await existing.body?.cancel(); }
+        return c.json({ key });
+      }
+    }
+    try {
+      const put = await deps.attachmentStorage.putAttachment(key, c.env.LOCAL_BETA_ENABLED==='true' ? fileBytes : file.stream(), {
+        httpMetadata: { contentType: file.type || 'application/octet-stream' }, customMetadata: { tocynUploadFingerprint: fingerprint },
+        onlyIf: { etagDoesNotMatch: '*' },
+      });
+      if (put.res !== null) return c.json({ key });
+    } catch (error) {
+      if (error instanceof BetaAdmissionError) throw error;
+      const winner = await deps.attachmentStorage.getAttachment(key);
+      if (winner) {
+        try {
+          if ((winner.customMetadata as Record<string, string> | undefined)?.tocynUploadFingerprint === fingerprint) return c.json({ key });
+        } finally { await winner.body?.cancel(); }
+        return c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409);
+      }
+      throw error;
+    }
+    const winner = await deps.attachmentStorage.getAttachment(key);
+    if (winner) {
+      try {
+        if ((winner.customMetadata as Record<string, string> | undefined)?.tocynUploadFingerprint === fingerprint) return c.json({ key });
+      } finally { await winner.body?.cancel(); }
+      return c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409);
+    }
+    return c.json({ error: 'Failed to upload file to storage' }, 500);
   } catch (error: any) {
     if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     if (c.env.LOCAL_BETA_ENABLED!=='true') console.error('Error uploading file:', error);

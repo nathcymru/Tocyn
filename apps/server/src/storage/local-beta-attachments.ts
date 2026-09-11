@@ -4,9 +4,21 @@ import type { VerifiedTenantScope } from '../types/tenant';
 
 /** The pre-R2 attempt charge is durable; failed or uncertain puts are never refunded. */
 export class LocalBetaAttachmentStorage extends TenantAttachmentStorage {
+  private preparedUploadAttempt?: Promise<void>;
+
+  // Composition owns one adapter per request. Concurrent preparation shares
+  // the same durable charge, including marker-only outcomes and failed reads.
+  override prepareUploadAttempt(): Promise<void> {
+    return this.preparedUploadAttempt ??= this.admission.chargeUploadAttempt();
+  }
+
   constructor(scope: VerifiedTenantScope, bucket: ConstructorParameters<typeof TenantAttachmentStorage>[1], private admission: LocalBetaAdmissionRepository, emit?: ConstructorParameters<typeof TenantAttachmentStorage>[2]) { super(scope, bucket, emit); }
   override async putAttachment(objectId: string, value: unknown, options?: unknown) {
-    await this.admission.chargeUploadAttempt();
+    // Consume before awaiting so concurrent puts cannot reuse a prepaid attempt.
+    // Direct callers that do not prepare still charge before touching storage.
+    const prepared = this.preparedUploadAttempt;
+    this.preparedUploadAttempt = undefined;
+    await (prepared ?? this.admission.chargeUploadAttempt());
     // Never delete on an ambiguous put failure: an object may already be accepted.
     // Disposable fixture teardown removes run-owned orphan state.
     return super.putAttachment(objectId, value, options);

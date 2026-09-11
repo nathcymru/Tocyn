@@ -1,11 +1,11 @@
 /**
  * Conservative table/index write slots, not a production billing measurement.
- * One canonical attempt may delete 100 receipts; each has four indexes plus
- * its table row (500 slots). At most 32 further row mutations cover ticket,
- * article, ten attachments, audit, SLA, assertion/local-beta and support-state
- * defaults. Their current tables have at most four indexes: allow the table
- * write plus removal/insertion of every index entry (32 * 9 = 288 slots).
- * Round 788 up to 1,024 per attempt; the isolate receipt allows two attempts.
+ * One canonical attempt may delete 100 receipts: four indexes and its table
+ * row cost at most 500 slots. The original 32 further row mutations plus two
+ * public-history projection mutations and 16 recipient activities total 50.
+ * Allow table write and removal/insertion for four indexes on each (50 * 9).
+ * Two conversation-event rows have a fifth index; reserve four extra slots.
+ * Round 954 up to 1,024 per attempt; the isolate receipt allows two attempts.
  * Native D1 schema/metadata tests require review if either inventory grows.
  */
 export const CANONICAL_MUTATION_ATTEMPT_D1_WRITES = 1_024;

@@ -30,18 +30,24 @@ export class BudgetGrantRecoveryService {
     const coordinator = this.namespace.get(this.namespace.idFromName(sealed.aggregateId)) as unknown as BudgetCoordinatorDO;
     try {
       await coordinator.refreshFromTrustedAuthority(current.authority);
-      // Recovery itself consumes only recovery-purpose capacity. Its outcome is
-      // intentionally not reconciled by this path, so its conservative charge remains.
+      // Recovery itself consumes only recovery-purpose capacity. Its slot is
+      // compacted atomically with the closed work grant; its full charge remains.
       const reserved = await coordinator.reserveFromTrustedAuthority({ tenantId: sealed.tenantId, holderId: `recovery:${sealed.terminalEvidenceId}`,
-        idempotencyKey: sealed.terminalEvidenceId, purpose: 'recovery', envelope: API_GRANT_CLOSURE_RECOVERY_ENVELOPE,
+        idempotencyKey: sealed.terminalEvidenceId, purpose: 'recovery', recoversReservationId: sealed.reservationId, envelope: API_GRANT_CLOSURE_RECOVERY_ENVELOPE,
         expectedPolicyId: sealed.policyId, expectedPolicyRevision: sealed.policyRevision, expectedRestrictionRevision: sealed.restrictionRevision, now });
-      if (reserved.status === 'rejected') return 'pending';
+      if (reserved.status === 'rejected' || !reserved.reservation) return 'pending';
       const closure = await new BudgetGrantClosureRepository(this.db).close(sealed);
       if (!closure) return 'pending';
       const outcome = await coordinator.reconcileFromTrustedAuthority({ tenantId: sealed.tenantId, reservationId: sealed.reservationId, holderId: sealed.holderId,
         expectedPolicyId: sealed.policyId, expectedPolicyRevision: sealed.policyRevision, expectedRestrictionRevision: sealed.restrictionRevision,
-        terminalEvidenceId: closure.terminalEvidenceId, measured: {}, uncertain: closure.uncertain, now });
-      return outcome === 'reconciled' || outcome === 'already-reconciled' ? 'reconciled' : 'rejected';
+        terminalEvidenceId: closure.terminalEvidenceId, measured: {}, uncertain: closure.uncertain, now,
+        certifiedClosure: { operationSetFingerprint: closure.operationSetFingerprint, expiresAt: sealed.expiresAt,
+          recoveryReservationId: reserved.reservation.reservationId, recoveryHolderId: reserved.reservation.holderId } });
+      if (outcome !== 'reconciled' && outcome !== 'already-reconciled') return 'rejected';
+      // This uses the recovery reservation already accepted above. It never
+      // deletes a live/uncertain grant and its finite batch is safe to retry.
+      try { await new BudgetGrantClosureRepository(this.db).pruneExpired(sealed.tenantId,now); } catch { /* Later recovery retries cleanup. */ }
+      return 'reconciled';
     } catch { return 'pending'; }
   }
 }

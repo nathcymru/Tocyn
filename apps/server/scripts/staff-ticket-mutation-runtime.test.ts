@@ -439,7 +439,7 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
     assert.equal(inventory.conversation_events,5, 'The two unique keys and three deliberate query indexes are accounted for');
-    assert.ok(100*5+32*5<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+    assert.ok(100*5+50*9+4<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
 });

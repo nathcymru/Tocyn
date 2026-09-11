@@ -92,3 +92,89 @@ test('real Miniflare coordinator rejects uninitialized or replacement authority 
     await mf?.dispose();
   }
 });
+
+test('native coordinator bounds unexpired allocation and charge history and permits exact current-authority refreshes', async () => {
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-coordinator-do-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
+  const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-metadata-proof', modules: true,
+    script: bundled.outputFiles[0].text, durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDiagnosticDO' }, unsafeEphemeralDurableObjects: true }] }));
+  try {
+    const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    const coordinator = namespace.get(namespace.idFromName('server-derived-owner-aggregate')) as unknown as BudgetCoordinatorDO;
+    const snapshot = (cycle: number, checkedAt = NOW): TrustedBudgetCoordinatorAuthority => {
+      const original = authority();
+      const owner = { ...original.ownerPolicy, revision: 7 + cycle, budgets: original.ownerPolicy.budgets.map(budget => ({ ...budget,
+        allocationId: `window-allocation-${cycle}`, window: { kind: 'interval' as const, id: `window-${cycle}-€`, startsAt: checkedAt - 1, endsAt: checkedAt + 3_600_000 } })) };
+      return { ...original, ownerPolicy: owner, authorityRevision: 1 + cycle, authorityCheckedAt: checkedAt, authorityExpiresAt: checkedAt + 30_000,
+        tenantAllocations: original.tenantAllocations.map(tenant => ({ ...tenant, effectivePolicy: { ...owner,
+          tenantId: tenant.effectivePolicy.tenantId, restrictionRevision: 3, disabledFeatures: [] } })) };
+    };
+    const diagnosticCoordinator = coordinator as unknown as import('./budget-coordinator-do-runtime-entry').BudgetCoordinatorDiagnosticDO;
+    await coordinator.initializeFromTrustedAuthority(snapshot(0));
+    await diagnosticCoordinator.persistLegacyObjectForTest();
+    assert.equal((await diagnosticCoordinator.inspectStoredValueForTest()).kind, 'object');
+    let completed = 0;
+    let lastCommitted = '';
+    for (let cycle = 0; cycle < 256; cycle++) {
+      const current = snapshot(cycle);
+      if (cycle === 1) {
+        await diagnosticCoordinator.persistLegacyStringForTest();
+        assert.equal((await diagnosticCoordinator.inspectStoredValueForTest()).kind, 'string');
+        assert.equal((await coordinator.inspectForTrustedRuntime()).tenantStates[0].closedCharges[0].units, 1);
+      }
+      lastCommitted = JSON.stringify(await coordinator.inspectForTrustedRuntime().catch(() => null));
+      try { await coordinator.refreshFromTrustedAuthority(current); }
+      catch (error) {
+        assert.match(String(error), /metadata.*capacity exhausted/);
+        assert.equal(JSON.stringify(await coordinator.inspectForTrustedRuntime()), lastCommitted);
+        break;
+      }
+      await coordinator.refreshFromTrustedAuthority(current);
+      lastCommitted = JSON.stringify(await coordinator.inspectForTrustedRuntime());
+      let result;
+      try { result = await coordinator.reserveFromTrustedAuthority({ ...reserve('tenant-a', `holder-${cycle}`, `operation-${cycle}`, 1), expectedPolicyRevision: 7 + cycle }); }
+      catch (error) {
+        assert.match(String(error), /metadata.*capacity exhausted/);
+        assert.equal(JSON.stringify(await coordinator.inspectForTrustedRuntime()), lastCommitted);
+        break;
+      }
+      if (result.status === 'rejected') {
+        assert.equal(result.reason, 'capacity-exhausted');
+        assert.equal(JSON.stringify(await coordinator.inspectForTrustedRuntime()), lastCommitted);
+        break;
+      }
+      assert.equal(result.status, 'granted'); const grant = JSON.parse(JSON.stringify(result.reservation!));
+      if (cycle === 0) {
+        await diagnosticCoordinator.persistLegacyObjectForTest();
+        assert.equal((await diagnosticCoordinator.inspectStoredValueForTest()).kind, 'object');
+        assert.equal((await coordinator.inspectForTrustedRuntime()).tenantStates[0].grants[0].accounted.workerRequests, 1);
+      }
+      lastCommitted = JSON.stringify(await coordinator.inspectForTrustedRuntime());
+      const diagnostic = await (coordinator as unknown as import('./budget-coordinator-do-runtime-entry').BudgetCoordinatorDiagnosticDO).reconcileDiagnostic({ tenantId: 'tenant-a', reservationId: grant.reservationId, holderId: grant.holderId,
+        expectedPolicyId: 'owner-policy', expectedPolicyRevision: 7 + cycle, expectedRestrictionRevision: 3, terminalEvidenceId: `terminal-${cycle}`,
+        measured: { workerRequests: 1 }, uncertain: {}, now: NOW, certifiedClosure: { operationSetFingerprint: `set-${cycle}`, expiresAt: grant.expiresAt } });
+      if (diagnostic.error) {
+        assert.match(diagnostic.error, /metadata.*capacity exhausted/);
+        assert.equal(JSON.stringify(await coordinator.inspectForTrustedRuntime()), lastCommitted);
+        break;
+      }
+      assert.equal(diagnostic.outcome, 'reconciled');
+      completed++;
+    }
+    const state = await coordinator.inspectForTrustedRuntime();
+    assert.ok(completed > 2 && completed < 256, 'physical byte bound rejects before the 256-allocation ceiling');
+    assert.ok(state.tenantStates[0].allocations.length <= 256);
+    assert.equal(state.tenantStates[0].closedCharges.length, completed);
+    assert.equal(state.tenantStates[0].closedCharges.reduce((sum, row) => sum + row.units, 0), completed);
+    const stored = await diagnosticCoordinator.inspectStoredValueForTest();
+    assert.equal(stored.kind, 'utf8', 'historic object and string state is read and upgraded under the same key');
+    assert.ok(stored.bytes > 0 && stored.bytes <= 120 * 1_024, 'actual UTF-8 persisted value remains below the physical ceiling');
+    console.log('metadata-bound-evidence', { completed, storedBytes: stored.bytes });
+    await coordinator.refreshFromTrustedAuthority(snapshot(256, NOW + 3_600_001));
+    const next = await coordinator.inspectForTrustedRuntime();
+    assert.ok(next.tenantStates[0].allocations.length <= 2);
+    assert.equal(next.tenantStates[0].closedCharges.length, 0, 'only the expired interval rolls over');
+    assert.ok(next.tenantStates[0].grants.every(grant => !grant.compacted), 'only certified completion records retire after their retry horizon');
+    assert.equal(next.tenantStates[0].grants.length, state.tenantStates[0].grants.filter(grant => !grant.compacted).length, 'unknown work remains detailed and charged');
+    assert.ok(next.ownerAllocations.length <= 2);
+  } finally { await mf.dispose(); }
+});

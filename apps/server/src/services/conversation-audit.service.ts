@@ -1,5 +1,7 @@
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
 
+export type ConversationHistoryPage = Readonly<{ limit?: string; cursor?: string }>;
+
 export class ConversationHistoryError extends Error {
   constructor(public status: 400 | 403 | 404, message: string) { super(message); }
 }
@@ -8,7 +10,7 @@ export class ConversationHistoryError extends Error {
 export class ConversationAuditService {
   constructor(private deps: TenantRequestDeps) {}
 
-  async history(ticketId: string, audience: 'api' | 'staff' | 'customer', options: {limit?: string;cursor?: string}) {
+  async history(ticketId: string, audience: 'api' | 'staff' | 'customer', options: ConversationHistoryPage) {
     const limit = options.limit === undefined ? 50 : Number(options.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > 50 ||
       (options.cursor !== undefined && !/^[a-f0-9-]{36}$/i.test(options.cursor))) throw new ConversationHistoryError(400,'Invalid history page');

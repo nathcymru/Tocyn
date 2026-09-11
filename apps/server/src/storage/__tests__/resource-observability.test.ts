@@ -49,6 +49,55 @@ it('keeps durable admission ahead of R2 and emits no R2 event when admission rej
   await expect(storage.putAttachment('object','body')).rejects.toBe(error);
   expect(chargeUploadAttempt).toHaveBeenCalledTimes(1);expect(bucket.put).not.toHaveBeenCalled();expect(emit).not.toHaveBeenCalled();
 });
+it('shares pending upload preparation and consumes its charge only once across parallel puts', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const chargeUploadAttempt = vi.fn(() => pending);
+  const admission = { chargeUploadAttempt } as unknown as LocalBetaAdmissionRepository;
+  const bucket = { get: vi.fn(), put: vi.fn(async () => ({})), delete: vi.fn() };
+  const storage = new LocalBetaAttachmentStorage(scope, bucket, admission);
+  const preparation = storage.prepareUploadAttempt();
+  expect(storage.prepareUploadAttempt()).toBe(preparation);
+  expect(chargeUploadAttempt).toHaveBeenCalledTimes(1);
+  const first = storage.putAttachment('first', 'body');
+  const second = storage.putAttachment('second', 'body');
+  expect(chargeUploadAttempt).toHaveBeenCalledTimes(2);
+  expect(bucket.put).not.toHaveBeenCalled();
+  release();
+  await Promise.all([preparation, first, second]);
+  expect(bucket.put).toHaveBeenCalledTimes(2);
+  expect(chargeUploadAttempt).toHaveBeenCalledTimes(2);
+});
+it('retains a prepared charge after an uncertain put and charges a later direct put separately', async () => {
+  const chargeUploadAttempt = vi.fn(async () => {});
+  const admission = { chargeUploadAttempt } as unknown as LocalBetaAdmissionRepository;
+  const error = new Error('uncertain put');
+  const bucket = { get: vi.fn(), put: vi.fn().mockRejectedValueOnce(error).mockResolvedValueOnce({}), delete: vi.fn() };
+  const storage = new LocalBetaAttachmentStorage(scope, bucket, admission);
+  await storage.prepareUploadAttempt();
+  await expect(storage.putAttachment('object', 'body')).rejects.toBe(error);
+  expect(chargeUploadAttempt).toHaveBeenCalledTimes(1);
+  await storage.putAttachment('object', 'body');
+  expect(chargeUploadAttempt).toHaveBeenCalledTimes(2);
+  expect(bucket.delete).not.toHaveBeenCalled();
+});
+it('rejects failed preparation before any marker read or put and does not retry its failed charge', async () => {
+  const error = new Error('admission denied');
+  const chargeUploadAttempt = vi.fn(async () => { throw error; });
+  const admission = { chargeUploadAttempt } as unknown as LocalBetaAdmissionRepository;
+  const bucket = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
+  const storage = new LocalBetaAttachmentStorage(scope, bucket, admission);
+  const upload = async () => {
+    await storage.prepareUploadAttempt();
+    await storage.getAttachment('object');
+    await storage.putAttachment('object', 'body');
+  };
+  await expect(upload()).rejects.toBe(error);
+  await expect(storage.putAttachment('object', 'body')).rejects.toBe(error);
+  expect(chargeUploadAttempt).toHaveBeenCalledTimes(1);
+  expect(bucket.get).not.toHaveBeenCalled();
+  expect(bucket.put).not.toHaveBeenCalled();
+});
 it.each(['production','disabled','isolated'])('enforces composition gating and output limits in %s mode', async mode => {
   const log=vi.spyOn(console,'log').mockImplementation(()=>{});
   const bucket={get:vi.fn(async()=>null),put:vi.fn(),delete:vi.fn()};

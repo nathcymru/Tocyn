@@ -31,6 +31,7 @@ import { StaffTicketMutationService } from '../services/staff-ticket-mutation.se
 import { OperatorActivityService } from '../services/operator-activity.service';
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
 import { admitConfiguredStaffTicketMutation, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
+import { admitDashboardAttachment } from '../budgets/storage-admission.service';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -157,6 +158,29 @@ async function readSupportStateMutation(c: any): Promise<{ body: unknown } | { r
 
 function displayUser(user: {id:string;full_name?:string|null;email:string;role:string}|null) {
   return user ? {id:user.id,full_name:user.full_name??null,email:user.email,role:user.role} : null;
+}
+
+function boundedIdempotencyKey(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  return /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : null;
+}
+
+async function storageDigest(parts: readonly string[]): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(parts)));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function storageByteDigest(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function attachmentBudgetFailure(c: any, reason: 'exhausted' | 'conflict' | 'unavailable') {
+  return reason === 'conflict'
+    ? c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409)
+    : reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
 }
 
 const dashboard = new Hono<{ Bindings: Env; Variables: AppVariables }>();
@@ -973,6 +997,12 @@ dashboard.get('/attachments/:id/download', async (c) => {
   const attachment = await d.repositories.attachments.getAttachmentWithMeta(attachmentId);
   if (!attachment) return c.json({ error: 'Not found' }, 404);
 
+  const payload = c.get('jwtPayload') as JWTPayload;
+  const digest = await storageDigest(['dashboard-attachment-download-v1', d.scope.tenantId, payload.sub, attachment.id, crypto.randomUUID()]);
+  const admission = await admitDashboardAttachment({ env: c.env, deps: d, payload, operation: 'dashboard.attachment.download',
+    operationId: `storage-download:${digest}`, operationFingerprint: `storage-download:${digest}`, now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return attachmentBudgetFailure(c, admission.reason!);
+
   const response = await d.attachmentStorage.getAttachment(attachment.r2_key);
   if (!response) return c.json({ error: 'File not found in storage' }, 404);
 
@@ -1019,13 +1049,74 @@ dashboard.post('/attachments/upload', async (c) => {
   if(c.env.LOCAL_BETA_ENABLED==='true' && (!file.name.trim() || file.name.length>255))return c.json({error:'Invalid attachment filename'},400);
   const fileExt = file.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '');
   const extPart = fileExt ? `.${fileExt}` : '';
-  const logicalKey = `agent-attachments/${payload.sub}/${crypto.randomUUID()}${extPart}`;
+  const requestedIdempotency = c.req.header('idempotency-key');
+  const idempotencyKey = boundedIdempotencyKey(requestedIdempotency);
+  if (requestedIdempotency !== undefined && !idempotencyKey) return c.json({ error: 'Invalid Idempotency-Key' }, 400);
+  const uploadSeed = idempotencyKey ?? crypto.randomUUID();
+  const digest = await storageDigest(['dashboard-attachment-upload-v1', d.scope.tenantId, payload.sub, uploadSeed]);
+  // FormData has already bounded the file to the endpoint's ten MiB limit.
+  // Hash its exact bytes before admission so an idempotency key cannot replay a
+  // same-size replacement. The original stream remains usable for R2 below.
+  const fileBytes = await file.arrayBuffer();
+  const byteDigest = await storageByteDigest(fileBytes);
+  const fingerprint = await storageDigest(['dashboard-attachment-upload-content-v2', file.name, file.type, String(file.size), byteDigest]);
+  // An idempotent key maps to one immutable logical object. Legacy unkeyed
+  // uploads retain their extension-bearing key shape, and existing stored
+  // references remain readable through the unchanged tenant storage adapter.
+  const logicalKey = idempotencyKey
+    ? `agent-attachments/${payload.sub}/${digest}`
+    : `agent-attachments/${payload.sub}/${digest}${extPart}`;
+  const admission = await admitDashboardAttachment({ env: c.env, deps: d, payload, operation: 'dashboard.attachment.upload',
+    operationId: `storage-upload:${digest}`, operationFingerprint: `storage-upload:${fingerprint}`, bytes: file.size,
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return attachmentBudgetFailure(c, admission.reason!);
 
   try {
-    await d.attachmentStorage.putAttachment(logicalKey, c.env.LOCAL_BETA_ENABLED==='true' ? await file.arrayBuffer() : file.stream(), {
-      httpMetadata: { contentType: file.type || 'application/octet-stream' },
-    });
-    return c.json({ key: logicalKey });
+    // A retry with an Idempotency-Key first verifies its own bounded marker.
+    // We never delete after an ambiguous write: provider acceptance remains
+    // charged until a later lifecycle operation owns cleanup evidence.
+    await d.attachmentStorage.prepareUploadAttempt();
+    const existing = idempotencyKey ? await d.attachmentStorage.getAttachment(logicalKey) : null;
+    if (existing) {
+      try {
+        if ((existing.customMetadata as Record<string, string> | undefined)?.tocynUploadFingerprint !== fingerprint) {
+          return c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409);
+        }
+      } finally { await existing.body?.cancel(); }
+      return c.json({ key: logicalKey });
+    }
+    try {
+      const put = await d.attachmentStorage.putAttachment(logicalKey, c.env.LOCAL_BETA_ENABLED==='true' ? fileBytes : file.stream(), {
+        httpMetadata: { contentType: file.type || 'application/octet-stream' },
+        customMetadata: { tocynUploadFingerprint: fingerprint },
+        onlyIf: { etagDoesNotMatch: '*' },
+      });
+      // R2 may report an unmet conditional write as `null` rather than
+      // throwing. Treat it exactly like the catch path below; returning a key
+      // before checking its marker would permit a conflicting overwrite race.
+      if (put.res !== null) return c.json({ key: logicalKey });
+    } catch (error) {
+      if (error instanceof BetaAdmissionError) throw error;
+      // A conditional collision can be the original write winning while this
+      // request lost its response. One bounded second metadata read proves a
+      // same-fingerprint recovery; every other ambiguous error stays charged.
+      const winner = await d.attachmentStorage.getAttachment(logicalKey);
+      if (winner) {
+        try {
+          if ((winner.customMetadata as Record<string, string> | undefined)?.tocynUploadFingerprint === fingerprint) return c.json({ key: logicalKey });
+        } finally { await winner.body?.cancel(); }
+        return c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409);
+      }
+      throw error;
+    }
+    const winner = await d.attachmentStorage.getAttachment(logicalKey);
+    if (winner) {
+      try {
+        if ((winner.customMetadata as Record<string, string> | undefined)?.tocynUploadFingerprint === fingerprint) return c.json({ key: logicalKey });
+      } finally { await winner.body?.cancel(); }
+      return c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409);
+    }
+    return c.json({ error: 'Failed to upload file to storage' }, 500);
   } catch (error: any) {
     if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
     if (c.env.LOCAL_BETA_ENABLED!=='true') console.error('Error uploading file:', error);
