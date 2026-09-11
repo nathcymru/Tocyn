@@ -19,7 +19,9 @@ export const KNOWLEDGE_SOURCE_MAX_BYTES = 10 * 1024 * 1024;
 // 24 writes for first-document upload, 23 for article update and 21 for QA
 // staging; there is no
 // uncharged external retry.
-const KNOWLEDGE_SOURCE_D1_WRITES = Object.freeze({ document: 24, article: 23, qa: 21 });
+// Migration 0061 adds the document/source-kind index and provider-lease state.
+// Native whole-attempt metadata is document 26, article 25 and QA 23.
+const KNOWLEDGE_SOURCE_D1_WRITES = Object.freeze({ document: 26, article: 25, qa: 23 });
 
 const sourceEnvelopeBase = (d1RowsWritten: number): Readonly<ResourceAmounts> => Object.freeze({
   workerRequests: 1, d1RowsRead: 2_560, d1RowsWritten,

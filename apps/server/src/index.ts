@@ -2,6 +2,7 @@ import { VectorizeWorkflow } from './workflows/vectorize.workflow';
 import { Env } from './bindings';
 import { EmailHandler } from './handlers/email.handler';
 import { runScheduledRetention } from './auth/automation-composition';
+import { runScheduledKnowledgeDeletion } from './auth/knowledge-delete-composition';
 import { NotificationDO } from './durable_objects/NotificationDO';
 import { BudgetCoordinatorDO } from './durable_objects/BudgetCoordinatorDO';
 import { BudgetGrantHolderDO } from './durable_objects/BudgetGrantHolderDO';
@@ -26,6 +27,8 @@ export default {
       return;
     }
     const result = await runScheduledRetention(env);
+    const knowledgeDeletion=await runScheduledKnowledgeDeletion(env);
     console.log(`Retention run complete: ${result.deleted_tickets} tickets deleted, ${result.deleted_attachments} attachments deleted.`);
+    console.log(`Knowledge deletion run complete: ${knowledgeDeletion.completed}/${knowledgeDeletion.attempted} bounded jobs completed.`);
   },
 };
