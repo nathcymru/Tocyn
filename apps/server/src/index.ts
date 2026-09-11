@@ -3,9 +3,11 @@ import { Env } from './bindings';
 import { EmailHandler } from './handlers/email.handler';
 import { runScheduledRetention } from './auth/automation-composition';
 import { NotificationDO } from './durable_objects/NotificationDO';
+import { BudgetCoordinatorDO } from './durable_objects/BudgetCoordinatorDO';
+import { BudgetGrantHolderDO } from './durable_objects/BudgetGrantHolderDO';
 import { app } from './application';
 
-export { NotificationDO, VectorizeWorkflow };
+export { BudgetCoordinatorDO, BudgetGrantHolderDO, NotificationDO, VectorizeWorkflow };
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

@@ -6,6 +6,10 @@ export interface Env {
   DB: D1Database;
   ATTACHMENTS_BUCKET: R2Bucket;
   NOTIFICATION_DO: DurableObjectNamespace;
+  /** Internal budget authority only; no client-facing path is wired in this slice. */
+  BUDGET_COORDINATOR_DO: DurableObjectNamespace;
+  /** Server-derived durable warm-grant holder; never directly addressed by a client. */
+  BUDGET_GRANT_HOLDER_DO: DurableObjectNamespace;
   VECTOR_INDEX: VectorizeIndex;
   AI: any; // Using any for simplicity as Vectorize types are often experimental
   RESEND_API_KEY: string;

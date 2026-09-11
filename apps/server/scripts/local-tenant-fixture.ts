@@ -163,6 +163,8 @@ function localEnv(db: D1Database, bucket: R2Bucket): Env {
     DB: db,
     ATTACHMENTS_BUCKET: bucket,
     NOTIFICATION_DO: {} as DurableObjectNamespace,
+    BUDGET_COORDINATOR_DO: {} as DurableObjectNamespace,
+    BUDGET_GRANT_HOLDER_DO: {} as DurableObjectNamespace,
     VECTORIZE_WORKFLOW: undefined,
     VECTOR_INDEX: {} as VectorizeIndex,
     AI: undefined,

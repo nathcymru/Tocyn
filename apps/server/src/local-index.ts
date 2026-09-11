@@ -4,6 +4,8 @@ import { Env } from './bindings';
 import { LocalAuthCaptureTransport } from './services/email/transport';
 
 export { NotificationDO } from './durable_objects/NotificationDO';
+export { BudgetCoordinatorDO } from './durable_objects/BudgetCoordinatorDO';
+export { BudgetGrantHolderDO } from './durable_objects/BudgetGrantHolderDO';
 
 const defaultLocalOrigins = new Set(['http://localhost:8787', 'http://127.0.0.1:8787']);
 
