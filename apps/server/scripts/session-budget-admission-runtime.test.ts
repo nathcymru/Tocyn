@@ -200,8 +200,16 @@ test('session warm admission retires an exact same-revision source edit without 
     assert.equal((await f.admit('changed')).reason,'stale-policy');
     assert.equal((await f.admit('still-current','tenant-b')).status,'spent');
     assert.deepEqual(f.calls,calls,'current session checks and snapshot comparison add no warm DO calls');
+    assert.equal((await f.admit('changed')).status,'spent','valid current source can allocate a newly charged holder');
+    assert.deepEqual(f.calls,{refresh:calls.refresh+1,reserve:calls.reserve+1});
     await f.db.prepare("UPDATE budget_tenant_allocations SET restriction_json=? WHERE tenant_id='tenant-a'").bind(original).run();
-    assert.equal((await f.admit('changed')).reason,'stale-policy','restoring source does not reset a retired holder');
-    assert.deepEqual((await f.coordinator.inspectForTrustedRuntime()).tenantStates,before.tenantStates,'no centrally held grant was refunded or replaced');
+    assert.equal((await f.admit('restored')).reason,'stale-policy');
+    assert.equal((await f.admit('restored')).status,'spent','restored source also needs a new paid holder');
+    const after=(await f.coordinator.inspectForTrustedRuntime()).tenantStates;
+    const prior=before.tenantStates.find(state=>state.tenantId==='tenant-a')!.grants[0];
+    const current=after.find(state=>state.tenantId==='tenant-a')!.grants;
+    assert.equal(current.length,3);assert.equal(new Set(current.map(grant=>grant.holderId)).size,3);
+    assert.deepEqual(current.find(grant=>grant.holderId===prior.holderId)?.accounted,prior.accounted);
+    assert.deepEqual(after.find(state=>state.tenantId==='tenant-b'),before.tenantStates.find(state=>state.tenantId==='tenant-b'));
   }finally{await f.mf.dispose();}
 });
