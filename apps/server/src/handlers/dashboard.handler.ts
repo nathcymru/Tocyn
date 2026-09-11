@@ -22,11 +22,14 @@ import { SupportStateError } from '../repositories/support-state.repository';
 import { SlaClockError } from '../repositories/sla-clock.repository';
 import { SlaClockService } from '../services/sla-clock.service';
 import type { SlaPolicyInput } from '../types/sla';
-import { MutationInputError, mutationInputErrorBody, readMutationJson } from './mutation-request';
+import { MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { requestBounds } from '../middleware/request-bounds';
 import workspace from "./operator-workspace.handler";
 import { replyCapability } from '../services/reply-capability';
 import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminatick/shared';
+import { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
+import { TicketMutationError } from '../services/ticket-mutation-replay.service';
+import { admitConfiguredStaffTicketMutation, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -47,6 +50,41 @@ const createTicketSchema = z.object({
   assigned_to: z.string().uuid().optional().nullable(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 });
+
+const staffCreateTicketSchema = createTicketSchema.extend({
+  subject: z.string().min(1).max(300),
+  body: z.string().min(1).max(16000).refine(value => new TextEncoder().encode(value).byteLength <= 16000),
+  customer_email: z.string().email().max(254),
+  body_format: z.enum(ARTICLE_BODY_FORMATS).default(DEFAULT_ARTICLE_BODY_FORMAT),
+}).strict();
+const staffReplySchema = z.object({
+  body: z.string().min(1).max(16000).refine(value => new TextEncoder().encode(value).byteLength <= 16000),
+  body_format: z.enum(ARTICLE_BODY_FORMATS).default(DEFAULT_ARTICLE_BODY_FORMAT),
+  is_internal: z.boolean().optional(),
+  attachments: z.array(z.unknown()).max(10).optional(),
+}).strict();
+
+function staffMutationService(c: any, d: TenantRequestDeps, operation: 'dashboard.ticket.create' | 'dashboard.ticket.reply') {
+  const agent = c.get('jwtPayload') as JWTPayload;
+  const sessionVersion = agent.session_version;
+  if ((agent.role !== 'admin' && agent.role !== 'agent') || typeof sessionVersion !== 'number' || !Number.isSafeInteger(sessionVersion) || !Number.isSafeInteger(agent.exp)) {
+    throw new TicketMutationError(403, 'staff_mutation_denied', 'Ticket mutation is not authorized');
+  }
+  return new StaffTicketMutationService(d.database, d.scope, {
+    tenantId: d.scope.tenantId, actorId: agent.sub, role: agent.role, sessionVersion,
+    expiresAt: agent.exp, mfaVerified: agent.mfa_verified === true,
+  }, d.ticketMutations, {
+    service: sessionTicketBudgetAdmission, repository: d.repositories.budgetAuthority,
+    namespace: c.env.BUDGET_COORDINATOR_DO, business: STAFF_TICKET_ENVELOPES[operation],
+    now: () => c.env.localNow?.() ?? Date.now(),
+  });
+}
+
+function staffMutationFailure(c: any, error: unknown): Response | null {
+  if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
+  if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
+  return null;
+}
 
 const createTicketFieldSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -406,7 +444,43 @@ dashboard.delete("/api-keys/:id", permissionGuard("api_keys"), async (c) => {
  * POST /api/tickets
  * Create a new ticket from the dashboard.
  */
-dashboard.post("/tickets", async (c) => {
+dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
+  const admissionMode = staffTicketAdmissionMode(c.env);
+  if (admissionMode === 'invalid') return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  if (admissionMode === 'enabled') {
+    const d = c.get('tenantDeps') as TenantRequestDeps;
+    try {
+      const body = await readMutationJson(c);
+      const parsed = staffCreateTicketSchema.safeParse(body);
+      if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors }, 400);
+      const mutation = staffMutationService(c, d, 'dashboard.ticket.create');
+      const prepared = await mutation.prepareStaffMutation({ operation: 'dashboard.ticket.create', data: {
+        subject: parsed.data.subject, customer_email: parsed.data.customer_email, body: parsed.data.body,
+        bodyFormat: parsed.data.body_format, priority: parsed.data.priority, status: parsed.data.status,
+        group_id: parsed.data.group_id, assigned_to: parsed.data.assigned_to, custom_fields: parsed.data.custom_fields,
+      } }, readIdempotencyKey(c));
+      if (prepared.replay) {
+        c.header('Idempotency-Replayed', 'true');
+        return c.json(prepared.replay.body, prepared.replay.status);
+      }
+      const rejection = await admitConfiguredStaffTicketMutation(c, 'dashboard.ticket.create', mutation, prepared);
+      if (rejection) return rejection;
+      const outcome = await mutation.commit(prepared);
+      // A raced receipt winner is already durable work. Only the canonical
+      // winner performs the existing best-effort delivery side effects.
+      if (!outcome.replayed) {
+        await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketCreated(outcome.ticket);
+        try { await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(outcome.ticket,outcome.article,outcome.attachments); }
+        catch { console.error('Initial ticket email delivery failed'); }
+      }
+      if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
+      return c.json(outcome.body, outcome.status);
+    } catch (error) {
+      const failure = staffMutationFailure(c,error); if (failure) return failure;
+      if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard budgeted ticket create failed');
+      return c.json({ error: 'Failed to create ticket' }, 500);
+    }
+  }
   const body = await c.req.json();
   const schema = c.env.LOCAL_BETA_ENABLED === 'true' ? createTicketSchema.extend({
     subject: z.string().min(1).max(300),
@@ -568,6 +642,51 @@ dashboard.get('/tickets/:id/reply-capability', async (c) => {
 dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10, 60000), async (c) => {
   const ticketId = c.req.param("id");
   if (!ticketId) return c.json({ error: 'Missing ID' }, 400);
+  const admissionMode = staffTicketAdmissionMode(c.env);
+  if (admissionMode === 'invalid') return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  if (admissionMode === 'enabled') {
+    const d = c.get('tenantDeps') as TenantRequestDeps;
+    try {
+      const payload = await readMutationJson(c);
+      const parsed = staffReplySchema.safeParse(payload);
+      if (!parsed.success) return c.json({ error: 'Invalid bounded reply' }, 400);
+      const requested = (parsed.data.attachments ?? []).map(item => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+        const raw = item as Record<string, unknown>;
+        return { storageKey: raw.storageKey ?? raw.key, filename: raw.filename };
+      });
+      const mutation = staffMutationService(c,d,'dashboard.ticket.reply');
+      const prepared = await mutation.prepareStaffMutation({ operation: 'dashboard.ticket.reply', ticketId, data: {
+        body: parsed.data.body, bodyFormat: parsed.data.body_format, is_internal: parsed.data.is_internal,
+        attachments: requested as any,
+      } }, readIdempotencyKey(c));
+      if (prepared.replay) {
+        c.header('Idempotency-Replayed', 'true');
+        return c.json(prepared.replay.body, prepared.replay.status);
+      }
+      const rejection = await admitConfiguredStaffTicketMutation(c, 'dashboard.ticket.reply', mutation, prepared);
+      if (rejection) return rejection;
+      let verified;
+      try { verified = await validateAttachmentReferences(d, `agent-attachments/${(c.get('jwtPayload') as JWTPayload).sub}/`, parsed.data.attachments); }
+      catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
+      const outcome = await mutation.commit(prepared,verified);
+      if (!outcome.replayed) {
+        if (!outcome.article.is_internal) {
+          // The canonical commit returned these exact attachment rows; do not
+          // re-list metadata after admission before the bounded stream path.
+          try { await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(outcome.ticket,outcome.article,outcome.attachments); }
+          catch { console.error('Ticket reply email delivery failed'); }
+        }
+        await new BroadcastService(c.env,d.scope,d.emitResourceOperation).broadcast('article.created',{ticket_id:ticketId,article_id:outcome.article.id});
+      }
+      if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
+      return c.json(outcome.body, outcome.status);
+    } catch (error) {
+      const failure = staffMutationFailure(c,error); if (failure) return failure;
+      if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard budgeted ticket reply failed');
+      return c.json({ error: 'Failed to add article' }, 500);
+    }
+  }
   const payloadBody = await c.req.json();
   const boundedReply = z.object({
     body: z.string().min(1).max(16000).refine(value => new TextEncoder().encode(value).length <= 16000),

@@ -1,6 +1,6 @@
 import { apiBudgetMutationStatement, type ApiMutationCommit } from './budget-commit-fence';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
-import { staffMutationStatements, staffMutationSnapshot, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
+import { staffMutationStatements, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
@@ -176,13 +176,18 @@ export class TicketMutationReplayRepository {
     }));
     const version = candidate.audit ? 2 : 1;
     const attachmentSnapshots = candidate.attachments.map(() => `json((SELECT ${attachmentJson} FROM attachments x WHERE x.tenant_id = ? AND x.id = ?))`);
+    // Staff receipts record the format selected from the canonical article row,
+    // after the write has passed all transaction fences. This keeps replay tied
+    // to persisted content rather than to a request-side default.
+    const staffFormatSnapshot = staff ? `,'staffVersion',1,'staffBodyFormat',
+      (SELECT a.body_format FROM articles a WHERE a.tenant_id = ? AND a.id = ?)` : '';
     const rawSnapshot = `json_object('version',${version},
       'ticket',json((SELECT ${ticketJson} FROM tickets t WHERE t.tenant_id = ? AND t.id = ?)),
-      'article',json((SELECT ${articleJson} FROM articles a WHERE a.tenant_id = ? AND a.id = ?)),
+      'article',json((SELECT ${articleJson} FROM articles a WHERE a.tenant_id = ? AND a.id = ?))${staffFormatSnapshot},
       'attachments',json_array(${attachmentSnapshots.join(',')})${eventId ? ", 'audit',json_array(json_object('eventId',?,'articleId',?))" : ''})`;
     const snapshotValues = [this.scope.tenantId, candidate.ticketId, this.scope.tenantId, candidate.articleId ?? null,
-      ...candidate.attachments.flatMap(a => [this.scope.tenantId, a.id]), ...(eventId ? [eventId,candidate.articleId ?? null] : [])];
-    const snapshot = staff ? staffMutationSnapshot(rawSnapshot) : rawSnapshot;
+      ...(staff ? [this.scope.tenantId, candidate.articleId ?? null] : []), ...candidate.attachments.flatMap(a => [this.scope.tenantId, a.id]), ...(eventId ? [eventId,candidate.articleId ?? null] : [])];
+    const snapshot = rawSnapshot;
     if (staff?.namespace) {
       statements.push(staffMutationReceiptStatement(this.db,this.scope,staff.namespace,candidate.ticketId,candidate.articleId!,snapshot,snapshotValues));
     } else if (ns) {

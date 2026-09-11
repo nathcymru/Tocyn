@@ -2,10 +2,11 @@ import type { Article, Attachment, Ticket } from './index';
 import type { RequestedMutationAttachment } from './ticket-mutation-replay';
 import type { SessionBudgetCredential, SessionBudgetRequirements } from '../repositories/session-budget-authority.repository';
 import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
+import type { ArticleBodyFormat } from '@luminatick/shared';
 
 export type StaffMutationOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply';
-/** #68 owns persistence/rendering. Only plain is enabled before that integration. */
-export type StaffArticleFormat = 'plain' | 'markdown-v1';
+/** Stored article formats share the composer contract. */
+export type StaffArticleFormat = ArticleBodyFormat;
 export type StaffMutationInput =
   | { operation: 'dashboard.ticket.create'; data: { subject: string; customer_email: string; body: string;
     bodyFormat?: StaffArticleFormat; status?: Ticket['status']; priority?: Ticket['priority'];
