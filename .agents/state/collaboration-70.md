@@ -12,6 +12,14 @@ The manual fixture uses a 30-minute budget window established before admission, 
 
 Remaining #70 work: durable authorized mentions through #133, interruption/motion preference integration through #132, remaining private colleague workflow and final combined accessibility/tenant/resource acceptance. Typing resource estimates do not prove full #64 active admission. Keep #70 and #140 open. No Copilot review or remote/provider action.
 
+## Durable internal mention slice — local candidate
+
+`codex/70-durable-mentions` composes a selected, normalized set of at most 16 UUID staff recipients only into an internal dashboard reply. The versioned reply capability advertises `internalMentions: { version: 1, protocol: 'internal-activity-v1', maxRecipients: 16 }` only on the current combined staff route, which accepts and atomically enforces the field. Legacy/off and API-only routes neither advertise the capability nor accept the request field. The dashboard keeps selected recipients through a rejected commit or retry, includes them in the exact semantic idempotency intent, and clears them only after the winning note is confirmed; it never parses or stores note body text in activity facts.
+
+The staff service builds #133 `OperatorActivityRepository.prepareTrustedAppend` statements with only the winning canonical article ID. It appends them before the staff receipt so a duplicate/lost-response winner replays without new activity, and an activity trigger checks current recipient tenant/ticket/group access in the same D1 batch. Public payloads are rejected. A revoked or cross-tenant recipient yields retained-draft `409 mention_recipient_unavailable` with no article, audit, SLA, receipt, or activity partial write.
+
+Focused Node 22.19 synthetic Miniflare proof covers a private winner, public rejection, tenant denial, final-batch group revocation, receipt replay, changed-recipient idempotency conflict, and a full 16-recipient projection. The observed base versus full batch was 10/27/25 versus 26/123/121 statements/rows-read/rows-written: 16 additional prepared activity statements and 96 additional observed D1 writes; the full batch remains within the existing 2,570-read and 128-write staff reservation. This is a local D1 observation, not provider billing, CPU, bytes, or whole #70 resource evidence. Focused dashboard capability/workflow tests and a production dashboard build passed under Node 22.19 after an ignored worktree-local dependency alias overlay. Full #70 remains open.
+
 ## Historical development checkpoints — superseded by current candidate above
 
 # #70 collaboration delivery
