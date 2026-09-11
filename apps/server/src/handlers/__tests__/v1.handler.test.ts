@@ -287,7 +287,10 @@ describe("v1 Handler Integration Tests", () => {
   describe("PATCH /tickets/:id", () => {
     it("should update ticket properties", async () => {
       // D1 returns one result for each submitted batch statement.
-      mockDB.batch.mockImplementation(async (statements: unknown[]) => statements.map((_, index) => ({ results: index >= statements.length - 2 ? [{ id: 't-123' }] : [] })));
+      mockDB.batch.mockImplementation(async (statements: unknown[]) => statements.map((_, index) => ({ results: index === statements.length - 1 ? [{ response_snapshot: JSON.stringify({
+        version: 3, ticket: { id: 't-123', subject: 'Test Ticket', customer_email: 'test@example.com', ticket_no: 1,
+          status: 'closed', priority: 'normal', source: 'api', created_at: '2026-01-01' },
+      }) }] : index >= statements.length - 2 ? [{ id: 't-123' }] : [] })));
       const res = await request("/tickets/t-123", {
         method: "PATCH",
         headers: {
