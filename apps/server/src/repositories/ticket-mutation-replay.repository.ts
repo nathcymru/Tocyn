@@ -137,7 +137,7 @@ export class TicketMutationReplayRepository {
         || staff.responsibleOwner.ownerId !== (data.assigned_to ?? null)))
       || (expectedAssignedTo === undefined && staff.responsibleOwner !== undefined)) throw new Error('Invalid staff update mutation');
     const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff)];
-    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo);
+    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo,staff.responsibleOwner?.capacityOverride === true);
     const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
     statements.push(...audit.statements);
     if (expectedAssignedTo !== undefined) {

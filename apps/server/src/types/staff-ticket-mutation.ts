@@ -20,6 +20,8 @@ export type StaffMutationInput =
     responsibleOwnerAssignment?: true;
     /** The owner observed by the dashboard before requesting the transition. */
     expectedAssignedTo?: string | null;
+    /** An administrator's explicit, audited exception to a hard work ceiling. */
+    capacityOverride?: true;
   } };
 export type StaffMutationNamespace = Readonly<{ principalId: string; operation: StaffMutationOperation; keyHash: string; payloadHash: string }>;
 export type StaffMutationOutcome = Readonly<{ status: 200 | 201; body: Record<string, unknown>; ticket: Ticket; article: Article;
@@ -32,4 +34,4 @@ export type StaffMutationReceipt = { payload_hash: string; fingerprint_version: 
 export type StaffMutationCommit = Readonly<{ credential: SessionBudgetCredential; requirements: SessionBudgetRequirements;
   authority: BudgetCommitAuthority; namespace?: StaffMutationNamespace;
   /** Rechecked in the same D1 batch as an explicit responsible-owner change. */
-  responsibleOwner?: Readonly<{ ticketId: string; ownerId: string | null }> }>;
+  responsibleOwner?: Readonly<{ ticketId: string; ownerId: string | null; capacityOverride: boolean }> }>;
