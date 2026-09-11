@@ -303,7 +303,7 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
     });
     const response = {
       ticket, articles,
-      canonical: await ticketService.projectAuditedConversation(ticket, page.articles),
+      canonical: await ticketService.projectAuditedConversation(ticket, page.articles, { boundedPage: true }),
       pagination: page.pagination,
     };
     assertConversationResponseBounds(response);

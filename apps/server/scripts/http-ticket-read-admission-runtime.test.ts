@@ -108,3 +108,29 @@ test('current group, owner and exhausted authority reject before detail/history 
     assert.equal(control.detailArticleMetadataQueries, 0); assert.equal(control.historyEventQueries, 0);
   } finally { await f.mf.dispose(); }
 });
+
+
+test('portal detail bounds canonical references on long histories outside local-beta mode', async () => {
+  const f = await fixture();
+  try {
+    for (let offset = 0; offset < 600; offset += 25) {
+      await f.db.batch(Array.from({length:25}, (_, item) => {
+        const index = offset + item;
+        return f.db.prepare("INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,is_internal,created_at) VALUES ('read-tenant',?,'read-ticket','customer','Public',0,?)")
+          .bind(`page-${index}`, new Date(Date.UTC(2026, 0, 1) + index * 1_000).toISOString());
+      }));
+      await f.db.batch(Array.from({length:25}, (_, item) => {
+        const index = offset + item;
+        return f.db.prepare("INSERT INTO conversation_events (tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts) VALUES ('read-tenant',?,'read-ticket',?,?,'message.reply','customer','reader-customer','authenticated-customer','dashboard','public','{}')")
+          .bind(`20000000-0000-4000-8000-${String(index).padStart(12,'0')}`, `page-${index}`, index + 3);
+      }));
+    }
+    const response = await request(f.mf, '/api/v1/customer/tickets/read-ticket', await customerToken());
+    assert.equal(response.status,200,await response.clone().text());
+    const body = await response.json() as {articles: unknown[]; pagination:{has_more:boolean}; canonical:{messages:unknown[]}};
+    assert.equal(body.articles.length,50); assert.equal(body.canonical.messages.length,50); assert.equal(body.pagination.has_more,true);
+    const measured = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {detailReferenceRowsRead:number};
+    assert.ok(measured.detailReferenceRowsRead > 0, 'reference query was measured');
+    assert.ok(measured.detailReferenceRowsRead <= 204, `reference lookup stays page-bound: ${measured.detailReferenceRowsRead}`);
+  } finally { await f.mf.dispose(); }
+});
