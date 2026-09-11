@@ -7,6 +7,7 @@ import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { splitSql } from './split-sql';
 import { dashboardAttachmentEnvelope } from '../src/budgets/storage-admission.service';
+import { customerAttachmentEnvelope } from '../src/budgets/customer-storage-admission.service';
 
 const root = resolve(import.meta.dirname, '..');
 const now = Date.now();
@@ -33,6 +34,13 @@ function ownerPolicy() {
 async function staffToken(tenantId: string): Promise<string> {
   return new SignJWT({ sub: 'shared-staff', role: 'agent', tenant_id: tenantId, session_version: 1, mfa_verified: true })
     .setProtectedHeader({ alg: 'HS256' }).setAudience('app').setIssuedAt().setExpirationTime('1h')
+    .sign(new TextEncoder().encode(jwtSecret));
+}
+
+async function customerToken(tenantId: string): Promise<string> {
+  return new SignJWT({ sub: 'shared-customer', role: 'customer', tenant_id: tenantId, session_version: 1,
+    email: `customer-${tenantId}@example.test` })
+    .setProtectedHeader({ alg: 'HS256' }).setAudience('widget').setIssuedAt().setExpirationTime('1h')
     .sign(new TextEncoder().encode(jwtSecret));
 }
 
@@ -63,6 +71,8 @@ async function fixture() {
       await db.batch([
         db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'shared-staff',?,'agent',1,1)")
           .bind(tenantId, `staff-${tenantId}@example.test`),
+        db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'shared-customer',?,'customer',1,0)")
+          .bind(tenantId, `customer-${tenantId}@example.test`),
         db.prepare(`INSERT INTO budget_tenant_allocations
           (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
           VALUES ('storage-deployment',?,'storage-policy',1,1,?,?,'active')`).bind(tenantId, `storage-${tenantId}`, JSON.stringify(restriction)),
@@ -78,6 +88,15 @@ async function upload(mf: Miniflare, token: string, key: string, body = 'synthet
   // Constructing a Request supplies the multipart boundary; dispatching a raw
   // FormData body does not on Miniflare's lower-level fetch helper.
   const request = new Request('http://runtime.test/api/attachments/upload', {
+    method: 'POST', headers: { authorization: `Bearer ${token}`, 'idempotency-key': key }, body: form,
+  });
+  return mf.dispatchFetch(request.url, { method: request.method, headers: Object.fromEntries(request.headers), body: await request.arrayBuffer() });
+}
+
+async function customerUpload(mf: Miniflare, token: string, key: string, body = 'synthetic attachment', filename = 'synthetic.txt', contentType = 'text/plain') {
+  const form = new FormData();
+  form.append('file', new Blob([body], { type: contentType }), filename);
+  const request = new Request('http://runtime.test/api/v1/customer/attachments/upload', {
     method: 'POST', headers: { authorization: `Bearer ${token}`, 'idempotency-key': key }, body: form,
   });
   return mf.dispatchFetch(request.url, { method: request.method, headers: Object.fromEntries(request.headers), body: await request.arrayBuffer() });
@@ -170,5 +189,58 @@ test('storage pressure rejects before an R2 object can be created', async () => 
     // No key is returned on refusal. The bucket contains no data because this
     // fixture performs no other R2 write; admission precedes every storage call.
     assert.equal(await bucket.list().then(result => result.objects.length), 0);
+  } finally { await f.mf.dispose(); }
+});
+
+test('customer storage is current-session scoped, content-bound and prepaid before native R2', async () => {
+  const f = await fixture();
+  try {
+    const tokenA = await customerToken('storage-a');
+    const tokenB = await customerToken('storage-b');
+    const first = await customerUpload(f.mf, tokenA, 'same-upload', 'aaaaaaaaaaaaaaaaaaaa');
+    assert.equal(first.status, 200); const firstBody = await first.json() as { key: string };
+    assert.match(firstBody.key, /^customer-attachments\/shared-customer\/[a-f0-9]{64}$/);
+    const replay = await customerUpload(f.mf, tokenA, 'same-upload', 'aaaaaaaaaaaaaaaaaaaa');
+    assert.equal(replay.status, 200); assert.equal((await replay.json() as { key: string }).key, firstBody.key);
+    await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ discard: true }) });
+    const renamed = await customerUpload(f.mf, tokenA, 'same-upload', 'aaaaaaaaaaaaaaaaaaaa', 'renamed.pdf', 'application/pdf');
+    assert.equal(renamed.status, 409, 'cache loss cannot create a second extension-derived object'); await renamed.body?.cancel();
+    const tenantB = await customerUpload(f.mf, tokenB, 'same-upload');
+    assert.equal(tenantB.status, 200); assert.notEqual((await tenantB.json() as { key: string }).key, firstBody.key);
+    const beforeLost = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number; r2Puts: number };
+    await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ loseR2PutAcknowledgement: true }) });
+    const lost = await customerUpload(f.mf, tokenA, 'lost-ack', 'lost acknowledgement bytes');
+    assert.equal(lost.status, 200); await lost.body?.cancel();
+    const retried = await customerUpload(f.mf, tokenA, 'lost-ack', 'lost acknowledgement bytes');
+    assert.equal(retried.status, 200); await retried.body?.cancel();
+    const afterLost = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number; r2Puts: number };
+    assert.equal(afterLost.r2Gets - beforeLost.r2Gets, 3, 'customer lost acknowledgement and retry use the prepaid marker reads');
+    assert.ok((customerAttachmentEnvelope('customer.attachment.upload', 24)?.r2ClassBOperations ?? 0) >= afterLost.r2Gets - beforeLost.r2Gets);
+
+    await f.db.batch([
+      f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_id,customer_email,source) VALUES ('storage-a','customer-storage-ticket','Synthetic','shared-customer','customer-storage-a@example.test','portal')"),
+      f.db.prepare("INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,is_internal,intake_source) VALUES ('storage-a','customer-storage-article','customer-storage-ticket','shared-customer','customer','synthetic',0,'portal')"),
+      f.db.prepare("INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key) VALUES ('storage-a','customer-storage-attachment','customer-storage-article','synthetic.txt',20,'text/plain',?)").bind(firstBody.key),
+    ]);
+    const download = await f.mf.dispatchFetch('http://runtime.test/api/v1/customer/attachments/customer-storage-attachment/download', { headers: { authorization: `Bearer ${tokenA}` } });
+    assert.equal(download.status, 200); assert.equal(await download.text(), 'aaaaaaaaaaaaaaaaaaaa');
+    const foreign = await f.mf.dispatchFetch('http://runtime.test/api/v1/customer/attachments/customer-storage-attachment/download', { headers: { authorization: `Bearer ${tokenB}` } });
+    assert.equal(foreign.status, 404, 'tenant metadata denial occurs before a foreign R2 read'); await foreign.body?.cancel();
+  } finally { await f.mf.dispose(); }
+});
+
+test('customer storage rejects exhausted and revoked sessions before R2 work', async () => {
+  const f = await fixture();
+  try {
+    const low = await customerToken('storage-low');
+    const revoked = await customerToken('storage-b');
+    await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='storage-b' AND id='shared-customer'").run();
+    const [capacity, denied] = await Promise.all([customerUpload(f.mf, low, 'capacity'), customerUpload(f.mf, revoked, 'revoked')]);
+    assert.equal(capacity.status, 429); await capacity.body?.cancel();
+    assert.equal(denied.status, 401); await denied.body?.cancel();
+    const bucket = await f.mf.getR2Bucket('ATTACHMENTS_BUCKET');
+    assert.equal((await bucket.list()).objects.length, 0);
+    const envelope = customerAttachmentEnvelope('customer.attachment.upload', 20)!;
+    assert.equal(envelope.r2ClassAOperations, 2); assert.equal(envelope.r2ClassBOperations, 4);
   } finally { await f.mf.dispose(); }
 });
