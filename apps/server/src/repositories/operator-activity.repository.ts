@@ -1,4 +1,5 @@
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
+import { EncryptJWT, jwtDecrypt } from 'jose';
 import type { VerifiedTenantScope } from '../types/tenant';
 import {
   OPERATOR_ACTIVITY_KINDS, type ActivityPresentationCredential, type OperatorActivity,
@@ -10,7 +11,9 @@ const MAX_PAGE_SIZE = 50;
 const MAX_IDENTIFIER_LENGTH = 128;
 const MAX_FACT_KEYS = 16;
 const MAX_FACT_VALUE_LENGTH = 256;
-const MAX_CURSOR_LENGTH = 256;
+const MAX_CURSOR_LENGTH = 2048;
+const CURSOR_TTL_SECONDS = 900;
+const CURSOR_PURPOSE = 'tocyn-operator-activity-cursor-v1';
 export const OPERATOR_ACTIVITY_CANDIDATE_LIMIT = 100;
 const identifier = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const columns = `id,ticket_id,recipient_user_id,kind,source_id,producer_kind,producer_id,facts,
@@ -77,24 +80,6 @@ function validTimestamp(value: string | null | undefined): string | null {
   return value;
 }
 
-function decodeCursor(value: string | null | undefined): OperatorActivityCursor | null {
-  if (value == null || value === '') return null;
-  if (typeof value !== 'string' || value.length > MAX_CURSOR_LENGTH) throw new Error('Invalid activity cursor');
-  try {
-    const parsed = JSON.parse(atob(value)) as Record<string, unknown>;
-    if (typeof parsed.createdAt !== 'string' || typeof parsed.id !== 'string' || parsed.createdAt.length > 40 || !identifier.test(parsed.id)) {
-      throw new Error('Invalid activity cursor');
-    }
-    return { createdAt: parsed.createdAt, id: parsed.id };
-  } catch {
-    throw new Error('Invalid activity cursor');
-  }
-}
-
-function encodeCursor(value: OperatorActivityCursor): string {
-  return btoa(JSON.stringify(value));
-}
-
 async function fingerprint(value: Omit<ImmutableActivity, 'fingerprint'>): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -107,15 +92,53 @@ async function fingerprint(value: Omit<ImmutableActivity, 'fingerprint'>): Promi
  * receive only their own currently-authorized rows.
  */
 export class OperatorActivityRepository {
-  constructor(private readonly scope: VerifiedTenantScope, private readonly db: D1Database) {}
+  private cursorKeyPromise?: Promise<Uint8Array>;
+
+  constructor(private readonly scope: VerifiedTenantScope, private readonly db: D1Database, private readonly cursorSecret?: string) {}
+
+  private cursorKey(): Promise<Uint8Array> {
+    if (!this.cursorSecret) throw new Error('Activity pagination key unavailable; restart pagination after configuration is restored');
+    this.cursorKeyPromise ??= (async () => {
+      const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(this.cursorSecret), 'HKDF', false, ['deriveBits']);
+      return new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256',
+        salt: new Uint8Array(32), info: new TextEncoder().encode(CURSOR_PURPOSE) }, material, 256));
+    })();
+    return this.cursorKeyPromise;
+  }
+
+  private async decodeCursor(value: string | null | undefined): Promise<OperatorActivityCursor | null> {
+    if (value == null || value === '') return null;
+    try {
+      if (typeof value !== 'string' || value.length > MAX_CURSOR_LENGTH) throw new Error();
+      const { payload, protectedHeader } = await jwtDecrypt(value, await this.cursorKey(), {
+        keyManagementAlgorithms: ['dir'], contentEncryptionAlgorithms: ['A256GCM'],
+        requiredClaims: ['exp', 'iat'], maxTokenAge: CURSOR_TTL_SECONDS,
+      });
+      if (protectedHeader.typ !== CURSOR_PURPOSE || payload.tenantId !== this.scope.tenantId
+        || payload.actorId !== this.scope.actorId || payload.authVersion !== this.scope.authVersion
+        || typeof payload.createdAt !== 'string' || payload.createdAt.length > 40 || !Number.isFinite(Date.parse(payload.createdAt))
+        || typeof payload.id !== 'string' || !identifier.test(payload.id)) throw new Error();
+      return { createdAt: payload.createdAt, id: payload.id };
+    } catch {
+      throw new Error('Invalid or expired activity cursor; restart pagination');
+    }
+  }
+
+  private async encodeCursor(value: OperatorActivityCursor, credential: ActivityPresentationCredential): Promise<string> {
+    return new EncryptJWT({ ...value, tenantId: this.scope.tenantId, actorId: this.scope.actorId, authVersion: this.scope.authVersion })
+      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ: CURSOR_PURPOSE }).setIssuedAt()
+      .setExpirationTime(Math.min(credential.expiresAt, Math.floor(Date.now() / 1000) + CURSOR_TTL_SECONDS))
+      .encrypt(await this.cursorKey());
+  }
 
   private recipientAuthority(credential: ActivityPresentationCredential): SqlCondition {
-    if (credential.mfaVerified !== true || credential.sessionVersion !== this.scope.authVersion
+    if ((credential.role !== 'agent' && credential.role !== 'admin')
+      || credential.mfaVerified !== true || credential.sessionVersion !== this.scope.authVersion
       || !this.scope.roles.includes(credential.role) || !Number.isSafeInteger(credential.sessionVersion) || credential.sessionVersion < 0
       || !Number.isSafeInteger(credential.expiresAt)) return { sql: '0', values: [] };
     return {
       sql: `EXISTS (SELECT 1 FROM users u WHERE u.tenant_id=? AND u.id=? AND u.role=?
-        AND u.session_version=? AND ? > unixepoch())`,
+        AND u.session_version=? AND u.mfa_enabled=1 AND ? > unixepoch())`,
       values: [this.scope.tenantId, this.scope.actorId, credential.role, credential.sessionVersion, credential.expiresAt],
     };
   }
@@ -139,9 +162,10 @@ export class OperatorActivityRepository {
   private appendStatement(immutable: ImmutableActivity): D1PreparedStatement {
     // The predicate is evaluated in the actual D1 batch. An earlier asynchronous
     // check cannot substitute for the ticket/recipient state at canonical commit.
-    return this.db.prepare(`INSERT OR IGNORE INTO operator_activities
+    return this.db.prepare(`INSERT INTO operator_activities
       (tenant_id,id,ticket_id,recipient_user_id,kind,source_id,producer_kind,producer_id,facts,receipt_fingerprint,resurfaced_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING ${columns}`)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT (tenant_id,recipient_user_id,kind,source_id) DO NOTHING RETURNING ${columns}`)
       .bind(
         this.scope.tenantId, immutable.id, immutable.ticketId, immutable.recipientUserId, immutable.kind, immutable.sourceId,
         immutable.producerKind, immutable.producerId, immutable.facts, immutable.fingerprint, immutable.resurfacedAt,
@@ -159,8 +183,13 @@ export class OperatorActivityRepository {
       throw error;
     }
     if (inserted) return { activity: activityFromRow(inserted), idempotent: false };
-    const existing = await this.db.prepare(`SELECT ${columns} FROM operator_activities
-      WHERE tenant_id=? AND recipient_user_id=? AND kind=? AND source_id=?`)
+    const existing = await this.db.prepare(`SELECT ${selectColumns} FROM operator_activities a
+      JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id
+      JOIN users r ON r.tenant_id=a.tenant_id AND r.id=a.recipient_user_id
+      WHERE a.tenant_id=? AND a.recipient_user_id=? AND a.kind=? AND a.source_id=?
+        AND r.role IN ('admin','agent') AND (t.group_id IS NULL OR r.role='admin' OR EXISTS (
+          SELECT 1 FROM user_groups ug WHERE ug.tenant_id=t.tenant_id AND ug.group_id=t.group_id AND ug.user_id=r.id
+        ))`)
       .bind(this.scope.tenantId, immutable.recipientUserId, immutable.kind, immutable.sourceId).first<Row>();
     if (!existing) return null;
     if (!this.sameImmutable(existing, immutable)) throw new OperatorActivityConflictError();
@@ -169,37 +198,47 @@ export class OperatorActivityRepository {
 
   async listForRecipient(options: Readonly<{ cursor?: string | null; limit: number }>, credential: ActivityPresentationCredential): Promise<OperatorActivityPage | null> {
     if (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > MAX_PAGE_SIZE) throw new Error('Invalid activity page size');
-    const cursor = decodeCursor(options.cursor);
-    const access = this.ticketAccess(credential);
     if (!(await this.isLiveRecipient(credential))) return null;
+    await this.cursorKey();
+    const cursor = await this.decodeCursor(options.cursor);
+    const access = this.ticketAccess(credential);
+    // The tuple predicate seeks directly in the recipient index, including on
+    // later pages. At most 100 candidates are authorized; the 101st is lookahead.
+    const seek = cursor ? 'AND (a.created_at,a.id)<(?,?)' : '';
     const { results } = await this.db.prepare(`WITH candidates AS MATERIALIZED (
-        SELECT a.* FROM operator_activities a WHERE a.tenant_id=? AND a.recipient_user_id=?
-          AND (? IS NULL OR a.created_at<? OR (a.created_at=? AND a.id<?))
+        SELECT a.* FROM operator_activities a WHERE a.tenant_id=? AND a.recipient_user_id=? ${seek}
         ORDER BY a.created_at DESC,a.id DESC LIMIT ?
+      ), window AS MATERIALIZED (
+        SELECT * FROM candidates ORDER BY created_at DESC,id DESC LIMIT ?
       ), visible AS (
-        SELECT a.* FROM candidates a JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id
+        SELECT a.* FROM window a JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id
         WHERE ${access.sql}
       )
       SELECT 'summary' AS row_kind,(SELECT count(*) FROM candidates) AS candidate_count,
-        NULL AS id,NULL AS ticket_id,NULL AS recipient_user_id,NULL AS kind,NULL AS source_id,NULL AS producer_kind,
-        NULL AS producer_id,NULL AS facts,NULL AS receipt_fingerprint,NULL AS revision,NULL AS created_at,NULL AS resurfaced_at,NULL AS read_at,NULL AS dismissed_at
+        (SELECT id FROM window ORDER BY created_at,id LIMIT 1) AS id,
+        NULL AS ticket_id,NULL AS recipient_user_id,NULL AS kind,NULL AS source_id,NULL AS producer_kind,
+        NULL AS producer_id,NULL AS facts,NULL AS receipt_fingerprint,NULL AS revision,
+        (SELECT created_at FROM window ORDER BY created_at,id LIMIT 1) AS created_at,
+        NULL AS resurfaced_at,NULL AS read_at,NULL AS dismissed_at
       UNION ALL
       SELECT 'item',NULL,${selectColumns} FROM visible a
       ORDER BY row_kind DESC,created_at DESC,id DESC`)
-      .bind(this.scope.tenantId, this.scope.actorId, cursor?.createdAt ?? null, cursor?.createdAt ?? '', cursor?.createdAt ?? '', cursor?.id ?? '', OPERATOR_ACTIVITY_CANDIDATE_LIMIT + 1, ...access.values)
+      .bind(this.scope.tenantId, this.scope.actorId, ...(cursor ? [cursor.createdAt, cursor.id] : []),
+        OPERATOR_ACTIVITY_CANDIDATE_LIMIT + 1, OPERATOR_ACTIVITY_CANDIDATE_LIMIT, ...access.values)
       .all<Row & { row_kind: 'summary' | 'item'; candidate_count: number | null }>();
-    // A failed live authority test must not look like an empty queue to a caller
-    // that needs to distinguish revoked access from a valid no-activity result.
     if (!(await this.isLiveRecipient(credential))) return null;
     const rows = results ?? [];
-    const candidateCount = rows.find(row => row.row_kind === 'summary')?.candidate_count ?? 0;
-    if (candidateCount > OPERATOR_ACTIVITY_CANDIDATE_LIMIT) {
-      return { status: 'unavailable', reason: 'recipient_activity_candidate_cap_exceeded', items: [], next: null };
-    }
-    const items = rows.filter(row => row.row_kind === 'item').slice(0, options.limit).map(activityFromRow);
+    const summary = rows.find(row => row.row_kind === 'summary');
+    const visibleRows = rows.filter(row => row.row_kind === 'item');
+    const items = visibleRows.slice(0, options.limit).map(activityFromRow);
     const last = items[items.length - 1];
-    const visibleCount = rows.filter(row => row.row_kind === 'item').length;
-    return { status: 'available', items, next: visibleCount > options.limit && last ? encodeCursor({ createdAt: last.createdAt, id: last.id }) : null };
+    // Full visible pages resume after their last returned row. A sparse or empty
+    // window resumes after its scanned boundary, encrypted so inaccessible row
+    // identifiers/timestamps never leave the server in a readable cursor.
+    const boundary = visibleRows.length > options.limit && last ? { createdAt: last.createdAt, id: last.id }
+      : (summary?.candidate_count ?? 0) > OPERATOR_ACTIVITY_CANDIDATE_LIMIT && summary
+        ? { createdAt: summary.created_at, id: summary.id } : null;
+    return { status: 'available', items, next: boundary ? await this.encodeCursor(boundary, credential) : null };
   }
 
   async unreadCount(credential: ActivityPresentationCredential): Promise<OperatorActivityUnreadCount | null> {

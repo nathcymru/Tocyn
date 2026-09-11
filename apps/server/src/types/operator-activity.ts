@@ -17,11 +17,12 @@ export type ActivityProducerProjection = Readonly<
 >;
 
 export type TrustedActivityAppend = Readonly<{
+  /** Stable projection ID: replay must reuse this ID and every immutable field. */
   id: string;
   ticketId: string;
   recipientUserId: string;
   kind: OperatorActivityKind;
-  /** Stable canonical/event identity. Replays of the same source are idempotent. */
+  /** Stable canonical/event identity. Exact replays (including the projection ID) are idempotent. */
   sourceId: string;
   producer: ActivityProducer;
   /** Compact render facts only; message bodies and delivery payloads do not belong here. */
@@ -45,10 +46,8 @@ export type OperatorActivity = Readonly<{
 }>;
 
 export type OperatorActivityCursor = Readonly<{ createdAt: string; id: string }>;
-export type OperatorActivityUnavailable = Readonly<{
-  status: 'unavailable'; reason: 'recipient_activity_candidate_cap_exceeded'; items: readonly []; next: null;
-}>;
-export type OperatorActivityPage = Readonly<{ status: 'available'; items: readonly OperatorActivity[]; next: string | null }> | OperatorActivityUnavailable;
+/** Empty pages may carry a continuation across filtered candidates; consume until next is null. */
+export type OperatorActivityPage = Readonly<{ status: 'available'; items: readonly OperatorActivity[]; next: string | null }>;
 export type OperatorActivityUnreadCount = Readonly<
   | { status: 'available'; count: number }
   | { status: 'unavailable'; reason: 'recipient_activity_candidate_cap_exceeded'; count: null }

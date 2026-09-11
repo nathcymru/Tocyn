@@ -49,7 +49,8 @@ CREATE TRIGGER redact_operator_activity_producer AFTER DELETE ON users BEGIN
     WHERE tenant_id=OLD.tenant_id AND producer_kind='staff' AND producer_id=OLD.id;
 END;
 
--- All producer seams use INSERT OR IGNORE. Equal receipts are harmless replays;
+-- Producer seams ignore only the canonical source uniqueness conflict.
+-- Equal receipts are harmless replays;
 -- a conflicting reuse or stale authorization aborts the entire caller batch.
 CREATE TRIGGER validate_operator_activity_append BEFORE INSERT ON operator_activities BEGIN
   SELECT CASE WHEN NOT EXISTS (
@@ -60,6 +61,9 @@ CREATE TRIGGER validate_operator_activity_append BEFORE INSERT ON operator_activ
       ))
   ) THEN RAISE(ABORT,'operator_activity_recipient_unavailable') END;
   SELECT CASE WHEN EXISTS (
+    SELECT 1 FROM operator_activities a WHERE a.tenant_id=NEW.tenant_id AND a.id=NEW.id
+      AND a.receipt_fingerprint<>NEW.receipt_fingerprint
+  ) OR EXISTS (
     SELECT 1 FROM operator_activities a WHERE a.tenant_id=NEW.tenant_id AND a.recipient_user_id=NEW.recipient_user_id
       AND a.kind=NEW.kind AND a.source_id=NEW.source_id AND a.receipt_fingerprint<>NEW.receipt_fingerprint
   ) THEN RAISE(ABORT,'operator_activity_receipt_conflict') END;

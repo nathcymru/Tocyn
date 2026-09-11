@@ -84,7 +84,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     canonicalMutationSli,
     ticketMutations: new TicketMutationReplayRepository(db, scope, betaAdmission, canonicalMutationSli),
     operationalMetrics: new OperationalMetricsRepository(db, scope),
-    operatorActivity: new OperatorActivityRepository(scope, db),
+    operatorActivity: new OperatorActivityRepository(scope, db, env.JWT_SECRET),
     repositories,
     attachmentStorage,
     legacyArticleStorage,
