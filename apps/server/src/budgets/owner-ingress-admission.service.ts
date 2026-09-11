@@ -46,9 +46,9 @@ class IngressBlock{
       expectedPolicyId:this.authority.ownerPolicy.policyId,expectedPolicyRevision:this.authority.ownerPolicy.revision,
       terminalEvidenceId:`ingress-block:${this.reservation.reservationId}`,measured,uncertain:{},now,
       certifiedClosure:{operationSetFingerprint:fingerprint,expiresAt:this.reservation.expiresAt}};
-    const transfers=proven.map(link=>{const p=this.authority.tenantAllocations.find(x=>x.effectivePolicy.tenantId===link.tenantId)?.effectivePolicy;
+    const transfers=proven.map((link,index)=>{const p=this.authority.tenantAllocations.find(x=>x.effectivePolicy.tenantId===link.tenantId)?.effectivePolicy;
       return{tenantId:link.tenantId,expectedPolicyId:p?.policyId??'',expectedPolicyRevision:p?.revision??-1,
-        expectedRestrictionRevision:p?.restrictionRevision??-1,operationId:link.operationId,envelope:OWNER_INGRESS_EXECUTION_ENVELOPE};});
+        expectedRestrictionRevision:p?.restrictionRevision??-1,operationId:`transfer-${index}`,envelope:OWNER_INGRESS_EXECUTION_ENVELOPE};});
     for(let attempt=0;attempt<MAX_OWNER_INGRESS_DELIVERY_ATTEMPTS;attempt++)try{const outcome=await this.coordinator.handoffIngressBatchFromTrustedAuthority({ownerClosure:closure,transfers,now});
       return outcome.status==='handed-off'||outcome.status==='already-handed-off'?'closed':'retained';}catch{}
     return'retained';
