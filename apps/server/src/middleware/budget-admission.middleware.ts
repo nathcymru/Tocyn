@@ -83,12 +83,17 @@ export const CUSTOMER_TICKET_ENVELOPES: Readonly<Record<CustomerTicketBudgetOper
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
 });
 /** Bounded support-state/SLA writes have no provider I/O. The remap can touch 100 tickets and its two audits. */
+// The complete native 100-ticket SLA remap measured 5,437 reads and 2,810
+// writes with 512-ticket same-tenant and foreign-tenant history prefixes,
+// plus 150 expired receipts. The two #0049 state indexes add exactly 300 writes at this cap:
+// definition update (+100), token set (+100), and token clear (+100).
+const SUPPORT_SLA_D1_READS = Object.freeze({ ordinary: 2_570, deactivate: 8_192 });
 const SUPPORT_SLA_D1_WRITES = Object.freeze({ ordinary: 2_048, deactivate: 4_096 });
 export const SUPPORT_SLA_ENVELOPES: Readonly<Record<SupportSlaBudgetOperation, ResourceAmounts>> = Object.freeze({
   'dashboard.sla.policy.set': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
   'dashboard.support-state.create': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
   'dashboard.support-state.update': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
-  'dashboard.support-state.deactivate': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: SUPPORT_SLA_D1_WRITES.deactivate, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+  'dashboard.support-state.deactivate': Object.freeze({ workerRequests: 2, d1RowsRead: SUPPORT_SLA_D1_READS.deactivate, d1RowsWritten: SUPPORT_SLA_D1_WRITES.deactivate, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
   'dashboard.ticket.sla.initialize': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
   'dashboard.ticket.support-state.transition': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: SUPPORT_SLA_D1_WRITES.ordinary, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
 });

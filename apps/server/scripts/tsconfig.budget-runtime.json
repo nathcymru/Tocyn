@@ -9,6 +9,8 @@
     "budget-grant-holder-runtime.test.ts",
     "budget-admission-runtime.test.ts",
     "session-budget-admission-runtime.test.ts",
-    "budget-admission-runtime-entry.ts"
+    "budget-admission-runtime-entry.ts",
+    "support-sla-admission-runtime.test.ts",
+    "support-sla-mutation-receipts.test.ts"
   ]
 }

@@ -145,9 +145,10 @@ export class SupportStateRepository {
   }
 
   async countReferences(definitionId: string): Promise<number> {
-    const row = await this.db.prepare('SELECT count(*) AS count FROM ticket_support_state WHERE tenant_id=? AND definition_id=?')
-      .bind(this.scope.tenantId, definitionId).first<{ count: number }>();
-    return row?.count ?? 0;
+    const page = await this.db.prepare(`SELECT ticket_id FROM ticket_support_state
+      WHERE tenant_id=? AND definition_id=? ORDER BY ticket_id COLLATE BINARY LIMIT 101`)
+      .bind(this.scope.tenantId, definitionId).all<{ ticket_id: string }>();
+    return page.results.length;
   }
 
   async captureTicketWriteFence(expectedSessionVersion?: number): Promise<TicketStateWriteFence> {
@@ -355,6 +356,16 @@ export class SupportStateRepository {
     const nextAction = boundedText(input.nextAction, 512);
     const token = crypto.randomUUID();
     const guard = capabilityWriteConstraint(fence);
+    // Every remap statement consumes the same in-batch 101-row sentinel. The
+    // admitted path keeps the first current-session/capability/group fence
+    // authoritative, then intersects it with that cap without repeating the
+    // full authorization predicate once per remapped ticket.
+    const batchGuard = fence
+      ? 'EXISTS (SELECT 1 FROM budget_mutation_assertion a WHERE a.tenant_id=? AND a.accepted=1)'
+      : `${guard.sql} AND EXISTS (SELECT 1 FROM budget_mutation_assertion a WHERE a.tenant_id=? AND a.accepted=1)`;
+    const batchGuardValues = fence ? [this.scope.tenantId] : [...guard.values, this.scope.tenantId];
+    const admittedFence = fence ? 'AND EXISTS (SELECT 1 FROM budget_mutation_assertion a WHERE a.tenant_id=? AND a.accepted=1)' : '';
+    const admittedFenceValues = fence ? [this.scope.tenantId] : [];
     const target = `EXISTS (SELECT 1 FROM support_state_definitions d WHERE d.tenant_id=s.tenant_id AND d.id=? AND d.is_active=1
       AND (d.waiting_reason_required=0 OR ? IS NOT NULL) AND (d.next_action_required=0 OR ? IS NOT NULL))`;
     const definitionTarget = `EXISTS (SELECT 1 FROM support_state_definitions d WHERE d.tenant_id=o.tenant_id AND d.id=? AND d.is_active=1
@@ -362,44 +373,123 @@ export class SupportStateRepository {
     const old = `EXISTS (SELECT 1 FROM support_state_definitions o WHERE o.tenant_id=s.tenant_id AND o.id=? AND o.is_active=1 AND o.is_compatibility_default=0)`;
     const facts = `json_object('before',json_object('definitionId',s.definition_id,'waitingReason',s.waiting_reason,'nextAction',s.next_action),
       'after',json_object('definitionId',d.id,'lifecycle',d.legacy_status,'waitingReason',?,'nextAction',?),'reason','definition_deactivated')`;
-    const rows = `t.tenant_id=? AND s.definition_id=? AND ${old} AND ${target} AND ${guard.sql}`;
+    const rows = `t.tenant_id=? AND s.definition_id=? AND ${old} AND ${target} AND ${batchGuard}`;
+    const candidates = `SELECT ticket_id FROM ticket_support_state
+      WHERE tenant_id=? AND definition_id=? ORDER BY ticket_id COLLATE BINARY LIMIT 101`;
     const results = await this.db.batch([
-      // The service's count is advisory. This bounded in-batch assertion
-      // prevents a concurrent remap from turning the admitted operation into
-      // an unbounded tenant write.
+      // The service's count is advisory. The same 101-row indexed sentinel is
+      // evaluated inside the batch, preventing a concurrent remap from
+      // expanding the supported 100-ticket operation.
       this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
-        VALUES (?,CASE WHEN (SELECT count(*) FROM ticket_support_state WHERE tenant_id=? AND definition_id=?)<=100 THEN 1 ELSE 0 END)
+        VALUES (?,CASE WHEN (SELECT count(*) FROM (${candidates}))<=100 ${admittedFence} THEN 1 ELSE 0 END)
         ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
-        .bind(this.scope.tenantId,this.scope.tenantId,id),
+        .bind(this.scope.tenantId,this.scope.tenantId,id,...admittedFenceValues),
       this.db.prepare(`INSERT INTO support_state_events (tenant_id,id,ticket_id,definition_id,kind,actor_kind,actor_id,facts)
         SELECT t.tenant_id,${uuidSql},t.id,d.id,'ticket.transition',?,?,${facts}
         FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
         JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=? WHERE ${rows}`)
-        .bind(actorKind,actorId,waitingReason,nextAction,input.replacementId,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...guard.values),
+        .bind(actorKind,actorId,waitingReason,nextAction,input.replacementId,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...batchGuardValues),
       this.db.prepare(`INSERT INTO conversation_events
         (tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
         SELECT t.tenant_id,${uuidSql},t.id,NULL,(SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=t.tenant_id AND e.ticket_id=t.id),
           'ticket.state_changed',?,?, 'mfa-staff','dashboard','internal',${facts}
         FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
         JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=? WHERE ${rows}`)
-        .bind(actorKind,actorId,waitingReason,nextAction,input.replacementId,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...guard.values),
+        .bind(actorKind,actorId,waitingReason,nextAction,input.replacementId,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...batchGuardValues),
       this.db.prepare(`UPDATE ticket_support_state AS s SET definition_id=?,waiting_reason=?,next_action=?,
-        changed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),revision=revision+1,transition_token=? WHERE s.tenant_id=? AND s.definition_id=? AND ${old} AND ${target} AND ${guard.sql}`)
-        .bind(input.replacementId,waitingReason,nextAction,token,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...guard.values),
+        changed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),revision=revision+1,transition_token=? WHERE s.tenant_id=? AND s.definition_id=? AND ${old} AND ${target} AND ${batchGuard}`)
+        .bind(input.replacementId,waitingReason,nextAction,token,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...batchGuardValues),
       this.db.prepare(`UPDATE tickets SET status=(SELECT legacy_status FROM support_state_definitions WHERE tenant_id=? AND id=?)
-        WHERE tenant_id=? AND ${guard.sql} AND EXISTS (SELECT 1 FROM ticket_support_state s WHERE s.tenant_id=tickets.tenant_id AND s.ticket_id=tickets.id AND s.transition_token=?)`)
-        .bind(this.scope.tenantId,input.replacementId,this.scope.tenantId,...guard.values,token),
-      this.db.prepare(`UPDATE ticket_support_state SET transition_token=NULL WHERE tenant_id=? AND transition_token=? AND ${guard.sql}`).bind(this.scope.tenantId,token,...guard.values),
+        WHERE tenant_id=? AND id IN (SELECT ticket_id FROM ticket_support_state
+          WHERE tenant_id=? AND transition_token=?) AND ${batchGuard}`)
+        .bind(this.scope.tenantId,input.replacementId,this.scope.tenantId,this.scope.tenantId,token,...batchGuardValues),
+      // Preserve the same SLA projection and audit composition as a regular
+      // support-state transition, but restrict every statement to the
+      // token-marked remap candidates.
+      this.db.prepare(`INSERT OR IGNORE INTO sla_policies
+        (tenant_id,calendar_json,response_target_ms,resolution_target_ms,response_reopen_policy,resolution_reopen_policy)
+        SELECT ?,?,NULL,NULL,'continue','continue' WHERE EXISTS (
+          SELECT 1 FROM ticket_support_state s WHERE s.tenant_id=? AND s.transition_token=? AND ${batchGuard}
+        )`).bind(this.scope.tenantId,defaultSlaCalendarJson,this.scope.tenantId,token,...batchGuardValues),
+      this.db.prepare(`INSERT INTO ticket_sla_events
+        (tenant_id,id,ticket_id,kind,support_state_revision,actor_id,facts)
+        SELECT t.tenant_id,${uuidSql},t.id,
+          CASE
+            WHEN c.ticket_id IS NULL THEN 'clock.initialized'
+            WHEN d.legacy_status='pending' AND s.waiting_reason IS NOT NULL AND c.paused_at IS NULL THEN 'clock.paused'
+            WHEN NOT (d.legacy_status='pending' AND s.waiting_reason IS NOT NULL) AND c.paused_at IS NOT NULL THEN 'clock.resumed'
+            WHEN d.legacy_status IN ('resolved','closed') AND c.resolution_completed_at IS NULL THEN 'clock.resolved'
+            WHEN d.legacy_status NOT IN ('resolved','closed') AND c.resolution_completed_at IS NOT NULL THEN 'clock.reopened'
+          END,
+          s.revision,?,json_object('lifecycle',d.legacy_status,'waiting',d.legacy_status='pending' AND s.waiting_reason IS NOT NULL)
+        FROM ticket_support_state s JOIN tickets t ON t.tenant_id=s.tenant_id AND t.id=s.ticket_id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+        LEFT JOIN ticket_sla_clocks c ON c.tenant_id=t.tenant_id AND c.ticket_id=t.id
+        WHERE s.tenant_id=? AND s.transition_token=? AND ${batchGuard}
+          AND (c.ticket_id IS NULL
+            OR (d.legacy_status='pending' AND s.waiting_reason IS NOT NULL) IS NOT (c.paused_at IS NOT NULL)
+            OR (d.legacy_status IN ('resolved','closed')) IS NOT (c.resolution_completed_at IS NOT NULL))`)
+        .bind(actorId,this.scope.tenantId,token,...batchGuardValues),
+      this.db.prepare(`INSERT INTO ticket_sla_pause_intervals (tenant_id,ticket_id,started_at,reason,support_state_revision)
+        SELECT t.tenant_id,t.id,s.changed_at,'waiting',s.revision
+        FROM ticket_support_state s JOIN tickets t ON t.tenant_id=s.tenant_id AND t.id=s.ticket_id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+        LEFT JOIN ticket_sla_clocks c ON c.tenant_id=t.tenant_id AND c.ticket_id=t.id
+        WHERE s.tenant_id=? AND s.transition_token=? AND d.legacy_status='pending' AND s.waiting_reason IS NOT NULL
+          AND (c.ticket_id IS NULL OR c.paused_at IS NULL) AND ${batchGuard}`)
+        .bind(this.scope.tenantId,token,...batchGuardValues),
+      this.db.prepare(`UPDATE ticket_sla_pause_intervals SET ended_at=(
+          SELECT s.changed_at FROM ticket_support_state s WHERE s.tenant_id=ticket_sla_pause_intervals.tenant_id
+            AND s.ticket_id=ticket_sla_pause_intervals.ticket_id AND s.transition_token=?)
+        WHERE tenant_id=? AND ended_at IS NULL AND ticket_id IN (
+          SELECT s.ticket_id FROM ticket_support_state s JOIN support_state_definitions d
+            ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+          WHERE s.tenant_id=? AND s.transition_token=? AND NOT (d.legacy_status='pending' AND s.waiting_reason IS NOT NULL)
+        ) AND ${batchGuard}`)
+        .bind(token,this.scope.tenantId,this.scope.tenantId,token,...batchGuardValues),
+      this.db.prepare(`INSERT INTO ticket_sla_clocks
+        (tenant_id,ticket_id,response_started_at,resolution_started_at,resolution_completed_at,paused_at,pause_reason,last_support_state_revision,
+         policy_revision,policy_calendar_json,policy_response_target_ms,policy_resolution_target_ms,policy_response_reopen_policy,policy_resolution_reopen_policy)
+        SELECT t.tenant_id,t.id,t.created_at,t.created_at,
+          CASE WHEN d.legacy_status IN ('resolved','closed') THEN s.changed_at ELSE NULL END,
+          CASE WHEN d.legacy_status='pending' AND s.waiting_reason IS NOT NULL THEN s.changed_at ELSE NULL END,
+          CASE WHEN d.legacy_status='pending' AND s.waiting_reason IS NOT NULL THEN 'waiting' ELSE NULL END,s.revision,
+          p.revision,p.calendar_json,p.response_target_ms,p.resolution_target_ms,p.response_reopen_policy,p.resolution_reopen_policy
+        FROM ticket_support_state s JOIN tickets t ON t.tenant_id=s.tenant_id AND t.id=s.ticket_id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+        JOIN sla_policies p ON p.tenant_id=t.tenant_id
+        WHERE s.tenant_id=? AND s.transition_token=? AND ${batchGuard}
+        ON CONFLICT(tenant_id,ticket_id) DO UPDATE SET
+          response_started_at=CASE WHEN excluded.resolution_completed_at IS NULL AND ticket_sla_clocks.resolution_completed_at IS NOT NULL
+            AND ticket_sla_clocks.policy_response_reopen_policy='restart'
+            THEN (SELECT changed_at FROM ticket_support_state s WHERE s.tenant_id=ticket_sla_clocks.tenant_id AND s.ticket_id=ticket_sla_clocks.ticket_id)
+            ELSE ticket_sla_clocks.response_started_at END,
+          response_completed_at=CASE WHEN excluded.resolution_completed_at IS NULL AND ticket_sla_clocks.resolution_completed_at IS NOT NULL
+            AND ticket_sla_clocks.policy_response_reopen_policy='restart' THEN NULL
+            ELSE ticket_sla_clocks.response_completed_at END,
+          resolution_started_at=CASE WHEN excluded.resolution_completed_at IS NULL AND ticket_sla_clocks.resolution_completed_at IS NOT NULL
+            AND ticket_sla_clocks.policy_resolution_reopen_policy='restart'
+            THEN (SELECT changed_at FROM ticket_support_state s WHERE s.tenant_id=ticket_sla_clocks.tenant_id AND s.ticket_id=ticket_sla_clocks.ticket_id)
+            ELSE ticket_sla_clocks.resolution_started_at END,
+          resolution_completed_at=CASE WHEN excluded.resolution_completed_at IS NOT NULL THEN COALESCE(ticket_sla_clocks.resolution_completed_at,excluded.resolution_completed_at)
+            ELSE NULL END,
+          paused_at=excluded.paused_at,pause_reason=excluded.pause_reason,
+          last_support_state_revision=excluded.last_support_state_revision,revision=ticket_sla_clocks.revision+1,
+          updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
+        .bind(this.scope.tenantId,token,...batchGuardValues),
+      this.db.prepare(`UPDATE ticket_support_state SET transition_token=NULL WHERE tenant_id=?
+        AND ticket_id IN (SELECT ticket_id FROM ticket_support_state WHERE tenant_id=? AND transition_token=?) AND ${batchGuard}`)
+        .bind(this.scope.tenantId,this.scope.tenantId,token,...batchGuardValues),
       this.db.prepare(`INSERT INTO support_state_events (tenant_id,id,definition_id,kind,actor_kind,actor_id,facts)
         SELECT ?,${uuidSql},id,'definition.deactivated',?,?,json_object('replacementId',?)
         FROM support_state_definitions o WHERE o.tenant_id=? AND o.id=? AND o.is_compatibility_default=0 AND o.is_active=1
-          AND ${definitionTarget} AND ${guard.sql}`)
-        .bind(this.scope.tenantId,actorKind,actorId,input.replacementId,this.scope.tenantId,id,input.replacementId,waitingReason,nextAction,...guard.values),
+          AND ${definitionTarget} AND ${batchGuard}`)
+        .bind(this.scope.tenantId,actorKind,actorId,input.replacementId,this.scope.tenantId,id,input.replacementId,waitingReason,nextAction,...batchGuardValues),
       this.db.prepare(`UPDATE support_state_definitions AS o SET is_active=0,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE o.tenant_id=? AND o.id=? AND o.is_compatibility_default=0 AND o.is_active=1
-          AND ${definitionTarget} AND ${guard.sql} RETURNING id`)
-        .bind(this.scope.tenantId,id,input.replacementId,waitingReason,nextAction,...guard.values),
+          AND ${definitionTarget} AND ${batchGuard} RETURNING id`)
+        .bind(this.scope.tenantId,id,input.replacementId,waitingReason,nextAction,...batchGuardValues),
     ]);
-    if (!results[7]?.results?.[0]) throw new SupportStateError('conflict', 'Support-state deactivation conflicted or was invalid');
+    if (!results[12]?.results?.[0]) throw new SupportStateError('conflict', 'Support-state deactivation conflicted or was invalid');
   }
 }

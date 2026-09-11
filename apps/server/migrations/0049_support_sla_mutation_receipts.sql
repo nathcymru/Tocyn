@@ -22,3 +22,8 @@ CREATE TRIGGER redact_support_sla_mutation_receipts_ticket AFTER DELETE ON ticke
   UPDATE support_sla_mutation_receipts SET lifecycle='gone',response_snapshot=NULL
     WHERE tenant_id=OLD.tenant_id AND result_ticket_id=OLD.id;
 END;
+
+-- Bounded support-state remaps select at most 101 source rows and update only
+-- the token-marked candidate tickets; both access paths remain tenant-qualified.
+CREATE INDEX idx_ticket_support_state_definition_ticket ON ticket_support_state(tenant_id,definition_id,ticket_id);
+CREATE INDEX idx_ticket_support_state_transition_ticket ON ticket_support_state(tenant_id,transition_token,ticket_id);
