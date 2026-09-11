@@ -613,4 +613,15 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     expect((await reposA.tickets.list({search:'B open'})).data).toEqual([]);
   });
 
+  it('keeps a colliding global ticket search inside the verified tenant scope', async () => {
+    await reposA.tickets.create({subject:'Shared incident reference',customer_email:'a@test.com',source:'web',status:'open',priority:'normal'});
+    await reposB.tickets.create({subject:'Shared incident reference',customer_email:'b@test.com',source:'web',status:'open',priority:'normal'});
+
+    const results = await reposA.tickets.list({search:'Shared incident reference'});
+
+    expect(results.data).toHaveLength(1);
+    expect(results.data[0]).toMatchObject({tenant_id:'tenant-A',customer_email:'a@test.com',subject:'Shared incident reference'});
+    expect(results.meta.total).toBe(1);
+  });
+
 });
