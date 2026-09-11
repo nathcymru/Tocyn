@@ -39,6 +39,13 @@ it('records an authorized selected ticket and persists context-panel preference 
   fireEvent.click(trigger);
   const heading=await screen.findByRole('heading',{name:'Ticket Details'});
   expect(heading).toHaveFocus();
+  expect(screen.getByText('Customer')).toBeInTheDocument();
+  expect(screen.getByText(/Customer history is unavailable/)).toBeInTheDocument();
+  expect(screen.getByText('Operational context')).toBeInTheDocument();
+  expect(screen.getByText(/No operational source is connected/)).toBeInTheDocument();
+  expect(screen.getByText('Knowledge')).toBeInTheDocument();
+  expect(screen.getByText('Collaboration')).toBeInTheDocument();
+  expect(screen.getByText(/No collaborators are viewing/)).toBeInTheDocument();
   await waitFor(()=>expect(writes.some((value:any)=>value.panel==='details')).toBe(true));
   fireEvent.click(screen.getByRole('button',{name:'Hide ticket context'}));
   expect(trigger).toHaveFocus();
