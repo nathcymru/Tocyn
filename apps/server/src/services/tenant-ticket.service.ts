@@ -133,20 +133,23 @@ export class TenantTicketService {
     return project(ticket, articles);
   }
 
-  async projectAuditedConversation(ticket: Ticket, articles: ArticleWithCanonicalAttachments[]): Promise<CanonicalConversation> {
+  async projectAuditedConversation(ticket: Ticket, articles: ArticleWithCanonicalAttachments[], options: { boundedPage?: boolean } = {}): Promise<CanonicalConversation> {
     const canonical = project(ticket,articles);
-    // The caller supplies a bounded page.  References are always qualified to
-    // that page so canonical projection cannot turn a paginated detail read
-    // into an unbounded conversation-events scan.
-    const references = await this.deps.conversationAudit.references(ticket.id,articles.map(article=>article.id));
+    // Beta detail already has a bounded page contract. The public V1 route
+    // opts in explicitly; established dashboard/customer projections keep
+    // their legacy full-conversation behavior until they paginate.
+    const boundedPage = options.boundedPage === true || Boolean(this.deps.betaAdmission);
+    const references = await this.deps.conversationAudit.references(ticket.id,
+      boundedPage ? articles.map(article=>article.id) : undefined);
     const byArticle = new Map<string,typeof references[number]>();
     for (const event of references) {
       if (event.article_id && !byArticle.has(event.article_id)) byArticle.set(event.article_id,event);
     }
-    // `references` has already proven the intake is in the current public
-    // projection. It remains a conversation fact when its initial article is
-    // outside this page.
-    const intake = references.find(event => event.kind === 'ticket.intake');
+    // Bounded references prove that an off-page intake is still currently
+    // public. The legacy path retains its historical visible-article rule.
+    const visible = new Set(articles.map(article => article.id));
+    const intake = references.find(event => event.kind === 'ticket.intake' &&
+      (boundedPage || !event.article_id || visible.has(event.article_id)));
     return {...canonical,
       conversation:{...canonical.conversation,...(intake ? {audit:{status:'known' as const,value:{eventId:intake.id}}} : {})},
       messages:canonical.messages.map(message => {

@@ -163,6 +163,17 @@ test('API detail follows current public visibility and rejects oversized bodies 
     await f.db.prepare("UPDATE articles SET is_internal=0 WHERE tenant_id='detail-a' AND id='hidden'").run();
     const exposed = await detail(f.mf, f.keys['detail-a'].value, '/api/v1/tickets/visibility-ticket');
     assert.equal(exposed.status, 200); assert.deepEqual((await exposed.json() as { articles: { id: string }[] }).articles.map(article => article.id), ['hidden', 'public']);
+    await f.db.batch([
+      f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('detail-a','attachment-order-ticket','Attachment order','detail-a@example.test','api')"),
+      f.db.prepare("INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,is_internal) VALUES ('detail-a','attachment-order-article','attachment-order-ticket','customer','Small',0)"),
+      f.db.prepare("INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES ('detail-a','a-lower','attachment-order-article','a.txt',1,'text/plain','detail-a/a','2026-09-11 00:00:00')"),
+      f.db.prepare("INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES ('detail-a','Z-upper','attachment-order-article','z.txt',1,'text/plain','detail-a/z','2026-09-11 00:00:00')"),
+    ]);
+    const ordered = await detail(f.mf, f.keys['detail-a'].value, '/api/v1/tickets/attachment-order-ticket');
+    assert.equal(ordered.status, 200);
+    const orderedBody = await ordered.json() as { canonical: { messages: { id: string; attachments: { id: string }[] }[] } };
+    assert.deepEqual(orderedBody.canonical.messages.find(message => message.id === 'attachment-order-article')?.attachments.map(attachment => attachment.id),
+      ['Z-upper', 'a-lower'], 'bounded attachment assembly retains SQLite BINARY ordering');
     await f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('detail-a','large-ticket','Large','detail-a@example.test','api')").run();
     await f.db.prepare("INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,body_r2_key,is_internal) VALUES ('detail-a','legacy','large-ticket','customer',NULL,'tenant/detail-a/legacy',0)").run();
     const legacy = await detail(f.mf, f.keys['detail-a'].value, '/api/v1/tickets/large-ticket');

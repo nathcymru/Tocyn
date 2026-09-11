@@ -121,7 +121,7 @@ v1.get("/tickets/:id", async (c) => {
     const response = {
       ...ticket,
       articles: page.articles.map(({ attachments, ...article }) => article),
-      canonical: await ticketService.projectAuditedConversation(ticket, page.articles),
+      canonical: await ticketService.projectAuditedConversation(ticket, page.articles, { boundedPage: true }),
       pagination: page.pagination,
     };
     assertConversationResponseBounds(response);

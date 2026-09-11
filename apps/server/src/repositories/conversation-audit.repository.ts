@@ -117,7 +117,15 @@ export class ConversationAuditRepository {
     return { rows, nextCursor: more ? rows[rows.length-1].id : null };
   }
 
-  async references(ticketId: string, articleIds: readonly string[]) {
+  async references(ticketId: string, articleIds?: readonly string[]) {
+    // Existing dashboard/customer projections retain their historical full
+    // conversation contract until those endpoints adopt an explicit page.
+    if (!articleIds) {
+      const result = await this.db.prepare(`SELECT id,article_id,kind FROM conversation_events
+        WHERE tenant_id=? AND ticket_id=? AND visibility='public'
+        ORDER BY sequence`).bind(this.scope.tenantId, ticketId).all<Pick<ConversationEvent, 'id' | 'article_id' | 'kind'>>();
+      return result.results;
+    }
     if (articleIds.length > 50) throw new Error('Bounded reference page required');
     const placeholders = articleIds.map(() => '?').join(',');
     // The intake is a ticket-level fact: retain it on every article page. The

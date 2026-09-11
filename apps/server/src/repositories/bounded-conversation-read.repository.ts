@@ -10,6 +10,19 @@ type ArticleMetadata = {
 };
 type PageOptions = { customerEmail?: string; publicOnly?: boolean; limit?: string; cursor?: string };
 const RAW_PAGE_BUDGET = 256 * 1024;
+
+// SQLite's default BINARY collation compares UTF-8 bytes, unlike localeCompare
+// (which can be locale-sensitive and puts lower case before upper case).
+const compareSqliteBinaryText = (left: string, right: string): number => {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  const length = Math.min(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index++) {
+    const difference = leftBytes[index] - rightBytes[index];
+    if (difference) return difference;
+  }
+  return leftBytes.length - rightBytes.length;
+};
 export type BoundedArticlePage = {
   articles: (Article & { attachments: Attachment[] })[];
   pagination: { limit: number; next_cursor: string | null; has_more: boolean };
@@ -74,8 +87,9 @@ export class BoundedConversationReadRepository {
     // SQL ordering over an IN list can require a full temporary sort. These
     // sets are independently bounded (50 articles, 500 attachments), so keep
     // the stable public response order in memory instead.
-    attachments.results.sort((left, right) => left.article_id.localeCompare(right.article_id)
-      || left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id));
+    attachments.results.sort((left, right) => compareSqliteBinaryText(left.article_id, right.article_id)
+      || compareSqliteBinaryText(left.created_at, right.created_at)
+      || compareSqliteBinaryText(left.id, right.id));
     const articleById = new Map(articles.results.map(article => [article.id, article]));
     const byArticle = new Map<string, Attachment[]>();
     for (const attachment of attachments.results) {
