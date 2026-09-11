@@ -65,6 +65,22 @@ test('failed publication is durable and partial rows clean in bounded continuati
    assert.equal((await f.db.prepare("SELECT COUNT(*) count FROM knowledge_index_chunks WHERE tenant_id='tenant-a' AND document_id='doc-a' AND version=?").bind(start.version).first<{count:number}>())?.count,0);
  } finally {await f.mf.dispose();}
 });
+test('stalled and superseded preparation batches roll back every inserted chunk',async()=>{
+ const f=await fixture(); try {
+   const stalled=await f.repo.begin('stalled','knowledge/stalled/body.md','answer',null,512); await f.repo.sourceCaptured('stalled',stalled.version);
+   const staleCursor=await f.repo.preparation('stalled',stalled.version); assert.ok(staleCursor);
+   await f.db.prepare("UPDATE knowledge_index_jobs SET next_source_offset=1 WHERE tenant_id='tenant-a' AND document_id='stalled'").run();
+   await assert.rejects(f.repo.publishPreparationBatch('stalled',staleCursor!,['x'.repeat(512)],512));
+   assert.equal((await f.db.prepare("SELECT COUNT(*) count FROM knowledge_index_chunks WHERE tenant_id='tenant-a' AND document_id='stalled'").first<{count:number}>())?.count,0);
+   assert.deepEqual(await f.db.prepare("SELECT state,next_source_offset FROM knowledge_index_jobs WHERE tenant_id='tenant-a' AND document_id='stalled'").first(),{state:'preparing',next_source_offset:1});
+
+   const superseded=await f.repo.begin('superseded','knowledge/superseded/body.md','answer',null,512); await f.repo.sourceCaptured('superseded',superseded.version);
+   const staleVersion=await f.repo.preparation('superseded',superseded.version); assert.ok(staleVersion); await f.repo.sourceFailed('superseded',superseded.version);
+   await assert.rejects(f.repo.publishPreparationBatch('superseded',staleVersion!,['y'.repeat(512)],512));
+   assert.equal((await f.db.prepare("SELECT COUNT(*) count FROM knowledge_index_chunks WHERE tenant_id='tenant-a' AND document_id='superseded'").first<{count:number}>())?.count,0);
+   assert.deepEqual(await f.db.prepare("SELECT state,next_source_offset FROM knowledge_index_jobs WHERE tenant_id='tenant-a' AND document_id='superseded'").first(),{state:'failed_cleanup',next_source_offset:0});
+ } finally {await f.mf.dispose();}
+});
 test('native R2 preparation is resumable and serves a later current chunk',async()=>{
  const f=await fixture(); try {
    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'); const vectors:any[]=[];

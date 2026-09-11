@@ -3,8 +3,8 @@ import { AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_R2_KEY_BYTES } f
 import { StatelessAiService } from './ai.service';
 import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { KnowledgeDoc, KnowledgeCategory } from '../repositories/knowledge.repository';
-import { KnowledgeIndexRepository, decodeCompleteKnowledgePrefix, KNOWLEDGE_INDEX_MANIFEST_READ_BYTES, splitKnowledgeManifestBatch } from '../repositories/knowledge-index.repository';
-import { KNOWLEDGE_SOURCE_MAX_BYTES, validKnowledgeSourceText } from '../budgets/knowledge-source-admission.service';
+import { KnowledgeIndexRepository, decodeCompleteKnowledgePrefix, KNOWLEDGE_INDEX_MANIFEST_READ_BYTES, splitKnowledgeManifestBatch, knowledgeSourceFenceStatements } from '../repositories/knowledge-index.repository';
+import { KNOWLEDGE_SOURCE_MAX_BYTES, validKnowledgeSourceText, KnowledgeSourceAdmissionError, type KnowledgeSourceAdmission, type KnowledgeSourceCommit } from '../budgets/knowledge-source-admission.service';
 import crypto from 'node:crypto';
 import { MAX_BGE_REQUEST_BYTES, MAX_STAFF_CONTEXT_BYTES, MAX_STAFF_HISTORY_BYTES, boundUntrustedAiText, truncateUtf8, truncateUtf8Tail } from './ai-input-bounds';
 
@@ -43,17 +43,28 @@ export class TenantKnowledgeService {
     return this.deps.repositories.knowledge.listDocuments();
   }
 
-  async uploadAndProcess(title: string, fileName: string, content: Uint8Array, contentType: string, categoryId?: string, tier: 'answer'|'sop'='answer'): Promise<string> {
+  private admitted(admission: KnowledgeSourceAdmission): KnowledgeSourceCommit | undefined {
+    if (admission.status === 'rejected') throw new Error('Knowledge source admission unavailable');
+    return admission.status === 'admitted' ? admission.commit : undefined;
+  }
+
+  async uploadAndProcess(title: string, fileName: string, content: Uint8Array, contentType: string,
+    categoryId?: string, tier: 'answer'|'sop'='answer', admission: KnowledgeSourceAdmission = {status:'disabled'}): Promise<string> {
     if (content.length > 10 * 1024 * 1024) throw new Error('File too large');
     const safeFileName = fileName.replace(/^.*[\\\/]/, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const id = crypto.randomUUID();
     const filePath = `knowledge/${id}/${safeFileName}`;
-    await this.deps.repositories.knowledge.createDocument({ id, title, file_path: filePath, category_id: categoryId, tier });
     let text: string;
     try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(content); }
     catch { throw new Error('Knowledge source must be valid UTF-8 text'); }
-    await this.stageSource(id, filePath, text, content, contentType, categoryId ?? null, tier);
-    return id;
+    const commit = this.admitted(admission);
+    try {
+      if (commit) await commit.start();
+      await this.stageSource(id,filePath,text,content,contentType,categoryId ?? null,tier,commit,
+        [this.deps.repositories.knowledge.createDocumentStatement({id,title,file_path:filePath,category_id:categoryId,tier})]);
+      commit?.settle('committed');
+      return id;
+    } catch (error) { commit?.settle('unknown'); if(commit && !(error instanceof KnowledgeSourceAdmissionError))throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable'); throw error; }
   }
   async getDocument(id: string): Promise<KnowledgeDoc | null> {
     return this.deps.repositories.knowledge.getDocument(id);
@@ -82,39 +93,56 @@ export class TenantKnowledgeService {
     await this.deps.repositories.knowledge.deleteCategory(id);
   }
 
-  async createArticle(title: string, content: string, categoryId?: string | null, tier: 'answer' | 'sop' = 'answer'): Promise<string> {
+  async createArticle(title: string, content: string, categoryId?: string | null,
+    tier: 'answer' | 'sop' = 'answer', admission: KnowledgeSourceAdmission = {status:'disabled'}): Promise<string> {
     if (!validKnowledgeSourceText(content)) throw new Error('Knowledge source exceeds 10 MiB');
     const id = crypto.randomUUID();
     const filePath = `knowledge/${id}/body.md`;
-    await this.deps.repositories.knowledge.createDocument({ id, title, file_path: filePath, category_id: categoryId, tier });
-    await this.stageSource(id, filePath, content, content, 'text/markdown', categoryId ?? null, tier);
-
-    return id;
+    const sourceTier = tier ?? 'answer', commit = this.admitted(admission);
+    try {
+      if (commit) await commit.start();
+      await this.stageSource(id,filePath,content,content,'text/markdown',categoryId ?? null,sourceTier,commit,
+        [this.deps.repositories.knowledge.createDocumentStatement({id,title,file_path:filePath,category_id:categoryId,tier:sourceTier})]);
+      commit?.settle('committed');
+      return id;
+    } catch (error) { commit?.settle('unknown'); if(commit && !(error instanceof KnowledgeSourceAdmissionError))throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable'); throw error; }
   }
 
-  async updateArticle(id: string, title: string, content: string, categoryId?: string | null, tier: 'answer' | 'sop' = 'answer', status: 'draft'|'pending'|'published' = 'pending'): Promise<void> {
+  async updateArticle(id: string, title: string, content: string, categoryId?: string | null,
+    tier: 'answer' | 'sop' = 'answer', admission: KnowledgeSourceAdmission = {status:'disabled'}): Promise<void> {
     if (!validKnowledgeSourceText(content)) throw new Error('Knowledge source exceeds 10 MiB');
-    const existing = await this.getDocument(id);
-    if (!existing) throw new Error('Document not found');
-    // Indexing is asynchronous. Keep the document visibly pending until a
-    // current manifest is indexed; never report provider work as complete here.
-    await this.deps.repositories.knowledge.updateDocument(id, { title, category_id: categoryId, tier, status: 'pending' });
-    const filePath = `knowledge/${id}/body.md`;
-    await this.stageSource(id, filePath, content, content, 'text/markdown', categoryId ?? null, tier);
+    const sourceTier = tier ?? 'answer', commit = this.admitted(admission);
+    try {
+      if (commit) await commit.start();
+      const existing = await this.getDocument(id);
+      if (!existing) throw new Error('Document not found');
+      const filePath = `knowledge/${id}/body.md`;
+      await this.stageSource(id,filePath,content,content,'text/markdown',categoryId ?? null,sourceTier,commit,
+        this.deps.repositories.knowledge.updateDocumentRequiredStatements(id,{title,category_id:categoryId,tier:sourceTier,status:'pending'}));
+      commit?.settle('committed');
+    } catch (error) { commit?.settle('unknown'); if(commit && !(error instanceof KnowledgeSourceAdmissionError))throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable'); throw error; }
   }
 
   private async stageSource(documentId: string, filePath: string, text: string, source: Uint8Array | string, contentType: string,
-    categoryId: string | null, tier: 'answer'|'sop'): Promise<void> {
+    categoryId: string | null, tier: 'answer'|'sop', commit?: KnowledgeSourceCommit,
+    initialStatements: readonly import('@cloudflare/workers-types').D1PreparedStatement[] = []): Promise<void> {
     if (!validKnowledgeSourceText(text)) throw new Error(`Knowledge source exceeds ${KNOWLEDGE_SOURCE_MAX_BYTES} bytes`);
     const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
     const sourceBytes = typeof source === 'string' ? new TextEncoder().encode(source).byteLength : source.byteLength;
-    const staged = await index.begin(documentId, filePath, tier, categoryId, sourceBytes);
+    const staged = await index.begin(documentId,filePath,tier,categoryId,sourceBytes,'document',commit?.fence,initialStatements);
     try {
-      await this.deps.attachmentStorage.putAttachment(staged.filePath, source, { httpMetadata: { contentType } });
-      if (!await index.sourceCaptured(documentId, staged.version)) throw new Error('Knowledge source capture was superseded');
-      await this.deps.repositories.knowledge.updateDocument(documentId, { file_path: staged.filePath, chunk_count: 0, status: 'pending' });
-    } catch (error) {
-      await index.sourceFailed(documentId, staged.version);
+      await commit?.authorizeCurrent();
+      const bytes = typeof source === 'string' ? new TextEncoder().encode(source) : source;
+      const fingerprint = crypto.createHash('sha256').update(bytes).digest('hex');
+      const put = await this.deps.attachmentStorage.putAttachment(staged.filePath,source,{ httpMetadata:{contentType},
+        customMetadata:{tocynKnowledgeSourceFingerprint:fingerprint},onlyIf:{etagDoesNotMatch:'*'} });
+      if (put?.res === null) throw new Error('Knowledge source capture conflicted');
+      if (!await index.sourceCaptured(documentId,staged.version,commit?.fence,
+        this.deps.repositories.knowledge.updateDocumentRequiredStatements(documentId,{file_path:staged.filePath,chunk_count:0,status:'pending'}))) {
+        throw new Error('Knowledge source capture was superseded');
+      }
+    } catch(error) {
+      try { await commit?.authorizeCurrent(); await index.sourceFailed(documentId,staged.version,commit?.fence); } catch { /* unresolved authority/result remains charged and source_pending */ }
       throw error;
     }
   }
@@ -253,29 +281,40 @@ export class TenantKnowledgeService {
     await this.deps.repositories.knowledge.deleteDocument(id);
   }
 
-  async markArticleAsQA(articleId: string, type: 'answer' | 'sop' | null): Promise<void> {
+  async markArticleAsQA(articleId: string, type: 'answer' | 'sop' | null, admission?: KnowledgeSourceAdmission): Promise<void> {
     // Legacy marks this on 'articles', so use ArticleRepository
+    const commit = type ? this.admitted(admission ?? {status:'rejected',reason:'unavailable'}) : undefined;
+    if (commit) await commit.start();
     const prevArticle = await this.deps.repositories.articles.get(articleId);
-    if (!prevArticle) return;
+    if (!prevArticle) {
+      if (commit) { commit.settle('unknown'); throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable'); }
+      return;
+    }
     
-    await this.deps.repositories.tickets.withExternalWrite(prevArticle.ticket_id, async () => {
+    try {
+      await this.deps.repositories.tickets.withExternalWrite(prevArticle.ticket_id, async () => {
       // Re-read under the durable write claim; retention cannot start until it ends.
       const current = await this.deps.repositories.articles.get(articleId);
-      if (!current) return;
+      if (!current) {
+        if (commit) throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable');
+        return;
+      }
       if (type) {
         const content = current.body || '';
         if (!validKnowledgeSourceText(content)) throw new Error('Knowledge source exceeds 10 MiB');
         const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
-        const staged = await index.begin(articleId, current.body_r2_key || `article/${articleId}`, type, null, new TextEncoder().encode(content).byteLength, 'article');
+        const staged = await index.begin(articleId,current.body_r2_key || `article/${articleId}`,type,null,new TextEncoder().encode(content).byteLength,
+          'article',commit?.fence,[],!!commit);
         try {
-          // Article bodies are already durable on the ticket row; their
-          // manifest preparation still needs an R2 source, so retain the body
-          // under its scoped key before exposing the continuation.
-          await this.deps.attachmentStorage.putAttachment(staged.filePath, content, { httpMetadata: { contentType: 'text/plain' } });
-          if (!await index.sourceCaptured(articleId, staged.version)) throw new Error('Knowledge source capture was superseded');
-          await this.deps.repositories.articles.updateQAState(articleId, type, 0);
-        } catch (error) {
-          await index.sourceFailed(articleId, staged.version);
+          await commit?.authorizeCurrent();
+          const fingerprint=crypto.createHash('sha256').update(content).digest('hex');
+          const put=await this.deps.attachmentStorage.putAttachment(staged.filePath,content,{httpMetadata:{contentType:'text/plain'},
+            customMetadata:{tocynKnowledgeSourceFingerprint:fingerprint},onlyIf:{etagDoesNotMatch:'*'}});
+          if(put?.res===null)throw new Error('Knowledge source capture conflicted');
+          if(!await index.sourceCaptured(articleId,staged.version,commit?.fence,
+            this.deps.repositories.articles.updateQAStateRequiredStatements(articleId,type,0)))throw new Error('Knowledge source capture was superseded');
+        } catch(error) {
+          try { await commit?.authorizeCurrent(); await index.sourceFailed(articleId,staged.version,commit?.fence); } catch { /* unresolved authority/result remains charged and source_pending */ }
           throw error;
         }
       } else {
@@ -286,7 +325,9 @@ export class TenantKnowledgeService {
         if (await index.hasAny(articleId)) await index.withdrawAll(articleId);
         await this.deps.repositories.articles.updateQAState(articleId, null, 0);
       }
-    });
+      },commit ? () => knowledgeSourceFenceStatements(this.deps.database,this.deps.scope,commit.fence) : undefined);
+      commit?.settle('committed');
+    } catch(error) { commit?.settle('unknown'); if(commit && !(error instanceof KnowledgeSourceAdmissionError))throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable'); throw error; }
   }
 
   async getAiSuggestion(ticketId: string): Promise<string> {

@@ -4,16 +4,20 @@ import type { JWTPayload } from '../types';
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { SessionBudgetAuthorityRepository, type SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
 import { sessionTicketBudgetAdmission, ticketMutationAdmissionMode } from '../middleware/budget-admission.middleware';
+import { apiTicketBudgetCache } from '../middleware/budget-admission.middleware';
 import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
 import { KNOWLEDGE_INDEX_CHUNK_BYTES, KNOWLEDGE_INDEX_MAX_CHUNKS } from '../repositories/knowledge-index.repository';
+import type { BudgetCommitAuthority } from './isolate-admission.service';
+import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
 
 export const KNOWLEDGE_SOURCE_MAX_BYTES = 10 * 1024 * 1024;
 // The HTTP request stores the source and creates one durable preparation job.
 // Manifest and cleanup rows are admitted in fixed continuation batches.
 // Version, preparation-job and current-document writes each maintain their
-// primary/secondary lookup structures. Sixteen leaves room for the measured
-// D1 row result plus those maintained indexes and a retry-safe state change.
-const KNOWLEDGE_SOURCE_D1_WRITES = 16;
+// primary/secondary lookup structures. Twenty covers QA's separately fenced
+// retention claim, source begin/capture batches, exact-operation link and
+// claim release; there is no uncharged external retry.
+const KNOWLEDGE_SOURCE_D1_WRITES = 20;
 
 export const KNOWLEDGE_SOURCE_WRITE_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({
   workerRequests: 1, d1RowsRead: 2_560, d1RowsWritten: KNOWLEDGE_SOURCE_D1_WRITES,
@@ -26,7 +30,46 @@ function sourceEnvelope(sourceBytes: number): Readonly<ResourceAmounts> {
   return Object.freeze({ ...KNOWLEDGE_SOURCE_WRITE_ENVELOPE, r2StorageBytes: sourceBytes });
 }
 
-export type KnowledgeSourceAdmission = Readonly<{ status: 'disabled' | 'admitted' | 'rejected'; reason?: 'exhausted' | 'unavailable' }>;
+export type KnowledgeSourceCommitFence = Pick<StaffMutationCommit, 'credential'|'requirements'|'authority'>;
+export class KnowledgeSourceAdmissionError extends Error {}
+
+/** One admitted source attempt. The exact authority never crosses the handler
+ * response boundary and can be started/settled only once. */
+export class KnowledgeSourceCommit {
+  private started = false;
+  private settled = false;
+  readonly fence: KnowledgeSourceCommitFence;
+  constructor(private readonly deps: TenantRequestDeps, credential: SessionBudgetCredential,
+    authority: BudgetCommitAuthority, private readonly now: () => number) {
+    this.fence = Object.freeze({ credential: structuredClone(credential), requirements: Object.freeze({}), authority });
+  }
+  async start(): Promise<KnowledgeSourceCommitFence> {
+    if (this.started || this.settled || this.now() >= this.fence.authority.expiresAt) throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable');
+    this.started = true;
+    await this.authorizeCurrent();
+    return this.fence;
+  }
+  async authorizeCurrent(): Promise<void> {
+    const checkedAt = this.now();
+    if (this.settled || checkedAt >= this.fence.authority.expiresAt) throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable');
+    const sessions = new SessionBudgetAuthorityRepository(this.deps.database,this.deps.scope);
+    const principal = await sessions.authorize(this.fence.credential,this.fence.requirements,checkedAt);
+    if (!principal) throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable');
+    const current = await this.deps.repositories.budgetAuthority.resolveForVerifiedPrincipal(this.deps.scope,principal,checkedAt);
+    if (current.kind !== 'active' || Object.entries(current.commitSnapshot).some(([key,value]) =>
+      this.fence.authority.snapshot[key as keyof typeof current.commitSnapshot] !== value)) throw new KnowledgeSourceAdmissionError('Knowledge source admission unavailable');
+  }
+  settle(outcome: 'committed'|'unknown'): void {
+    if (this.settled) return;
+    this.settled = true;
+    apiTicketBudgetCache.settleOperation(this.fence.authority,outcome,this.now());
+  }
+}
+
+export type KnowledgeSourceAdmission =
+  | Readonly<{ status: 'disabled' }>
+  | Readonly<{ status: 'admitted'; commit: KnowledgeSourceCommit }>
+  | Readonly<{ status: 'rejected'; reason: 'exhausted' | 'unavailable' }>;
 
 function validIdentity(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value);
@@ -66,7 +109,9 @@ export async function admitKnowledgeSourceWrite(input: {
       intent: { operationId: crypto.randomUUID(), operationFingerprint: await fingerprint(['knowledge-source-v1', deps.scope.tenantId, deps.scope.actorId, input.sourceKind, input.sourceBytes]), workScopeKey: 'knowledge.source.write' },
       business: sourceEnvelope(input.sourceBytes), now: input.now,
     });
-    return outcome.status === 'spent' || outcome.status === 'idempotent' ? { status: 'admitted' }
+    const authority = outcome.status !== 'rejected' ? outcome.commitAuthority : undefined;
+    return (outcome.status === 'spent' || outcome.status === 'idempotent') && authority
+      ? { status: 'admitted', commit: new KnowledgeSourceCommit(deps,credential,authority,input.now) }
       : { status: 'rejected', reason: outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted' ? 'exhausted' : 'unavailable' };
   } catch { return { status: 'rejected', reason: 'unavailable' }; }
 }

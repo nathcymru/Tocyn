@@ -17,7 +17,7 @@
     "typecheck:local-tenants": "tsc -p scripts/tsconfig.local-tenant-fixture.json",
     "test:tenant-isolation-core": "tsx --test scripts/tenant-isolation-core.test.ts scripts/article-body-format-runtime.test.ts",
     "typecheck:tenant-isolation-core": "tsc -p scripts/tsconfig.tenant-isolation-core.json",
-    "test:tenant-isolation-storage-background": "tsx --test scripts/tenant-isolation-storage-background.test.ts scripts/durable-object-resource-runtime.test.ts scripts/notification-capacity-runtime.test.ts scripts/notification-collaboration-runtime.test.ts scripts/notification-typing-resource-runtime.test.ts scripts/vectorize-workflow-runtime.test.ts scripts/knowledge-index-manifest-runtime.test.ts",
+    "test:tenant-isolation-storage-background": "tsx --test scripts/tenant-isolation-storage-background.test.ts scripts/durable-object-resource-runtime.test.ts scripts/notification-capacity-runtime.test.ts scripts/notification-collaboration-runtime.test.ts scripts/notification-typing-resource-runtime.test.ts scripts/realtime-admission-runtime.test.ts scripts/vectorize-workflow-runtime.test.ts scripts/knowledge-index-manifest-runtime.test.ts",
     "test:budget-coordinator-runtime": "tsx --test scripts/budget-coordinator-do-runtime.test.ts",
     "test:budget-authority-runtime": "tsx --test scripts/budget-authority-runtime.test.ts",
     "test:budget-grant-holder-runtime": "tsx --test scripts/budget-grant-holder-runtime.test.ts",

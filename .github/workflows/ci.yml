@@ -18,7 +18,7 @@ jobs:
   validate:
     name: Tocyn / ${{ matrix.check }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.check == 'test' && 35 || 20 }}
     strategy:
       fail-fast: false
       matrix:

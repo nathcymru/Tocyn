@@ -1,4 +1,4 @@
-import { D1Database } from '@cloudflare/workers-types';
+import { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { VerifiedTenantScope } from '../types/tenant';
 import crypto from 'node:crypto';
 
@@ -35,15 +35,24 @@ export class SqlKnowledgeRepository {
       .bind(this.scope.tenantId, id).first<KnowledgeDoc>();
   }
 
+  createDocumentStatement(data: { id: string; title: string; file_path: string; category_id?: string | null; tier?: 'answer' | 'sop' }): D1PreparedStatement {
+    return this.db.prepare(
+      "INSERT INTO knowledge_docs (tenant_id, id, title, file_path, category_id, tier) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(this.scope.tenantId, data.id, data.title, data.file_path, data.category_id || null, data.tier || 'answer');
+  }
+
   async createDocument(data: { id?: string; title: string; file_path: string; category_id?: string | null; tier?: 'answer' | 'sop' }): Promise<string> {
     const id = data.id || crypto.randomUUID();
-    await this.db.prepare(
-      "INSERT INTO knowledge_docs (tenant_id, id, title, file_path, category_id, tier) VALUES (?, ?, ?, ?, ?, ?)"
-    ).bind(this.scope.tenantId, id, data.title, data.file_path, data.category_id || null, data.tier || 'answer').run();
+    await this.createDocumentStatement({ ...data, id }).run();
     return id;
   }
 
   async updateDocument(id: string, data: { title?: string; file_path?: string; category_id?: string | null; chunk_count?: number; tier?: 'answer' | 'sop', status?: 'draft'|'pending'|'published' }): Promise<void> {
+    const statement = this.updateDocumentStatement(id,data);
+    if (statement) await statement.run();
+  }
+
+  updateDocumentStatement(id: string, data: { title?: string; file_path?: string; category_id?: string | null; chunk_count?: number; tier?: 'answer' | 'sop', status?: 'draft'|'pending'|'published' }): D1PreparedStatement | null {
     const updates: string[] = [];
     const values: any[] = [];
     if (data.title !== undefined) { updates.push('title = ?'); values.push(data.title); }
@@ -53,11 +62,20 @@ export class SqlKnowledgeRepository {
     if (data.status !== undefined) { updates.push('status = ?'); values.push(data.status); }
     if (data.tier !== undefined) { updates.push('tier = ?'); values.push(data.tier); }
     
-    if (updates.length === 0) return;
+    if (updates.length === 0) return null;
     
     values.push(this.scope.tenantId, id);
     const sql = `UPDATE knowledge_docs SET ${updates.join(', ')} WHERE tenant_id = ? AND id = ?`;
-    await this.db.prepare(sql).bind(...values).run();
+    return this.db.prepare(sql).bind(...values);
+  }
+
+  /** Required source metadata update. A missing/superseded document aborts the
+   * surrounding fenced batch instead of leaving a detached source version. */
+  updateDocumentRequiredStatements(id: string, data: { title?: string; file_path?: string; category_id?: string | null; chunk_count?: number; tier?: 'answer' | 'sop', status?: 'draft'|'pending'|'published' }): readonly D1PreparedStatement[] {
+    const update = this.updateDocumentStatement(id,data);
+    if (!update) throw new Error('Empty knowledge source metadata update');
+    return [update,this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
+      ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId)];
   }
 
   async deleteDocument(id: string): Promise<void> {

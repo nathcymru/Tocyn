@@ -392,9 +392,9 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     const deleteByIds = vi.fn(async () => undefined);
     const service = new TenantKnowledgeService({ database: d1, scope: scopeA, repositories: reposA, attachmentStorage: { putAttachment: vi.fn() }, vectorStorage: { upsert, deleteByIds } } as any, { generateEmbeddings: vi.fn(async () => [0.1]) } as any);
 
-    await service.markArticleAsQA(articleA.id, 'answer');
+    await service.markArticleAsQA(articleA.id, 'answer', { status: 'disabled' });
     expect((await reposA.articles.get(articleA.id))?.qa_type).toBe('answer');
-    await service.markArticleAsQA(articleA.id, 'sop');
+    await service.markArticleAsQA(articleA.id, 'sop', { status: 'disabled' });
     expect((await reposA.articles.get(articleA.id))?.qa_type).toBe('sop');
     await service.markArticleAsQA(articleA.id, null);
     expect(await reposA.articles.get(articleA.id)).toMatchObject({ qa_type: null, chunk_count: 0 });
