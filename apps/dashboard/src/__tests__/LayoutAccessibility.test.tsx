@@ -49,12 +49,16 @@ afterEach(() => {
   vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
 
-it('names global search and shared navigation, focuses its close control and returns focus on Escape', async () => {
+it('names global search, makes its authorised scope available to assistive technology, clears it predictably, and keeps shared navigation reachable', async () => {
   await renderReady();
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
-  const search = screen.getByRole('textbox', { name: 'Search all tickets' });
+  const search = screen.getByRole('textbox', { name: 'Search all authorised tickets' });
+  expect(screen.getByText('Searches all tickets you are authorised to access. Filter this view is available in the Inbox.')).toHaveClass('sr-only');
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
   expect(screen.getByRole('heading')).toHaveTextContent('/tickets?search=Follow%20up');
+  const clear = screen.getByRole('button', { name: 'Clear global ticket search' });
+  fireEvent.click(clear);
+  expect(screen.getByRole('heading')).toHaveTextContent('Route /tickets');
   const trigger = screen.getByRole('button', { name: 'Open navigation' });
   trigger.focus(); fireEvent.click(trigger);
   const dialog = await screen.findByRole('dialog', { name: 'Navigation' });
