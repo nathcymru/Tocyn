@@ -3,6 +3,9 @@ import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import type { IsolateBudgetAdmissionCache, BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import { BudgetGrantRecoveryService } from '../budgets/budget-grant-recovery.service';
 import type { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
+import { CustomerBudgetReservationService } from '../budgets/customer-budget-reservation.service';
+import type { CustomerBudgetCommitHandoff } from '../types/customer-budget-admission';
+import { CustomerCurrentCredentialRepository, type CustomerBudgetCredential, type CustomerBudgetRequirements } from '../repositories/customer-current-credential.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from '../repositories/local-beta-admission.repository';
 import type { ConversationAuditReference } from '../types/conversation-audit';
@@ -41,7 +44,9 @@ async function digest(value: string): Promise<string> {
 }
 
 type MutationAdmissionIntent = Readonly<{ operationId: string; operationFingerprint: string; workScopeKey: string }>;
-type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; budgetIntent?: Promise<MutationAdmissionIntent>; budgetRequired?: boolean; budgetAuthority?: BudgetCommitAuthority; budgetCommitStarted?: boolean;
+type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; budgetIntent?: Promise<MutationAdmissionIntent>;
+  budgetRequired?: boolean; budgetAuthority?: BudgetCommitAuthority; budgetCommitStarted?: boolean;
+  customerBudgetRequired?: boolean; customerBudgetHandoff?: CustomerBudgetCommitHandoff; customerBudgetCommitStarted?: boolean;
   budgetLifecycle?: { cache: IsolateBudgetAdmissionCache; now: () => number } };
 export const API_GRANT_IDLE_SEAL_MS = 30_000;
 
@@ -158,13 +163,14 @@ export class TicketMutationReplayService {
       const body = d.body?.trim() ? d.body : undefined;
       if (portal && body === undefined) throw invalid();
       // Normalize only defaults/absence that have identical persistence effects.
+      if (portal && input.source !== undefined && input.source !== 'widget') throw invalid();
       return {
-        operation: input.operation,
+        operation: input.operation, ...(portal && input.source === 'widget' ? { source: 'widget' as const } : {}),
         data: {
           subject: d.subject, customer_email: customerEmail, ...(body === undefined ? {} : { body }),
           status: portal ? 'open' : d.status ?? 'open', priority: portal ? 'normal' : d.priority ?? 'normal',
           assigned_to: portal ? null : d.assigned_to ?? null, group_id: portal ? null : d.group_id ?? null,
-          ...(portal || d.custom_fields == null ? {} : { custom_fields: d.custom_fields }),
+          ...((portal && input.source !== 'widget') || d.custom_fields == null ? {} : { custom_fields: d.custom_fields }),
         },
       };
     }
@@ -294,6 +300,42 @@ export class TicketMutationReplayService {
     return result;
   }
 
+  /** Customer admission keeps the portal/widget's current identity and exact reply owner private until commit. */
+  async admitCustomerBudget(prepared: PreparedTicketMutation, input: {
+    cache: IsolateBudgetAdmissionCache; repository: BudgetAuthorityRepository; customers: CustomerCurrentCredentialRepository;
+    namespace: DurableObjectNamespace; operation: 'portal.ticket.create' | 'portal.ticket.reply'; business: ResourceAmounts; now: () => number;
+  }) {
+    const attempt = this.attempts.get(prepared);
+    if (!attempt || this.principal.kind !== 'customer' || attempt.input.operation !== input.operation) throw unavailable();
+    attempt.customerBudgetRequired = true;
+    attempt.customerBudgetHandoff = undefined;
+    if (attempt.namespace) {
+      const receipt = await this.repository.findActive(attempt.namespace);
+      if (receipt) return { status: 'replayed' as const, outcome: await this.replay(receipt, attempt.namespace) };
+    }
+    const email = await this.authorize();
+    if (!email) throw unauthorized();
+    let requirements: CustomerBudgetRequirements = {};
+    if ('ticketId' in attempt.input) {
+      const ticket = await this.repository.ticketOwnership(attempt.input.ticketId);
+      if (!ticket || ticket.customer_email !== email || (ticket.customer_id !== null && ticket.customer_id !== this.principal.id)) throw notFound();
+      requirements = { ticket: { id: attempt.input.ticketId, customerId: ticket.customer_id, customerEmail: ticket.customer_email } };
+    }
+    const credential: CustomerBudgetCredential = { tenantId: this.scope.tenantId, actorId: this.principal.id, role: 'customer',
+      sessionVersion: this.principal.sessionVersion, expiresAt: this.principal.expiresAt, email };
+    const reservation = new CustomerBudgetReservationService(input.cache);
+    const reservationPrepared = reservation.prepareCustomerReservation({ repository: input.repository, customers: input.customers, namespace: input.namespace,
+      scope: this.scope, credential, requirements, intent: await this.admissionIntent(prepared), business: input.business, now: input.now });
+    if (!reservationPrepared) throw unavailable();
+    const result = await reservation.reserve(reservationPrepared);
+    if (result.status !== 'rejected') {
+      const handoff = reservation.commitHandoff(reservationPrepared);
+      if (!handoff) throw unavailable();
+      attempt.customerBudgetHandoff = handoff;
+    }
+    return result;
+  }
+
   async commit(prepared: PreparedTicketMutation, verifiedAttachments: VerifiedMutationAttachment[] = []): Promise<MutationOutcome> {
     const attempt = this.attempts.get(prepared);
     if (!attempt) throw unavailable();
@@ -316,9 +358,10 @@ export class TicketMutationReplayService {
         }
       }
       if (attempt.budgetRequired && (!attempt.budgetAuthority || Date.now() >= attempt.budgetAuthority.expiresAt || attempt.budgetCommitStarted)) throw unavailable();
+      if (attempt.customerBudgetRequired && (!attempt.customerBudgetHandoff || Date.now() >= attempt.customerBudgetHandoff.authority.expiresAt || attempt.customerBudgetCommitStarted)) throw unavailable();
       const observedAt = new Date().toISOString();
       const portal = input.operation.startsWith('portal.');
-      const source = portal ? 'portal' : 'api';
+      const source = portal ? (('source' in input && input.source === 'widget') ? 'widget' : 'portal') : 'api';
       const candidate: MutationCandidate = { audit:{kind:this.principal.kind,id:this.principal.id,source}, ticketId: 'ticketId' in input ? input.ticketId : crypto.randomUUID(), attachments: [] };
       if (!('ticketId' in input)) {
         if (portal && input.data.customer_email !== email) throw unauthorized();
@@ -350,9 +393,13 @@ export class TicketMutationReplayService {
       if (candidate.article) candidate.articleId = crypto.randomUUID();
       try {
         if (attempt.budgetRequired && attempt.budgetCommitStarted) throw unavailable();
+        if (attempt.customerBudgetRequired && attempt.customerBudgetCommitStarted) throw unavailable();
         attempt.budgetCommitStarted = true;
-        const snapshot = await this.repository.commit(candidate, attempt.namespace,
-          attempt.budgetRequired ? { apiKeyId: this.principal.id, authority: attempt.budgetAuthority! } : undefined);
+        attempt.customerBudgetCommitStarted = true;
+        const snapshot = attempt.customerBudgetRequired
+          ? await this.repository.commitCustomer(candidate, attempt.namespace, attempt.customerBudgetHandoff!)
+          : await this.repository.commit(candidate, attempt.namespace,
+            attempt.budgetRequired ? { apiKeyId: this.principal.id, authority: attempt.budgetAuthority! } : undefined);
         if (attempt.budgetAuthority && attempt.budgetLifecycle) attempt.budgetLifecycle.cache.settleOperation(attempt.budgetAuthority,'committed',attempt.budgetLifecycle.now());
         return renderMutationSnapshot(snapshot, input.operation, false, Boolean(attempt.namespace));
       } catch {

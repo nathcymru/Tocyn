@@ -26,6 +26,7 @@ import { TicketMutationError } from '../services/ticket-mutation-replay.service'
 import { SlaClockError } from '../repositories/sla-clock.repository';
 import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
 import { MutationInputError, mutationInputErrorBody, normalizeAttachmentReferences, portalTicketCreateSchema, portalTicketReplySchema, readIdempotencyKey, readMutationJson } from './mutation-request';
+import { admitConfiguredCustomerTicketMutation, customerTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -194,6 +195,8 @@ app.get('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddlew
 app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(3, 60000), async (c) => {
   const payload = c.get('jwtPayload');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admissionMode = customerTicketAdmissionMode(c.env);
+  if (admissionMode === 'invalid') return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   try {
     const body = await readMutationJson(c);
     const key = readIdempotencyKey(c);
@@ -215,6 +218,10 @@ app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddle
     } catch (error: any) {
       if (error.message?.includes('APP_MASTER_KEY')) return c.json({ error: 'Server misconfiguration: APP_MASTER_KEY is missing.' }, 500);
       return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
+    }
+    if (admissionMode === 'enabled') {
+      const rejection = await admitConfiguredCustomerTicketMutation(c, 'portal.ticket.create', mutation, prepared);
+      if (rejection) return rejection;
     }
     const outcome = await mutation.commit(prepared);
     if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
@@ -324,6 +331,8 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
   const payload = c.get('jwtPayload');
   const ticketId = c.req.param('id')!;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admissionMode = customerTicketAdmissionMode(c.env);
+  if (admissionMode === 'invalid') return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   try {
     const body = await readMutationJson(c);
     const key = readIdempotencyKey(c);
@@ -340,6 +349,10 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
     if (prepared.replay) {
       if (prepared.replay.keyed) c.header('Idempotency-Replayed', 'true');
       return c.json(prepared.replay.body, prepared.replay.status);
+    }
+    if (admissionMode === 'enabled') {
+      const rejection = await admitConfiguredCustomerTicketMutation(c, 'portal.ticket.reply', mutation, prepared);
+      if (rejection) return rejection;
     }
     let verifiedAttachments;
     try {
