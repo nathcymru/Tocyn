@@ -63,6 +63,7 @@ describe('request controls', () => {
     expect(preflight.headers.get('Access-Control-Allow-Headers')).toContain('Idempotency-Key');
     const response = await app.request('/api/data', { method: 'POST', headers: { Origin: env.PORTAL_URL } }, env);
     expect(response.headers.get('Access-Control-Expose-Headers')).toContain('Idempotency-Replayed');
+    expect(response.headers.get('Access-Control-Expose-Headers')).toContain('X-Next-Cursor');
   });
   it('preflights API credentials with retry keys only on the configured API origin', async () => {
     const app = new Hono(); app.use('*', apiCors);

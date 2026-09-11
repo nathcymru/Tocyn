@@ -75,6 +75,10 @@ export function request<T>(path: string, options: RequestInit = {}): Promise<T> 
   return sessionRequest(path, options, response => response.json() as Promise<T>);
 }
 
+export function requestWithHeaders<T>(path: string, options: RequestInit = {}): Promise<{ data: T; headers: Headers }> {
+  return sessionRequest(path, options, async response => ({ data: await response.json() as T, headers: response.headers }));
+}
+
 /** A 204 is an authorized absence, distinct from a JSON parse failure. */
 export function requestOptional<T>(path: string, options: RequestInit = {}): Promise<T | null> {
   return sessionRequest(path, options, response => response.status === 204 ? Promise.resolve(null) : response.json() as Promise<T>);
@@ -87,6 +91,7 @@ export function requestEmpty(path: string, options: RequestInit = {}): Promise<v
 
 export const dashboardApi = {
   get: <T>(path: string, options?: RequestInit) => request<T>(path, {...options,method:'GET'}),
+  getWithHeaders: <T>(path: string, options?: RequestInit) => requestWithHeaders<T>(path, {...options,method:'GET'}),
   getOptional: <T>(path: string, options?: RequestInit) => requestOptional<T>(path, {...options,method:'GET'}),
   post: <T>(path: string, body?: unknown, options?: RequestInit) => request<T>(path,{...options,method:'POST',body:JSON.stringify(body)}),
   postForm: <T>(path: string, body: FormData, options?: RequestInit) => request<T>(path,{...options,method:'POST',body}),

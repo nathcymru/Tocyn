@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": [
+    "ui-support-state-browser.test.ts",
+    "local-tenant-fixture.ts",
+    "local-beta-fixture.ts"
+  ]
+}

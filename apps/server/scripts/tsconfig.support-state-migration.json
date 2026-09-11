@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["support-state-migration.test.ts", "split-sql.ts", "../src/repositories/support-state.repository.ts", "../src/services/support-state.service.ts", "../src/types/support-state.ts"]
+}

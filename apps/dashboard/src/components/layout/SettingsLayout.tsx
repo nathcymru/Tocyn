@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Settings, Users, Shield, Zap, Key, LayoutTemplate, FormInput, Mail, CreditCard } from 'lucide-react';
+import { Settings, Users, Shield, Zap, Key, LayoutTemplate, FormInput, Mail, CreditCard, Workflow } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { dashboardApi } from '../../api/client';
@@ -11,6 +11,7 @@ function cn(...inputs: any[]) {
 
 const settingsNavigation = [
   { name: 'General', href: '/settings/general', icon: Settings, permissionKey: 'general' },
+  { name: 'Support States', href: '/settings/support-states', icon: Workflow, permissionKey: 'support_states' },
   { name: 'Users', href: '/settings/users', icon: Users, permissionKey: 'users' },
   { name: 'Groups', href: '/settings/groups', icon: Shield, permissionKey: 'groups' },
   { name: 'Ticket Fields', href: '/settings/ticket-fields', icon: FormInput, permissionKey: 'ticket_fields' },
@@ -40,7 +41,7 @@ export function SettingsLayout() {
     return permissions[key] === true;
   };
 
-  const filteredSettingsNav = settingsNavigation.filter(item => hasPermission(item.permissionKey));
+  const filteredSettingsNav = settingsNavigation.filter(item => item.permissionKey === 'support_states' ? user?.role === 'admin' : hasPermission(item.permissionKey));
   const filteredChannelsNav = channelsNavigation.filter(item => hasPermission(item.permissionKey));
 
   return (
