@@ -24,8 +24,12 @@ CREATE TABLE budget_grant_closures (
   operation_count INTEGER NOT NULL CHECK (operation_count BETWEEN 1 AND 8),
   measured_json TEXT NOT NULL CHECK (json_valid(measured_json)),
   uncertain_json TEXT NOT NULL CHECK (json_valid(uncertain_json)),
+  expires_at INTEGER NOT NULL,
   closed_at INTEGER NOT NULL DEFAULT (unixepoch()),
   PRIMARY KEY (tenant_id,reservation_id,holder_id),
   UNIQUE (tenant_id,terminal_evidence_id),
   FOREIGN KEY (tenant_id) REFERENCES budget_tenant_allocations(tenant_id) ON DELETE RESTRICT
 );
+
+CREATE INDEX budget_grant_closures_expiry_idx
+  ON budget_grant_closures (tenant_id,expires_at,reservation_id,holder_id);

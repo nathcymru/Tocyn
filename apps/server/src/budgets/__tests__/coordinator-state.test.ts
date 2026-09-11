@@ -99,6 +99,46 @@ describe('budget coordinator pure state', () => {
     expect(reserve(cappedExpired, 'holder-b', 'capacity-not-returned', 'new-work', { queueOperations: 1 }, 12).outcome).toMatchObject({ reason: 'capacity-exhausted' });
   });
 
+  it('compacts only a certified whole-grant closure while retaining its allocation charge and freeing its slot', () => {
+    const capped = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 1, authority: { effectivePolicy: policy(), authorityCheckedAt: 0 } });
+    const granted = reserve(capped, 'holder-a', 'certified', 'new-work', { queueOperations: 50 }, 1);
+    const grant = granted.outcome.reservation!;
+    const reconciled = reconcileBudgetGrant(granted.state, { reservationId: grant.reservationId, holderId: 'holder-a', expectedPolicyId: 'owner-policy',
+      expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: 'certified-terminal', measured: { queueOperations: 30 }, uncertain: {}, now: 2,
+      certifiedClosure: { operationSetFingerprint: 'synthetic-closure-fingerprint', expiresAt: grant.expiresAt } });
+    expect(reconciled.outcome).toBe('reconciled');
+    expect(reconciled.state.grants).toHaveLength(0);
+    expect(reconciled.state.closedCharges).toMatchObject([{ dimension: 'queueOperations', purpose: 'new-work', units: 30 }]);
+    expect(reserve(reconciled.state, 'holder-b', 'slot-is-free', 'new-work', { queueOperations: 50 }, 2).outcome).toMatchObject({ status: 'granted' });
+    expect(reserve(reconciled.state, 'holder-b', 'charge-is-not-free', 'new-work', { queueOperations: 51 }, 2).outcome).toMatchObject({ status: 'rejected', reason: 'exhausted' });
+    expect(reconcileBudgetGrant(reconciled.state, { reservationId: grant.reservationId, holderId: 'holder-a', expectedPolicyId: 'owner-policy',
+      expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: 'certified-terminal', measured: {}, uncertain: {}, now: 2 }).outcome).toBe('rejected');
+    const rehydrated = JSON.parse(JSON.stringify(reconciled.state));
+    expect(reconcileBudgetGrant(rehydrated, { reservationId: grant.reservationId, holderId: 'holder-a', expectedPolicyId: 'owner-policy',
+      expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: 'certified-terminal', measured: {}, uncertain: {}, now: 2,
+      certifiedClosure: { operationSetFingerprint: 'synthetic-closure-fingerprint', expiresAt: grant.expiresAt } }).outcome).toBe('already-reconciled');
+  });
+
+  it('keeps sustained certified closures in one allocation rollup instead of exhausting detailed slots', () => {
+    let state = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 1,
+      authority: { effectivePolicy: policy(3, 2, 100), authorityCheckedAt: 0 } });
+    for (let index = 0; index < 5; index++) {
+      const granted = reserve(state, `holder-${index}`, `sustained-${index}`, 'new-work', { queueOperations: 10 }, 1);
+      expect(granted.outcome.status).toBe('granted');
+      const grant = granted.outcome.reservation!;
+      const reconciled = reconcileBudgetGrant(granted.state, { reservationId: grant.reservationId, holderId: grant.holderId, expectedPolicyId: 'owner-policy',
+        expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: `terminal-${index}`, measured: { queueOperations: 10 }, uncertain: {}, now: 2,
+        certifiedClosure: { operationSetFingerprint: `sustained-closure-${index}`, expiresAt: grant.expiresAt } });
+      expect(reconciled.outcome).toBe('reconciled');
+      state = reconciled.state;
+    }
+    expect(state.grants).toHaveLength(0);
+    expect(state.closedCharges).toMatchObject([{ dimension: 'queueOperations', purpose: 'new-work', units: 50 }]);
+    expect(reserve(state, 'holder-next', 'sustained-next', 'new-work', { queueOperations: 31 }, 2).outcome)
+      .toMatchObject({ status: 'rejected', reason: 'exhausted' });
+    expect(reserve(state, 'holder-next', 'sustained-remaining', 'new-work', { queueOperations: 30 }, 2).outcome.status).toBe('granted');
+  });
+
   it('rejects partial envelopes and preserves uncertainty in reconciliation', () => {
     const granted = reserve(initial(), 'holder-a', 'multi', 'new-work', { queueOperations: 40 });
     expect(reserve(granted.state, 'holder-b', 'next', 'new-work', { workerRequests: 1 }).outcome).toMatchObject({ reason: 'exhausted' });

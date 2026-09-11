@@ -214,8 +214,9 @@ async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1
   const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
   const coordinator = namespace.get(namespace.idFromName('runtime-owner-coordinator')) as unknown as BudgetCoordinatorDO;
   const grants = async () => (await coordinator.inspectForTrustedRuntime()).tenantStates.flatMap(state => state.grants);
+  const coordinatorState = () => coordinator.inspectForTrustedRuntime();
   const count = async () => (await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant'").first<{ count: number }>())?.count;
-  return { mf, db, control, create, coordinator, namespace, grants, count, initialNow };
+  return { mf, db, control, create, coordinator, namespace, grants, coordinatorState, count, initialNow };
 }
 
 // Synthetic reconstruction is test-only: production accepts the cache's sealed capability.
@@ -454,15 +455,19 @@ test('native identical concurrent closures are idempotent and conflicting termin
     const closures = await Promise.all([repository.close(sealed), repository.close(sealed)]);
     assert.ok(closures.every(Boolean)); assert.deepEqual(closures[0], closures[1]);
     assert.equal(await repository.close({ ...sealed, terminalEvidenceId: 'different-terminal' }), null);
+    assert.equal(await repository.close({ ...sealed, expiresAt: sealed.expiresAt + 1 }), null, 'closure retry must retain its original recovery horizon');
     assert.equal(await recovery.recover({ ...sealed, terminalEvidenceId: 'different-terminal' }, h.initialNow + 1), 'pending');
     assert.deepEqual((await h.grants()).find(item => item.reservationId === grant.reservationId)?.accounted, grant.accounted);
     assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled');
-    const accounted = (await h.grants()).find(item => item.reservationId === grant.reservationId)!.accounted;
+    const tenant = (await h.coordinatorState()).tenantStates.find(item => item.tenantId === sealed.tenantId)!;
+    assert.equal(tenant.grants.some(item => item.reservationId === grant.reservationId), false, 'certified closure releases only its detailed slot');
+    assert.deepEqual(tenant.closedCharges.find(charge => charge.dimension === 'workerRequests' && charge.purpose === 'new-work')?.units,
+      closures[0]!.uncertain.workerRequests, 'the closed allocation charge remains durable after detail compaction');
     const rejected = await h.coordinator.reconcileFromTrustedAuthority({ tenantId: sealed.tenantId, reservationId: sealed.reservationId,
       holderId: sealed.holderId, expectedPolicyId: sealed.policyId, expectedPolicyRevision: 1, expectedRestrictionRevision: 1,
       terminalEvidenceId: sealed.terminalEvidenceId, measured: {}, uncertain: {}, now: h.initialNow + 1 });
     assert.equal(rejected, 'rejected');
-    assert.deepEqual((await h.grants()).find(item => item.reservationId === grant.reservationId)?.accounted, accounted);
+    assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled', 'the D1 closure proves a lost coordinator response without a retained tombstone');
   } finally { await h.mf.dispose(); }
 });
 
@@ -517,11 +522,13 @@ test('idle API closure reconciles the entire two-operation grant', async () => {
     for (const row of operationRows) for (const [dimension,units] of Object.entries(JSON.parse(row.operation_envelope_json) as Record<string,number>)) {
       expectedUncertain[dimension] = (expectedUncertain[dimension] ?? 0) + units;
     }
-    const reconciled = afterTrigger.find(grant => grant.reservationId === original.reservationId)!;
-    assert.equal(reconciled.status, 'reconciled');
-    assert.deepEqual(reconciled.accounted, expectedUncertain, 'cold control and all assigned operation envelopes remain charged');
-    assert.equal(original.envelope.workerRequests! - reconciled.accounted.workerRequests!, 12, 'only six unused two-request operations are released');
-    assert.equal(afterTrigger.filter(grant => grant.purpose === 'new-work').length, 2, 'later work uses a newly charged holder');
+    const tenant = (await h.coordinatorState()).tenantStates.find(item => item.tenantId === 'runtime-tenant')!;
+    assert.equal(afterTrigger.some(grant => grant.reservationId === original.reservationId), false, 'the certified holder detail is compacted');
+    assert.deepEqual(Object.fromEntries(tenant.closedCharges.filter(charge => charge.purpose === 'new-work')
+      .map(charge => [charge.dimension, charge.units])), expectedUncertain, 'cold control and all assigned operation envelopes remain charged');
+    assert.equal(original.envelope.workerRequests! - (tenant.closedCharges.find(charge => charge.dimension === 'workerRequests')?.units ?? 0), 12,
+      'only six unused two-request operations are released');
+    assert.equal(afterTrigger.filter(grant => grant.purpose === 'new-work').length, 1, 'later work uses a newly charged holder');
     assert.equal((await h.control()).calls.reconcile, 1, 'automatic closure sends one whole-grant reconciliation');
     const recovery = new BudgetGrantRecoveryService(h.db,new BudgetAuthorityRepository(h.db),h.namespace as unknown as DurableObjectNamespace,
       createVerifiedTenantScope('runtime-tenant','runtime-key',['integration'],1),'runtime-key');
@@ -530,13 +537,14 @@ test('idle API closure reconciles the entire two-operation grant', async () => {
       terminalEvidenceId: closure!.terminal_evidence_id, operations: operationRows.map(row => ({ operationId: row.operation_id,
         operationFingerprint: row.operation_fingerprint, operationEnvelope: JSON.parse(row.operation_envelope_json) })),
       operationIds: operationRows.map(row => row.operation_id), operationFingerprint: 'test',
-      operationEnvelopes: operationRows.map(row => JSON.parse(row.operation_envelope_json)), envelope: original.envelope },h.initialNow + 30_001);
+      operationEnvelopes: operationRows.map(row => JSON.parse(row.operation_envelope_json)), envelope: original.envelope,
+      expiresAt: original.expiresAt },h.initialNow + 30_001);
     assert.equal(recovered,'reconciled',`recovery service result: ${recovered}`);
     const uncertain = Object.fromEntries(JSON.parse(closure!.uncertain_json)) as Record<string,number>;
     const result = await h.coordinator.reconcileFromTrustedAuthority({ tenantId: 'runtime-tenant', reservationId: original.reservationId,
       holderId: original.holderId, expectedPolicyId: 'runtime-owner-policy', expectedPolicyRevision: 1, expectedRestrictionRevision: 1,
       terminalEvidenceId: closure!.terminal_evidence_id, measured: {}, uncertain, now: h.initialNow + 30_001 });
-    assert.equal(result,'already-reconciled',`direct coordinator outcome: ${result}; trigger=${trigger.status} ${triggerBody}`);
+    assert.equal(result,'rejected',`uncertified direct retry must not claim a compacted closure; trigger=${trigger.status} ${triggerBody}`);
     assert.equal(trigger.status,201,`${triggerBody}; afterTrigger=${JSON.stringify(afterTrigger.map(grant => [grant.reservationId,grant.purpose,grant.status]))}`);
   } finally { await h.mf.dispose(); }
 });
@@ -570,7 +578,30 @@ test('lost reconciliation replies use two bounded attempts and then block the se
     const control = await h.control();
     assert.equal(control.calls.reconcile,2);
     assert.equal((await h.grants()).filter(grant => grant.purpose === 'recovery').length,1);
-    assert.equal((await h.grants()).find(grant => grant.purpose === 'new-work')?.status,'reconciled');
+    assert.equal((await h.grants()).some(grant => grant.purpose === 'new-work'),false);
+    assert.ok((await h.coordinatorState()).tenantStates.find(tenant => tenant.tenantId === 'runtime-tenant')?.closedCharges.length,
+      'lost coordinator acknowledgements retain the certified new-work charge without retaining a slot');
+  } finally { await h.mf.dispose(); }
+});
+
+test('native expired closure cleanup removes only stale D1 proof while retained certified accounting survives', async () => {
+  const h = await warmHarness();
+  try {
+    const response = await h.create('closure-prune'); assert.equal(response.status, 201); await response.body?.cancel();
+    const { sealed, recovery } = await sealedFixture(h);
+    assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled');
+    const before = (await h.coordinatorState()).tenantStates.find(tenant => tenant.tenantId === sealed.tenantId)!;
+    const retained = structuredClone(before.closedCharges);
+    assert.ok(retained.length);
+    const closureRepository = new BudgetGrantClosureRepository(h.db);
+    await closureRepository.pruneExpired(sealed.tenantId, sealed.expiresAt);
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM budget_grant_closures WHERE tenant_id=?').bind(sealed.tenantId)
+      .first<{ count: number }>())?.count, 0);
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM budget_grant_operations WHERE tenant_id=?').bind(sealed.tenantId)
+      .first<{ count: number }>())?.count, 0);
+    const after = (await h.coordinatorState()).tenantStates.find(tenant => tenant.tenantId === sealed.tenantId)!;
+    assert.deepEqual(after.closedCharges, retained, 'expiry removes retry evidence only after its policy horizon; stock/window accounting remains');
+    assert.equal(await recovery.recover(sealed, sealed.expiresAt), 'rejected', 'expired proof can never authorize delayed recovery');
   } finally { await h.mf.dispose(); }
 });
 

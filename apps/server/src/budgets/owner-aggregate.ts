@@ -207,6 +207,13 @@ function allocationMatches(reference: { dimension: ResourceDimension; allocation
   return reference.dimension === allocation.dimension && reference.allocationId === allocation.allocationId && reference.windowId === allocation.window.id;
 }
 
+function allocationMatchesClosedCharge(allocation: CoordinatorAllocation, charge: { dimension: ResourceDimension; allocationId: string;
+  window: CoordinatorAllocation['window']; purpose: BudgetPurpose }, purpose: BudgetPurpose): boolean {
+  if (charge.dimension !== allocation.dimension || charge.purpose !== purpose) return false;
+  if (allocation.window.kind === 'stock') return charge.window.kind === 'stock';
+  return charge.window.kind === 'interval' && charge.allocationId === allocation.allocationId && charge.window.id === allocation.window.id;
+}
+
 function charged(state: BudgetOwnerAggregateState, allocation: CoordinatorAllocation, purpose: BudgetPurpose): number {
   let total = 0;
   for (const tenant of state.tenantStates) {
@@ -214,6 +221,12 @@ function charged(state: BudgetOwnerAggregateState, allocation: CoordinatorAlloca
       if (grant.purpose !== purpose || !grant.allocations.some(reference => allocationMatches(reference, allocation))) continue;
       const next = total + (grant.accounted[allocation.dimension] ?? 0);
       if (!Number.isSafeInteger(next)) throw new BudgetCoordinatorStateError('owner aggregate charge overflow');
+      total = next;
+    }
+    for (const charge of tenant.closedCharges ?? []) {
+      if (!allocationMatchesClosedCharge(allocation, charge, purpose)) continue;
+      const next = total + charge.units;
+      if (!Number.isSafeInteger(next)) throw new BudgetCoordinatorStateError('owner aggregate closed charge overflow');
       total = next;
     }
   }
