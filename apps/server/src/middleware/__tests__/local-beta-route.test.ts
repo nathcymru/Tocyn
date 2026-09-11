@@ -11,4 +11,8 @@ describe('localBetaRoute', () => {
     expect(localBetaRoute('GET', '/api/v1/tickets/ticket-1/reply-capability')).toBe('disabled');
     expect(localBetaRoute('GET', '/api/v1/customer/tickets/ticket-1/reply-capability')).toBe('disabled');
   });
+
+  it('admits the responsible-owner transition as a bounded conversation write', () => {
+    expect(localBetaRoute('PATCH', '/api/tickets/ticket-1/responsible-owner')).toBe('conversation-write');
+  });
 });

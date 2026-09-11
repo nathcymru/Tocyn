@@ -28,6 +28,14 @@ export class StaffTicketMutationRepository {
     // Preserve dashboard's existing link-to-existing-user behavior; no customer creation.
     return this.db.prepare('SELECT id FROM users WHERE tenant_id=? AND email=? LIMIT 1').bind(this.scope.tenantId,email).first();
   }
+  async eligibleResponsibleOwner(ticketId: string, ownerId: string | null): Promise<boolean> {
+    const row = await this.db.prepare(`SELECT 1 AS eligible FROM tickets t WHERE t.tenant_id=? AND t.id=?
+      AND (? IS NULL OR EXISTS (SELECT 1 FROM users owner WHERE owner.tenant_id=t.tenant_id AND owner.id=?
+        AND owner.role IN ('admin','agent') AND (t.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership
+          WHERE membership.tenant_id=t.tenant_id AND membership.user_id=owner.id AND membership.group_id=t.group_id)))) LIMIT 1`)
+      .bind(this.scope.tenantId,ticketId,ownerId,ownerId).first<{ eligible: number }>();
+    return row?.eligible === 1;
+  }
 }
 
 /** Fixed guard only: no request-provided SQL or assertion callbacks. */
@@ -46,6 +54,18 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
     sql.push(`EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=? AND t.group_id IS ?
       AND (?='admin' OR t.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups WHERE tenant_id=t.tenant_id AND user_id=? AND group_id=t.group_id)))`);
     values.push(scope.tenantId,requirement.ticket.id,requirement.ticket.groupId,c.role,c.actorId);
+  }
+  if (commit.responsibleOwner) {
+    const assignment = commit.responsibleOwner;
+    // `assigned_to` remains the single canonical responsible-handler field.
+    // A target is current tenant staff and, for a grouped ticket, remains a
+    // current member of that exact group at commit time. This is deliberately
+    // independent of later #137 availability, ceilings, and fairness rules.
+    sql.push(`EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=?
+      AND (? IS NULL OR EXISTS (SELECT 1 FROM users owner WHERE owner.tenant_id=t.tenant_id AND owner.id=?
+        AND owner.role IN ('admin','agent') AND (t.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership
+          WHERE membership.tenant_id=t.tenant_id AND membership.user_id=owner.id AND membership.group_id=t.group_id)))))`);
+    values.push(scope.tenantId,assignment.ticketId,assignment.ownerId,assignment.ownerId);
   }
   if (requirement.capability) {
     const f = requirement.capability;

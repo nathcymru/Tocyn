@@ -7,7 +7,7 @@ import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
-import { useTicket, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
+import { useTicket, useAssignResponsibleOwner, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
 import { useCollaboration } from '../components/CollaborationContext';
@@ -66,6 +66,8 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const { data: ticketFields } = useTicketFields();
   const customFieldPrefix = useId();
   const updateTicket = useUpdateTicket();
+  const assignResponsibleOwner = useAssignResponsibleOwner();
+  const ticketMutationPending = updateTicket.isPending || assignResponsibleOwner.isPending;
   const {
     data: supportStates = [],
     loadMore: loadMoreSupportStates,
@@ -251,7 +253,12 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     setChangeError(null);
     setNotice('');
     try {
-      await updateTicket.mutateAsync({ id, ...changes });
+      if (control === 'assigned_to') {
+        await assignResponsibleOwner.mutateAsync({ id, ownerId: changes.assigned_to ?? null,
+          expectedOwnerId: ticket?.assigned_to ?? null, idempotencyKey: crypto.randomUUID() });
+      } else {
+        await updateTicket.mutateAsync({ id, ...changes });
+      }
       if (control) {
         setIsConfirmingTicketSelect(true);
         try {
@@ -622,7 +629,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
             <TocynSelect
               key={`ticket-status-${ticketSelectVersions.status}`}
               ref={node => { ticketSelectRefs.current.status = node; }}
-              aria-label="Status" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+              aria-label="Status" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
               value={ticket.status}
               onChange={(e) => {
                 if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
@@ -1087,7 +1094,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                 <TocynSelect
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   ref={node => { ticketSelectRefs.current.priority = node; }}
-                  id="ticket-priority" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-priority" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.priority}
                   onChange={(e) => {
                     if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.priority; return; }
@@ -1108,7 +1115,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                 <TocynSelect
                   key={`ticket-assigned_to-${ticketSelectVersions.assigned_to}`}
                   ref={node => { ticketSelectRefs.current.assigned_to = node; }}
-                  id="ticket-assigned_to" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-assigned_to" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.assigned_to || ''}
                   onChange={(e) => {
                     if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.assigned_to || ''; return; }
@@ -1129,7 +1136,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                 <TocynSelect
                   key={`ticket-group_id-${ticketSelectVersions.group_id}`}
                   ref={node => { ticketSelectRefs.current.group_id = node; }}
-                  id="ticket-group_id" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-group_id" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.group_id || ''}
                   onChange={(e) => {
                     if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.group_id || ''; return; }
