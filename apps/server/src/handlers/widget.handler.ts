@@ -130,7 +130,7 @@ widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, tenantRate
       return c.json(prepared.replay.body.ticket, prepared.replay.status);
     }
     if (admissionMode === 'enabled') {
-      const rejection = await admitConfiguredCustomerTicketMutation(c, 'portal.ticket.create', mutation, prepared);
+      const rejection = await admitConfiguredCustomerTicketMutation(c, 'portal.ticket.create', mutation, prepared, outcome => outcome.body.ticket);
       if (rejection) return rejection;
     }
     const outcome = await mutation.commit(prepared);

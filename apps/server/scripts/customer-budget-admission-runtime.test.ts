@@ -74,7 +74,7 @@ async function fixture() {
     const reserve = async (operation: string, tenantId = 'tenant-a', credential = credentialFor(tenantId), requirements = requirementsFor(tenantId)) => {
       const scope = scopeFor(tenantId);
       const service = new CustomerBudgetReservationService(cache);
-      const prepared = service.prepare({ repository: new BudgetAuthorityRepository(db, scope), customers: new CustomerCurrentCredentialRepository(db, scope), namespace,
+      const prepared = service.prepareCustomerReservation({ repository: new BudgetAuthorityRepository(db, scope), customers: new CustomerCurrentCredentialRepository(db, scope), namespace,
         scope, credential, requirements, intent: { operationId: operation, operationFingerprint: `digest:${operation}`, workScopeKey: 'ticket:shared-ticket' },
         business: { d1RowsRead: 2_560, d1RowsWritten: 1, logEvents: 136 }, now: () => NOW });
       assert.ok(prepared, 'trusted composition supplied a bounded private intent');

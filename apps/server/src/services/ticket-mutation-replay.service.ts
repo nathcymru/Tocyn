@@ -309,7 +309,7 @@ export class TicketMutationReplayService {
     const credential: CustomerBudgetCredential = { tenantId: this.scope.tenantId, actorId: this.principal.id, role: 'customer',
       sessionVersion: this.principal.sessionVersion, expiresAt: this.principal.expiresAt, email };
     const reservation = new CustomerBudgetReservationService(input.cache);
-    const reservationPrepared = reservation.prepare({ repository: input.repository, customers: input.customers, namespace: input.namespace,
+    const reservationPrepared = reservation.prepareCustomerReservation({ repository: input.repository, customers: input.customers, namespace: input.namespace,
       scope: this.scope, credential, requirements, intent: await this.admissionIntent(prepared), business: input.business, now: input.now });
     if (!reservationPrepared) throw unavailable();
     const result = await reservation.reserve(reservationPrepared);

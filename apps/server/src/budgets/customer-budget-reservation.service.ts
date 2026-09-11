@@ -36,7 +36,7 @@ export class CustomerBudgetReservationService {
   private readonly attempts = new WeakMap<PreparedCustomerBudgetReservation, Attempt>();
   constructor(private readonly cache: IsolateBudgetAdmissionCache) {}
 
-  prepare(input: CustomerBudgetReservationInput): PreparedCustomerBudgetReservation | null {
+  prepareCustomerReservation(input: CustomerBudgetReservationInput): PreparedCustomerBudgetReservation | null {
     if (!validIntent(input.intent)) return null;
     const prepared = Object.freeze({}) as PreparedCustomerBudgetReservation;
     // Database/binding objects are capability references and cannot be cloned;

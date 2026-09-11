@@ -3,6 +3,7 @@ import type { TicketMutationReplayService, PreparedTicketMutation } from '../ser
 import type { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
 import { CustomerCurrentCredentialRepository } from '../repositories/customer-current-credential.repository';
 import type { PreparedStaffMutation } from '../types/staff-ticket-mutation';
+import type { MutationOutcome } from '../types/ticket-mutation-replay';
 import type { Context } from 'hono';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { Env } from '../bindings';
@@ -171,6 +172,7 @@ export async function admitConfiguredStaffTicketMutation(
 export async function admitConfiguredCustomerTicketMutation(
   c: Context<{ Bindings: Env; Variables: AppVariables }>, operation: CustomerTicketBudgetOperation,
   mutation: TicketMutationReplayService, prepared: PreparedTicketMutation,
+  projectReplayBody: (outcome: MutationOutcome) => unknown = outcome => outcome.body,
 ): Promise<Response | null> {
   const configured = customerTicketAdmissionMode(c.env);
   if (configured === 'disabled') return null;
@@ -189,7 +191,7 @@ export async function admitConfiguredCustomerTicketMutation(
     });
     if (outcome.status === 'replayed') {
       c.header('Idempotency-Replayed', 'true');
-      return c.json(outcome.outcome.body, outcome.outcome.status);
+      return c.json(projectReplayBody(outcome.outcome), outcome.outcome.status);
     }
     if (outcome.status === 'spent' || outcome.status === 'idempotent') return null;
     if (outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted') {

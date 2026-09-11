@@ -10,6 +10,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { splitSql } from './split-sql';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
 import { createVerifiedTenantScope } from '../src/auth/scope';
+import { canonicalMutationJson } from '../src/services/ticket-mutation-replay.service';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 import type { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
 import type { DurableObjectNamespace } from '@cloudflare/workers-types';
@@ -149,10 +150,10 @@ test('real local combined policy admits API, staff, portal and widget mutations 
     }] }));
     const db = await mf.getD1Database('DB');
     await applyMigrations(db);
-    await seed(db, 0, policy({ workerRequests: 1_000_000, d1RowsRead: 2_000_000, d1RowsWritten: 1_000_000,
-      doRequests: 1_000_000, doRowsRead: 1_000_000, doRowsWritten: 1_000_000, logEvents: 200_000_000, r2ClassBOperations: 1_000_000 }));
-    const customerLimits = policy({ workerRequests: 1_000_000, d1RowsRead: 2_000_000, d1RowsWritten: 1_000_000,
-      doRequests: 1_000_000, doRowsRead: 1_000_000, doRowsWritten: 1_000_000, logEvents: 200_000_000, r2ClassBOperations: 1_000_000 });
+    await seed(db, 0, policy({ workerRequests: 10_000_000, d1RowsRead: 10_000_000, d1RowsWritten: 10_000_000,
+      doRequests: 10_000_000, doRowsRead: 10_000_000, doRowsWritten: 10_000_000, logEvents: 200_000_000, r2ClassBOperations: 10_000_000 }));
+    const customerLimits = policy({ workerRequests: 10_000_000, d1RowsRead: 10_000_000, d1RowsWritten: 10_000_000,
+      doRequests: 10_000_000, doRowsRead: 10_000_000, doRowsWritten: 10_000_000, logEvents: 200_000_000, r2ClassBOperations: 10_000_000 });
     const customerRestriction = (tenantId: string) => JSON.stringify({ schemaVersion: 1, tenantId,
       ownerPolicyId: customerLimits.policyId, ownerPolicyRevision: 1, revision: 1, mode: 'conservative',
       limits: Object.fromEntries(customerLimits.budgets.map(item => [item.dimension, item.limit])), disabledFeatures: [] });
@@ -216,8 +217,10 @@ test('real local combined policy admits API, staff, portal and widget mutations 
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'idempotency-key': key },
       body: JSON.stringify({ message: 'synthetic public reply' }),
     });
+    let widgetRequest = 0;
     const widgetCreate = (token: string, key: string, subject: string) => mf!.dispatchFetch('http://runtime.test/api/v1/widget/tickets', {
-      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'idempotency-key': key },
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'idempotency-key': key,
+        'cf-connecting-ip': `127.0.0.${++widgetRequest}` },
       body: JSON.stringify({ subject, email: 'customer@runtime.test', message: 'synthetic customer message' }),
     });
 
@@ -234,10 +237,29 @@ test('real local combined policy admits API, staff, portal and widget mutations 
 
     const crossSurface = await widgetCreate(firstCustomerToken, 'customer-portal-create', 'Portal customer receipt');
     assert.equal(crossSurface.status, 409, 'the trusted widget source changes the canonical request fingerprint'); await crossSurface.body?.cancel();
-    const widgetFirst = await widgetCreate(firstCustomerToken, 'customer-widget-create', 'Widget customer receipt');
-    assert.equal(widgetFirst.status, 201); await widgetFirst.body?.cancel();
-    assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant' AND source='widget' AND subject='Widget customer receipt'")
-      .first<{ count: number }>())?.count, 1, 'widget attribution persists through the customer canonical write');
+
+    const raceKey = 'customer-widget-admission-race';
+    const raceTicket = { id: 'widget-admission-race-ticket', subject: 'Widget admission race', customer_email: 'customer@runtime.test' };
+    const raceArticle = { id: 'widget-admission-race-article', body: 'synthetic customer message' };
+    const raceInput = { operation: 'portal.ticket.create' as const, source: 'widget' as const, data: {
+      subject: raceTicket.subject, customer_email: raceTicket.customer_email, body: raceArticle.body,
+      status: 'open', priority: 'normal', assigned_to: null, group_id: null,
+    } };
+    const raceSnapshot = JSON.stringify({ version: 1, ticket: { tenant_id: 'runtime-tenant', ...raceTicket, status: 'open', priority: 'normal',
+      customer_id: 'runtime-customer', assigned_to: null, group_id: null, source: 'widget' }, article: { tenant_id: 'runtime-tenant', ...raceArticle,
+      ticket_id: raceTicket.id, sender_id: 'runtime-customer', sender_type: 'customer', is_internal: false, intake_source: 'widget' }, attachments: [] });
+    await mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ receiptWinner: {
+      tenantId: 'runtime-tenant', principalId: 'runtime-customer', operation: 'portal.ticket.create', keyHash: await credentialDigest(raceKey),
+      payloadHash: await credentialDigest(`ticket-mutation-v1\n${canonicalMutationJson(raceInput)}`), ticket: raceTicket, article: raceArticle, snapshot: raceSnapshot,
+    } }) });
+    const widgetAdmissionReplay = await widgetCreate(firstCustomerToken, raceKey, raceTicket.subject);
+    assert.equal(widgetAdmissionReplay.status, 201);
+    assert.equal(widgetAdmissionReplay.headers.get('Idempotency-Replayed'), 'true');
+    const widgetAdmissionBody = await widgetAdmissionReplay.json() as { id?: string; ticket?: unknown };
+    assert.ok(widgetAdmissionBody.id, 'an admission-time replay preserves the widget ticket response shape');
+    assert.equal(widgetAdmissionBody.ticket, undefined);
+    assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant' AND source='widget' AND subject='Widget admission race'")
+      .first<{ count: number }>())?.count, 1, 'the post-prepare winner is the only widget mutation');
 
     const isolated = await portalCreate(secondTenantToken, 'customer-portal-create', 'Portal customer receipt');
     assert.equal(isolated.status, 201, 'the same customer id and retry key are tenant-scoped'); await isolated.body?.cancel();
@@ -258,7 +280,8 @@ test('real local combined policy admits API, staff, portal and widget mutations 
     assert.equal(revokedWidget.status, 401, 'widget rejects a revoked current session before admission'); await revokedWidget.body?.cancel();
     const rotatedToken = await customerToken(jwtSecret, 'runtime-tenant', 'customer@runtime.test', 2);
     const rotatedWidget = await widgetCreate(rotatedToken, 'customer-widget-rotated', 'Current widget session');
-    assert.equal(rotatedWidget.status, 201, 'the verified widget scope carries the current session version into its canonical fence'); await rotatedWidget.body?.cancel();
+    const rotatedBody = await rotatedWidget.json();
+    assert.equal(rotatedWidget.status, 201, `the verified widget scope carries the current session version into its canonical fence: ${JSON.stringify(rotatedBody)}`);
     assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant' AND subject IN ('must not commit','must not commit at the canonical fence')")
       .first<{ count: number }>())?.count, 0);
   } finally { await mf?.dispose(); }
