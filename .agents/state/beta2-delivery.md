@@ -1,4 +1,4 @@
-Latest coordinating checkpoint: [11 September 09:25 BST](beta2-checkpoint-2026-09-11-0925.md). Full beta.2 acceptance remains open.
+Latest coordinating checkpoint: [11 September 09:45 BST, updated 10:12](beta2-checkpoint-2026-09-11-0945.md). Full beta.2 acceptance remains open.
 
 Historical checkpoints: [08:55 BST](beta2-checkpoint-2026-09-11-0855.md), [08:25 BST](beta2-checkpoint-2026-09-11-0825.md).
 
