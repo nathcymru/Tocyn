@@ -11,7 +11,8 @@ export const CUSTOMER_AUTH_ENVELOPES: Readonly<Record<CustomerAuthOperation, Rea
   request: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, d1RowsWritten: 32, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
   verify: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, d1RowsWritten: 24, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
   logout: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, d1RowsWritten: 8, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
-  session: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
+  // Current-session lookup also persists the exact admission fence and grant link.
+  session: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, d1RowsWritten: 8, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
 });
 
 export type CustomerAuthAdmission = Readonly<{ authority: BudgetCommitAuthority; fence: CustomerAuthBudgetFence;

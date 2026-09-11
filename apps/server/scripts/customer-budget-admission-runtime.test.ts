@@ -181,6 +181,11 @@ test('customer auth fences native token and session effects after admission-time
     const writeMeter = meterNativeD1Writes(f.db);
     const env = { DB: writeMeter.database, BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: namespace,
       localNow: () => clock } as any;
+    const assertEnvelopeWrites = (operation: 'request' | 'verify' | 'logout' | 'session'): void => {
+      const rowsWritten = writeMeter.rowsWritten(), envelope = CUSTOMER_AUTH_ENVELOPES[operation].d1RowsWritten ?? 0;
+      assert.ok(rowsWritten <= envelope, `${operation} wrote ${rowsWritten}/${envelope} D1 rows`);
+      t.diagnostic(`native customer auth ${operation}: ${rowsWritten}/${envelope} D1 rows written ${JSON.stringify(writeMeter.samples())}`);
+    };
     const widgetScope = createVerifiedTenantScope('tenant-a', 'widget-anonymous', ['customer'], 1);
     const widgetDeps = createTenantRequestDeps(widgetScope, env);
     await f.db.prepare("INSERT INTO tenant_config(tenant_id,key,value) VALUES ('tenant-a','widget.public_key','widget-a')").run();
@@ -209,17 +214,18 @@ test('customer auth fences native token and session effects after admission-time
     await widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'otp-fifth', 'otp-fifth-hash', 'otp', '2099-01-01', otpIssue.admission!.fence);
     otpIssue.admission!.settle('committed');
     const otpIssueWrites = writeMeter.rowsWritten();
-    assert.ok(otpIssueWrites <= (CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten ?? 0),
-      `new OTP after ${historicalOtpCount} historical rows wrote ${otpIssueWrites}/${CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten} D1 rows`);
-    t.diagnostic(`native OTP issue after ${historicalOtpCount} historical rows: ${otpIssueWrites}/${CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten} D1 rows written ${JSON.stringify(writeMeter.samples())}`);
+    assertEnvelopeWrites('request');
+    t.diagnostic(`native OTP issue after ${historicalOtpCount} historical rows: ${otpIssueWrites}/${CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten} D1 rows written`);
     for (let attempt = 0; attempt < 4; attempt++) {
       const admission = await admitOtpVerify();
       assert.equal(await widgetDeps.repositories.users.verifyAndConsumeCustomerAuthToken(`wrong-${attempt}`, '2026-09-11T10:00:00.000Z', 'otp-fifth', admission.admission!.fence), null);
       admission.admission!.settle('committed');
     }
+    writeMeter.reset();
     const fifth = await admitOtpVerify();
     assert.equal((await widgetDeps.repositories.users.verifyAndConsumeCustomerAuthToken('otp-fifth-hash', '2026-09-11T10:00:00.000Z', 'otp-fifth', fifth.admission!.fence))?.id, 'shared-customer');
     fifth.admission!.settle('committed');
+    assertEnvelopeWrites('verify');
     const exhaustedIssue = await admitWidget();
     await widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'otp-exhausted', 'otp-exhausted-hash', 'otp', '2099-01-01', exhaustedIssue.admission!.fence);
     exhaustedIssue.admission!.settle('committed');
@@ -233,6 +239,14 @@ test('customer auth fences native token and session effects after admission-time
       'an exhausted OTP is not consumed by a later claim');
     exhausted.admission!.settle('committed');
     assert.equal((await f.db.prepare("SELECT used_at FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='otp-exhausted'").first<{used_at:string|null}>())!.used_at, null);
+    await f.db.batch([
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version) VALUES ('tenant-a','pointer-delete','pointer-delete@example.test','customer',1)"),
+      f.db.prepare("INSERT INTO customer_auth_tokens (tenant_id,id,user_id,token_hash,type,expires_at) VALUES ('tenant-a','pointer-delete-otp','pointer-delete','pointer-delete-hash','otp','2099-01-01')"),
+      f.db.prepare("INSERT INTO customer_current_otp_challenges(tenant_id,user_id,token_id) VALUES ('tenant-a','pointer-delete','pointer-delete-otp')"),
+    ]);
+    await f.db.prepare("DELETE FROM users WHERE tenant_id='tenant-a' AND id='pointer-delete'").run();
+    assert.equal(await f.db.prepare("SELECT token_id FROM customer_current_otp_challenges WHERE tenant_id='tenant-a' AND user_id='pointer-delete'").first(), null,
+      'deleting a tenant-qualified customer cascades its OTP pointer');
 
     const staleWidget = await admitWidget();
     assert.equal(staleWidget.status, 'admitted');
@@ -259,6 +273,25 @@ test('customer auth fences native token and session effects after admission-time
     await f.db.prepare("UPDATE budget_tenant_allocations SET state='active' WHERE tenant_id='tenant-a'").run();
     const customerScope = createVerifiedTenantScope('tenant-a', 'shared-customer', ['customer'], 1);
     const customerDeps = createTenantRequestDeps(customerScope, env);
+    writeMeter.reset();
+    const session = await admitCustomerAuthEffect({ env, deps: customerDeps, operation: 'session',
+      principal: { kind: 'session' as const, sessionVersion: 1 }, credentialKey: 'customer:shared-customer:1', now: () => clock });
+    assert.equal(session.status, 'admitted');
+    assert.equal((await customerDeps.repositories.users.get('shared-customer', session.admission!.fence))?.id, 'shared-customer');
+    session.admission!.settle('committed');
+    assertEnvelopeWrites('session');
+
+    await f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version) VALUES ('tenant-a','logout-customer','logout-customer@example.test','customer',1)").run();
+    const normalLogoutScope = createVerifiedTenantScope('tenant-a', 'logout-customer', ['customer'], 1);
+    const normalLogoutDeps = createTenantRequestDeps(normalLogoutScope, env);
+    writeMeter.reset();
+    const normalLogout = await admitCustomerAuthEffect({ env, deps: normalLogoutDeps, operation: 'logout',
+      principal: { kind: 'session' as const, sessionVersion: 1 }, credentialKey: 'customer:logout-customer:1', now: () => clock });
+    assert.equal(normalLogout.status, 'admitted');
+    await normalLogoutDeps.repositories.users.revokeSessions('logout-customer', normalLogout.admission!.fence);
+    normalLogout.admission!.settle('committed');
+    assertEnvelopeWrites('logout');
+
     const logout = await admitCustomerAuthEffect({ env, deps: customerDeps, operation: 'logout',
       principal: { kind: 'session' as const, sessionVersion: 1 }, credentialKey: 'customer:shared-customer:1', now: () => clock });
     assert.equal(logout.status, 'admitted');
