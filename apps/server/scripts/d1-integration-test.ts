@@ -1,6 +1,7 @@
 import { splitSql } from './split-sql';
 import { Miniflare, convertV4MiniflareOptions, Headers as MiniflareHeaders } from 'miniflare';
 import assert from 'node:assert';
+import { build } from 'esbuild';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
 import { createRepositories } from '../src/repositories/index';
@@ -19,10 +20,14 @@ async function run() {
   // Use that implementation for real handler calls in this Node-hosted harness.
   const originalHeaders = globalThis.Headers;
   Object.assign(globalThis, { Headers: MiniflareHeaders });
+  const budgetBundle = await build({ entryPoints: ['scripts/budget-coordinator-do-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
     name: 'integration',
     modules: true,
-    script: 'export default { fetch() { return new Response("ok"); } }',
+    script: budgetBundle.outputFiles[0].text,
+    compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'],
+    durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' },
+    unsafeEphemeralDurableObjects: true,
     d1Databases: { DB: '597c6389-7387-4bc6-95aa-6e65fad55097' },
     r2Buckets: ['ATTACHMENTS_BUCKET'],
   }] }));
@@ -552,7 +557,7 @@ async function run() {
   const secret = new TextEncoder().encode('secret');
 
   const createToken = async (tenantId, role, sub, email, aud = 'app') => {
-    return await new SignJWT({ aud, sub, email, role, tenant_id: tenantId, mfa_verified: aud === 'app' })
+    return await new SignJWT({ aud, sub, email, role, tenant_id: tenantId, session_version: 0, mfa_verified: aud === 'app' })
       .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1h')
       .sign(secret);
   };
@@ -646,13 +651,31 @@ async function run() {
   await bucket.put('tenant-A/synthetic-path', 'A pub widget content');
   await bucket.put('tenant-B/synthetic-path', 'B pub widget content');
 
+  // Real local admission preserves the original positive/negative AI isolation checks.
+  const now = Date.now();
+  const limit = 1_000_000_000_000;
+  const dimensions = ['workerRequests','d1RowsRead','r2ClassBOperations','doRequests','doRowsRead','doRowsWritten','logEvents','aiMicroNeurons','vectorQueriedDimensions'];
+    const limits = Object.fromEntries(dimensions.map(dimension => [dimension, limit]));
+    const owner = { schemaVersion: 1, policyId: 'http-ai-policy', revision: 1, deploymentId: 'http-ai-deployment', mode: 'conservative',
+      catalogueVersion: 'synthetic-2026-09-11', maxGrantLifetimeMs: 60_000,
+      budgets: dimensions.map(dimension => ({ dimension, limit, allocationId: `ai-${dimension}`, recoveryPercent: 20,
+        provenance: 'owner-allocation', window: { kind: 'interval', id: 'ai-window', startsAt: now - 1, endsAt: now + 60_000 } })), };
+  await db.batch([
+      db.prepare("INSERT INTO budget_deployment_authority VALUES ('http-ai-deployment',1,'active',?)").bind(now),
+      db.prepare(`INSERT INTO budget_owner_policies (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
+        VALUES ('http-ai-deployment','http-ai-policy',1,1,'http-ai-coordinator',64,30000,?)`).bind(JSON.stringify(owner)),
+      db.prepare("INSERT INTO budget_tenant_allocations VALUES ('http-ai-deployment','tenant-A','http-ai-policy',1,1,'http-ai-tenant-A',?,'active')").bind(JSON.stringify({schemaVersion:1,tenantId:'tenant-A',ownerPolicyId:owner.policyId,ownerPolicyRevision:1,revision:1,mode:'conservative',limits,disabledFeatures:[]})),
+      db.prepare("INSERT INTO budget_tenant_allocations VALUES ('http-ai-deployment','tenant-B','http-ai-policy',1,1,'http-ai-tenant-B',?,'active')").bind(JSON.stringify({schemaVersion:1,tenantId:'tenant-B',ownerPolicyId:owner.policyId,ownerPolicyRevision:1,revision:1,mode:'conservative',limits,disabledFeatures:[]})),
+  ]);
+  const aiEnv = {...envMock, BUDGET_ADMISSION_POLICY:'ticket-mutations-v1', BUDGET_COORDINATOR_DO:await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO'), BUDGET_GRANT_HOLDER_DO:await mf.getDurableObjectNamespace('BUDGET_GRANT_HOLDER_DO')};
+
   // Widget A1 searches
   const searchA1 = new Request('http://localhost/api/v1/widget/chat', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${tokenWidgetA1}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: 'Title' })
   });
-  const searchARes = await worker.fetch(searchA1, envMock, {});
+  const searchARes = await worker.fetch(searchA1, aiEnv, {});
   const resAData = await searchARes.json();
   if (!resAData.response.includes('A pub widget content') || resAData.response.includes('B pub widget content')) {
      throw new Error('Widget A received B content or did not receive A content. Response: ' + resAData.response);
@@ -666,11 +689,15 @@ async function run() {
     headers: { 'Authorization': `Bearer ${await createToken('tenant-B', 'customer', userIdB1, 'c1@b.com', 'widget')}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: 'Title' })
   });
-  const searchBRes = await worker.fetch(searchBReq, envMock, {});
+  const searchBRes = await worker.fetch(searchBReq, aiEnv, {});
   const resBData = await searchBRes.json();
   if (!resBData.response.includes('B pub widget content') || resBData.response.includes('A pub widget content')) {
      throw new Error('Widget B received A content or did not receive B content. Response: ' + resBData.response);
   }
+  const aiCoordinator = aiEnv.BUDGET_COORDINATOR_DO.get(aiEnv.BUDGET_COORDINATOR_DO.idFromName('http-ai-coordinator')) as any;
+  const aiState = await aiCoordinator.inspectForTrustedRuntime();
+  assert.strictEqual(aiState.tenantStates.length, 2, 'Both tenant AI executions retain distinct durable budget state');
+  assert.ok(aiState.tenantStates.every(state => state.grants.length > 0), 'Both successful retrievals consumed real prepaid grants');
   console.log('SUCCESS: Widget API A/B knowledge isolation verified with body inspection');
 
   // Customer A1 vs A2 private ticket authorization
