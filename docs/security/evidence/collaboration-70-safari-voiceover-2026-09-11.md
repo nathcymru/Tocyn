@@ -1,8 +1,12 @@
 # Collaboration reply-recovery Safari and VoiceOver check
 
-Observed 11 September 2026 on `369c662` using Safari and the native VoiceOver
-AppleScript dictionary. The dashboard production build ran against a disposable
-loopback-only Miniflare/D1 fixture with two synthetic tenant-A operators and a
+Initial spoken observations were made 11 September 2026 on functional recovery
+revision `369c662` using Safari and the native VoiceOver AppleScript dictionary.
+The final fresh production build at merge revision `e538af9` (including accepted
+branding) was then rerun through the same Safari recovery journey and exposed the
+same named stale-review, rebase, manual-send, and retry controls in its native
+accessibility tree; its window title was `Tocyn Operator`. The dashboard ran
+against a disposable loopback-only Miniflare/D1 fixture with two synthetic tenant-A operators and a
 separate synthetic tenant-B identity. The fixture used its own ephemeral port
 and a test-only authenticated local session; it did not contact a provider or
 remote service. Owner ports and unrelated Safari tabs were left untouched.
@@ -53,10 +57,12 @@ policy gzip level 9 measured 569,285 total dashboard JavaScript gzip bytes,
 100,905 initial JavaScript gzip bytes, and 15,603 CSS gzip bytes. These remain
 within the unchanged 570,000, 135,000, and 16,000 limits respectively.
 
-This is partial local accessibility evidence. The stale conflict and rebase
-completion strings were exposed in Safari's native accessibility tree, but only
-the refreshed-review and lost-response messages above were captured as their
-exact VoiceOver spoken output. The bounded multi-page stale-review regression
+This is partial local accessibility evidence. The final branded build exposed
+the stale conflict and rebase completion strings in Safari's native
+accessibility tree. Exact VoiceOver phrases above were captured on the unchanged
+functional recovery revision before the branding merge; after the final reload
+the VoiceOver cursor remained on the text area, so its action notices were not
+claimed as fresh spoken output. The bounded multi-page stale-review regression
 is covered by the focused dashboard test rather than this single-page fixture.
 It does not establish whole-issue assistive-technology acceptance, durable
 mentions, interruption preferences, deployment, or beta.2 readiness.
