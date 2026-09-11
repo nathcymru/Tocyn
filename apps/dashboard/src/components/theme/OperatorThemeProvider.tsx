@@ -50,12 +50,14 @@ export function OperatorThemeControl() {
 
 export function OperatorPreferencesControl() {
   const preferences = useOperatorPreferencesContext();
+  const busy = preferences.status === 'loading' || preferences.status === 'saving';
   return <section aria-labelledby="workspace-preferences-title" data-tocyn-preferences>
     <h3 id="workspace-preferences-title">Workspace preferences</h3>
-    <label>Density<select aria-label="Workspace density" value={preferences.density} onChange={event => preferences.update({ density: event.target.value as OperatorDensity })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
+    <fieldset disabled={busy}><label>Density<select aria-label="Workspace density" value={preferences.density} onChange={event => preferences.update({ density: event.target.value as OperatorDensity })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
     <label>Text size<select aria-label="Workspace text size" value={preferences.fontScale} onChange={event => preferences.update({ fontScale: event.target.value as OperatorFontScale })}><option value="normal">Standard</option><option value="large">Large</option><option value="larger">Largest</option></select></label>
     <label><input type="checkbox" checked={preferences.focusMode} onChange={event => preferences.update({ focusMode: event.target.checked })} /> Focus mode</label>
-    <label>Motion<select aria-label="Workspace motion" value={preferences.motion} onChange={event => preferences.update({ motion: event.target.value as OperatorMotion })}><option value="system">Use system setting</option><option value="reduced">Reduce motion</option><option value="full">Allow motion</option></select></label>
-    <p role="status" aria-live="polite">Preferences are saved for this workspace account.</p>
+    <label>Motion<select aria-label="Workspace motion" value={preferences.motion} onChange={event => preferences.update({ motion: event.target.value as OperatorMotion })}><option value="system">Use system setting</option><option value="reduced">Reduce motion</option><option value="full">Allow motion</option></select></label></fieldset>
+    <div><TocynButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</TocynButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <TocynButton type="button" onClick={preferences.retry}>Retry workspace preferences</TocynButton>}{preferences.status === 'conflict' && <TocynButton type="button" onClick={preferences.restore}>Restore server preferences</TocynButton>}</div>
+    <p role="status" aria-live="polite">{preferences.error || (preferences.status === 'saved' ? 'Workspace preferences saved.' : preferences.status === 'saving' ? 'Saving workspace preferences…' : preferences.status === 'unsaved' ? 'Unsaved workspace preferences.' : preferences.status === 'loading' ? 'Restoring workspace preferences…' : '')}</p>
   </section>;
 }
