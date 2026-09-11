@@ -47,15 +47,20 @@ type PendingAttachment = Readonly<{
 
 /** A server-derived review revision; retry means that the bracketing reads disagreed. */
 type StaleReplyReview = number | 'refreshing' | 'retry';
+type TicketReclassificationProps = {
+  reclassificationEnabled?: boolean;
+  onBeforeTicketReclassification?: (ticketId: string) => void;
+  onTicketReclassified?: (ticketId: string) => Promise<'advanced'|'cleared'>;
+};
 
-export function TicketDetailPage({id:providedId,workspaceBackHref}:{id?:string;workspaceBackHref?:string}={}) {
+export function TicketDetailPage({id:providedId,workspaceBackHref,reclassificationEnabled,onBeforeTicketReclassification,onTicketReclassified}:{id?:string;workspaceBackHref?:string}&TicketReclassificationProps={}) {
   const { id:routeId } = useParams<{ id: string }>();
   const id=providedId??routeId;
   const generation = useAuthStore(state => state.sessionGeneration);
-  return <TicketDetail key={`${generation}:${id}`} id={id!} workspaceBackHref={workspaceBackHref} />;
+  return <TicketDetail key={`${generation}:${id}`} id={id!} workspaceBackHref={workspaceBackHref} reclassificationEnabled={reclassificationEnabled} onBeforeTicketReclassification={onBeforeTicketReclassification} onTicketReclassified={onTicketReclassified} />;
 }
 
-function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:string }) {
+function TicketDetail({ id,workspaceBackHref,reclassificationEnabled,onBeforeTicketReclassification,onTicketReclassified }: { id: string;workspaceBackHref?:string}&TicketReclassificationProps) {
   type TicketSelectControl = 'status' | 'priority' | 'assigned_to' | 'group_id';
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError } = useTicket(id!);
@@ -146,6 +151,8 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const supportStateDraftDirty = useRef(false);
   const supportStateFlight = useRef(false);
   const [isSupportStateSubmitting, setIsSupportStateSubmitting] = useState(false);
+  const [reclassified, setReclassified] = useState(false);
+  const [isAdvancing, setIsAdvancing] = useState(false);
   const selectedSupportStateDefinition = supportStates.find(candidate => candidate.id === supportStateDraft.definitionId);
   const selectedSupportStateNeedsDetails = Boolean(supportState.data?.definition_id) && !selectedSupportStateDefinition;
 
@@ -250,6 +257,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     changing.current = true;
     setChangeError(null);
     setNotice('');
+    if (changes.status === 'resolved') onBeforeTicketReclassification?.(id);
     try {
       await updateTicket.mutateAsync({ id, ...changes });
       if (control) {
@@ -266,6 +274,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
         }
       }
       setNotice('Ticket details saved.');
+      if (changes.status === 'resolved' && reclassificationEnabled) setReclassified(true);
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') setChangeError(error.message);
     } finally {
@@ -309,21 +318,37 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     const nextAction = supportStateDraft.nextAction.trim();
     if (definition.waiting_reason_required && !waitingReason) { setSupportStateError('A waiting reason is required for this support state.'); return; }
     if (definition.next_action_required && !nextAction) { setSupportStateError('A next action is required for this support state.'); return; }
+    const snoozedUntil = snoozedUntilOverride === undefined
+      ? (supportStateDraft.snoozedUntil ? new Date(supportStateDraft.snoozedUntil).toISOString() : null)
+      : snoozedUntilOverride;
     setSupportStateError(null); setSupportStateNotice(null);
     supportStateFlight.current = true;
+    const reclassifiesQueue = snoozedUntil !== null;
+    if (reclassifiesQueue) onBeforeTicketReclassification?.(id);
     setIsSupportStateSubmitting(true);
     try {
-      const snoozedUntil = snoozedUntilOverride === undefined
-        ? (supportStateDraft.snoozedUntil ? new Date(supportStateDraft.snoozedUntil).toISOString() : null)
-        : snoozedUntilOverride;
       const saved = await transitionSupportState.mutateAsync({ ticketId: id, definitionId: definition.id, waitingReason: waitingReason || null, nextAction: nextAction || null, snoozedUntil, expectedRevision: current.revision });
       restoreSupportStateDraft(saved);
       setSupportStateNotice('Support state saved.');
+      if (reclassifiesQueue && reclassificationEnabled) setReclassified(true);
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409) {
         setSupportStateError('This support state changed elsewhere. Your input is retained. Refresh the current state, then review and retry.');
       } else setSupportStateError(cause instanceof Error ? `${cause.message}. Your input is retained.` : 'Support state could not be saved. Your input is retained.');
     } finally { supportStateFlight.current = false; setIsSupportStateSubmitting(false); }
+  };
+
+  const advanceToNextConversation = async () => {
+    if (!onTicketReclassified || isAdvancing) return;
+    if (!(await flushDraftBeforeNavigation())) return;
+    setIsAdvancing(true);
+    try {
+      const outcome = await onTicketReclassified(id);
+      setNotice(outcome === 'cleared' ? 'This view is clear after the confirmed change.' : 'Opened the next conversation.');
+      setReclassified(false);
+    } catch {
+      setNotice('The change was saved, but the next conversation could not be confirmed. Retry from the list.');
+    } finally { setIsAdvancing(false); }
   };
 
   const refreshSupportState = async () => {
@@ -601,6 +626,10 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
         {supportStateError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{supportStateError} <TocynButton type="button" onClick={() => void refreshSupportState()} className="underline">Refresh current support state</TocynButton></p>}
         {notice && <p role="status" className="text-slate-700">{notice}</p>}
         {supportStateNotice && <p role="status" className="text-slate-700">{supportStateNotice}</p>}
+        {reclassified && onTicketReclassified && <div role="status" className="flex flex-wrap items-center gap-3 rounded border border-brand-200 bg-brand-50 p-3 text-sm text-brand-900">
+          <span>This conversation was removed from the current view after the confirmed change.</span>
+          <TocynButton type="button" disabled={isAdvancing} onClick={() => void advanceToNextConversation()} className="rounded border border-brand-700 px-3 py-1.5 font-semibold">{isAdvancing ? 'Loading next conversation…' : 'Open next conversation'}</TocynButton>
+        </div>}
         {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="text-sm text-slate-700">
           {workspace.status === 'saving' && 'Saving workspace preference…'}
           {workspace.status === 'saved' && 'Workspace preference saved.'}
