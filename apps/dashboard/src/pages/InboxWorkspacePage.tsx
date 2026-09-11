@@ -1,8 +1,9 @@
 import { TocynButton,TocynInput,TocynSelect } from '@luminatick/ui/primitives';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,Search } from 'lucide-react';
-import React,{useEffect,useMemo,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
+import { useQueryClient } from '@tanstack/react-query';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { useFilters } from '../hooks/useFilters';
@@ -10,8 +11,10 @@ import { OperatorWorkspaceProvider,useOperatorDraftIndicators,useOperatorWorkspa
 import { useSettings } from '../hooks/useSettings';
 import { useTicketSlaBatch } from '../hooks/useTicketSla';
 import { useTickets } from '../hooks/useTickets';
+import type { PaginatedResponse, Ticket } from '@luminatick/shared';
 import { ticketReference } from '../utils/ticket-reference';
 import { utcTimestamp } from '../utils/utcTimestamp';
+import { deterministicNextTicket } from '../utils/deterministic-next-ticket';
 import { TicketDetailPage } from './TicketDetailPage';
 
 const statusStyle={open:'bg-emerald-50 text-emerald-800 border-emerald-200',pending:'bg-amber-50 text-amber-900 border-amber-200',
@@ -32,6 +35,7 @@ function InboxWorkspace(){
   const [viewId,conversationId]=inboxPath?.split('/')??[];
   const navigate=useNavigate();
   const workspace=useOperatorWorkspaceState();
+  const queryClient=useQueryClient();
   const {data:filters,isLoading:isLoadingFilters}=useFilters();
   const lastRouteView=useRef<string|null>(null);
   const routeFilter=useMemo(()=>viewId&&viewId!=='all'&&!isQueueView(viewId)?filters?.find(filter=>filter.id===viewId):undefined,[filters,viewId]);
@@ -54,6 +58,30 @@ function InboxWorkspace(){
     else if(routeFilter&&(workspace.view!=='custom'||workspace.filters.filterId!==routeFilter.id))workspace.update({view:'custom',filters:{...workspace.filters,filterId:routeFilter.id},...clearSelection});
   },[conversationId,filters,isLoadingFilters,navigate,routeFilter,viewId,workspace]);
 
+  const listBeforeAction=useRef<readonly Ticket[]|null>(null);
+  const rememberTicketList=useCallback((ticketId:string)=>{
+    const params={page:String(pageFromAnchor(workspace.listAnchor)),sort:workspace.sort,...(isQueueView(viewId)?{queue:viewId}:{}),...(viewId&&viewId!=='all'&&!isQueueView(viewId)?{filter_id:viewId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{})};
+    const cached=queryClient.getQueryData<PaginatedResponse<Ticket>>(['tickets',params]);
+    if(cached?.data.some(ticket=>ticket.id===ticketId)) listBeforeAction.current=cached.data;
+  },[queryClient,viewId,workspace.listAnchor,workspace.listQuery,workspace.sort]);
+  const advanceAfterReclassification=useCallback(async(ticketId:string)=>{
+    const params={page:String(pageFromAnchor(workspace.listAnchor)),sort:workspace.sort,...(isQueueView(viewId)?{queue:viewId}:{}),...(viewId&&viewId!=='all'&&!isQueueView(viewId)?{filter_id:viewId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{})};
+    await queryClient.refetchQueries({queryKey:['tickets',params],exact:true});
+    const refreshed=queryClient.getQueryData<PaginatedResponse<Ticket>>(['tickets',params]);
+    const remaining=refreshed?.data??[];
+    const previous=listBeforeAction.current;
+    listBeforeAction.current=null;
+    const next=deterministicNextTicket(previous??[],remaining,ticketId);
+    if(next){
+      workspace.update({selectedTicketId:next.id});
+      navigate(`/inbox/${viewId??'all'}/${next.id}`);
+      return 'advanced' as const;
+    }
+    workspace.update({selectedTicketId:null});
+    navigate(`/inbox/${viewId??'all'}`);
+    return 'cleared' as const;
+  },[navigate,queryClient,viewId,workspace]);
+
   if(viewId&&viewId!=='all'&&!isQueueView(viewId)&&!isLoadingFilters&&!routeFilter)return <section className="p-6" aria-labelledby="inbox-view-unavailable">
     <h1 id="inbox-view-unavailable" tabIndex={-1} className="text-xl font-bold text-slate-900">Inbox view unavailable</h1>
     <p className="mt-2 text-slate-600">This saved view is unavailable for the current account.</p>
@@ -67,7 +95,7 @@ function InboxWorkspace(){
       <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} />
     </section>
     <section aria-label="Active conversation" className={clsx('h-full min-h-0 overflow-y-auto bg-slate-50 p-4 lg:col-span-2 lg:p-8',!conversationId&&'hidden lg:block')}>
-      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} />:<EmptyConversation />}
+      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} reclassificationEnabled={isQueueView(viewId)} onBeforeTicketReclassification={rememberTicketList} onTicketReclassified={advanceAfterReclassification} />:<EmptyConversation />}
     </section>
   </div>;
 }
