@@ -1,6 +1,7 @@
 import { CANONICAL_MUTATION_D1_WRITES } from '../budgets/canonical-mutation-envelope';
 import type { TicketMutationReplayService, PreparedTicketMutation } from '../services/ticket-mutation-replay.service';
 import type { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
+import { CustomerCurrentCredentialRepository } from '../repositories/customer-current-credential.repository';
 import type { PreparedStaffMutation } from '../types/staff-ticket-mutation';
 import type { Context } from 'hono';
 import type { ResourceAmounts } from '@luminatick/shared';
@@ -16,6 +17,7 @@ export const API_TICKET_BUDGET_POLICY = 'api-ticket-mutations-v1' as const;
 export const TICKET_MUTATIONS_BUDGET_POLICY = 'ticket-mutations-v1' as const;
 export type ApiTicketBudgetOperation = 'api.ticket.create' | 'api.ticket.reply';
 export type StaffTicketBudgetOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply';
+export type CustomerTicketBudgetOperation = 'portal.ticket.create' | 'portal.ticket.reply';
 
 /**
  * Conservative estimated business/retry envelope, excluding the separately
@@ -52,6 +54,17 @@ export const STAFF_TICKET_ENVELOPES: Readonly<Record<StaffTicketBudgetOperation,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
 });
+/**
+ * Customer messages have no outbound email work, but preserve the bounded
+ * attachment-reference and post-commit broadcast allowance. Provider billing,
+ * bytes and CPU remain outside this local reservation estimate.
+ */
+export const CUSTOMER_TICKET_ENVELOPES: Readonly<Record<CustomerTicketBudgetOperation, ResourceAmounts>> = Object.freeze({
+  'portal.ticket.create': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
+    r2ClassBOperations: 30, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+  'portal.ticket.reply': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
+    r2ClassBOperations: 30, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+});
 /** One bounded registry across binding contexts in this isolate; no request creates a new cache. */
 export const apiTicketBudgetCache = new IsolateBudgetAdmissionCache();
 /** Session and API operations share the one server-owned isolate registry; identities stay disjoint. */
@@ -66,6 +79,13 @@ export function ticketMutationAdmissionMode(env: Env): 'disabled' | 'api' | 'com
 
 /** Explicitly exposes the policy matrix to dashboard composition. */
 export function staffTicketAdmissionMode(env: Env): 'disabled' | 'enabled' | 'invalid' {
+  const configured = ticketMutationAdmissionMode(env);
+  return configured === 'combined' ? 'enabled'
+    : configured === 'disabled' || configured === 'api' ? 'disabled' : 'invalid';
+}
+
+/** Customer portal and authenticated widget writes are admitted only in combined mode. */
+export function customerTicketAdmissionMode(env: Env): 'disabled' | 'enabled' | 'invalid' {
   const configured = ticketMutationAdmissionMode(env);
   return configured === 'combined' ? 'enabled'
     : configured === 'disabled' || configured === 'api' ? 'disabled' : 'invalid';
@@ -135,6 +155,43 @@ export async function admitConfiguredStaffTicketMutation(
       return c.json(outcome.outcome.body, outcome.outcome.status);
     }
     if ((outcome.status === 'spent' || outcome.status === 'idempotent') && outcome.commitAuthority) return null;
+    if (outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted') {
+      return c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429);
+    }
+    return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  } catch {
+    return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  }
+}
+
+/**
+ * Customer writes use the same preallocated isolate cache, but their own live
+ * identity/email/ownership adapter and their own canonical D1 assertion.
+ */
+export async function admitConfiguredCustomerTicketMutation(
+  c: Context<{ Bindings: Env; Variables: AppVariables }>, operation: CustomerTicketBudgetOperation,
+  mutation: TicketMutationReplayService, prepared: PreparedTicketMutation,
+): Promise<Response | null> {
+  const configured = customerTicketAdmissionMode(c.env);
+  if (configured === 'disabled') return null;
+  if (configured === 'invalid' || !c.env.BUDGET_COORDINATOR_DO) {
+    return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  }
+  const deps = c.get('tenantDeps');
+  if (!deps?.database || !deps.repositories?.budgetAuthority) {
+    return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  }
+  try {
+    const outcome = await mutation.admitCustomerBudget(prepared, {
+      cache: apiTicketBudgetCache, repository: deps.repositories.budgetAuthority,
+      customers: new CustomerCurrentCredentialRepository(deps.database, deps.scope), namespace: c.env.BUDGET_COORDINATOR_DO,
+      operation, business: CUSTOMER_TICKET_ENVELOPES[operation], now: () => c.env.localNow?.() ?? Date.now(),
+    });
+    if (outcome.status === 'replayed') {
+      c.header('Idempotency-Replayed', 'true');
+      return c.json(outcome.outcome.body, outcome.outcome.status);
+    }
+    if (outcome.status === 'spent' || outcome.status === 'idempotent') return null;
     if (outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted') {
       return c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429);
     }

@@ -23,7 +23,7 @@ import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinat
 const NOW = Date.UTC(2026, 8, 11, 10, 0, 0);
 const root = resolve(import.meta.dirname, '..');
 
-/** Native D1/DO proof only; customer HTTP and canonical write wiring remain later work. */
+/** Native D1/DO proof for the customer reservation seam; route composition is covered separately. */
 async function fixture() {
   const bundled = await build({ absWorkingDir: root, entryPoints: ['scripts/budget-coordinator-do-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'customer-budget-proof', modules: true,

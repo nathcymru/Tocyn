@@ -5,11 +5,14 @@ import { AiService, StatelessAiService } from '../services/ai.service';
 import { WidgetKnowledgeReader } from '../services/tenant-knowledge.service';
 import { widgetAuthMiddleware, widgetTenantMiddleware } from '../middleware/widget-auth.middleware';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
-import { TenantTicketService } from '../services/tenant-ticket.service';
 import { rateLimiter } from '../middleware/rate-limiter';
 import { AppVariables } from '../types';
 import { z } from 'zod';
 import { requestBounds } from '../middleware/request-bounds';
+import { BetaAdmissionError } from '../types/local-beta';
+import { TicketMutationError } from '../services/ticket-mutation-replay.service';
+import { MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMutationJson } from './mutation-request';
+import { admitConfiguredCustomerTicketMutation, customerTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 
 const widget = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 widget.use('*', requestBounds(64 * 1024));
@@ -107,35 +110,37 @@ const createWidgetTicketSchema = z.object({
 
 // Ticket Submission endpoint
 widget.post('/tickets', rateLimiter(3, 300000), widgetAuthMiddleware, tenantRateLimit('widget-ticket', 3, 300000), async (c) => {
-  const body = await c.req.json();
   const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const ticketService = new TenantTicketService(deps);
-
-  const result = createWidgetTicketSchema.safeParse(body);
-  if (!result.success) {
-    return c.json({ error: "Validation failed", details: result.error.flatten().fieldErrors }, 400);
-  }
-  const validData = result.data;
-  if (validData.email.trim().toLowerCase() !== c.get('user').email.trim().toLowerCase()) {
-    return c.json({ error: "Email must match the authenticated customer" }, 400);
-  }
-
+  const admissionMode = customerTicketAdmissionMode(c.env);
+  if (admissionMode === 'invalid') return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   try {
-    const { ticket } = await ticketService.createTicketWithArticle({
-      subject: validData.subject,
-      customer_email: c.get('user').email,
-      source: 'widget',
-      custom_fields: validData.custom_fields,
-      body: validData.message,
-      sender_type: 'customer',
-      sender_id: c.get('user').id,
-      customer_id: c.get('user').id,
-    }, {kind:'customer',id:c.get('user').id,source:'widget'});
-
-    return c.json(ticket, 201);
+    const body = await readMutationJson(c);
+    const parsed = createWidgetTicketSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors }, 400);
+    const payload = c.get('jwtPayload');
+    if (parsed.data.email.trim().toLowerCase() !== c.get('user').email.trim().toLowerCase()) {
+      return c.json({ error: 'Email must match the authenticated customer' }, 400);
+    }
+    const mutation = deps.ticketMutationReplay({ kind: 'customer', id: payload.sub, sessionVersion: payload.session_version ?? 0, expiresAt: payload.exp ?? 0 });
+    const prepared = await mutation.prepareMutation({ operation: 'portal.ticket.create', source: 'widget', data: {
+      subject: parsed.data.subject, body: parsed.data.message, custom_fields: parsed.data.custom_fields,
+    } }, readIdempotencyKey(c));
+    if (prepared.replay) {
+      if (prepared.replay.keyed) c.header('Idempotency-Replayed', 'true');
+      return c.json(prepared.replay.body.ticket, prepared.replay.status);
+    }
+    if (admissionMode === 'enabled') {
+      const rejection = await admitConfiguredCustomerTicketMutation(c, 'portal.ticket.create', mutation, prepared);
+      if (rejection) return rejection;
+    }
+    const outcome = await mutation.commit(prepared);
+    if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
+    return c.json(outcome.body.ticket, outcome.status);
   } catch (error) {
-    console.error("Widget Create Ticket Error:", error);
-    return c.json({ error: "Failed to create ticket" }, 500);
+    if (error instanceof BetaAdmissionError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
+    if (error instanceof TicketMutationError) return c.json({ error: error.message, code: error.code }, error.status);
+    throw error;
   }
 });
 

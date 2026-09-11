@@ -92,7 +92,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
       payload.tenant_id as string,
       payload.sub as string,
       ['customer'],
-      1
+      userRes.sessionVersion
     );
 
     // Current signed claims, tenant-scoped identity, email, role and session

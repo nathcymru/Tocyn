@@ -45,6 +45,7 @@ function instrumentDatabase(db: any): any {
           restriction:"UPDATE budget_tenant_allocations SET restriction_json=json_set(restriction_json,'$.disabledFeatures',json('[\"changed\"]')) WHERE tenant_id='runtime-tenant'",
           key:"UPDATE api_keys SET is_active=0 WHERE tenant_id='runtime-tenant' AND id='runtime-key'",
           permission:"UPDATE api_keys SET permissions='tickets:read' WHERE tenant_id='runtime-tenant' AND id='runtime-key'",
+          customerSession:"UPDATE users SET session_version=2 WHERE tenant_id='runtime-tenant' AND id='runtime-customer'",
         };
         if (action==='failure') throw new Error('Synthetic canonical interruption');
         if (action && actions[action]) await target.prepare(actions[action]).run();
