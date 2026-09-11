@@ -118,6 +118,22 @@ test('session tenant/actor/role/MFA/expiry and wrong-target failures have no adm
   } finally { await f.mf.dispose(); }
 });
 
+test('staff read authority resolves the current target group before a warm grant can expose ticket content', async () => {
+  const f = await fixture();
+  try {
+    const read = { readTicketId: 'shared-ticket' };
+    assert.equal((await f.admit('read-before-change', 'tenant-a', f.credentialFor('tenant-a'), read)).status, 'spent');
+    const before = { ...f.calls };
+    await f.db.batch([
+      f.db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES ('tenant-a','moved-group','Moved')"),
+      f.db.prepare("UPDATE tickets SET group_id='moved-group' WHERE tenant_id='tenant-a' AND id='shared-ticket'"),
+    ]);
+    assert.equal((await f.admit('read-after-group-change', 'tenant-a', f.credentialFor('tenant-a'), read)).status, 'rejected');
+    assert.deepEqual(f.calls, before, 'current group denial consumes no further coordinator work');
+    assert.equal((await f.admit('read-tenant-b', 'tenant-b', f.credentialFor('tenant-b'), read)).status, 'spent');
+  } finally { await f.mf.dispose(); }
+});
+
 for (const [label, mutation] of [
   ["session revocation", "UPDATE users SET session_version=2 WHERE tenant_id='tenant-a' AND id='shared-actor'"],
   ["role change", "UPDATE users SET role='customer' WHERE tenant_id='tenant-a' AND id='shared-actor'"],

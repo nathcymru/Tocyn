@@ -1,5 +1,5 @@
 import { BetaAdmissionError } from '../types/local-beta';
-import { assertConversationResponseBounds } from '../services/conversation-read-bounds';
+import { articlePageQuery, assertConversationResponseBounds, ConversationReadError } from '../services/conversation-read-bounds';
 import { conversationHistory } from './conversation-history';
 import { validateAttachmentReferences } from '../services/attachment-references';
 import { EmailService } from '../services/email/outbound.service';
@@ -35,6 +35,8 @@ import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, 
 import { SupportSlaMutationService } from '../services/support-sla-mutation.service';
 import type { SupportSlaBudgetOperation } from '../middleware/budget-admission.middleware';
 import { admitDashboardAttachment } from '../budgets/storage-admission.service';
+import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.service';
+import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -705,13 +707,31 @@ dashboard.get("/tickets/:id", async (c) => {
   const id = c.req.param("id");
   const d = c.get('tenantDeps') as TenantRequestDeps;
 
+  const admissionEnabled = c.env.BUDGET_ADMISSION_POLICY !== undefined && staffTicketAdmissionMode(c.env) === 'enabled';
+  let query: { limit?: string; cursor?: string } = {};
+  if (admissionEnabled) {
+    try { query = articlePageQuery({ limit: c.req.query('article_limit'), cursor: c.req.query('article_cursor') }); }
+    catch (error) {
+      if (error instanceof ConversationReadError) return c.json({ code: error.code, error: error.message }, error.status);
+      throw error;
+    }
+  }
+  const admission = await admitHttpTicketRead({ env: c.env, deps: d, payload: c.get('jwtPayload') as JWTPayload,
+    operation: 'dashboard.ticket.detail', ticketId: id, page: query, now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
+    ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
+    : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
+
   const ticket = await d.repositories.tickets.get(id);
   if (!ticket) {
     return c.json({ error: "Ticket not found" }, 404);
   }
 
-  if (d.boundedConversationRead) {
-    const page=await d.boundedConversationRead.page(id,{limit:c.req.query('article_limit'),cursor:c.req.query('article_cursor')});
+  const conversationRead = admission.status === 'admitted'
+    ? d.boundedConversationRead ?? new BoundedConversationReadRepository(d.database, d.scope)
+    : d.boundedConversationRead;
+  if (conversationRead) {
+    const page=await conversationRead.page(id,{limit:query.limit || c.req.query('article_limit'),cursor:query.cursor || c.req.query('article_cursor')});
     const articles = page.articles.map(({ attachments, ...article }) => ({
       ...article,
       attachments: attachments.map(a => ({

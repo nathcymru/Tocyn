@@ -87,7 +87,7 @@ function instrumentDatabase(db: any): any {
         }
         if (sql.includes('length(CAST(x.file_name AS BLOB))')) detailAttachmentMetadataQueries++;
         if (sql.includes('SELECT x.* FROM attachments x')) detailAttachmentRowsRead += result.meta?.rows_read ?? 0;
-        if (sql.includes("SELECT e.id,e.article_id,e.kind FROM conversation_events e")) detailReferenceRowsRead += result.meta?.rows_read ?? 0;
+        if (sql.includes("SELECT e.id,e.article_id,e.kind FROM conversation_events e") || sql.includes("SELECT id,article_id,kind FROM conversation_events")) detailReferenceRowsRead += result.meta?.rows_read ?? 0;
         if (sql.includes('SELECT e.* FROM conversation_events e') || sql.includes('SELECT e.* FROM conversation_public_history p')) {
           historyEventQueries++;
           historyEventRowsRead += result.meta?.rows_read ?? 0;
@@ -129,6 +129,11 @@ function instrumentDatabase(db: any): any {
         const delay=canonicalDelayMs;canonicalDelayMs=0;if (delay) await new Promise(resolve=>setTimeout(resolve,delay));
       }
       const results=await target.batch(batch.map(statement=>statements.get(statement)?.raw??statement));
+      batch.forEach((statement, index) => {
+        const sql = statements.get(statement)?.sql ?? '';
+        if (sql.includes('SELECT e.id,e.article_id,e.kind FROM conversation_events e') || sql.includes('SELECT id,article_id,kind FROM conversation_events'))
+          detailReferenceRowsRead += results[index].meta?.rows_read ?? 0;
+      });
       if (canonical) {
         canonicalBatches.push({statements:results.length,rowsRead:results.reduce((n:number,r:any)=>n+r.meta.rows_read,0),rowsWritten:results.reduce((n:number,r:any)=>n+r.meta.rows_written,0)});
         if (loseCanonicalAck) {loseCanonicalAck=false;throw new Error('Synthetic lost canonical acknowledgement');}

@@ -1,3 +1,5 @@
+> Current pending integration: [staff/customer read handoff](budget-64-staff-customer-reads.md), with accepted-state evidence in the checkpoint below.
+
 > Current delivery entry point: [12:41 BST checkpoint](beta2-checkpoint-2026-09-11-1241.md). Earlier entries below are historical.
 
 Latest coordinating review and queue: [11 September active integration review](budget-64-review-2026-09-11-1213.md). Full beta.2 acceptance remains open.

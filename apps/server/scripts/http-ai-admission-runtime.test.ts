@@ -130,3 +130,36 @@ test('staff suggestion uses the indexed newest-five window and retains a charge 
     assert.equal(observed.cache.operations, 2, 'the failed second execution remains a separately charged warm operation');
   } finally { await f.mf.dispose(); }
 });
+
+test('staff AI checks current ticket group before provider work, including a warm ticket-group change', async () => {
+  const f = await fixture();
+  try {
+    await f.db.batch([
+      f.db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES ('tenant-a','restricted','Restricted')"),
+      f.db.prepare("UPDATE tickets SET group_id='restricted' WHERE tenant_id='tenant-a' AND id='ticket-a'"),
+      f.db.prepare("INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,is_internal) VALUES ('tenant-a','group-body','ticket-a','customer',?,0)").bind('>'.repeat(8_000)),
+    ]);
+    const headers = { authorization: `Bearer ${await token('agent')}` };
+    const call = () => f.mf.dispatchFetch('http://runtime.test/api/knowledge/tickets/ticket-a/ai-suggest', { headers });
+    let response = await call();
+    assert.equal(response.status, 200);
+    let observed = await control(f.mf);
+    assert.equal(observed.aiCalls, 0); assert.equal(observed.vectorQueries, 0); assert.equal(observed.r2Gets, 0);
+    await f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('tenant-a','agent-a','restricted')").run();
+    response = await call();
+    assert.equal(response.status, 200);
+    observed = await control(f.mf);
+    assert.equal(observed.aiCalls, 2);
+    assert.ok(observed.generationInputBytes.at(-1)! < 7_968, 'escaped staff input fits the reserved model window');
+    await f.db.batch([
+      f.db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES ('tenant-a','moved','Moved')"),
+      f.db.prepare("UPDATE tickets SET group_id='moved' WHERE tenant_id='tenant-a' AND id='ticket-a'"),
+    ]);
+    response = await call();
+    assert.equal(response.status, 200);
+    const denied = await control(f.mf);
+    assert.equal(denied.aiCalls, observed.aiCalls);
+    assert.equal(denied.vectorQueries, observed.vectorQueries);
+    assert.equal(denied.r2Gets, observed.r2Gets);
+  } finally { await f.mf.dispose(); }
+});
