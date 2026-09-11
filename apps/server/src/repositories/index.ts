@@ -107,7 +107,7 @@ export class SqlUserRepository implements UserRepository {
     return result;
   }
 
-  async update(id: string, data: Partial<User>): Promise<void> {
+  async update(id: string, data: Partial<User>, fence?: CustomerAuthBudgetFence): Promise<void> {
     const sets: string[] = [];
     const values: any[] = [];
     if (data.full_name !== undefined) { sets.push("full_name = ?"); values.push(data.full_name); }
@@ -116,8 +116,17 @@ export class SqlUserRepository implements UserRepository {
     if (sets.length === 0) return;
 
     values.push(this.scope.tenantId, id);
-    const query = `UPDATE users SET ${sets.join(", ")} WHERE tenant_id = ? AND id = ?`;
-    await this.db.prepare(query).bind(...values).run();
+    const query = this.db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE tenant_id = ? AND id = ?${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
+      .bind(...values, ...(fence ? [this.scope.tenantId] : []));
+    if (!fence) {
+      await query.run();
+      return;
+    }
+    const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+    const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), query]);
+    if (!customerAuthAccepted(results[statements.length]) || !results.at(-1)?.meta.changes) {
+      throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
   }
 
   async delete(id: string): Promise<void> {

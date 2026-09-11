@@ -368,7 +368,7 @@ describe("Auth Handler Integration Tests", () => {
   });
 
   describe("POST /mfa/disable", () => {
-    it("should disable MFA for a user and clear the secret", async () => {
+    it.each([undefined, "off"])("preserves disabled admission behavior for policy %s", async policy => {
       const mockUser = {
         id: "user-1",
         tenant_id: "default-tenant",
@@ -391,7 +391,7 @@ describe("Auth Handler Integration Tests", () => {
             "Authorization": `Bearer ${token}`
           },
         },
-        { DB: mockDB as any, JWT_SECRET, MFA_ENCRYPTION_KEY }
+        { DB: mockDB as any, JWT_SECRET, MFA_ENCRYPTION_KEY, ...(policy === undefined ? {} : { BUDGET_ADMISSION_POLICY: policy }) }
       );
 
       expect(res.status).toBe(200);
@@ -427,6 +427,23 @@ describe("Auth Handler Integration Tests", () => {
       expect(res.status).toBe(404);
       const body = await res.json();
       expect(body.error).toBe("User not found");
+    });
+
+    it("fails closed under incomplete strict admission before reading or changing customer MFA", async () => {
+      const mockUser = {
+        id: "customer-1", tenant_id: "default-tenant", email: "customer@example.com",
+        mfa_enabled: 1, mfa_secret: "some-encrypted-secret", role: "customer", session_version: 1,
+      };
+      mockDB.first.mockResolvedValue(mockUser);
+      const token = await authService.generateToken(mockUser as any, JWT_SECRET, true);
+
+      const response = await auth.request("/mfa/disable", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      }, { DB: mockDB as any, JWT_SECRET, MFA_ENCRYPTION_KEY, BUDGET_ADMISSION_POLICY: "ticket-mutations-v1" });
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ code: "budget_admission_unavailable", error: "Budget admission authority is unavailable" });
+      expect(mockDB.prepare.mock.calls.some(([sql]) => typeof sql === "string" && /^UPDATE users SET mfa_/.test(sql))).toBe(false);
     });
   });
 

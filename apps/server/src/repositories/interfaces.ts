@@ -45,7 +45,7 @@ export interface UserRepository {
   findByEmail(email: string): Promise<User | null>;
   get(id: string, fence?: CustomerAuthBudgetFence): Promise<User | null>;
   create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>, fence?: CustomerAuthBudgetFence): Promise<User>;
-  update(id: string, data: Partial<User>): Promise<void>;
+  update(id: string, data: Partial<User>, fence?: CustomerAuthBudgetFence): Promise<void>;
   delete(id: string): Promise<void>;
   getCurrentCustomerOtpChallenge(userId: string): Promise<CustomerAuthOtpChallengeSnapshot | null>;
   issueCustomerAuthCredential(input: CustomerAuthCredentialIssue, fence?: CustomerAuthBudgetFence): Promise<void>;
