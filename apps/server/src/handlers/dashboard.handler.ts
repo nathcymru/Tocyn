@@ -40,6 +40,8 @@ import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.servi
 import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
 import { admitHttpTicketList } from '../budgets/http-ticket-list-admission.service';
 import { TicketListScanError } from '../repositories/ticket-list-scan.repository';
+import { admitGroupDirectory, settleGroupDirectory, type GroupDirectoryAdmission } from '../budgets/group-directory-admission.service';
+import { GroupDirectoryFenceError, GroupDirectoryRepository, type GroupDirectoryCommit } from '../repositories/group-directory.repository';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -122,6 +124,46 @@ function supportSlaAdmissionConfigurationFailure(c: any): Response | null {
   return staffTicketAdmissionMode(c.env) === 'invalid'
     ? c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503)
     : null;
+}
+
+function groupDirectoryBudgetFailure(c: any, reason: 'exhausted'|'unavailable') {
+  return reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+
+async function admittedGroupDirectoryWork<T>(c:any,d:TenantRequestDeps,admission:GroupDirectoryAdmission,
+  work:(repository:GroupDirectoryRepository,commit:GroupDirectoryCommit)=>Promise<T>):Promise<T|Response> {
+  const commit=admission.commit!;
+  try {
+    const result=await work(new GroupDirectoryRepository(d.scope,d.database),commit);
+    settleGroupDirectory(commit,'committed',c.env.localNow?.()??Date.now());
+    return result;
+  } catch(error) {
+    settleGroupDirectory(commit,'unknown',c.env.localNow?.()??Date.now());
+    if(error instanceof GroupDirectoryFenceError)return groupDirectoryBudgetFailure(c,'unavailable');
+    throw error;
+  }
+}
+
+/** These admitted routes use the same 65th-row sentinel as their live commit fence. */
+function groupDirectoryPermissionGuard(key:'users'|'groups') {
+  return async(c:any,next:()=>Promise<void>)=>{
+    if(staffTicketAdmissionMode(c.env)!=='enabled')return permissionGuard(key)(c,next);
+    const d=c.get('tenantDeps') as TenantRequestDeps|undefined;
+    const payload=c.get('jwtPayload') as JWTPayload|undefined;
+    const sessionVersion=payload?.session_version;
+    if(!d||!payload||(payload.role!=='admin'&&payload.role!=='agent')||typeof sessionVersion!=='number'||!Number.isSafeInteger(sessionVersion)){
+      return c.json({error:'Unauthorized',message:'No session found'},401);
+    }
+    const credential={tenantId:d.scope.tenantId,actorId:payload.sub,role:payload.role,sessionVersion,
+      expiresAt:payload.exp,mfaVerified:payload.mfa_verified===true} as const;
+    const fence=await new GroupDirectoryRepository(d.scope,d.database).capabilityFence(credential,key);
+    if(!fence)return c.json({error:'Forbidden',message:`Capability denied: ${key}.manage`},403);
+    c.set('permissionFences',{...(c.get('permissionFences')??{}),[fence.capability]:{allowed:true,reason:'allowed',
+      capability:fence.capability,policyFingerprint:fence.policyFingerprint}});
+    await next();
+  };
 }
 
 const createTicketFieldSchema = z.object({
@@ -995,11 +1037,19 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
  * GET /api/users
  * List all users with pagination and role filter
  */
-dashboard.get("/users", permissionGuard("users"), async (c) => {
+dashboard.get("/users", groupDirectoryPermissionGuard("users"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const page = Math.max(1, parseInt(c.req.query('page') || '1') || 1);
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '20') || 20));
-  const users = await d.repositories.users.list({page,limit,role:c.req.query('role')});
+  const role=c.req.query('role');
+  const admission=await admitGroupDirectory({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'directory.users.list',target:{page,limit,role:role??null},capability:permissionWriteFence(c,'users'),
+    now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return groupDirectoryBudgetFailure(c,admission.reason!);
+  const users=admission.status==='admitted'
+    ?await admittedGroupDirectoryWork(c,d,admission,(repository,commit)=>repository.listUsers({page,limit,role},commit))
+    :await d.repositories.users.list({page,limit,role});
+  if(users instanceof Response)return users;
   return c.json({users,page,limit});
 });
 
@@ -1009,7 +1059,14 @@ dashboard.get("/users", permissionGuard("users"), async (c) => {
  */
 dashboard.get("/users/agents", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  return c.json(await d.repositories.users.list({page:1,limit:100,staffOnly:true}));
+  const admission=await admitGroupDirectory({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'directory.agents.list',target:{},now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return groupDirectoryBudgetFailure(c,admission.reason!);
+  const users=admission.status==='admitted'
+    ?await admittedGroupDirectoryWork(c,d,admission,(repository,commit)=>repository.listAllStaff(commit))
+    :await d.repositories.users.list({page:1,limit:100,staffOnly:true});
+  if(users instanceof Response)return users;
+  return c.json(users);
 });
 
 /**
@@ -1018,7 +1075,13 @@ dashboard.get("/users/agents", async (c) => {
  */
 dashboard.get("/groups", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  const results = await d.repositories.groups.list();
+  const admission=await admitGroupDirectory({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'directory.groups.list',target:{},now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return groupDirectoryBudgetFailure(c,admission.reason!);
+  const results=admission.status==='admitted'
+    ?await admittedGroupDirectoryWork(c,d,admission,(repository,commit)=>repository.listGroups(commit))
+    :await d.repositories.groups.list();
+  if(results instanceof Response)return results;
   return c.json(results);
 });
 
@@ -1026,7 +1089,7 @@ dashboard.get("/groups", async (c) => {
  * POST /api/groups
  * Create a new group
  */
-dashboard.post("/groups", roleGuard(["admin", "agent"]), permissionGuard("groups"), async (c) => {
+dashboard.post("/groups", roleGuard(["admin", "agent"]), groupDirectoryPermissionGuard("groups"), async (c) => {
   const body = await c.req.json();
   const result = createGroupSchema.safeParse(body);
 
@@ -1036,6 +1099,16 @@ dashboard.post("/groups", roleGuard(["admin", "agent"]), permissionGuard("groups
 
   const { name, description } = result.data;
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const capability=permissionWriteFence(c,"groups");
+  const admission=await admitGroupDirectory({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'directory.group.create',target:{name,description:description??null},capability,
+    now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return groupDirectoryBudgetFailure(c,admission.reason!);
+  if(admission.status==='admitted'){
+    const group=await admittedGroupDirectoryWork(c,d,admission,(repository,commit)=>repository.createGroup({name,description},commit));
+    if(group instanceof Response)return group;
+    return group?c.json(group,201):c.json({error:"Group with this name already exists"},409);
+  }
   const revalidationFailure = await revalidatePermission(c, "groups");
   if (revalidationFailure) return revalidationFailure;
 
@@ -1054,10 +1127,21 @@ dashboard.post("/groups", roleGuard(["admin", "agent"]), permissionGuard("groups
  * DELETE /api/groups/:id
  * Delete a group
  */
-dashboard.delete("/groups/:id", roleGuard(["admin", "agent"]), permissionGuard("groups"), async (c) => {
+dashboard.delete("/groups/:id", roleGuard(["admin", "agent"]), groupDirectoryPermissionGuard("groups"), async (c) => {
   const id = c.req.param("id");
   if (!id) return c.json({ error: "Missing ID" }, 400);
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=await admitGroupDirectory({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'directory.group.delete',target:{groupId:id},capability:permissionWriteFence(c,'groups'),
+    now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return groupDirectoryBudgetFailure(c,admission.reason!);
+  if(admission.status==='admitted'){
+    const outcome=await admittedGroupDirectoryWork(c,d,admission,(repository,commit)=>repository.deleteGroup(id,commit));
+    if(outcome instanceof Response)return outcome;
+    if(outcome==='missing')return c.json({error:"Group not found"},404);
+    if(outcome==='has_tickets')return c.json({error:"Cannot delete group with associated tickets"},400);
+    return c.json({success:true});
+  }
 
   const group = await d.repositories.groups.get(id);
   if (!group) {
@@ -1083,6 +1167,14 @@ dashboard.get("/groups/:id/members", async (c) => {
   const groupId = c.req.param("id");
   if (!groupId) return c.json({ error: "Missing ID" }, 400);
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=await admitGroupDirectory({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'directory.group.members.list',target:{groupId},now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return groupDirectoryBudgetFailure(c,admission.reason!);
+  if(admission.status==='admitted'){
+    const result=await admittedGroupDirectoryWork(c,d,admission,(repository,commit)=>repository.members(groupId,commit));
+    if(result instanceof Response)return result;
+    return result?c.json(result.members):c.json({error:"Group not found"},404);
+  }
 
   const group = await d.repositories.groups.get(groupId);
   if (!group) {
@@ -1097,7 +1189,7 @@ dashboard.get("/groups/:id/members", async (c) => {
  * POST /api/groups/:id/members
  * Add a user to a group
  */
-dashboard.post("/groups/:id/members", roleGuard(["admin", "agent"]), permissionGuard("groups"), async (c) => {
+dashboard.post("/groups/:id/members", roleGuard(["admin", "agent"]), groupDirectoryPermissionGuard("groups"), async (c) => {
   const groupId = c.req.param("id");
   if (!groupId) return c.json({ error: "Missing ID" }, 400);
   const body = await c.req.json();
@@ -1109,6 +1201,18 @@ dashboard.post("/groups/:id/members", roleGuard(["admin", "agent"]), permissionG
 
   const { userId } = result.data;
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=await admitGroupDirectory({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'directory.group.member.add',target:{groupId,userId},capability:permissionWriteFence(c,'groups'),
+    now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return groupDirectoryBudgetFailure(c,admission.reason!);
+  if(admission.status==='admitted'){
+    const outcome=await admittedGroupDirectoryWork(c,d,admission,(repository,commit)=>repository.addMember(groupId,userId,commit));
+    if(outcome instanceof Response)return outcome;
+    if(outcome==='missing_group')return c.json({error:"Group not found"},404);
+    if(outcome==='missing_user')return c.json({error:"User not found"},404);
+    if(outcome==='already_member')return c.json({error:"User is already a member of this group"},409);
+    return c.json({success:true});
+  }
 
   const group = await d.repositories.groups.get(groupId);
   if (!group) {
@@ -1141,12 +1245,21 @@ dashboard.post("/groups/:id/members", roleGuard(["admin", "agent"]), permissionG
 dashboard.delete(
   "/groups/:id/members/:userId",
   roleGuard(["admin", "agent"]),
-  permissionGuard("groups"),
+  groupDirectoryPermissionGuard("groups"),
   async (c) => {
     const groupId = c.req.param("id");
     const userId = c.req.param("userId");
     if (!groupId || !userId) return c.json({ error: "Missing ID" }, 400);
     const d = c.get('tenantDeps') as TenantRequestDeps;
+    const admission=await admitGroupDirectory({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'directory.group.member.remove',target:{groupId,userId},capability:permissionWriteFence(c,'groups'),
+      now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return groupDirectoryBudgetFailure(c,admission.reason!);
+    if(admission.status==='admitted'){
+      const removed=await admittedGroupDirectoryWork(c,d,admission,(repository,commit)=>repository.removeMember(groupId,userId,commit));
+      if(removed instanceof Response)return removed;
+      return removed?c.json({success:true}):c.json({error:"User is not a member of this group"},404);
+    }
 
     // Verify membership exists via isMember
     const isMember = await d.repositories.groups.isMember(groupId, userId);

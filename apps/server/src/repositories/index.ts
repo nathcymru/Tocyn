@@ -1016,9 +1016,9 @@ export class SqlGroupRepository implements GroupRepository {
 
   async hasTickets(groupId: string): Promise<boolean> {
     const result = await this.db.prepare(
-      "SELECT COUNT(*) as count FROM tickets WHERE tenant_id = ? AND group_id = ?"
-    ).bind(this.scope.tenantId, groupId).first<{ count: number }>();
-    return (result?.count || 0) > 0;
+      "SELECT 1 AS present FROM tickets WHERE tenant_id = ? AND group_id = ? LIMIT 1"
+    ).bind(this.scope.tenantId, groupId).first<{ present: number }>();
+    return result?.present === 1;
   }
 }
 

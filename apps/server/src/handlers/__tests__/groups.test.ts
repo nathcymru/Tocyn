@@ -125,7 +125,7 @@ describe("Group Management Integration Tests", () => {
     });
 
     it("should return 400 if group has active tickets", async () => {
-      firstQueue.push({ id: "g-1" }, { count: 5 });
+      firstQueue.push({ id: "g-1" }, { present: 1 });
 
       const res = await dashboard.request(
         "/groups/g-1",
