@@ -11,9 +11,11 @@ import { createVerifiedTenantScope } from '../src/auth/scope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
 import { TicketMutationReplayRepository, type MutationCandidate } from '../src/repositories/ticket-mutation-replay.repository';
 import { CapabilityPolicyService } from '../src/repositories/capability-policy.repository';
+import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-admission.repository';
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { StaffTicketMutationService } from '../src/services/staff-ticket-mutation.service';
+import { createRequestCanonicalMutationSli } from '../src/observability/request-canonical-mutation-sli';
 import type { StaffMutationCommit,StaffMutationInput } from '../src/types/staff-ticket-mutation';
 import type { CapabilityWriteFence } from '../src/auth/capability-policy';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
@@ -45,6 +47,14 @@ async function fixture() {
       db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES (?,'ticket','Synthetic',?,'group','dashboard')").bind(tenant,`customer-${tenant}@example.test`),
       db.prepare("INSERT INTO budget_tenant_allocations VALUES ('staff-deployment',?,'staff-policy',1,1,?,?,'active')").bind(tenant,`staff-${tenant}`,JSON.stringify({schemaVersion:1,tenantId:tenant,ownerPolicyId:'staff-policy',ownerPolicyRevision:1,revision:1,mode:'conservative',limits,disabledFeatures:[]})),
       db.prepare("INSERT INTO tenant_role_capability_policies (tenant_id,role,capability,enabled,revision) VALUES (?,'agent','ticket-fields.manage',1,1)").bind(tenant),
+    ]);
+    await db.batch([
+      db.prepare("INSERT INTO local_beta_runs(run_id,ticket_limit,mutation_limit,recovery_reserve,upload_limit) VALUES ('staff-beta',2,4,2,2)"),
+      db.prepare("INSERT INTO local_beta_tenants(run_id,tenant_id) VALUES ('staff-beta','a')"),
+      db.prepare("INSERT INTO local_beta_tenants(run_id,tenant_id) VALUES ('staff-beta','b')"),
+      db.prepare("INSERT INTO local_beta_invitations(run_id,tenant_id,principal_kind,principal_id) VALUES ('staff-beta','a','staff','staff')"),
+      db.prepare("INSERT INTO local_beta_invitations(run_id,tenant_id,principal_kind,principal_id) VALUES ('staff-beta','b','staff','staff')"),
+      db.prepare("INSERT INTO local_beta_policy(singleton,run_id,revision,state) VALUES (1,'staff-beta',1,'running')"),
     ]);
     await db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('b','foreign','Foreign','customer-b@example.test','dashboard')").run();
     const rawNamespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
@@ -88,14 +98,23 @@ async function fixture() {
     const credential = (tenant='a',actor='staff') => ({tenantId:tenant,actorId:actor,role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600,mfaVerified:true});
     const service = (tenant='a',actor='staff',capability?:CapabilityWriteFence) => new StaffTicketMutationService(db,scope(tenant,actor),credential(tenant,actor),new Canonical(canonicalDb,scope(tenant,actor)),
       {service:admission,repository:new Authority(db,scope(tenant,actor)),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},capability);
+    const betaService = (tenant='a',actor='staff') => {
+      const activeScope=scope(tenant,actor),activeCredential=credential(tenant,actor);
+      const canonicalSli=createRequestCanonicalMutationSli();
+      const canonical=new TicketMutationReplayRepository(canonicalDb,activeScope,
+        new LocalBetaAdmissionRepository(canonicalDb,activeScope,{kind:'staff',id:actor},{sessionVersion:activeCredential.sessionVersion,expiresAt:activeCredential.expiresAt}),canonicalSli);
+      return {service:new StaffTicketMutationService(db,activeScope,activeCredential,canonical,
+        {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()}),canonicalSli};
+    };
     const counts = async () => {
       const result:Record<string,number> = {};
-      for (const table of ['tickets','articles','attachments','conversation_events','ticket_sla_events','staff_ticket_mutation_receipts']) {
+      for (const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','staff_ticket_mutation_receipts']) {
         result[table] = (await db.prepare(`SELECT count(*) AS n FROM ${table}`).first<{n:number}>())!.n;
       }
       return result;
     };
-    return {mf,db,service,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
+    const betaCounters=()=>db.prepare("SELECT tickets,mutations FROM local_beta_runs WHERE run_id='staff-beta'").first<{tickets:number;mutations:number}>();
+    return {mf,db,service,betaService,betaCounters,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
       clock:(value:number)=>{admissionNow=value;},afterAuthority:(action:()=>Promise<void>)=>{afterAuthority=action;},canonicalAttempts:()=>canonicalAttempts};
   } catch (error) {await mf.dispose();throw error;}
 }
@@ -247,6 +266,25 @@ test('two tenants persist shared article formats, reject unknown formats, and re
     const plain:StaffMutationInput={operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'Plain',bodyFormat:'plain'}};
     const other=await accept(f.service('b'),plain,'format-key');assert.equal(other.outcome.article.body_format,'plain');assert.notEqual(other.outcome.article.id,first.outcome.article.id);
     await assert.rejects(f.service('a').prepare({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'Unknown',bodyFormat:'markdown-v2' as unknown as 'plain'}},'unknown-format'),(error:any)=>error.code==='unsupported_article_format');
+  }finally{await f.mf.dispose();}
+});
+
+test('actual #93 beta admission rolls back the entire staff canonical batch on exhaustion and completed receipt replay is quota-free',async()=>{
+  const f=await fixture();try{
+    const beta=f.betaService();
+    const first=await accept(beta.service,reply('Beta receipt'),'beta-replay');
+    assert.equal((await f.betaCounters())?.mutations,1);
+    assert.deepEqual(beta.canonicalSli.snapshot().counts,{attempted:1,durablyCompleted:1,replayed:0,noOp:0,denied:0,uncertain:0});
+    await f.db.prepare("UPDATE local_beta_runs SET mutations=mutation_limit WHERE run_id='staff-beta'").run();
+    const replay=await beta.service.prepare(reply('Beta receipt'),'beta-replay');
+    assert.equal(replay.replay?.replayed,true);assert.equal(replay.replay?.article.id,first.outcome.article.id);
+    assert.deepEqual(await f.betaCounters(),{tickets:0,mutations:4},'completed receipt replay does not increment the exhausted beta quota');
+
+    const blocked=f.betaService();const prepared=await blocked.service.prepare(reply('Quota exhausted'),'beta-exhausted');
+    assert.equal((await blocked.service.admit(prepared)).status,'spent');const before=await f.counts();
+    await assert.rejects(blocked.service.commit(prepared));
+    assert.deepEqual(await f.counts(),before,'beta assertion failure rolls back article, audit, SLA, and staff receipt writes together');
+    assert.deepEqual(await f.betaCounters(),{tickets:0,mutations:4});
   }finally{await f.mf.dispose();}
 });
 
