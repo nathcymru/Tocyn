@@ -11,7 +11,7 @@ import { normalizeSupportEmail } from '../utils/email-normalize';
 import { CapabilityFenceError, capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
 import { VerifiedTenantScope } from '../types/tenant';
 import { AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_MESSAGES, AI_SUGGESTION_MAX_R2_KEY_BYTES, UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
-import { D1Database } from '@cloudflare/workers-types';
+import { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import { articleBodyFormat } from '@luminatick/shared';
@@ -171,11 +171,12 @@ export class SqlTicketRepository implements TicketRepository {
       .bind(this.scope.tenantId, id, token).run();
   }
 
-  async withExternalWrite<T>(id: string, operation: () => Promise<T>): Promise<T> {
+  async withExternalWrite<T>(id: string, operation: () => Promise<T>, fenceStatements?: () => readonly D1PreparedStatement[]): Promise<T> {
     const token = crypto.randomUUID();
-    const result = await this.db.prepare(`INSERT OR IGNORE INTO ticket_cleanup_claims (tenant_id, ticket_id, token, mode)
+    const claim = this.db.prepare(`INSERT OR IGNORE INTO ticket_cleanup_claims (tenant_id, ticket_id, token, mode)
       SELECT tenant_id, id, ?, 'write' FROM tickets WHERE tenant_id = ? AND id = ?`)
-      .bind(token, this.scope.tenantId, id).run();
+      .bind(token, this.scope.tenantId, id);
+    const result = fenceStatements ? (await this.db.batch([...fenceStatements(),claim])).at(-1)! : await claim.run();
     if (!result.meta.changes) throw new Error('Ticket busy or unavailable');
     // An ambiguous external failure retains the claim for explicit reconciliation.
     const value = await operation();
@@ -576,8 +577,18 @@ export class SqlArticleRepository implements ArticleRepository {
   }
 
   async updateQAState(id: string, type: string | null, chunkCount: number): Promise<void> {
-    await this.db.prepare("UPDATE articles SET qa_type = ?, chunk_count = ? WHERE tenant_id = ? AND id = ?")
-      .bind(type, chunkCount, this.scope.tenantId, id).run();
+    await this.updateQAStateStatement(id,type,chunkCount).run();
+  }
+
+  updateQAStateStatement(id: string, type: string | null, chunkCount: number): D1PreparedStatement {
+    return this.db.prepare("UPDATE articles SET qa_type = ?, chunk_count = ? WHERE tenant_id = ? AND id = ?")
+      .bind(type, chunkCount, this.scope.tenantId, id);
+  }
+
+  updateQAStateRequiredStatements(id: string, type: string | null, chunkCount: number): readonly D1PreparedStatement[] {
+    return [this.updateQAStateStatement(id,type,chunkCount),
+      this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
+        ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId)];
   }
 
   async listByTicket(ticketId: string): Promise<Article[]> {
