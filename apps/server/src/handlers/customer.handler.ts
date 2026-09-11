@@ -151,7 +151,7 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
     if (err.message === 'Invalid tenant context') {
       return c.json({ error: 'Invalid tenant context' }, 400);
     }
-    throw err;
+    return c.json({ error: 'Authentication request could not be completed' }, 500);
   }
 });
 
