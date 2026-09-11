@@ -65,6 +65,69 @@ describe('realtime session lifecycle', () => {
     expect(event.payload.location).toHaveLength(100);
     for (const privateField of ['version', 'expiresAt', 'role', 'tenantId']) expect(event.payload).not.toHaveProperty(privateField);
   });
+  it('derives a bounded typing actor after current ticket and group authorization', async () => {
+    const alice = socket({ connectionId: 'alice', userId: 'alice', name: 'Spoofed sender' });
+    const bob = socket({ connectionId: 'bob', userId: 'bob' });
+    const outsider = socket({ connectionId: 'outsider', userId: 'outsider' });
+    sockets.push(alice, bob, outsider);
+    const users: Record<string, any> = {
+      alice: { tenant_id: 'A', id: 'alice', role: 'agent', session_version: 0, full_name: 'Alice Authoritative' },
+      bob: { tenant_id: 'A', id: 'bob', role: 'agent', session_version: 0, full_name: 'Bob' },
+      outsider: { tenant_id: 'A', id: 'outsider', role: 'agent', session_version: 0, full_name: 'Outsider' },
+    };
+    env.DB.prepare = (sql: string) => ({ bind: (...values: string[]) => ({ first: async () => {
+      if (sql.includes('FROM users')) return users[values[1]] ?? null;
+      if (sql.includes('FROM tickets')) return values[1] === 'ticket-1' ? { group_id: 'group-1' } : null;
+      if (sql.includes('FROM user_groups')) return ['alice', 'bob'].includes(values[1]) ? { allowed: 1 } : null;
+      return null;
+    } }) });
+    await instance.webSocketMessage(alice as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: {
+      version: 1, ticketId: 'ticket-1', baseConversationRevision: 7, active: true,
+      actor: { id: 'customer-supplied', name: 'Customer supplied' }, expiresAt: Date.now() + 600_000,
+    } }));
+    expect(alice.send).not.toHaveBeenCalled(); expect(outsider.send).not.toHaveBeenCalled();
+    const event = JSON.parse(bob.send.mock.calls[0][0]);
+    expect(event).toMatchObject({ type: 'collaboration.typing.v1', payload: {
+      version: 1, ticketId: 'ticket-1', actor: { id: 'alice', name: 'Alice Authoritative' }, active: true,
+    } });
+    expect(event.payload.expiresAt).toBe(Date.now() + 6000);
+    expect(event.payload).not.toHaveProperty('baseConversationRevision');
+  });
+  it('rejects invalid, unauthorized and throttled typing messages without disclosing a ticket', async () => {
+    const sender = socket({ connectionId: 'sender', userId: 'sender' }), recipient = socket({ connectionId: 'recipient', userId: 'recipient' });
+    sockets.push(sender, recipient);
+    env.DB.prepare = (sql: string) => ({ bind: (...values: string[]) => ({ first: async () => {
+      if (sql.includes('FROM users')) return { tenant_id: 'A', id: values[1], role: 'agent', session_version: 0, full_name: values[1] };
+      if (sql.includes('FROM tickets')) return values[1] === 'allowed' ? { group_id: null } : null;
+      return null;
+    } }) });
+    await instance.webSocketMessage(sender as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'missing', baseConversationRevision: 0, active: true } }));
+    await instance.webSocketMessage(sender as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 2, ticketId: 'allowed', baseConversationRevision: 0, active: true } }));
+    await instance.webSocketMessage(sender as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'allowed', baseConversationRevision: -1, active: true } }));
+    expect(recipient.send).not.toHaveBeenCalled();
+    await instance.webSocketMessage(sender as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'allowed', baseConversationRevision: 0, active: true } }));
+    await instance.webSocketMessage(sender as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'allowed', baseConversationRevision: 0, active: false } }));
+    expect(recipient.send).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(1000);
+    await instance.webSocketMessage(sender as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'allowed', baseConversationRevision: 0, active: false } }));
+    expect(recipient.send).toHaveBeenCalledTimes(2);
+  });
+  it('clears transient typing throttles on a reconnect and denies revoked recipients', async () => {
+    const sender = socket({ connectionId: 'sender', userId: 'sender' }), revoked = socket({ connectionId: 'revoked', userId: 'revoked', version: 0 });
+    sockets.push(sender, revoked);
+    env.DB.prepare = (sql: string) => ({ bind: (...values: string[]) => ({ first: async () => {
+      if (sql.includes('FROM users')) return { tenant_id: 'A', id: values[1], role: 'agent', session_version: values[1] === 'revoked' ? 1 : 0, full_name: values[1] };
+      if (sql.includes('FROM tickets')) return { group_id: null };
+      return null;
+    } }) });
+    await instance.webSocketMessage(sender as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'ticket', baseConversationRevision: 0, active: true } }));
+    expect(revoked.send).not.toHaveBeenCalled(); expect(revoked.close).toHaveBeenCalledWith(1008, expect.any(String));
+    await instance.webSocketClose(sender as any, 1000, '', true);
+    const reconnected = socket({ connectionId: 'reconnected', userId: 'sender' }); sockets.splice(sockets.indexOf(sender), 1, reconnected);
+    await instance.webSocketMessage(reconnected as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'ticket', baseConversationRevision: 0, active: true } }));
+    // The revoked socket remains denied; the newly connected sender was not throttled by its old connection.
+    expect(revoked.send).not.toHaveBeenCalled();
+  });
   it('initializes a valid connection and schedules expiry before returning the upgrade', async () => {
     const server = socket();
     vi.stubGlobal('WebSocketPair', class { 0 = {}; 1 = server; });
