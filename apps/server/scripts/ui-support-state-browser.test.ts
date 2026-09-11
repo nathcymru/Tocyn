@@ -57,7 +57,8 @@ async function startServer(fixture: LocalTenantFixture) {
       for (const [name, value] of Object.entries(request.headers)) if (typeof value === 'string' && ['authorization', 'content-type'].includes(name.toLowerCase())) headers[name] = value;
       const result = await fixture.request(`${url.pathname}${url.search}`, { method: request.method, rawBody: await requestBody(request), contentType: request.headers['content-type'] ?? null, headers });
       const contentType = result.headers.get('content-type');
-      response.writeHead(result.status, { 'Cache-Control': 'no-store', ...(contentType ? { 'Content-Type': contentType } : {}) }).end(Buffer.from(await result.arrayBuffer()));
+      const nextCursor = result.headers.get('x-next-cursor');
+      response.writeHead(result.status, { 'Cache-Control': 'no-store', ...(contentType ? { 'Content-Type': contentType } : {}), ...(nextCursor ? { 'X-Next-Cursor': nextCursor } : {}) }).end(Buffer.from(await result.arrayBuffer()));
     } catch { response.writeHead(502, { 'Content-Type': 'application/json' }).end('{"error":"Local support-state fixture forwarding failed"}'); }
   });
   await new Promise<void>((done, fail) => { server.once('error', fail); server.listen(0, '127.0.0.1', done); });
@@ -98,6 +99,9 @@ test('proves production dashboard support-state workflow against disposable two-
     const server = await startServer(fixture); const browser = await chromium.launch({ headless: true });
     try {
       const sessionA = await operatorSession(fixture, 'operatorA');
+      await fixture.db.batch(Array.from({ length: 46 }, (_, index) => fixture.db.prepare(`INSERT INTO support_state_definitions
+        (tenant_id,id,legacy_status,internal_label,public_label) VALUES ('fixture-tenant-a',?,'open',?,?)`)
+        .bind(`browser-state-${String(index).padStart(3, '0')}`, `State ${String(index).padStart(3, '0')}`, `State ${index}`)));
       const externalRequests: string[] = [];
       const contextA = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
       const contextWriter = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -119,25 +123,41 @@ test('proves production dashboard support-state workflow against disposable two-
       await page.getByLabel('Require next action').check();
       await page.getByRole('button', { name: 'Create state', exact: true }).click();
       await page.getByText('Support state created.', { exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Load more support states', exact: true }).click();
       await page.getByRole('button', { name: 'Edit Waiting on customer', exact: true }).click();
       await page.getByLabel('Customer-visible label').fill('We are waiting for your reply');
       await page.getByRole('button', { name: 'Save state', exact: true }).click();
       await page.getByText('Support state saved.', { exact: true }).waitFor();
       await page.getByText('Customer label: We are waiting for your reply · Legacy lifecycle: pending', { exact: true }).waitFor();
+      const directFirstPage = await fixture.request('/api/support-states?limit=50', { token: sessionA.token });
+      assert.equal(directFirstPage.status, 200);
+      assert.equal((await directFirstPage.clone().json<Array<unknown>>()).length, 50);
+      assert.ok(directFirstPage.headers.get('X-Next-Cursor'), 'The Worker must return a continuation cursor for the browser page-two fixture');
 
       await initializeLocalBetaFixture(fixture, {
         runId: 'support-state-browser', tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
         invitations: Object.values(fixture.principals).map(principal => ({ tenantId: principal.tenantId, id: principal.localId, kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const })),
         limits: { ticketLimit: 1, mutationLimit: 4, recoveryReserve: 1, uploadLimit: 1 },
       });
+      const betaFirstPage = await fixture.request('/api/support-states?limit=50', { token: sessionA.token });
+      assert.equal(betaFirstPage.status, 200);
+      assert.ok(betaFirstPage.headers.get('X-Next-Cursor'), 'The local-beta Worker route must preserve support-state pagination');
 
       const writer = await contextWriter.newPage(); await seedSession(writer, sessionA);
       const patches: unknown[] = [];
       page.on('request', request => { if (new URL(request.url()).pathname === '/api/tickets/fixture-ticket/support-state' && request.method() === 'PATCH') patches.push(request.postDataJSON()); });
       for (const candidate of [page, writer]) {
+        const firstSupportStatePage = candidate.waitForResponse(response => {
+          const request = response.request();
+          const url = new URL(request.url());
+          return request.method() === 'GET' && url.origin === server.origin && url.pathname === '/api/support-states' && !url.searchParams.has('cursor');
+        });
         await candidate.goto(`${server.origin}/tickets/fixture-ticket`);
+        assert.ok((await firstSupportStatePage).headers()['x-next-cursor'], 'The browser fixture must forward the first support-state continuation cursor');
         await candidate.getByRole('button', { name: 'Manage support state', exact: true }).click();
         await candidate.getByRole('combobox', { name: 'Support state', exact: true }).waitFor();
+        await candidate.getByRole('button', { name: 'Load more support states', exact: true }).click();
+        await candidate.getByRole('option', { name: 'Waiting on customer (pending)', exact: true }).waitFor({ state: 'attached' });
         await candidate.getByRole('combobox', { name: 'Support state', exact: true }).selectOption('waiting-on-customer');
       }
       assert.equal(await writer.getByLabel('Waiting reason').getAttribute('aria-required'), 'true', 'The real dashboard must expose waiting reason as required for this state');

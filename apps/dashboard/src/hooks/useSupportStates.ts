@@ -40,7 +40,9 @@ export function useSupportStates(includeInactive = false) {
     queryKey: ['support-states', { includeInactive }],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '100' });
+      // The guarded local-beta read policy caps list pages at 50. Keep the
+      // dashboard under that shared bound and continue explicitly by cursor.
+      const params = new URLSearchParams({ limit: '50' });
       if (includeInactive) params.set('include_inactive', 'true');
       if (pageParam) params.set('cursor', pageParam);
       const response = await dashboardApi.getWithHeaders<SupportStateDefinition[]>(`/support-states?${params}`);
