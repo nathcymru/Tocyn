@@ -119,7 +119,7 @@ try {
       const text = {
         title: await visualSnapshot(page.getByRole('heading', { name: 'Synthetic support', exact: true })),
         placeholder: await visualSnapshot(subject, '::placeholder'),
-        footer: await visualSnapshot(page.getByText('Powered by Luminatick', { exact: true })),
+        footer: await visualSnapshot(page.locator('[data-product-attribution]')),
       };
       const defects = Object.entries({ ...controls, ...text }).flatMap(([name, measurement]) => [
         measurement.text.unsupported ? `${name}: ${measurement.text.unsupported}` : measurement.text.contrast !== null && measurement.text.contrast < 4.5 ? `${name}: text contrast ${measurement.text.contrast.toFixed(2)}:1` : null,

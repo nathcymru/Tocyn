@@ -1,3 +1,4 @@
+import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
@@ -115,8 +116,8 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   const location = useLocation();
   return (
         <div className="flex flex-col h-full items-center py-4">
-          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-8 shadow-sm hover:bg-brand-400 transition-colors">
-            L
+          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="w-11 h-11 rounded-xl flex items-center justify-center mb-8 hover:bg-slate-700 transition-colors">
+            <ProductLogo compact decorative className="w-10 h-10 object-contain" />
           </Link>
 
           <nav aria-label="Workspace navigation" className="flex-1 w-full px-2 space-y-2">

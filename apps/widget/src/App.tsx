@@ -1,3 +1,4 @@
+import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { Tabs } from '@luminatick/ui/ark';
 import { TocynButton } from '@luminatick/ui/primitives';
 import React, { useState, useEffect, useRef, useId } from 'react';
@@ -77,8 +78,8 @@ const App: React.FC = () => {
           </div>
 
           </Tabs.Root>
-          <div className="p-2 text-center text-[10px] text-gray-600 border-t border-gray-100">
-            Powered by Luminatick
+          <div data-product-attribution className="p-2 text-center text-[10px] text-gray-600 border-t border-gray-100">
+            Powered by {PRODUCT_BRAND.name}
           </div>
         </div>
       </div>
