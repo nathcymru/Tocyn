@@ -5,7 +5,7 @@ import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO
 import { BudgetAuthorityRepository, type BudgetCommitSnapshot } from '../repositories/budget-authority.repository';
 import type { CurrentBudgetAuthorityGate } from './budget-coordinator.service';
 import type { TrustedBudgetCoordinatorAuthority } from './owner-aggregate';
-import { IsolateBudgetGrantHolder, isolateWarmReservedEnvelope, type CurrentIsolateGrantAuthority, type IsolateGrantScope, type IsolateGrantSpendResult } from './isolate-grant-holder';
+import { IsolateBudgetGrantHolder, isolateWarmReservedEnvelope, MAX_ISOLATE_OPERATION_ATTEMPTS, type CurrentIsolateGrantAuthority, type IsolateGrantScope, type IsolateGrantSpendResult } from './isolate-grant-holder';
 
 export const MAX_ACTIVE_ISOLATE_SCOPES = 64;
 export const MAX_ISOLATE_BLOCK_OPERATIONS = 8;
@@ -45,6 +45,15 @@ function scaledEnvelope(cost: ResourceAmounts, operations: number): ResourceAmou
   for (const dimension of RESOURCE_DIMENSIONS) {
     const units = (cost[dimension] ?? 0) * operations + (ISOLATE_COLD_ENVELOPE[dimension] ?? 0);
     if (!Number.isSafeInteger(units)) throw new Error('isolate allocation overflow');
+    if (units > 0) result[dimension] = units;
+  }
+  return result;
+}
+function withIngressLiability(business: ResourceAmounts, ingress: Readonly<ResourceAmounts>): ResourceAmounts | null {
+  const result: ResourceAmounts = { ...business };
+  for (const dimension of RESOURCE_DIMENSIONS) {
+    const units = (result[dimension] ?? 0) + MAX_ISOLATE_OPERATION_ATTEMPTS * (ingress[dimension] ?? 0);
+    if (!Number.isSafeInteger(units)) return null;
     if (units > 0) result[dimension] = units;
   }
   return result;
@@ -222,11 +231,13 @@ export class IsolateBudgetAdmissionCache {
     if (!authority) { if (entry) this.retire(entry); return stale(); }
     const offeredIngress = ownerIngress?.tenantHandoff(input.scope.tenantId, input.now());
     if (offeredIngress) {
-      // Owner preallocation already contains this Worker execution. Durable
-      // tenant proof is collected after the business grant is spent and the
-      // whole warm block is reconciled later without a per-request DO RPC.
-      const remainingWorkerRequests=(input.business.workerRequests??0)-1;
-      business={...input.business};if(remainingWorkerRequests>0)business.workerRequests=remainingWorkerRequests;else delete business.workerRequests;
+      // Both permitted HTTP attempts are prepaid in the tenant holder before
+      // admission. No dimension is subtracted merely because owner ingress
+      // also holds it; the duplicate owner coverage is released only later
+      // from exact durable proof.
+      const prepaid = withIngressLiability(input.business, offeredIngress.envelope);
+      if (!prepaid) return { status: 'rejected', reason: 'invalid-request' };
+      business = prepaid;
     }
     if (entry && !this.observeAuthority(entry,authority)) return stale();
     if (entry?.blocked) {
