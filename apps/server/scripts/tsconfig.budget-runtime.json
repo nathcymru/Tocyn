@@ -20,6 +20,8 @@
     "group-directory-admission-runtime-entry.ts",
     "group-directory-admission-runtime.test.ts",
     "operator-workspace-admission-runtime.test.ts",
-    "operator-workspace-admission-runtime-entry.ts"
+    "operator-workspace-admission-runtime-entry.ts",
+    "knowledge-read-admission-runtime-entry.ts",
+    "knowledge-read-admission-runtime.test.ts"
   ]
 }

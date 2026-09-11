@@ -11,6 +11,8 @@ import { z } from 'zod';
 import { admitHttpAi } from '../budgets/http-ai-admission.service';
 import { ticketMutationAdmissionMode } from '../middleware/budget-admission.middleware';
 import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_MAX_BYTES, KnowledgeSourceAdmissionError, type KnowledgeSourceAdmission } from '../budgets/knowledge-source-admission.service';
+import { admitKnowledgeRead, type KnowledgeReadAdmission, type KnowledgeReadOperation } from '../budgets/knowledge-read-admission.service';
+import { KnowledgeReadFenceError, KnowledgeReadRepository } from '../repositories/knowledge-read.repository';
 
 const staffSuggestionFallback = "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
 
@@ -46,8 +48,17 @@ async function admitSourceOrResponse(c: any, sourceBytes: number, sourceKind: 'd
     : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
 }
 
+async function admitReadOrResponse(c:any,operation:KnowledgeReadOperation,documentId?:string):Promise<Response|Exclude<KnowledgeReadAdmission,{status:'rejected'}>>{
+  const outcome=await admitKnowledgeRead({env:c.env,deps:c.get('tenantDeps'),payload:c.get('jwtPayload'),operation,documentId,
+    now:()=>c.env.localNow?.()??Date.now()});
+  if(outcome.status==='admitted'||outcome.status==='disabled')return outcome;
+  return outcome.reason==='exhausted'
+    ?c.json({code:'budget_exhausted',error:'Configured budget capacity is exhausted'},429)
+    :c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
+}
+
 knowledgeHandler.onError((error, c) => {
-  if (error instanceof KnowledgeSourceAdmissionError) {
+  if (error instanceof KnowledgeSourceAdmissionError || error instanceof KnowledgeReadFenceError) {
     return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   }
   if (error.message === 'Maximum tag stripping depth exceeded: possible malicious input') {
@@ -61,18 +72,32 @@ knowledgeHandler.use('*', authMiddleware, mfaGuard, roleGuard(['agent', 'admin']
 // Article Endpoints
 knowledgeHandler.get('/articles', async (c) => {
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=await admitReadOrResponse(c,'knowledge.article.list');
+  if(admission instanceof Response)return admission;
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
-  const docs = await service.listDocuments();
+  let docs;
+  if(admission.status==='disabled')docs=await service.listDocuments();
+  else try{
+    docs=await new KnowledgeReadRepository(deps.database,deps.scope).list(await admission.commit.start());
+    admission.commit.settle('committed');
+  }catch(error){admission.commit.settle('unknown');throw error;}
   return c.json(docs);
 });
 
 knowledgeHandler.get('/articles/:id', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=await admitReadOrResponse(c,'knowledge.article.detail',id);
+  if(admission instanceof Response)return admission;
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
-  const doc = await service.getDocument(id);
+  let doc;
+  if(admission.status==='disabled')doc=await service.getDocument(id);
+  else try{
+    doc=await new KnowledgeReadRepository(deps.database,deps.scope).detail(id,await admission.commit.start());
+    admission.commit.settle('committed');
+  }catch(error){admission.commit.settle('unknown');throw error;}
   if (!doc) {
     return c.json({ error: 'Document not found' }, 404);
   }
@@ -128,12 +153,28 @@ knowledgeHandler.post('/articles/:id/qa', async (c) => {
 knowledgeHandler.get('/articles/:id/content', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=await admitReadOrResponse(c,'knowledge.article.content',id);
+  if(admission instanceof Response)return admission;
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   try {
-    const content = await service.getArticleContent(id);
+    let content:string;
+    if(admission.status==='disabled')content=await service.getArticleContent(id);
+    else{
+      const source=await new KnowledgeReadRepository(deps.database,deps.scope).contentSource(id,await admission.commit.start());
+      if(!source)throw new Error('Document not found');
+      await admission.commit.authorizeCurrent();
+      const object=await deps.attachmentStorage.getAttachment(source.filePath);
+      if(!object)throw new Error('File not found in storage');
+      if((source.versioned&&object.size!==source.sourceBytes)||(!source.versioned&&object.size>source.sourceBytes))
+        throw new KnowledgeReadFenceError('authority_changed');
+      content=await object.text();
+      admission.commit.settle('committed');
+    }
     return c.json({ content });
   } catch (error: any) {
+    if(admission.status==='admitted')admission.commit.settle('unknown');
+    if(error instanceof KnowledgeReadFenceError)return c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
     return c.json({ error: error.message }, 404);
   }
 });
