@@ -19,6 +19,8 @@ export const OPERATOR_WORKSPACE_ENVELOPES: Readonly<Record<WorkspaceAdmissionOpe
   'workspace.state.write': WRITE,
   'workspace.theme.read': READ,
   'workspace.theme.write': WRITE,
+  'workspace.presentation.read': READ,
+  'workspace.presentation.write': WRITE,
   'workspace.drafts.list': Object.freeze({ ...READ, d1RowsWritten: 256 }),
   'workspace.draft.read': Object.freeze({ ...READ, d1RowsWritten: 256 }),
   'workspace.draft.write': Object.freeze({ ...WRITE, r2ClassBOperations: 10 }),

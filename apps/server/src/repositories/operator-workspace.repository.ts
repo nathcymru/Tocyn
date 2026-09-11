@@ -7,10 +7,12 @@ import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service
 import type { SessionBudgetCredential } from './session-budget-authority.repository';
 import { budgetCommitConstraint } from './budget-commit-fence';
 import { DRAFT_EXPIRY_SQL } from '../types/operator-draft-retention';
+import { OPERATOR_PRESENTATION_PREFERENCES_VERSION } from '../types/operator-workspace';
 import type {
   OperatorDraft, OperatorDraftAttachment, OperatorDraftMode, OperatorWorkspaceFilters,
   OperatorWorkspaceSort, OperatorWorkspaceState, OperatorWorkspaceView,
   OperatorThemeMode, OperatorThemePreference,
+  OperatorPresentationPreference,
 } from '../types/operator-workspace';
 
 type DraftRow = {
@@ -57,7 +59,7 @@ export type DraftRebaseInput = Readonly<{
 }>;
 type MutationCondition = Readonly<{ sql: string; values: unknown[] }>;
 export type OperatorPresentationCredential = Readonly<{ sessionVersion: number; expiresAt: number; role: 'agent' | 'admin' }>;
-export type WorkspaceAdmissionOperation = 'workspace.state.read'|'workspace.state.write'|'workspace.theme.read'|'workspace.theme.write'|'workspace.drafts.list'|'workspace.draft.read'|'workspace.draft.write'|'workspace.draft.rebase'|'workspace.draft.delete';
+export type WorkspaceAdmissionOperation = 'workspace.state.read'|'workspace.state.write'|'workspace.theme.read'|'workspace.theme.write'|'workspace.presentation.read'|'workspace.presentation.write'|'workspace.drafts.list'|'workspace.draft.read'|'workspace.draft.write'|'workspace.draft.rebase'|'workspace.draft.delete';
 export type OperatorWorkspaceCommit = Readonly<{ operation: WorkspaceAdmissionOperation; ticketId?: string;
   draftPopulation?: number; credential: SessionBudgetCredential; authority: BudgetCommitAuthority }>;
 
@@ -162,6 +164,45 @@ export class OperatorWorkspaceRepository {
       .bind(this.scope.tenantId, this.scope.actorId, input.mode, ...condition.values, input.expectedRevision);
     const row = await this.runWorkspaceMutation<{ revision: number; mode: OperatorThemeMode; updated_at: string }>(statement, condition, commit, 'workspace.theme.write');
     return row ? { revision: row.revision, mode: row.mode, updatedAt: row.updated_at } : null;
+  }
+
+  /** Missing or legacy rows deliberately resolve to a safe, versioned default. */
+  async getPresentationPreference(credential: OperatorPresentationCredential, commit?: OperatorWorkspaceCommit): Promise<OperatorPresentationPreference | null> {
+    const authority = this.themeAuthority(credential);
+    const rows = await this.readWorkspace<{revision: number; version: number; density: 'comfortable'|'compact'; font_scale: 'normal'|'large'|'larger'; focus_mode: number; motion: 'system'|'reduced'|'full'; updated_at: string | null}>(this.db.prepare(`SELECT COALESCE(p.revision,0) AS revision,COALESCE(p.version,?) AS version,
+      COALESCE(p.density,'comfortable') AS density,COALESCE(p.font_scale,'normal') AS font_scale,COALESCE(p.focus_mode,0) AS focus_mode,
+      COALESCE(p.motion,'system') AS motion,p.updated_at FROM users u
+      LEFT JOIN operator_presentation_preference p ON p.tenant_id=u.tenant_id AND p.user_id=u.id
+      WHERE u.tenant_id=? AND u.id=? AND ${authority.sql}`)
+      .bind(OPERATOR_PRESENTATION_PREFERENCES_VERSION, this.scope.tenantId, this.scope.actorId, ...authority.values), commit, 'workspace.presentation.read');
+    const row = rows[0];
+    if (!row) return null;
+    if (row.version !== OPERATOR_PRESENTATION_PREFERENCES_VERSION || !Number.isSafeInteger(row.revision) || row.revision < 0
+      || !['comfortable','compact'].includes(row.density) || !['normal','large','larger'].includes(row.font_scale)
+      || (row.focus_mode !== 0 && row.focus_mode !== 1) || !['system','reduced','full'].includes(row.motion)) {
+      return { version: OPERATOR_PRESENTATION_PREFERENCES_VERSION, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
+    }
+    return { version: OPERATOR_PRESENTATION_PREFERENCES_VERSION, revision: row.revision, density: row.density, fontScale: row.font_scale, focusMode: row.focus_mode === 1, motion: row.motion, updatedAt: row.updated_at };
+  }
+
+  async savePresentationPreference(input: Omit<OperatorPresentationPreference, 'updatedAt'>, credential: OperatorPresentationCredential,
+    commit?: OperatorWorkspaceCommit): Promise<OperatorPresentationPreference | null> {
+    const authority = this.themeAuthority(credential);
+    const condition: MutationCondition = { sql: `${authority.sql} AND ((?=0 AND NOT EXISTS (SELECT 1 FROM operator_presentation_preference WHERE tenant_id=? AND user_id=?))
+      OR EXISTS (SELECT 1 FROM operator_presentation_preference WHERE tenant_id=? AND user_id=? AND ((revision=? AND version=?) OR (?=0 AND version<>?))))`,
+      values: [...authority.values, input.revision, this.scope.tenantId, this.scope.actorId, this.scope.tenantId, this.scope.actorId, input.revision, OPERATOR_PRESENTATION_PREFERENCES_VERSION, input.revision, OPERATOR_PRESENTATION_PREFERENCES_VERSION] };
+    const statement = this.db.prepare(`INSERT INTO operator_presentation_preference
+      (tenant_id,user_id,version,revision,density,font_scale,focus_mode,motion,updated_at)
+      SELECT ?,?,?,1,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE ${condition.sql}
+      ON CONFLICT(tenant_id,user_id) DO UPDATE SET version=excluded.version,revision=operator_presentation_preference.revision+1,density=excluded.density,
+        font_scale=excluded.font_scale,focus_mode=excluded.focus_mode,motion=excluded.motion,updated_at=excluded.updated_at
+      WHERE (operator_presentation_preference.revision=? AND operator_presentation_preference.version=?)
+        OR (?=0 AND operator_presentation_preference.version<>?)
+      RETURNING version,revision,density,font_scale,focus_mode,motion,updated_at`)
+      .bind(this.scope.tenantId, this.scope.actorId, OPERATOR_PRESENTATION_PREFERENCES_VERSION, input.density, input.fontScale, input.focusMode ? 1 : 0, input.motion,
+        ...condition.values, input.revision, OPERATOR_PRESENTATION_PREFERENCES_VERSION, input.revision, OPERATOR_PRESENTATION_PREFERENCES_VERSION);
+    const row = await this.runWorkspaceMutation<{version:number;revision:number;density:'comfortable'|'compact';font_scale:'normal'|'large'|'larger';focus_mode:number;motion:'system'|'reduced'|'full';updated_at:string}>(statement, condition, commit, 'workspace.presentation.write');
+    return row ? { version: OPERATOR_PRESENTATION_PREFERENCES_VERSION, revision: row.revision, density: row.density, fontScale: row.font_scale, focusMode: row.focus_mode === 1, motion: row.motion, updatedAt: row.updated_at } : null;
   }
 
   /** A local-beta assertion and counter share the same D1 batch as the CAS mutation. */

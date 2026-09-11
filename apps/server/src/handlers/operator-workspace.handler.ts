@@ -43,6 +43,8 @@ const stateInput = z.object({
 
 const workspace = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 const themePreferenceInput = z.object({ expectedRevision: revision, mode: z.enum(['light', 'dark', 'system']) }).strict();
+const presentationPreferenceInput = z.object({ version: z.literal(1), expectedRevision: revision,
+  density: z.enum(['comfortable', 'compact']), fontScale: z.enum(['normal', 'large', 'larger']), focusMode: z.boolean(), motion: z.enum(['system', 'reduced', 'full']) }).strict();
 function themeCredential(c: any): OperatorPresentationCredential {
   const payload = c.get('jwtPayload');
   if (!payload || !['admin', 'agent'].includes(payload.role) || !Number.isSafeInteger(payload.session_version ?? 0)
@@ -109,6 +111,26 @@ workspace.put('/theme-preference', async c => {
       if (gate.status === 'disabled' && !await repository.getThemePreference(credential)) throw new OperatorWorkspaceError(403, 'Operator session changed');
       throw new OperatorWorkspaceError(409, 'Theme preference changed before it could be saved');
     }
+    return c.json(result);
+  } catch (error) { return failure(c, error); }
+});
+workspace.get('/presentation-preference', async c => {
+  try {
+    const gate = await admission(c, 'workspace.presentation.read'); const denied = admissionFailure(c, gate); if (denied) return denied;
+    const result = await (c.get('tenantDeps') as TenantRequestDeps).repositories.operatorWorkspace.getPresentationPreference(themeCredential(c), admittedCommit(gate));
+    if (!result) throw new OperatorWorkspaceError(403, 'Operator session changed');
+    return c.json(result);
+  } catch (error) { return failure(c, error); }
+});
+workspace.put('/presentation-preference', async c => {
+  try {
+    const parsed = presentationPreferenceInput.safeParse(await readMutationJson(c));
+    if (!parsed.success) return c.json({ error: 'Invalid workspace preferences' }, 400);
+    const gate = await admission(c, 'workspace.presentation.write'); const denied = admissionFailure(c, gate); if (denied) return denied;
+    const repository = (c.get('tenantDeps') as TenantRequestDeps).repositories.operatorWorkspace;
+    const result = await repository.savePresentationPreference({ version: parsed.data.version, revision: parsed.data.expectedRevision,
+      density: parsed.data.density, fontScale: parsed.data.fontScale, focusMode: parsed.data.focusMode, motion: parsed.data.motion }, themeCredential(c), admittedCommit(gate));
+    if (!result) throw new OperatorWorkspaceError(409, 'Workspace preferences changed before they could be saved');
     return c.json(result);
   } catch (error) { return failure(c, error); }
 });
