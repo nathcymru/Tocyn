@@ -226,10 +226,10 @@ test('real local combined policy admits API, staff, portal and widget mutations 
       body: JSON.stringify({ message: 'synthetic public reply', ...(attachments ? { attachments } : {}) }),
     });
     let widgetRequest = 0;
-    const widgetCreate = (token: string, key: string, subject: string) => mf!.dispatchFetch('http://runtime.test/api/v1/widget/tickets', {
+    const widgetCreate = (token: string, key: string, subject: string, customFields?: Record<string, string>, email = 'customer@runtime.test') => mf!.dispatchFetch('http://runtime.test/api/v1/widget/tickets', {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'idempotency-key': key,
         'cf-connecting-ip': `127.0.0.${++widgetRequest}` },
-      body: JSON.stringify({ subject, email: 'customer@runtime.test', message: 'synthetic customer message' }),
+      body: JSON.stringify({ subject, email, message: 'synthetic customer message', ...(customFields ? { custom_fields: customFields } : {}) }),
     });
 
     const portalFirst = await portalCreate(firstCustomerToken, 'customer-portal-create', 'Portal customer receipt');
@@ -306,9 +306,22 @@ test('real local combined policy admits API, staff, portal and widget mutations 
     const revokedWidget = await widgetCreate(firstCustomerToken, 'customer-widget-revoked', 'must not commit');
     assert.equal(revokedWidget.status, 401, 'widget rejects a revoked current session before admission'); await revokedWidget.body?.cancel();
     const rotatedToken = await customerToken(jwtSecret, 'runtime-tenant', 'customer@runtime.test', 2);
-    const rotatedWidget = await widgetCreate(rotatedToken, 'customer-widget-rotated', 'Current widget session');
-    const rotatedBody = await rotatedWidget.json();
+    const rotatedWidget = await widgetCreate(rotatedToken, 'customer-widget-rotated', 'Current widget session', { product: 'Test' });
+    const rotatedBody = await rotatedWidget.json() as { custom_fields: string };
     assert.equal(rotatedWidget.status, 201, `the verified widget scope carries the current session version into its canonical fence: ${JSON.stringify(rotatedBody)}`);
+    assert.deepEqual(JSON.parse(rotatedBody.custom_fields), { product: 'Test' }, 'widget custom fields survive canonical persistence');
+    // Use the independent tenant's untouched three-request widget window;
+    // retain the first tenant's existing rate limit and session-rotation proof.
+    const widgetFieldCreate = await widgetCreate(secondTenantToken, 'widget-fields', 'Widget fields', { product: 'Test' }, 'customer@runtime-b.test');
+    assert.equal(widgetFieldCreate.status, 201);
+    await widgetFieldCreate.body?.cancel();
+    const widgetFieldReplay = await widgetCreate(secondTenantToken, 'widget-fields', 'Widget fields', { product: 'Test' }, 'customer@runtime-b.test');
+    assert.equal(widgetFieldReplay.status, 201);
+    assert.equal(widgetFieldReplay.headers.get('Idempotency-Replayed'), 'true');
+    assert.deepEqual(JSON.parse((await widgetFieldReplay.json() as { custom_fields: string }).custom_fields), { product: 'Test' });
+    const changedFields = await widgetCreate(secondTenantToken, 'widget-fields', 'Widget fields', { product: 'Changed' }, 'customer@runtime-b.test');
+    assert.equal(changedFields.status, 409, 'custom fields are part of the widget canonical retry intent');
+    await changedFields.body?.cancel();
     assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant' AND subject IN ('must not commit','must not commit at the canonical fence')")
       .first<{ count: number }>())?.count, 0);
   } finally { await mf?.dispose(); }
