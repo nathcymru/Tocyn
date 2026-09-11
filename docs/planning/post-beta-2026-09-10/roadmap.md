@@ -1,6 +1,6 @@
 # Reconciled dependency-aware forecast
 
-Forecast anchor: **2026-09-11**. Beta.2 gate forecast: **2026-12-09**. Expanded scope forecast: **2027-12-09**. These are calculated conservative capacity forecasts, not promises of releases or remote approval.
+Forecast anchor: **2026-09-11**. Beta.2 gate forecast: **2026-12-09**. Expanded scope forecast: **2027-12-06**. These are calculated conservative capacity forecasts, not promises of releases or remote approval.
 
 Two lanes, 8h/day Monday–Saturday; 2.5× baseline implementation and 0.5× shared 4h/day review/integration. A lane remains occupied through integration. Dependencies become available the following working day. External approval/provider waits are unknown, not zero-duration guarantees. Actual concurrency may exceed this reference model.
 
@@ -11,8 +11,9 @@ Dependency-only critical network length: 1086 planning hours. Resource-constrain
 | [#12](https://github.com/nathcymru/Tocyn/issues/12) Verify required checks on dependency-only pull requests | 24 | W2 | 2026-09-11 → 2026-09-15 |  |
 | [#91](https://github.com/nathcymru/Tocyn/issues/91) Recover accepted payloads through durable storage journals | 72 | W1 | 2026-09-11 → 2026-09-23 | #50, #59 |
 | [#64](https://github.com/nathcymru/Tocyn/issues/64) Enforce resource budgets across active application paths | 48 | W2 | 2026-09-16 → 2026-09-25 | #50, #60, #93, #159 |
+| [#70](https://github.com/nathcymru/Tocyn/issues/70) Add typing awareness and private colleague collaboration | 72 | W1 | 2026-09-24 → 2026-10-06 | #63, #68 |
 | [#130](https://github.com/nathcymru/Tocyn/issues/130) Add task-based work queues and snooze/resurface | 72 | W2 | 2026-09-26 → 2026-10-09 | #129, #136, #73, #64 |
-| [#70](https://github.com/nathcymru/Tocyn/issues/70) Add typing awareness and private colleague collaboration | 72 | W1 | 2026-10-07 → 2026-10-19 | #63, #68 |
+| [#51](https://github.com/nathcymru/Tocyn/issues/51) Implement authenticated durable webhook ingress | 72 | W1 | 2026-10-07 → 2026-10-19 | #50, #64, #91 |
 | [#128](https://github.com/nathcymru/Tocyn/issues/128) Build the persistent progressive operator workspace | 96 | W2 | 2026-10-10 → 2026-10-26 | #127, #129, #130, #48, #66 |
 | [#137](https://github.com/nathcymru/Tocyn/issues/137) Add workload-aware queues and operator capacity controls | 72 | W1 | 2026-10-20 → 2026-10-31 | #73, #79, #162, #130 |
 | [#71](https://github.com/nathcymru/Tocyn/issues/71) Enable keyboard-first workspace navigation | 36 | W2 | 2026-10-27 → 2026-11-03 | #62, #66, #128 |
@@ -23,61 +24,60 @@ Dependency-only critical network length: 1086 planning hours. Resource-constrain
 | [#135](https://github.com/nathcymru/Tocyn/issues/135) Add configurable Table view and safe bulk ticket actions | 48 | W1 | 2026-11-18 → 2026-11-25 | #128, #60, #64, #79 |
 | [#138](https://github.com/nathcymru/Tocyn/issues/138) Define workspace utility actions for call, remote support and external tools | 36 | W2 | 2026-11-24 → 2026-11-30 | #128, #79 |
 | [#139](https://github.com/nathcymru/Tocyn/issues/139) Measure operator interaction performance and enforce UI response budgets | 24 | W1 | 2026-11-26 → 2026-12-01 | #128, #48 |
-| [#51](https://github.com/nathcymru/Tocyn/issues/51) Implement authenticated durable webhook ingress | 72 | W2 | 2026-12-01 → 2026-12-12 | #50, #64, #91 |
+| [#87](https://github.com/nathcymru/Tocyn/issues/87) Normalise provider events into reliable conversation state | 96 | W2 | 2026-12-01 → 2026-12-16 | #51, #59, #91 |
 | [#140](https://github.com/nathcymru/Tocyn/issues/140) Validate the redesigned operator workspace for usability and cognitive accessibility | 48 | W1 | 2026-12-02 → 2026-12-09 | #128, #129, #130, #131, #132, #133, #134, #135, #136, #137, #138, #139, #48, #66, #68, #70, #71, #73, #79 |
-| [#14](https://github.com/nathcymru/Tocyn/issues/14) Standardise repository formatting and lint conventions | 24 | W1 | 2026-12-10 → 2026-12-14 |  |
-| [#87](https://github.com/nathcymru/Tocyn/issues/87) Normalise provider events into reliable conversation state | 96 | W2 | 2026-12-14 → 2026-12-29 | #51, #59, #91 |
-| [#16](https://github.com/nathcymru/Tocyn/issues/16) Establish measurable FidesLang coverage | 48 | W1 | 2026-12-15 → 2026-12-22 | #59, #91 |
-| [#17](https://github.com/nathcymru/Tocyn/issues/17) Complete FidesLang coverage and optional user controls | 72 | W1 | 2026-12-23 → 2027-01-04 | #16 |
-| [#88](https://github.com/nathcymru/Tocyn/issues/88) Dispatch transactional outbound intents reliably | 72 | W2 | 2026-12-30 → 2027-01-11 | #63, #64, #87 |
-| [#18](https://github.com/nathcymru/Tocyn/issues/18) Migrate transactional mail to Cloudflare-native delivery | 48 | W1 | 2027-01-05 → 2027-01-13 | #57 |
-| [#22](https://github.com/nathcymru/Tocyn/issues/22) Complete remaining repository launch administration | 18 | W2 | 2027-01-12 → 2027-01-14 | #65 |
-| [#42](https://github.com/nathcymru/Tocyn/issues/42) Validate production cutover and rollback readiness | 48 | W1 | 2027-01-14 → 2027-01-21 | #65, #159, #160 |
-| [#44](https://github.com/nathcymru/Tocyn/issues/44) Retire inactive services while preserving regression coverage | 24 | W2 | 2027-01-15 → 2027-01-19 | #14 |
-| [#45](https://github.com/nathcymru/Tocyn/issues/45) Evaluate deferred major dependency and Actions upgrades | 24 | W2 | 2027-01-20 → 2027-01-23 | #12 |
-| [#52](https://github.com/nathcymru/Tocyn/issues/52) Deliver signed tenant webhook subscriptions reliably | 48 | W1 | 2027-01-22 → 2027-01-29 | #50, #64, #88 |
-| [#53](https://github.com/nathcymru/Tocyn/issues/53) Implement tenant-owned Slack support channels | 72 | W2 | 2027-01-25 → 2027-02-05 | #66, #87, #88 |
-| [#54](https://github.com/nathcymru/Tocyn/issues/54) Implement tenant-owned Microsoft Teams support channels | 96 | W1 | 2027-01-30 → 2027-02-15 | #66, #87, #88 |
-| [#55](https://github.com/nathcymru/Tocyn/issues/55) Implement tenant-owned WhatsApp messaging | 72 | W2 | 2027-02-06 → 2027-02-18 | #66, #87, #88 |
-| [#56](https://github.com/nathcymru/Tocyn/issues/56) Implement tenant-owned Telegram support messaging | 48 | W1 | 2027-02-16 → 2027-02-23 | #66, #87, #88 |
-| [#67](https://github.com/nathcymru/Tocyn/issues/67) Package isolated helpdesk Web Components | 72 | W2 | 2027-02-19 → 2027-03-03 | #48, #66 |
-| [#69](https://github.com/nathcymru/Tocyn/issues/69) Add reusable responses and safe operator macros | 36 | W1 | 2027-02-24 → 2027-03-05 | #68 |
-| [#72](https://github.com/nathcymru/Tocyn/issues/72) Split and merge tickets without losing context | 72 | W2 | 2027-03-04 → 2027-03-16 | #59, #63, #70 |
-| [#74](https://github.com/nathcymru/Tocyn/issues/74) Preserve conversations across verified channel changes | 72 | W1 | 2027-03-06 → 2027-03-19 | #53, #61, #87 |
-| [#75](https://github.com/nathcymru/Tocyn/issues/75) Enrich intake with authorised operational context | 72 | W2 | 2027-03-17 → 2027-03-29 | #64, #79 |
-| [#80](https://github.com/nathcymru/Tocyn/issues/80) Validate governed actions against an isolated reference API | 120 | W1 | 2027-03-20 → 2027-04-09 | #63, #64, #79 |
-| [#89](https://github.com/nathcymru/Tocyn/issues/89) Enable verified canonical support-email conversations | 72 | W2 | 2027-03-30 → 2027-04-13 | #57, #87, #88 |
-| [#81](https://github.com/nathcymru/Tocyn/issues/81) Bind human approvals to specific proposed actions | 72 | W1 | 2027-04-10 → 2027-04-22 | #80 |
-| [#90](https://github.com/nathcymru/Tocyn/issues/90) Expose owner and tenant Cost & Capacity controls | 72 | W2 | 2027-04-14 → 2027-04-26 | #50, #64, #66 |
-| [#83](https://github.com/nathcymru/Tocyn/issues/83) Transfer live agentic work safely to human operators | 72 | W1 | 2027-04-23 → 2027-05-05 | #70, #80, #81 |
-| [#49](https://github.com/nathcymru/Tocyn/issues/49) Track delivery of the omnichannel architecture | 6 | W2 | 2027-04-27 → 2027-04-28 | #51, #52, #53, #54, #55, #56, #74, #89, #90 |
-| [#92](https://github.com/nathcymru/Tocyn/issues/92) Attach bounded telemetry to programmatic support intake | 48 | W2 | 2027-04-29 → 2027-05-07 | #60, #91 |
-| [#86](https://github.com/nathcymru/Tocyn/issues/86) Expose authorised deterministic self-service actions | 72 | W1 | 2027-05-06 → 2027-05-18 | #61, #81, #83 |
-| [#142](https://github.com/nathcymru/Tocyn/issues/142) Prove the Cloudflare Realtime support-session architecture | 72 | W2 | 2027-05-08 → 2027-05-21 | #50, #74, #79, #87, #88, #90 |
-| [#149](https://github.com/nathcymru/Tocyn/issues/149) Create linked back-office work items without exposing customer conversations | 96 | W1 | 2027-05-19 → 2027-06-03 | #70, #72, #79 |
-| [#143](https://github.com/nathcymru/Tocyn/issues/143) Model tenant-scoped realtime support sessions and media permissions | 120 | W2 | 2027-05-22 → 2027-06-11 | #142, #50, #64, #74, #79 |
-| [#150](https://github.com/nathcymru/Tocyn/issues/150) Track service problems and incidents across affected conversations | 120 | W1 | 2027-06-04 → 2027-06-24 | #149, #72, #79, #88 |
-| [#144](https://github.com/nathcymru/Tocyn/issues/144) Add browser voice, video and screen-sharing support sessions | 144 | W2 | 2027-06-12 → 2027-07-06 | #143, #48, #68, #70, #74 |
-| [#145](https://github.com/nathcymru/Tocyn/issues/145) Implement a tenant-owned telephony gateway for inbound and outbound calls | 144 | W1 | 2027-06-25 → 2027-07-19 | #142, #143, #74, #79, #87, #88, #90 |
-| [#147](https://github.com/nathcymru/Tocyn/issues/147) Record and transcribe support sessions under tenant policy | 120 | W2 | 2027-07-07 → 2027-07-27 | #143, #50, #90 |
-| [#146](https://github.com/nathcymru/Tocyn/issues/146) Add voicemail, callback, transfer and call-queue operations | 120 | W1 | 2027-07-20 → 2027-08-09 | #145, #70, #73, #79 |
-| [#151](https://github.com/nathcymru/Tocyn/issues/151) Ingest tenant PDF knowledge with lifecycle-safe provenance | 96 | W2 | 2027-07-28 → 2027-08-13 | #50, #64, #79 |
-| [#153](https://github.com/nathcymru/Tocyn/issues/153) Render governed operator applets from declarative schemas | 120 | W1 | 2027-08-10 → 2027-08-30 | #48, #68, #75, #79, #80, #81 |
-| [#152](https://github.com/nathcymru/Tocyn/issues/152) Bind AI assistance to authorised tenant knowledge scopes | 72 | W2 | 2027-08-14 → 2027-09-01 | #151, #79 |
-| [#155](https://github.com/nathcymru/Tocyn/issues/155) Capture tenant-scoped CSAT and CES feedback | 72 | W1 | 2027-08-31 → 2027-09-11 | #73, #79, #88 |
-| [#76](https://github.com/nathcymru/Tocyn/issues/76) Add bounded triage and conversation summarisation | 72 | W2 | 2027-09-02 → 2027-09-15 | #75, #152 |
-| [#158](https://github.com/nathcymru/Tocyn/issues/158) Accept verified Cloudflare Access workforce identity without weakening Tocyn authorisation | 96 | W1 | 2027-09-13 → 2027-09-28 | #79 |
-| [#77](https://github.com/nathcymru/Tocyn/issues/77) Expand the operator copilot with translation and runbooks | 48 | W2 | 2027-09-16 → 2027-09-23 | #68, #76, #152 |
-| [#82](https://github.com/nathcymru/Tocyn/issues/82) Resolve reference-service tickets through bounded autonomous workflows | 96 | W2 | 2027-09-24 → 2027-10-09 | #76, #80, #81, #83 |
-| [#161](https://github.com/nathcymru/Tocyn/issues/161) Evaluate AI inference routing, caching and provider fallback | 24 | W1 | 2027-09-29 → 2027-10-02 | #50, #64, #76 |
-| [#78](https://github.com/nathcymru/Tocyn/issues/78) Author and publish governed diagnostic workflows visually | 96 | W1 | 2027-10-11 → 2027-10-26 | #66, #79, #80, #81, #82 |
-| [#84](https://github.com/nathcymru/Tocyn/issues/84) Review agent interactions through auditable QA workflows | 72 | W2 | 2027-10-11 → 2027-10-27 | #63, #82 |
-| [#154](https://github.com/nathcymru/Tocyn/issues/154) Author, validate and publish tenant applets safely | 96 | W1 | 2027-10-27 → 2027-11-11 | #153, #66, #78, #79, #80, #81 |
-| [#85](https://github.com/nathcymru/Tocyn/issues/85) Report operational performance and quality metrics | 48 | W2 | 2027-10-28 → 2027-11-04 | #73, #84, #162 |
-| [#148](https://github.com/nathcymru/Tocyn/issues/148) Integrate realtime support artefacts into conversations, QA and reporting | 72 | W2 | 2027-11-05 → 2027-11-17 | #144, #146, #147, #76, #77, #84, #85 |
-| [#157](https://github.com/nathcymru/Tocyn/issues/157) Build bounded tenant-defined operational reports | 120 | W1 | 2027-11-12 → 2027-12-02 | #50, #79, #85, #155 |
-| [#156](https://github.com/nathcymru/Tocyn/issues/156) Expose a live support-operations management dashboard | 96 | W2 | 2027-11-18 → 2027-12-07 | #73, #85, #155, #150, #148 |
-| [#141](https://github.com/nathcymru/Tocyn/issues/141) Track delivery of the approved helpdesk capability extensions | 6 | W1 | 2027-12-08 → 2027-12-09 | #142, #143, #144, #145, #146, #147, #148, #149, #150, #151, #152, #153, #154, #155, #156, #157, #158 |
+| [#14](https://github.com/nathcymru/Tocyn/issues/14) Standardise repository formatting and lint conventions | 24 | W1 | 2026-12-10 → 2026-12-17 |  |
+| [#88](https://github.com/nathcymru/Tocyn/issues/88) Dispatch transactional outbound intents reliably | 72 | W2 | 2026-12-17 → 2026-12-29 | #63, #64, #87 |
+| [#16](https://github.com/nathcymru/Tocyn/issues/16) Establish measurable FidesLang coverage | 48 | W1 | 2026-12-18 → 2026-12-25 | #59, #91 |
+| [#17](https://github.com/nathcymru/Tocyn/issues/17) Complete FidesLang coverage and optional user controls | 72 | W1 | 2026-12-26 → 2027-01-07 | #16 |
+| [#18](https://github.com/nathcymru/Tocyn/issues/18) Migrate transactional mail to Cloudflare-native delivery | 48 | W2 | 2026-12-30 → 2027-01-09 | #57 |
+| [#22](https://github.com/nathcymru/Tocyn/issues/22) Complete remaining repository launch administration | 18 | W1 | 2027-01-08 → 2027-01-11 | #65 |
+| [#42](https://github.com/nathcymru/Tocyn/issues/42) Validate production cutover and rollback readiness | 48 | W2 | 2027-01-11 → 2027-01-18 | #65, #159, #160 |
+| [#44](https://github.com/nathcymru/Tocyn/issues/44) Retire inactive services while preserving regression coverage | 24 | W1 | 2027-01-12 → 2027-01-15 | #14 |
+| [#45](https://github.com/nathcymru/Tocyn/issues/45) Evaluate deferred major dependency and Actions upgrades | 24 | W1 | 2027-01-16 → 2027-01-20 | #12 |
+| [#52](https://github.com/nathcymru/Tocyn/issues/52) Deliver signed tenant webhook subscriptions reliably | 48 | W2 | 2027-01-19 → 2027-01-26 | #50, #64, #88 |
+| [#53](https://github.com/nathcymru/Tocyn/issues/53) Implement tenant-owned Slack support channels | 72 | W1 | 2027-01-21 → 2027-02-02 | #66, #87, #88 |
+| [#54](https://github.com/nathcymru/Tocyn/issues/54) Implement tenant-owned Microsoft Teams support channels | 96 | W2 | 2027-01-27 → 2027-02-11 | #66, #87, #88 |
+| [#55](https://github.com/nathcymru/Tocyn/issues/55) Implement tenant-owned WhatsApp messaging | 72 | W1 | 2027-02-03 → 2027-02-15 | #66, #87, #88 |
+| [#56](https://github.com/nathcymru/Tocyn/issues/56) Implement tenant-owned Telegram support messaging | 48 | W2 | 2027-02-12 → 2027-02-19 | #66, #87, #88 |
+| [#67](https://github.com/nathcymru/Tocyn/issues/67) Package isolated helpdesk Web Components | 72 | W1 | 2027-02-16 → 2027-02-27 | #48, #66 |
+| [#69](https://github.com/nathcymru/Tocyn/issues/69) Add reusable responses and safe operator macros | 36 | W2 | 2027-02-20 → 2027-03-02 | #68 |
+| [#72](https://github.com/nathcymru/Tocyn/issues/72) Split and merge tickets without losing context | 72 | W1 | 2027-03-01 → 2027-03-12 | #59, #63, #70 |
+| [#74](https://github.com/nathcymru/Tocyn/issues/74) Preserve conversations across verified channel changes | 72 | W2 | 2027-03-03 → 2027-03-16 | #53, #61, #87 |
+| [#75](https://github.com/nathcymru/Tocyn/issues/75) Enrich intake with authorised operational context | 72 | W1 | 2027-03-13 → 2027-03-25 | #64, #79 |
+| [#80](https://github.com/nathcymru/Tocyn/issues/80) Validate governed actions against an isolated reference API | 120 | W2 | 2027-03-17 → 2027-04-06 | #63, #64, #79 |
+| [#89](https://github.com/nathcymru/Tocyn/issues/89) Enable verified canonical support-email conversations | 72 | W1 | 2027-03-26 → 2027-04-09 | #57, #87, #88 |
+| [#81](https://github.com/nathcymru/Tocyn/issues/81) Bind human approvals to specific proposed actions | 72 | W2 | 2027-04-07 → 2027-04-19 | #80 |
+| [#90](https://github.com/nathcymru/Tocyn/issues/90) Expose owner and tenant Cost & Capacity controls | 72 | W1 | 2027-04-10 → 2027-04-22 | #50, #64, #66 |
+| [#83](https://github.com/nathcymru/Tocyn/issues/83) Transfer live agentic work safely to human operators | 72 | W2 | 2027-04-20 → 2027-05-01 | #70, #80, #81 |
+| [#49](https://github.com/nathcymru/Tocyn/issues/49) Track delivery of the omnichannel architecture | 6 | W1 | 2027-04-23 → 2027-04-24 | #51, #52, #53, #54, #55, #56, #74, #89, #90 |
+| [#92](https://github.com/nathcymru/Tocyn/issues/92) Attach bounded telemetry to programmatic support intake | 48 | W1 | 2027-04-26 → 2027-05-04 | #60, #91 |
+| [#86](https://github.com/nathcymru/Tocyn/issues/86) Expose authorised deterministic self-service actions | 72 | W2 | 2027-05-03 → 2027-05-14 | #61, #81, #83 |
+| [#142](https://github.com/nathcymru/Tocyn/issues/142) Prove the Cloudflare Realtime support-session architecture | 72 | W1 | 2027-05-05 → 2027-05-18 | #50, #74, #79, #87, #88, #90 |
+| [#149](https://github.com/nathcymru/Tocyn/issues/149) Create linked back-office work items without exposing customer conversations | 96 | W2 | 2027-05-15 → 2027-05-31 | #70, #72, #79 |
+| [#143](https://github.com/nathcymru/Tocyn/issues/143) Model tenant-scoped realtime support sessions and media permissions | 120 | W1 | 2027-05-19 → 2027-06-08 | #142, #50, #64, #74, #79 |
+| [#150](https://github.com/nathcymru/Tocyn/issues/150) Track service problems and incidents across affected conversations | 120 | W2 | 2027-06-01 → 2027-06-21 | #149, #72, #79, #88 |
+| [#144](https://github.com/nathcymru/Tocyn/issues/144) Add browser voice, video and screen-sharing support sessions | 144 | W1 | 2027-06-09 → 2027-07-02 | #143, #48, #68, #70, #74 |
+| [#145](https://github.com/nathcymru/Tocyn/issues/145) Implement a tenant-owned telephony gateway for inbound and outbound calls | 144 | W2 | 2027-06-22 → 2027-07-15 | #142, #143, #74, #79, #87, #88, #90 |
+| [#147](https://github.com/nathcymru/Tocyn/issues/147) Record and transcribe support sessions under tenant policy | 120 | W1 | 2027-07-03 → 2027-07-23 | #143, #50, #90 |
+| [#146](https://github.com/nathcymru/Tocyn/issues/146) Add voicemail, callback, transfer and call-queue operations | 120 | W2 | 2027-07-16 → 2027-08-05 | #145, #70, #73, #79 |
+| [#151](https://github.com/nathcymru/Tocyn/issues/151) Ingest tenant PDF knowledge with lifecycle-safe provenance | 96 | W1 | 2027-07-24 → 2027-08-10 | #50, #64, #79 |
+| [#153](https://github.com/nathcymru/Tocyn/issues/153) Render governed operator applets from declarative schemas | 120 | W2 | 2027-08-06 → 2027-08-26 | #48, #68, #75, #79, #80, #81 |
+| [#152](https://github.com/nathcymru/Tocyn/issues/152) Bind AI assistance to authorised tenant knowledge scopes | 72 | W1 | 2027-08-11 → 2027-08-28 | #151, #79 |
+| [#155](https://github.com/nathcymru/Tocyn/issues/155) Capture tenant-scoped CSAT and CES feedback | 72 | W2 | 2027-08-27 → 2027-09-08 | #73, #79, #88 |
+| [#76](https://github.com/nathcymru/Tocyn/issues/76) Add bounded triage and conversation summarisation | 72 | W1 | 2027-08-30 → 2027-09-11 | #75, #152 |
+| [#158](https://github.com/nathcymru/Tocyn/issues/158) Accept verified Cloudflare Access workforce identity without weakening Tocyn authorisation | 96 | W2 | 2027-09-09 → 2027-09-24 | #79 |
+| [#77](https://github.com/nathcymru/Tocyn/issues/77) Expand the operator copilot with translation and runbooks | 48 | W1 | 2027-09-13 → 2027-09-20 | #68, #76, #152 |
+| [#82](https://github.com/nathcymru/Tocyn/issues/82) Resolve reference-service tickets through bounded autonomous workflows | 96 | W1 | 2027-09-21 → 2027-10-06 | #76, #80, #81, #83 |
+| [#161](https://github.com/nathcymru/Tocyn/issues/161) Evaluate AI inference routing, caching and provider fallback | 24 | W2 | 2027-09-25 → 2027-09-29 | #50, #64, #76 |
+| [#78](https://github.com/nathcymru/Tocyn/issues/78) Author and publish governed diagnostic workflows visually | 96 | W2 | 2027-10-07 → 2027-10-22 | #66, #79, #80, #81, #82 |
+| [#84](https://github.com/nathcymru/Tocyn/issues/84) Review agent interactions through auditable QA workflows | 72 | W1 | 2027-10-07 → 2027-10-23 | #63, #82 |
+| [#154](https://github.com/nathcymru/Tocyn/issues/154) Author, validate and publish tenant applets safely | 96 | W2 | 2027-10-23 → 2027-11-08 | #153, #66, #78, #79, #80, #81 |
+| [#85](https://github.com/nathcymru/Tocyn/issues/85) Report operational performance and quality metrics | 48 | W1 | 2027-10-25 → 2027-11-01 | #73, #84, #162 |
+| [#148](https://github.com/nathcymru/Tocyn/issues/148) Integrate realtime support artefacts into conversations, QA and reporting | 72 | W1 | 2027-11-02 → 2027-11-13 | #144, #146, #147, #76, #77, #84, #85 |
+| [#157](https://github.com/nathcymru/Tocyn/issues/157) Build bounded tenant-defined operational reports | 120 | W2 | 2027-11-09 → 2027-11-29 | #50, #79, #85, #155 |
+| [#156](https://github.com/nathcymru/Tocyn/issues/156) Expose a live support-operations management dashboard | 96 | W1 | 2027-11-15 → 2027-12-03 | #73, #85, #155, #150, #148 |
+| [#141](https://github.com/nathcymru/Tocyn/issues/141) Track delivery of the approved helpdesk capability extensions | 6 | W2 | 2027-12-04 → 2027-12-06 | #142, #143, #144, #145, #146, #147, #148, #149, #150, #151, #152, #153, #154, #155, #156, #157, #158 |
 
 ## Critical-path issues
 

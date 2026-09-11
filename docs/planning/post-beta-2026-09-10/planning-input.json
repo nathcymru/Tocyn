@@ -504,7 +504,7 @@
       "number": 68,
       "alias": "#68",
       "title": "Add a rich conversation composer",
-      "done": false,
+      "done": true,
       "effort": 24.0,
       "dependencies": [
         48,
@@ -513,8 +513,9 @@
       ],
       "baselineStart": "2027-01-29",
       "baselineTarget": "2027-02-09",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualStart": "2026-09-11",
+      "actualCompletion": "2026-09-11",
+      "progress": 100,
       "milestone": 14,
       "new": false
     },
