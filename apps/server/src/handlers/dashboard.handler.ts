@@ -4,6 +4,8 @@ import { articlePageQuery, assertConversationResponseBounds, ConversationReadErr
 import { conversationHistory } from './conversation-history';
 import { validateAttachmentReferences } from '../services/attachment-references';
 import { EmailService } from '../services/email/outbound.service';
+import { isLocalAuthCaptureTransport } from '../services/email/transport';
+import { TicketEmailDeliveryAdmissionService } from '../services/email/ticket-email-admission.service';
 import { BroadcastService } from '../services/broadcast.service';
 import { Hono } from "hono";
 import type { D1Database } from '@cloudflare/workers-types';
@@ -30,9 +32,10 @@ import workspace from "./operator-workspace.handler";
 import { replyCapability } from '../services/reply-capability';
 import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminatick/shared';
 import { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
+import type { PreparedStaffMutation, StaffMutationOutcome } from '../types/staff-ticket-mutation';
 import { OperatorActivityService } from '../services/operator-activity.service';
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
-import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, SUPPORT_SLA_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
+import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, apiTicketBudgetCache, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, SUPPORT_SLA_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { SupportSlaMutationService } from '../services/support-sla-mutation.service';
 import type { SupportSlaBudgetOperation } from '../middleware/budget-admission.middleware';
 import { admitDashboardAttachment } from '../budgets/storage-admission.service';
@@ -93,6 +96,19 @@ function staffMutationService(c: any, d: TenantRequestDeps, operation: 'dashboar
     namespace: c.env.BUDGET_COORDINATOR_DO, business: STAFF_TICKET_ENVELOPES[operation],
     now: () => c.env.localNow?.() ?? Date.now(),
   }, undefined, new OperatorActivityService(d));
+}
+
+async function deliverCommittedTicketEmail(c: any, d: TenantRequestDeps, mutation: StaffTicketMutationService,
+  prepared: PreparedStaffMutation, outcome: StaffMutationOutcome): Promise<boolean> {
+  const grant = mutation.ticketEmailGrant(prepared,outcome);
+  if (!grant) return false;
+  const transport = c.env.emailTransport;
+  const admission = new TicketEmailDeliveryAdmissionService(d.database,d.scope,{
+    service:sessionTicketBudgetAdmission,repository:d.repositories.budgetAuthority,namespace:c.env.BUDGET_COORDINATOR_DO,
+    now:()=>c.env.localNow?.()??Date.now(),externalProvider:!transport || !isLocalAuthCaptureTransport(transport),
+    settle:(authority,result,now)=>apiTicketBudgetCache.settleOperation(authority,result,now),
+  });
+  return admission.deliver(grant,()=>new EmailService(c.env,d,transport).sendTicketReply(outcome.ticket,outcome.article,outcome.attachments));
 }
 
 function supportSlaMutationService(c: any, d: TenantRequestDeps, operation: SupportSlaBudgetOperation) {
@@ -657,7 +673,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
       // winner performs the existing best-effort delivery side effects.
       if (!outcome.replayed) {
         await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketCreated(outcome.ticket, mutation.broadcastGrant(prepared,outcome));
-        try { await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(outcome.ticket,outcome.article,outcome.attachments); }
+        try { await deliverCommittedTicketEmail(c,d,mutation,prepared,outcome); }
         catch { console.error('Initial ticket email delivery failed'); }
       }
       if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
@@ -902,7 +918,7 @@ dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10
         if (!outcome.article.is_internal) {
           // The canonical commit returned these exact attachment rows; do not
           // re-list metadata after admission before the bounded stream path.
-          try { await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(outcome.ticket,outcome.article,outcome.attachments); }
+          try { await deliverCommittedTicketEmail(c,d,mutation,prepared,outcome); }
           catch { console.error('Ticket reply email delivery failed'); }
         }
         await new BroadcastService(c.env,d.scope,d.emitResourceOperation).broadcast('article.created',{ticket_id:ticketId,article_id:outcome.article.id},2,mutation.broadcastGrant(prepared,outcome));
