@@ -25,8 +25,10 @@ export function ApiKeyPage() {
   const createdHeading = React.useRef<HTMLHeadingElement>(null);
   const createGuard = React.useRef(false);
   const createSucceeded = React.useRef(false);
+  const createIntent = React.useRef<{ name: string; key: string } | null>(null);
   const createTitleId = React.useId();
   const [creating, setCreating] = useState(false);
+  const [createUnresolved, setCreateUnresolved] = useState(false);
   const [createError, setCreateError] = useState('');
   const copyGuard = React.useRef(false);
   const copyGeneration = React.useRef(0);
@@ -36,6 +38,7 @@ export function ApiKeyPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
+  const [uncertainKey, setUncertainKey] = useState<ApiKey | null>(null);
   const [copied, setCopied] = useState(false);
   const closeCreate = () => { if (!createGuard.current) setIsCreating(false); };
   useEffect(() => {
@@ -62,14 +65,32 @@ export function ApiKeyPage() {
     e.preventDefault();
     if (!newKeyName || createGuard.current) return;
     createGuard.current = true; setCreating(true); setCreateError('');
+    const intent = createIntent.current?.name === newKeyName
+      ? createIntent.current : { name: newKeyName, key: crypto.randomUUID() };
+    createIntent.current = intent;
     try {
-      const result = await dashboardApi.post<ApiKeyCreatedResponse>('/api-keys', { name: newKeyName });
+      const result = await dashboardApi.post<ApiKeyCreatedResponse>('/api-keys', { name: newKeyName },
+        { headers: { 'Idempotency-Key': intent.key } });
+      createIntent.current = null;
+      setCreateUnresolved(false);
       createSucceeded.current = true; setCreatedKey(result);
       setNewKeyName('');
       setIsCreating(false);
       fetchKeys();
-    } catch {
-      setCreateError('API key creation could not be confirmed. Check the key list before retrying; your name has been kept.');
+    } catch (error) {
+      const body = error && typeof error === 'object' && 'body' in error ? (error as { body?: unknown }).body : null;
+      const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : null;
+      const key = body && typeof body === 'object' && 'key' in body ? (body as { key?: unknown }).key : null;
+      if (code === 'api_key_plaintext_unavailable' && key && typeof key === 'object'
+        && typeof (key as any).id === 'string' && typeof (key as any).name === 'string'
+        && typeof (key as any).prefix === 'string' && typeof (key as any).created_at === 'string') {
+        setUncertainKey({ ...(key as ApiKey), is_active: true });
+        setCreateUnresolved(false);
+        setIsCreating(false);
+      } else {
+        setCreateUnresolved(true);
+        setCreateError('API key creation could not be confirmed. Retry this unchanged attempt to learn whether it was created.');
+      }
       fetchKeys();
     } finally { createGuard.current = false; setCreating(false); }
   };
@@ -83,6 +104,7 @@ export function ApiKeyPage() {
       revokedIds.current.add(revocation.id);
       setKeys(current => current.filter(key => key.id !== revocation.id));
       setCreatedKey(current => current?.id === revocation.id ? null : current);
+      if (uncertainKey?.id === revocation.id) { setUncertainKey(null); createIntent.current = null; setCreateUnresolved(false); }
       revokeSucceeded.current = true; setRevokeOpen(false); setRevokeStatus('API key revoked.');
     } catch { setRevokeError('API key revocation could not be confirmed. Try again.'); }
     finally { revokeGuard.current = false; setRevoking(false); }
@@ -113,6 +135,7 @@ export function ApiKeyPage() {
           <p className="text-slate-500 text-sm">Manage external access to the {PRODUCT_BRAND.name} API.</p>
         </div>
         <TocynButton
+          disabled={Boolean(uncertainKey)}
           ref={createOpener} onClick={() => {
             createSucceeded.current = false; setCreateError(''); setCreatedKey(null);
             setIsCreating(true);
@@ -136,7 +159,7 @@ export function ApiKeyPage() {
                 Key Name
               </label>
               <TocynInput
-                type="text" required id={`${createTitleId}-name`} ref={keyNameInput}
+                type="text" required maxLength={120} disabled={createUnresolved} id={`${createTitleId}-name`} ref={keyNameInput}
                 placeholder="e.g. CRM Integration"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 value={newKeyName}
@@ -148,7 +171,7 @@ export function ApiKeyPage() {
                 type="submit"
                 className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
               >
-                {creating ? 'Generating...' : 'Generate Key'}
+                {creating ? 'Generating...' : createUnresolved ? 'Retry creation' : 'Generate Key'}
               </TocynButton>
               <TocynButton
                 type="button"
@@ -194,6 +217,20 @@ export function ApiKeyPage() {
           >
             I've saved my key
           </TocynButton>
+        </div>
+      )}
+
+      {uncertainKey && (
+        <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl" role="alert">
+          <h2 className="font-semibold text-amber-900">API key created; plaintext unavailable</h2>
+          <p className="mt-1 text-sm text-amber-800">
+            The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
+            but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.
+          </p>
+          <TocynButton className="mt-4 text-red-700 underline" onClick={event => {
+            revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(uncertainKey);
+            setRevokeError(''); setRevokeOpen(true);
+          }}>Revoke unavailable key</TocynButton>
         </div>
       )}
 
