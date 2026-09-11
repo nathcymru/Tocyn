@@ -74,3 +74,15 @@ it('keeps OTP verification in the login page, retains the challenge and permits 
   fireEvent.click(screen.getByRole('button', { name: 'Request a new code' }));
   expect(await screen.findByLabelText('Email address')).toHaveValue('test@example.invalid');
 });
+
+it('restores an OTP challenge from login history after reload', async () => {
+  vi.mocked(portalApi.get).mockResolvedValue({});
+  vi.mocked(portalApi.post).mockRejectedValueOnce(new Error('Retry code'));
+  render(<MemoryRouter initialEntries={[{ pathname: '/login', search: '?key=synthetic-public-key', state: {
+    authStep: 'verify', challenge: { email: 'test@example.invalid', challengeId: 'restored-challenge' }
+  } }]}><LoginPage /></MemoryRouter>);
+  fireEvent.change(await screen.findByLabelText('Authentication Code'), { target: { value: '123456' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Retry code');
+  expect(portalApi.post).toHaveBeenLastCalledWith('/auth/verify', { token: '123456', challengeId: 'restored-challenge' });
+});

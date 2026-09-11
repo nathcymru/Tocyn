@@ -33,7 +33,7 @@ export function LoginPage() {
         setAuth(data.token, data.user);
         setMfaRequired(true);
         setPassword('');
-        if (!data.user.mfa_enabled) navigate('/mfa');
+        if (!data.user.mfa_enabled) navigate('/mfa', { state: { tocynAuthVisual: window.history.state?.tocynAuthVisual } });
       } else {
         setAuth(data.token, data.user);
         navigate('/');
