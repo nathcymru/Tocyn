@@ -10,6 +10,7 @@
     "budget-admission-runtime.test.ts",
     "session-budget-admission-runtime.test.ts",
     "http-ticket-read-admission-runtime.test.ts",
+    "ticket-list-admission-runtime.test.ts",
     "budget-admission-runtime-entry.ts"
   ]
 }

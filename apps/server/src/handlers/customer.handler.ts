@@ -30,6 +30,8 @@ import { admitConfiguredCustomerTicketMutation, customerTicketAdmissionMode } fr
 import { admitCustomerAttachment } from '../budgets/customer-storage-admission.service';
 import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.service';
 import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
+import { admitHttpTicketList } from '../budgets/http-ticket-list-admission.service';
+import { TicketListScanError } from '../repositories/ticket-list-scan.repository';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -211,11 +213,22 @@ app.get('/auth/me', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddlew
 app.get('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, async (c) => {
   const payload = c.get('jwtPayload');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitHttpTicketList({ env: c.env, deps, payload, operation: 'portal.ticket.list',
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
+    ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
+    : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
   const ticketService = new TenantTicketService(deps);
   const page = parseInt(c.req.query('page') || '1');
   const limit = parseInt(c.req.query('limit') || '50');
-  const tickets = await ticketService.findTickets({ page, limit, customerEmail: payload.email });
-  return c.json(tickets);
+  try {
+    const tickets = await ticketService.findTickets({ page, limit, customerEmail: payload.email,
+      ...(admission.snapshot ? { scanFence: admission.snapshot } : {}) });
+    return c.json(tickets);
+  } catch (error) {
+    if (error instanceof TicketListScanError) return c.json({ code: 'budget_admission_unavailable', error: 'Ticket list capacity changed; retry the request' }, 503);
+    throw error;
+  }
 });
 
 app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(3, 60000), async (c) => {

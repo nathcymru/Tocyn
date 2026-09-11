@@ -15,6 +15,7 @@ import { D1Database } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import { articleBodyFormat } from '@luminatick/shared';
+import { TicketListScanError, ticketListScanAssertionSql, ticketListScanFenceSql, type TicketListScanSnapshot } from './ticket-list-scan.repository';
 
 const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
 
@@ -210,6 +211,10 @@ export class SqlTicketRepository implements TicketRepository {
       search?: string;
       customerEmail?: string;
       sort?: OperatorWorkspaceSort;
+      /** Current dashboard viewers retain the same group rule as ticket detail. */
+      viewer?: Readonly<{ role: 'admin' | 'agent'; actorId: string }>;
+      /** Present only after the dynamic list reservation has been accepted. */
+      scanFence?: TicketListScanSnapshot;
     }
   ): Promise<{ data: Ticket[]; total: number; meta: { total: number; page: number; limit: number; total_pages: number } }> {
     const page = Math.max(1, Number.isFinite(options.page) ? options.page! : 1);
@@ -219,6 +224,13 @@ export class SqlTicketRepository implements TicketRepository {
     let query = "SELECT tickets.*, (SELECT snippet FROM articles WHERE articles.tenant_id = tickets.tenant_id AND ticket_id = tickets.id ORDER BY created_at DESC LIMIT 1) as snippet FROM tickets WHERE tenant_id = ?";
     let countQuery = "SELECT COUNT(*) as total FROM tickets WHERE tenant_id = ?";
     const params: any[] = [this.scope.tenantId];
+
+    if (options.viewer?.role === 'agent') {
+      const visible = "(group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership WHERE membership.tenant_id = tickets.tenant_id AND membership.user_id = ? AND membership.group_id = tickets.group_id))";
+      query += ` AND ${visible}`;
+      countQuery += ` AND ${visible}`;
+      params.push(options.viewer.actorId);
+    }
 
     if (options.customerEmail) {
       query += " AND customer_email = ?";
@@ -319,11 +331,12 @@ export class SqlTicketRepository implements TicketRepository {
       }
     }
 
-    const countResult = await this.db.prepare(countQuery)
-      .bind(...params)
-      .first<{ total: number }>();
-    const total = countResult?.total || 0;
-    const totalPages = Math.ceil(total / limit);
+    const scanFence = options.scanFence ? ticketListScanFenceSql(options.scanFence) : undefined;
+    if (scanFence) {
+      query += ` AND ${scanFence.sql}`;
+      countQuery += ` AND ${scanFence.sql}`;
+      params.push(...scanFence.values);
+    }
 
     const sortClauses: Record<OperatorWorkspaceSort, string> = {
       updated_desc: 'tickets.updated_at DESC', updated_asc: 'tickets.updated_at ASC',
@@ -334,12 +347,30 @@ export class SqlTicketRepository implements TicketRepository {
     const sort = options.sort ?? 'updated_desc';
     if (!Object.prototype.hasOwnProperty.call(sortClauses, sort)) throw new Error('Invalid ticket sort');
     query += ` ORDER BY ${sortClauses[sort]}, tickets.id ASC LIMIT ? OFFSET ?`;
-    params.push(limit, offset);
+    const countStatement = this.db.prepare(countQuery).bind(...params);
+    const pageStatement = this.db.prepare(query).bind(...params, limit, offset);
+    // D1 batches share one transaction snapshot. Both retained exact-total and
+    // page statements carry the same counter fence, so a post-reservation
+    // growth cannot execute list work beyond the admitted metadata.
+    const assertion = scanFence ? ticketListScanAssertionSql(this.scope.tenantId, options.scanFence!) : undefined;
+    if (!assertion) {
+      const countResult = await countStatement.first<{ total: number }>();
+      const total = countResult?.total || 0;
+      const totalPages = Math.ceil(total / limit);
+      const { results } = await pageStatement.all<Ticket & { custom_fields?: string | Record<string, any> }>();
+      return this.listResponse(results, total, page, limit, totalPages);
+    }
+    const batch = await this.db.batch([this.db.prepare(assertion.sql).bind(...assertion.values), countStatement, pageStatement]);
+    if (!batch[0]?.results?.[0]) throw new TicketListScanError('fence_changed');
+    const countResult = batch[1]?.results?.[0] as { total?: number } | undefined;
+    const total = typeof countResult?.total === 'number' ? countResult.total : 0;
+    const totalPages = Math.ceil(total / limit);
+    const results = (batch[2]?.results ?? []) as (Ticket & { custom_fields?: string | Record<string, any> })[];
 
-    const { results } = await this.db.prepare(query)
-      .bind(...params)
-      .all<Ticket & { custom_fields?: string | Record<string, any> }>();
+    return this.listResponse(results, total, page, limit, totalPages);
+  }
 
+  private listResponse(results: (Ticket & { custom_fields?: string | Record<string, any> })[], total: number, page: number, limit: number, totalPages: number) {
     const data = results.map((ticket) => {
       if (typeof ticket.custom_fields === 'string') {
         try {
@@ -481,13 +512,28 @@ export class SqlTicketRepository implements TicketRepository {
       .run();
   }
 
-  async findCustomerTickets(customerEmail: string, page: number, limit: number): Promise<{ data: Ticket[], total: number }> {
+  async findCustomerTickets(customerEmail: string, page: number, limit: number, scanFence?: TicketListScanSnapshot): Promise<{ data: Ticket[], total: number }> {
     const offset = (page - 1) * limit;
-    const items = await this.db.prepare("SELECT * FROM tickets WHERE tenant_id = ? AND customer_email = ? ORDER BY created_at DESC LIMIT ? OFFSET ?")
-      .bind(this.scope.tenantId, customerEmail, limit, offset).all<Ticket>();
-    const total = await this.db.prepare("SELECT COUNT(*) as count FROM tickets WHERE tenant_id = ? AND customer_email = ?")
-      .bind(this.scope.tenantId, customerEmail).first<{ count: number }>();
-    return { data: items.results || [], total: total?.count || 0 };
+    const fence = scanFence ? ticketListScanFenceSql(scanFence) : undefined;
+    const where = `tenant_id = ? AND customer_email = ?${fence ? ` AND ${fence.sql}` : ''}`;
+    const params = [this.scope.tenantId, customerEmail, ...(fence?.values ?? [])];
+    const assertion = scanFence ? ticketListScanAssertionSql(this.scope.tenantId, scanFence) : undefined;
+    if (!assertion) {
+      const items = await this.db.prepare(`SELECT * FROM tickets WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+        .bind(...params, limit, offset).all<Ticket>();
+      const total = await this.db.prepare(`SELECT COUNT(*) as count FROM tickets WHERE ${where}`)
+        .bind(...params).first<{ count: number }>();
+      return { data: items.results || [], total: total?.count || 0 };
+    }
+    const batch = await this.db.batch([
+      this.db.prepare(assertion.sql).bind(...assertion.values),
+      this.db.prepare(`SELECT COUNT(*) as count FROM tickets WHERE ${where}`).bind(...params),
+      this.db.prepare(`SELECT * FROM tickets WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...params, limit, offset),
+    ]);
+    if (!batch[0]?.results?.[0]) throw new TicketListScanError('fence_changed');
+    const total = batch[1]?.results?.[0] as { count?: number } | undefined;
+    const items = batch[2]?.results as Ticket[] | undefined;
+    return { data: items || [], total: total?.count || 0 };
   }
 
   async findTicketsForRetention(cutoffStr: string): Promise<Ticket[]> {
