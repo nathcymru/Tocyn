@@ -14,6 +14,8 @@ let pauseNextCanonical = false;
 let releaseCanonical: (() => void) | undefined;
 let loseCanonicalAck = false;
 let failCanonicalAttempts = 0;
+let rollbackNextCanonical = false;
+let forcedRollbackCanonicalAttempts = 0;
 let nextMutationReceiptWinner: any;
 let canonicalAttempts = 0;
 const canonicalBatches: { statements: number; rowsRead: number; rowsWritten: number }[] = [];
@@ -128,7 +130,18 @@ function instrumentDatabase(db: any): any {
         if (action && actions[action]) await target.prepare(actions[action]).run();
         const delay=canonicalDelayMs;canonicalDelayMs=0;if (delay) await new Promise(resolve=>setTimeout(resolve,delay));
       }
-      const results=await target.batch(batch.map(statement=>statements.get(statement)?.raw??statement));
+      const nativeBatch=batch.map(statement=>statements.get(statement)?.raw??statement);
+      if (canonical && rollbackNextCanonical) {
+        rollbackNextCanonical = false;
+        // This final duplicate runs after the entire native business batch and
+        // makes D1 roll it all back. It is test-only and never reaches app SQL.
+        nativeBatch.push(target.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+          SELECT tenant_id,accepted FROM budget_mutation_assertion LIMIT 1`));
+        try { await target.batch(nativeBatch); }
+        catch (error) { forcedRollbackCanonicalAttempts++; throw error; }
+        throw new Error('Synthetic forced canonical rollback unexpectedly committed');
+      }
+      const results=await target.batch(nativeBatch);
       batch.forEach((statement, index) => {
         const sql = statements.get(statement)?.sql ?? '';
         if (sql.includes('SELECT e.id,e.article_id,e.kind FROM conversation_events e') || sql.includes('SELECT id,article_id,kind FROM conversation_events'))
@@ -198,12 +211,13 @@ export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     if (new URL(request.url).pathname === '/__budget-control') {
       if (request.method === 'POST') {
-        const control = await request.json() as { pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown; revokeApiKeyAfterAuth?: { tenantId?: unknown; apiKeyId?: unknown } };
+        const control = await request.json() as { pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown; rollbackNextCanonical?: boolean; revokeApiKeyAfterAuth?: { tenantId?: unknown; apiKeyId?: unknown } };
         if (control.pauseNextCanonical) pauseNextCanonical = true;
         if (control.releaseCanonical) releaseCanonical?.();
         if (control.pauseNextReserve) pauseNextReserve=true;
         if (control.releaseReserve) releaseReserve?.();
         if (control.receiptWinner) nextMutationReceiptWinner=control.receiptWinner;
+        if (control.rollbackNextCanonical) rollbackNextCanonical=true;
         if (control.editPolicyAfterReserve) editPolicyAfterReserve=true;
         if (control.failCanonicalAttempts && control.failCanonicalAttempts<=5) failCanonicalAttempts=control.failCanonicalAttempts;
         if (control.beforeCanonical) beforeCanonical=control.beforeCanonical;
@@ -219,7 +233,7 @@ export default {
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
         if (control.loseReconcileAcks && control.loseReconcileAcks <= 5) lostReconcileAcksRemaining = control.loseReconcileAcks;
       }
-      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, r2Puts, notificationBroadcasts,
+      return Response.json({ calls, canonicalBatches, canonicalAttempts, forcedRollbackCanonicalAttempts, r2Gets, r2Puts, notificationBroadcasts,
         historyEventQueries, historyEventRowsRead, historyRowsRead, detailArticleMetadataQueries, detailArticleRowsRead,
         detailAttachmentMetadataQueries, detailAttachmentRowsRead, detailReferenceRowsRead, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical,
         cache: apiTicketBudgetCache.inspectForTrustedRuntime() });

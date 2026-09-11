@@ -85,6 +85,15 @@ test('real combined admission protects all bounded support-state/SLA writes with
       method, headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', ...(key ? { 'idempotency-key': key } : {}) }, body: JSON.stringify(body),
     });
 
+    const control = async (body?: { rollbackNextCanonical?: boolean }) => {
+      const response = await mf.dispatchFetch('http://runtime.test/__budget-control', {
+        method: body ? 'POST' : 'GET', headers: body ? { 'content-type': 'application/json' } : undefined,
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      return response.json() as Promise<{ canonicalAttempts: number; forcedRollbackCanonicalAttempts: number;
+        canonicalBatches: Array<{ statements: number; rowsRead: number; rowsWritten: number }> }>;
+    };
+
     // The admission fence deletes at most 99 old receipts, even under a prior
     // retry backlog. These are deliberately the current actor's rows.
     await db.batch(Array.from({ length: 150 }, (_, index) => db.prepare(`INSERT INTO support_sla_mutation_receipts
@@ -159,19 +168,45 @@ test('real combined admission protects all bounded support-state/SLA writes with
       (tenant_id,id,subject,status,customer_email,source) VALUES (?,?,'Bounded remap','open',?,'dashboard')`)
       .bind(tenant, `bulk-${index}`, `bulk-${index}@example.test`)));
     await db.prepare("UPDATE ticket_support_state SET definition_id='bulk-source' WHERE tenant_id=? AND ticket_id LIKE 'bulk-%'").bind(tenant).run();
+    const beforeRollback = await control();
+    const receiptsBeforeRollback = (await db.prepare(`SELECT count(*) AS n FROM support_sla_mutation_receipts
+      WHERE tenant_id=? AND operation='dashboard.support-state.deactivate'`).bind(tenant).first<{ n: number }>())?.n;
+    await control({ rollbackNextCanonical: true });
+    const rolledBack = await request('/api/support-states/bulk-source/deactivate', 'POST', admin,
+      { replacementId: 'bulk-replacement', waitingReason: 'Carry bounded remap' }, 'bulk-deactivate');
+    assert.ok(rolledBack.status >= 500, 'the injected final D1 conflict rolls back the full first native remap attempt');
+    await rolledBack.body?.cancel();
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM ticket_support_state WHERE tenant_id=? AND definition_id='bulk-source'").bind(tenant).first<{ n: number }>())?.n, 100,
+      'the first full native batch rolls back all source-state changes');
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM ticket_support_state WHERE tenant_id=? AND definition_id='bulk-replacement'").bind(tenant).first<{ n: number }>())?.n, 0);
+    assert.equal((await db.prepare(`SELECT count(*) AS n FROM support_sla_mutation_receipts
+      WHERE tenant_id=? AND operation='dashboard.support-state.deactivate'`).bind(tenant).first<{ n: number }>())?.n, receiptsBeforeRollback,
+      'a rolled-back attempt leaves no durable receipt to suppress the permitted retry');
+    const afterRollback = await control();
+    assert.equal(afterRollback.canonicalAttempts, beforeRollback.canonicalAttempts + 1);
+    assert.equal(afterRollback.forcedRollbackCanonicalAttempts, beforeRollback.forcedRollbackCanonicalAttempts + 1);
+    assert.equal(afterRollback.canonicalBatches.length, beforeRollback.canonicalBatches.length,
+      'failed D1 batches have no D1 metadata result; their resource envelope stays conservatively prepaid');
+
     const bulkDeactivated = await request('/api/support-states/bulk-source/deactivate', 'POST', admin,
       { replacementId: 'bulk-replacement', waitingReason: 'Carry bounded remap' }, 'bulk-deactivate');
     assert.equal(bulkDeactivated.status, 200); await bulkDeactivated.body?.cancel();
     assert.equal((await db.prepare("SELECT count(*) AS n FROM ticket_support_state WHERE tenant_id=? AND definition_id='bulk-replacement'").bind(tenant).first<{ n: number }>())?.n, 100);
-    const observed = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { canonicalBatches: Array<{ statements: number; rowsRead: number; rowsWritten: number }> };
-    assert.ok(observed.canonicalBatches.length >= 11, 'each admitted route contributes one fenced D1 batch');
-    const maximumWrites = Math.max(...observed.canonicalBatches.map(batch => batch.rowsWritten));
-    const maximumReads = Math.max(...observed.canonicalBatches.map(batch => batch.rowsRead));
-    assert.ok(maximumWrites <= 4_096,
-      `the measured 100-ticket remap fits the reserved deactivation write ceiling: ${JSON.stringify(observed.canonicalBatches)}`);
-    assert.ok(maximumReads <= 8_192,
-      `the measured 100-ticket remap fits the reserved deactivation read ceiling despite unrelated same- and foreign-tenant history: ${JSON.stringify(observed.canonicalBatches)}`);
-    console.log(JSON.stringify({ fixture: 'native-support-sla-100-remap-envelope', measuredMaximumD1RowsRead: maximumReads, measuredMaximumD1RowsWritten: maximumWrites, remapBatch: observed.canonicalBatches.at(-1) }));
+    const observed = await control();
+    assert.equal(observed.canonicalAttempts, beforeRollback.canonicalAttempts + 2,
+      'the same key permits exactly the prepaid rollback recovery and no third canonical execution');
+    assert.equal(observed.canonicalBatches.length, beforeRollback.canonicalBatches.length + 1);
+    const remapBatch = observed.canonicalBatches.at(-1)!;
+    assert.ok(remapBatch.rowsWritten <= 4_096,
+      `one successful native remap fits its single-attempt write ceiling: ${JSON.stringify(remapBatch)}`);
+    assert.ok(remapBatch.rowsRead <= 8_192,
+      `one successful native remap fits its single-attempt read ceiling despite unrelated same- and foreign-tenant history: ${JSON.stringify(remapBatch)}`);
+    const cumulativeUpperBound = { attempts: 2, d1RowsRead: 2 * remapBatch.rowsRead, d1RowsWritten: 2 * remapBatch.rowsWritten };
+    assert.ok(cumulativeUpperBound.d1RowsRead <= 16_384 && cumulativeUpperBound.d1RowsWritten <= 8_192,
+      `two prepaid remap attempts fit the operation envelope: ${JSON.stringify(cumulativeUpperBound)}`);
+    console.log(JSON.stringify({ fixture: 'native-support-sla-100-remap-retry-envelope', measuredSuccessfulAttempt: remapBatch,
+      conservativeCumulativeUpperBound: cumulativeUpperBound,
+      note: 'The failed D1 batch returns no metadata; doubled successful-run rows are a conservative cumulative bound, not failed-batch metadata.' }));
 
     await db.prepare("UPDATE users SET session_version=2 WHERE tenant_id=? AND id='admin'").bind(tenant).run();
     const revoked = await request('/api/support-states', 'POST', admin, state('revoked'), 'revoked');
