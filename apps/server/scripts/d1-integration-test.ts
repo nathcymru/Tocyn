@@ -1210,7 +1210,10 @@ async function run() {
   // Retention is intentionally one durable external item per cron turn.
   // Drive local cron continuations to completion rather than restoring the
   // former unbounded all-ticket cleanup in the scheduler.
-  for (let turn = 0; turn < 12 && await reposApiKeyB.tickets.get(ticketBOld.id); turn++) {
+  // External work and relational finalization each use one admitted durable
+  // turn. Drive the local scheduler through every bounded child table rather
+  // than restoring an unbounded final ticket cascade.
+  for (let turn = 0; turn < 40 && await reposApiKeyB.tickets.get(ticketBOld.id); turn++) {
     await worker.scheduled({} as any, envMock, {} as any);
   }
   assert.strictEqual(await reposApiKeyB.tickets.get(ticketBOld.id), null, 'Actual scheduled entrypoint must process tenant B');
