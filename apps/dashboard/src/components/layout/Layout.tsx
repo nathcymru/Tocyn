@@ -164,6 +164,8 @@ function LayoutContent() {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const { isConnected, lastMessage, manualReconnect } = useCollaboration();
+  const wasConnected = useRef(isConnected);
+  const [connectionRecoveryMessage, setConnectionRecoveryMessage] = useState<string | null>(null);
   const [showConnDetails, setShowConnDetails] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [activity, setActivity] = useState<ActivityResponse | null>(null);
@@ -214,6 +216,17 @@ function LayoutContent() {
     // Signals never carry activity content. A visible panel recovers from D1.
     if (activityOpen) void loadActivity();
   }, [activityOpen, lastMessage, loadActivity, queryClient]);
+
+  // Realtime is only an invalidation channel. Once a dropped connection is
+  // restored, re-read the bounded durable projection so unread activity and
+  // recovery state do not depend on a transient frame or toast.
+  useEffect(() => {
+    const restored = !wasConnected.current && isConnected;
+    wasConnected.current = isConnected;
+    if (!restored) return;
+    setConnectionRecoveryMessage('Connection restored. Durable activity refreshed.');
+    void loadActivity();
+  }, [isConnected, loadActivity]);
 
   const openActivity = (open: boolean) => {
     setActivityOpen(open);
@@ -338,7 +351,7 @@ function LayoutContent() {
                   )} />
                 </div>
 
-                <p className="text-sm text-slate-600">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
+                <p role="status" className="text-sm text-slate-600">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
 
                 <div className="mt-4 pt-4 border-t border-slate-100">
                   <TocynButton
@@ -357,6 +370,7 @@ function LayoutContent() {
             </Popover.Positioner>
           </div>
           </Popover.Root>}
+          {connectionRecoveryMessage && <p role="status" aria-live="polite" className="sr-only">{connectionRecoveryMessage}</p>}
         </header>
 
         <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('flex-1 min-h-0', isInboxRoute ? 'overflow-hidden' : 'overflow-auto', !location.pathname.startsWith('/settings') && !isInboxRoute && 'p-4 lg:p-8')}>
