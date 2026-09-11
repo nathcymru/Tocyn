@@ -426,7 +426,8 @@
       "actualCompletion": null,
       "progress": 0,
       "milestone": 29,
-      "new": false
+      "new": false,
+      "actualStart": "2026-09-11"
     },
     {
       "number": 72,
@@ -1751,18 +1752,22 @@
       "number": 162,
       "alias": "METRICS-FOUNDATION",
       "title": "Define operational metric contracts for SLA and routing",
-      "done": false,
-      "effort": 8,
+      "done": true,
+      "effort": 0,
       "dependencies": [
         63,
         79
       ],
       "baselineStart": "2026-11-14",
       "baselineTarget": "2026-11-18",
-      "actualCompletion": null,
-      "progress": 0,
+      "actualCompletion": "2026-09-11",
+      "progress": 100,
       "milestone": 25,
-      "new": true
+      "new": true,
+      "actualStart": "2026-09-11",
+      "forecastStart": "2026-10-15",
+      "forecastTarget": "2026-10-19",
+      "workstream": "W1"
     }
   ]
 }

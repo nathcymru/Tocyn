@@ -4,7 +4,7 @@ The owner-approved 10 September baseline supersedes earlier sequencing. Start wi
 
 ## Current calculated forecast
 
-Forecast anchor: **2026-09-11**. Beta.2 gate forecast: **2027-01-18**. Expanded scope forecast: **2028-01-05**. These are calculated conservative capacity forecasts, not promises of releases or remote approval.
+Forecast anchor: **2026-09-11**. Beta.2 gate forecast: **2027-01-08**. Expanded scope forecast: **2028-01-05**. These are calculated conservative capacity forecasts, not promises of releases or remote approval.
 
 Two lanes, 8h/day Monday–Saturday; 2.5× baseline implementation and 0.5× shared 4h/day review/integration. A lane remains occupied through integration. Dependencies become available the following working day. External approval/provider waits are unknown, not zero-duration guarantees. Actual concurrency may exceed this reference model.
 
@@ -15,35 +15,34 @@ Dependency-only critical network length: 1134 planning hours. Resource-constrain
 | [#66](https://github.com/nathcymru/Tocyn/issues/66) Apply tenant themes through standard CSS variables | 48 | W1 | 2026-09-11 → 2026-09-18 | #48 |
 | [#136](https://github.com/nathcymru/Tocyn/issues/136) Add explicit waiting reasons and configurable support workflow states | 72 | W2 | 2026-09-11 → 2026-09-23 | #127, #60, #63, #79 |
 | [#68](https://github.com/nathcymru/Tocyn/issues/68) Add a rich conversation composer | 72 | W1 | 2026-09-19 → 2026-10-01 | #48, #66, #129 |
-| [#159](https://github.com/nathcymru/Tocyn/issues/159) Establish operational observability and service-level objectives | 72 | W2 | 2026-09-24 → 2026-10-06 | #50, #63 |
+| [#73](https://github.com/nathcymru/Tocyn/issues/73) Expose SLA progress and responsible handlers | 72 | W2 | 2026-09-24 → 2026-10-06 | #61, #63, #136, #162 |
 | [#70](https://github.com/nathcymru/Tocyn/issues/70) Add typing awareness and private colleague collaboration | 72 | W1 | 2026-10-02 → 2026-10-14 | #63, #68 |
-| [#64](https://github.com/nathcymru/Tocyn/issues/64) Enforce resource budgets across active application paths | 48 | W2 | 2026-10-07 → 2026-10-16 | #50, #60, #93, #159 |
-| [#162](https://github.com/nathcymru/Tocyn/issues/162) Define operational metric contracts for SLA and routing | 24 | W1 | 2026-10-15 → 2026-10-19 | #63, #79 |
-| [#91](https://github.com/nathcymru/Tocyn/issues/91) Recover accepted payloads through durable storage journals | 72 | W2 | 2026-10-17 → 2026-10-29 | #50, #59 |
-| [#73](https://github.com/nathcymru/Tocyn/issues/73) Expose SLA progress and responsible handlers | 72 | W1 | 2026-10-20 → 2026-11-02 | #61, #63, #136, #162 |
-| [#51](https://github.com/nathcymru/Tocyn/issues/51) Implement authenticated durable webhook ingress | 72 | W2 | 2026-10-30 → 2026-11-11 | #50, #64, #91 |
-| [#130](https://github.com/nathcymru/Tocyn/issues/130) Add task-based work queues and snooze/resurface | 72 | W1 | 2026-11-03 → 2026-11-14 | #129, #136, #73, #64 |
-| [#87](https://github.com/nathcymru/Tocyn/issues/87) Normalise provider events into reliable conversation state | 96 | W2 | 2026-11-12 → 2026-11-27 | #51, #59, #91 |
-| [#128](https://github.com/nathcymru/Tocyn/issues/128) Build the persistent progressive operator workspace | 96 | W1 | 2026-11-16 → 2026-12-02 | #127, #129, #130, #48, #66 |
-| [#137](https://github.com/nathcymru/Tocyn/issues/137) Add workload-aware queues and operator capacity controls | 72 | W2 | 2026-11-28 → 2026-12-10 | #73, #79, #162, #130 |
-| [#71](https://github.com/nathcymru/Tocyn/issues/71) Enable keyboard-first workspace navigation | 36 | W1 | 2026-12-03 → 2026-12-12 | #62, #66, #128 |
-| [#132](https://github.com/nathcymru/Tocyn/issues/132) Add cognitive-accessibility workspace preferences and focus mode | 48 | W2 | 2026-12-11 → 2026-12-18 | #128, #66 |
-| [#131](https://github.com/nathcymru/Tocyn/issues/131) Unify global search and scoped inbox filtering | 36 | W1 | 2026-12-14 → 2026-12-21 | #128, #71 |
-| [#133](https://github.com/nathcymru/Tocyn/issues/133) Replace transient ticket toasts with durable operator activity | 48 | W2 | 2026-12-19 → 2026-12-26 | #128, #63, #70, #66 |
-| [#134](https://github.com/nathcymru/Tocyn/issues/134) Add customer context and contextual support panels | 60 | W1 | 2026-12-22 → 2027-01-01 | #128, #132, #63 |
-| [#135](https://github.com/nathcymru/Tocyn/issues/135) Add configurable Table view and safe bulk ticket actions | 48 | W2 | 2026-12-28 → 2027-01-04 | #128, #60, #64, #79 |
-| [#138](https://github.com/nathcymru/Tocyn/issues/138) Define workspace utility actions for call, remote support and external tools | 36 | W1 | 2027-01-02 → 2027-01-08 | #128, #79 |
-| [#139](https://github.com/nathcymru/Tocyn/issues/139) Measure operator interaction performance and enforce UI response budgets | 24 | W2 | 2027-01-05 → 2027-01-09 | #128, #48 |
-| [#88](https://github.com/nathcymru/Tocyn/issues/88) Dispatch transactional outbound intents reliably | 72 | W1 | 2027-01-09 → 2027-01-21 | #63, #64, #87 |
-| [#140](https://github.com/nathcymru/Tocyn/issues/140) Validate the redesigned operator workspace for usability and cognitive accessibility | 48 | W2 | 2027-01-11 → 2027-01-18 | #128, #129, #130, #131, #132, #133, #134, #135, #136, #137, #138, #139, #48, #66, #68, #70, #71, #73, #79 |
-| [#12](https://github.com/nathcymru/Tocyn/issues/12) Verify required checks on dependency-only pull requests | 24 | W2 | 2027-01-19 → 2027-01-22 |  |
-| [#14](https://github.com/nathcymru/Tocyn/issues/14) Standardise repository formatting and lint conventions | 24 | W1 | 2027-01-22 → 2027-01-26 |  |
-| [#16](https://github.com/nathcymru/Tocyn/issues/16) Establish measurable FidesLang coverage | 48 | W2 | 2027-01-23 → 2027-01-30 | #59, #91 |
-| [#18](https://github.com/nathcymru/Tocyn/issues/18) Migrate transactional mail to Cloudflare-native delivery | 48 | W1 | 2027-01-27 → 2027-02-03 | #57 |
-| [#17](https://github.com/nathcymru/Tocyn/issues/17) Complete FidesLang coverage and optional user controls | 72 | W2 | 2027-02-01 → 2027-02-12 | #16 |
-| [#22](https://github.com/nathcymru/Tocyn/issues/22) Complete remaining repository launch administration | 18 | W1 | 2027-02-04 → 2027-02-06 | #65 |
-| [#42](https://github.com/nathcymru/Tocyn/issues/42) Validate production cutover and rollback readiness | 48 | W1 | 2027-02-08 → 2027-02-15 | #65, #159, #160 |
-| [#44](https://github.com/nathcymru/Tocyn/issues/44) Retire inactive services while preserving regression coverage | 24 | W2 | 2027-02-13 → 2027-02-17 | #14 |
+| [#159](https://github.com/nathcymru/Tocyn/issues/159) Establish operational observability and service-level objectives | 72 | W2 | 2026-10-07 → 2026-10-19 | #50, #63 |
+| [#91](https://github.com/nathcymru/Tocyn/issues/91) Recover accepted payloads through durable storage journals | 72 | W1 | 2026-10-15 → 2026-10-27 | #50, #59 |
+| [#64](https://github.com/nathcymru/Tocyn/issues/64) Enforce resource budgets across active application paths | 48 | W2 | 2026-10-20 → 2026-10-29 | #50, #60, #93, #159 |
+| [#12](https://github.com/nathcymru/Tocyn/issues/12) Verify required checks on dependency-only pull requests | 24 | W1 | 2026-10-28 → 2026-10-31 |  |
+| [#130](https://github.com/nathcymru/Tocyn/issues/130) Add task-based work queues and snooze/resurface | 72 | W2 | 2026-10-30 → 2026-11-11 | #129, #136, #73, #64 |
+| [#51](https://github.com/nathcymru/Tocyn/issues/51) Implement authenticated durable webhook ingress | 72 | W1 | 2026-11-02 → 2026-11-14 | #50, #64, #91 |
+| [#128](https://github.com/nathcymru/Tocyn/issues/128) Build the persistent progressive operator workspace | 96 | W2 | 2026-11-12 → 2026-11-27 | #127, #129, #130, #48, #66 |
+| [#137](https://github.com/nathcymru/Tocyn/issues/137) Add workload-aware queues and operator capacity controls | 72 | W1 | 2026-11-16 → 2026-12-01 | #73, #79, #162, #130 |
+| [#71](https://github.com/nathcymru/Tocyn/issues/71) Enable keyboard-first workspace navigation | 36 | W2 | 2026-11-28 → 2026-12-04 | #62, #66, #128 |
+| [#132](https://github.com/nathcymru/Tocyn/issues/132) Add cognitive-accessibility workspace preferences and focus mode | 48 | W1 | 2026-12-02 → 2026-12-09 | #128, #66 |
+| [#131](https://github.com/nathcymru/Tocyn/issues/131) Unify global search and scoped inbox filtering | 36 | W2 | 2026-12-05 → 2026-12-11 | #128, #71 |
+| [#133](https://github.com/nathcymru/Tocyn/issues/133) Replace transient ticket toasts with durable operator activity | 48 | W1 | 2026-12-10 → 2026-12-17 | #128, #63, #70, #66 |
+| [#134](https://github.com/nathcymru/Tocyn/issues/134) Add customer context and contextual support panels | 60 | W2 | 2026-12-12 → 2026-12-23 | #128, #132, #63 |
+| [#135](https://github.com/nathcymru/Tocyn/issues/135) Add configurable Table view and safe bulk ticket actions | 48 | W1 | 2026-12-18 → 2026-12-25 | #128, #60, #64, #79 |
+| [#138](https://github.com/nathcymru/Tocyn/issues/138) Define workspace utility actions for call, remote support and external tools | 36 | W2 | 2026-12-24 → 2026-12-30 | #128, #79 |
+| [#139](https://github.com/nathcymru/Tocyn/issues/139) Measure operator interaction performance and enforce UI response budgets | 24 | W1 | 2026-12-26 → 2026-12-31 | #128, #48 |
+| [#87](https://github.com/nathcymru/Tocyn/issues/87) Normalise provider events into reliable conversation state | 96 | W2 | 2026-12-31 → 2027-01-15 | #51, #59, #91 |
+| [#140](https://github.com/nathcymru/Tocyn/issues/140) Validate the redesigned operator workspace for usability and cognitive accessibility | 48 | W1 | 2027-01-01 → 2027-01-08 | #128, #129, #130, #131, #132, #133, #134, #135, #136, #137, #138, #139, #48, #66, #68, #70, #71, #73, #79 |
+| [#14](https://github.com/nathcymru/Tocyn/issues/14) Standardise repository formatting and lint conventions | 24 | W1 | 2027-01-09 → 2027-01-16 |  |
+| [#88](https://github.com/nathcymru/Tocyn/issues/88) Dispatch transactional outbound intents reliably | 72 | W2 | 2027-01-16 → 2027-01-28 | #63, #64, #87 |
+| [#16](https://github.com/nathcymru/Tocyn/issues/16) Establish measurable FidesLang coverage | 48 | W1 | 2027-01-18 → 2027-01-25 | #59, #91 |
+| [#17](https://github.com/nathcymru/Tocyn/issues/17) Complete FidesLang coverage and optional user controls | 72 | W1 | 2027-01-26 → 2027-02-06 | #16 |
+| [#18](https://github.com/nathcymru/Tocyn/issues/18) Migrate transactional mail to Cloudflare-native delivery | 48 | W2 | 2027-01-29 → 2027-02-09 | #57 |
+| [#22](https://github.com/nathcymru/Tocyn/issues/22) Complete remaining repository launch administration | 18 | W1 | 2027-02-08 → 2027-02-10 | #65 |
+| [#42](https://github.com/nathcymru/Tocyn/issues/42) Validate production cutover and rollback readiness | 48 | W2 | 2027-02-10 → 2027-02-17 | #65, #159, #160 |
+| [#44](https://github.com/nathcymru/Tocyn/issues/44) Retire inactive services while preserving regression coverage | 24 | W1 | 2027-02-11 → 2027-02-15 | #14 |
 | [#45](https://github.com/nathcymru/Tocyn/issues/45) Evaluate deferred major dependency and Actions upgrades | 24 | W1 | 2027-02-16 → 2027-02-19 | #12 |
 | [#52](https://github.com/nathcymru/Tocyn/issues/52) Deliver signed tenant webhook subscriptions reliably | 48 | W2 | 2027-02-18 → 2027-02-25 | #50, #64, #88 |
 | [#53](https://github.com/nathcymru/Tocyn/issues/53) Implement tenant-owned Slack support channels | 72 | W1 | 2027-02-20 → 2027-03-04 | #66, #87, #88 |
