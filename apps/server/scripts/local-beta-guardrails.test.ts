@@ -115,7 +115,7 @@ test('guarded local profile classifies only the approved workspace method and pa
   for (const [method,path,route] of [
     ['GET','/api/workspace/state','conversation-read'],['PUT','/api/workspace/state','conversation-write'],
     ['GET','/api/workspace/drafts','conversation-read'],['GET','/api/workspace/drafts/ticket-1','conversation-read'],
-    ['PUT','/api/workspace/drafts/ticket-1','conversation-write'],['DELETE','/api/workspace/drafts/ticket-1','conversation-write'],
+    ['PUT','/api/workspace/drafts/ticket-1','conversation-write'],['POST','/api/workspace/drafts/ticket-1/rebase','conversation-write'],['DELETE','/api/workspace/drafts/ticket-1','conversation-write'],
     ['POST','/api/workspace/state','disabled'],['PATCH','/api/workspace/state','disabled'],['DELETE','/api/workspace/state','disabled'],
     ['POST','/api/workspace/drafts','disabled'],['PATCH','/api/workspace/drafts/ticket-1','disabled'],['GET','/api/workspace/drafts/ticket-1/extra','disabled'],
   ] as const) assert.equal(localBetaRoute(method,path),route,`${method} ${path}`);

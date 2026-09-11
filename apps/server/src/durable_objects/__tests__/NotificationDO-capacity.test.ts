@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NotificationDO } from '../NotificationDO';
 import { MAX_NOTIFICATION_CONNECTIONS } from '../notification-limits';
-import { estimateDirectNotificationBroadcastEnvelope, estimateNotificationBroadcastWithCleanupEnvelope } from '../notification-resource-envelope';
+import {
+  estimateDirectNotificationBroadcastEnvelope,
+  estimateNotificationBroadcastWithCleanupEnvelope,
+  estimateNotificationTypingEnvelope,
+  estimateNotificationTypingWithCleanupEnvelope,
+} from '../notification-resource-envelope';
 
 const attachment = () => ({ connectionId: 'c', userId: 'u', name: 'Staff', location: null,
   tenantId: 'A', role: 'agent', version: 0, expiresAt: Math.floor(Date.now() / 1000) + 60 });
@@ -42,6 +47,14 @@ describe('bounded realtime capacity', () => {
     expect(envelope).toMatchObject({ doRequests: 3, d1RowsRead: 384, logEvents: 24_579 });
     expect(estimateNotificationBroadcastWithCleanupEnvelope()).toMatchObject({
       doRequests: 771, doRowsWritten: 768, d1RowsRead: 98_688, logEvents: 6_316_803,
+    });
+  });
+  it('accounts separately for ticket-authorized advisory typing and its bounded cleanup', () => {
+    expect(estimateNotificationTypingEnvelope()).toMatchObject({
+      doRequests: 1, d1RowsRead: 384, logEvents: 16_385,
+    });
+    expect(estimateNotificationTypingWithCleanupEnvelope()).toMatchObject({
+      doRequests: 257, doRowsWritten: 256, d1RowsRead: 33_152, logEvents: 2_113_793,
     });
   });
   it('never accepts foreign, revoked, malformed or unavailable authority', async () => {

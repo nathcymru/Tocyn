@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Layout } from '../components/layout/Layout';
+import { CollaborationProvider } from '../components/CollaborationContext';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuthStore } from '../store/authStore';
 
@@ -20,9 +21,9 @@ let client: QueryClient;
 const realtime = { isConnected: true, lastMessage: null, presence: [], updateLocation: vi.fn(), connectionDetails: { latency: 10, reconnectCount: 0 }, manualReconnect: vi.fn() };
 function Destination() { const location = useLocation(); return <h1>Route {location.pathname}{location.search}</h1>; }
 function tree() {
-  return <QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets']}><Routes>
+  return <QueryClientProvider client={client}><CollaborationProvider><MemoryRouter initialEntries={['/tickets']}><Routes>
     <Route element={<Layout />}><Route path="*" element={<Destination />} /></Route>
-  </Routes></MemoryRouter></QueryClientProvider>;
+  </Routes></MemoryRouter></CollaborationProvider></QueryClientProvider>;
 }
 async function renderReady() {
   const result = render(tree());

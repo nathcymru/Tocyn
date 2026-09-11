@@ -9,7 +9,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useTicket, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
-import { useRealtime } from '../hooks/useRealtime';
+import { useCollaboration } from '../components/CollaborationContext';
 import { useTicketFields } from '../hooks/useTicketFields';
 import { useSupportStates, useTicketSupportState, useTransitionSupportState } from '../hooks/useSupportStates';
 import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue, type OperatorDraftVersion } from '../hooks/useOperatorDraft';
@@ -45,6 +45,9 @@ type PendingAttachment = Readonly<{
   status: 'uploading' | 'error';
 }>;
 
+/** A server-derived review revision; retry means that the bracketing reads disagreed. */
+type StaleReplyReview = number | 'refreshing' | 'retry';
+
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const generation = useAuthStore(state => state.sessionGeneration);
@@ -73,12 +76,13 @@ function TicketDetail({ id }: { id: string }) {
   const [showSupportState, setShowSupportState] = useState(false);
   const supportState = useTicketSupportState(id, showSupportState);
   const transitionSupportState = useTransitionSupportState();
-  const { presence, updateLocation, lastMessage } = useRealtime();
+  const { updateLocation, lastMessage, viewersForTicket, typingForTicket, announceTyping, stopTyping } = useCollaboration();
   const draft = useOperatorDraft(id);
   const replyCapabilities = useReplyCapability(id);
   const replyCapability = replyCapabilities.data?.modes.find(mode => mode.visibility === draft.mode);
   const workspace = useOperatorWorkspaceState();
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
+  const currentUserId = useAuthStore(state => state.user?.id);
   const sessionGenerationRef = useRef(sessionGeneration);
   sessionGenerationRef.current = sessionGeneration;
   const draftRef = useRef(draft);
@@ -97,15 +101,20 @@ function TicketDetail({ id }: { id: string }) {
   const reply = draft.body;
   const isInternal = draft.mode === 'internal';
   const [suggestion, setSuggestion] = React.useState<string | null>(null);
+  const mentionedUserIds = draft.mentionedUserIds ?? [];
+  // The existing roster is already bounded server-side; selection has its own 16-person cap.
+  const mentionCandidates = (agents ?? []).filter(agent => agent.id !== currentUserId);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [staleReplyReview, setStaleReplyReview] = useState<StaleReplyReview | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const qaChanging = useRef(false);
   const [qaPending, setQaPending] = useState(false);
   const submission = useRef(false);
+  const idempotency = useRef<{ intent: string; key: string } | null>(null);
   const changing = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
@@ -200,8 +209,8 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   // Filter presence to find other agents viewing this ticket and deduplicate by userId
-  const rawViewers = presence.filter(p => p.location === `ticket:${id}`);
-  const viewers = Array.from(new Map(rawViewers.map(v => [v.userId, v])).values());
+  const viewers = viewersForTicket(id);
+  const typing = typingForTicket(id);
 
   useEffect(() => {
     if (!ticket || error || (workspace.status !== 'restored' && workspace.status !== 'saved') || workspace.selectedTicketId === id) return;
@@ -216,8 +225,8 @@ function TicketDetail({ id }: { id: string }) {
 
   useEffect(() => {
     updateLocation(`ticket:${id}`);
-    return () => updateLocation(null);
-  }, [id, updateLocation]);
+    return () => { updateLocation(null); stopTyping(id); };
+  }, [draft.baseConversationRevision, id, stopTyping, updateLocation]);
 
   useEffect(() => {
     if (lastMessage?.type === 'article.created' && String(lastMessage.payload?.ticket_id ?? lastMessage.payload?.ticketId) === String(id)) {
@@ -324,8 +333,10 @@ function TicketDetail({ id }: { id: string }) {
       body: changes.body ?? current.body,
       bodyFormat: changes.bodyFormat ?? current.bodyFormat,
       attachments: changes.attachments ?? current.attachments,
+      mentionedUserIds: changes.mentionedUserIds ?? current.mentionedUserIds ?? [],
       baseConversationRevision: current.baseConversationRevision,
     }));
+    if (changes.body !== undefined) announceTyping(id, draft.baseConversationRevision, changes.body.trim().length > 0);
   };
 
   const uploadAttachment = async (pending: PendingAttachment) => {
@@ -394,6 +405,7 @@ function TicketDetail({ id }: { id: string }) {
     activeUploads.current.clear();
     setPendingAttachments(current => current.map(attachment => ({ ...attachment, status: 'error' })));
     const result = await draft.discard();
+    stopTyping(id);
     if (result === 'cleared') {
       setSentDraftVersion(null);
       setPendingAttachments(current => current.filter(attachment => attachment.sessionGeneration !== sessionGeneration));
@@ -421,9 +433,75 @@ function TicketDetail({ id }: { id: string }) {
     } finally { submission.current = false; setIsSubmitting(false); }
   };
 
+  const refreshConversationForStaleReply = async () => {
+    if (submission.current || staleReplyReview === 'refreshing') return;
+    setStaleReplyReview('refreshing');
+    setNotice('');
+    try {
+      // Bracket the ticket read with two server-derived revisions. The ticket
+      // response is a real read between them, so matching values prove no
+      // material event arrived before, during, or after that rendered review.
+      // The following rebase remains a separate explicit action so the
+      // operator can review the material without losing local draft edits.
+      const before = await replyCapabilities.refetch({ throwOnError: true });
+      const beforeCollision = before.data?.collision;
+      if (!beforeCollision) {
+        setStaleReplyReview(null);
+        setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.');
+        return;
+      }
+      const refreshed = await refetch({ throwOnError: true });
+      // Article reads are ascending. Do not acknowledge a revision until the
+      // operator has deliberately loaded the bounded remaining pages, so the
+      // newest material is actually on screen for review.
+      if (refreshed.data?.pages.at(-1)?.pagination?.has_more) {
+        setStaleReplyReview('retry');
+        setReplyError('More messages are available. Load them, then refresh and review the conversation before rebasing. Your draft is retained.');
+        return;
+      }
+      const after = await replyCapabilities.refetch({ throwOnError: true });
+      const afterCollision = after.data?.collision;
+      if (!afterCollision) {
+        setStaleReplyReview(null);
+        setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.');
+        return;
+      }
+      if (beforeCollision.conversationRevision !== afterCollision.conversationRevision) {
+        setStaleReplyReview('retry');
+        setReplyError('The conversation changed while it was being refreshed. Your draft is retained; refresh and review the latest material before rebasing.');
+        return;
+      }
+      // The ticket response is rendered by the query update above before this
+      // exact reviewed revision is made available to the separate rebase action.
+      setStaleReplyReview(afterCollision.conversationRevision);
+      setReplyError('The latest conversation is shown below. Review it, then rebase the saved draft when ready.');
+    } catch (error) {
+      setStaleReplyReview(null);
+      setReplyError(error instanceof Error ? `${error.message}. Your draft is retained.` : 'Could not refresh the conversation. Your draft is retained.');
+    }
+  };
+
+  const rebaseReviewedStaleDraft = async () => {
+    if (submission.current || typeof staleReplyReview !== 'number') return;
+    setNotice('');
+    if (await draft.rebase(staleReplyReview)) {
+      idempotency.current = null;
+      setStaleReplyReview(null);
+      setReplyError(null);
+      setNotice('Draft rebased to the reviewed conversation. Review the draft, then send manually.');
+    } else {
+      setStaleReplyReview(null);
+      setReplyError('The conversation or saved draft changed again. Your draft is retained; refresh and review before rebasing.');
+    }
+  };
+
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reply.trim() || submission.current || sentDraftVersion) return;
+    if (staleReplyReview) {
+      setReplyError('Review the refreshed conversation and rebase the saved draft before sending. Your draft is retained.');
+      return;
+    }
     if (!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || reply.length > replyCapability.body.maxCharacters) {
       setReplyError('Reply options do not allow this message. Review its format and length or retry loading reply options.'); return;
     }
@@ -446,13 +524,24 @@ function TicketDetail({ id }: { id: string }) {
         setReplyError('Draft needs a confirmed save before sending. Retry the draft save, then send again.');
         return;
       }
+      const collision = replyCapabilities.data?.collision;
+      const precondition = collision ? {
+        generation: sendingDraft.version.generation, revision: sendingDraft.version.revision,
+        baseConversationRevision: sendingDraft.baseConversationRevision,
+      } : undefined;
+      const intent = JSON.stringify({ ticketId: id, draft: precondition, mode: sendingDraft.mode, body: sendingDraft.body,
+        bodyFormat: sendingDraft.bodyFormat, mentionedUserIds: sendingDraft.mode === 'internal' && replyCapabilities.data?.internalMentions ? (sendingDraft.mentionedUserIds ?? []) : [], attachments: sendingDraft.attachments.map(({ storageKey, filename, size, contentType }) => ({ storageKey, filename, size, contentType })) });
+      if (!idempotency.current || idempotency.current.intent !== intent) idempotency.current = { intent, key: crypto.randomUUID() };
       const article = await dashboardApi.post<{ id?: string }>(`/tickets/${id}/articles`, {
         body: sendingDraft.body,
         body_format: sendingDraft.bodyFormat,
         is_internal: sendingDraft.mode === 'internal',
-        attachments: sendingDraft.attachments
-      });
+        attachments: sendingDraft.attachments,
+        ...(sendingDraft.mode === 'internal' && replyCapabilities.data?.internalMentions && (sendingDraft.mentionedUserIds?.length ?? 0) ? { mentioned_user_ids: sendingDraft.mentionedUserIds } : {}),
+        ...(precondition ? { draft: precondition } : {}),
+      }, { headers: { 'Idempotency-Key': idempotency.current.key } });
       if (!article?.id) throw new Error('The reply was not confirmed.');
+      stopTyping(id);
       setSentDraftVersion(sendingDraft.version);
       const cleanup = await draft.cleanupAfterConfirmedSend(sendingDraft.version);
       if (cleanup === 'cleared') setSentDraftVersion(null);
@@ -465,8 +554,11 @@ function TicketDetail({ id }: { id: string }) {
         queryClient.invalidateQueries({ queryKey: ['tickets'] }),
       ]);
     } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        setReplyError(`${error.message}. Your draft is retained. Refresh the conversation before trying again if delivery is uncertain.`);
+        if (error instanceof Error && error.name !== 'AbortError') {
+          if (error instanceof ApiError && error.status === 409 && error.code === 'staff_reply_stale' && replyCapabilities.data?.collision) {
+          setStaleReplyReview('retry');
+          setReplyError('The saved draft or conversation changed. Review and rebase before sending; your draft is retained.');
+        } else setReplyError(`${error.message}. Your draft is retained. Refresh the conversation before trying again if delivery is uncertain.`);
       }
     } finally {
       submission.current = false;
@@ -617,6 +709,11 @@ function TicketDetail({ id }: { id: string }) {
                     </span>
                   </div>
                 )}
+                {typing.length > 0 && (
+                  <p className="text-xs text-slate-600">
+                    {typing.map(candidate => candidate.actor.name).join(', ')} {typing.length === 1 ? 'is' : 'are'} typing…
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -739,7 +836,15 @@ function TicketDetail({ id }: { id: string }) {
             </p>
           </div>}
           <div className="p-6 border-t border-slate-200 bg-white">
-            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton></p>}
+            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} {' '}
+              {staleReplyReview ? <>
+                {staleReplyReview === 'refreshing'
+                  ? <span role="status">Refreshing the latest conversation…</span>
+                  : typeof staleReplyReview !== 'number'
+                    ? <TocynButton type="button" onClick={() => void refreshConversationForStaleReply()} className="underline">Refresh and review conversation</TocynButton>
+                    : <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="underline">Rebase saved draft</TocynButton>}
+              </> : <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton>}
+            </p>}
             {(draft.status !== 'idle' && draft.status !== 'discarded') && <div role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} className={clsx(
               'mb-4 flex flex-wrap items-center justify-between gap-3 rounded border p-3 text-sm',
               draft.status === 'error' || draft.status === 'conflict' ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50 text-slate-700'
@@ -764,7 +869,7 @@ function TicketDetail({ id }: { id: string }) {
                   <TocynButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={!isInternal}
-                    onClick={() => { if (!submission.current) updateDraft({ mode: 'public' }); }}
+                    onClick={() => { if (!submission.current) updateDraft({ mode: 'public', mentionedUserIds: [] }); }}
                     className={clsx(
                       "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
                       !isInternal ? "bg-brand-600 text-white border-brand-700 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
@@ -840,6 +945,21 @@ function TicketDetail({ id }: { id: string }) {
               </div> : <p className="mb-2 text-sm text-slate-600">{replyCapability.channel === 'email'
                 ? `Email reply to ${ticket.customer_email}. Delivery is attempted after saving.`
                 : 'Internal note. No email is sent.'} Up to {replyCapability.attachments.maxCount} attachments, {replyCapability.attachments.maxBytesPerFile / 1024 / 1024} MB each.</p>}
+              {isInternal && replyCapabilities.data?.internalMentions && <fieldset className="mb-3 rounded border border-amber-200 bg-amber-50 p-3">
+                <legend className="px-1 text-sm font-semibold text-amber-950">Mention colleagues</legend>
+                <p id="mention-help" className="mb-2 text-sm text-amber-900">Mentioned colleagues with current ticket access receive a private activity after this note is saved. Up to 16.</p>
+                {mentionCandidates.length ? <div className="grid gap-2 sm:grid-cols-2">
+                  {mentionCandidates.map(agent => {
+                    const checked = mentionedUserIds.includes(agent.id);
+                    return <label key={agent.id} className="flex min-h-11 items-center gap-2 text-sm text-slate-900">
+                      <input type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
+                        onChange={() => updateDraft({ mentionedUserIds: checked ? mentionedUserIds.filter(id => id !== agent.id)
+                          : mentionedUserIds.length < (replyCapabilities.data?.internalMentions?.maxRecipients ?? 0) ? [...mentionedUserIds, agent.id] : mentionedUserIds })} />
+                      <span>{agent.full_name || agent.email}</span>
+                    </label>;
+                  })}
+                </div> : <p className="text-sm text-slate-700">No colleagues are available to mention.</p>}
+              </fieldset>}
               <label className="mb-2 block text-sm text-slate-700">
                 Message format
                 <select aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
@@ -937,7 +1057,7 @@ function TicketDetail({ id }: { id: string }) {
                   </TocynButton>
                   <TocynButton
                     type="submit"
-                    aria-disabled={!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion)}
+                    aria-disabled={!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion) || Boolean(staleReplyReview)}
                     className={clsx(
                       "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
                       isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"

@@ -52,3 +52,5 @@ Coordinator correction0f816c6 reserves2560 D1 reads and4 D1 writes per two-attem
 History projection worker passed5 history/9 audit/100 native tests before integration, including3000 hidden events, cursor and current-visibility/deletion isolation. Root review preserves current public semantics rather than accepting a fixed scan cap that rejects valid pages. Full64 remains open. No remote resource or Copilot action.
 
 Coordination correction: a worker's scoped regression commit finalized root's concurrently pending clean merge. Root verified both parents and all14 intended files, preserved the clean tree, and corrected only the unpublished merge title to0f4d7e8. Future handoffs must wait for worker mutation completion before root starts repository merge operations.
+
+PR196 CI ataeef928 exposed one outdated customer-handler double lacking prepareUploadAttempt (500 rather than200). The isolated test double now implements the production adapter interface; no runtime fallback was added. All69server test files/670tests pass after correction. Native110/110 product validation remains unchanged; the corrected revision still requires its own CI.

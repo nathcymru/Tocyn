@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": { "noEmit": true },
-  "include": ["local-tenant-fixture.ts", "operator-workflow.test.ts"]
+  "include": ["local-tenant-fixture.ts", "operator-workflow.test.ts", "operator-draft-retention.test.ts"]
 }

@@ -1,10 +1,12 @@
 import { ARTICLE_BODY_FORMATS, REPLY_ATTACHMENT_RULES, type ReplyCapabilityV1 } from '@luminatick/shared';
 
 /** Current dashboard reply behavior, without provider or recipient disclosure. */
-export function replyCapability(ticketId: string): ReplyCapabilityV1 {
+export function replyCapability(ticketId: string, collision?: ReplyCapabilityV1['collision'], internalMentions?: ReplyCapabilityV1['internalMentions']): ReplyCapabilityV1 {
   return {
     version: 1,
     ticketId,
+    ...(collision ? { collision } : {}),
+    ...(internalMentions ? { internalMentions } : {}),
     modes: [
       {
         visibility: 'public',

@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import * as OTPAuth from 'otpauth';
 import * as jose from 'jose';
 import { Headers as MiniflareHeaders, Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { build } from 'esbuild';
 import { createLocalRuntime } from '../src/local-app';
 import type { Env } from '../src/bindings';
 import { createSystemTenantScope } from '../src/auth/scope';
@@ -75,6 +76,13 @@ export type LocalTenantFixture = Readonly<{
   enableLocalBeta: () => void;
   /** Enables only the existing synthetic isolated-evidence gate for this disposable fixture. */
   enableIsolatedObservability: () => void;
+  /**
+   * Enables the existing combined ticket-admission policy only for a configured
+   * guarded local-beta fixture. Its authority and Durable Objects stay local.
+   */
+  enableCombinedTicketAdmission: () => Promise<void>;
+  /** Enables the real admission authority in API-only mode for capability-negation checks. */
+  enableApiTicketAdmission: () => Promise<void>;
   restartLocalRuntime: () => void;
   db: D1Database;
   r2: FixtureR2;
@@ -184,6 +192,60 @@ function localEnv(db: D1Database, bucket: R2Bucket): Env {
     DASHBOARD_URL: 'http://localhost:5173',
     CORS_ORIGINS: 'http://localhost:5174,http://localhost:5173',
   };
+}
+
+/** A complete, high-capacity synthetic owner authority for two local fixture tenants.
+ * It is intentionally created only by enableCombinedTicketAdmission, after the
+ * fixture's local-beta policy and invitations have been installed. */
+async function enableTicketAdmission(env: Env, db: D1Database, policy: 'api-ticket-mutations-v1' | 'ticket-mutations-v1'): Promise<void> {
+  assert.equal(env.LOCAL_BETA_ENABLED, 'true', 'Combined admission evidence requires the guarded local-beta fixture');
+  if (env.BUDGET_ADMISSION_POLICY === 'api-ticket-mutations-v1') {
+    assert.equal(policy, 'ticket-mutations-v1', 'The disposable authority supports only an API-to-combined transition');
+    env.BUDGET_ADMISSION_POLICY = policy;
+    return;
+  }
+  assert.equal(env.BUDGET_ADMISSION_POLICY, 'off', 'Admission authority may be seeded once per disposable fixture');
+  const deploymentId = 'fixture-combined-beta-deployment';
+  const policyId = 'fixture-combined-beta-policy';
+  const authorityRevision = 1;
+  const policyRevision = 1;
+  const dimensions = ['workerRequests', 'd1RowsRead', 'd1RowsWritten', 'r2ClassBOperations',
+    'doRequests', 'doRowsRead', 'doRowsWritten', 'logEvents'] as const;
+  const limitFor = (dimension: typeof dimensions[number]) => dimension === 'logEvents' ? 200_000_000 : 10_000_000;
+  const ownerPolicy = {
+    schemaVersion: 1,
+    policyId,
+    revision: policyRevision,
+    deploymentId,
+    mode: 'conservative',
+    catalogueVersion: 'fixture-combined-beta-catalogue',
+    maxGrantLifetimeMs: 60_000,
+    budgets: dimensions.map(dimension => ({
+      dimension,
+      allocationId: `fixture-combined-${dimension}`,
+      window: { kind: 'interval', id: 'fixture-combined-window', startsAt: Date.now() - 1_000, endsAt: Date.now() + 60_000 },
+      limit: limitFor(dimension),
+      recoveryPercent: 20,
+      provenance: 'owner-allocation',
+    })),
+  };
+  const restrictions = (tenantId: Tenant) => JSON.stringify({
+    schemaVersion: 1, tenantId, ownerPolicyId: policyId, ownerPolicyRevision: policyRevision,
+    revision: 1, mode: 'conservative', limits: Object.fromEntries(dimensions.map(dimension => [dimension, limitFor(dimension)])), disabledFeatures: [],
+  });
+  await db.batch([
+    db.prepare(`INSERT INTO budget_deployment_authority (deployment_id,authority_revision,state,updated_at)
+      VALUES (?,?,'active',?)`).bind(deploymentId, authorityRevision, Date.now()),
+    db.prepare(`INSERT INTO budget_owner_policies
+      (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
+      VALUES (?,?,?,?,?,?,?,?)`).bind(deploymentId, policyId, policyRevision, authorityRevision,
+      'fixture-combined-beta-coordinator', 64, 60_000, JSON.stringify(ownerPolicy)),
+    ...(['fixture-tenant-a', 'fixture-tenant-b'] as const).map((tenantId, index) => db.prepare(`INSERT INTO budget_tenant_allocations
+      (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
+      VALUES (?,?,?,?,?,?,?,'active')`).bind(deploymentId, tenantId, policyId, policyRevision, authorityRevision,
+      `fixture-combined-namespace-${index}`, restrictions(tenantId))),
+  ]);
+  env.BUDGET_ADMISSION_POLICY = policy;
 }
 
 async function applyMigrations(db: D1Database): Promise<void> {
@@ -332,12 +394,20 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
   let miniflare: Miniflare | undefined;
 
   try {
+    const durableObjectBundle = await build({
+      entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')],
+      bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false,
+    });
     miniflare = new Miniflare(convertV4MiniflareOptions({ workers: [{
       name: fixtureMarker,
       modules: true,
-      script: 'export default { fetch() { return new Response("fixture"); } }',
+      compatibilityDate: '2024-04-03',
+      compatibilityFlags: ['nodejs_compat'],
+      script: durableObjectBundle.outputFiles[0].text,
       d1Databases: { DB: 'e2d1b2a2-b2f8-42f4-82f7-0c58f5371e58' },
       r2Buckets: ['ATTACHMENTS_BUCKET'],
+      durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' },
+      unsafeEphemeralDurableObjects: true,
     }] }));
     const db = await miniflare.getD1Database('DB');
     const rawBucket = await miniflare.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
@@ -357,7 +427,10 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
         },
       }),
     } as unknown as DurableObjectNamespace;
-    const env: Env = { ...localEnv(db, r2.bucket), NOTIFICATION_DO: notificationDo };
+    const budgetCoordinator = await miniflare.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace;
+    const budgetGrantHolder = await miniflare.getDurableObjectNamespace('BUDGET_GRANT_HOLDER_DO') as unknown as DurableObjectNamespace;
+    const env: Env = { ...localEnv(db, r2.bucket), NOTIFICATION_DO: notificationDo,
+      BUDGET_COORDINATOR_DO: budgetCoordinator, BUDGET_GRANT_HOLDER_DO: budgetGrantHolder };
     const privatePrincipals = generatedPrincipals();
     let localRuntime = createLocalRuntime();
     const requestIp = `fixture-run-${++fixtureRun}`;
@@ -390,6 +463,8 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
     const fixture: LocalTenantFixture = Object.freeze({
       enableLocalBeta: () => { env.LOCAL_BETA_ENABLED = 'true'; },
       enableIsolatedObservability: () => { env.OBSERVABILITY_MODE = 'isolated-evidence'; },
+      enableCombinedTicketAdmission: () => enableTicketAdmission(env, db, 'ticket-mutations-v1'),
+      enableApiTicketAdmission: () => enableTicketAdmission(env, db, 'api-ticket-mutations-v1'),
       restartLocalRuntime: () => { localRuntime = createLocalRuntime(); },
       principals: Object.freeze(Object.fromEntries(principalNames.map(name => [name, publicPrincipal(name, privatePrincipals[name])])) as Record<PrincipalName, FixturePrincipal>),
       db,
@@ -429,10 +504,10 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
       createAgentSession: async (tenantId, mfaVerified = true) => {
         const id = `fixture-agent-${crypto.randomUUID()}`;
         const email = `${id}@example.test`;
-        await db.prepare('INSERT INTO users (tenant_id, id, email, full_name, role, mfa_enabled) VALUES (?, ?, ?, ?, ?, ?)')
-          .bind(tenantId, id, email, 'Synthetic route agent', 'agent', 1).run();
+        await db.prepare('INSERT INTO users (tenant_id, id, email, full_name, role, mfa_enabled, session_version) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .bind(tenantId, id, email, 'Synthetic route agent', 'agent', 1, 1).run();
         const token = await new AuthService().generateToken({
-          id, email, full_name: 'Synthetic route agent', role: 'agent', tenant_id: tenantId, mfa_enabled: true,
+          id, email, full_name: 'Synthetic route agent', role: 'agent', tenant_id: tenantId, mfa_enabled: true, session_version: 1,
         } as any, env.JWT_SECRET, mfaVerified);
         return Object.freeze({ id, token });
       },

@@ -1,7 +1,18 @@
 import { Env } from '../bindings';
-import { UserAuthResolver } from '../auth/user-auth-resolver';
+import { UserAuthResolver, type UserAuthResolution } from '../auth/user-auth-resolver';
 import { createResourceOperationEmitter } from '../observability/resource-operation';
+import { authorizeNotificationTicket } from '../repositories/notification-ticket-access.repository';
 import { MAX_NOTIFICATION_CONNECTIONS } from './notification-limits';
+import {
+  COLLABORATION_MAX_ACTOR_ID_LENGTH,
+  COLLABORATION_MAX_ACTOR_NAME_LENGTH,
+  COLLABORATION_MAX_TICKET_ID_LENGTH,
+  COLLABORATION_TYPING_EVENT,
+  COLLABORATION_TYPING_MIN_EMIT_INTERVAL_MS,
+  COLLABORATION_TYPING_PROTOCOL_VERSION,
+  COLLABORATION_TYPING_TTL_MS,
+  createCollaborationTypingPayload,
+} from '@luminatick/shared';
 
 interface SessionAttachment {
   connectionId: string;
@@ -16,6 +27,9 @@ interface SessionAttachment {
 
 /** Revalidate before delivery and every 30s within the supported registry bound; legacy overcapacity denies delivery. */
 export class NotificationDO {
+  /** Transient only: hibernation and reconnects intentionally discard typing state. */
+  private readonly typingUpdates = new Map<WebSocket, Map<string, number>>();
+
   constructor(public state: DurableObjectState, private env: Env) {}
 
   private belongsToThisObject(session: SessionAttachment | null): session is SessionAttachment {
@@ -23,27 +37,36 @@ export class NotificationDO {
       this.state.id.equals(this.env.NOTIFICATION_DO.idFromName(`tenant:${session.tenantId}`));
   }
 
-  private async authorized(session: SessionAttachment | null): Promise<boolean> {
+  private async currentStaff(session: SessionAttachment | null): Promise<UserAuthResolution | null> {
     try {
       if (this.belongsToThisObject(session) && Number.isSafeInteger(session.expiresAt) && session.expiresAt * 1000 > Date.now() &&
           Number.isSafeInteger(session.version) && session.version >= 0 && ['agent', 'admin'].includes(session.role)) {
         // Each revalidation is an independently capped #159 diagnostic composition.
         const user = await UserAuthResolver.fromEnvironment(this.env, createResourceOperationEmitter(this.env))
           .resolveUserById(session.tenantId, session.userId);
-        return !!user && user.role === session.role && user.sessionVersion === session.version &&
-          session.expiresAt * 1000 > Date.now();
+        if (user && user.tenantId === session.tenantId && user.userId === session.userId &&
+          user.role === session.role && user.sessionVersion === session.version && session.expiresAt * 1000 > Date.now()) return user;
       }
     } catch { /* Database failures deny delivery, including after hibernation. */ }
-    return false;
+    return null;
   }
 
-  private async active(ws: WebSocket, closeInvalid = true): Promise<boolean> {
-    if (ws.readyState !== WebSocket.OPEN) return false;
-    if (await this.authorized(ws.deserializeAttachment() as SessionAttachment | null)) return true;
+  private async authorized(session: SessionAttachment | null): Promise<boolean> {
+    return !!await this.currentStaff(session);
+  }
+
+  private async activeStaff(ws: WebSocket, closeInvalid = true): Promise<UserAuthResolution | null> {
+    if (ws.readyState !== WebSocket.OPEN) return null;
+    const user = await this.currentStaff(ws.deserializeAttachment() as SessionAttachment | null);
+    if (user) return user;
     if (closeInvalid) {
       try { ws.close(1008, 'Session no longer authorized'); } catch { /* Already closed. */ }
     }
-    return false;
+    return null;
+  }
+
+  private async active(ws: WebSocket, closeInvalid = true): Promise<boolean> {
+    return !!await this.activeStaff(ws, closeInvalid);
   }
 
   /** Never truncate recipients. Legacy overcapacity needs connections to drain before service resumes. */
@@ -58,6 +81,42 @@ export class NotificationDO {
 
   private presence(session: SessionAttachment) {
     return { connectionId: session.connectionId, userId: session.userId, name: session.name, location: session.location };
+  }
+
+  /** Current tenant, staff session, ticket and group membership are all required for this advisory signal. */
+  private async authorizedForTicket(session: SessionAttachment | null, user: UserAuthResolution, ticketId: string): Promise<boolean> {
+    if (!this.belongsToThisObject(session) || ticketId.length === 0 || ticketId.length > COLLABORATION_MAX_TICKET_ID_LENGTH) return false;
+    try {
+      return await authorizeNotificationTicket(this.env, session.tenantId, user, ticketId);
+    } catch { /* A failed current authorization check must never disclose a typing event. */ }
+    return false;
+  }
+
+  /** A small, transient per-socket map preserves ticket-specific throttling without retaining unbounded client keys. */
+  private typingAllowed(ws: WebSocket, ticketId: string, now: number): boolean {
+    const updates = this.typingUpdates.get(ws) ?? new Map<string, number>();
+    this.typingUpdates.set(ws, updates);
+    for (const [key, timestamp] of updates) if (now - timestamp >= COLLABORATION_TYPING_TTL_MS) updates.delete(key);
+    const previous = updates.get(ticketId);
+    if (previous !== undefined && now - previous < COLLABORATION_TYPING_MIN_EMIT_INTERVAL_MS) return false;
+    // Do not evict a live key: rotating ticket ids could otherwise bypass its one-second throttle.
+    // New keys wait for the short transient window to expire once this bounded map is full.
+    if (!updates.has(ticketId) && updates.size >= 16) return false;
+    updates.set(ticketId, now);
+    return true;
+  }
+
+  private async fanoutTyping(sender: WebSocket, ticketId: string, message: unknown): Promise<boolean> {
+    const sockets = this.boundedSockets();
+    if (!sockets) return false;
+    const results = await Promise.all(sockets.filter(ws => ws !== sender).map(async ws => {
+      const recipient = await this.activeStaff(ws);
+      if (!recipient) return true;
+      if (!await this.authorizedForTicket(ws.deserializeAttachment() as SessionAttachment | null, recipient, ticketId)) return true;
+      try { ws.send(JSON.stringify(message)); return true; }
+      catch { return false; }
+    }));
+    return results.every(Boolean);
   }
 
   private async scheduleAlarm() {
@@ -108,10 +167,27 @@ export class NotificationDO {
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
     if (!this.boundedSockets()) { ws.close(1013, 'Realtime capacity temporarily unavailable'); return; }
-    if (!await this.active(ws)) return;
     if (typeof message !== 'string' || message.length > 4096) { ws.close(1009, 'Message too large'); return; }
     try {
       const data = JSON.parse(message);
+      const staff = await this.activeStaff(ws);
+      if (!staff) return;
+      if (data.type === COLLABORATION_TYPING_EVENT) {
+        const payload = createCollaborationTypingPayload(data.payload?.ticketId, data.payload?.baseConversationRevision, data.payload?.active);
+        if (!payload || data.payload?.version !== COLLABORATION_TYPING_PROTOCOL_VERSION) return;
+        const now = Date.now();
+        if (!this.typingAllowed(ws, payload.ticketId, now)) return;
+        const session = ws.deserializeAttachment() as SessionAttachment | null;
+        if (!await this.authorizedForTicket(session, staff, payload.ticketId)) return;
+        const actorId = staff.userId.slice(0, COLLABORATION_MAX_ACTOR_ID_LENGTH);
+        const actorName = (staff.fullName?.trim() || 'Staff member').slice(0, COLLABORATION_MAX_ACTOR_NAME_LENGTH);
+        const event = { type: COLLABORATION_TYPING_EVENT, payload: {
+          version: COLLABORATION_TYPING_PROTOCOL_VERSION, ticketId: payload.ticketId,
+          actor: { id: actorId, name: actorName }, active: payload.active, expiresAt: now + COLLABORATION_TYPING_TTL_MS,
+        } };
+        if (!await this.fanoutTyping(ws, payload.ticketId, event)) ws.close(1013, 'Realtime delivery failed');
+        return;
+      }
       if (data.type !== 'presence.update') return;
       const session = ws.deserializeAttachment() as SessionAttachment;
       session.location = typeof data.payload?.location === 'string' ? data.payload.location.slice(0, 100) : null;
@@ -123,6 +199,7 @@ export class NotificationDO {
   }
 
   async webSocketClose(ws: WebSocket, _code: number, _reason: string, _wasClean: boolean) {
+    this.typingUpdates.delete(ws);
     // Complete the close handshake on compatibility dates before automatic close replies.
     try { ws.close(1000, 'Connection closed'); } catch { /* Already closed. */ }
     const session = ws.deserializeAttachment() as SessionAttachment | null;

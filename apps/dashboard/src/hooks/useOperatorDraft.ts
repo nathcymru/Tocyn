@@ -11,6 +11,7 @@ export type OperatorDraftValue = Readonly<{
   body: string;
   bodyFormat: ArticleBodyFormat;
   attachments: readonly OperatorDraftAttachment[];
+  mentionedUserIds?: readonly string[];
   baseConversationRevision: number;
 }>;
 type StoredDraft = OperatorDraftValue & OperatorDraftVersion;
@@ -18,18 +19,18 @@ type DraftStatus = 'idle' | 'loading' | 'unsaved' | 'saving' | 'saved' | 'error'
 type DraftState = OperatorDraftValue & { status: DraftStatus; error: string | null; version: OperatorDraftVersion | null };
 type CleanupResult = 'cleared' | 'conflict' | 'error';
 
-const EMPTY_DRAFT: OperatorDraftValue = Object.freeze({ mode: 'public', body: '', bodyFormat: 'markdown-v1', attachments: [], baseConversationRevision: 0 });
+const EMPTY_DRAFT: OperatorDraftValue = Object.freeze({ mode: 'public', body: '', bodyFormat: 'markdown-v1', attachments: [], mentionedUserIds: [], baseConversationRevision: 0 });
 function empty(status: DraftStatus = 'idle'): DraftState {
   return { ...EMPTY_DRAFT, status, error: null, version: null };
 }
 function withinBounds(value: OperatorDraftValue) {
-  return value.attachments.length <= 10 && new TextEncoder().encode(value.body).length <= 16_000;
+  return value.attachments.length <= 10 && (value.mentionedUserIds?.length ?? 0) <= 16 && new Set(value.mentionedUserIds ?? []).size === (value.mentionedUserIds?.length ?? 0) && new TextEncoder().encode(value.body).length <= 16_000;
 }
 function sameVersion(a: OperatorDraftVersion | null, b: OperatorDraftVersion) {
   return a?.generation === b.generation && a.revision === b.revision;
 }
 function toStored(value: StoredDraft): DraftState {
-  return { mode: value.mode, body: value.body, bodyFormat: articleBodyFormat(value.bodyFormat), attachments: [...value.attachments],
+  return { mode: value.mode, body: value.body, bodyFormat: articleBodyFormat(value.bodyFormat), attachments: [...value.attachments], mentionedUserIds: [...(value.mentionedUserIds ?? [])],
     baseConversationRevision: value.baseConversationRevision, status: 'saved', error: null,
     version: { generation: value.generation, revision: value.revision } };
 }
@@ -52,6 +53,7 @@ function createController(identity: string | null, ticketId: string | null) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let saving: Promise<void> | null = null;
   let deleting: Promise<CleanupResult> | null = null;
+  let rebasing = false;
   const listeners = new Set<() => void>();
   const path = `/workspace/drafts/${encodeURIComponent(ticketId ?? '')}`;
   const isCurrent = (requestEpoch = epoch) => {
@@ -69,12 +71,12 @@ function createController(identity: string | null, ticketId: string | null) {
   const cancelTimer = () => { if (timer !== null) clearTimeout(timer); timer = null; };
   const schedule = () => {
     cancelTimer();
-    if (!isCurrent() || !known || !dirty || restoring || saving || deleting || state.status === 'conflict' || !withinBounds(state)) return;
+    if (!isCurrent() || !known || !dirty || restoring || saving || deleting || rebasing || state.status === 'conflict' || !withinBounds(state)) return;
     timer = setTimeout(() => { timer = null; void saveNow(); }, debounceMs);
   };
 
   const restore = async () => {
-    if (!isCurrent() || restoring || saving || deleting || state.status === 'conflict') return;
+    if (!isCurrent() || restoring || saving || deleting || rebasing || state.status === 'conflict') return;
     const requestEpoch = epoch;
     restoring = true;
     known = false;
@@ -103,7 +105,7 @@ function createController(identity: string | null, ticketId: string | null) {
     cancelTimer();
     if (!isCurrent()) return Promise.resolve();
     if (saving) return saving;
-    if (!known || !dirty || restoring || deleting || state.status === 'conflict' || !withinBounds(state)) return Promise.resolve();
+    if (!known || !dirty || restoring || deleting || rebasing || state.status === 'conflict' || !withinBounds(state)) return Promise.resolve();
     const requestEpoch = epoch;
     const snapshot = state;
     const submittedEdit = edit;
@@ -113,7 +115,7 @@ function createController(identity: string | null, ticketId: string | null) {
       try {
         const saved = await dashboardApi.put<StoredDraft>(path, {
           expectedGeneration: snapshot.version?.generation ?? null, expectedRevision: snapshot.version?.revision ?? 0,
-          mode: snapshot.mode, body: snapshot.body, bodyFormat: snapshot.bodyFormat, attachments: snapshot.attachments,
+          mode: snapshot.mode, body: snapshot.body, bodyFormat: snapshot.bodyFormat, attachments: snapshot.attachments, mentionedUserIds: snapshot.mentionedUserIds ?? [],
         });
         if (!isCurrent(requestEpoch)) return;
         const restored = toStored(saved);
@@ -144,7 +146,7 @@ function createController(identity: string | null, ticketId: string | null) {
     const requestEpoch = epoch;
     const failed = () => state.status === 'error' || state.status === 'conflict';
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (!isCurrent(requestEpoch) || !known || restoring || deleting || state.status === 'conflict' || !withinBounds(state)) return false;
+      if (!isCurrent(requestEpoch) || !known || restoring || deleting || rebasing || state.status === 'conflict' || !withinBounds(state)) return false;
       if (!dirty && !saving) return true;
       await saveNow();
       if (!isCurrent(requestEpoch) || failed()) return false;
@@ -160,10 +162,40 @@ function createController(identity: string | null, ticketId: string | null) {
     cancelTimer();
     // A local edit cannot unlock a failed restore or an unresolved remote conflict.
     const blocked = state.status === 'conflict' || !known;
-    replace({ ...state, ...next, attachments: next.attachments.map(attachment => ({ ...attachment })),
+    replace({ ...state, ...next, attachments: next.attachments.map(attachment => ({ ...attachment })), mentionedUserIds: [...(next.mentionedUserIds ?? [])],
       status: blocked ? state.status : withinBounds(next) ? 'unsaved' : 'error',
       error: blocked ? state.error : withinBounds(next) ? null : 'Draft exceeds the server size limit.' });
     schedule();
+  };
+
+  /** Rebase is explicit: the caller supplies a freshly fetched full conversation revision. */
+  const rebase = async (expectedReviewedConversationRevision: number): Promise<boolean> => {
+    if (!isCurrent() || !known || dirty || restoring || saving || deleting || rebasing || !state.version
+      || !Number.isSafeInteger(expectedReviewedConversationRevision) || expectedReviewedConversationRevision < 0) return false;
+    const requestEpoch = epoch, snapshot = state, version = state.version, submittedEdit = edit;
+    rebasing = true;
+    replace({ ...state, status: 'saving', error: null });
+    try {
+      const saved = await dashboardApi.post<StoredDraft>(`${path}/rebase`, {
+        expectedGeneration: version.generation, expectedRevision: version.revision, expectedReviewedConversationRevision,
+      });
+      if (!isCurrent(requestEpoch)) return false;
+      const restored = toStored(saved);
+      // Never replace text edited while the explicit review request was in flight.
+      if (edit !== submittedEdit) {
+        dirty = true;
+        replace({ ...state, version: restored.version, baseConversationRevision: restored.baseConversationRevision,
+          status: withinBounds(state) ? 'unsaved' : 'error', error: withinBounds(state) ? null : 'Draft exceeds the server size limit.' });
+      } else { savedEdit = submittedEdit; dirty = false; replace(restored); }
+      return true;
+    } catch (error) {
+      if (isCurrent(requestEpoch)) {
+        if (denied(error)) clearDenied();
+        else replace({ ...state, status: error instanceof ApiError && error.status === 409 ? 'conflict' : 'error',
+          error: error instanceof ApiError && error.status === 409 ? 'Conversation changed before the draft could be rebased.' : 'Draft rebase failed. The draft is retained.' });
+      }
+      return false;
+    } finally { if (isCurrent(requestEpoch)) { rebasing = false; schedule(); } }
   };
 
   const remove = (requestedVersion?: OperatorDraftVersion): Promise<CleanupResult> => {
@@ -220,7 +252,7 @@ function createController(identity: string | null, ticketId: string | null) {
       return () => { active = false; epoch++; cancelTimer(); };
     },
     setDebounce: (value: number) => { debounceMs = value; },
-    update, saveNow, flushBeforeNavigation,
+    update, saveNow, rebase, flushBeforeNavigation,
     retrySave: () => { void saveNow(); },
     retryRestore: () => { if (!known) void restore(); },
     discard: () => remove(),
@@ -241,5 +273,5 @@ export function useOperatorDraft(ticketId: string | null, options: Readonly<{ de
   const debounceMs = Math.max(100, Math.min(2_000, options.debounceMs ?? 500));
   useLayoutEffect(() => { controller.setDebounce(debounceMs); }, [controller, debounceMs]);
   return { ...state, currentSnapshot: controller.currentSnapshot, update: controller.update, retrySave: controller.retrySave, retryRestore: controller.retryRestore,
-    discard: controller.discard, saveNow: controller.saveNow, flushBeforeNavigation: controller.flushBeforeNavigation, cleanupAfterConfirmedSend: controller.cleanupAfterConfirmedSend };
+    discard: controller.discard, saveNow: controller.saveNow, rebase: controller.rebase, flushBeforeNavigation: controller.flushBeforeNavigation, cleanupAfterConfirmedSend: controller.cleanupAfterConfirmedSend };
 }
