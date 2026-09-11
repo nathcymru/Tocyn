@@ -1,3 +1,4 @@
+import type { SessionBudgetAuthorityRepository } from './session-budget-authority.repository';
 import type { BudgetAuthorityRepository } from './budget-authority.repository';
 import type { ConversationActor } from '../types/conversation-audit';
 import { SqlKnowledgeRepository } from './knowledge.repository';
@@ -132,6 +133,7 @@ export interface FilterRepository {
 
 export interface Repositories {
   budgetAuthority: BudgetAuthorityRepository;
+  sessionBudgetAuthority: SessionBudgetAuthorityRepository;
   requestLimits: { consume(bucket: string, limit: number, windowMs: number, now?: number): Promise<boolean> };
   knowledge: SqlKnowledgeRepository;
   users: UserRepository;

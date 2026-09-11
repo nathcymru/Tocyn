@@ -1,3 +1,4 @@
+import { SessionBudgetAuthorityRepository } from './session-budget-authority.repository';
 import { BudgetAuthorityRepository } from './budget-authority.repository';
 import { TicketMutationReplayRepository } from './ticket-mutation-replay.repository';
 import type { OperatorWorkspaceSort } from '../types/operator-workspace';
@@ -1009,6 +1010,7 @@ export class SqlRequestLimitRepository {
 export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli, budgetBindingIdentity: object = db): Repositories {
   return {
     budgetAuthority: new BudgetAuthorityRepository(db, scope, budgetBindingIdentity),
+    sessionBudgetAuthority: new SessionBudgetAuthorityRepository(db, scope),
     requestLimits: new SqlRequestLimitRepository(scope, db),
     knowledge: new SqlKnowledgeRepository(scope, db),
     users: new SqlUserRepository(scope, db),
