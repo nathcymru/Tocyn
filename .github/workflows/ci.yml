@@ -68,6 +68,11 @@ jobs:
         run: |
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-sla-browser.json
           node --import tsx --test apps/server/scripts/ui-sla-browser.test.ts > "$RUNNER_TEMP/tocyn-sla-browser.tap"
+      - name: Verify composer browser acceptance
+        if: matrix.check == 'build'
+        run: |
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-composer-browser.json
+          node --import tsx --test apps/server/scripts/ui-composer-browser.test.ts > "$RUNNER_TEMP/tocyn-composer-browser.tap"
       - name: Verify support-state browser acceptance
         if: matrix.check == 'build'
         run: |
@@ -120,6 +125,7 @@ jobs:
             ${{ runner.temp }}/tocyn-operator-drafts.tap
             ${{ runner.temp }}/tocyn-support-state-browser.tap
             ${{ runner.temp }}/tocyn-sla-browser.tap
+            ${{ runner.temp }}/tocyn-composer-browser.tap
             ${{ runner.temp }}/tocyn-theme-scope.json
           retention-days: 3
           if-no-files-found: warn
