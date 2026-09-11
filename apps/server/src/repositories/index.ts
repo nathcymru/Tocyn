@@ -525,6 +525,13 @@ export class SqlArticleRepository implements ArticleRepository {
       .bind(this.scope.tenantId, ticketId).all<Article>().then(r => r.results);
   }
 
+  async listRecentByTicket(ticketId: string, limit: number): Promise<Article[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid recent article limit');
+    return this.db.prepare(`SELECT * FROM articles WHERE tenant_id = ? AND ticket_id = ?
+      ORDER BY created_at DESC, id DESC LIMIT ?`).bind(this.scope.tenantId, ticketId, limit)
+      .all<Article>().then(result => result.results);
+  }
+
   async get(id: string): Promise<Article | null> {
     const result = await this.db.prepare("SELECT * FROM articles WHERE tenant_id = ? AND id = ?")
       .bind(this.scope.tenantId, id)

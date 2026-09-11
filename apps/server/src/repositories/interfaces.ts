@@ -58,6 +58,8 @@ export interface TicketRepository {
 
 export interface ArticleRepository {
   listByTicket(ticketId: string): Promise<Article[]>;
+  /** Five newest rows, with a stable newest-first order for bounded AI advice. */
+  listRecentByTicket(ticketId: string, limit: number): Promise<Article[]>;
   updateQAState(id: string, type: string | null, chunkCount: number): Promise<void>;
   findByRawEmailId(rawEmailId: string): Promise<Article | null>;
   getRecentCustomerArticleCount(customerId: string, since: string): Promise<number>;

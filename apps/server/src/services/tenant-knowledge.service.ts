@@ -3,6 +3,10 @@ import { StatelessAiService } from './ai.service';
 import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { KnowledgeDoc, KnowledgeCategory } from '../repositories/knowledge.repository';
 import crypto from 'node:crypto';
+import { MAX_BGE_REQUEST_BYTES, MAX_STAFF_CONTEXT_BYTES, MAX_STAFF_HISTORY_BYTES, boundUntrustedAiText, truncateUtf8 } from './ai-input-bounds';
+
+const MAX_AI_SUGGESTION_MESSAGES = 5;
+const MAX_AI_SUGGESTION_BODY_BYTES = 8_192;
 
 export function stripTags(str: string): string {
   if (!str) return '';
@@ -210,14 +214,14 @@ export class TenantKnowledgeService {
     const ticket = await this.deps.repositories.tickets.get(ticketId);
     if (!ticket) return 'No context found.';
 
-    const articles = await this.deps.repositories.articles.listByTicket(ticketId);
+    // The composite tenant/ticket/created-at index backs this fixed newest-five
+    // read. It replaces the unbounded conversation read followed by slice().
+    const articles = await this.deps.repositories.articles.listRecentByTicket(ticketId, MAX_AI_SUGGESTION_MESSAGES);
     if (!articles || articles.length === 0) return 'No context found.';
-    
-    const limitedArticles = articles.slice(0, 5); // top 5 recent
 
     const hydratedMessages = await Promise.all(
-      limitedArticles.map(async (m: any) => {
-        let bodyText = await this.hydrator.hydrate(m.body, m.body_r2_key, 8192);
+      articles.map(async (m: any) => {
+        const bodyText = await this.hydrator.hydrate(m.body, m.body_r2_key, MAX_AI_SUGGESTION_BODY_BYTES, MAX_AI_SUGGESTION_BODY_BYTES);
         return {
           body: bodyText,
           sender_type: m.sender_type
@@ -225,6 +229,8 @@ export class TenantKnowledgeService {
       })
     );
 
+    // Repository order is newest-first; present the bounded recent window to
+    // the model chronologically so the final valid message is the newest one.
     const orderedMessages = hydratedMessages.reverse();
 
     const validMessages = orderedMessages.filter((m: any) => {
@@ -236,27 +242,28 @@ export class TenantKnowledgeService {
       return 'No text context found in recent messages to generate a suggestion.';
     }
 
-    const lastValidMessage = stripTags(validMessages[validMessages.length - 1].body.substring(0, 8000)).trim();
+    const lastValidMessage = truncateUtf8(stripTags(validMessages[validMessages.length - 1].body.substring(0, 8000)).trim(), MAX_BGE_REQUEST_BYTES);
 
-    const chatHistory = orderedMessages.map((m: any) => {
+    const chatHistory = truncateUtf8(orderedMessages.map((m: any) => {
       const cleanBody = stripTags(m.body).trim();
       return `${m.sender_type === 'customer' ? 'User' : 'Agent'}: ${cleanBody}`;
-    }).join('\n');
+    }).join('\n'), MAX_STAFF_HISTORY_BYTES);
 
     const relevantChunks = await this.searchWithFallback(lastValidMessage, 3);
     const hasSOP = relevantChunks.some((c: any) => c.tier === 'sop');
     const systemInstruction = hasSOP ?
       'IMPORTANT: The provided context contains Standard Operating Procedures (SOPs) meant for internal use only. DO NOT expose the raw SOP to the user. Instead, read the SOP and ask the user for the required information needed to fulfill it.' : undefined;
 
+    const boundedContext = truncateUtf8(relevantChunks.map((chunk) => chunk.content).join('\n\n'), MAX_STAFF_CONTEXT_BYTES);
     return await this.aiService.generateSuggestion({
       input: chatHistory,
-      context: relevantChunks.map((c) => c.content),
+      context: boundedContext ? [boundedContext] : [],
       systemInstruction
     });
   }
 
   async searchWithFallback(query: string, limit: number = 3, categoryId?: string): Promise<{ content: string, tier: string, score: number }[]> {
-    const embedding = await this.aiService.generateEmbeddings(query);
+    const embedding = await this.aiService.generateEmbeddings(boundUntrustedAiText(query, MAX_BGE_REQUEST_BYTES));
     const filter: any = {};
     if (categoryId) filter.category_id = categoryId;
 
@@ -293,7 +300,7 @@ export class WidgetKnowledgeReader {
   ) {}
 
   async search(query: string, limit: number = 3, categoryId?: string): Promise<{ content: string }[]> {
-    const embedding = await this.aiService.generateEmbeddings(query);
+    const embedding = await this.aiService.generateEmbeddings(boundUntrustedAiText(query, MAX_BGE_REQUEST_BYTES));
 
     // Widget search EXCLUDES sop and drafts. Only tier = 'answer'.
     const filter: any = { tier: 'answer', status: 'published' };

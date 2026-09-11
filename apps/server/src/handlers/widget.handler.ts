@@ -14,6 +14,7 @@ import { TicketMutationError } from '../services/ticket-mutation-replay.service'
 import { MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { admitConfiguredCustomerTicketMutation, customerTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { admitHttpAi } from '../budgets/http-ai-admission.service';
+import { MAX_WIDGET_CONTEXT_BYTES, MAX_WIDGET_HISTORY_BYTES, MAX_WIDGET_MESSAGE_BYTES, boundRecentHistory, boundUntrustedAiText, truncateUtf8 } from '../services/ai-input-bounds';
 
 const widgetAiFallback = "I'm having trouble connecting to my brain. Please try again later.";
 
@@ -101,8 +102,10 @@ widget.post('/chat', rateLimiter(5, 60000), widgetAuthMiddleware, tenantRateLimi
   const reader = new WidgetKnowledgeReader(deps, aiService);
   try {
     const contextResults = await reader.search(message, 3, category_id);
-    const context = contextResults.map(r => r.content).join('\n\n');
-    const response = await aiService.generateResponse(message, context, history || []);
+    const context = truncateUtf8(contextResults.map(r => r.content).join('\n\n'), MAX_WIDGET_CONTEXT_BYTES);
+    const response = await aiService.generateResponse(
+      boundUntrustedAiText(message, MAX_WIDGET_MESSAGE_BYTES), context, boundRecentHistory(history || [], MAX_WIDGET_HISTORY_BYTES),
+    );
     return c.json({ response });
   } catch {
     // Admission already charged this bounded attempt. Do not retry embedding or
