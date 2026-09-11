@@ -13,6 +13,10 @@ import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middle
 import { parseTocynTenantTheme, TOCYN_THEME_CONTRACT_VERSION, type TocynTenantTheme } from "@luminatick/shared/ui-theme";
 import { requestBounds } from '../middleware/request-bounds';
 import { MutationInputError, readMutationJson } from './mutation-request';
+import { readIdempotencyKey } from './mutation-request';
+import { AdminSettingsMutationError, AdminSettingsMutationService } from '../services/admin-settings-mutation.service';
+import { apiTicketBudgetCache, sessionTicketBudgetAdmission, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
+import { SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
 
 const settings = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -81,6 +85,29 @@ function isSensitiveKey(key: string): boolean {
   return key.endsWith('_TOKEN') || key.endsWith('_KEY') || key.endsWith('_SECRET') || key.includes('PASSWORD') || key.includes('_ACCESS_KEY_');
 }
 
+/** Optional legacy mode remains explicit; any configured malformed/enabled boundary fails closed. */
+function adminAdmission(c: any, capability: any): AdminSettingsMutationService | Response | null {
+  if (c.env.BUDGET_ADMISSION_POLICY === undefined) return null;
+  const mode = staffTicketAdmissionMode(c.env);
+  if (mode === 'disabled') return null;
+  const deps = c.get('tenantDeps') as TenantRequestDeps | undefined, payload = c.get('jwtPayload');
+  if (mode !== 'enabled' || !c.env.BUDGET_COORDINATOR_DO || !deps || !payload || payload.sub !== deps.scope.actorId || payload.tenant_id !== deps.scope.tenantId
+    || (payload.role !== 'admin' && payload.role !== 'agent') || payload.mfa_verified !== true || !Number.isSafeInteger(payload.session_version) || !Number.isSafeInteger(payload.exp)) {
+    return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  }
+  const credential: SessionBudgetCredential = { tenantId: deps.scope.tenantId, actorId: payload.sub, role: payload.role,
+    sessionVersion: payload.session_version, expiresAt: payload.exp, mfaVerified: true };
+  return new AdminSettingsMutationService(deps.database, deps.scope, credential, { service: sessionTicketBudgetAdmission,
+    repository: deps.repositories.budgetAuthority, namespace: c.env.BUDGET_COORDINATOR_DO, now: () => c.env.localNow?.() ?? Date.now(),
+    settle: (authority, outcome, now) => apiTicketBudgetCache.settleOperation(authority, outcome, now) });
+}
+
+async function admitRead(c: any, operation: 'dashboard.settings.read' | 'dashboard.settings.theme.read', capability: any): Promise<Response | null> {
+  const admission = adminAdmission(c, capability); if (admission instanceof Response) return admission; if (!admission) return null;
+  try { await admission.read(operation, capability); return null; }
+  catch (error) { if (error instanceof AdminSettingsMutationError) return c.json({ code: error.code, error: error.message }, error.status); throw error; }
+}
+
 /**
  * GET /api/settings/usage
  * Fetch usage stats from Cloudflare GraphQL Analytics API
@@ -99,8 +126,10 @@ settings.get("/usage", roleGuard(["admin"]), permissionGuard("usage"), async (c)
 });
 
 /** Branding is readable by authenticated operators; editing requires settings capability. */
-settings.get('/theme', roleGuard(["admin", "agent"]), async c => {
+settings.get('/theme', roleGuard(["admin", "agent"]), permissionGuard("general"), async c => {
   c.header('Cache-Control', 'private, no-store');
+  const revalidationFailure = await revalidatePermission(c, 'general'); if (revalidationFailure) return revalidationFailure;
+  const admissionFailure = await admitRead(c, 'dashboard.settings.theme.read', permissionWriteFence(c, 'general')); if (admissionFailure) return admissionFailure;
   const d = c.get('tenantDeps') as TenantRequestDeps;
   return c.json(parseTenantTheme(await d.repositories.config.get(THEME_CONFIG_KEY)));
 });
@@ -121,8 +150,15 @@ settings.put('/theme', roleGuard(["admin", "agent"]), permissionGuard("general")
   const revalidationFailure = await revalidatePermission(c, "general");
   if (revalidationFailure) return revalidationFailure;
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  await d.repositories.config.set(THEME_CONFIG_KEY, JSON.stringify(parsed), permissionWriteFence(c, "general"));
-  return c.json({ success: true, version: TOCYN_THEME_CONTRACT_VERSION });
+  const capability = permissionWriteFence(c, "general"), admission = adminAdmission(c, capability);
+  if (admission instanceof Response) return admission;
+  if (!admission) { await d.repositories.config.set(THEME_CONFIG_KEY, JSON.stringify(parsed), capability); return c.json({ success: true, version: TOCYN_THEME_CONTRACT_VERSION }); }
+  try {
+    const prepared = await admission.prepare('dashboard.settings.theme.update', capability, parsed, readIdempotencyKey(c));
+    const outcome = await admission.commit(prepared, (repo, commit) => repo.commitSettings(commit, { [THEME_CONFIG_KEY]: JSON.stringify(parsed) }, JSON.stringify({ success: true, version: TOCYN_THEME_CONTRACT_VERSION })));
+    if (outcome.replayed && outcome.keyed) c.header('Idempotency-Replayed', 'true');
+    return c.json(outcome.body);
+  } catch (error) { if (error instanceof MutationInputError) return c.json({ code: error.code, error: error.message }, error.status); if (error instanceof AdminSettingsMutationError) return c.json({ code: error.code, error: error.message }, error.status); throw error; }
 });
 
 /**
@@ -131,6 +167,8 @@ settings.put('/theme', roleGuard(["admin", "agent"]), permissionGuard("general")
  */
 settings.get("/", roleGuard(["admin", "agent"]), permissionGuard("general"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const revalidationFailure = await revalidatePermission(c, 'general'); if (revalidationFailure) return revalidationFailure;
+  const admissionFailure = await admitRead(c, 'dashboard.settings.read', permissionWriteFence(c, 'general')); if (admissionFailure) return admissionFailure;
   const settingsObj: Record<string, string> = {};
 
   const hasKey = !!c.env.APP_MASTER_KEY;
@@ -156,8 +194,9 @@ settings.get("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
  * PUT /api/settings
  * Update multiple tenant settings
  */
-settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), async (c) => {
-  const body = await c.req.json();
+settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), requestBounds(64 * 1024), async (c) => {
+  let body: unknown;
+  try { body = await readMutationJson(c); } catch (error) { if (error instanceof MutationInputError) return c.json({ error: error.message }, error.status); throw error; }
   const payloadResult = settingsPayloadSchema.safeParse(body);
   if (!payloadResult.success) {
     return c.json({ error: payloadResult.error.errors[0].message }, 400);
@@ -179,6 +218,7 @@ settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
   const revalidationFailure = await revalidatePermission(c, "general");
   if (revalidationFailure) return revalidationFailure;
 
+  const persisted: Record<string, string> = {};
   for (let [key, value] of Object.entries(updates)) {
     if (key === 'agent_settings_permissions') {
       return c.json({ error: "Cannot modify agent permissions via this endpoint" }, 403);
@@ -199,10 +239,17 @@ settings.put("/", roleGuard(["admin", "agent"]), permissionGuard("general"), asy
       value = await encryptString(value, c.env.APP_MASTER_KEY);
     }
 
-    await d.repositories.config.set(key, value, permissionWriteFence(c, "general"));
+    persisted[key] = value;
   }
-
-  return c.json({ success: true });
+  const capability = permissionWriteFence(c, 'general'), admission = adminAdmission(c, capability);
+  if (admission instanceof Response) return admission;
+  if (!admission) { for (const [key, value] of Object.entries(persisted)) await d.repositories.config.set(key, value, capability); return c.json({ success: true }); }
+  try {
+    const prepared = await admission.prepare('dashboard.settings.update', capability, updates, readIdempotencyKey(c));
+    const outcome = await admission.commit(prepared, (repo, commit) => repo.commitSettings(commit, persisted, JSON.stringify({ success: true })));
+    if (outcome.replayed && outcome.keyed) c.header('Idempotency-Replayed', 'true');
+    return c.json(outcome.body);
+  } catch (error) { if (error instanceof MutationInputError) return c.json({ code: error.code, error: error.message }, error.status); if (error instanceof AdminSettingsMutationError) return c.json({ code: error.code, error: error.message }, error.status); throw error; }
 });
 
 export default settings;
