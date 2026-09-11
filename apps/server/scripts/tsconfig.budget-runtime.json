@@ -22,6 +22,8 @@
     "operator-workspace-admission-runtime.test.ts",
     "operator-workspace-admission-runtime-entry.ts",
     "knowledge-read-admission-runtime-entry.ts",
-    "knowledge-read-admission-runtime.test.ts"
+    "knowledge-read-admission-runtime.test.ts",
+    "knowledge-delete-admission-runtime-entry.ts",
+    "knowledge-delete-admission-runtime.test.ts"
   ]
 }

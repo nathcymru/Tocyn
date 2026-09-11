@@ -7,6 +7,10 @@ import { KnowledgeIndexRepository, decodeCompleteKnowledgePrefix, KNOWLEDGE_INDE
 import { KNOWLEDGE_SOURCE_MAX_BYTES, validKnowledgeSourceText, KnowledgeSourceAdmissionError, type KnowledgeSourceAdmission, type KnowledgeSourceCommit } from '../budgets/knowledge-source-admission.service';
 import crypto from 'node:crypto';
 import { MAX_BGE_REQUEST_BYTES, MAX_STAFF_CONTEXT_BYTES, MAX_STAFF_HISTORY_BYTES, boundUntrustedAiText, truncateUtf8, truncateUtf8Tail } from './ai-input-bounds';
+import { KnowledgeDeleteRepository } from '../repositories/knowledge-delete.repository';
+import { admitKnowledgeDeleteStep, KnowledgeDeleteAdmissionError, settleKnowledgeDeleteStep,
+  type KnowledgeDeleteAdmission } from '../budgets/knowledge-delete-admission.service';
+import type { Env } from '../bindings';
 
 export function stripTags(str: string): string {
   if (!str) return '';
@@ -132,6 +136,7 @@ export class TenantKnowledgeService {
     const staged = await index.begin(documentId,filePath,tier,categoryId,sourceBytes,'document',commit?.fence,initialStatements);
     try {
       await commit?.authorizeCurrent();
+      if(!await index.authorizeSourceEffect(documentId,staged.version))throw new Error('Knowledge source capture was superseded');
       const bytes = typeof source === 'string' ? new TextEncoder().encode(source) : source;
       const fingerprint = crypto.createHash('sha256').update(bytes).digest('hex');
       const put = await this.deps.attachmentStorage.putAttachment(staged.filePath,source,{ httpMetadata:{contentType},
@@ -181,14 +186,18 @@ export class TenantKnowledgeService {
     if (!doc || !source) return 'missing';
     if (source.source_kind !== 'document' || source.state !== 'pending' || !await index.isCurrent(documentId, version)
       || doc.file_path !== source.file_path || doc.tier !== source.tier || (doc.category_id ?? null) !== source.category_id) return 'stale';
-    const chunk = await index.claim(documentId, version, chunkIndex);
-    if (!chunk) return 'missing';
+      const chunk = await index.claim(documentId, version, chunkIndex);
+      if (!chunk) return 'missing';
     try {
       const embedding = await this.aiService.generateEmbeddings(chunk.text);
       if (embedding.length !== 1_024) throw new Error('Unexpected embedding dimensions');
+      if(!await index.authorizeIndexEffect(documentId,version,chunkIndex)){
+        await index.uncertain(documentId,version,chunkIndex);
+        return 'stale';
+      }
       await this.deps.vectorStorage.upsert(chunk.vectorId, embedding, { source_id: documentId, type: 'document', text: chunk.text,
         category_id: source.category_id, tier: source.tier, status: doc.status, source_version: version, chunk_index: chunkIndex });
-      await index.indexed(documentId, version, chunkIndex);
+      if(!await index.indexed(documentId, version, chunkIndex))return 'stale';
       if (chunkIndex + 1 < source.chunk_count) return 'next';
       const complete = await index.completeIfFinished(documentId, version);
       if (complete) {
@@ -243,14 +252,18 @@ export class TenantKnowledgeService {
     const source = await index.current(articleId, version);
     if (!article || !source || source.source_kind !== 'article') return 'missing';
     if (source.state !== 'pending' || !await index.isCurrent(articleId, version) || article.qa_type !== source.tier) return 'stale';
-    const chunk = await index.claim(articleId, version, chunkIndex);
+      const chunk = await index.claim(articleId, version, chunkIndex);
     if (!chunk) return 'missing';
     try {
       const embedding = await this.aiService.generateEmbeddings(chunk.text);
       if (embedding.length !== 1_024) throw new Error('Unexpected embedding dimensions');
+      if(!await index.authorizeIndexEffect(articleId,version,chunkIndex)){
+        await index.uncertain(articleId,version,chunkIndex);
+        return 'stale';
+      }
       await this.deps.vectorStorage.upsert(chunk.vectorId, embedding, {
         source_id: articleId, type: 'qa', text: chunk.text, tier: source.tier, status: 'published', source_version: version, chunk_index: chunkIndex });
-      await index.indexed(articleId, version, chunkIndex);
+      if(!await index.indexed(articleId, version, chunkIndex))return 'stale';
       if (chunkIndex + 1 < source.chunk_count) return 'next';
       return await index.completeIfFinished(articleId, version) ? 'complete' : 'next';
     } catch (error) { await index.uncertain(articleId, version, chunkIndex); throw error; }
@@ -273,12 +286,58 @@ export class TenantKnowledgeService {
     if (await index.hasAny(id)) await index.withdrawAll(id);
   }
 
-  async deleteDocument(id: string): Promise<void> {
-    const doc = await this.getDocument(id);
-    if (!doc) return;
-    const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
-    if (await index.hasAny(id)) await index.withdrawAll(id);
-    await this.deps.repositories.knowledge.deleteDocument(id);
+  async deleteDocument(id: string, admission: KnowledgeDeleteAdmission = {status:'disabled'},
+    dispatch?: (token:string)=>Promise<void>): Promise<string|null> {
+    if(admission.status==='rejected')throw new KnowledgeDeleteAdmissionError('Knowledge deletion admission unavailable');
+    const commit=admission.status==='admitted'?admission.commit:undefined;
+    try{
+      const fence=await commit?.start();
+      const token=await new KnowledgeDeleteRepository(this.deps.database,this.deps.scope).revoke(id,fence);
+      let outcome:'committed'|'unknown'='committed';
+      if(token&&dispatch){
+        try{await commit?.authorizeCurrent();await dispatch(token);}catch{outcome='unknown';}
+      }
+      commit?.settle(outcome);
+      return token;
+    }catch(error){commit?.settle('unknown');if(commit&&!(error instanceof KnowledgeDeleteAdmissionError))
+      throw new KnowledgeDeleteAdmissionError('Knowledge deletion admission unavailable');throw error;}
+  }
+
+  /** One separately admitted cleanup turn performs at most one provider effect
+   * or one bounded D1 finalization mutation. Unknown effects retain ownership. */
+  async runKnowledgeDeleteStep(input:{env:Env;documentId:string;deleteToken:string;purpose:'new-work'|'recovery';now?:()=>number}):
+    Promise<'next'|'complete'|'blocked'> {
+    const now=input.now??Date.now;
+    const admitted=await admitKnowledgeDeleteStep({env:input.env,deps:this.deps,documentId:input.documentId,
+      deleteToken:input.deleteToken,purpose:input.purpose,now});
+    if(admitted.status!=='admitted')return 'blocked';
+    const repository=new KnowledgeDeleteRepository(this.deps.database,this.deps.scope),authority=admitted.authority;
+    let claimed:import('../repositories/knowledge-delete.repository').KnowledgeDeleteWork|null=null;
+    try{
+      const work=claimed=await repository.claimNext(input.documentId,input.deleteToken,authority);
+      if(!work){settleKnowledgeDeleteStep(authority,'committed',now);
+        return await repository.nextContinuation(input.documentId,input.deleteToken)?'blocked':'complete';}
+      if(work.itemKind==='finalize'){
+        const outcome=await repository.finalizeOne(input.documentId,input.deleteToken,work,authority);
+        if(outcome==='stale')throw new Error('Knowledge deletion finalization lost ownership');
+        settleKnowledgeDeleteStep(authority,'committed',now);return outcome==='complete'?'complete':'next';
+      }
+      if(!await repository.authorizeEffect(input.documentId,input.deleteToken,work,authority))throw new Error('Knowledge deletion effect authority changed');
+      const payload=JSON.parse(work.payload) as {path?:unknown;ids?:unknown};
+      if(work.itemKind==='r2_source'){
+        if(typeof payload.path!=='string'||!payload.path)throw new Error('Knowledge deletion source path unavailable');
+        await this.deps.attachmentStorage.deleteAttachment(payload.path);
+      }else{
+        if(!Array.isArray(payload.ids)||payload.ids.length<1||payload.ids.length>100||payload.ids.some(id=>typeof id!=='string'||!id))
+          throw new Error('Knowledge deletion vector manifest unavailable');
+        await this.deps.vectorStorage.deleteByIds(payload.ids as string[]);
+      }
+      if(!await repository.completeWork(input.documentId,input.deleteToken,work,authority))throw new Error('Knowledge deletion completion result unavailable');
+      settleKnowledgeDeleteStep(authority,'committed',now);return 'next';
+    }catch{
+      if(claimed)await repository.uncertain(input.documentId,input.deleteToken,claimed);
+      settleKnowledgeDeleteStep(authority,'unknown',now);return 'blocked';
+    }
   }
 
   async markArticleAsQA(articleId: string, type: 'answer' | 'sop' | null, admission?: KnowledgeSourceAdmission): Promise<void> {

@@ -10,10 +10,12 @@ import { admitKnowledgeCleanupBatch, admitKnowledgeIndexChunk, admitKnowledgeMan
 
 export type VectorizeJob = {
   tenantId: string;
-  action: 'create' | 'update' | 'qa_mark' | 'prepare' | 'index' | 'qa_index' | 'cleanup';
+  action: 'create' | 'update' | 'qa_mark' | 'prepare' | 'index' | 'qa_index' | 'cleanup' | 'delete_cleanup';
   documentId: string;
   qaType?: 'answer' | 'sop' | null;
   version?: number;
+  deleteToken?: string;
+  purpose?: 'new-work'|'recovery';
 };
 
 function validWorkflowIdentity(value: unknown): value is string {
@@ -24,22 +26,28 @@ function validWorkflowIdentity(value: unknown): value is string {
 export class VectorizeWorkflow extends WorkflowEntrypoint<Env, VectorizeJob> {
   async run(event: WorkflowEvent<VectorizeJob>, step: WorkflowStep) {
     if (this.env.LOCAL_BETA_ENABLED !== undefined && this.env.LOCAL_BETA_ENABLED !== 'false') throw new Error('Vector workflows are disabled in the local beta');
-    const { tenantId, action, documentId, version } = event.payload;
+    const { tenantId, action, documentId, version, deleteToken, purpose } = event.payload;
     if (!validWorkflowIdentity(tenantId) || !validWorkflowIdentity(documentId)) {
       throw new Error('Scoped workflow identity required; legacy jobs require an explicit migration');
     }
-    if (!['create', 'update', 'qa_mark', 'prepare', 'index', 'qa_index', 'cleanup'].includes(action)) throw new Error('Invalid workflow action');
-    if (action !== 'prepare' && action !== 'index' && action !== 'qa_index' && action !== 'cleanup') {
+    if (!['create', 'update', 'qa_mark', 'prepare', 'index', 'qa_index', 'cleanup','delete_cleanup'].includes(action)) throw new Error('Invalid workflow action');
+    if (action !== 'prepare' && action !== 'index' && action !== 'qa_index' && action !== 'cleanup' && action !== 'delete_cleanup') {
       // The binding remains deployed for job delivery, but legacy jobs do not
       // carry a bounded source/version or an admitted provider envelope.
       throw new Error('Legacy vector jobs require a durable manifest migration');
     }
-    const scope = createSystemTenantScope({ tenantId, actor: 'vectorize-workflow' });
+    if(action==='delete_cleanup'&&(!validWorkflowIdentity(deleteToken)||!['new-work','recovery'].includes(purpose??'')))
+      throw new Error('Knowledge deletion workflow ownership required');
+    const scope = createSystemTenantScope({ tenantId, actor: action==='delete_cleanup'?'knowledge-delete':'vectorize-workflow' });
     const deps = createTenantRequestDeps(scope, this.env);
     const service = new TenantKnowledgeService(deps, new StatelessAiService(this.env.AI, deps.emitResourceOperation));
     // This records the Workflow step invocation. A cached Workflow step can complete
     // without running this callback, so its latency is not callback execution time.
     await measureResourceOperation({ resource: 'workflow', operation: 'run', emit: deps.emitResourceOperation, execute: () => step.do('apply_scoped_vectorization', async () => {
+      if(action==='delete_cleanup'){
+        await service.runKnowledgeDeleteStep({env:this.env,documentId,deleteToken:deleteToken!,purpose:purpose!});
+        return;
+      }
       if (action === 'prepare' || action === 'index' || action === 'qa_index' || action === 'cleanup') {
         const index = new KnowledgeIndexRepository(deps.database, scope);
         if (action === 'cleanup') {

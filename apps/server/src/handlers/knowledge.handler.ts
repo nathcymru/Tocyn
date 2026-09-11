@@ -13,6 +13,7 @@ import { ticketMutationAdmissionMode } from '../middleware/budget-admission.midd
 import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_MAX_BYTES, KnowledgeSourceAdmissionError, type KnowledgeSourceAdmission } from '../budgets/knowledge-source-admission.service';
 import { admitKnowledgeRead, type KnowledgeReadAdmission, type KnowledgeReadOperation } from '../budgets/knowledge-read-admission.service';
 import { KnowledgeReadFenceError, KnowledgeReadRepository } from '../repositories/knowledge-read.repository';
+import { admitKnowledgeDelete, KnowledgeDeleteAdmissionError, type KnowledgeDeleteAdmission } from '../budgets/knowledge-delete-admission.service';
 
 const staffSuggestionFallback = "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
 
@@ -29,13 +30,6 @@ async function dispatchPendingIndex(c: any, service: TenantKnowledgeService, doc
   if (!await service.reservePendingIndexDispatch(documentId, version)) return;
   try { await c.env.VECTORIZE_WORKFLOW.create({ params: { tenantId: c.get('tenantDeps').scope.tenantId, action: preparation === null ? action : 'prepare', documentId, version } }); }
   catch { /* durable job remains pending; do not misreport source capture as indexed */ }
-}
-
-async function dispatchPendingDocumentCleanup(c: any, service: TenantKnowledgeService, documentId: string): Promise<void> {
-  if (ticketMutationAdmissionMode(c.env) !== 'combined' || !c.env.VECTORIZE_WORKFLOW) return;
-  if (!await service.reservePendingDocumentCleanupDispatch(documentId)) return;
-  try { await c.env.VECTORIZE_WORKFLOW.create({ params: { tenantId: c.get('tenantDeps').scope.tenantId, action: 'cleanup', documentId } }); }
-  catch { /* the durable cleanup target remains recoverable */ }
 }
 
 async function admitSourceOrResponse(c: any, sourceBytes: number, sourceKind: 'document'|'article'|'qa'): Promise<Response | KnowledgeSourceAdmission> {
@@ -57,8 +51,28 @@ async function admitReadOrResponse(c:any,operation:KnowledgeReadOperation,docume
     :c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
 }
 
+async function admitDeleteOrResponse(c:any,documentId:string):Promise<Response|Exclude<KnowledgeDeleteAdmission,{status:'rejected'}>>{
+  const outcome=await admitKnowledgeDelete({env:c.env,deps:c.get('tenantDeps'),payload:c.get('jwtPayload'),documentId,
+    now:()=>c.env.localNow?.()??Date.now()});
+  if(outcome.status==='admitted'||outcome.status==='disabled')return outcome;
+  return outcome.reason==='exhausted'
+    ?c.json({code:'budget_exhausted',error:'Configured budget capacity is exhausted'},429)
+    :c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
+}
+
+async function deleteKnowledgeDocument(c:any,id:string):Promise<Response>{
+  const admission=await admitDeleteOrResponse(c,id);if(admission instanceof Response)return admission;
+  const deps=c.get('tenantDeps') as TenantRequestDeps;
+  const service=new TenantKnowledgeService(deps,new StatelessAiService(c.env.AI,deps.emitResourceOperation));
+  await service.deleteDocument(id,admission,async token=>{
+    if(ticketMutationAdmissionMode(c.env)!=='combined'||!c.env.VECTORIZE_WORKFLOW)return;
+    await c.env.VECTORIZE_WORKFLOW.create({params:{tenantId:deps.scope.tenantId,action:'delete_cleanup',documentId:id,deleteToken:token,purpose:'new-work'}});
+  });
+  return c.json({success:true});
+}
+
 knowledgeHandler.onError((error, c) => {
-  if (error instanceof KnowledgeSourceAdmissionError || error instanceof KnowledgeReadFenceError) {
+  if (error instanceof KnowledgeSourceAdmissionError || error instanceof KnowledgeReadFenceError || error instanceof KnowledgeDeleteAdmissionError) {
     return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   }
   if (error.message === 'Maximum tag stripping depth exceeded: possible malicious input') {
@@ -105,24 +119,12 @@ knowledgeHandler.get('/articles/:id', async (c) => {
 });
 
 knowledgeHandler.delete('/articles/:id', async (c) => {
-  const id = c.req.param('id');
-  const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
-  const service = new TenantKnowledgeService(deps, aiService);
-  await service.deleteDocument(id);
-  await dispatchPendingDocumentCleanup(c, service, id);
-  return c.json({ success: true });
+  return deleteKnowledgeDocument(c,c.req.param('id'));
 });
 
 // For backward compatibility or if used by other components
 knowledgeHandler.delete('/:id', async (c) => {
-  const id = c.req.param('id');
-  const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
-  const service = new TenantKnowledgeService(deps, aiService);
-  await service.deleteDocument(id);
-  await dispatchPendingDocumentCleanup(c, service, id);
-  return c.json({ success: true });
+  return deleteKnowledgeDocument(c,c.req.param('id'));
 });
 
 knowledgeHandler.post('/articles/:id/qa', async (c) => {

@@ -280,7 +280,7 @@ test('knowledge source upload publishes one immutable source within its whole-at
       .uploadAndProcess('Admitted','source.txt',new TextEncoder().encode('source bytes'),'text/plain',undefined,'answer',admission);
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful upload attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
-    assert.equal(attemptRows,24,'upload native D1 metadata changed');
+    assert.equal(attemptRows,26,'upload native D1 metadata changed');
     assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document.d1RowsWritten ?? 0),
       `upload wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document.d1RowsWritten}`);
     const document=await deps.repositories.knowledge.getDocument(id); assert.ok(document); assert.match(document.file_path,/\/versions\/1$/);
@@ -305,7 +305,7 @@ test('article update publishes within its whole-attempt D1 write envelope',async
       .updateArticle('updated-doc','Updated','source bytes',null,'answer',admission);
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful article update attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
-    assert.equal(attemptRows,23,'article update native D1 metadata changed');
+    assert.equal(attemptRows,25,'article update native D1 metadata changed');
     assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPES.article.d1RowsWritten ?? 0),
       `article update wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPES.article.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT title,status FROM knowledge_docs WHERE tenant_id='tenant-a' AND id='updated-doc'").first(),
@@ -331,7 +331,7 @@ test('QA staging carries the admitted fence through the retention claim, R2 sour
       .markArticleAsQA('qa-article','answer',admission);
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful QA attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
-    assert.equal(attemptRows,21,'QA native D1 metadata changed');
+    assert.equal(attemptRows,23,'QA native D1 metadata changed');
     assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPES.qa.d1RowsWritten ?? 0),
       `QA staging wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPES.qa.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT qa_type,chunk_count FROM articles WHERE tenant_id='tenant-a' AND id='qa-article'").first(),{qa_type:'answer',chunk_count:0});
@@ -358,7 +358,7 @@ test('failed source recovery remains within the whole-attempt D1 write envelope'
       .uploadAndProcess('Failed','source.txt',new TextEncoder().encode('source bytes'),'text/plain',undefined,'answer',admission));
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for failed source recovery attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
-    assert.equal(attemptRows,19,'failed source recovery native D1 metadata changed');
+    assert.equal(attemptRows,21,'failed source recovery native D1 metadata changed');
     assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document.d1RowsWritten ?? 0),
       `failed source recovery wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT v.state,j.state AS job_state FROM knowledge_index_versions v JOIN knowledge_index_jobs j ON j.tenant_id=v.tenant_id AND j.document_id=v.document_id AND j.version=v.version WHERE v.tenant_id='tenant-a'").first(),
