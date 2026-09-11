@@ -2,7 +2,17 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 11 September 2026, 03:38 BST
+## Current state — 11 September 2026, 03:56 BST
+
+Accepted main `a30cb1769b14f3cfd13bee87acb67556e3160dbb` completes #159 via PR #179 at 02:48 UTC. Required checks, empty review threads and signed reviewed/CI/merge tree `586dfd771511ea0444d036e9259c8f8f1b93a84a` verified. Receipt 5628706423 records the review-only owner bypass and Project Done/100%, actual completion 11 September, remaining allowance zero, unchanged baseline and −50 working-day variance. No Copilot reviews; production telemetry remains #42.
+
+#64 pure grant-state prerequisite is active in `/private/tmp/tocyn-beta2-64`, branch `codex/64-budget-coordinator-foundation`; Terra/high owns only pure state/tests. #136 draft #177 now has Unicode-safe explicit cursor pagination, CORS exposure, admin and ticket page discovery/retry, and current-state safety; a Luna/medium attempt was escalated to Terra/high for missing Unicode/CORS/race handling and ticket-consumer coverage. #73 draft #180 head `55f8b8f` fixes a reproduced narrow DST-fold overcount with actual UTC occurrence unions; 13 focused / 528 server tests passed before refresh. Full #73/#137/#140 remain incomplete.
+
+#66 draft #175 has real VoiceOver and strict-CSP/contrast evidence. Its remaining bundle gate is assigned to a focused Terra/high worker after medium-effort safe reductions remained above the unchanged limit. Do not substitute another gzip configuration or weaken behavior to pass the metric. Keyboard Escape command now succeeds; no owner approval is missing.
+
+This branch's recalculated candidate after #159/#162 acceptance is beta.2 22 December 2026 and expanded scope 28 December 2027. Published records still retain 18 January 2027 / 5 January 2028 until PR #181 is integrated and its issue/Project/Wiki publication read back. Last operational update 03:40 BST; next due 04:10 BST. Owner checkout, servers and historical worktrees remain preserved.
+
+## Historical state — 11 September 2026, 03:38 BST
 
 Accepted main `8ef397c716802a50d7ba1be835f438148eb2e4c0` completes #162 via PR #178: exact reviewed/CI/accepted tree `13cddcad421231078ced3edd15902e5e73658d5f`, valid GitHub signature, required checks and review-thread validation passed. Standing review-only owner bypass recorded in issue receipt 5628496190. Issue closed; Project Done/100%, actual completion 11 September, remaining allowance zero; baseline unchanged. Full beta.2 #140 remains incomplete.
 
