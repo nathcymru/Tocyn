@@ -29,6 +29,7 @@ type BrowserPolicyEvidence = Readonly<{
   consoleErrors: string[];
   expectedConsoleErrors: string[];
   unexpectedConsoleErrors: string[];
+  failedResponses: string[];
 }>;
 
 type RenderedContrast = Readonly<{
@@ -91,6 +92,7 @@ async function captureBrowserPolicyEvidence(page: Page): Promise<BrowserPolicyEv
   const consoleErrors: string[] = [];
   const expectedConsoleErrors: string[] = [];
   const unexpectedConsoleErrors: string[] = [];
+  const failedResponses: string[] = [];
   await page.exposeBinding('__tocynRecordCspViolation', (_source, violation: unknown) => {
     cspViolations.push(JSON.stringify(violation));
   });
@@ -102,22 +104,28 @@ async function captureBrowserPolicyEvidence(page: Page): Promise<BrowserPolicyEv
         originalPolicy: event.originalPolicy,
       });
     });`);
-  const recordConsoleError = (message: string) => {
+  const recordConsoleError = (message: string, location = '') => {
     const sanitized = message.replace(/([?&]token=)[^'\s]+/g, '$1<redacted>');
-    consoleErrors.push(sanitized);
+    consoleErrors.push(`${sanitized}${location}`);
     if (sanitized === 'WebSocket error: Event' || sanitized.includes('WebSocket connection to') && sanitized.includes('Unexpected response code: 426')) {
       expectedConsoleErrors.push(sanitized);
     } else if (sanitized === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') {
       expectedConsoleErrors.push(sanitized);
     } else {
-      unexpectedConsoleErrors.push(sanitized);
+      unexpectedConsoleErrors.push(`${sanitized}${location}`);
     }
   };
   page.on('console', message => {
-    if (message.type() === 'error') recordConsoleError(message.text());
+    if (message.type() === 'error') {
+      const location = message.location();
+      recordConsoleError(message.text(), location.url ? ` [${location.url}:${location.lineNumber}]` : '');
+    }
+  });
+  page.on('response', response => {
+    if (response.status() >= 400) failedResponses.push(`${response.status()} ${response.request().method()} ${response.url()}`);
   });
   page.on('pageerror', error => recordConsoleError(error.message));
-  return { cspViolations, consoleErrors, expectedConsoleErrors, unexpectedConsoleErrors };
+  return { cspViolations, consoleErrors, expectedConsoleErrors, unexpectedConsoleErrors, failedResponses };
 }
 
 async function digestDirectory(directory: string): Promise<string> {
@@ -232,13 +240,21 @@ async function initializeBrowserLocalBeta(fixture: LocalTenantFixture): Promise<
   });
 }
 
+/** The dashboard now reads SLA alongside draft state; make that real route available
+ * before the guarded workflow begins instead of classifying its legacy 404 as noise. */
+async function initializeFixtureTicketSla(fixture: LocalTenantFixture, token: string): Promise<void> {
+  const initialized = await fixture.request('/api/tickets/fixture-ticket/sla/initialize', { method: 'POST', token, body: {} });
+  assert.equal(initialized.status, 201, 'The authorized fixture precondition must initialize the legacy ticket SLA clock');
+}
+
 test('proves production dashboard draft restore, guarded navigation, and tenant scope against the disposable local Worker', async () => {
   await withTwoTenantFixture(async fixture => {
+    const sessionA = await operatorSession(fixture, 'operatorA');
+    await initializeFixtureTicketSla(fixture, sessionA.token);
     await initializeBrowserLocalBeta(fixture);
     const server = await startServer(fixture);
     const browser = await chromium.launch({ headless: true });
     try {
-      const sessionA = await operatorSession(fixture, 'operatorA');
       const created = await fixture.request('/api/tickets', {
         method: 'POST', token: sessionA.token,
         body: { subject: 'Synthetic browser navigation ticket', customer_email: fixture.principals.customerA.email, body: 'Synthetic navigation seed' },
@@ -424,6 +440,7 @@ test('proves operator theme first paint, persistence, recovery and tenant separa
   await withTwoTenantFixture(async fixture => {
     const sessionA = await operatorSession(fixture, 'operatorA');
     const sessionB = await operatorSession(fixture, 'operatorB');
+    await initializeFixtureTicketSla(fixture, sessionA.token);
     await fixture.db.prepare('INSERT OR REPLACE INTO tenant_config (tenant_id,key,value) VALUES (?,?,?)')
       .bind(fixture.principals.operatorA.tenantId, 'ui.theme.v1', JSON.stringify({ version: '1', light: {}, dark: { colorSurface: '#111827' } })).run();
     assert.equal((await fixture.request('/api/workspace/theme-preference', { method: 'PUT', token: sessionA.token, body: { expectedRevision: 0, mode: 'dark' } })).status, 200);
