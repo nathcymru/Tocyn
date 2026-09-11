@@ -1,8 +1,10 @@
+import { encodeCoordinatorState } from '../src/budgets/coordinator-storage';
 import { CANONICAL_MUTATION_ATTEMPT_D1_WRITES, CANONICAL_MUTATION_D1_WRITES } from '../src/budgets/canonical-mutation-envelope';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { SignJWT } from 'jose';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { build } from 'esbuild';
@@ -34,10 +36,11 @@ async function customerToken(secret: string, tenantId: string, email: string, se
     .sign(new TextEncoder().encode(secret));
 }
 
-async function applyMigrations(db: D1Database): Promise<void> {
+async function applyMigrations(db: D1Database, through?: string): Promise<void> {
   const directory = join(serverRoot, 'migrations');
   for (const file of readdirSync(directory).filter(file => file.endsWith('.sql')).sort()) {
     await db.batch(splitSql(readFileSync(join(directory, file), 'utf8')).map(statement => db.prepare(statement)));
+    if (file === through) break;
   }
 }
 
@@ -328,16 +331,18 @@ test('real local combined policy admits API, staff, portal and widget mutations 
 });
 
 async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1_000_000, d1RowsWritten: 100_000,
-  doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 }), extraTenants = 0) {
+  doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 }), extraTenants = 0, through?: string, restartable = false) {
   const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
-  const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-warm-proof', modules: true,
+  const persistencePath = restartable ? mkdtempSync(join(tmpdir(), 'tocyn-64-restart-')) : undefined;
+  const runtimeOptions = convertV4MiniflareOptions({ resourcePersistencePath: persistencePath, workers: [{ name: 'budget-warm-proof', modules: true,
     compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'], script: bundled.outputFiles[0].text,
     bindings: { BUDGET_ADMISSION_POLICY: 'api-ticket-mutations-v1', DISABLE_RATE_LIMIT: 'true' },
     d1Databases: { DB: 'budget-warm-d1' }, durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' },
-    unsafeEphemeralDurableObjects: true,
-  }] }));
+    unsafeEphemeralDurableObjects: !restartable,
+  }] });
+  let mf = new Miniflare(runtimeOptions);
   const db = await mf.getD1Database('DB');
-  await applyMigrations(db); await seed(db, extraTenants, owner);
+  await applyMigrations(db, through); await seed(db, extraTenants, owner);
   const control = async (value?: object) => (await (await mf.dispatchFetch('http://runtime.test/__budget-control',
     value ? { method: 'POST', body: JSON.stringify(value) } : undefined)).json()) as any;
   const initialNow = Date.now() + 1;
@@ -349,8 +354,15 @@ async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1
   const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
   const coordinator = namespace.get(namespace.idFromName('runtime-owner-coordinator')) as unknown as BudgetCoordinatorDO;
   const grants = async () => (await coordinator.inspectForTrustedRuntime()).tenantStates.flatMap(state => state.grants);
+  const coordinatorState = () => coordinator.inspectForTrustedRuntime();
   const count = async () => (await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant'").first<{ count: number }>())?.count;
-  return { mf, db, control, create, coordinator, namespace, grants, count, initialNow };
+  const restartCoordinator = async () => {
+    await mf.dispose();
+    mf = new Miniflare(runtimeOptions);
+    const restarted = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    return { coordinator: restarted.get(restarted.idFromName('runtime-owner-coordinator')) as unknown as BudgetCoordinatorDO };
+  };
+  return { get mf() { return mf; }, persistencePath, db, control, create, coordinator, namespace, grants, coordinatorState, count, initialNow, restartCoordinator };
 }
 
 // Synthetic reconstruction is test-only: production accepts the cache's sealed capability.
@@ -589,15 +601,100 @@ test('native identical concurrent closures are idempotent and conflicting termin
     const closures = await Promise.all([repository.close(sealed), repository.close(sealed)]);
     assert.ok(closures.every(Boolean)); assert.deepEqual(closures[0], closures[1]);
     assert.equal(await repository.close({ ...sealed, terminalEvidenceId: 'different-terminal' }), null);
+    assert.equal(await repository.close({ ...sealed, expiresAt: sealed.expiresAt + 1 }), null, 'closure retry must retain its original recovery horizon');
     assert.equal(await recovery.recover({ ...sealed, terminalEvidenceId: 'different-terminal' }, h.initialNow + 1), 'pending');
     assert.deepEqual((await h.grants()).find(item => item.reservationId === grant.reservationId)?.accounted, grant.accounted);
     assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled');
-    const accounted = (await h.grants()).find(item => item.reservationId === grant.reservationId)!.accounted;
+    const tenant = (await h.coordinatorState()).tenantStates.find(item => item.tenantId === sealed.tenantId)!;
+    assert.equal(tenant.grants.find(item => item.reservationId === grant.reservationId)?.compacted, true, 'certified closure releases only its detailed slot');
+    assert.deepEqual(tenant.closedCharges.find(charge => charge.dimension === 'workerRequests' && charge.purpose === 'new-work')?.units,
+      closures[0]!.uncertain.workerRequests, 'the closed allocation charge remains durable after detail compaction');
     const rejected = await h.coordinator.reconcileFromTrustedAuthority({ tenantId: sealed.tenantId, reservationId: sealed.reservationId,
       holderId: sealed.holderId, expectedPolicyId: sealed.policyId, expectedPolicyRevision: 1, expectedRestrictionRevision: 1,
       terminalEvidenceId: sealed.terminalEvidenceId, measured: {}, uncertain: {}, now: h.initialNow + 1 });
     assert.equal(rejected, 'rejected');
-    assert.deepEqual((await h.grants()).find(item => item.reservationId === grant.reservationId)?.accounted, accounted);
+    assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled', 'the exact durable completion fingerprint proves a lost coordinator response');
+  } finally { await h.mf.dispose(); }
+});
+
+test('native API recovery reclaims both purpose slots beyond maxReservations while retaining every charge', async () => {
+  const owner = policy({ workerRequests: 10_000, d1RowsRead: 10_000_000, d1RowsWritten: 1_000_000,
+    doRequests: 10_000, doRowsRead: 10_000, doRowsWritten: 10_000, logEvents: 1_000_000 });
+  for (const budget of owner.budgets) budget.window.endsAt += 600_000;
+  const h = await warmHarness(owner);
+  try {
+    await h.db.prepare('UPDATE budget_owner_policies SET max_reservations=2').run();
+    const first = await h.create('sustained-0'); assert.equal(first.status, 201); await first.body?.cancel();
+    for (let cycle = 1; cycle <= 3; cycle++) {
+      await h.control({ now: h.initialNow + cycle * 30_001 });
+      const next = await h.create(`sustained-${cycle}`); assert.equal(next.status, 201, `actual recovery cycle ${cycle}`); await next.body?.cancel();
+      const state = await h.coordinatorState();
+      const charges = state.tenantStates[0].closedCharges;
+      assert.equal(charges.find(row => row.dimension === 'workerRequests' && row.purpose === 'new-work')?.units, cycle * 2);
+      assert.equal(charges.find(row => row.dimension === 'workerRequests' && row.purpose === 'recovery')?.units, cycle * 2);
+      assert.equal((await h.control()).calls.reconcile, cycle, 'one automatic closure RPC per whole grant');
+    }
+    assert.equal(await h.count(), 4);
+  } finally { await h.mf.dispose(); }
+});
+
+test('native coordinator rejects a never-completed missing reservation with a syntactically valid closure certificate', async () => {
+  const h = await warmHarness();
+  try {
+    const response = await h.create('initialize-missing-proof'); assert.equal(response.status, 201); await response.body?.cancel();
+    const { sealed } = await sealedFixture(h);
+    const before = await h.coordinatorState();
+    const outcome = await h.coordinator.reconcileFromTrustedAuthority({ tenantId: sealed.tenantId, reservationId: 'never-reserved', holderId: sealed.holderId,
+      expectedPolicyId: sealed.policyId, expectedPolicyRevision: 1, expectedRestrictionRevision: 1, terminalEvidenceId: sealed.terminalEvidenceId,
+      measured: {}, uncertain: {}, now: h.initialNow + 1, certifiedClosure: { operationSetFingerprint: 'syntactically-valid', expiresAt: sealed.expiresAt } });
+    assert.equal(outcome, 'rejected'); assert.equal(JSON.stringify(await h.coordinatorState()), JSON.stringify(before));
+  } finally { await h.mf.dispose(); }
+});
+
+test('native compacted completion survives a Worker restart and requires the exact certificate and accounting', async () => {
+  const h = await warmHarness(undefined, 0, undefined, true);
+  try {
+    const response = await h.create('restart-certified'); assert.equal(response.status, 201); await response.body?.cancel();
+    const { sealed, recovery } = await sealedFixture(h);
+    const closure = await new BudgetGrantClosureRepository(h.db).close(sealed); assert.ok(closure);
+    assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled');
+    const recoveryGrant = (await h.grants()).find(grant => grant.purpose === 'recovery')!;
+    const input = { tenantId: sealed.tenantId, reservationId: sealed.reservationId, holderId: sealed.holderId,
+      expectedPolicyId: sealed.policyId, expectedPolicyRevision: 1, expectedRestrictionRevision: 1, terminalEvidenceId: sealed.terminalEvidenceId,
+      measured: {}, uncertain: closure.uncertain, now: h.initialNow + 1, certifiedClosure: { operationSetFingerprint: closure.operationSetFingerprint,
+        expiresAt: sealed.expiresAt, recoveryReservationId: recoveryGrant.reservationId, recoveryHolderId: recoveryGrant.holderId } };
+    const before = JSON.stringify(await h.coordinatorState());
+    const { coordinator: restarted } = await h.restartCoordinator();
+    assert.equal(await restarted.reconcileFromTrustedAuthority(input), 'already-reconciled');
+    for (const wrong of [{ ...input, reservationId: 'never-completed' }, { ...input, uncertain: {} },
+      { ...input, certifiedClosure: { ...input.certifiedClosure, operationSetFingerprint: 'different-set' } },
+      { ...input, terminalEvidenceId: 'different-terminal' }, { ...input, tenantId: 'runtime-extra-000' }]) {
+      assert.equal(await restarted.reconcileFromTrustedAuthority(wrong), 'rejected');
+    }
+    assert.equal(JSON.stringify(await restarted.inspectForTrustedRuntime()), before);
+  } finally { await h.mf.dispose(); if (h.persistencePath) rmSync(h.persistencePath, { recursive: true, force: true }); }
+});
+
+test('native 0040 to 0041 upgrade preserves legacy closure rows with unknown expiry', async () => {
+  const h = await warmHarness(undefined, 0, '0040_budget_grant_closures.sql');
+  try {
+    await h.db.batch([
+      h.db.prepare(`INSERT INTO budget_grant_operations (tenant_id,reservation_id,holder_id,operation_id,aggregate_id,operation_fingerprint,operation_envelope_json)
+        VALUES ('runtime-tenant','legacy-reservation','legacy-holder','legacy-operation','runtime-owner-coordinator','legacy-fingerprint','{"workerRequests":2}')`),
+      h.db.prepare(`INSERT INTO budget_grant_closures (tenant_id,reservation_id,holder_id,aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json)
+        VALUES ('runtime-tenant','legacy-reservation','legacy-holder','runtime-owner-coordinator','legacy-terminal','legacy-set',1,'[]','[["workerRequests",2]]')`),
+    ]);
+    const before = await h.db.prepare('SELECT * FROM budget_grant_closures').first();
+    await h.db.batch(splitSql(readFileSync(join(serverRoot, 'migrations/0041_budget_grant_closure_expiry.sql'), 'utf8')).map(sql => h.db.prepare(sql)));
+    const after = await h.db.prepare('SELECT * FROM budget_grant_closures').first();
+    assert.deepEqual(after, { ...before, expires_at: null });
+    await new BudgetGrantClosureRepository(h.db).pruneExpired('runtime-tenant', Number.MAX_SAFE_INTEGER);
+    assert.equal((await h.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{ n: number }>())!.n, 1);
+    assert.equal((await h.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{ n: number }>())!.n, 1);
+    const response = await h.create('post-upgrade'); assert.equal(response.status, 201); await response.body?.cancel();
+    const { sealed, recovery } = await sealedFixture(h);
+    assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled');
+    assert.equal((await h.db.prepare('SELECT expires_at FROM budget_grant_closures WHERE terminal_evidence_id=?').bind(sealed.terminalEvidenceId).first<{ expires_at: number }>())!.expires_at, sealed.expiresAt);
   } finally { await h.mf.dispose(); }
 });
 
@@ -652,11 +749,13 @@ test('idle API closure reconciles the entire two-operation grant', async () => {
     for (const row of operationRows) for (const [dimension,units] of Object.entries(JSON.parse(row.operation_envelope_json) as Record<string,number>)) {
       expectedUncertain[dimension] = (expectedUncertain[dimension] ?? 0) + units;
     }
-    const reconciled = afterTrigger.find(grant => grant.reservationId === original.reservationId)!;
-    assert.equal(reconciled.status, 'reconciled');
-    assert.deepEqual(reconciled.accounted, expectedUncertain, 'cold control and all assigned operation envelopes remain charged');
-    assert.equal(original.envelope.workerRequests! - reconciled.accounted.workerRequests!, 12, 'only six unused two-request operations are released');
-    assert.equal(afterTrigger.filter(grant => grant.purpose === 'new-work').length, 2, 'later work uses a newly charged holder');
+    const tenant = (await h.coordinatorState()).tenantStates.find(item => item.tenantId === 'runtime-tenant')!;
+    assert.equal(afterTrigger.find(grant => grant.reservationId === original.reservationId)?.compacted, true, 'the certified holder detail is compacted');
+    assert.deepEqual(Object.fromEntries(tenant.closedCharges.filter(charge => charge.purpose === 'new-work')
+      .map(charge => [charge.dimension, charge.units])), expectedUncertain, 'cold control and all assigned operation envelopes remain charged');
+    assert.equal(original.envelope.workerRequests! - (tenant.closedCharges.find(charge => charge.dimension === 'workerRequests')?.units ?? 0), 12,
+      'only six unused two-request operations are released');
+    assert.equal(afterTrigger.filter(grant => grant.purpose === 'new-work' && !grant.compacted).length, 1, 'later work uses a newly charged holder');
     assert.equal((await h.control()).calls.reconcile, 1, 'automatic closure sends one whole-grant reconciliation');
     const recovery = new BudgetGrantRecoveryService(h.db,new BudgetAuthorityRepository(h.db),h.namespace as unknown as DurableObjectNamespace,
       createVerifiedTenantScope('runtime-tenant','runtime-key',['integration'],1),'runtime-key');
@@ -665,13 +764,14 @@ test('idle API closure reconciles the entire two-operation grant', async () => {
       terminalEvidenceId: closure!.terminal_evidence_id, operations: operationRows.map(row => ({ operationId: row.operation_id,
         operationFingerprint: row.operation_fingerprint, operationEnvelope: JSON.parse(row.operation_envelope_json) })),
       operationIds: operationRows.map(row => row.operation_id), operationFingerprint: 'test',
-      operationEnvelopes: operationRows.map(row => JSON.parse(row.operation_envelope_json)), envelope: original.envelope },h.initialNow + 30_001);
+      operationEnvelopes: operationRows.map(row => JSON.parse(row.operation_envelope_json)), envelope: original.envelope,
+      expiresAt: original.expiresAt },h.initialNow + 30_001);
     assert.equal(recovered,'reconciled',`recovery service result: ${recovered}`);
     const uncertain = Object.fromEntries(JSON.parse(closure!.uncertain_json)) as Record<string,number>;
     const result = await h.coordinator.reconcileFromTrustedAuthority({ tenantId: 'runtime-tenant', reservationId: original.reservationId,
       holderId: original.holderId, expectedPolicyId: 'runtime-owner-policy', expectedPolicyRevision: 1, expectedRestrictionRevision: 1,
       terminalEvidenceId: closure!.terminal_evidence_id, measured: {}, uncertain, now: h.initialNow + 30_001 });
-    assert.equal(result,'already-reconciled',`direct coordinator outcome: ${result}; trigger=${trigger.status} ${triggerBody}`);
+    assert.equal(result,'rejected',`uncertified direct retry must not claim a compacted closure; trigger=${trigger.status} ${triggerBody}`);
     assert.equal(trigger.status,201,`${triggerBody}; afterTrigger=${JSON.stringify(afterTrigger.map(grant => [grant.reservationId,grant.purpose,grant.status]))}`);
   } finally { await h.mf.dispose(); }
 });
@@ -705,7 +805,30 @@ test('lost reconciliation replies use two bounded attempts and then block the se
     const control = await h.control();
     assert.equal(control.calls.reconcile,2);
     assert.equal((await h.grants()).filter(grant => grant.purpose === 'recovery').length,1);
-    assert.equal((await h.grants()).find(grant => grant.purpose === 'new-work')?.status,'reconciled');
+    assert.equal((await h.grants()).some(grant => grant.purpose === 'new-work' && !grant.compacted),false);
+    assert.ok((await h.coordinatorState()).tenantStates.find(tenant => tenant.tenantId === 'runtime-tenant')?.closedCharges.length,
+      'lost coordinator acknowledgements retain the certified new-work charge without retaining a slot');
+  } finally { await h.mf.dispose(); }
+});
+
+test('native expired closure cleanup removes only stale D1 proof while retained certified accounting survives', async () => {
+  const h = await warmHarness();
+  try {
+    const response = await h.create('closure-prune'); assert.equal(response.status, 201); await response.body?.cancel();
+    const { sealed, recovery } = await sealedFixture(h);
+    assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled');
+    const before = (await h.coordinatorState()).tenantStates.find(tenant => tenant.tenantId === sealed.tenantId)!;
+    const retained = structuredClone(before.closedCharges);
+    assert.ok(retained.length);
+    const closureRepository = new BudgetGrantClosureRepository(h.db);
+    await closureRepository.pruneExpired(sealed.tenantId, sealed.expiresAt);
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM budget_grant_closures WHERE tenant_id=?').bind(sealed.tenantId)
+      .first<{ count: number }>())?.count, 0);
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM budget_grant_operations WHERE tenant_id=?').bind(sealed.tenantId)
+      .first<{ count: number }>())?.count, 0);
+    const after = (await h.coordinatorState()).tenantStates.find(tenant => tenant.tenantId === sealed.tenantId)!;
+    assert.deepEqual(after.closedCharges, retained, 'expiry removes retry evidence only after its policy horizon; stock/window accounting remains');
+    assert.equal(await recovery.recover(sealed, sealed.expiresAt), 'rejected', 'expired proof can never authorize delayed recovery');
   } finally { await h.mf.dispose(); }
 });
 
@@ -802,10 +925,16 @@ test('four eight-operation blocks cap refill work while the owner recovery parti
   } finally { await h.mf.dispose(); }
 });
 
-test('the shared isolate registry rejects its 65th authorized scope before another DO call', async () => {
+for (const boundary of [
+  { total: 65, ordinary: 64, cache: true, name: 'the shared isolate registry rejects its 65th authorized scope before another DO call' },
+  { total: 64, ordinary: 63, cache: false, name: 'native unchanged total64 cap reserves its last slot for real recovery after63 ordinary scopes' },
+]) test(boundary.name, async () => {
   const h = await warmHarness(policy({ workerRequests: 10_000, d1RowsRead: 5_000_000, d1RowsWritten: 2_000_000,
     doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 1_000_000 }));
   try {
+    // The cache-specific case needs64 ordinary slots plus the dedicated recovery
+    // slot. The separate total64 case below preserves the default owner ceiling.
+    if (boundary.cache) await h.db.prepare('UPDATE budget_owner_policies SET max_reservations=65').run();
     const first = await h.create('scope-fixture'); assert.equal(first.status, 201);
     const firstBody = await first.json() as { id: string };
     const source = await h.db.prepare("SELECT * FROM tickets WHERE tenant_id='runtime-tenant' AND id=?").bind(firstBody.id).first<Record<string, unknown>>();
@@ -822,14 +951,27 @@ test('the shared isolate registry rejects its 65th authorized scope before anoth
     const reply = (target: string) => h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target}/articles`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey }, body: JSON.stringify({ body: 'synthetic bounded scope' }),
     });
-    for (const target of targets.slice(0, 63)) {
-      const response = await reply(target); assert.equal(response.status, 201); await response.body?.cancel();
+    for (const target of targets.slice(0, boundary.ordinary - 1)) {
+      const response = await reply(target);
+      assert.equal(response.status, 201); await response.body?.cancel();
     }
     const before = await h.control();
-    assert.equal(before.cache.scopes, 64);
-    const rejected = await reply(targets[63]); assert.equal(rejected.status, 429); await rejected.body?.cancel();
-    assert.deepEqual((await h.control()).calls, before.calls);
-    assert.equal((await h.db.prepare("SELECT count(*) AS count FROM articles WHERE tenant_id='runtime-tenant' AND ticket_id=?").bind(targets[63]).first<{ count: number }>())?.count, 0);
+    assert.equal(before.cache.scopes, boundary.ordinary);
+    console.log('scope-capacity-evidence', { scopes: before.cache.scopes,
+      storedBytes: new TextEncoder().encode(encodeCoordinatorState(await h.coordinatorState())).byteLength });
+    const rejected = await reply(targets[boundary.ordinary - 1]); assert.equal(rejected.status, 429); await rejected.body?.cancel();
+    if (boundary.cache) assert.deepEqual((await h.control()).calls, before.calls);
+    else {
+      assert.ok((await h.control()).calls.reserve > before.calls.reserve, 'owner slot exhaustion is checked by the coordinator');
+      assert.equal((await h.grants()).filter(grant => !grant.compacted).length, 63);
+      await h.control({ now: h.initialNow + 30_001 });
+      const recovered = await h.create('ordinary63-after-recovery'); assert.equal(recovered.status, 201); await recovered.body?.cancel();
+      const tenant = (await h.coordinatorState()).tenantStates[0];
+      assert.equal(tenant.closedCharges.find(charge => charge.dimension === 'workerRequests' && charge.purpose === 'recovery')?.units, 2);
+      assert.ok(tenant.grants.filter(grant => !grant.compacted).length <= boundary.total);
+      assert.equal((await h.control()).calls.reconcile, 1);
+    }
+    assert.equal((await h.db.prepare("SELECT count(*) AS count FROM articles WHERE tenant_id='runtime-tenant' AND ticket_id=?").bind(targets[boundary.ordinary - 1]).first<{ count: number }>())?.count, 0);
   } finally { await h.mf.dispose(); }
 });
 
@@ -1233,4 +1375,75 @@ test('policy identity replacement can start at revision one without erasing old 
     const warm=await h.create('identity-still-warm');assert.equal(warm.status,201);await warm.body?.cancel();
     assert.deepEqual((await h.control()).calls,calls);
   }finally{await h.mf.dispose();}
+});
+
+test('native byte capacity rejects new growth before storage and preserves headroom for an accepted API grant recovery', async () => {
+  const h = await warmHarness(policy({ workerRequests: 100_000, d1RowsRead: 1_000_000, d1RowsWritten: 100_000,
+    doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 }));
+  try {
+    await h.db.prepare('UPDATE budget_owner_policies SET max_reservations=4096').run();
+    const response = await h.create('byte-headroom-accepted'); assert.equal(response.status, 201); await response.body?.cancel();
+    let rejected = false;
+    for (let index = 0; index < 512; index++) {
+      const before = JSON.stringify(await h.coordinatorState());
+      try {
+        const result = await h.coordinator.reserveFromTrustedAuthority({ tenantId: 'runtime-tenant', holderId: `metadata-${index}-${'€'.repeat(80)}`, idempotencyKey: `metadata-${index}-${'€'.repeat(80)}`,
+          expectedPolicyId: 'runtime-owner-policy', expectedPolicyRevision: 1, expectedRestrictionRevision: 1, purpose: 'recovery', envelope: { workerRequests: 1 }, now: h.initialNow });
+        if (result.status === 'rejected') {
+          assert.equal(result.reason, 'capacity-exhausted');
+          assert.equal(JSON.stringify(await h.coordinatorState()), before, 'rejection precedes a durable write');
+          rejected = true; break;
+        }
+        assert.equal(result.status, 'granted');
+      } catch (error) {
+        assert.match(String(error), /metadata recovery headroom capacity exhausted/);
+        assert.equal(JSON.stringify(await h.coordinatorState()), before, 'rejection precedes a durable write');
+        rejected = true; break;
+      }
+    }
+    assert.equal(rejected, true, 'bounded synthetic metadata reaches the explicit growth ceiling');
+    const beforeRecoveryBytes = new TextEncoder().encode(encodeCoordinatorState(await h.coordinatorState())).byteLength;
+    const { sealed, recovery } = await sealedFixture(h);
+    assert.equal(await recovery.recover(sealed, h.initialNow + 1), 'reconciled', 'already accepted work can reserve recovery and persist both certified completions');
+    const state = await h.coordinatorState();
+    const tenant = state.tenantStates[0];
+    assert.equal(tenant.grants.find(grant => grant.reservationId === sealed.reservationId)?.compacted, true);
+    const paired = tenant.grants.find(grant => grant.recoversReservationId === sealed.reservationId)!;
+    assert.equal(paired.compacted, true);
+    assert.deepEqual(paired.accounted, paired.envelope);
+    const afterRecoveryBytes = new TextEncoder().encode(encodeCoordinatorState(state)).byteLength;
+    assert.ok(afterRecoveryBytes <= 120 * 1_024);
+    console.log('recovery-headroom-evidence', { beforeRecoveryBytes, afterRecoveryBytes, retainedGrants: tenant.grants.length });
+  } finally { await h.mf.dispose(); }
+});
+
+test('native total-two slot limit preserves recovery headroom before ordinary API saturation', async () => {
+  const h = await warmHarness();
+  try {
+    await h.db.prepare('UPDATE budget_owner_policies SET max_reservations=2').run();
+    const first = await h.create('slot-headroom-first'); assert.equal(first.status, 201);
+    const ticket = await first.json() as { id: string };
+    const rejected = await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${ticket.id}/articles`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey }, body: JSON.stringify({ body: 'must not consume recovery slot' }),
+    });
+    assert.equal(rejected.status, 429); await rejected.body?.cancel();
+    assert.equal((await h.db.prepare("SELECT count(*) AS n FROM articles WHERE body='must not consume recovery slot'").first<{ n: number }>())!.n, 0);
+    assert.equal((await h.grants()).filter(grant => !grant.compacted).length, 1);
+    await h.control({ now: h.initialNow + 30_001 });
+    const later = await h.create('slot-headroom-after-recovery'); assert.equal(later.status, 201); await later.body?.cancel();
+    const tenant = (await h.coordinatorState()).tenantStates[0];
+    assert.equal(tenant.closedCharges.find(row => row.dimension === 'workerRequests' && row.purpose === 'new-work')?.units, 2);
+    assert.equal(tenant.closedCharges.find(row => row.dimension === 'workerRequests' && row.purpose === 'recovery')?.units, 2);
+    assert.ok(tenant.grants.filter(grant => !grant.compacted).length <= 2);
+    assert.equal((await h.control()).calls.reconcile, 1);
+  } finally { await h.mf.dispose(); }
+});
+
+test('native total-one slot configuration rejects ordinary work without borrowing recovery capacity', async () => {
+  const h = await warmHarness();
+  try {
+    await h.db.prepare('UPDATE budget_owner_policies SET max_reservations=1').run();
+    const rejected = await h.create('one-slot-cannot-intake'); assert.equal(rejected.status, 429); await rejected.body?.cancel();
+    assert.equal(await h.count(), 0); assert.equal((await h.grants()).length, 0);
+  } finally { await h.mf.dispose(); }
 });
