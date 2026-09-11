@@ -1,3 +1,5 @@
+import { MfaPage } from './MfaPage';
+import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +14,8 @@ export function LoginPage() {
   const [loading, setLoading] = React.useState(false);
 
   const navigate = useNavigate();
+  const mfaRequired = useAuthStore(state => state.mfaRequired);
+  const enrolled = useAuthStore(state => state.user?.mfa_enabled);
   const setAuth = useAuthStore((state) => state.setAuth);
   const setMfaRequired = useAuthStore((state) => state.setMfaRequired);
 
@@ -28,7 +32,8 @@ export function LoginPage() {
         // We still need the token (pre-mfa) to call the MFA verify endpoint
         setAuth(data.token, data.user);
         setMfaRequired(true);
-        navigate('/mfa');
+        setPassword('');
+        if (!data.user.mfa_enabled) navigate('/mfa', { state: { tocynAuthVisual: window.history.state?.tocynAuthVisual } });
       } else {
         setAuth(data.token, data.user);
         navigate('/');
@@ -40,13 +45,15 @@ export function LoginPage() {
     }
   };
 
+  if (mfaRequired && enrolled) return <MfaPage />;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+    <div className="w-full">
+      <div className="w-full">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-brand-500 rounded-xl flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4">L</div>
+
           <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
-          <p className="text-slate-500 mt-1">Sign in to your Luminatick account</p>
+          <p className="text-slate-500 mt-1">Sign in to your {PRODUCT_BRAND.name} account</p>
         </div>
 
         {error && (
