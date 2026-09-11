@@ -6,6 +6,7 @@ import { EmailService } from '../services/email/outbound.service';
 import { BroadcastService } from '../services/broadcast.service';
 import { Hono } from "hono";
 import { z } from "zod";
+import { ARTICLE_BODY_FORMATS, DEFAULT_ARTICLE_BODY_FORMAT } from '@luminatick/shared';
 import { OPERATOR_WORKSPACE_SORTS } from '../types/operator-workspace';
 import { Env } from "../bindings";
 import { authMiddleware } from "../middleware/auth.middleware";
@@ -24,6 +25,8 @@ import type { SlaPolicyInput } from '../types/sla';
 import { MutationInputError, mutationInputErrorBody, readMutationJson } from './mutation-request';
 import { requestBounds } from '../middleware/request-bounds';
 import workspace from "./operator-workspace.handler";
+import { replyCapability } from '../services/reply-capability';
+import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminatick/shared';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -539,22 +542,42 @@ dashboard.get("/tickets/:id", async (c) => {
 });
 
 /**
+ * Describe the existing dashboard reply paths without disclosing a recipient,
+ * provider configuration, or inferring a delivery route from intake provenance.
+ */
+dashboard.get('/tickets/:id/reply-capability', async (c) => {
+  const ticketId = c.req.param('id');
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  const agent = c.get('jwtPayload') as JWTPayload;
+  const ticket = await d.repositories.tickets.get(ticketId);
+  if (!ticket) return c.json({ error: 'Ticket not found' }, 404);
+
+  // Keep the same live group boundary as the corresponding reply mutation.
+  if (agent.role === 'agent' && ticket.group_id
+    && !await d.repositories.groups.isMember(ticket.group_id, agent.sub)) {
+    return c.json({ error: 'Forbidden', message: 'You do not have access to this ticket\'s group' }, 403);
+  }
+
+  return c.json(replyCapability(ticket.id));
+});
+
+/**
  * POST /api/tickets/:id/articles
  * Add a new article (agent response or internal note) to a ticket
  */
-dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
+dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10, 60000), async (c) => {
   const ticketId = c.req.param("id");
   if (!ticketId) return c.json({ error: 'Missing ID' }, 400);
   const payloadBody = await c.req.json();
-  if (c.env.LOCAL_BETA_ENABLED === 'true') {
-    const boundedReply = z.object({
-      body: z.string().min(1).max(16000),
-      is_internal: z.boolean().optional(),
-      attachments: z.array(z.unknown()).max(10).optional(),
-    });
-    if (!boundedReply.safeParse(payloadBody).success) return c.json({ error: 'Invalid bounded reply' }, 400);
-  }
-  const { body: articleBody, is_internal, attachments: bodyAttachments } = payloadBody;
+  const boundedReply = z.object({
+    body: z.string().min(1).max(16000).refine(value => new TextEncoder().encode(value).length <= 16000),
+    body_format: z.enum(ARTICLE_BODY_FORMATS).default(DEFAULT_ARTICLE_BODY_FORMAT),
+    is_internal: z.boolean().optional(),
+    attachments: z.array(z.unknown()).max(10).optional(),
+  }).strict();
+  const parsedReply = boundedReply.safeParse(payloadBody);
+  if (!parsedReply.success) return c.json({ error: 'Invalid bounded reply' }, 400);
+  const { body: articleBody, body_format, is_internal, attachments: bodyAttachments } = parsedReply.data;
   const agent = c.get("jwtPayload") as JWTPayload;
   const d = c.get('tenantDeps') as TenantRequestDeps;
 
@@ -583,7 +606,7 @@ dashboard.post("/tickets/:id/articles", rateLimiter(10, 60000), async (c) => {
   catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
 
   const {article,attachments:savedAttachments} = await ticketService.createAuditedReply(
-    ticketId,articleBody,Boolean(is_internal),{kind:'staff',id:agent.sub,source:'dashboard'},verifiedAttachments);
+    ticketId,articleBody,Boolean(is_internal),{kind:'staff',id:agent.sub,source:'dashboard'},verifiedAttachments,body_format);
   const attachments = savedAttachments.map(a => ({id:a.id,filename:a.file_name,size:a.file_size,contentType:a.content_type,storageKey:a.r2_key}));
 
   if (!article.is_internal) {
@@ -838,7 +861,7 @@ dashboard.post('/attachments/upload', async (c) => {
   const payload = c.get('jwtPayload');
   const d = c.get('tenantDeps') as TenantRequestDeps;
 
-  const MAX_FILE_SIZE = 10 * 1024 * 1024;
+  const MAX_FILE_SIZE = REPLY_ATTACHMENT_RULES.maxBytesPerFile;
   const contentLength = parseInt(c.req.header('content-length') || '0', 10);
   if (contentLength > MAX_FILE_SIZE) {
     return c.json({ error: 'Payload too large. Maximum size is 10MB.' }, 413);
@@ -858,8 +881,7 @@ dashboard.post('/attachments/upload', async (c) => {
     return c.json({ error: 'File too large. Maximum size is 10MB.' }, 413);
   }
 
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/csv'];
-  if (!allowedTypes.includes(file.type)) {
+  if (!(REPLY_ATTACHMENT_CONTENT_TYPES as readonly string[]).includes(file.type)) {
     return c.json({ error: 'Unsupported file type. Please upload images, PDFs, or text files.' }, 415);
   }
 

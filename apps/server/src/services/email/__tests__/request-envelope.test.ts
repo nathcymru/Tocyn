@@ -49,6 +49,25 @@ const ticket = { id: 't', subject: 'Subject', customer_email: LOCAL_AUTH_CAPTURE
 const attachment = (size: number) => ({ r2_key: 'private-key', file_name: 'a.pdf', content_type: 'application/pdf', file_size: size }) as any;
 
 describe('pre-read ticket email admission', () => {
+  it('preserves versioned safe HTML and readable text through the bounded delivery path', async () => {
+    const f = serviceFixture();
+    await f.service.sendTicketReply(ticket, { body: '**Hello** <script>bad</script>', body_format: 'markdown-v1', is_internal: false } as any);
+    expect(f.send).toHaveBeenCalledWith(expect.objectContaining({
+      html: expect.stringContaining('<strong>Hello</strong> &lt;script&gt;bad&lt;/script&gt;'),
+      text: 'Hello <script>bad</script>',
+    }), expect.anything());
+    expect(f.storage.getAttachment).not.toHaveBeenCalled();
+  });
+
+  it('rejects private notes before sender lookup, storage reads or delivery', async () => {
+    const f = serviceFixture();
+    await expect(f.service.sendTicketReply(ticket, { body: 'Private synthetic note', body_format: 'markdown-v1', is_internal: true } as any, [attachment(3)]))
+      .rejects.toThrow('Internal articles cannot be sent as email');
+    expect(f.channels.findReplySender).not.toHaveBeenCalled();
+    expect(f.storage.getAttachment).not.toHaveBeenCalled();
+    expect(f.send).not.toHaveBeenCalled();
+  });
+
   it('rejects ten maximum-size attachments whole before storage or provider work', async () => {
     const f = serviceFixture();
     await expect(f.service.sendTicketReply(ticket, { body: 'Hello' } as any, Array.from({ length: 10 }, () => attachment(10 * 1024 * 1024))))

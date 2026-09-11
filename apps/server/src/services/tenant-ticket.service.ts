@@ -1,4 +1,5 @@
 import type { ConversationActor } from '../types/conversation-audit';
+import { articleBodyFormat, type ArticleBodyFormat } from '@luminatick/shared';
 import type { VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { Ticket, Article, Attachment } from '../types';
@@ -14,6 +15,7 @@ export type InitialConversationInput = {
   customer_email: string;
   source: Ticket['source'];
   body: string;
+  body_format?: ArticleBodyFormat;
   sender_type: Article['sender_type'];
   sender_id?: string;
   status?: Ticket['status'];
@@ -65,6 +67,7 @@ export class TenantTicketService {
       },
       article: {
         body: data.body,
+        body_format: articleBodyFormat(data.body_format),
         sender_type: data.sender_type,
         sender_id: data.sender_id,
         is_internal: false,
@@ -75,11 +78,12 @@ export class TenantTicketService {
     });
   }
 
-  async createAuditedReply(ticketId: string, body: string, internal: boolean, actor: ConversationActor, attachments: VerifiedMutationAttachment[]) {
+  async createAuditedReply(ticketId: string, body: string, internal: boolean, actor: ConversationActor,
+    attachments: VerifiedMutationAttachment[], bodyFormat: ArticleBodyFormat = 'plain') {
     const now = new Date().toISOString();
     const raw = await this.deps.ticketMutations.commit({
       ticketId,articleId:crypto.randomUUID(),audit:actor,
-      article:{sender_id:actor.id,sender_type:'agent',body,is_internal:internal,intake_source:actor.source,received_at:now,processed_at:now},
+      article:{sender_id:actor.id,sender_type:'agent',body,body_format:articleBodyFormat(bodyFormat),is_internal:internal,intake_source:actor.source,received_at:now,processed_at:now},
       attachments:attachments.map(attachment => ({...attachment,id:crypto.randomUUID()})),
     });
     const result = JSON.parse(raw) as {article:Article;attachments:Attachment[]};
@@ -112,10 +116,11 @@ export class TenantTicketService {
   async createArticle(data: Omit<Article, 'id' | 'created_at'>): Promise<Article> {
     // Only a route/service that explicitly identifies its intake path receives
     // new server-observed facts. Legacy repository callers remain not-recorded.
-    if (!data.intake_source) return this.deps.repositories.articles.create(data);
+    const withFormat = { ...data, body_format: articleBodyFormat(data.body_format) };
+    if (!data.intake_source) return this.deps.repositories.articles.create(withFormat);
     const observedAt = new Date().toISOString();
     return this.deps.repositories.articles.create({
-      ...data,
+      ...withFormat,
       received_at: observedAt,
       processed_at: observedAt,
     });

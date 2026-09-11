@@ -1,14 +1,14 @@
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
+import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminatick/shared';
 
 export class AttachmentReferenceError extends Error {}
 
 /** Validate the complete list before the caller creates an article or attachment rows. */
 export async function validateAttachmentReferences(deps: TenantRequestDeps, prefix: string, input: unknown) {
   if (input === undefined) return [];
-  if (!Array.isArray(input) || input.length > 10) throw new AttachmentReferenceError('Invalid attachments');
+  if (!Array.isArray(input) || input.length > REPLY_ATTACHMENT_RULES.maxCount) throw new AttachmentReferenceError('Invalid attachments');
   const seen = new Set<string>();
   const result = [];
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/csv'];
   for (const entry of input as unknown[]) {
     if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) throw new AttachmentReferenceError('Invalid attachment reference');
     const item = entry as Record<string, unknown>;
@@ -22,7 +22,7 @@ export async function validateAttachmentReferences(deps: TenantRequestDeps, pref
     await object.body?.cancel();
     const size = object.size;
     const contentType = object.httpMetadata?.contentType;
-    if (!Number.isInteger(size) || size < 0 || size > 10 * 1024 * 1024 || !allowedTypes.includes(contentType)) throw new AttachmentReferenceError('Invalid stored attachment');
+    if (!Number.isInteger(size) || size < 0 || size > REPLY_ATTACHMENT_RULES.maxBytesPerFile || !(REPLY_ATTACHMENT_CONTENT_TYPES as readonly string[]).includes(contentType)) throw new AttachmentReferenceError('Invalid stored attachment');
     result.push({ storageKey: key, filename, size, contentType });
   }
   return result;

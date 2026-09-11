@@ -96,6 +96,8 @@ export type LocalTenantFixture = Readonly<{
   login: (principal: PrincipalName, password?: string) => Promise<FixtureResponse>;
   currentMfaCode: (principal: 'operatorA' | 'operatorB') => string;
   invalidMfaCode: (principal: 'operatorA' | 'operatorB') => string;
+  /** A synthetic, DB-backed agent session for narrow route authorization checks. */
+  createAgentSession: (tenantId: Tenant, mfaVerified?: boolean) => Promise<Readonly<{ id: string; token: string }>>;
   createScopedApiKey: (operator: OperatorPrincipal, permissions: readonly TicketPermission[]) => Promise<Readonly<{
     id: string;
     apiKey: string;
@@ -406,6 +408,16 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
           if (!verifier.verifyCode(code, secret)) return code;
         }
         throw new Error('Unable to derive a deliberately invalid fixture OTP');
+      },
+      createAgentSession: async (tenantId, mfaVerified = true) => {
+        const id = `fixture-agent-${crypto.randomUUID()}`;
+        const email = `${id}@example.test`;
+        await db.prepare('INSERT INTO users (tenant_id, id, email, full_name, role, mfa_enabled) VALUES (?, ?, ?, ?, ?, ?)')
+          .bind(tenantId, id, email, 'Synthetic route agent', 'agent', 1).run();
+        const token = await new AuthService().generateToken({
+          id, email, full_name: 'Synthetic route agent', role: 'agent', tenant_id: tenantId, mfa_enabled: true,
+        } as any, env.JWT_SECRET, mfaVerified);
+        return Object.freeze({ id, token });
       },
       createScopedApiKey: async (operator, permissions) => {
         assert.ok(permissions.length > 0 && permissions.every(permission => permission === 'tickets:read' || permission === 'tickets:write'), 'Fixture API-key permissions must be ticket permissions');

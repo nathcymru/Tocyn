@@ -30,6 +30,7 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
   if (['POST', 'PATCH'].includes(method) && (/^\/api\/support-states(?:\/[^/]+(?:\/deactivate)?)?$/.test(path))) return 'configuration';
   if (method === 'GET' && (path === '/api/workspace/theme-preference' || path === '/api/settings/theme')) return 'conversation-read';
   if (method === 'PUT' && path === '/api/workspace/theme-preference') return 'conversation-write';
+  if (method === 'GET' && /^\/api\/tickets\/[^/]+\/reply-capability$/.test(path)) return 'conversation-read';
   if (method === 'GET' && /^\/api\/(stats|ticket-fields|users\/agents|groups|settings(?:\/filters(?:\/[^/]+)?)?\/?|permissions\/?|realtime)$/.test(path)) return 'conversation-read';
   if (method === 'GET' && (path === '/api/workspace/state' || path === '/api/workspace/drafts' || /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) return 'conversation-read';
   if (method === 'GET' && /^\/api(?:\/v1\/customer)?\/attachments\/[^/]+\/download$/.test(path)) return 'attachment';

@@ -5,6 +5,7 @@
   },
   "include": [
     "local-tenant-fixture.ts",
-    "tenant-isolation-core.test.ts"
+    "tenant-isolation-core.test.ts",
+    "article-body-format-runtime.test.ts"
   ]
 }

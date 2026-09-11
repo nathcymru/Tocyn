@@ -88,6 +88,25 @@ describe('Real Phase 1 migration chain', () => {
     } finally { db.close(); }
   });
 
+  it('adds explicit plain formats without rewriting historical article or draft bytes', () => {
+    const db = legacy();
+    try {
+      apply(db, 14, 35);
+      expect(db.prepare("SELECT body,body_format FROM articles WHERE id='old-article'").get())
+        .toEqual({ body: 'Preserved body', body_format: 'plain' });
+      db.prepare(`INSERT INTO operator_drafts
+        (tenant_id,user_id,ticket_id,generation,revision,mode,body,attachments,base_conversation_revision)
+        VALUES ('default-tenant','old-user','old-ticket','123e4567-e89b-12d3-a456-426614174000',1,'public','Old draft','[]',0)`).run();
+      expect(db.prepare('SELECT body,body_format FROM operator_drafts').get())
+        .toEqual({ body: 'Old draft', body_format: 'plain' });
+      db.prepare(`INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,body_format,is_internal)
+        VALUES ('default-tenant','markdown-article','old-ticket','agent','**new**','markdown-v1',0)`).run();
+      expect(() => db.prepare(`INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,body_format,is_internal)
+        VALUES ('default-tenant','unknown-format','old-ticket','agent','body','markdown-v2',0)`).run()).toThrow(/CHECK constraint/);
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('invalidates legacy unbound OTPs while preserving magic links through security migrations', () => {
     const db = legacy();
     try {

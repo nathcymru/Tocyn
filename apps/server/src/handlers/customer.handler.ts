@@ -12,6 +12,7 @@ import { Env } from "../bindings";
 import { AppVariables, Article } from "../types";
 import { CustomerAuthService } from "../services/customer-auth.service";
 import { TenantTicketService } from "../services/tenant-ticket.service";
+import { publicArticleBodyText } from '../services/email/article-body-renderer';
 import { publicSupportState } from '../types/support-state';
 import { tenantMiddleware, TenantRequestDeps, createTenantRequestDeps, createCustomerAuthResolvers } from "../middleware/tenant.middleware";
 import { createVerifiedTenantScope } from "../auth/scope";
@@ -239,13 +240,17 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
 
   if (deps.boundedConversationRead) {
     const page=await deps.boundedConversationRead.page(ticketId,{customerEmail:payload.email,limit:c.req.query('article_limit'),cursor:c.req.query('article_cursor')});
-    const articles = page.articles.map(({ attachments, ...article }) => ({
-      ...article,
-      attachments: attachments.map(a => ({
+    const articles = page.articles.map(({ attachments, ...article }) => {
+      const bodyText = publicArticleBodyText(article);
+      return {
+        ...article,
+        ...(bodyText === undefined ? {} : { body_text: bodyText }),
+        attachments: attachments.map(a => ({
         id: a.id, filename: a.file_name, size: a.file_size,
         contentType: a.content_type, storageKey: a.r2_key,
       })),
-    }));
+      };
+    });
     const response = {
       ticket, articles,
       canonical: await ticketService.projectAuditedConversation(ticket, page.articles),
@@ -262,9 +267,11 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
 
   const articlesWithAttachments = await Promise.all(externalArticles.map(async (article) => {
     const atts = await ticketService.getArticleAttachments(article.id);
+    const bodyText = publicArticleBodyText(article);
     return {
       response: {
         ...article,
+        ...(bodyText === undefined ? {} : { body_text: bodyText }),
         attachments: atts.map(a => ({ id: a.id, filename: a.file_name, size: a.file_size, contentType: a.content_type, storageKey: a.r2_key })),
       },
       canonical: { ...article, attachments: atts },

@@ -55,6 +55,8 @@ export const apiTicketCreateSchema = z.object({
   subject: z.string().min(1, 'Subject is required').max(300),
   customer_email: z.string().email('Invalid email address').max(254),
   body: z.string().max(16000).optional(),
+  // v1 creation remains plain-text-only; rich composition is dashboard scoped.
+  body_format: z.literal('plain').optional(),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
   status: z.enum(['open', 'pending', 'resolved', 'closed']).default('open'),
   group_id: z.string().uuid().optional().nullable(),
@@ -64,6 +66,7 @@ export const apiTicketCreateSchema = z.object({
 
 export const apiTicketReplySchema = z.object({
   body: z.string().min(1, 'Message is required').max(16000),
+  body_format: z.literal('plain').optional(),
   sender_type: z.enum(['customer', 'agent', 'system']).optional(),
   is_internal: z.boolean().optional(),
 });
@@ -71,12 +74,14 @@ export const apiTicketReplySchema = z.object({
 export const portalTicketCreateSchema = z.object({
   subject: z.string().min(1, 'Subject is required').max(300),
   message: z.string().min(1, 'Message is required').max(16000),
+  body_format: z.literal('plain').optional(),
   custom_fields: customFields.optional(),
   turnstileToken: z.string().max(4096).optional(),
 });
 
 export const portalTicketReplySchema = z.object({
   message: z.string().min(1, 'Message is required').max(16000),
+  body_format: z.literal('plain').optional(),
   attachments: z.array(attachmentReference).max(10).optional(),
 });
 

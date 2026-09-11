@@ -2,6 +2,7 @@ import { Ticket, Article, Attachment, SendEmailOptions } from '../../types';
 import { decryptString } from '../../utils/crypto';
 import { TenantRequestDeps } from '../../middleware/tenant.middleware';
 import { EmailTransport, HttpResendTransport, isLocalAuthCaptureTransport } from './transport';
+import { renderPublicArticleForEmail } from './article-body-renderer';
 import { estimateProviderEmailRequestBytes, MAX_TICKET_EMAIL_ATTACHMENTS, OutboundEmailPreparationError } from './request-envelope';
 
 export class TenantOutboundEmailService {
@@ -63,6 +64,7 @@ export class TenantOutboundEmailService {
     attachments: Attachment[] = [],
     replyToEmailId?: string
   ): Promise<void> {
+    const rendered = renderPublicArticleForEmail(article);
     if (attachments.length > MAX_TICKET_EMAIL_ATTACHMENTS) throw new OutboundEmailPreparationError();
     const savedAttachments = attachments.map(attachment => ({ ...attachment }));
     const prefixResult = await this.deps.repositories.config.get('TICKET_PREFIX');
@@ -81,7 +83,7 @@ export class TenantOutboundEmailService {
     const selectedSender = await this.deps.repositories.channels.findReplySender(ticket.group_id);
     const fromEmail = selectedSender?.email_address || ticket.source_email || undefined;
     const prepared = await this.prepareSend({ from: fromEmail, to: [ticket.customer_email],
-      subject, html: article.body || '', headers });
+      subject, html: rendered.html, text: rendered.text, headers });
     // Validate the complete submitted message before any attachment body reads.
     // Keep the shared ticket capability unchanged; an oversized email fails whole.
     estimateProviderEmailRequestBytes(prepared.options, savedAttachments.map(a => ({
