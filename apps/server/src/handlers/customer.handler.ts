@@ -422,7 +422,7 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
       try {
         await new BroadcastService(c.env, deps.scope, deps.emitResourceOperation).broadcast('article.created', {
           ticketId: outcome.ticketId, articleId: outcome.articleId, senderType: 'customer', isInternal: false,
-        });
+        }, 2, mutation.broadcastGrant(prepared,outcome));
       } catch {
         // The committed response remains successful; refreshing the ticket recovers missed events.
         console.warn('Portal reply notification failed after commit');

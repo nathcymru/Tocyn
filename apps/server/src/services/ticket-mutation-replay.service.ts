@@ -16,6 +16,7 @@ import type { MutationNamespace, MutationOutcome, MutationPrincipal, MutationRec
 import { TicketMutationReplayRepository, type MutationCandidate } from '../repositories/ticket-mutation-replay.repository';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import { projectCanonicalConversation } from './canonical-conversation.service';
+import { canonicalBroadcastGrantAfterCommit, type CanonicalBroadcastGrant } from '../budgets/realtime-admission.service';
 
 export type { MutationOperation, MutationOutcome, MutationPrincipal, PreparedTicketMutation, TicketMutationInput,
   RequestedMutationAttachment, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
@@ -47,7 +48,7 @@ type MutationAdmissionIntent = Readonly<{ operationId: string; operationFingerpr
 type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; keyed: boolean; budgetIntent?: Promise<MutationAdmissionIntent>;
   budgetRequired?: boolean; budgetAuthority?: BudgetCommitAuthority; budgetCommitStarted?: boolean;
   customerBudgetRequired?: boolean; customerBudgetHandoff?: CustomerBudgetCommitHandoff; customerBudgetCommitStarted?: boolean;
-  budgetLifecycle?: { cache: IsolateBudgetAdmissionCache; now: () => number } };
+  budgetLifecycle?: { cache: IsolateBudgetAdmissionCache; now: () => number }; broadcastGrant?: CanonicalBroadcastGrant };
 export const API_GRANT_IDLE_SEAL_MS = 30_000;
 
 /**
@@ -134,6 +135,17 @@ export class TicketMutationReplayService {
     if (this.canonicalMutationSli?.hasAttempt()) return;
     if (error instanceof TicketMutationError && [401, 403, 404].includes(error.status)) this.canonicalMutationSli?.recordDenied();
     else if (error instanceof BetaAdmissionError && error.status >= 400 && error.status < 500) this.canonicalMutationSli?.recordDenied();
+  }
+  /** Same post-commit-only capability boundary as staff mutations. */
+  broadcastGrant(prepared: PreparedTicketMutation, outcome: MutationOutcome): CanonicalBroadcastGrant | null {
+    const attempt = this.attempts.get(prepared);
+    return attempt && !outcome.replayed ? attempt.broadcastGrant ?? null : null;
+  }
+  private committed(prepared: PreparedTicketMutation, outcome: MutationOutcome): MutationOutcome {
+    const attempt = this.attempts.get(prepared);
+    const authority = attempt?.budgetAuthority ?? attempt?.customerBudgetHandoff?.authority;
+    if (attempt && !outcome.replayed) attempt.broadcastGrant = canonicalBroadcastGrantAfterCommit(authority, this.scope.tenantId) ?? undefined;
+    return outcome;
   }
 
   private async authorize(): Promise<string | undefined> {
@@ -432,7 +444,7 @@ export class TicketMutationReplayService {
           : await this.repository.commit(candidate, attempt.namespace,
             attempt.budgetRequired ? { apiKeyId: this.principal.id, authority: attempt.budgetAuthority! } : undefined);
         if (attempt.budgetAuthority && attempt.budgetLifecycle) attempt.budgetLifecycle.cache.settleOperation(attempt.budgetAuthority,'committed',attempt.budgetLifecycle.now());
-        return renderMutationSnapshot(snapshot, input.operation, false, attempt.keyed);
+        return this.committed(prepared,renderMutationSnapshot(snapshot, input.operation, false, attempt.keyed));
       } catch {
         // A unique receipt collision rolls back all losing writes. Only an
         // authoritative committed receipt can establish a replay/conflict.

@@ -13,6 +13,8 @@
     "notification-collaboration-runtime-entry.ts",
     "notification-typing-resource-runtime.test.ts",
     "notification-typing-resource-runtime-entry.ts",
+    "realtime-admission-runtime.test.ts",
+    "realtime-admission-runtime-entry.ts",
     "vectorize-workflow-runtime.test.ts"
   ]
 }

@@ -5,8 +5,9 @@ import { MAX_NOTIFICATION_BROADCAST_ATTEMPTS, MAX_NOTIFICATION_CONNECTIONS } fro
 
 /**
  * Direct bounded fanout only, including all three existing sender attempts and
- * full #159 diagnostic ceilings. The tenant/id primary-key authority lookup
- * returns at most one row per recipient; runtime evidence verifies that bound.
+ * full #159 diagnostic ceilings. Ticket-bearing canonical events additionally
+ * perform one current ticket lookup and one possible group-membership lookup
+ * per recipient; runtime evidence verifies the three-row bound.
  *
  * This is NOT a complete dashboard operation grant: the caller's request and
  * other compositions, independent alarm/message callbacks, message bytes, CPU/
@@ -18,13 +19,13 @@ import { MAX_NOTIFICATION_BROADCAST_ATTEMPTS, MAX_NOTIFICATION_CONNECTIONS } fro
 export function estimateDirectNotificationBroadcastEnvelope(): ResourceAmounts {
   return sumResourceEnvelopes({
     doRequests: MAX_NOTIFICATION_BROADCAST_ATTEMPTS,
-    d1RowsRead: MAX_NOTIFICATION_BROADCAST_ATTEMPTS * MAX_NOTIFICATION_CONNECTIONS,
+    d1RowsRead: MAX_NOTIFICATION_BROADCAST_ATTEMPTS * MAX_NOTIFICATION_CONNECTIONS * 3,
     // One fixed caller failure diagnostic per attempt; caller resource events
     // belong to its already-reserved request composition.
     logEvents: MAX_NOTIFICATION_BROADCAST_ATTEMPTS,
   }, estimateDiagnosticEnvelope({
     httpRequests: 0,
-    durableObjectRevalidations: MAX_NOTIFICATION_BROADCAST_ATTEMPTS * MAX_NOTIFICATION_CONNECTIONS,
+    durableObjectRevalidations: MAX_NOTIFICATION_BROADCAST_ATTEMPTS * MAX_NOTIFICATION_CONNECTIONS * 2,
   }));
 }
 
