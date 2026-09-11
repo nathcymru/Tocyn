@@ -33,11 +33,12 @@ type AuditedUpdateEventId = Partial<Record<'ticket.assignment_changed' | 'ticket
  */
 export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTenantScope,
   admission: LocalBetaAdmissionRepository | undefined, id: string, data: AuditedTicketUpdate,
-  actor: ConversationActor, retainSystemNote = false, expectedAssignedToOrEvents?: string | null | AuditedUpdateEventId): { statements: D1PreparedStatement[]; updateIndex?: number } {
-  const eventIds = typeof expectedAssignedToOrEvents === 'string' || expectedAssignedToOrEvents === null
-    ? undefined
-    : expectedAssignedToOrEvents;
+  actor: ConversationActor, retainSystemNote = false, expectedAssignedToOrEvents?: string | null | AuditedUpdateEventId,
+  capacityOverride = false): { statements: D1PreparedStatement[]; updateIndex?: number } {
   const expectedAssignedTo = typeof expectedAssignedToOrEvents === 'string' || expectedAssignedToOrEvents === null
+    ? expectedAssignedToOrEvents
+    : undefined;
+  const eventIds = typeof expectedAssignedToOrEvents === 'object' && expectedAssignedToOrEvents !== null
     ? expectedAssignedToOrEvents
     : undefined;
   const statements: D1PreparedStatement[] = [...(admission?.ticketChangeStatements(id,data as unknown as Partial<Pick<Ticket,
@@ -58,7 +59,7 @@ export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTen
     const after = category.keys.map((key,index) => `'${category.names[index]}',${data[key] === undefined ? `t.${key}` : '?'}`).join(',');
     statements.push(db.prepare(`INSERT INTO conversation_events (${columns})
       SELECT t.tenant_id,?,t.id,NULL,${sequence},?,?,?,?,?,'internal',
-        json_object('before',json_object(${before}),'after',json_object(${after}))
+        json_object('before',json_object(${before}),'after',json_object(${after})${capacityOverride && category.kind === 'ticket.assignment_changed' ? ",'capacityOverride',1" : ''})
       FROM tickets t WHERE t.tenant_id=? AND t.id=?${expectedAssignedTo === undefined ? '' : ' AND t.assigned_to IS ?'} AND (${changes.map(key => `t.${key} IS NOT ?`).join(' OR ')})`)
       .bind(eventId,category.kind,actor.kind,actor.id,provenance(actor),actor.source,
         ...category.keys.filter(key => data[key] !== undefined).map(value),scope.tenantId,id,

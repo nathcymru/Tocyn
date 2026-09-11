@@ -144,8 +144,8 @@ export class TicketMutationReplayRepository {
     const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff)];
     const audit = assignmentActivity
       ? auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,
-        { 'ticket.assignment_changed': assignmentActivity.eventId })
-      : auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo);
+        { 'ticket.assignment_changed': assignmentActivity.eventId },staff.responsibleOwner?.capacityOverride === true)
+      : auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo,staff.responsibleOwner?.capacityOverride === true);
     const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
     statements.push(...audit.statements);
     if (expectedAssignedTo !== undefined) {

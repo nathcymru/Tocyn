@@ -114,8 +114,8 @@ async function fixture() {
         return result;
       }
     }
-    const scope = (tenant='a',actor='staff') => createVerifiedTenantScope(tenant,actor,['agent'],1);
-    const credential = (tenant='a',actor='staff') => ({tenantId:tenant,actorId:actor,role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600,mfaVerified:true});
+    const scope = (tenant='a',actor='staff') => createVerifiedTenantScope(tenant,actor,[actor === 'admin' ? 'admin' : 'agent'],1);
+    const credential = (tenant='a',actor='staff') => ({tenantId:tenant,actorId:actor,role:(actor === 'admin' ? 'admin' : 'agent') as 'admin' | 'agent',sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600,mfaVerified:true});
     const service = (tenant='a',actor='staff',capability?:CapabilityWriteFence) => {
       const activeScope=scope(tenant,actor);
       const activity = new OperatorActivityService({ scope: activeScope,
@@ -140,7 +140,7 @@ async function fixture() {
     };
     const counts = async () => {
       const result:Record<string,number> = {};
-      for (const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','staff_ticket_mutation_receipts','operator_activities']) {
+      for (const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','staff_ticket_mutation_receipts','operator_activities','operator_routing_profiles']) {
         result[table] = (await db.prepare(`SELECT count(*) AS n FROM ${table}`).first<{n:number}>())!.n;
       }
       return result;
@@ -153,8 +153,8 @@ async function fixture() {
 const reply = (body='Synthetic reply'):StaffMutationInput => ({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body}});
 const create = ():StaffMutationInput => ({operation:'dashboard.ticket.create',data:{subject:'Staff intake',customer_email:'CUSTOMER-A@EXAMPLE.TEST',body:'Synthetic intake',group_id:'group'}});
 const update = (data: AuditedTicketUpdate = { status:'pending' }): StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data });
-const responsibleOwner = (ownerId:string|null,expectedOwnerId:string|null):StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data:{
-  assigned_to:ownerId,responsibleOwnerAssignment:true,expectedAssignedTo:expectedOwnerId,
+const responsibleOwner = (ownerId:string|null,expectedOwnerId:string|null,capacityOverride=false, ticketId='ticket'):StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId,data:{
+  assigned_to:ownerId,responsibleOwnerAssignment:true,expectedAssignedTo:expectedOwnerId,...(capacityOverride ? {capacityOverride:true as const} : {}),
 } });
 async function accept(service:StaffTicketMutationService,input:StaffMutationInput,key:string) {
   const prepared = await service.prepareStaffMutation(input,key);assert.equal(prepared.replay,null);
@@ -229,6 +229,41 @@ test('responsible-owner assignment is tenant-qualified, audited, receipted, and 
     await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='a' AND user_id='owner-2' AND group_id='group'").run();
     await assert.rejects(revokedService.commit(revoked),(error:any)=>error.status===503);
     assert.deepEqual(await f.counts(),beforeRevocation,'a revoked target cannot acquire responsibility or emit an audit event');
+  } finally { await f.mf.dispose(); }
+});
+
+test('responsible-owner capacity is tenant-scoped, concurrent, and overrideable only by an audited administrator', async () => {
+  const f=await fixture();try {
+    await f.db.batch([
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('a','owner','owner-a@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('a','owner','group')"),
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('a','admin','admin-a@example.test','admin',1,1)"),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('a','admin','group')"),
+      f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES ('a','ticket-2','Synthetic second','customer-a@example.test','group','dashboard')"),
+      f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES ('a','ticket-3','Synthetic third','customer-a@example.test','group','dashboard')"),
+      f.db.prepare("INSERT INTO operator_routing_profiles (tenant_id,user_id,is_available,assignment_capacity) VALUES ('a','owner',1,1)"),
+    ]);
+    const firstService=f.service(), secondService=f.service();
+    const first=await firstService.prepareStaffMutation(responsibleOwner('owner',null,false),'capacity-first');
+    const second=await secondService.prepareStaffMutation(responsibleOwner('owner',null,false,'ticket-2'),'capacity-second');
+    assert.equal((await firstService.admit(first)).status,'spent');
+    assert.equal((await secondService.admit(second)).status,'spent');
+    const simultaneous=await Promise.allSettled([firstService.commit(first),secondService.commit(second)]);
+    assert.equal(simultaneous.filter(result=>result.status==='fulfilled').length,1);
+    assert.equal(simultaneous.filter(result=>result.status==='rejected' && (result.reason as any).status===409
+      && (result.reason as any).code==='responsible_owner_capacity_reached').length,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM tickets WHERE tenant_id='a' AND assigned_to='owner'").first<{n:number}>())?.n,1);
+
+    await assert.rejects(f.service().prepareStaffMutation(responsibleOwner('owner',null,true,'ticket-2'),'agent-override'),(error:any)=>error.status===403);
+    const admin=f.service('a','admin');
+    const overridden=await accept(admin,responsibleOwner('owner',null,true,'ticket-2'),'admin-override');
+    assert.equal(overridden.outcome.ticket.assigned_to,'owner');
+    const overrideAudit=await f.db.prepare(`SELECT facts FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket-2'
+      AND kind='ticket.assignment_changed' ORDER BY sequence DESC LIMIT 1`).first<{facts:string}>();
+    assert.equal(JSON.parse(overrideAudit!.facts).capacityOverride,1);
+
+    await f.db.prepare("UPDATE operator_routing_profiles SET is_available=0 WHERE tenant_id='a' AND user_id='owner'").run();
+    await assert.rejects(f.service('a','admin').prepareStaffMutation(responsibleOwner('owner',null,true,'ticket-3'),'unavailable-owner'),(error:any)=>error.status===409 && error.code==='responsible_owner_unavailable');
   } finally { await f.mf.dispose(); }
 });
 
