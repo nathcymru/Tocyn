@@ -30,6 +30,7 @@ import { MutationInputError, mutationInputErrorBody, readIdempotencyKey, readMut
 import { requestBounds } from '../middleware/request-bounds';
 import workspace from "./operator-workspace.handler";
 import { replyCapability } from '../services/reply-capability';
+import { governedTicketUtilityActions } from '../services/governed-ticket-actions';
 import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminatick/shared';
 import { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
 import type { PreparedStaffMutation, StaffMutationOutcome } from '../types/staff-ticket-mutation';
@@ -1110,6 +1111,29 @@ dashboard.get('/tickets/:id/reply-capability', async (c) => {
     ? { version: 1 as const, protocol: 'internal-activity-v1' as const, maxRecipients: 16 as const }
     : undefined;
   return c.json(replyCapability(ticket.id, collision, internalMentions));
+});
+
+/**
+ * The action list is a server-issued view model. It is deliberately not a
+ * generic extension endpoint: tenant data cannot provide executable code,
+ * command identifiers, or link targets through this route.
+ */
+dashboard.get('/tickets/:id/utility-actions', async (c) => {
+  const ticketId = c.req.param('id');
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  const agent = c.get('jwtPayload') as JWTPayload;
+  const ticket = await d.repositories.tickets.get(ticketId);
+  if (!ticket) return c.json({ error: 'Ticket not found' }, 404);
+  if (agent.role === 'agent' && ticket.group_id && !await d.repositories.groups.isMember(ticket.group_id, agent.sub)) {
+    return c.json({ error: 'Forbidden', message: 'You do not have access to this ticket\'s group' }, 403);
+  }
+  const decision = await d.capabilityPolicy.authorize({
+    tenantId: d.scope.tenantId,
+    actorId: agent.sub,
+    role: agent.role,
+    sessionVersion: agent.session_version ?? 0,
+  }, 'tools.reference.read');
+  return c.json(governedTicketUtilityActions(ticket.id, decision));
 });
 
 /**

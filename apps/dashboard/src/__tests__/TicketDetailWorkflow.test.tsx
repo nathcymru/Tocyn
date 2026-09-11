@@ -40,6 +40,11 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
       {visibility:'internal',channel:'internal',delivery:'recorded_only',recipient:null,record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}}
     ], ...(collision ? { collision: { version: 1, protocol: 'draft-precondition-v1', conversationRevision: typeof collision === 'function' ? collision() : 0 },
       internalMentions: { version: 1, protocol: 'internal-activity-v1', maxRecipients: 16 } } : {})});
+    if(path === '/api/tickets/workflow-ticket/utility-actions') return json({version:1,ticketId:'workflow-ticket',actions:[
+      {id:'copy-ticket-reference',label:'Copy ticket reference',description:'Copies the current ticket reference.',slot:'action-bar',capability:'tools.reference.read',kind:'application-command',command:'copy-ticket-reference',enabled:true},
+      {id:'view-ticket-reference',label:'View ticket reference',description:'Shows the current ticket reference in this workspace.',slot:'more',capability:'tools.reference.read',kind:'internal-dialog',dialog:'ticket-reference',enabled:true},
+      {id:'open-governed-action-guidance',label:'Open action safety guidance',description:'Opens the documented action security boundary in a new tab.',slot:'more',capability:'tools.reference.read',kind:'external-link',href:'https://github.com/nathcymru/Tocyn/blob/main/docs/security/capability-permissions.md',enabled:true},
+    ]});
     if(path===`/api/tickets/${ticket.id}/sla`) return sla(path,options);
     if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/'))return handle(path,options,url);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);

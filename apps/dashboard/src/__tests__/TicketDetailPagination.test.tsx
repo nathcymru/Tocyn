@@ -32,6 +32,11 @@ function setup(response:typeof request) {
     if(path==='/api/ticket-fields')return json([]);
     if(path==='/api/workspace/drafts/ticket')return new Response(null,{status:204});
     if(path==='/api/tickets/ticket/sla')return json(unavailableSla);
+    if(path==='/api/tickets/ticket/utility-actions')return json({version:1,ticketId:'ticket',actions:[
+      {id:'copy-ticket-reference',label:'Copy ticket reference',description:'Copies the current ticket reference.',slot:'action-bar',capability:'tools.reference.read',kind:'application-command',command:'copy-ticket-reference',enabled:true},
+      {id:'view-ticket-reference',label:'View ticket reference',description:'Shows the current ticket reference in this workspace.',slot:'more',capability:'tools.reference.read',kind:'internal-dialog',dialog:'ticket-reference',enabled:true},
+      {id:'open-governed-action-guidance',label:'Open action safety guidance',description:'Opens the documented action security boundary in a new tab.',slot:'more',capability:'tools.reference.read',kind:'external-link',href:'https://github.com/nathcymru/Tocyn/blob/main/docs/security/capability-permissions.md',enabled:true},
+    ]});
     return request(path,init);
   }));
 }
