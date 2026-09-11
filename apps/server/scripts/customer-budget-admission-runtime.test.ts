@@ -78,7 +78,7 @@ async function fixture() {
         scope, credential, requirements, intent: { operationId: operation, operationFingerprint: `digest:${operation}`, workScopeKey: 'ticket:shared-ticket' },
         business: { d1RowsRead: 2_560, d1RowsWritten: 1, logEvents: 136 }, now: () => NOW });
       assert.ok(prepared, 'trusted composition supplied a bounded private intent');
-      return { result: await service.reserve(prepared), handoff: service.commitHandoff(prepared) };
+      return { service, prepared, result: await service.reserve(prepared), handoff: service.commitHandoff(prepared) };
     };
     return { mf, db, coordinator, calls, cache, reserve, credentialFor, requirementsFor };
   } catch (error) { await mf.dispose(); throw error; }
@@ -92,6 +92,7 @@ test('customer reservations isolate colliding tenant/customer/ticket IDs and kee
     assert.ok(first.handoff);
     assert.ok(Object.isFrozen(first.handoff) && Object.isFrozen(first.handoff.credential) && Object.isFrozen(first.handoff.authority));
     assert.equal(first.handoff.authority.purpose, 'new-work');
+    assert.equal(first.service.commitHandoff(first.prepared), null, 'a grant cannot be handed to two canonical write attempts');
     const cold = { ...f.calls };
     assert.equal((await f.reserve('portal.reply.b')).result.status, 'spent');
     assert.deepEqual(f.calls, cold, 'the second authorized customer operation spends a preallocated warm grant');
