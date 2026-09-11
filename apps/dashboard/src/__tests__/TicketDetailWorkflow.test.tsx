@@ -846,7 +846,7 @@ it('requires a rendered conversation review and explicit CAS rebase after a stal
 
   fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
   await screen.findByText('A newer customer reply');
-  await screen.findByText(/2 messages are now rendered/);
+  await screen.findByRole('button', { name: 'Rebase saved draft' });
   expect(message).toHaveValue('Keep this draft through review');
   fireEvent.click(screen.getByRole('button', { name: 'Rebase saved draft' }));
   await screen.findByText(/Draft rebased to the reviewed conversation/);

@@ -45,12 +45,8 @@ type PendingAttachment = Readonly<{
   status: 'uploading' | 'error';
 }>;
 
-type StaleReplyReview = Readonly<{
-  phase: 'refreshing' | 'ready';
-  /** Server-derived full conversation revision fetched with the rendered review. */
-  conversationRevision?: number;
-  renderedMessages?: number;
-}>;
+/** A server-derived review revision; retry means that the bracketing reads disagreed. */
+type StaleReplyReview = number | 'refreshing' | 'retry';
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -225,7 +221,7 @@ function TicketDetail({ id }: { id: string }) {
 
   useEffect(() => {
     updateLocation(`ticket:${id}`);
-    return () => { updateLocation(null); stopTyping(id, draft.baseConversationRevision); };
+    return () => { updateLocation(null); stopTyping(id); };
   }, [draft.baseConversationRevision, id, stopTyping, updateLocation]);
 
   useEffect(() => {
@@ -335,7 +331,7 @@ function TicketDetail({ id }: { id: string }) {
       attachments: changes.attachments ?? current.attachments,
       baseConversationRevision: current.baseConversationRevision,
     }));
-    if (changes.body !== undefined) announceTyping({ ticketId: id, baseConversationRevision: draft.baseConversationRevision, active: changes.body.trim().length > 0 });
+    if (changes.body !== undefined) announceTyping(id, draft.baseConversationRevision, changes.body.trim().length > 0);
   };
 
   const uploadAttachment = async (pending: PendingAttachment) => {
@@ -404,7 +400,7 @@ function TicketDetail({ id }: { id: string }) {
     activeUploads.current.clear();
     setPendingAttachments(current => current.map(attachment => ({ ...attachment, status: 'error' })));
     const result = await draft.discard();
-    stopTyping(id, draft.baseConversationRevision);
+    stopTyping(id);
     if (result === 'cleared') {
       setSentDraftVersion(null);
       setPendingAttachments(current => current.filter(attachment => attachment.sessionGeneration !== sessionGeneration));
@@ -433,8 +429,8 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   const refreshConversationForStaleReply = async () => {
-    if (submission.current || staleReplyReview?.phase === 'refreshing') return;
-    setStaleReplyReview({ phase: 'refreshing' });
+    if (submission.current || staleReplyReview === 'refreshing') return;
+    setStaleReplyReview('refreshing');
     setNotice('');
     try {
       // Bracket the ticket read with two server-derived revisions. The ticket
@@ -449,7 +445,7 @@ function TicketDetail({ id }: { id: string }) {
         setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.');
         return;
       }
-      const refreshed = await refetch({ throwOnError: true });
+      await refetch({ throwOnError: true });
       const after = await replyCapabilities.refetch({ throwOnError: true });
       const afterCollision = after.data?.collision;
       if (!afterCollision) {
@@ -458,12 +454,13 @@ function TicketDetail({ id }: { id: string }) {
         return;
       }
       if (beforeCollision.conversationRevision !== afterCollision.conversationRevision) {
-        setStaleReplyReview({ phase: 'ready' });
+        setStaleReplyReview('retry');
         setReplyError('The conversation changed while it was being refreshed. Your draft is retained; refresh and review the latest material before rebasing.');
         return;
       }
-      setStaleReplyReview({ phase: 'ready', conversationRevision: afterCollision.conversationRevision,
-        renderedMessages: refreshed.data?.pages.reduce((total, page) => total + page.articles.length, 0) ?? 0 });
+      // The ticket response is rendered by the query update above before this
+      // exact reviewed revision is made available to the separate rebase action.
+      setStaleReplyReview(afterCollision.conversationRevision);
       setReplyError('The latest conversation is shown below. Review it, then rebase the saved draft when ready.');
     } catch (error) {
       setStaleReplyReview(null);
@@ -472,9 +469,9 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   const rebaseReviewedStaleDraft = async () => {
-    if (submission.current || staleReplyReview?.phase !== 'ready' || staleReplyReview.conversationRevision === undefined) return;
+    if (submission.current || typeof staleReplyReview !== 'number') return;
     setNotice('');
-    if (await draft.rebase(staleReplyReview.conversationRevision)) {
+    if (await draft.rebase(staleReplyReview)) {
       idempotency.current = null;
       setStaleReplyReview(null);
       setReplyError(null);
@@ -530,7 +527,7 @@ function TicketDetail({ id }: { id: string }) {
         ...(precondition ? { draft: precondition } : {}),
       }, { headers: { 'Idempotency-Key': idempotency.current.key } });
       if (!article?.id) throw new Error('The reply was not confirmed.');
-      stopTyping(id, sendingDraft.baseConversationRevision);
+      stopTyping(id);
       setSentDraftVersion(sendingDraft.version);
       const cleanup = await draft.cleanupAfterConfirmedSend(sendingDraft.version);
       if (cleanup === 'cleared') setSentDraftVersion(null);
@@ -545,7 +542,7 @@ function TicketDetail({ id }: { id: string }) {
     } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
           if (error instanceof ApiError && error.status === 409 && replyCapabilities.data?.collision) {
-          setStaleReplyReview({ phase: 'ready' });
+          setStaleReplyReview('retry');
           setReplyError('The saved draft or conversation changed. Review and rebase before sending; your draft is retained.');
         } else setReplyError(`${error.message}. Your draft is retained. Refresh the conversation before trying again if delivery is uncertain.`);
       }
@@ -827,12 +824,11 @@ function TicketDetail({ id }: { id: string }) {
           <div className="p-6 border-t border-slate-200 bg-white">
             {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} {' '}
               {staleReplyReview ? <>
-                {staleReplyReview.phase === 'refreshing'
+                {staleReplyReview === 'refreshing'
                   ? <span role="status">Refreshing the latest conversation…</span>
-                  : staleReplyReview.conversationRevision === undefined
+                  : typeof staleReplyReview !== 'number'
                     ? <TocynButton type="button" onClick={() => void refreshConversationForStaleReply()} className="underline">Refresh and review conversation</TocynButton>
-                    : <><span> {staleReplyReview.renderedMessages ?? 0} messages are now rendered.</span>{' '}
-                      <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="underline">Rebase saved draft</TocynButton></>}
+                    : <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="underline">Rebase saved draft</TocynButton>}
               </> : <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton>}
             </p>}
             {(draft.status !== 'idle' && draft.status !== 'discarded') && <div role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} className={clsx(

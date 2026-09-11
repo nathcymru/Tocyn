@@ -11,7 +11,6 @@ import {
 import { useRealtime, type RealtimePresence } from '../hooks/useRealtime';
 import { useAuthStore } from '../store/authStore';
 
-type TypingAnnouncement = Readonly<{ ticketId: string; baseConversationRevision: number; active: boolean }>;
 type CollaborationContextValue = Readonly<{
   isConnected: boolean;
   lastMessage: ReturnType<typeof useRealtime>['lastMessage'];
@@ -20,8 +19,8 @@ type CollaborationContextValue = Readonly<{
   updateLocation: ReturnType<typeof useRealtime>['updateLocation'];
   viewersForTicket: (ticketId: string) => readonly RealtimePresence[];
   typingForTicket: (ticketId: string) => readonly CollaborationTypingPresence[];
-  announceTyping: (announcement: TypingAnnouncement) => void;
-  stopTyping: (ticketId: string, baseConversationRevision: number) => void;
+  announceTyping: (ticketId: string, baseConversationRevision: number, active: boolean) => void;
+  stopTyping: (ticketId: string) => void;
 }>;
 
 const CollaborationContext = createContext<CollaborationContextValue | null>(null);
@@ -69,28 +68,28 @@ export function CollaborationProvider({ children }: { children: ReactNode }) {
     return sent;
   }, []);
 
-  const stopTyping = useCallback((ticketId: string, baseConversationRevision: number) => {
+  const stopTyping = useCallback((ticketId: string) => {
     const local = localRef.current;
     if (!local || local.ticketId !== ticketId) return;
     clearLocalTimer();
-    if (local.active) emit(ticketId, baseConversationRevision, false);
+    if (local.active) emit(ticketId, local.baseConversationRevision, false);
     localRef.current = null;
   }, [clearLocalTimer, emit]);
 
-  const announceTyping = useCallback(({ ticketId, baseConversationRevision, active }: TypingAnnouncement) => {
-    if (!active) { stopTyping(ticketId, baseConversationRevision); return; }
+  const announceTyping = useCallback((ticketId: string, baseConversationRevision: number, active: boolean) => {
+    if (!active) { stopTyping(ticketId); return; }
     // The indicator is static, including for motion-sensitive operators. While
     // a tab is hidden, no hint is sent and a reconnect never replays stale intent.
     if (document.visibilityState === 'hidden') return;
     const current = localRef.current;
-    if (current && current.ticketId !== ticketId) stopTyping(current.ticketId, current.baseConversationRevision);
+    if (current && current.ticketId !== ticketId) stopTyping(current.ticketId);
     const local = localRef.current ?? { ticketId, baseConversationRevision, active: false, lastSentAt: 0, idleTimer: null };
     local.baseConversationRevision = baseConversationRevision;
     localRef.current = local;
     const now = Date.now();
     if (!local.active || now - local.lastSentAt >= COLLABORATION_TYPING_MIN_EMIT_INTERVAL_MS) emit(ticketId, baseConversationRevision, true);
     clearLocalTimer();
-    local.idleTimer = window.setTimeout(() => stopTyping(ticketId, baseConversationRevision), COLLABORATION_TYPING_IDLE_MS);
+    local.idleTimer = window.setTimeout(() => stopTyping(ticketId), COLLABORATION_TYPING_IDLE_MS);
   }, [clearLocalTimer, emit, stopTyping]);
 
   useEffect(() => {

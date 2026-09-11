@@ -19,7 +19,7 @@ function Probe() {
   const viewers = collaboration.viewersForTicket('ticket-a');
   const typing = collaboration.typingForTicket('ticket-a');
   return <>
-    <button type="button" onClick={() => collaboration.announceTyping({ ticketId: 'ticket-a', baseConversationRevision: 4, active: true })}>Type</button>
+    <button type="button" onClick={() => collaboration.announceTyping('ticket-a', 4, true)}>Type</button>
     <span>viewers:{viewers.map(viewer => viewer.name).join(',')}</span>
     <span>typing:{typing.map(candidate => candidate.actor.name).join(',')}</span>
     <span>typing-count:{typing.length}</span>
@@ -30,9 +30,9 @@ function TicketLifecycleProbe() {
   const collaboration = useCollaboration();
   useEffect(() => {
     collaboration.updateLocation('ticket:ticket-a');
-    return () => { collaboration.updateLocation(null); collaboration.stopTyping('ticket-a', 4); };
+    return () => { collaboration.updateLocation(null); collaboration.stopTyping('ticket-a'); };
   }, [collaboration.stopTyping, collaboration.updateLocation]);
-  return <button type="button" onClick={() => collaboration.announceTyping({ ticketId: 'ticket-a', baseConversationRevision: 4, active: true })}>Start typing</button>;
+  return <button type="button" onClick={() => collaboration.announceTyping('ticket-a', 4, true)}>Start typing</button>;
 }
 
 function view() {
