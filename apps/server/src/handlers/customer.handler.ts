@@ -243,7 +243,11 @@ app.get('/auth/me', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddlew
   if (admission.status === 'rejected') return authAdmissionFailure(c, admission);
   let user;
   try { user = await deps.repositories.users.get(payload.sub, admission.admission?.fence); admission.admission?.settle('committed'); }
-  catch (error) { admission.admission?.settle('unknown'); throw error; }
+  catch (error) {
+    admission.admission?.settle('unknown');
+    if (error instanceof CustomerAuthBudgetFenceError) return authAdmissionFailure(c, { reason: 'unavailable' });
+    throw error;
+  }
   return c.json({ user: user ? { id: user.id, email: user.email, full_name: user.full_name, role: user.role, tenant_id: user.tenant_id } : null });
 });
 
