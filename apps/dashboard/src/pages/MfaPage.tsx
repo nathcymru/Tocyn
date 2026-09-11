@@ -95,8 +95,8 @@ export function MfaPage() {
   const isSetupMode = !user.mfa_enabled;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-8">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+    <div className="w-full">
+      <div className="w-full">
         <div className="text-center mb-8">
           <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 mb-4">
             {isSetupMode ? (
@@ -180,6 +180,7 @@ export function MfaPage() {
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </TocynButton>
         </form>
+        {!isSetupMode && <TocynButton type="button" disabled={loading} className="mt-4 min-h-11 w-full text-sm" onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</TocynButton>}
         <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
       </div>
     </div>
