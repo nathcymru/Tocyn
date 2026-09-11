@@ -2,6 +2,10 @@ import { RE2JS } from 're2js';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { Ticket, Article } from '../types';
 import { KnowledgeIndexRepository } from '../repositories/knowledge-index.repository';
+import { RetentionAdmissionRepository, RETENTION_EXTERNAL_BATCH, RETENTION_RULE_BATCH } from '../repositories/retention-admission.repository';
+import { admitRetentionStep } from '../budgets/retention-admission.service';
+import { apiTicketBudgetCache } from '../middleware/budget-admission.middleware';
+import type { Env } from '../bindings';
 
 interface AutomationCondition {
   field: string;
@@ -244,5 +248,117 @@ export class TenantAutomationService {
     }
 
     return { deleted_tickets: totalDeletedTickets, deleted_attachments: totalDeletedAttachments };
+  }
+
+  /**
+   * Cron-only continuation.  It deliberately does one externally visible
+   * deletion per retained ticket: all candidate scans are keyset/LIMIT based,
+   * and a claim remains in place until a provider acknowledgement is durable.
+   * The historic `runRetention` remains for old local callers; scheduler
+   * composition exclusively uses this admitted method.
+   */
+  async runBoundedRetention(input: { env: Env; now?: () => number }): Promise<{ deleted_tickets: number; deleted_attachments: number }> {
+    if (!this.deps.scope.roles.includes('system') || this.deps.scope.actorId !== 'scheduled-retention') return { deleted_tickets: 0, deleted_attachments: 0 };
+    const now = input.now ?? Date.now;
+    let deleted_tickets = 0, deleted_attachments = 0;
+    const work = new RetentionAdmissionRepository(this.deps.database, this.deps.scope);
+    const ruleAfter = await work.ruleCursor();
+    let rules = (await this.deps.database.prepare(`SELECT id,conditions,action_config FROM automation_rules
+      WHERE tenant_id=? AND is_active=1 AND event_type='scheduled.retention' AND (? IS NULL OR id>?) ORDER BY id LIMIT ?`)
+      .bind(this.deps.scope.tenantId,ruleAfter,ruleAfter,RETENTION_RULE_BATCH).all<any>()).results;
+    if (!rules.length && ruleAfter) {
+      await work.setRuleCursor(null);
+      rules = (await this.deps.database.prepare(`SELECT id,conditions,action_config FROM automation_rules
+        WHERE tenant_id=? AND is_active=1 AND event_type='scheduled.retention' ORDER BY id LIMIT ?`)
+        .bind(this.deps.scope.tenantId,RETENTION_RULE_BATCH).all<any>()).results;
+    }
+    for (const rule of rules) {
+      let config: RetentionConfig;
+      try {
+        config = JSON.parse(rule.action_config);
+        const days = config.days_to_keep ?? 365;
+        if (!Number.isInteger(days) || days < 1 || days > 36500 || (config.delete_attachments !== undefined && typeof config.delete_attachments !== 'boolean')) throw new Error('Invalid retention configuration');
+        const cutoff = new Date(now() - days * 86_400_000).toISOString();
+        const resumed = await work.resumableTickets(rule.id);
+        const cursor = await work.ticketCursor(rule.id);
+        const candidates = resumed.length ? resumed : await work.nextTickets(cutoff, cursor);
+        if (!candidates.length) { await work.setTicketCursor(rule.id, null); continue; }
+        for (const candidate of candidates) {
+          if (!('token' in candidate)) await work.setTicketCursor(rule.id, candidate);
+          const claim: { token: string } | null = 'token' in candidate
+            ? { token: candidate.token as string } : await this.deps.repositories.tickets.claimRetention(candidate.id, cutoff);
+          if (!claim) continue;
+          const current = await this.deps.repositories.tickets.get(candidate.id);
+          if (!current || !this.evaluateConditions(rule.conditions, { ticket: current })) continue;
+          await work.begin(candidate.id, claim.token, rule.id);
+          const result = await this.processRetentionWork(work, candidate.id, claim.token, config, input.env, now);
+          deleted_attachments += result.deleted_attachments;
+          if (await work.finished(candidate.id, claim.token) && await this.deps.repositories.tickets.completeRetention(candidate.id, claim.token)) deleted_tickets++;
+        }
+      } catch { console.error('Tenant retention rule failed'); }
+      await work.setRuleCursor(rule.id);
+    }
+    return { deleted_tickets, deleted_attachments };
+  }
+
+  private async processRetentionWork(work: RetentionAdmissionRepository, ticketId: string, token: string, config: RetentionConfig,
+    env: Env, now: () => number): Promise<{ deleted_attachments: number }> {
+    const nowIso = new Date(now()).toISOString();
+    await work.recoverExpired(ticketId, token, nowIso);
+    let item = await work.claimNext(ticketId, token, nowIso, new Date(now() + 300_000).toISOString());
+    if (!item) { await work.materializeNext(ticketId, token); item = await work.claimNext(ticketId, token, nowIso, new Date(now() + 300_000).toISOString()); }
+    if (!item) return { deleted_attachments: 0 };
+    if (item.itemKind === 'attachment' && !config.delete_attachments) { await work.uncertain(ticketId,item.itemKey,token); return { deleted_attachments: 0 }; }
+    const admission = await admitRetentionStep({ env, deps: this.deps, ticketId, itemKey: item.itemKey, attempt: item.attempts,
+      resource: item.itemKind === 'legacy_vector' ? 'vector' : 'r2', now });
+    // Off/undefined policy preserves the established local scheduler behavior;
+    // every configured active policy needs a current paid authority first.
+    if (admission.status === 'rejected') { await work.uncertain(ticketId,item.itemKey,token); return { deleted_attachments: 0 }; }
+    if (admission.authority?.grant) await work.recordAdmission(ticketId,item.itemKey,token,admission.authority.snapshot.authority_revision,admission.authority.grant.reservationId);
+    try {
+      if (item.itemKind === 'attachment') {
+        const id = item.itemKey.slice('attachment:'.length);
+        const row = await this.deps.database.prepare(`SELECT x.r2_key FROM attachments x JOIN articles a ON a.tenant_id=x.tenant_id AND a.id=x.article_id
+          WHERE x.tenant_id=? AND x.id=? AND a.ticket_id=? LIMIT 1`).bind(this.deps.scope.tenantId,id,ticketId).first<{r2_key:string}>();
+        if (row) await this.deps.attachmentStorage.deleteAttachment(row.r2_key);
+      } else if (item.itemKind === 'article_body') {
+        const id = item.itemKey.slice('body:'.length);
+        const row = await this.deps.database.prepare(`SELECT body_r2_key FROM articles WHERE tenant_id=? AND id=? AND ticket_id=? LIMIT 1`)
+          .bind(this.deps.scope.tenantId,id,ticketId).first<{body_r2_key:string|null}>();
+        if (row?.body_r2_key) {
+          if (this.deps.legacyArticleStorage && /^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/.test(row.body_r2_key)) await this.deps.legacyArticleStorage.deleteLegacyArticleBody(row.body_r2_key);
+          else await this.deps.attachmentStorage.deleteAttachment(row.body_r2_key);
+        }
+      } else {
+        const match = /^legacy:([^:]+):(\d+)$/.exec(item.itemKey);
+        if (!match || !this.deps.vectorStorage) throw new Error('Vector cleanup manifest unavailable');
+        const [, articleId, offsetText] = match; const offset = Number(offsetText);
+        const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
+        if (await index.hasAny(articleId)) {
+          // This is an O(1) durable all-version cleanup target (implemented by
+          // the indexing prerequisite). It preserves active QA rows until the
+          // admitted retention delete claims them in fixed-size batches.
+          await index.withdrawAll(articleId);
+          const chunks = await index.claimArticleCleanup(articleId, RETENTION_EXTERNAL_BATCH);
+          if (chunks.length) {
+            try { await this.deps.vectorStorage.deleteByIds(chunks.map(chunk => chunk.vectorId)); await index.completeArticleCleanup(articleId,chunks); }
+            catch (error) { await index.releaseArticleCleanup(articleId,chunks); throw error; }
+          }
+        } else {
+          const row = await this.deps.database.prepare(`SELECT chunk_count FROM articles WHERE tenant_id=? AND id=? AND ticket_id=? LIMIT 1`)
+            .bind(this.deps.scope.tenantId,articleId,ticketId).first<{chunk_count:number}>();
+          if (!row || !Number.isSafeInteger(row.chunk_count) || row.chunk_count < 1 || row.chunk_count > 10_000) throw new Error('Vector cleanup manifest unavailable');
+          const count = Math.min(RETENTION_EXTERNAL_BATCH, row.chunk_count - offset);
+          if (count > 0) await this.deps.vectorStorage.deleteByIds(Array.from({length:count},(_, index) => `qa_${articleId}_${offset + index}`));
+        }
+      }
+      await work.complete(ticketId,item.itemKey,token);
+      if (admission.authority) apiTicketBudgetCache.settleOperation(admission.authority,'committed',now());
+      return { deleted_attachments: item.itemKind === 'attachment' ? 1 : 0 };
+    } catch {
+      await work.uncertain(ticketId,item.itemKey,token);
+      if (admission.authority) apiTicketBudgetCache.settleOperation(admission.authority,'unknown',now());
+      return { deleted_attachments: 0 };
+    }
   }
 }
