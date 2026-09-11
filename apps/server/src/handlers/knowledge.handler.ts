@@ -9,11 +9,34 @@ import { tenantMiddleware, TenantRequestDeps } from '../middleware/tenant.middle
 import { AppVariables } from '../types';
 import { z } from 'zod';
 import { admitHttpAi } from '../budgets/http-ai-admission.service';
+import { ticketMutationAdmissionMode } from '../middleware/budget-admission.middleware';
+import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_MAX_BYTES } from '../budgets/knowledge-source-admission.service';
 
 const staffSuggestionFallback = "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
 
 const knowledgeHandler = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 const qaMarkerSchema = z.object({ type: z.enum(['answer', 'sop']).nullable() });
+
+/** A source is durable before this best-effort dispatch. The pending job remains
+ * visible and recoverable if the workflow binding is unavailable. */
+async function dispatchPendingIndex(c: any, service: TenantKnowledgeService, documentId: string, action: 'index'|'qa_index' = 'index'): Promise<void> {
+  if (ticketMutationAdmissionMode(c.env) !== 'combined' || !c.env.VECTORIZE_WORKFLOW) return;
+  const version = await service.pendingIndexVersion(documentId);
+  if (version === null) return;
+  if (!await service.reservePendingIndexDispatch(documentId, version)) return;
+  try { await c.env.VECTORIZE_WORKFLOW.create({ params: { tenantId: c.get('tenantDeps').scope.tenantId, action, documentId, version } }); }
+  catch { /* durable job remains pending; do not misreport source capture as indexed */ }
+}
+
+async function admitSourceOrResponse(c: any, sourceBytes: number, sourceKind: 'document'|'article'|'qa'): Promise<Response | null> {
+  const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const outcome = await admitKnowledgeSourceWrite({ env: c.env, deps, payload: c.get('jwtPayload'), sourceBytes, sourceKind,
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (outcome.status === 'admitted' || outcome.status === 'disabled') return null;
+  return outcome.reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
 
 knowledgeHandler.onError((error, c) => {
   if (error.message === 'Maximum tag stripping depth exceeded: possible malicious input') {
@@ -76,10 +99,15 @@ knowledgeHandler.post('/articles/:id/qa', async (c) => {
   if (!parsed.success) return c.json({ error: 'Invalid QA marker type' }, 400);
   const { type } = parsed.data;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  if (type) {
+    const admission = await admitSourceOrResponse(c, KNOWLEDGE_SOURCE_MAX_BYTES, 'qa');
+    if (admission) return admission;
+  }
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   await service.markArticleAsQA(id, type);
-  return c.json({ success: true });
+  if (type) await dispatchPendingIndex(c, service, id, 'qa_index');
+  return type ? c.json({ success: true, indexing: 'pending' }, 202) : c.json({ success: true });
 });
 
 knowledgeHandler.get('/articles/:id/content', async (c) => {
@@ -99,19 +127,24 @@ knowledgeHandler.get('/articles/:id/content', async (c) => {
 knowledgeHandler.post('/', async (c) => {
   const body = await c.req.parseBody();
   const file = body['file'] as File;
-  const title = (body['title'] as string) || file.name;
 
   if (!file) {
     return c.json({ error: 'No file provided' }, 400);
   }
 
+  const title = (body['title'] as string) || file.name;
+
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const content = new Uint8Array(await file.arrayBuffer());
+  if (content.byteLength > KNOWLEDGE_SOURCE_MAX_BYTES) return c.json({ error: 'Knowledge source exceeds 10 MiB' }, 422);
+  const admission = await admitSourceOrResponse(c, content.byteLength, 'document');
+  if (admission) return admission;
   const docId = await service.uploadAndProcess(title, file.name, content, file.type);
+  await dispatchPendingIndex(c, service, docId);
 
-  return c.json({ id: docId });
+  return c.json({ id: docId, indexing: 'pending' }, 202);
 });
 
 // AI Suggestions
@@ -198,11 +231,16 @@ knowledgeHandler.post('/articles', async (c) => {
   }
 
   const { title, content, category_id, tier } = result.data;
+  const sourceBytes = new TextEncoder().encode(content).byteLength;
+  if (sourceBytes > KNOWLEDGE_SOURCE_MAX_BYTES) return c.json({ error: 'Knowledge source exceeds 10 MiB' }, 422);
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitSourceOrResponse(c, sourceBytes, 'article');
+  if (admission) return admission;
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const id = await service.createArticle(title, content, category_id || null, tier);
-  return c.json({ id });
+  await dispatchPendingIndex(c, service, id);
+  return c.json({ id, indexing: 'pending' }, 202);
 });
 
 knowledgeHandler.put('/articles/:id', async (c) => {
@@ -214,11 +252,16 @@ knowledgeHandler.put('/articles/:id', async (c) => {
   }
 
   const { title, content, category_id, tier } = result.data;
+  const sourceBytes = new TextEncoder().encode(content).byteLength;
+  if (sourceBytes > KNOWLEDGE_SOURCE_MAX_BYTES) return c.json({ error: 'Knowledge source exceeds 10 MiB' }, 422);
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitSourceOrResponse(c, sourceBytes, 'article');
+  if (admission) return admission;
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   await service.updateArticle(id, title, content, category_id || null, tier);
-  return c.json({ success: true });
+  await dispatchPendingIndex(c, service, id);
+  return c.json({ success: true, indexing: 'pending' }, 202);
 });
 
 export default knowledgeHandler;

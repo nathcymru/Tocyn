@@ -12,6 +12,7 @@ import { CapabilityPolicyService } from '../src/repositories/capability-policy.r
 import { SESSION_BUDGET_GROUP_CAPABILITY_SQL, SessionBudgetAuthorityRepository, type SessionBudgetCredential, type SessionBudgetRequirements } from '../src/repositories/session-budget-authority.repository';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
+import { admitKnowledgeSourceWrite } from '../src/budgets/knowledge-source-admission.service';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 
 const NOW = Date.UTC(2026, 8, 11, 10, 0, 0);
@@ -29,12 +30,14 @@ async function fixture(workerLimit = 1_000) {
   for (const migration of readdirSync(join(root, 'migrations')).filter(file => file.endsWith('.sql')).sort()) {
     await db.batch(splitSql(readFileSync(join(root, 'migrations', migration), 'utf8')).map(sql => db.prepare(sql)));
   }
-  const limits = { workerRequests: workerLimit, d1RowsRead: 10_000_000, d1RowsWritten: 10_000,
+  const limits = { workerRequests: workerLimit, d1RowsRead: 10_000_000, d1RowsWritten: 100_000,
+    r2StorageBytes: 100_000_000, r2ClassAOperations: 1_000, workflowExecutions: 1_000, workflowSteps: 1_000, workflowStorageBytes: 1_000_000,
     doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 };
   const owner = { schemaVersion: 1, policyId: 'session-policy', revision: 1, deploymentId: 'session-deployment', mode: 'conservative',
     catalogueVersion: 'synthetic-2026-09', maxGrantLifetimeMs: 60_000,
     budgets: Object.entries(limits).map(([dimension, limit]) => ({ dimension, limit, allocationId: `session-${dimension}`, recoveryPercent: 20,
-      provenance: 'owner-allocation', window: { kind: 'interval', id: 'session-window', startsAt: NOW - 1, endsAt: NOW + 3_600_000 } })) };
+      provenance: 'owner-allocation', window: dimension.endsWith('StorageBytes') ? { kind: 'stock', id: `session-${dimension}-stock` }
+        : { kind: 'interval', id: 'session-window', startsAt: NOW - 1, endsAt: NOW + 3_600_000 } })) };
   await db.batch([
     db.prepare("INSERT INTO budget_deployment_authority VALUES ('session-deployment',1,'active',?)").bind(NOW),
     db.prepare(`INSERT INTO budget_owner_policies (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
@@ -80,7 +83,7 @@ async function fixture(workerLimit = 1_000) {
       intent: { operationId: operation, operationFingerprint: `digest:${operation}`, workScopeKey: 'synthetic-ticket-work' },
       business: { d1RowsRead: 2_560, d1RowsWritten: 1, logEvents: 136 } });
   };
-  return { mf, db, coordinator, calls, cache, admit, scopeFor, credentialFor, requirements, loseAck: () => { loseAck = true; } };
+  return { mf, db, coordinator, calls, cache, admit, scopeFor, credentialFor, requirements, namespace, loseAck: () => { loseAck = true; } };
   } catch (error) { await mf.dispose(); throw error; }
 }
 
@@ -133,6 +136,22 @@ for (const [label, mutation] of [
     assert.deepEqual(f.calls, before);
     assert.equal(f.cache.inspectForTrustedRuntime().operations, 1);
     assert.equal((await f.admit('unaffected-other-tenant', 'tenant-b')).status, 'spent');
+  } finally { await f.mf.dispose(); }
+});
+
+test('knowledge source admission rejects a newly revoked current staff session before R2 or workflow composition', async () => {
+  const f = await fixture();
+  try {
+    const scope = f.scopeFor('tenant-a');
+    const deps = { database: f.db, scope, repositories: { budgetAuthority: new BudgetAuthorityRepository(f.db, scope) } } as any;
+    const payload = { sub: 'shared-actor', role: 'agent' as const, tenant_id: 'tenant-a', session_version: 1,
+      mfa_verified: true, exp: NOW / 1000 + 60, email: 'tenant-a@example.test', iat: NOW / 1000 };
+    const env = { BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: f.namespace } as any;
+    assert.equal((await admitKnowledgeSourceWrite({ env, deps, payload, sourceBytes: 1_024, sourceKind: 'article', now: () => NOW })).status, 'admitted');
+    const before = { ...f.calls };
+    await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='tenant-a' AND id='shared-actor'").run();
+    assert.equal((await admitKnowledgeSourceWrite({ env, deps, payload, sourceBytes: 1_024, sourceKind: 'article', now: () => NOW })).status, 'rejected');
+    assert.deepEqual(f.calls, before, 'revocation is rejected before a source write can be composed');
   } finally { await f.mf.dispose(); }
 });
 

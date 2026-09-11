@@ -1,6 +1,7 @@
 import { RE2JS } from 're2js';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { Ticket, Article } from '../types';
+import { KnowledgeIndexRepository } from '../repositories/knowledge-index.repository';
 
 interface AutomationCondition {
   field: string;
@@ -205,9 +206,28 @@ export class TenantAutomationService {
               }
               if (article.qa_type || article.chunk_count) {
                 if (!this.deps.vectorStorage) throw new Error('Vector storage unavailable');
-                const count = article.chunk_count;
-                if (!Number.isSafeInteger(count) || !count || count < 1 || count > 10000) throw new Error('Vector cleanup manifest unavailable');
-                await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${article.id}_${i}`));
+                const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
+                if (await index.hasAny(article.id)) {
+                  // New versioned QA rows retain vector ids under the existing
+                  // ticket retention claim. One bounded batch per run avoids
+                  // unbounded cleanup fanout; incomplete work keeps ownership.
+                  const chunks = await index.claimArticleCleanup(article.id);
+                  if (chunks.length) {
+                    try {
+                      await this.deps.vectorStorage.deleteByIds(chunks.map(chunk => chunk.vectorId));
+                      await index.completeArticleCleanup(article.id, chunks);
+                    } catch (error) {
+                      await index.releaseArticleCleanup(article.id, chunks);
+                      throw error;
+                    }
+                  }
+                  if (await index.hasPendingArticleCleanup(article.id)) throw new Error('Versioned QA vector cleanup remains pending');
+                } else {
+                  // Historical rows retain the prior bounded ID convention.
+                  const count = article.chunk_count;
+                  if (!Number.isSafeInteger(count) || !count || count < 1 || count > 10000) throw new Error('Vector cleanup manifest unavailable');
+                  await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${article.id}_${i}`));
+                }
               }
             }
             if (await this.deps.repositories.tickets.completeRetention(ticket.id, claim.token)) {

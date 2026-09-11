@@ -37,6 +37,7 @@ let validToken: string;
 
 import { TenantKnowledgeService } from "../../services/tenant-knowledge.service";
 import { IsolateBudgetAdmissionCache } from '../../budgets/isolate-admission.service';
+import { SessionBudgetAdmissionService } from '../../budgets/session-admission.service';
 describe("Knowledge Handler Integration Tests", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -112,10 +113,21 @@ describe("Knowledge Handler Integration Tests", () => {
     it("should create an article with valid payload", async () => {
       const mockCreate = vi.spyOn(TenantKnowledgeService.prototype, 'createArticle').mockResolvedValue("new-article-id");
       const res = await request("/articles", "POST", { title: "Title", content: "Content" });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(202);
       const data = await res.json();
-      expect(data).toEqual({ id: "new-article-id" });
+      expect(data).toEqual({ id: "new-article-id", indexing: "pending" });
       expect(mockCreate).toHaveBeenCalledWith("Title", "Content", null, undefined);
+    });
+
+    it('does not write a source or dispatch a workflow when current staff budget admission is denied', async () => {
+      const create = vi.spyOn(TenantKnowledgeService.prototype, 'createArticle').mockResolvedValue('new-article-id');
+      vi.spyOn(SessionBudgetAdmissionService.prototype, 'admit').mockResolvedValueOnce({ status: 'rejected', reason: 'exhausted' } as any);
+      const response = await knowledgeHandler.request('/articles', {
+        method: 'POST', headers: { Authorization: `Bearer ${validToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Title', content: 'Content' }),
+      }, { DB: mockDB as any, JWT_SECRET, BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: {} } as any);
+      expect(response.status).toBe(429);
+      expect(create).not.toHaveBeenCalled();
     });
 
     it("should reject creating an article with missing content", async () => {
@@ -126,9 +138,9 @@ describe("Knowledge Handler Integration Tests", () => {
     it("should update an article with valid payload", async () => {
       const mockUpdate = vi.spyOn(TenantKnowledgeService.prototype, 'updateArticle').mockResolvedValue(undefined);
       const res = await request("/articles/art-1", "PUT", { title: "New Title", content: "New Content" });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(202);
       const data = await res.json();
-      expect(data).toEqual({ success: true });
+      expect(data).toEqual({ success: true, indexing: "pending" });
       expect(mockUpdate).toHaveBeenCalledWith("art-1", "New Title", "New Content", null, undefined);
     });
 
@@ -180,7 +192,7 @@ describe("Knowledge Handler Integration Tests", () => {
     it.each(['answer', 'sop'])('accepts the tenant QA marker %s', async (type) => {
       const mark = vi.spyOn(TenantKnowledgeService.prototype, 'markArticleAsQA').mockResolvedValue(undefined);
       const res = await request('/articles/art-1/qa', 'POST', { type });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(202);
       expect(mark).toHaveBeenCalledWith('art-1', type);
     });
   });
