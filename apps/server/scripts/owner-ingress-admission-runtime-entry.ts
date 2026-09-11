@@ -20,7 +20,8 @@ app.post('/api/handoff', authMiddleware, async c => {
   // and its D1 membership select the tenant.
   const scope = c.get('tenantScope')!;
   const deps = c.get('tenantDeps')!;
-  const operationId = crypto.randomUUID();
+  // Optional deterministic identity exists only in this synthetic runtime.
+  const operationId = c.req.query('operation') ?? crypto.randomUUID();
   const result = await tenantCache.admit({ repository: deps.repositories.budgetAuthority,
     namespace: c.env.BUDGET_COORDINATOR_DO,
     authorization: { authorize: async () => ({ kind: 'session' as const, sessionVersion: 1 }) },
@@ -30,9 +31,9 @@ app.post('/api/handoff', authMiddleware, async c => {
   const link=result.commitAuthority?.grant;
   if(result.status==='spent'&&link)await c.env.DB.prepare(`INSERT INTO budget_grant_operations
     (tenant_id,reservation_id,holder_id,operation_id,aggregate_id,operation_fingerprint,operation_envelope_json)
-    VALUES (?,?,?,?,?,?,?)`).bind(link.tenantId,link.reservationId,link.holderId,link.operationId,link.aggregateId,
+    VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`).bind(link.tenantId,link.reservationId,link.holderId,link.operationId,link.aggregateId,
       link.operationFingerprint,JSON.stringify(link.operationEnvelope)).run();
-  return c.json(result, result.status === 'spent' ? 200 : 503);
+  return c.json(result, result.status === 'spent' || result.status === 'idempotent' ? 200 : 503);
 });
 app.get('/email-readiness-guard', async c => {
   let rejection: string | undefined;
