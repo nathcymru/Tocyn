@@ -60,9 +60,10 @@ within the unchanged 570,000, 135,000, and 16,000 limits respectively.
 This is partial local accessibility evidence. The final branded build exposed
 the stale conflict and rebase completion strings in Safari's native
 accessibility tree. Exact VoiceOver phrases above were captured on the unchanged
-functional recovery revision before the branding merge; after the final reload
-the VoiceOver cursor remained on the text area, so its action notices were not
-claimed as fresh spoken output. The bounded multi-page stale-review regression
+functional recovery revision before the branding merge. A bounded follow-up
+correctly routed the cursor into the final branded Safari web content and
+captured the rebase and manual-send outcome phrases above; it still did not
+capture the longer action-notice strings as fresh spoken output. The bounded multi-page stale-review regression
 is covered by the focused dashboard test rather than this single-page fixture.
 It does not establish whole-issue assistive-technology acceptance, durable
 mentions, interruption preferences, deployment, or beta.2 readiness.
