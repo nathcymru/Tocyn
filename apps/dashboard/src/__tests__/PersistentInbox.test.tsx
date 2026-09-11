@@ -93,6 +93,20 @@ it('keeps the 20-result list node, scroll position and roving focus while conver
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
 });
 
+it('switches to an accessible factual table with row navigation and a mobile list fallback',async()=>{
+  showInbox();
+  await screen.findByRole('option',{name:/Fixture conversation 1 customer-1/});
+  const tableView=screen.getByRole('button',{name:'Table view'});
+  fireEvent.click(tableView);
+  expect(tableView).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('table',{name:'Tickets in the current view'})).toBeInTheDocument();
+  expect(screen.getByRole('columnheader',{name:'Reference'})).toBeInTheDocument();
+  expect(screen.getByRole('columnheader',{name:'Customer'})).toBeInTheDocument();
+  expect(screen.getByRole('link',{name:'Fixture conversation 1'})).toHaveAttribute('href','/inbox/all/ticket-1');
+  expect(screen.getByText('Table view uses the compact conversation list on small screens.')).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/Actions for/})).not.toBeInTheDocument();
+});
+
 it('does not persist a view switch before an unsaved conversation draft permits navigation',async()=>{
   savedSelection='ticket-1';
   detailNavigation.pending=true;

@@ -1,5 +1,5 @@
 import { TocynButton,TocynInput,TocynSelect } from '@luminatick/ui/primitives';
-import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,Search } from 'lucide-react';
+import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,LayoutList,Search,Table2 } from 'lucide-react';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
@@ -86,6 +86,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   const page=pageFromAnchor(workspace.listAnchor);
   const [filterInput,setFilterInput]=useState(workspace.listQuery);
   const [focusedIndex,setFocusedIndex]=useState(0);
+  const [presentation,setPresentation]=useState<'list'|'table'>('list');
   const rowRefs=useRef<Array<HTMLAnchorElement|null>>([]);
   const heading=useRef<HTMLHeadingElement>(null);
   const paging=useRef(false);
@@ -125,10 +126,14 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
         <TocynInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} onChange={event=>setFilterInput(event.target.value)}
           className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-9 pr-3 text-sm focus:ring-2 focus:ring-brand-600" />
       </form>
-      <div className="mt-3 flex items-center justify-between gap-3"><label className="text-xs font-semibold text-slate-600">Sort
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><label className="text-xs font-semibold text-slate-600">Sort
         <TocynSelect aria-label="Sort conversations" value={workspace.sort} onChange={event=>workspace.update({sort:event.target.value as WorkspacePreference['sort'],listAnchor:'page:1'})}
           className="ml-2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"><option value="updated_desc">Recently updated</option><option value="updated_asc">Least recently updated</option>
           <option value="created_desc">Newest</option><option value="created_asc">Oldest</option><option value="priority_desc">Highest priority</option><option value="priority_asc">Lowest priority</option></TocynSelect></label>
+        <div role="group" aria-label="Conversation presentation" className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
+          <TocynButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('rounded-md p-1.5',presentation==='list'?'bg-brand-50 text-brand-800':'text-slate-600')}><LayoutList className="h-4 w-4" aria-hidden="true" /></TocynButton>
+          <TocynButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('rounded-md p-1.5',presentation==='table'?'bg-brand-50 text-brand-800':'text-slate-600')}><Table2 className="h-4 w-4" aria-hidden="true" /></TocynButton>
+        </div></div>
         <p role="status" aria-label="Inbox status" className="text-xs text-slate-600">{query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p></div>
     </header>
     {query.error&&<div role="alert" className="m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900"><p>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</p>
@@ -136,7 +141,8 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
     {workspace.status==='error'||workspace.status==='conflict'?<div role="alert" className="mx-4 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{workspace.error}
       <TocynButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave} className="ml-2 font-semibold underline">{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</TocynButton></div>:null}
     {drafts.status==='partial'&&<p role="status" className="mx-4 mt-3 text-xs text-amber-900">Some draft indicators are still loading.</p>}
-    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className="flex-1 divide-y divide-slate-200">
+    {presentation==='table'&&<p role="status" className="mx-4 mt-3 text-xs text-slate-600 sm:hidden">Table view uses the compact conversation list on small screens.</p>}
+    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx('flex-1 divide-y divide-slate-200',presentation==='table'&&'sm:hidden')}>
       {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:tickets.length===0&&!query.error?<div className="p-8 text-center"><p className="font-semibold text-slate-800">No conversations in this view</p><p className="mt-1 text-sm text-slate-600">Clear the view filter or choose another saved view.</p></div>:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
@@ -154,6 +160,22 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
         </Link>;
       })}
     </div>
+    {presentation==='table'&&<div className="hidden flex-1 overflow-x-auto sm:block" aria-label="Conversation table">
+      <table className="min-w-[40rem] w-full text-left text-sm"><caption className="sr-only">Tickets in the current view</caption><thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600"><tr>
+        <th scope="col" className="px-4 py-3">Reference</th><th scope="col" className="px-4 py-3">Subject</th><th scope="col" className="px-4 py-3">Status</th><th scope="col" className="px-4 py-3">Priority</th><th scope="col" className="px-4 py-3">Customer</th><th scope="col" className="px-4 py-3">Updated</th>
+      </tr></thead><tbody className="divide-y divide-slate-200">
+        {query.isLoading?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">Loading conversations…</td></tr>:tickets.length===0&&!query.error?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">No conversations in this view</td></tr>:tickets.map(ticket=>{
+          const reference=ticketReference(ticket,prefix);const selected=ticket.id===selectedTicketId;
+          return <tr key={ticket.id} aria-selected={selected} className={clsx('hover:bg-slate-50',selected&&'bg-brand-50')}>
+            <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-slate-600">{reference}</td>
+            <td className="max-w-[20rem] px-4 py-3"><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} className="font-semibold text-slate-900 underline decoration-transparent hover:text-brand-700 hover:decoration-current focus-visible:outline focus-visible:ring-2 focus-visible:ring-brand-700">{ticket.subject}</Link>{ticket.snippet&&<p className="mt-1 truncate text-xs text-slate-600">{ticket.snippet}</p>}</td>
+            <td className="whitespace-nowrap px-4 py-3"><span className={clsx('rounded-full border px-2 py-0.5 text-xs font-semibold capitalize',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span></td>
+            <td className="whitespace-nowrap px-4 py-3"><span className={clsx('inline-flex items-center gap-1 font-semibold capitalize',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{ticket.priority}</span></td>
+            <td className="max-w-[15rem] truncate px-4 py-3 text-slate-700" title={ticket.customer_email}>{ticket.customer_email}</td><td className="whitespace-nowrap px-4 py-3 text-slate-600"><time dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></td>
+          </tr>;
+        })}
+      </tbody></table>
+    </div>}
     {meta.total_pages>1&&<footer className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3"><span role="status" className="text-xs font-semibold text-slate-600">Page {meta.page} of {meta.total_pages}</span><div className="flex gap-2">
       <TocynButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||page<=1} onClick={()=>{if(!query.isFetching&&page>1){paging.current=true;workspace.update({listAnchor:pageAnchor(page-1)});}}} className="rounded-lg border border-slate-300 p-2"><ChevronLeft className="h-4 w-4" /></TocynButton>
       <TocynButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||page>=meta.total_pages} onClick={()=>{if(!query.isFetching&&page<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(page+1)});}}} className="rounded-lg border border-slate-300 p-2"><ChevronRight className="h-4 w-4" /></TocynButton></div></footer>}
