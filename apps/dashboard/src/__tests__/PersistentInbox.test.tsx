@@ -169,3 +169,26 @@ it('shows recovery and no historical rows when the current tenant list read is d
   expect(within(screen.getByRole('listbox',{name:'Conversation list'})).queryAllByRole('option')).toHaveLength(0);
   expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
 });
+
+it('provides discoverable command navigation and keeps shortcuts out of editable controls',async()=>{
+  showInbox();
+  const filter=await screen.findByRole('textbox',{name:'Filter this view'});
+  const shortcuts=screen.getByRole('button',{name:'Keyboard shortcuts'});
+
+  screen.getByRole('heading',{name:'Inbox'}).focus();
+  fireEvent.keyDown(window,{key:'k',ctrlKey:true});
+  expect(filter).toHaveFocus();
+
+  fireEvent.keyDown(filter,{key:'k',ctrlKey:true});
+  expect(filter).toHaveFocus();
+
+  fireEvent.click(shortcuts);
+  const dialog=screen.getByRole('dialog',{name:'Keyboard shortcuts'});
+  expect(dialog).toHaveTextContent('Focus view filter');
+  expect(screen.getByRole('button',{name:'Close keyboard shortcuts'})).toHaveFocus();
+  fireEvent.click(screen.getByRole('button',{name:'Close keyboard shortcuts'}));
+  expect(filter).toHaveFocus();
+  fireEvent.click(shortcuts);
+  fireEvent.keyDown(screen.getByRole('dialog',{name:'Keyboard shortcuts'}),{key:'Escape'});
+  expect(filter).toHaveFocus();
+});
