@@ -12,6 +12,7 @@ import {mfaService} from '../src/services/auth/mfa.service';
 import {authService} from '../src/services/auth/auth.service';
 import {isolateWarmReservedEnvelope} from '../src/budgets/isolate-grant-holder';
 import {staffAuthEnvelope,type StaffAuthOperation} from '../src/budgets/staff-auth-admission.service';
+import {CUSTOMER_AUTH_ENVELOPES,type CustomerAuthOperation} from '../src/budgets/customer-auth-admission.service';
 
 const root=resolve(import.meta.dirname,'..');
 const now=Math.floor(Date.now()/1000)*1000;
@@ -67,12 +68,18 @@ async function fixture(){
       db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,mfa_enabled,session_version)
         VALUES ('staff-zero','staff-new','new-zero@example.test','New Zero','agent',0,1)`),
     ]);
-    const token=async(input:{tenantId:string;actorId:string;role?:'admin'|'agent';audience:'app'|'mfa-challenge';mfaVerified:boolean;sessionVersion?:number})=>
+    await db.batch([
+      db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,mfa_secret,mfa_enabled,session_version)
+        VALUES ('staff-a','customer-disable','customer-disable@example.test','Customer disable','customer',?,1,1)`).bind(encryptedAdmin),
+      db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,mfa_secret,mfa_enabled,session_version)
+        VALUES ('staff-low','customer-low','customer-low@example.test','Customer low','customer',?,1,1)`).bind(encryptedAdmin),
+    ]);
+    const token=async(input:{tenantId:string;actorId:string;role?:'admin'|'agent'|'customer';audience:'app'|'mfa-challenge';mfaVerified:boolean;sessionVersion?:number})=>
       new SignJWT({tenant_id:input.tenantId,role:input.role??'admin',mfa_verified:input.mfaVerified,
         session_version:input.sessionVersion??1,email:`${input.actorId}@example.test`}).setProtectedHeader({alg:'HS256'})
         .setSubject(input.actorId).setAudience(input.audience).setIssuedAt(Math.floor(now/1000))
         .setExpirationTime(Math.floor(now/1000)+3600).sign(new TextEncoder().encode(jwtSecret));
-    return{mf,db,token};
+    return{mf,db,token,encryptedAdmin};
   }catch(error){await mf.dispose();throw error;}
 }
 
@@ -94,6 +101,7 @@ async function operations(f:Awaited<ReturnType<typeof fixture>>,tenantId:string)
 function expected(operation:StaffAuthOperation,snapshot:{mfaEnabled:boolean;pendingSecret:boolean}){
   return isolateWarmReservedEnvelope(staffAuthEnvelope(operation,snapshot));
 }
+function customerExpected(operation:CustomerAuthOperation){return isolateWarmReservedEnvelope(CUSTOMER_AUTH_ENVELOPES[operation]);}
 function assertWithin(measured:Awaited<ReturnType<typeof control>>,operation:StaffAuthOperation,
   snapshot:{mfaEnabled:boolean;pendingSecret:boolean}){
   const envelope=staffAuthEnvelope(operation,snapshot);
@@ -230,5 +238,33 @@ test('MFA state changed after reservation blocks enrollment mutation and token i
     await control(f,{beforeFence:'mfa',reset:true});const response=await request(f,'/mfa/setup',enrollment);
     assert.equal(response.status,503,await response.clone().text());
     assert.equal((await f.db.prepare("SELECT count(*) AS count FROM budget_grant_operations WHERE tenant_id='staff-a'").first<{count:number}>())?.count,0);
+  }finally{await f.mf.dispose();}
+});
+
+test('customer MFA disable is admitted and strict policy rejects before the MFA update',async()=>{
+  const f=await fixture();try{
+    const customer=await f.token({tenantId:'staff-a',actorId:'customer-disable',role:'customer',audience:'app',mfaVerified:true});
+    const disabled=await request(f,'/mfa/disable',customer);
+    assert.equal(disabled.status,200,await disabled.clone().text());
+    assert.deepEqual(await f.db.prepare("SELECT mfa_enabled,mfa_secret FROM users WHERE tenant_id='staff-a' AND id='customer-disable'")
+      .first<{mfa_enabled:number;mfa_secret:string|null}>(),{mfa_enabled:0,mfa_secret:null});
+    assert.deepEqual(await operations(f,'staff-a'),[customerExpected('mfa.disable')]);
+
+    const low=await f.token({tenantId:'staff-low',actorId:'customer-low',role:'customer',audience:'app',mfaVerified:true});
+    const rejected=await request(f,'/mfa/disable',low);
+    assert.equal(rejected.status,429,await rejected.clone().text());
+    assert.deepEqual(await f.db.prepare("SELECT mfa_enabled,mfa_secret FROM users WHERE tenant_id='staff-low' AND id='customer-low'")
+      .first<{mfa_enabled:number;mfa_secret:string|null}>(),{mfa_enabled:1,mfa_secret:f.encryptedAdmin});
+  }finally{await f.mf.dispose();}
+});
+
+test('customer MFA-disable session race fails the exact fence without lowering MFA',async()=>{
+  const f=await fixture();try{
+    const customer=await f.token({tenantId:'staff-a',actorId:'customer-disable',role:'customer',audience:'app',mfaVerified:true});
+    await control(f,{beforeFence:'customer-session'});
+    const response=await request(f,'/mfa/disable',customer);
+    assert.equal(response.status,503,await response.clone().text());
+    assert.deepEqual(await f.db.prepare("SELECT mfa_enabled,mfa_secret,session_version FROM users WHERE tenant_id='staff-a' AND id='customer-disable'")
+      .first<{mfa_enabled:number;mfa_secret:string|null;session_version:number}>(),{mfa_enabled:1,mfa_secret:f.encryptedAdmin,session_version:2});
   }finally{await f.mf.dispose();}
 });
