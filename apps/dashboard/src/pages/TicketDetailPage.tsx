@@ -139,7 +139,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const pendingTicketSelectFocus = useRef<TicketSelectControl | null>(null);
   const [pendingTicketSelectRefresh, setPendingTicketSelectRefresh] = useState<TicketSelectControl | null>(null);
   const [isConfirmingTicketSelect, setIsConfirmingTicketSelect] = useState(false);
-  const [supportStateDraft, setSupportStateDraft] = useState({ definitionId: '', waitingReason: '', nextAction: '' });
+  const [supportStateDraft, setSupportStateDraft] = useState({ definitionId: '', waitingReason: '', nextAction: '', snoozedUntil: '' });
   const [supportStateError, setSupportStateError] = useState<string | null>(null);
   const [supportStateNotice, setSupportStateNotice] = useState<string | null>(null);
   const supportStateSelect = useRef<HTMLSelectElement>(null);
@@ -152,10 +152,10 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const restoreSupportStateDraft = (current = supportState.data) => {
     if (!current) return;
     supportStateDraftDirty.current = false;
-    setSupportStateDraft({ definitionId: current.definition_id, waitingReason: current.waiting_reason ?? '', nextAction: current.next_action ?? '' });
+    setSupportStateDraft({ definitionId: current.definition_id, waitingReason: current.waiting_reason ?? '', nextAction: current.next_action ?? '', snoozedUntil: current.snoozed_until ? current.snoozed_until.slice(0, 16) : '' });
   };
 
-  const updateSupportStateDraft = (change: Partial<{ definitionId: string; waitingReason: string; nextAction: string }>) => {
+  const updateSupportStateDraft = (change: Partial<{ definitionId: string; waitingReason: string; nextAction: string; snoozedUntil: string }>) => {
     if (supportStateFlight.current) return;
     supportStateDraftDirty.current = true;
     setSupportStateDraft(current => ({ ...current, ...change }));
@@ -298,8 +298,8 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     }
   };
 
-  const submitSupportState = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submitSupportState = async (event?: React.FormEvent, snoozedUntilOverride?: string | null) => {
+    event?.preventDefault();
     if (supportStateFlight.current) return;
     const current = supportState.data;
     const definition = selectedSupportStateDefinition;
@@ -313,7 +313,10 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     supportStateFlight.current = true;
     setIsSupportStateSubmitting(true);
     try {
-      const saved = await transitionSupportState.mutateAsync({ ticketId: id, definitionId: definition.id, waitingReason: waitingReason || null, nextAction: nextAction || null, expectedRevision: current.revision });
+      const snoozedUntil = snoozedUntilOverride === undefined
+        ? (supportStateDraft.snoozedUntil ? new Date(supportStateDraft.snoozedUntil).toISOString() : null)
+        : snoozedUntilOverride;
+      const saved = await transitionSupportState.mutateAsync({ ticketId: id, definitionId: definition.id, waitingReason: waitingReason || null, nextAction: nextAction || null, snoozedUntil, expectedRevision: current.revision });
       restoreSupportStateDraft(saved);
       setSupportStateNotice('Support state saved.');
     } catch (cause) {
@@ -654,6 +657,17 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
           <div className="grid gap-3 md:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
             <label className="text-sm font-medium text-slate-700">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <label className="block text-sm font-medium text-slate-700">Snooze until (UTC)
+              <TocynInput type="datetime-local" aria-label="Snooze until (UTC)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2" />
+            </label>
+            <p className="mt-1 text-xs text-slate-600">The shared queue will resurface this ticket at the selected UTC time.</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, new Date(supportStateDraft.snoozedUntil).toISOString())} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
+              {supportState.data.snoozed_until && <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="rounded border border-slate-400 px-3 py-2 text-sm font-semibold text-slate-700">Unsnooze ticket</TocynButton>}
+            </div>
+            {supportState.data.snoozed_until && <p role="status" className="mt-2 text-sm text-slate-700">Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
           </div>
           {selectedSupportStateNeedsDetails && <p role="status" className="text-sm text-slate-700">Load the current support-state definition before saving.</p>}
           <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
