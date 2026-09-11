@@ -1,7 +1,7 @@
 import { localBetaEnabled, authorizeLocalBeta } from '../middleware/local-beta';
 import { LOCAL_AUTH_CAPTURE_RECIPIENTS } from '../services/email/transport';
 import { BetaAdmissionError } from '../types/local-beta';
-import { assertConversationResponseBounds } from '../services/conversation-read-bounds';
+import { articlePageQuery, assertConversationResponseBounds, ConversationReadError } from '../services/conversation-read-bounds';
 import { conversationHistory } from './conversation-history';
 import { z } from 'zod';
 import { validateAttachmentReferences } from '../services/attachment-references';
@@ -28,6 +28,8 @@ import type { RequestCredentialAuthDecision } from '../observability/request-aut
 import { MutationInputError, mutationInputErrorBody, normalizeAttachmentReferences, portalTicketCreateSchema, portalTicketReplySchema, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { admitConfiguredCustomerTicketMutation, customerTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { admitCustomerAttachment } from '../budgets/customer-storage-admission.service';
+import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.service';
+import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -262,6 +264,20 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
   const payload = c.get('jwtPayload');
   const ticketId = c.req.param('id')!;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admissionEnabled = c.env.BUDGET_ADMISSION_POLICY !== undefined && customerTicketAdmissionMode(c.env) === 'enabled';
+  let query: { limit?: string; cursor?: string } = {};
+  if (admissionEnabled) {
+    try { query = articlePageQuery({ limit: c.req.query('article_limit'), cursor: c.req.query('article_cursor') }); }
+    catch (error) {
+      if (error instanceof ConversationReadError) return c.json({ code: error.code, error: error.message }, error.status);
+      throw error;
+    }
+  }
+  const admission = await admitHttpTicketRead({ env: c.env, deps, payload, operation: 'portal.ticket.detail', ticketId,
+    page: query, now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
+    ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
+    : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
   const ticketService = new TenantTicketService(deps);
   const ticket = await ticketService.findTicketById(ticketId);
 
@@ -269,8 +285,11 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
     return c.json({ error: 'Not found' }, 404);
   }
 
-  if (deps.boundedConversationRead) {
-    const page=await deps.boundedConversationRead.page(ticketId,{customerEmail:payload.email,limit:c.req.query('article_limit'),cursor:c.req.query('article_cursor')});
+  const conversationRead = admission.status === 'admitted'
+    ? deps.boundedConversationRead ?? new BoundedConversationReadRepository(deps.database, deps.scope)
+    : deps.boundedConversationRead;
+  if (conversationRead) {
+    const page=await conversationRead.page(ticketId,{customerEmail:payload.email,limit:query.limit || c.req.query('article_limit'),cursor:query.cursor || c.req.query('article_cursor')});
     const articles = page.articles.map(({ attachments, ...article }) => {
       const bodyText = publicArticleBodyText(article);
       return {
@@ -284,7 +303,7 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
     });
     const response = {
       ticket, articles,
-      canonical: await ticketService.projectAuditedConversation(ticket, page.articles),
+      canonical: await ticketService.projectAuditedConversation(ticket, page.articles, { boundedPage: true }),
       pagination: page.pagination,
     };
     assertConversationResponseBounds(response);
