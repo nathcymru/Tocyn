@@ -122,10 +122,14 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
     assert.ok(tenantA?.grants.length, 'tenant-a receives the server-derived handoff envelope');
     assert.equal(tenantB, undefined, 'a client query cannot select another tenant ledger');
     assert.ok(tenantA.grants.some(grant => (grant.envelope.d1RowsRead ?? 0) >= OWNER_INGRESS_EXECUTION_ENVELOPE.d1RowsRead!));
-    for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
-      assert.equal(tenantA.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units,
-        units * 15, `${dimension} is charged once per durably proven tenant execution`);
+    const operationRows=await f.db.prepare(`SELECT operation_envelope_json FROM budget_grant_operations
+      WHERE tenant_id='tenant-a' ORDER BY operation_id LIMIT 16`).all<{operation_envelope_json:string}>();
+    assert.equal(operationRows.results.length,15);
+    for(const row of operationRows.results)for(const [dimension,units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)){
+      assert.ok((JSON.parse(row.operation_envelope_json)[dimension]??0)>=units*2,
+        `${dimension} prepays both permitted ingress attempts in the tenant operation`);
     }
+    assert.equal(tenantA.closedCharges.length,0,'retirement creates no fresh tenant reservation or charge');
 
     const tenantGrantCount = tenantA.grants.length;
     await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='tenant-a' AND id='actor-a'").run();
@@ -204,6 +208,56 @@ test('0063 bounds the server-derived deployment and policy candidate scan', asyn
   } finally { await f.mf.dispose(); }
 });
 
+test('tenant admission prepays ingress liability before effects and fails closed on held-balance exhaustion',async()=>{
+  const f=await fixture('owner-ingress-tenant-prepay'),g=await fixture('owner-ingress-tenant-held');
+  try{
+    await seed(f.db);
+    const token=await new SignJWT({tenant_id:'tenant-a',role:'admin',session_version:1,mfa_verified:true})
+      .setProtectedHeader({alg:'HS256'}).setSubject('actor-a').setAudience('app').setIssuedAt().setExpirationTime('5m')
+      .sign(new TextEncoder().encode(JWT_SECRET));
+    const constrained={...restriction(),limits:{...restriction().limits,workerRequests:4}};
+    await f.db.prepare("UPDATE budget_tenant_allocations SET restriction_json=? WHERE tenant_id='tenant-a'").bind(JSON.stringify(constrained)).run();
+    const denied=await f.mf.dispatchFetch('http://example.test/api/handoff',{method:'POST',headers:{Authorization:`Bearer ${token}`}});
+    assert.equal(denied.status,503,'old business/control capacity cannot admit without both ingress attempts prepaid');
+    assert.equal((await f.db.prepare('SELECT count(*) AS total FROM budget_grant_operations').first<{total:number}>())?.total,0);
+
+    await seed(g.db);
+    const enough={...restriction(),limits:{...restriction().limits,workerRequests:50}};
+    await g.db.prepare("UPDATE budget_tenant_allocations SET restriction_json=? WHERE tenant_id='tenant-a'").bind(JSON.stringify(enough)).run();
+    const statuses=[];for(let index=0;index<9;index++)statuses.push((await g.mf.dispatchFetch(`http://example.test/api/handoff?n=${index}`,{
+      method:'POST',headers:{Authorization:`Bearer ${token}`}})).status);
+    assert.deepEqual(statuses.slice(0,8),Array(8).fill(200));
+    assert.equal(statuses[8],503,'a spent prepaid tenant block cannot refill beyond tenant capacity');
+    const namespace=await g.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    const state=await (namespace.get(namespace.idFromName('owner-ingress-aggregate')) as unknown as BudgetCoordinatorDO).inspectForTrustedRuntime();
+    assert.equal(state.tenantStates[0].grants.length,1);
+  }finally{await f.mf.dispose();await g.mf.dispose()}
+});
+
+test('one canonical operation releases at most its two admitted ingress attempts across blocks',async()=>{
+  const f=await fixture('owner-ingress-attempt-bound');
+  try{
+    await seed(f.db);
+    const token=await new SignJWT({tenant_id:'tenant-a',role:'admin',session_version:1,mfa_verified:true})
+      .setProtectedHeader({alg:'HS256'}).setSubject('actor-a').setAudience('app').setIssuedAt().setExpirationTime('5m')
+      .sign(new TextEncoder().encode(JWT_SECRET));
+    const send=(operation:string)=>f.mf.dispatchFetch(`http://example.test/api/handoff?operation=${operation}`,{
+      method:'POST',headers:{Authorization:`Bearer ${token}`}});
+    const second=await send('canonical-replay');assert.equal(second.status,200,JSON.stringify(await second.json()));
+    for(let index=0;index<7;index++)assert.equal((await send(`first-fill-${index}`)).status,200);
+    const retry=await send('canonical-replay');assert.equal(retry.status,200,JSON.stringify(await retry.json()));
+    for(let index=0;index<7;index++)assert.equal((await send(`second-fill-${index}`)).status,200);
+    assert.equal((await send('canonical-replay')).status,503,'the third attempt receives no tenant proof');
+    for(let index=0;index<7;index++)assert.equal((await send(`third-fill-${index}`)).status,200);
+    const namespace=await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    const state=await (namespace.get(namespace.idFromName('owner-ingress-aggregate')) as unknown as BudgetCoordinatorDO).inspectForTrustedRuntime();
+    assert.equal(state.ownerIngress.closedCharges.find(charge=>charge.dimension==='workerRequests'&&charge.purpose==='new-work')?.units,1,
+      'only the rejected third attempt remains charged to owner ingress');
+    assert.equal((await f.db.prepare("SELECT count(*) AS total FROM budget_grant_operations WHERE operation_id='canonical-replay'").first<{total:number}>())?.total,1,
+      'both admitted attempts reuse one exact durable business operation');
+  }finally{await f.mf.dispose()}
+});
+
 test('native lost acknowledgements reuse one ingress reservation and terminal certificate', async () => {
   const f = await fixture('owner-ingress-lost-ack');
   try {
@@ -230,19 +284,29 @@ test('native lost acknowledgements reuse one ingress reservation and terminal ce
       }),
     } as unknown as DurableObjectNamespace;
     const cache = new OwnerIngressAdmissionCache();
+    let proofReads=0;
+    const repository=new BudgetAuthorityRepository(f.db);
+    repository.hasDurableGrantOperation=async()=>{proofReads++;return false};
     const admissions = [];
     for(let index=0;index<8;index++){
-      const admitted=await cache.admit({repository:new BudgetAuthorityRepository(f.db),namespace:lossy,purpose:'new-work',now:()=>NOW});
+      const admitted=await cache.admit({repository,namespace:lossy,purpose:'new-work',now:()=>NOW});
       assert.equal(admitted.status,'admitted');if(admitted.status!=='admitted')throw new Error('expected warm admission');
+      admitted.admission.tenantHandoff('tenant-a',NOW);
+      admitted.admission.handoffToTenant('tenant-a',{grant:{tenantId:'tenant-a',aggregateId:'owner-ingress-aggregate',
+        reservationId:'synthetic-business',holderId:'synthetic-holder',operationId:`operation-${index}`,
+        operationFingerprint:`fingerprint-${index}`,operationEnvelope:{workerRequests:2}}} as never);
       admissions.push(admitted.admission);
     }
-    for(const admission of admissions.slice(0,-1))assert.equal(await admission.finish(NOW+1),'retained');
-    assert.equal(await admissions.at(-1)!.finish(NOW+1),'closed');
-    assert.equal(reserveCalls, 2);
+    const rollover=cache.admit({repository,namespace:lossy,purpose:'new-work',now:()=>NOW+1});
+    await Promise.all(admissions.map(admission=>admission.finish(NOW+1)));
+    assert.equal((await rollover).status,'admitted');
+    assert.equal(reserveCalls,3,'one lost initial delivery plus one first block and one rollover reservation');
     assert.equal(reconcileCalls, 2);
+    assert.equal(proofReads,8,'concurrent rollover performs one sealed bounded proof-read sequence');
     const state = await target.inspectForTrustedRuntime();
-    assert.equal(state.ownerIngress.grants.length, 1, 'lost delivery acknowledgement does not create another credential/grant');
-    assert.equal(state.ownerIngress.grants[0].holderSeedAttempts, 2);
+    assert.equal(state.ownerIngress.grants.length,2,'rollover creates exactly one next warm block');
+    assert.equal(state.ownerIngress.grants[0].holderSeedAttempts,2,'lost delivery acknowledgement reuses the first reservation');
+    assert.equal(state.ownerIngress.grants.filter(grant=>!grant.compacted).length,1,'only the rollover block remains open');
     assert.equal(state.ownerIngress.closedCharges.find(charge => charge.dimension === 'workerRequests')?.units,8);
 
     let failedRefreshes = 0;

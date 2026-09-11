@@ -125,6 +125,9 @@ export type OwnerIngressBatchTransfer = Readonly<{
   expectedRestrictionRevision: number;
   operationId: string;
   envelope: Readonly<ResourceAmounts>;
+  businessReservationId: string;
+  businessHolderId: string;
+  prepaidOperationEnvelope: Readonly<ResourceAmounts>;
 }>;
 export type HandoffOwnerIngressBatchInput = Readonly<{
   ownerClosure: ReconcileOwnerIngressInput;
@@ -630,8 +633,8 @@ export function handoffOwnerIngress(state: BudgetOwnerAggregateState, input: Han
 
 /**
  * Closes one preallocated ingress block and moves only durably proven
- * executions into tenant ledgers. This is one aggregate transition: any
- * invalid proof or tenant capacity failure retains the original owner block.
+ * executions already prepaid in tenant ledgers. This never creates a fresh
+ * tenant reservation: any invalid prepayment proof retains the owner block.
  */
 export function handoffOwnerIngressBatch(state: BudgetOwnerAggregateState, input: HandoffOwnerIngressBatchInput): Readonly<{
   state: BudgetOwnerAggregateState;
@@ -660,20 +663,12 @@ export function handoffOwnerIngressBatch(state: BudgetOwnerAggregateState, input
     const tenant = next.tenantStates.find(item => item.tenantId === transfer.tenantId);
     if (!tenant || tenant.policyId !== transfer.expectedPolicyId || tenant.policyRevision !== transfer.expectedPolicyRevision
       || tenant.restrictionRevision !== transfer.expectedRestrictionRevision) return reject('stale-policy');
-    const holderId = `${ingress.holderId}:${transfer.operationId}`;
-    const reserved = reserveOwnerAggregate(next,{ tenantId:transfer.tenantId,holderId,idempotencyKey:transfer.operationId,
-      expectedPolicyId:transfer.expectedPolicyId,expectedPolicyRevision:transfer.expectedPolicyRevision,
-      expectedRestrictionRevision:transfer.expectedRestrictionRevision,purpose:ingress.purpose,envelope:transfer.envelope,now:input.now });
-    if (reserved.outcome.status !== 'granted' || !reserved.outcome.reservation) return reject(
-      reserved.outcome.reason === 'exhausted' ? 'exhausted' : reserved.outcome.reason === 'capacity-defect' ? 'capacity-defect'
-        : reserved.outcome.reason === 'stale-policy' ? 'stale-policy' : 'capacity-exhausted');
-    const closed = reconcileOwnerAggregate(reserved.state,{tenantId:transfer.tenantId,reservationId:reserved.outcome.reservation.reservationId,
-      holderId,expectedPolicyId:transfer.expectedPolicyId,expectedPolicyRevision:transfer.expectedPolicyRevision,
-      expectedRestrictionRevision:transfer.expectedRestrictionRevision,terminalEvidenceId:`${input.ownerClosure.terminalEvidenceId}:${transfer.operationId}`,
-      measured:transfer.envelope,uncertain:{},now:input.now,certifiedClosure:{operationSetFingerprint:transfer.operationId,
-        expiresAt:reserved.outcome.reservation.expiresAt}});
-    if (closed.outcome !== 'reconciled') return reject(closed.outcome === 'capacity-defect' ? 'capacity-defect' : 'invalid-closure');
-    next = closed.state;
+    const prepaid = tenant.grants.find(grant => grant.reservationId === transfer.businessReservationId
+      && grant.holderId === transfer.businessHolderId && !grant.compacted);
+    if (!prepaid || Object.entries(transfer.envelope).some(([dimension,units]) =>
+      (transfer.prepaidOperationEnvelope[dimension as ResourceDimension] ?? 0) < units * 2)
+      || Object.entries(transfer.prepaidOperationEnvelope).some(([dimension,units]) =>
+        units > (prepaid.envelope[dimension as ResourceDimension] ?? 0))) return reject('invalid-closure');
   }
   return { state: next, outcome: { status: 'handed-off' } };
 }
