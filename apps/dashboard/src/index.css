@@ -50,6 +50,25 @@
   border-top: 1px solid var(--tocyn-app-border);
   padding: 0.75rem 1rem;
 }
+[data-tocyn-preferences] { border-top: 1px solid var(--tocyn-app-border); margin-top: .75rem; padding-top: .75rem; }
+[data-tocyn-preferences] h3 { color: var(--tocyn-app-text); font-size: .875rem; font-weight: 600; }
+[data-tocyn-preferences] label { align-items: center; color: var(--tocyn-app-text-muted); display: flex; gap: .5rem; min-height: 44px; font-size: .875rem; }
+[data-tocyn-preferences] select { background: var(--tocyn-app-surface-panel); border: 1px solid var(--tocyn-app-border); color: var(--tocyn-app-text); margin-left: auto; max-width: 9rem; padding: .35rem; }
+[data-tocyn-preferences] > p { color: var(--tocyn-app-text-muted); font-size: .75rem; margin-top: .35rem; }
+:root[data-tocyn-font-scale="large"] { --tocyn-preference-font-scale: 1.125; }
+:root[data-tocyn-font-scale="larger"] { --tocyn-preference-font-scale: 1.25; }
+:root[data-tocyn-font-scale="normal"] { --tocyn-preference-font-scale: 1; }
+:root[data-tocyn-font-scale] body { font-size: calc(1rem * var(--tocyn-preference-font-scale, 1)); }
+:root[data-tocyn-density="compact"] [data-tocyn-workspace] { --tocyn-preference-density: .75; }
+:root[data-tocyn-density="comfortable"] [data-tocyn-workspace] { --tocyn-preference-density: 1; }
+:root[data-tocyn-density="compact"] main[aria-label="Workspace"] { padding: 1rem; }
+:root[data-tocyn-density="comfortable"] main[aria-label="Workspace"] { padding: 2rem; }
+:root[data-tocyn-focus-mode="true"] aside[data-tocyn-inverse] { display: none; }
+:root[data-tocyn-focus-mode="true"] header > div.max-w-md { visibility: hidden; }
+:root[data-tocyn-motion="reduced"] *, :root[data-tocyn-motion="reduced"] *::before, :root[data-tocyn-motion="reduced"] *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-tocyn-motion="system"] *, :root[data-tocyn-motion="system"] *::before, :root[data-tocyn-motion="system"] *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+}
 [data-tocyn-appearance] button {
   min-height: var(--tocyn-target-min, 44px);
   transition-duration: var(--tocyn-motion-duration-normal, 180ms);
