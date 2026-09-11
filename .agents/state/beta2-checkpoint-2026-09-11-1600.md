@@ -1,3 +1,7 @@
+## Combined index inventory review
+
+Old combined CI34614351572 exposed an intentionally strict staff-mutation index inventory mismatch after0052retention/0058groups. Updated the exact ticket inventory to seven and exact article inventory to five, preserving the measured resource ceiling assertion. Native ten-attachment/receipt/SLA mutation passes at452reads/181writes; no envelope or ceiling increased. Log /private/tmp/tocyn-205-index-review.log. Old CI failed lint (fixed repository query) and this inventory; build/typecheck passed. New exact-head CI remains required. PR211 root native4/4 and sharedruntime types pass; required workflow registration pushed024fdcb.
+
 # Integration correction — 11 September 2026
 
 Supersedes the active queue below; historical evidence is retained. PR205 remains the frozen batch, with a required correctness fix: existing knowledge-content GETs charge Class B operations, not new persistent R2 storage stock. A native zero-new-storage test first failed with429 and now passes twice with two distinct charged read operations. Source writes retain storage reservations; transfer/CPU accounting remains outstanding under64. The closure query was moved unchanged into the tenant-scoped repository boundary after ESLint identified it.
