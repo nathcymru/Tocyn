@@ -64,7 +64,7 @@ async function seedAuthority(db: D1Database, policy = ownerPolicy(), tenantRestr
 }
 
 test('real local D1 authority derives a shared coordinator, expires stale policy, and delivers revocation', async () => {
-  const bundled = await build({ entryPoints: ['scripts/budget-coordinator-do-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-coordinator-do-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
   let mf: Miniflare | undefined;
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
@@ -240,7 +240,7 @@ test('real local D1 authority derives a shared coordinator, expires stale policy
 
 
 test('real local D1 snapshot stops at the configured allocation sentinel and uses the allocation index', async () => {
-  const bundled = await build({ entryPoints: ['scripts/budget-coordinator-do-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-coordinator-do-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
   let mf: Miniflare | undefined;
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-authority-snapshot-proof', modules: true, script: bundled.outputFiles[0].text,

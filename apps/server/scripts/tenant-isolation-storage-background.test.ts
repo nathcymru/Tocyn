@@ -147,7 +147,7 @@ test('realtime source contract: real D1 revalidation isolates colliding staff se
         tenantId: claims.tenant_id, role: claims.role, version: claims.session_version, expiresAt: claims.exp };
       const sent: string[] = [];
       const closed: number[] = [];
-      const socket = { deserializeAttachment: () => attachment, serializeAttachment: (value: typeof attachment) => { attachment = value; },
+      const socket = { readyState: WebSocket.OPEN, deserializeAttachment: () => attachment, serializeAttachment: (value: typeof attachment) => { attachment = value; },
         send: (value: string) => { sent.push(value); }, close: (code: number) => { closed.push(code); } };
       const tenantId = fixture.principals[name].tenantId;
       const state = { id: { equals: (id: unknown) => id === `tenant:${tenantId}` }, getWebSockets: () => [socket],

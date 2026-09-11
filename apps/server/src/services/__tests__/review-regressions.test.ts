@@ -61,7 +61,7 @@ describe('PR 43 review regressions', () => {
   });
   it('broadcasts to distinct tenant objects and rejects missing scope', async () => {
     const idFromName = vi.fn(n=>n);
-    const env = {NOTIFICATION_DO:{idFromName,get:vi.fn(()=>({fetch:vi.fn()}))}};
+    const env = {NOTIFICATION_DO:{idFromName,get:vi.fn(()=>({fetch:vi.fn().mockResolvedValue(new Response('OK'))}))}};
     for (const tenant of ['A','B']) await new BroadcastService(env as any,createVerifiedTenantScope(tenant,'agent',['agent'],1)).broadcast('test',{});
     expect(idFromName.mock.calls).toEqual([['tenant:A'],['tenant:B']]);
     await expect(new BroadcastService(env as any).broadcast('test',{})).rejects.toThrow('Verified tenant scope');

@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { build } from 'esbuild';
@@ -35,7 +36,7 @@ function reserve(tenantId: string, holderId: string, idempotencyKey: string, uni
 }
 
 test('real Miniflare coordinator atomically caps two tenant allocations at their shared owner ceiling', async () => {
-  const bundled = await build({ entryPoints: ['scripts/budget-coordinator-do-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-coordinator-do-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
   let mf: Miniflare | undefined;
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
@@ -77,7 +78,7 @@ test('real Miniflare coordinator atomically caps two tenant allocations at their
 });
 
 test('real Miniflare coordinator rejects uninitialized or replacement authority snapshots', async () => {
-  const bundled = await build({ entryPoints: ['scripts/budget-coordinator-do-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-coordinator-do-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
   let mf: Miniflare | undefined;
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-coordinator-bootstrap-proof', modules: true, script: bundled.outputFiles[0].text,

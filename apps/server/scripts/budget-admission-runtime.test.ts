@@ -73,7 +73,7 @@ async function seed(db: D1Database, extraTenants = 31, owner = policy()): Promis
 }
 
 test('real local API-key create reserves configured aggregate capacity before its mutation commit', async () => {
-  const bundled = await build({ entryPoints: ['scripts/budget-admission-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   let mf: Miniflare | undefined;
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
@@ -122,7 +122,7 @@ test('real local API-key create reserves configured aggregate capacity before it
 
 async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1_000_000, d1RowsWritten: 10_000,
   doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 }), extraTenants = 0) {
-  const bundled = await build({ entryPoints: ['scripts/budget-admission-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-warm-proof', modules: true,
     compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'], script: bundled.outputFiles[0].text,
     bindings: { BUDGET_ADMISSION_POLICY: 'api-ticket-mutations-v1', DISABLE_RATE_LIMIT: 'true' },
@@ -315,7 +315,7 @@ test('two live tenant credentials retain separate warm grants and wrong-tenant t
 });
 
 test('real local API creates and same-ticket replies reuse prepaid blocks without warm DO calls', async () => {
-  const bundled = await build({ entryPoints: ['scripts/budget-admission-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   let mf: Miniflare | undefined;
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
@@ -379,7 +379,7 @@ test('real local API creates and same-ticket replies reuse prepaid blocks withou
 
 
 test('full 128-allocation authority that exceeds the bounded DO payload fails closed before mutation', async () => {
-  const bundled = await build({ entryPoints: ['scripts/budget-admission-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   let mf: Miniflare | undefined;
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{

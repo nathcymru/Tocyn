@@ -51,3 +51,12 @@ SessionBudgetAdmissionService and factory-created SessionBudgetAuthorityReposito
 Required before full dashboard admission: staff/dashboard canonical receipt variants (never mislabelstaff asAPIkeys), bounded NotificationDO accepted fanout, bounded sender selection, bounded outbound attachment rereads and full-operation request/resource envelopes. No canonical-only substitute or silentlydisabledrequired sideeffects is authorized. Notification bounds are next; article/draftformat0035 is owned in#68, potential staffreceipt0036 remains pending integration contract.
 
 Observability fixture CI was updated to verify the exact three local DO bindings, explicit local budget-off setting and realWorkersbuilt-in module support. Configuration4/4, localcollector1/1 and operationalperformance5/5 pass; exactCI revision still required.
+
+
+## Bounded realtime prerequisite — 11 September 2026
+
+NotificationDO authenticates before synchronous admission to a128-registered-socket ceiling; closing sockets retain their slots until runtime removal. Overcapacity is explicit503, with no truncated successful fanout. Current tenant/session checks remain perrecipient. Cleanup revalidates without recursively closing further recipients; valid recipients retain offline events. Runtime proves128recipients ×3broadcasts =384queries/rows and384frames; focused20tests, storage/background11, native2, types/lint pass. The conservative cleanup-inclusive reservation estimate is771invocations,768alarm writes,98688D1rows and6316803potential diagnostics; these are reservation units, not providerbilling or a complete dashboard operation. Independent callbacks, bytes, CPU/duration still need accounting.
+
+BroadcastService now returns accepted/failed/disabled outcomes, with at most3attempts, fixed diagnostics and terminal4xx/redirects. It never converts postcommit delivery failure into a failed canonical mutation response.61focusedtests and native/types/lint pass. This is service-visible outcome only; user-visible delivery receipts/recovery remain outstanding.
+
+CI uncovered runtime entrypoints dependent on working directory. Root made four existing budget scripts resolve their bundled entries relative to the script and reran the exact repository-root CI invocation:17/17pass. No test suppression, changed production algorithm, resource limit increase or Copilot request. Batch this with the session prerequisite in PR182; full#64 remains open.

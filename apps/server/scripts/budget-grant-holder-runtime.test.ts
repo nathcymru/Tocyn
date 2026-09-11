@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { build } from 'esbuild';
@@ -8,7 +9,7 @@ import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 const NOW = Date.UTC(2026, 8, 11, 11, 0, 0);
 
 test('real Miniflare warm holder persists a decrement before reply and rejects replay/fault races', async () => {
-  const bundled = await build({ entryPoints: ['scripts/budget-coordinator-do-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-coordinator-do-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
   let mf: Miniflare | undefined;
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-holder-proof', modules: true, script: bundled.outputFiles[0].text,
