@@ -1,4 +1,4 @@
-Latest coordinating checkpoint: [11 September 10:27 BST](beta2-checkpoint-2026-09-11-1027.md). Full beta.2 acceptance remains open.
+Latest coordinating checkpoint: [11 September 11:46 BST](beta2-checkpoint-2026-09-11-1146.md). Full beta.2 acceptance remains open.
 
 Historical checkpoints: [08:55 BST](beta2-checkpoint-2026-09-11-0855.md), [08:25 BST](beta2-checkpoint-2026-09-11-0825.md).
 
@@ -8,7 +8,7 @@ Active goal: complete #140, including full SLA, ownership/routing, durable works
 
 ## Current checkpoint
 
-Read [the 07:03 BST checkpoint](beta2-checkpoint-2026-09-11-0703.md) first. It supersedes the historical status below.
+Read the latest coordinating checkpoint linked above first. All older checkpoints below are historical evidence.
 
 ## Historical state — 11 September 2026, 06:36 BST
 
