@@ -22,7 +22,8 @@ describe('tenant automation safety', () => {
     expect(fetcher).toHaveBeenCalledWith('https://hooks.example.com/events', expect.objectContaining({ redirect: 'error' }));
   });
   it.each(['attachment', 'vector'])('retains ownership after %s deletion failure and succeeds on retry', async (failure) => {
-    const deps: any = { repositories: {
+    const noManifestDb = { prepare: () => ({ bind: () => ({ first: async () => null }) }) };
+    const deps: any = { database: noManifestDb, scope: { tenantId: 'tenant-a' }, repositories: {
       automations: { getActiveRules: vi.fn().mockResolvedValue([{ action_config: '{"days_to_keep":30,"delete_attachments":true}' }]) },
       tickets: { claimRetention: async () => ({ token: 'claim', created: false }), get: async () => ({ id: 'ticket' }), completeRetention: vi.fn().mockResolvedValue(true), findTicketsForRetention: vi.fn().mockResolvedValue([{ id: 'ticket' }]), delete: vi.fn() },
       articles: { listByTicket: vi.fn().mockResolvedValue([{ id: 'article', qa_type: 'answer', chunk_count: 1 }]), delete: vi.fn() },

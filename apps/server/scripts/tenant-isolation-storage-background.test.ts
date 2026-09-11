@@ -215,9 +215,9 @@ test('workflow source contract: withdrawn/deleted/foreign retries never restore 
       await deps.repositories.knowledge.createDocument({ id: 'shared-document', title: 'Synthetic document', file_path: 'shared-document.md' });
       await deps.attachmentStorage.putAttachment('shared-document.md', `body:${deps.scope.tenantId}`);
       await deps.repositories.knowledge.updateDocument('shared-document', { status: 'published', chunk_count: 1 });
-      await run(deps.scope.tenantId);
+      await deps.vectorStorage.upsert('doc_shared-document_0', [0.25, 0.75], { source_id: 'shared-document', type: 'document', status: 'published' });
     }
-    assert.equal(aiCalls, 2, 'Positive jobs must reach the real embedding service');
+    assert.equal(aiCalls, 0, 'Legacy jobs cannot reach the unbounded embedding path');
     assert.equal(vectors.size, 2);
     assert.equal(new Set([...vectors.values()].map(vector => vector.namespace)).size, 2);
     const bVectors = () => [...vectors.values()].filter(vector => vector.metadata.tenant_id === b);
@@ -225,20 +225,20 @@ test('workflow source contract: withdrawn/deleted/foreign retries never restore 
     const bDocBefore = await depsB.repositories.knowledge.getDocument('shared-document');
     await serviceA.unpublishDocument('shared-document');
     const before = { aiCalls, vectorWrites, r2: fixture.r2.operationCounts() };
-    await run(a);
-    await run(a);
+    await assert.rejects(run(a), /Legacy vector jobs require a durable manifest migration/);
+    await assert.rejects(run(a), /Legacy vector jobs require a durable manifest migration/);
     assert.deepEqual({ aiCalls, vectorWrites, r2: fixture.r2.operationCounts() }, before, 'Withdrawn retries must perform no external work');
     assert.equal((await depsA.repositories.knowledge.getDocument('shared-document'))?.status, 'pending');
     await serviceA.deleteDocument('shared-document');
     await depsB.repositories.knowledge.createDocument({ id: 'b-only-document', title: 'B only', file_path: 'b-only.md' });
     const afterDelete = { aiCalls, vectorWrites, r2: fixture.r2.operationCounts() };
-    await assert.rejects(run(a), /Document not found/);
-    await assert.rejects(run(a, 'b-only-document'), /Document not found/);
+    await assert.rejects(run(a), /Legacy vector jobs require a durable manifest migration/);
+    await assert.rejects(run(a, 'b-only-document'), /Legacy vector jobs require a durable manifest migration/);
     await assert.rejects(run(''), /Scoped workflow identity required/);
     assert.deepEqual({ aiCalls, vectorWrites, r2: fixture.r2.operationCounts() }, afterDelete);
     assert.deepEqual(bVectors(), bBefore);
     assert.deepEqual(await depsB.repositories.knowledge.getDocument('shared-document'), bDocBefore);
-    assert.equal(vectors.size, 1);
+    assert.equal(vectors.size, 2, 'legacy vectors are never synchronously deleted without an admitted durable manifest cleanup');
   });
 });
 
