@@ -135,8 +135,9 @@ test('real local combined policy admits API and authenticated staff receipts wit
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
       name: 'combined-ticket-admission-proof', modules: true, compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'], script: bundled.outputFiles[0].text,
-      bindings: { BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', DISABLE_RATE_LIMIT: 'true', JWT_SECRET: jwtSecret },
+      bindings: { BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', DISABLE_RATE_LIMIT: 'true', ENVIRONMENT: 'local', JWT_SECRET: jwtSecret },
       d1Databases: { DB: 'combined-ticket-admission-d1' },
+      r2Buckets: { ATTACHMENTS_BUCKET: 'combined-ticket-admission-r2' },
       durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' },
       unsafeEphemeralDurableObjects: true,
     }] }));
@@ -163,11 +164,21 @@ test('real local combined policy admits API and authenticated staff receipts wit
     assert.equal(conflict.status, 409); await conflict.body?.cancel();
     assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant' AND subject='Staff receipt'").first<{count:number}>())?.count, 1);
     assert.equal((await db.prepare("SELECT count(*) AS count FROM staff_ticket_mutation_receipts WHERE tenant_id='runtime-tenant'").first<{count:number}>())?.count, 1);
-    const reply = await mf.dispatchFetch(`http://runtime.test/api/tickets/${ticket.id}/articles`, {
+    const bucket = await mf.getR2Bucket('ATTACHMENTS_BUCKET');
+    await bucket.put('runtime-tenant/agent-attachments/runtime-staff/retry.txt', 'retry attachment', { httpMetadata: { contentType: 'text/plain' } });
+    const beforeRetry = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number };
+    await mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ beforeCanonical: 'failure' }) });
+    const replyRequest = () => mf!.dispatchFetch(`http://runtime.test/api/tickets/${ticket.id}/articles`, {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${staffToken}`, 'idempotency-key': 'staff-reply' },
-      body: JSON.stringify({ body: 'public **reply**', body_format: 'markdown-v1', is_internal: false, attachments: [] }),
+      body: JSON.stringify({ body: 'public **reply**', body_format: 'markdown-v1', is_internal: false,
+        attachments: [{ storageKey: 'agent-attachments/runtime-staff/retry.txt', filename: 'retry.txt' }] }),
     });
+    const failedReply = await replyRequest();
+    assert.equal(failedReply.status, 503, 'the first canonical failure retains a charged retry rather than delivering'); await failedReply.body?.cancel();
+    const reply = await replyRequest();
     assert.equal(reply.status, 201); await reply.body?.cancel();
+    const afterRetry = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number };
+    assert.equal(afterRetry.r2Gets - beforeRetry.r2Gets, 3, 'two metadata validation reads plus one winning outbound stream read are bounded');
     await db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='runtime-tenant' AND id='runtime-staff'").run();
     const revoked = await mf.dispatchFetch(`http://runtime.test/api/tickets/${ticket.id}/articles`, {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${staffToken}`, 'idempotency-key': 'revoked-staff-reply' },

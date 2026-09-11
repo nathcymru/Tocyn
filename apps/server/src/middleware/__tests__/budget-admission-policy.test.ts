@@ -5,8 +5,8 @@ describe('ticket mutation admission policy', () => {
   it.each([
     ['off', 'disabled', 'disabled'],
     ['api-ticket-mutations-v1', 'api', 'disabled'],
-    ['staff-ticket-mutations-v1', 'staff', 'enabled'],
     ['ticket-mutations-v1', 'combined', 'enabled'],
+    ['staff-ticket-mutations-v1', 'invalid', 'invalid'],
     ['unknown', 'invalid', 'invalid'],
     [undefined, 'invalid', 'invalid'],
   ] as const)('classifies %s without an implicit fallback', (policy, ticket, staff) => {

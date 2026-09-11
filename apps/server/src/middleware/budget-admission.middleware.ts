@@ -13,7 +13,6 @@ import { sumResourceEnvelopes } from '../utils/cost-policy';
 import { SessionBudgetAdmissionService } from '../budgets/session-admission.service';
 
 export const API_TICKET_BUDGET_POLICY = 'api-ticket-mutations-v1' as const;
-export const STAFF_TICKET_BUDGET_POLICY = 'staff-ticket-mutations-v1' as const;
 export const TICKET_MUTATIONS_BUDGET_POLICY = 'ticket-mutations-v1' as const;
 export type ApiTicketBudgetOperation = 'api.ticket.create' | 'api.ticket.reply';
 export type StaffTicketBudgetOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply';
@@ -34,22 +33,22 @@ export const API_TICKET_ENVELOPES: Readonly<Record<ApiTicketBudgetOperation, Res
 });
 
 /**
- * The staff operation reserves its entire bounded local composition: two HTTP
- * attempts, canonical and current-authority checks, ten attachment metadata
- * reads plus ten outbound streaming reads, and the worst permitted three
- * NotificationDO broadcasts with cleanup. Local capture has no external
- * provider unit. A real provider has no universal conversion here, so this
- * intentionally does not claim one.
+ * The staff operation reserves these bounded resource dimensions across two HTTP
+ * attempts, canonical/current-authority checks, up to two ten-attachment
+ * metadata validation passes and one ten-attachment outbound stream pass.
+ * It also includes the worst permitted three NotificationDO broadcasts with
+ * cleanup. This only covers the listed resource dimensions: CPU/duration,
+ * bytes, provider work and billing remain outside this estimate.
  */
 export const STAFF_TICKET_ENVELOPES: Readonly<Record<StaffTicketBudgetOperation, ResourceAmounts>> = Object.freeze({
   'dashboard.ticket.create': Object.freeze(sumResourceEnvelopes({
     workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
-    r2ClassBOperations: 20,
+    r2ClassBOperations: 30,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
   'dashboard.ticket.reply': Object.freeze(sumResourceEnvelopes({
     workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
-    r2ClassBOperations: 20,
+    r2ClassBOperations: 30,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
 });
@@ -58,10 +57,9 @@ export const apiTicketBudgetCache = new IsolateBudgetAdmissionCache();
 /** Session and API operations share the one server-owned isolate registry; identities stay disjoint. */
 export const sessionTicketBudgetAdmission = new SessionBudgetAdmissionService(apiTicketBudgetCache);
 
-export function ticketMutationAdmissionMode(env: Env): 'disabled' | 'api' | 'staff' | 'combined' | 'invalid' {
+export function ticketMutationAdmissionMode(env: Env): 'disabled' | 'api' | 'combined' | 'invalid' {
   if (env.BUDGET_ADMISSION_POLICY === 'off') return 'disabled';
   if (env.BUDGET_ADMISSION_POLICY === API_TICKET_BUDGET_POLICY) return 'api';
-  if (env.BUDGET_ADMISSION_POLICY === STAFF_TICKET_BUDGET_POLICY) return 'staff';
   if (env.BUDGET_ADMISSION_POLICY === TICKET_MUTATIONS_BUDGET_POLICY) return 'combined';
   return 'invalid';
 }
@@ -69,7 +67,7 @@ export function ticketMutationAdmissionMode(env: Env): 'disabled' | 'api' | 'sta
 /** Explicitly exposes the policy matrix to dashboard composition. */
 export function staffTicketAdmissionMode(env: Env): 'disabled' | 'enabled' | 'invalid' {
   const configured = ticketMutationAdmissionMode(env);
-  return configured === 'staff' || configured === 'combined' ? 'enabled'
+  return configured === 'combined' ? 'enabled'
     : configured === 'disabled' || configured === 'api' ? 'disabled' : 'invalid';
 }
 
@@ -85,7 +83,7 @@ export async function admitConfiguredApiTicketMutation(
   prepared: PreparedTicketMutation,
 ): Promise<Response | null> {
   const configured = ticketMutationAdmissionMode(c.env);
-  if (configured === 'disabled' || configured === 'staff') return null;
+  if (configured === 'disabled') return null;
   if (configured === 'invalid' || !c.env.BUDGET_COORDINATOR_DO) {
     return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   }
@@ -116,8 +114,8 @@ export async function admitConfiguredApiTicketMutation(
 
 /**
  * The dashboard-only counterpart to the API gate. `off` and API-only preserve
- * the documented legacy dashboard path; staff-only and combined modes never
- * fall through when authority is unavailable.
+ * the documented legacy dashboard path; combined mode never falls through
+ * when authority is unavailable.
  */
 export async function admitConfiguredStaffTicketMutation(
   c: Context<{ Bindings: Env; Variables: AppVariables }>,
