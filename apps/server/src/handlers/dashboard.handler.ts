@@ -18,6 +18,9 @@ import { JWTPayload, AppVariables } from "../types";
 import { TenantTicketService } from "../services/tenant-ticket.service";
 import { SupportStateService } from '../services/support-state.service';
 import { SupportStateError } from '../repositories/support-state.repository';
+import { SlaClockError } from '../repositories/sla-clock.repository';
+import { SlaClockService } from '../services/sla-clock.service';
+import type { SlaPolicyInput } from '../types/sla';
 import { MutationInputError, mutationInputErrorBody, readMutationJson } from './mutation-request';
 import { requestBounds } from '../middleware/request-bounds';
 import workspace from "./operator-workspace.handler";
@@ -80,11 +83,23 @@ const supportStateDeactivateSchema = z.object({
   waitingReason: z.string().trim().min(1).max(512).nullable().optional(),
   nextAction: z.string().trim().min(1).max(512).nullable().optional(),
 }).strict();
+const slaPolicySchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
+  calendar: z.unknown(),
+  responseTargetMs: z.number().int().nullable(),
+  resolutionTargetMs: z.number().int().nullable(),
+  reopenPolicy: z.object({ response: z.enum(['continue', 'restart']).optional(), resolution: z.enum(['continue', 'restart']).optional() }).strict().optional(),
+}).strict();
 
 function supportStateFailure(c: any, error: unknown) {
   if (!(error instanceof SupportStateError)) throw error;
   const status = error.code === 'invalid' ? 400 : error.code === 'not_found' ? 404 : 409;
   return c.json({ error: error.message, code: `support_state_${error.code}` }, status);
+}
+
+function slaFailure(c: any, error: unknown) {
+  if (!(error instanceof SlaClockError)) throw error;
+  return c.json({ error: error.message, code: `sla_${error.code}` }, error.code === 'invalid' ? 400 : error.code === 'unavailable' ? 503 : error.code === 'conflict' ? 409 : 404);
 }
 
 async function readSupportStateMutation(c: any): Promise<{ body: unknown } | { response: Response }> {
@@ -169,6 +184,22 @@ dashboard.get('/support-states', async (c) => {
   catch (error) { return supportStateFailure(c, error); }
 });
 
+dashboard.get('/sla-policy', async (c) => {
+  try { return c.json(await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getPolicy()); }
+  catch (error) { return slaFailure(c, error); }
+});
+
+dashboard.put('/sla-policy', requestBounds(64 * 1024), roleGuard(['admin']), permissionGuard('general'), async (c) => {
+  const mutation = await readSupportStateMutation(c);
+  if ('response' in mutation) return mutation.response;
+  const parsed = slaPolicySchema.safeParse(mutation.body);
+  if (!parsed.success) return c.json({ error: 'Invalid SLA policy' }, 400);
+  const revalidationFailure = await revalidatePermission(c, 'general');
+  if (revalidationFailure) return revalidationFailure;
+  try { return c.json(await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).setPolicy(parsed.data as SlaPolicyInput, permissionWriteFence(c, 'general'))); }
+  catch (error) { return slaFailure(c, error); }
+});
+
 dashboard.post('/support-states', requestBounds(64 * 1024), roleGuard(['admin']), permissionGuard('general'), async (c) => {
   const mutation = await readSupportStateMutation(c);
   if ('response' in mutation) return mutation.response;
@@ -220,6 +251,37 @@ dashboard.get('/tickets/:id/support-state', async (c) => {
     if (!state) return c.json({ error: 'Ticket not found' }, 404);
     return c.json(state);
   } catch (error) { return supportStateFailure(c, error); }
+});
+
+dashboard.get('/tickets/:id/sla', async (c) => {
+  try {
+    const projection = await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getTicketProjection(c.req.param('id'));
+    return projection ? c.json(projection) : c.json({ error: 'SLA clock unavailable' }, 404);
+  } catch (error) { return slaFailure(c, error); }
+});
+
+// Legacy tickets are initialized only when an authorized administrator
+// explicitly acknowledges the start point. This avoids retroactively applying
+// today's policy to historical tickets or scanning an entire tenant.
+dashboard.post('/tickets/:id/sla/initialize', requestBounds(1024), roleGuard(['admin']), permissionGuard('general'), async (c) => {
+  const mutation = await readSupportStateMutation(c);
+  if ('response' in mutation) return mutation.response;
+  if (!z.object({}).strict().safeParse(mutation.body).success) return c.json({ error: 'Invalid SLA initialization' }, 400);
+  const revalidationFailure = await revalidatePermission(c, 'general');
+  if (revalidationFailure) return revalidationFailure;
+  try {
+    const initialized = await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).initializeExistingTicket(c.req.param('id'));
+    return c.json({ initialized }, initialized ? 201 : 200);
+  } catch (error) { return slaFailure(c, error); }
+});
+
+dashboard.post('/ticket-sla/projections', requestBounds(16 * 1024), async (c) => {
+  const mutation = await readSupportStateMutation(c);
+  if ('response' in mutation) return mutation.response;
+  const parsed = z.object({ ticketIds: z.array(z.string().min(1).max(120)).min(1).max(25) }).strict().safeParse(mutation.body);
+  if (!parsed.success) return c.json({ error: 'Invalid SLA projection batch' }, 400);
+  try { return c.json(await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getTicketProjections(parsed.data.ticketIds)); }
+  catch (error) { return slaFailure(c, error); }
 });
 
 dashboard.patch('/tickets/:id/support-state', requestBounds(64 * 1024), async (c) => {

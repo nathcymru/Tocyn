@@ -23,6 +23,15 @@ const compatibilityDefaults = [
 ] as const;
 const supportStateCursorVersion = 1;
 const maxSupportStateCursorLength = 1024;
+// Policies are created only when a tenant first needs a clock. Calendar is
+// deliberately the approved 24/7 UTC baseline; target durations remain NULL
+// until an administrator configures them.
+const defaultSlaCalendarJson = JSON.stringify({
+  timeZone: 'UTC',
+  weekly: Object.fromEntries(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => [day, [{ startMinute: 0, endMinute: 1440 }]])),
+  exceptions: [],
+  dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' },
+});
 
 function encodeSupportStateCursor(value: { compatibility: number; label: string; id: string }): string {
   return arrayBufferToBase64(new TextEncoder().encode(JSON.stringify({ v: supportStateCursorVersion, ...value })))
@@ -257,6 +266,80 @@ export class SupportStateRepository {
       this.db.prepare(`SELECT s.ticket_id,s.definition_id,d.legacy_status AS lifecycle,d.internal_label,d.public_label,
         s.waiting_reason,s.next_action,s.changed_at,s.revision FROM ticket_support_state s JOIN support_state_definitions d
         ON d.tenant_id=s.tenant_id AND d.id=s.definition_id WHERE s.tenant_id=? AND s.ticket_id=?`).bind(this.scope.tenantId,ticketId),
+      // Every SLA write is fenced by the just-advanced support-state revision.
+      // A stale compare-and-swap therefore cannot create a policy, clock, or
+      // audit record even though D1 batch statements are evaluated in order.
+      this.db.prepare(`INSERT OR IGNORE INTO sla_policies
+        (tenant_id,calendar_json,response_target_ms,resolution_target_ms,response_reopen_policy,resolution_reopen_policy)
+        SELECT ?,?,NULL,NULL,'continue','continue' WHERE EXISTS (
+          SELECT 1 FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+          WHERE t.tenant_id=? AND t.id=? AND s.revision=? AND ${live.sql}
+        )`).bind(this.scope.tenantId,defaultSlaCalendarJson,this.scope.tenantId,ticketId,input.expectedRevision + 1,...live.values),
+      this.db.prepare(`INSERT INTO ticket_sla_events
+        (tenant_id,id,ticket_id,kind,support_state_revision,actor_id,facts)
+        SELECT t.tenant_id,${uuidSql},t.id,
+          CASE
+            WHEN c.ticket_id IS NULL THEN 'clock.initialized'
+            WHEN d.legacy_status='pending' AND s.waiting_reason IS NOT NULL AND c.paused_at IS NULL THEN 'clock.paused'
+            WHEN NOT (d.legacy_status='pending' AND s.waiting_reason IS NOT NULL) AND c.paused_at IS NOT NULL THEN 'clock.resumed'
+            WHEN d.legacy_status IN ('resolved','closed') AND c.resolution_completed_at IS NULL THEN 'clock.resolved'
+            WHEN d.legacy_status NOT IN ('resolved','closed') AND c.resolution_completed_at IS NOT NULL THEN 'clock.reopened'
+          END,
+          s.revision,?,json_object('lifecycle',d.legacy_status,'waiting',d.legacy_status='pending' AND s.waiting_reason IS NOT NULL)
+        FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+        LEFT JOIN ticket_sla_clocks c ON c.tenant_id=t.tenant_id AND c.ticket_id=t.id
+        WHERE t.tenant_id=? AND t.id=? AND s.revision=? AND ${live.sql}
+          AND (c.ticket_id IS NULL
+            OR (d.legacy_status='pending' AND s.waiting_reason IS NOT NULL) IS NOT (c.paused_at IS NOT NULL)
+            OR (d.legacy_status IN ('resolved','closed')) IS NOT (c.resolution_completed_at IS NOT NULL))`)
+        .bind(actorId,this.scope.tenantId,ticketId,input.expectedRevision + 1,...live.values),
+      this.db.prepare(`INSERT INTO ticket_sla_pause_intervals (tenant_id,ticket_id,started_at,reason,support_state_revision)
+        SELECT t.tenant_id,t.id,s.changed_at,'waiting',s.revision
+        FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+        LEFT JOIN ticket_sla_clocks c ON c.tenant_id=t.tenant_id AND c.ticket_id=t.id
+        WHERE t.tenant_id=? AND t.id=? AND s.revision=? AND d.legacy_status='pending' AND s.waiting_reason IS NOT NULL
+          AND (c.ticket_id IS NULL OR c.paused_at IS NULL) AND ${live.sql}`)
+        .bind(this.scope.tenantId,ticketId,input.expectedRevision + 1,...live.values),
+      this.db.prepare(`UPDATE ticket_sla_pause_intervals SET ended_at=(
+          SELECT s.changed_at FROM ticket_support_state s WHERE s.tenant_id=ticket_sla_pause_intervals.tenant_id AND s.ticket_id=ticket_sla_pause_intervals.ticket_id)
+        WHERE tenant_id=? AND ticket_id=? AND ended_at IS NULL AND EXISTS (
+          SELECT 1 FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+          JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+          WHERE t.tenant_id=? AND t.id=? AND s.revision=? AND NOT (d.legacy_status='pending' AND s.waiting_reason IS NOT NULL) AND ${live.sql}
+        )`).bind(this.scope.tenantId,ticketId,this.scope.tenantId,ticketId,input.expectedRevision + 1,...live.values),
+      this.db.prepare(`INSERT INTO ticket_sla_clocks
+        (tenant_id,ticket_id,response_started_at,resolution_started_at,resolution_completed_at,paused_at,pause_reason,last_support_state_revision,
+         policy_revision,policy_calendar_json,policy_response_target_ms,policy_resolution_target_ms,policy_response_reopen_policy,policy_resolution_reopen_policy)
+        SELECT t.tenant_id,t.id,t.created_at,t.created_at,
+          CASE WHEN d.legacy_status IN ('resolved','closed') THEN s.changed_at ELSE NULL END,
+          CASE WHEN d.legacy_status='pending' AND s.waiting_reason IS NOT NULL THEN s.changed_at ELSE NULL END,
+          CASE WHEN d.legacy_status='pending' AND s.waiting_reason IS NOT NULL THEN 'waiting' ELSE NULL END,s.revision,
+          p.revision,p.calendar_json,p.response_target_ms,p.resolution_target_ms,p.response_reopen_policy,p.resolution_reopen_policy
+        FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+        JOIN sla_policies p ON p.tenant_id=t.tenant_id
+        WHERE t.tenant_id=? AND t.id=? AND s.revision=? AND ${live.sql}
+        ON CONFLICT(tenant_id,ticket_id) DO UPDATE SET
+          response_started_at=CASE WHEN excluded.resolution_completed_at IS NULL AND ticket_sla_clocks.resolution_completed_at IS NOT NULL
+            AND ticket_sla_clocks.policy_response_reopen_policy='restart'
+            THEN (SELECT changed_at FROM ticket_support_state s WHERE s.tenant_id=ticket_sla_clocks.tenant_id AND s.ticket_id=ticket_sla_clocks.ticket_id)
+            ELSE ticket_sla_clocks.response_started_at END,
+          response_completed_at=CASE WHEN excluded.resolution_completed_at IS NULL AND ticket_sla_clocks.resolution_completed_at IS NOT NULL
+            AND ticket_sla_clocks.policy_response_reopen_policy='restart' THEN NULL
+            ELSE ticket_sla_clocks.response_completed_at END,
+          resolution_started_at=CASE WHEN excluded.resolution_completed_at IS NULL AND ticket_sla_clocks.resolution_completed_at IS NOT NULL
+            AND ticket_sla_clocks.policy_resolution_reopen_policy='restart'
+            THEN (SELECT changed_at FROM ticket_support_state s WHERE s.tenant_id=ticket_sla_clocks.tenant_id AND s.ticket_id=ticket_sla_clocks.ticket_id)
+            ELSE ticket_sla_clocks.resolution_started_at END,
+          resolution_completed_at=CASE
+            WHEN excluded.resolution_completed_at IS NOT NULL THEN COALESCE(ticket_sla_clocks.resolution_completed_at,excluded.resolution_completed_at)
+            ELSE NULL END,
+          paused_at=excluded.paused_at,pause_reason=excluded.pause_reason,
+          last_support_state_revision=excluded.last_support_state_revision,revision=ticket_sla_clocks.revision+1,
+          updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
+        .bind(this.scope.tenantId,ticketId,input.expectedRevision + 1,...live.values),
     ]);
     const offset = admission.length;
     if (!results[offset + 2]?.results?.[0]) throw new SupportStateError('conflict', 'Support-state transition conflicted or was invalid');
