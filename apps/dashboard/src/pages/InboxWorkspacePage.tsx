@@ -66,8 +66,23 @@ function InboxWorkspace(){
   },[queryClient,viewId,workspace.listAnchor,workspace.listQuery,workspace.sort]);
   const advanceAfterReclassification=useCallback(async(ticketId:string)=>{
     const params={page:String(pageFromAnchor(workspace.listAnchor)),sort:workspace.sort,...(isQueueView(viewId)?{queue:viewId}:{}),...(viewId&&viewId!=='all'&&!isQueueView(viewId)?{filter_id:viewId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{})};
-    await queryClient.refetchQueries({queryKey:['tickets',params],exact:true});
-    const refreshed=queryClient.getQueryData<PaginatedResponse<Ticket>>(['tickets',params]);
+    let refreshed: PaginatedResponse<Ticket>|undefined;
+    // A queue read can fail or briefly return the pre-mutation page. Retry the
+    // read once, but never retry the server mutation or advance from an
+    // unconfirmed page.
+    for(let attempt=0;attempt<2;attempt++){
+      try {
+        await queryClient.refetchQueries({queryKey:['tickets',params],exact:true});
+        const state=queryClient.getQueryState<PaginatedResponse<Ticket>>(['tickets',params]);
+        if(state?.status==='error') throw state.error;
+        refreshed=queryClient.getQueryData<PaginatedResponse<Ticket>>(['tickets',params]);
+        if(!refreshed) throw new Error('The refreshed queue response was unavailable.');
+        if(refreshed?.data.some(ticket=>ticket.id===ticketId)) throw new Error('The queue has not confirmed the saved change yet.');
+        break;
+      } catch(error){
+        if(attempt===1) throw error;
+      }
+    }
     const remaining=refreshed?.data??[];
     const previous=listBeforeAction.current;
     listBeforeAction.current=null;

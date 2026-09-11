@@ -347,7 +347,7 @@ function TicketDetail({ id,workspaceBackHref,reclassificationEnabled,onBeforeTic
       setNotice(outcome === 'cleared' ? 'This view is clear after the confirmed change.' : 'Opened the next conversation.');
       setReclassified(false);
     } catch {
-      setNotice('The change was saved, but the next conversation could not be confirmed. Retry from the list.');
+      setChangeError('The change was saved, but the next conversation could not be confirmed. Your selection and draft are preserved. Retry opening the next conversation.');
     } finally { setIsAdvancing(false); }
   };
 
