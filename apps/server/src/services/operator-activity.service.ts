@@ -14,6 +14,12 @@ export class OperatorActivityService {
     return this.deps.operatorActivity.prepareTrustedAppend(input);
   }
 
+  prepareAssignmentFromCanonicalEvent(input: Readonly<{
+    id: string; ticketId: string; recipientUserId: string; eventId: string; producerId: string;
+  }>) {
+    return this.deps.operatorActivity.prepareAssignmentFromCanonicalEvent(input);
+  }
+
   list(input: Readonly<{ cursor?: string | null; limit: number }>, credential: ActivityPresentationCredential): Promise<OperatorActivityPage | null> {
     return this.deps.operatorActivity.listForRecipient(input, credential);
   }

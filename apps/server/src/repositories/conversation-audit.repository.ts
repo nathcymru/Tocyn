@@ -24,6 +24,7 @@ export function conversationMutationEvent(db: D1Database, scope: VerifiedTenantS
 }
 
 export type AuditedTicketUpdateOutcome = Readonly<{ ticket: Ticket | null; changed: boolean }>;
+type AuditedUpdateEventId = Partial<Record<'ticket.assignment_changed' | 'ticket.state_changed', string>>;
 
 /**
  * The update event statements are shared by ordinary audited PATCH and the
@@ -32,10 +33,10 @@ export type AuditedTicketUpdateOutcome = Readonly<{ ticket: Ticket | null; chang
  */
 export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTenantScope,
   admission: LocalBetaAdmissionRepository | undefined, id: string, data: AuditedTicketUpdate,
-  actor: ConversationActor, retainSystemNote = false): { statements: D1PreparedStatement[]; updateIndex?: number } {
+  actor: ConversationActor, retainSystemNote = false, eventIds?: AuditedUpdateEventId): { statements: D1PreparedStatement[]; updateIndex?: number } {
   const statements: D1PreparedStatement[] = [...(admission?.ticketChangeStatements(id,data as unknown as Partial<Pick<Ticket,
     'status' | 'priority' | 'assigned_to' | 'group_id' | 'custom_fields'>>)??[])];
-  const eventIds: string[] = [];
+  const createdEventIds: string[] = [];
   const allKeys = ['status','priority','assigned_to','group_id','custom_fields'] as const;
   const supplied = allKeys.filter(key => data[key] !== undefined);
   const value = (key: typeof allKeys[number]) => key === 'custom_fields' && data[key] !== null && typeof data[key] !== 'string'
@@ -46,7 +47,7 @@ export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTen
   ]) {
     const changes = category.keys.filter(key => data[key] !== undefined);
     if (!changes.length) continue;
-    const eventId = crypto.randomUUID(); eventIds.push(eventId);
+    const eventId = eventIds?.[category.kind as keyof AuditedUpdateEventId] ?? crypto.randomUUID(); createdEventIds.push(eventId);
     const before = category.keys.map((key,index) => `'${category.names[index]}',t.${key}`).join(',');
     const after = category.keys.map((key,index) => `'${category.names[index]}',${data[key] === undefined ? `t.${key}` : '?'}`).join(',');
     statements.push(db.prepare(`INSERT INTO conversation_events (${columns})
@@ -56,7 +57,7 @@ export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTen
       .bind(eventId,category.kind,actor.kind,actor.id,provenance(actor),actor.source,
         ...category.keys.filter(key => data[key] !== undefined).map(value),scope.tenantId,id,...changes.map(value)));
   }
-  if (retainSystemNote && eventIds.length) {
+  if (retainSystemNote && createdEventIds.length) {
     statements.push(db.prepare(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,is_internal)
       SELECT ?,?,?,?,'system',group_concat(CASE kind WHEN 'ticket.assignment_changed' THEN 'Assignment updated'
         ELSE trim(
@@ -65,8 +66,8 @@ export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTen
           CASE WHEN json_extract(facts,'$.before.priority') IS NOT json_extract(facts,'$.after.priority')
             THEN 'Priority changed from ' || json_extract(facts,'$.before.priority') || ' to ' || json_extract(facts,'$.after.priority') || '.' ELSE '' END)
         END,'; '),1
-      FROM conversation_events WHERE tenant_id=? AND ticket_id=? AND id IN (${eventIds.map(() => '?').join(',')}) HAVING count(*)>0`)
-      .bind(scope.tenantId,crypto.randomUUID(),id,actor.id,scope.tenantId,id,...eventIds));
+      FROM conversation_events WHERE tenant_id=? AND ticket_id=? AND id IN (${createdEventIds.map(() => '?').join(',')}) HAVING count(*)>0`)
+      .bind(scope.tenantId,crypto.randomUUID(),id,actor.id,scope.tenantId,id,...createdEventIds));
   }
   if (retainSystemNote && data.custom_fields !== undefined) {
     statements.push(db.prepare(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,is_internal)
