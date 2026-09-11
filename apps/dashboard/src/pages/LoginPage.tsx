@@ -72,7 +72,7 @@ export function LoginPage() {
               aria-describedby={error ? "staff-login-error" : undefined}
               type="email"
               required
-              className="input"
+              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="agent@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -87,7 +87,7 @@ export function LoginPage() {
               aria-describedby={error ? "staff-login-error" : undefined}
               type="password"
               required
-              className="input"
+              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -96,7 +96,7 @@ export function LoginPage() {
           <TocynButton
             type="submit"
             aria-disabled={loading}
-            className="btn btn-primary w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11"
+            className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:pointer-events-none disabled:opacity-50 bg-brand-500 text-white hover:bg-brand-600 w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </TocynButton>

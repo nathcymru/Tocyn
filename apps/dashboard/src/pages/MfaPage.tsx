@@ -165,7 +165,7 @@ export function MfaPage() {
               type="text"
               required
               maxLength={6}
-              className="input text-center text-3xl tracking-[0.5em] font-mono h-14"
+              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 text-center text-3xl tracking-[0.5em] font-mono h-14"
               placeholder="000000"
               value={code}
               onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
@@ -175,7 +175,7 @@ export function MfaPage() {
           <TocynButton
             type="submit"
             aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
-            className="btn btn-primary w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11 text-base font-medium"
+            className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:pointer-events-none disabled:opacity-50 bg-brand-500 text-white hover:bg-brand-600 w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11 text-base"
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </TocynButton>

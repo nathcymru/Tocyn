@@ -100,21 +100,6 @@
   }
 }
 
-@layer components {
-  .btn {
-    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:pointer-events-none disabled:opacity-50;
-  }
-  .btn-primary {
-    @apply bg-brand-500 text-white hover:bg-brand-600;
-  }
-  .btn-ghost {
-    @apply bg-transparent hover:bg-slate-100 text-slate-700;
-  }
-  .input {
-    @apply flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50;
-  }
-}
-
 /* The dashboard still has a small set of legacy neutral utility classes.
    Map them through the validated aliases in every resolved appearance mode. */
 [data-tocyn-theme-mode] :where(.bg-white, .bg-slate-50) {
@@ -152,33 +137,13 @@
   font-size: 0.9em;
   padding: 0 0.25rem;
 }
-.tocyn-markdown-code-block .token.comment,
-.tocyn-markdown-code-block .token.prolog,
-.tocyn-markdown-code-block .token.doctype,
-.tocyn-markdown-code-block .token.cdata { color: #cbd5e1; }
+.tocyn-markdown-code-block .token:is(.comment, .prolog, .doctype, .cdata) { color: #cbd5e1; }
 .tocyn-markdown-code-block .token.punctuation { color: #e2e8f0; }
-.tocyn-markdown-code-block .token.property,
-.tocyn-markdown-code-block .token.tag,
-.tocyn-markdown-code-block .token.constant,
-.tocyn-markdown-code-block .token.symbol,
-.tocyn-markdown-code-block .token.deleted { color: #fda4af; }
-.tocyn-markdown-code-block .token.boolean,
-.tocyn-markdown-code-block .token.number { color: #fdba74; }
-.tocyn-markdown-code-block .token.selector,
-.tocyn-markdown-code-block .token.attr-name,
-.tocyn-markdown-code-block .token.string,
-.tocyn-markdown-code-block .token.char,
-.tocyn-markdown-code-block .token.builtin,
-.tocyn-markdown-code-block .token.inserted { color: #86efac; }
-.tocyn-markdown-code-block .token.operator,
-.tocyn-markdown-code-block .token.entity,
-.tocyn-markdown-code-block .token.url,
+.tocyn-markdown-code-block .token:is(.property, .tag, .constant, .symbol, .deleted) { color: #fda4af; }
+.tocyn-markdown-code-block .token:is(.boolean, .number) { color: #fdba74; }
+.tocyn-markdown-code-block .token:is(.selector, .attr-name, .string, .char, .builtin, .inserted) { color: #86efac; }
+.tocyn-markdown-code-block .token:is(.operator, .entity, .url),
 .tocyn-markdown-code-block .language-css .token.string { color: #7dd3fc; }
-.tocyn-markdown-code-block .token.atrule,
-.tocyn-markdown-code-block .token.attr-value,
-.tocyn-markdown-code-block .token.keyword { color: #c4b5fd; }
-.tocyn-markdown-code-block .token.function,
-.tocyn-markdown-code-block .token.class-name { color: #fef08a; }
-.tocyn-markdown-code-block .token.regex,
-.tocyn-markdown-code-block .token.important,
-.tocyn-markdown-code-block .token.variable { color: #fca5a5; }
+.tocyn-markdown-code-block .token:is(.atrule, .attr-value, .keyword) { color: #c4b5fd; }
+.tocyn-markdown-code-block .token:is(.function, .class-name) { color: #fef08a; }
+.tocyn-markdown-code-block .token:is(.regex, .important, .variable) { color: #fca5a5; }
