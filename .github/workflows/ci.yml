@@ -63,6 +63,9 @@ jobs:
         run: npm exec -- playwright install --with-deps chromium
       - name: Validate
         run: ${{ matrix.command }}
+      - name: Verify theme scopes under browser CSP
+        if: matrix.check == 'build'
+        run: node tools/ui-browser/theme-scope.mjs > "$RUNNER_TEMP/tocyn-theme-scope.json"
       - name: Verify durable drafts against the local Worker
         if: matrix.check == 'build'
         run: |
@@ -90,5 +93,6 @@ jobs:
             /tmp/tocyn-widget-visual-*.png
             ${{ runner.temp }}/tocyn-ui-authenticated.tap
             ${{ runner.temp }}/tocyn-operator-drafts.tap
+            ${{ runner.temp }}/tocyn-theme-scope.json
           retention-days: 3
           if-no-files-found: warn
