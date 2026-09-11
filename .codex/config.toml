@@ -1,0 +1,3 @@
+# Tocyn-only Graphify connection. OAuth credentials are stored by Codex, not here.
+[mcp_servers.graphify]
+url = "https://api.graphify.com/mcp"
