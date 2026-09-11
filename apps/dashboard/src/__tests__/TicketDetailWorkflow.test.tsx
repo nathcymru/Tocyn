@@ -207,6 +207,126 @@ it('keeps a committed select read-only until its detail refresh succeeds without
   expect(patches).toBe(1);
 });
 
+it('transitions a custom waiting state with its required private facts and retains input after a CAS conflict', async () => {
+  const transition = { ticket_id: 'workflow-ticket', definition_id: 'awaiting-customer', lifecycle: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason: 'Awaiting account number', next_action: 'Follow up tomorrow', changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const definitions = [
+    { id: 'awaiting-customer', legacy_status: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason_required: 1, next_action_required: 1, is_compatibility_default: 0, is_active: 1 },
+    { id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 },
+  ];
+  let attempts = 0;
+  let refreshed = false;
+  transport((path, options) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') {
+      if (options.method === 'PATCH') { attempts++; return attempts === 1 ? json({ error: 'State changed elsewhere' }, 409) : json({ ...transition, revision: 5 }); }
+      return json(refreshed ? { ...transition, waiting_reason: 'Another operator changed this', next_action: 'Check inbox', revision: 5 } : transition);
+    }
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (new URL(url, 'http://localhost').pathname === '/api/support-states') return json(definitions);
+    return original(url, options);
+  }));
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  await screen.findByRole('combobox', { name: 'Support state' });
+  expect(screen.getByText(/Customer-facing label: We need your reply/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: '' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('waiting reason is required');
+  fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: 'Waiting for their account number' } });
+  fireEvent.change(screen.getByLabelText('Next action'), { target: { value: 'Follow up tomorrow' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('changed elsewhere');
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('Waiting for their account number');
+  expect(screen.getByLabelText('Next action')).toHaveValue('Follow up tomorrow');
+  refreshed = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh current support state' }));
+  await screen.findByText('Current support state refreshed. Your local input is retained; review it before saving.');
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('Waiting for their account number');
+  expect(screen.getByLabelText('Next action')).toHaveValue('Follow up tomorrow');
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  await screen.findByText('Support state saved.');
+  const requests = vi.mocked(fetch).mock.calls.filter(([url, options]) => new URL(String(url), 'http://localhost').pathname.endsWith('/support-state') && options?.method === 'PATCH');
+  expect(JSON.parse(String(requests[0]?.[1]?.body))).toMatchObject({ definitionId: 'awaiting-customer', expectedRevision: 4, waitingReason: 'Waiting for their account number', nextAction: 'Follow up tomorrow' });
+  expect(JSON.parse(String(requests[1]?.[1]?.body))).toMatchObject({ expectedRevision: 5, waitingReason: 'Waiting for their account number', nextAction: 'Follow up tomorrow' });
+});
+
+it('discovers a later current support state, recovers its page load, and enforces its required facts', async () => {
+  const current = { ticket_id: 'workflow-ticket', definition_id: 'late-waiting', lifecycle: 'pending', internal_label: 'Later queue', public_label: 'We need more information', waiting_reason: '', next_action: '', changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const firstPage = [{ id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 }];
+  const laterPage = [{ id: 'late-waiting', legacy_status: 'pending', internal_label: 'Later queue', public_label: 'We need more information', waiting_reason_required: 1, next_action_required: 1, is_compatibility_default: 0, is_active: 1 }];
+  let pageAttempts = 0;
+  let saved: Record<string, unknown> | undefined;
+  transport((path, options) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') {
+      if (options.method === 'PATCH') { saved = JSON.parse(String(options.body)); return json({ ...current, waiting_reason: 'Need account number', next_action: 'Follow up tomorrow', revision: 5 }); }
+      return json(current);
+    }
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    const request = new URL(url, 'http://localhost');
+    if (request.pathname === '/api/support-states') {
+      if (!request.searchParams.has('cursor')) return new Response(JSON.stringify(firstPage), { headers: { 'Content-Type': 'application/json', 'X-Next-Cursor': 'later-page' } });
+      pageAttempts += 1;
+      if (pageAttempts === 1) throw new Error('synthetic later-state failure');
+      return json(laterPage);
+    }
+    return original(url, options);
+  }));
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  const select = await screen.findByRole('combobox', { name: 'Support state' });
+  expect(select).toHaveValue('late-waiting');
+  expect(screen.getByRole('option', { name: 'Later queue (pending) — state details loading' })).toBeInTheDocument();
+  expect(screen.getByText(/Customer-facing label: We need more information/)).toBeInTheDocument();
+  expect(screen.getByLabelText('Waiting reason')).toHaveAttribute('aria-required', 'false');
+  expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
+  expect(await screen.findByText('Could not load more support states. Try again.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
+  await waitFor(() => expect(screen.getByRole('option', { name: 'Later queue (pending)' })).toBeInTheDocument());
+  expect(screen.getByLabelText('Waiting reason')).toHaveAttribute('aria-required', 'true');
+  expect(screen.getByLabelText('Next action')).toHaveAttribute('aria-required', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('waiting reason is required');
+  fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: 'Need account number' } });
+  fireEvent.change(screen.getByLabelText('Next action'), { target: { value: 'Follow up tomorrow' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  await screen.findByText('Support state saved.');
+  expect(saved).toMatchObject({ definitionId: 'late-waiting', expectedRevision: 4, waitingReason: 'Need account number', nextAction: 'Follow up tomorrow' });
+});
+
+it('uses a synchronous support-state flight guard to prevent duplicate delayed saves and locks fields while pending', async () => {
+  const transition = { ticket_id: 'workflow-ticket', definition_id: 'awaiting-customer', lifecycle: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason: 'Awaiting account number', next_action: 'Follow up tomorrow', changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const definitions = [{ id: 'awaiting-customer', legacy_status: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason_required: 1, next_action_required: 1, is_compatibility_default: 0, is_active: 1 }];
+  const delayed = deferred<Response>(); let writes = 0;
+  transport((path, options) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') {
+      if (options.method === 'PATCH') { writes++; return delayed.promise; }
+      return json(transition);
+    }
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => new URL(url, 'http://localhost').pathname === '/api/support-states' ? json(definitions) : original(url, options)));
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  await screen.findByRole('combobox', { name: 'Support state' });
+  const waiting = screen.getByLabelText('Waiting reason');
+  fireEvent.change(waiting, { target: { value: 'Awaiting a response' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  await waitFor(() => expect(writes).toBe(1));
+  expect(waiting).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'Support state' })).toBeDisabled();
+  await act(async () => delayed.resolve(json({ ...transition, waiting_reason: 'Awaiting a response', revision: 5 })));
+  await screen.findByText('Support state saved.');
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('Awaiting a response');
+});
+
 it('keeps explicit confirmation recovery available after a successful background refresh', async () => {
   let patches = 0;
   let confirmationAvailable = false;

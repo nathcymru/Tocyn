@@ -4,6 +4,7 @@ import { User, Ticket, Article, Attachment } from '../types';
 import type { CapabilityWriteFence } from '../auth/capability-policy';
 import type { OperatorWorkspaceRepository } from './operator-workspace.repository';
 import type { OperatorWorkspaceSort } from '../types/operator-workspace';
+import type { SupportStateRepository } from './support-state.repository';
 
 export interface UserRepository {
   revokeSessions(id: string): Promise<void>;
@@ -142,5 +143,6 @@ export interface Repositories {
   ticketFields: TicketFieldRepository;
   groups: GroupRepository;
   ticketFilters: FilterRepository;
+  supportStates: SupportStateRepository;
   operatorWorkspace: OperatorWorkspaceRepository;
 }
