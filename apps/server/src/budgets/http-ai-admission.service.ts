@@ -100,7 +100,7 @@ export async function admitHttpAi(input: AdmissionInput): Promise<HttpAiAdmissio
     || payload.tenant_id !== deps.scope.tenantId || !validIdentity(input.operation)
     || (input.targetId !== undefined && !validIdentity(input.targetId))
     || (input.operation === 'widget.chat' && payload.role !== 'customer')
-    || (input.operation === 'dashboard.ticket.ai-suggest' && payload.role === 'customer')) return { status: 'rejected', reason: 'unavailable' };
+    || (input.operation === 'dashboard.ticket.ai-suggest' && (payload.role === 'customer' || !validIdentity(input.targetId)))) return { status: 'rejected', reason: 'unavailable' };
   const operationId = crypto.randomUUID();
   const operationFingerprint = await digest(['http-ai-v1', input.operation, deps.scope.tenantId, deps.scope.actorId, input.targetId ?? null]);
   const business = input.operation === 'widget.chat' ? WIDGET_CHAT_AI_ENVELOPE : STAFF_SUGGESTION_AI_ENVELOPE;
@@ -128,7 +128,7 @@ export async function admitHttpAi(input: AdmissionInput): Promise<HttpAiAdmissio
       sessionVersion: payload.session_version, expiresAt: payload.exp, mfaVerified: true };
     const outcome = await sessionTicketBudgetAdmission.admit({ repository: deps.repositories.budgetAuthority,
       sessions: new SessionBudgetAuthorityRepository(deps.database, deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
-      scope: deps.scope, credential, requirements: {}, intent: { operationId, operationFingerprint, workScopeKey: input.operation },
+      scope: deps.scope, credential, requirements: { readTicketId: input.targetId }, intent: { operationId, operationFingerprint, workScopeKey: input.operation },
       business, now: input.now,
     });
     return outcome.status === 'spent' || outcome.status === 'idempotent' ? { status: 'admitted' }

@@ -247,7 +247,7 @@ export class TenantKnowledgeService {
     const chatHistory = truncateUtf8Tail(orderedMessages.map((m: any) => {
       const cleanBody = stripTags(m.body).trim();
       return `${m.sender_type === 'customer' ? 'User' : 'Agent'}: ${cleanBody}`;
-    }).join('\n'), MAX_STAFF_HISTORY_BYTES);
+    }).join('\n').replace(/</g, '&lt;').replace(/>/g, '&gt;'), MAX_STAFF_HISTORY_BYTES);
 
     const relevantChunks = await this.searchWithFallback(lastValidMessage, 3);
     const hasSOP = relevantChunks.some((c: any) => c.tier === 'sop');

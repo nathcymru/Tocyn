@@ -18,6 +18,8 @@ export type SessionBudgetCredential = Readonly<{
 export type SessionBudgetRequirements = Readonly<{
   /** Exact current target/group captured by canonical authorization. */
   ticket?: Readonly<{ id: string; groupId: string | null }>;
+  /** Resolve the current ticket group during read admission, before content access. */
+  readTicketId?: string;
   /** Optional existing capability fence; omitted for routes without a catalogue capability. */
   capability?: CapabilityWriteFence;
 }>;
@@ -36,10 +38,10 @@ export class SessionBudgetAuthorityRepository {
       .bind(this.scope.tenantId, this.scope.actorId).first<{ role: string; session_version: number; mfa_enabled: number | boolean }>();
     if (!user || user.role !== credential.role || user.session_version !== credential.sessionVersion
       || (user.mfa_enabled !== 1 && user.mfa_enabled !== true)) return null;
-    if (requirements.ticket) {
+    if (requirements.ticket || requirements.readTicketId) {
       const ticket = await this.db.prepare(`SELECT group_id FROM tickets WHERE tenant_id=? AND id=? LIMIT 1`)
-        .bind(this.scope.tenantId, requirements.ticket.id).first<{ group_id: string | null }>();
-      if (!ticket || ticket.group_id !== requirements.ticket.groupId) return null;
+        .bind(this.scope.tenantId, requirements.ticket?.id ?? requirements.readTicketId).first<{ group_id: string | null }>();
+      if (!ticket || (requirements.ticket && ticket.group_id !== requirements.ticket.groupId)) return null;
       if (credential.role === 'agent' && ticket.group_id !== null) {
         const member = await this.db.prepare(`SELECT 1 AS present FROM user_groups WHERE tenant_id=? AND user_id=? AND group_id=? LIMIT 1`)
           .bind(this.scope.tenantId, this.scope.actorId, ticket.group_id).first();
