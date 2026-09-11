@@ -17,16 +17,20 @@ import type { RequestCanonicalMutationSli } from '../observability/request-canon
 import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
 import { articleBodyFormat } from '@luminatick/shared';
 import { TicketListScanError, ticketListCurrentCredentialSql, ticketListScanAssertionSql, ticketListScanFenceSql, type TicketListCurrentCredential, type TicketListScanSnapshot } from './ticket-list-scan.repository';
-import { CustomerAuthBudgetFenceError, customerAuthAcceptedSql, customerAuthFenceStatements, type CustomerAuthBudgetFence } from './customer-auth-budget-fence';
+import { CustomerAuthBudgetFenceError, customerAuthAcceptanceStatement, customerAuthAcceptedSql, customerAuthFenceStatements, type CustomerAuthBudgetFence } from './customer-auth-budget-fence';
 
 const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
+const customerAuthAccepted = (result: unknown): boolean => (result as { results?: readonly { accepted?: unknown }[] } | undefined)?.results?.[0]?.accepted === 1;
 
 export class SqlUserRepository implements UserRepository {
   async revokeSessions(id: string, fence?: CustomerAuthBudgetFence): Promise<void> {
     const query = this.db.prepare(`UPDATE users SET session_version = session_version + 1 WHERE tenant_id = ? AND id = ?${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
       .bind(this.scope.tenantId, id, ...(fence ? [this.scope.tenantId] : []));
     if (fence) {
-      const result = (await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), query])).at(-1);
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), query]);
+      if (!customerAuthAccepted(results[statements.length])) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      const result = results.at(-1);
       if (!result?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
     }
     else await query.run();
@@ -72,9 +76,13 @@ export class SqlUserRepository implements UserRepository {
   async get(id: string, fence?: CustomerAuthBudgetFence): Promise<User | null> {
     const query = this.db.prepare(`SELECT * FROM users WHERE tenant_id = ? AND id = ?${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
       .bind(this.scope.tenantId, id, ...(fence ? [this.scope.tenantId] : []));
-    const result = fence
-      ? (await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), query])).at(-1)?.results[0] as User | undefined
-      : await query.first<User>();
+    let result: User | undefined | null;
+    if (fence) {
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), query]);
+      if (!customerAuthAccepted(results[statements.length])) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      result = results.at(-1)?.results[0] as User | undefined;
+    } else result = await query.first<User>();
     return result || null;
   }
 
@@ -87,9 +95,13 @@ export class SqlUserRepository implements UserRepository {
       this.scope.tenantId, id, data.email, data.full_name, data.role, data.mfa_enabled ? 1 : 0, data.mfa_secret || null,
       ...(fence ? [this.scope.tenantId] : [])
     );
-    const result = fence
-      ? (await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), query])).at(-1)?.results[0] as User | undefined
-      : await query.first<User>();
+    let result: User | undefined | null;
+    if (fence) {
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), query]);
+      if (!customerAuthAccepted(results[statements.length])) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      result = results.at(-1)?.results[0] as User | undefined;
+    } else result = await query.first<User>();
     if (!result) throw new Error("Failed to create user");
     return result;
   }
@@ -119,16 +131,18 @@ export class SqlUserRepository implements UserRepository {
        SELECT ?, ?, ?, ?, ?, ?${fence ? ` WHERE ${customerAuthAcceptedSql()}` : ''}`
     ).bind(this.scope.tenantId, tokenId, userId, tokenHash, type, expiresAt, ...(fence ? [this.scope.tenantId] : []));
     if (type === 'otp') {
-      const revoke = this.db.prepare(`UPDATE customer_auth_tokens SET used_at = ? WHERE tenant_id = ? AND user_id = ? AND type = 'otp' AND used_at IS NULL${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
-          .bind(new Date().toISOString(), this.scope.tenantId, userId, ...(fence ? [this.scope.tenantId] : []));
-      const results = await this.db.batch([
-        ...(fence ? customerAuthFenceStatements(this.db, this.scope, fence) : []), revoke,
-        insert,
-      ]);
-      if (fence && !results.at(-1)?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      const current = this.db.prepare(`INSERT INTO customer_current_otp_challenges(tenant_id,user_id,token_id)
+        SELECT ?,?,?${fence ? ` WHERE ${customerAuthAcceptedSql()}` : ''}
+        ON CONFLICT(tenant_id,user_id) DO UPDATE SET token_id=excluded.token_id`)
+        .bind(this.scope.tenantId, userId, tokenId, ...(fence ? [this.scope.tenantId] : []));
+      if (!fence) { await this.db.batch([insert, current]); return; }
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), insert, current]);
+      if (!customerAuthAccepted(results[statements.length]) || !results.at(-1)?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
     } else if (fence) {
-      const result = (await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), insert])).at(-1);
-      if (!result?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), insert]);
+      if (!customerAuthAccepted(results[statements.length]) || !results.at(-1)?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
     }
     else await insert.run();
   }
@@ -152,7 +166,9 @@ export class SqlUserRepository implements UserRepository {
       // Claim one of five attempts atomically before comparing the code.
       attemptStatement = this.db.prepare(`UPDATE customer_auth_tokens SET attempts = attempts + 1
         WHERE tenant_id = ? AND id = ? AND type = 'otp' AND used_at IS NULL
-          AND expires_at > ? AND attempts < 5${accepted} RETURNING id`)
+          AND expires_at > ? AND attempts < 5
+          AND EXISTS (SELECT 1 FROM customer_current_otp_challenges current
+            WHERE current.tenant_id=customer_auth_tokens.tenant_id AND current.user_id=customer_auth_tokens.user_id AND current.token_id=customer_auth_tokens.id)${accepted} RETURNING id`)
         .bind(this.scope.tenantId, challengeId, now, ...acceptedValues);
     }
     // A single conditional write claims the token. Concurrent redemption can return
@@ -164,7 +180,9 @@ export class SqlUserRepository implements UserRepository {
         JOIN users u ON u.tenant_id = t.tenant_id AND u.id = t.user_id
         WHERE t.tenant_id = ? AND t.token_hash = ? AND t.used_at IS NULL
           AND t.expires_at > ? AND u.role = 'customer'
-          AND ((? IS NULL AND t.type = 'magic_link') OR (t.type = 'otp' AND t.id = ?))
+          AND ((? IS NULL AND t.type = 'magic_link') OR (t.type = 'otp' AND t.id = ?
+            AND EXISTS (SELECT 1 FROM customer_current_otp_challenges current
+              WHERE current.tenant_id=t.tenant_id AND current.user_id=t.user_id AND current.token_id=t.id)))
         ORDER BY t.id LIMIT 1
       ) AND used_at IS NULL AND expires_at > ?${accepted}
       RETURNING user_id
@@ -174,16 +192,25 @@ export class SqlUserRepository implements UserRepository {
       if (attemptStatement && !await attemptStatement.first()) return null;
       claimed = await claimStatement.first<{ user_id: string }>() ?? undefined;
     } else {
-      const results = await this.db.batch([...prefix, ...(attemptStatement ? [attemptStatement] : []), claimStatement]);
-      if (attemptStatement && !results[prefix.length]?.results[0]) return null;
-      claimed = results.at(-1)?.results[0] as { user_id: string } | undefined;
+      if (attemptStatement) {
+        const attemptResults = await this.db.batch([...prefix, customerAuthAcceptanceStatement(this.db, this.scope), attemptStatement]);
+        if (!customerAuthAccepted(attemptResults[prefix.length])) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+        if (!attemptResults.at(-1)?.results[0]) return null;
+      }
+      const claimResults = await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), customerAuthAcceptanceStatement(this.db, this.scope), claimStatement]);
+      if (!customerAuthAccepted(claimResults.at(-2))) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      claimed = claimResults.at(-1)?.results[0] as { user_id: string } | undefined;
     }
     if (!claimed) return null;
     const user = await this.get(claimed.user_id, fence);
     if (!user || user.role !== 'customer') return null;
     const update = this.db.prepare(`UPDATE users SET last_login_at = ? WHERE tenant_id = ? AND id = ?${accepted}`)
       .bind(now, this.scope.tenantId, user.id, ...acceptedValues);
-    if (fence) await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), update]);
+    if (fence) {
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), update]);
+      if (!customerAuthAccepted(results[statements.length]) || !results.at(-1)?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
     else await update.run();
     user.last_login_at = now;
     return user;

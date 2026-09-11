@@ -60,3 +60,7 @@ export function customerAuthFenceStatements(db: D1Database, scope: VerifiedTenan
 export function customerAuthAcceptedSql(): string {
   return `EXISTS (SELECT 1 FROM customer_auth_budget_assertions WHERE tenant_id=? AND accepted=1)`;
 }
+
+export function customerAuthAcceptanceStatement(db: D1Database, scope: VerifiedTenantScope): D1PreparedStatement {
+  return db.prepare('SELECT accepted FROM customer_auth_budget_assertions WHERE tenant_id=?').bind(scope.tenantId);
+}

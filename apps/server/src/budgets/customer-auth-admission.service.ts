@@ -7,12 +7,12 @@ import type { CustomerAuthBudgetFence } from '../repositories/customer-auth-budg
 
 export type CustomerAuthOperation = 'request' | 'verify' | 'logout' | 'session';
 const cache = new IsolateBudgetAdmissionCache();
-const ENVELOPES: Record<CustomerAuthOperation, Readonly<ResourceAmounts>> = {
+export const CUSTOMER_AUTH_ENVELOPES: Readonly<Record<CustomerAuthOperation, Readonly<ResourceAmounts>>> = Object.freeze({
   request: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, d1RowsWritten: 32, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
   verify: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, d1RowsWritten: 24, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
   logout: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, d1RowsWritten: 8, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
   session: Object.freeze({ workerRequests: 1, d1RowsRead: 3_072, doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 67 }),
-};
+});
 
 export type CustomerAuthAdmission = Readonly<{ authority: BudgetCommitAuthority; fence: CustomerAuthBudgetFence;
   settle: (outcome: 'committed' | 'unknown') => void }>;
@@ -29,7 +29,7 @@ export async function admitCustomerAuthEffect(input: { env: Env; deps: TenantReq
   const outcome = await cache.admit({ repository: input.deps.repositories.budgetAuthority, namespace: input.env.BUDGET_COORDINATOR_DO,
     authorization: { authorize: async () => input.principal }, scope: input.deps.scope, credentialKey: input.credentialKey,
     intent: { operationId, operationFingerprint: `${input.operation}:${operationId}`, workScopeKey: `customer.auth.${input.operation}` },
-    business: ENVELOPES[input.operation], purpose, now });
+    business: CUSTOMER_AUTH_ENVELOPES[input.operation], purpose, now });
   return (outcome.status === 'spent' || outcome.status === 'idempotent') && outcome.commitAuthority
     ? { status: 'admitted', admission: Object.freeze({ authority: outcome.commitAuthority,
       fence: Object.freeze({ principal: input.principal, authority: outcome.commitAuthority }),
