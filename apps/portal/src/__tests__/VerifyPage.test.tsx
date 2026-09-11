@@ -6,7 +6,7 @@ import { VerifyPage } from '../pages/VerifyPage';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
-vi.mock('../api/client', () => ({ portalApi: { post: vi.fn() } }));
+vi.mock('../api/client', () => ({ portalApi: { post: vi.fn() }, getWidgetKey: () => '' }));
 
 function mount(entry: string | { pathname: string; state: { challengeId: string } }) {
   return render(
