@@ -6,7 +6,7 @@ import { SignJWT } from 'jose';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { splitSql } from './split-sql';
-import { OPERATOR_WORKSPACE_ENVELOPES } from '../src/budgets/operator-workspace-admission.service';
+import { OPERATOR_WORKSPACE_ENVELOPES, operatorWorkspaceEnvelope } from '../src/budgets/operator-workspace-admission.service';
 
 const root = resolve(import.meta.dirname, '..');
 const secret = 'synthetic-workspace-admission-secret-at-least-32-chars';
@@ -18,7 +18,7 @@ async function token() {
     .sign(new TextEncoder().encode(secret));
 }
 
-async function fixture(options: { workerLimit?: number; localBeta?: boolean } = {}) {
+async function fixture(options: { workerLimit?: number; d1ReadLimit?: number; localBeta?: boolean } = {}) {
   const now = Date.now();
   const bundle = await build({ entryPoints:[resolve(import.meta.dirname,'operator-workspace-admission-runtime-entry.ts')],bundle:true,
     format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto'],write:false });
@@ -33,7 +33,8 @@ async function fixture(options: { workerLimit?: number; localBeta?: boolean } = 
     const db=await mf.getD1Database('DB');
     for(const file of readdirSync(join(root,'migrations')).filter(name=>name.endsWith('.sql')).sort())
       await db.batch(splitSql(readFileSync(join(root,'migrations',file),'utf8')).map(sql=>db.prepare(sql)));
-    const limitFor=(dimension:typeof dimensions[number])=>dimension==='workerRequests'?(options.workerLimit??10_000_000):10_000_000;
+    const limitFor=(dimension:typeof dimensions[number])=>dimension==='workerRequests'?(options.workerLimit??10_000_000)
+      :dimension==='d1RowsRead'?(options.d1ReadLimit??10_000_000):10_000_000;
     const limits=Object.fromEntries(dimensions.map(d=>[d,limitFor(d)]));
     const policy={schemaVersion:1,policyId:'workspace-policy',revision:1,deploymentId:'workspace-deployment',mode:'conservative',
       catalogueVersion:'synthetic-workspace',maxGrantLifetimeMs:60_000,budgets:dimensions.map(d=>({dimension:d,limit:limitFor(d),
@@ -49,6 +50,7 @@ async function fixture(options: { workerLimit?: number; localBeta?: boolean } = 
       db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES ('workspace-tenant','hidden-group','Hidden')"),
       db.prepare("INSERT INTO user_groups VALUES ('workspace-tenant','workspace-agent','workspace-group')"),
       db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES ('workspace-tenant','draft-ticket','Draft','customer@example.test','workspace-group','dashboard')"),
+      db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES ('workspace-tenant','population-race','Race','customer@example.test','workspace-group','dashboard')"),
     ];
     if(options.localBeta) seed.push(
       db.prepare("INSERT INTO local_beta_runs(run_id,ticket_limit,mutation_limit,recovery_reserve,upload_limit) VALUES ('workspace-run',100,1000,100,100)"),
@@ -85,6 +87,27 @@ test('workspace envelopes include cleanup and the complete ten-reference attachm
   assert.ok((OPERATOR_WORKSPACE_ENVELOPES['workspace.draft.read'].d1RowsWritten??0)>=100);
 });
 
+test('population migration backfills historical drafts and maintains later deletion',async()=>{
+  const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:`workspace-migration-${crypto.randomUUID()}`,modules:true,
+    compatibilityDate:'2024-04-03',script:'export default {fetch(){return new Response("migration")}}',d1Databases:{DB:`workspace-migration-${crypto.randomUUID()}`}}]}));
+  try{
+    const db=await mf.getD1Database('DB');const migrations=join(root,'migrations');
+    for(const file of readdirSync(migrations).filter(name=>name.endsWith('.sql')&&name<'0054_').sort())
+      await db.batch(splitSql(readFileSync(join(migrations,file),'utf8')).map(sql=>db.prepare(sql)));
+    await db.batch([
+      db.prepare("INSERT INTO users (tenant_id,id,email,role) VALUES ('legacy-tenant','legacy-agent','legacy@example.test','agent')"),
+      ...[0,1,2].map(index=>db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('legacy-tenant',?,'Legacy','customer@example.test','dashboard')").bind(`legacy-${index}`)),
+      ...[0,1,2].map(index=>db.prepare(`INSERT INTO operator_drafts
+        (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision)
+        VALUES ('legacy-tenant','legacy-agent',?,'00000000-0000-4000-a000-000000000001',1,'public','body','plain','[]','[]',0)`).bind(`legacy-${index}`)),
+    ]);
+    await db.batch(splitSql(readFileSync(join(migrations,'0054_operator_workspace_admission_indexes.sql'),'utf8')).map(sql=>db.prepare(sql)));
+    assert.equal((await db.prepare("SELECT draft_count FROM operator_draft_actor_population WHERE tenant_id='legacy-tenant' AND user_id='legacy-agent'").first<{draft_count:number}>())?.draft_count,3);
+    await db.prepare("DELETE FROM operator_drafts WHERE tenant_id='legacy-tenant' AND user_id='legacy-agent' AND ticket_id='legacy-0'").run();
+    assert.equal((await db.prepare("SELECT draft_count FROM operator_draft_actor_population WHERE tenant_id='legacy-tenant' AND user_id='legacy-agent'").first<{draft_count:number}>())?.draft_count,2);
+  }finally{await mf.dispose();}
+});
+
 test('workspace routes spend independently and preserve exact CAS, rebase and retry results',async()=>{
   const f=await fixture();try{
     let response=await request(f,'/api/workspace/theme-preference');assert.equal(response.status,200,await response.clone().text());
@@ -108,7 +131,24 @@ test('workspace routes spend independently and preserve exact CAS, rebase and re
     const rebased=await response.json() as {generation:string;revision:number};
     response=await request(f,`/api/workspace/drafts/draft-ticket?generation=${rebased.generation}&revision=${saved.revision}`,'DELETE');assert.equal(response.status,409);
     response=await request(f,`/api/workspace/drafts/draft-ticket?generation=${rebased.generation}&revision=${rebased.revision}`,'DELETE');assert.equal(response.status,204);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_draft_actor_population WHERE tenant_id='workspace-tenant' AND user_id='workspace-agent'").first<{n:number}>())?.n,0,'the atomic delete removes the zero population row');
     const measured=await control(f);assert.equal(measured.cache.operations,11,'every route execution, including CAS conflicts, owns one spend');
+  }finally{await f.mf.dispose();}
+});
+
+test('state read retry keeps two authority assertions and the successful clear inside four writes',async context=>{
+  const f=await fixture();try{
+    await f.db.prepare(`INSERT INTO operator_workspace_state
+      (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel)
+      VALUES ('workspace-tenant','workspace-agent',1,'all','updated_desc','{}','','','hidden-ticket','conversation')`).run();
+    await f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES ('workspace-tenant','hidden-ticket','Hidden','customer@example.test','hidden-group','dashboard')").run();
+    await control(f,{reset:true,beforeStateClear:true});
+    const response=await request(f,'/api/workspace/state');assert.equal(response.status,200,await response.clone().text());
+    const state=await response.json() as {revision:number;selectedTicketId:string|null};
+    assert.deepEqual({revision:state.revision,selectedTicketId:state.selectedTicketId},{revision:3,selectedTicketId:null});
+    const measured=await control(f);assert.equal(measured.workspaceBatches,4,'read, lost clear, retry read and successful clear are all fenced');
+    assert.ok(measured.workspaceRowsWritten>0 && measured.workspaceRowsWritten<=(OPERATOR_WORKSPACE_ENVELOPES['workspace.state.read'].d1RowsWritten??0),JSON.stringify(measured));
+    context.diagnostic(JSON.stringify({fixture:'native-d1-state-read-cas-retry',measured}));
   }finally{await f.mf.dispose();}
 });
 
@@ -153,6 +193,14 @@ for(const change of ['session','mfa','membership','policy'] as const)test(`final
   }finally{await f.mf.dispose();}
 });
 
+test('final workspace list rejects population growth beyond its admitted dynamic reservation',async()=>{
+  const f=await fixture();try{
+    await control(f,{beforeWorkspaceBatch:'population'});
+    const response=await request(f,'/api/workspace/drafts?limit=50');assert.equal(response.status,503,await response.clone().text());
+    assert.equal((await f.db.prepare("SELECT draft_count FROM operator_draft_actor_population WHERE tenant_id='workspace-tenant' AND user_id='workspace-agent'").first<{draft_count:number}>())?.draft_count,1);
+  }finally{await f.mf.dispose();}
+});
+
 async function insertNoise(f:Awaited<ReturnType<typeof fixture>>) {
   const rows:{id:string;group:string;actor:string;expired:boolean}[]=[];
   for(let i=0;i<150;i++)rows.push({id:`a-exp-${String(i).padStart(3,'0')}`,group:'workspace-group',actor:'workspace-agent',expired:true});
@@ -168,6 +216,30 @@ async function insertNoise(f:Awaited<ReturnType<typeof fixture>>) {
     ]));
   }
 }
+
+async function insertAllMissOverflow(f:Awaited<ReturnType<typeof fixture>>, total:number) {
+  for(let base=0;base<total;base+=500){
+    const last=Math.min(499,total-base-1);
+    await f.db.prepare(`WITH RECURSIVE seq(n) AS (VALUES(0) UNION ALL SELECT n+1 FROM seq WHERE n<?)
+      INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source)
+      SELECT 'workspace-tenant',printf('overflow-%04d',?+n),'Overflow','customer@example.test',
+        CASE WHEN (?+n)%2=0 THEN 'hidden-group' ELSE 'workspace-group' END,'dashboard' FROM seq`).bind(last,base,base).run();
+  }
+  await f.db.prepare(`INSERT INTO operator_drafts
+    (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,expires_at,updated_at)
+    SELECT tenant_id,'workspace-agent',id,lower(hex(randomblob(4)))||'-'||lower(hex(randomblob(2)))||'-4'||substr(lower(hex(randomblob(2))),2)||'-a'||substr(lower(hex(randomblob(2))),2)||'-'||lower(hex(randomblob(6))),
+      1,'public','body','plain','[]','[]',0,CASE WHEN CAST(substr(id,-1) AS INTEGER)%2=0 THEN '2099-01-01T00:00:00.000Z' ELSE '2000-01-01T00:00:00.000Z' END,
+      '2026-09-11T00:00:00.000Z' FROM tickets WHERE tenant_id='workspace-tenant' AND id LIKE 'overflow-%'`).run();
+}
+
+test('dynamic list reservation rejects before workspace work when population cost exceeds policy',async()=>{
+  const f=await fixture({d1ReadLimit:5_000});try{
+    await insertAllMissOverflow(f,400);await control(f,{reset:true});
+    const response=await request(f,'/api/workspace/drafts?limit=50');assert.equal(response.status,429,await response.clone().text());
+    assert.deepEqual(await response.json(),{code:'budget_exhausted',error:'Configured budget capacity is exhausted'});
+    const measured=await control(f);assert.equal(measured.workspaceBatches,0);assert.ok((operatorWorkspaceEnvelope('workspace.drafts.list',400).d1RowsRead??0)>5_000);
+  }finally{await f.mf.dispose();}
+});
 
 test('native noisy pages stay full while 48-hour actor cleanup remains bounded to 100 rows',async context=>{
   const f=await fixture({localBeta:true});try{
@@ -191,5 +263,28 @@ test('native noisy pages stay full while 48-hour actor cleanup remains bounded t
     assert.match((pagePlan as {detail:string}[]).map(row=>row.detail).join('\n'),/idx_operator_drafts_actor_ticket/);
     context.diagnostic(JSON.stringify({fixture:'native-d1-workspace-noise',firstPage:firstMeasured,secondPage:measured,
       seeded:{actorExpired:150,otherActorExpired:150,hidden:120,visible:55}}));
+  }finally{await f.mf.dispose();}
+});
+
+test('more than 2,560 all-miss drafts return the complete visible result inside dynamic admission',async context=>{
+  const f=await fixture({localBeta:true});try{
+    const seeded=2_801;await insertAllMissOverflow(f,seeded);
+    await f.db.batch([
+      f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES ('workspace-tenant','zz-visible-overflow','Visible','customer@example.test','workspace-group','dashboard')"),
+      f.db.prepare(`INSERT INTO operator_drafts
+        (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,expires_at,updated_at)
+        VALUES ('workspace-tenant','workspace-agent','zz-visible-overflow','00000000-0000-4000-a000-000000000099',1,'public','body','plain','[]','[]',0,'2099-01-01T00:00:00.000Z','2026-09-11T00:00:00.000Z')`),
+    ]);
+    assert.equal((await f.db.prepare("SELECT draft_count FROM operator_draft_actor_population WHERE tenant_id='workspace-tenant' AND user_id='workspace-agent'").first<{draft_count:number}>())?.draft_count,seeded+1);
+    await control(f,{reset:true});
+    const response=await request(f,'/api/workspace/drafts?limit=50');assert.equal(response.status,200,await response.clone().text());
+    const page=await response.json() as {items:{ticketId:string}[];next:string|null};assert.deepEqual(page.items.map(item=>item.ticketId),['zz-visible-overflow']);assert.equal(page.next,null);
+    const measured=await control(f);assert.equal(measured.workspaceBatches,2,'bounded cleanup and the complete dynamically admitted list each run once');
+    const admitted=operatorWorkspaceEnvelope('workspace.drafts.list',seeded+1);
+    assert.ok(measured.workspaceRowsRead<=(admitted.d1RowsRead??0),JSON.stringify({measured,admitted}));
+    assert.ok(measured.workspaceRowsWritten<=(OPERATOR_WORKSPACE_ENVELOPES['workspace.drafts.list'].d1RowsWritten??0),JSON.stringify(measured));
+    assert.equal((await f.db.prepare("SELECT draft_count FROM operator_draft_actor_population WHERE tenant_id='workspace-tenant' AND user_id='workspace-agent'").first<{draft_count:number}>())?.draft_count,seeded+1-100);
+    assert.ok(seeded+1-100>2_560);
+    context.diagnostic(JSON.stringify({fixture:'native-d1-workspace-all-miss-dynamic',seeded:seeded+1,afterCleanup:seeded+1-100,admitted,measured}));
   }finally{await f.mf.dispose();}
 });

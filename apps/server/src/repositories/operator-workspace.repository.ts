@@ -59,7 +59,7 @@ type MutationCondition = Readonly<{ sql: string; values: unknown[] }>;
 export type OperatorPresentationCredential = Readonly<{ sessionVersion: number; expiresAt: number; role: 'agent' | 'admin' }>;
 export type WorkspaceAdmissionOperation = 'workspace.state.read'|'workspace.state.write'|'workspace.theme.read'|'workspace.theme.write'|'workspace.drafts.list'|'workspace.draft.read'|'workspace.draft.write'|'workspace.draft.rebase'|'workspace.draft.delete';
 export type OperatorWorkspaceCommit = Readonly<{ operation: WorkspaceAdmissionOperation; ticketId?: string;
-  credential: SessionBudgetCredential; authority: BudgetCommitAuthority }>;
+  draftPopulation?: number; credential: SessionBudgetCredential; authority: BudgetCommitAuthority }>;
 
 /** A current session or exact budget fence changed between admission and D1 work. */
 export class OperatorWorkspaceFenceError extends Error {}
@@ -96,6 +96,13 @@ export class OperatorWorkspaceRepository {
           WHERE tenant_id=t.tenant_id AND user_id=? AND group_id=t.group_id)))`);
       values.push(this.scope.tenantId, ticketId, c.role, c.actorId);
     }
+    if (operation === 'workspace.drafts.list') {
+      const population = commit.draftPopulation;
+      sql.push(`?=1 AND COALESCE((SELECT draft_count FROM operator_draft_actor_population WHERE tenant_id=? AND user_id=?),0)<=?`);
+      values.push(Number.isSafeInteger(population) && population! >= 0 ? 1 : 0, this.scope.tenantId, c.actorId, population ?? -1);
+    } else if (commit.draftPopulation !== undefined) {
+      sql.push('0');
+    }
     return { sql: sql.join(' AND '), values };
   }
 
@@ -103,12 +110,29 @@ export class OperatorWorkspaceRepository {
     operation: WorkspaceAdmissionOperation, ticketId?: string): Promise<T[]> {
     if (!commit) return (await statement.all<T>()).results ?? [];
     const authority = this.workspaceAuthority(commit, operation, ticketId);
-    const results = await this.db.batch([
-      this.db.prepare(`SELECT 1 AS authorized WHERE ${authority.sql}`).bind(...authority.values),
-      statement,
-    ]);
-    if (!results[0]?.results?.[0]) throw new OperatorWorkspaceFenceError('Operator workspace authority changed');
-    return (results[1]?.results ?? []) as T[];
+    try {
+      const guard = operation === 'workspace.drafts.list'
+        ? this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+            VALUES (?,CASE WHEN ${authority.sql} THEN 1 ELSE 0 END)
+            ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
+          .bind(this.scope.tenantId, ...authority.values)
+        : this.db.prepare(`SELECT 1 AS authorized WHERE ${authority.sql}`).bind(...authority.values);
+      const results = await this.db.batch([guard, statement]);
+      if (operation !== 'workspace.drafts.list' && !results[0]?.results?.[0]) throw new OperatorWorkspaceFenceError('Operator workspace authority changed');
+      return (results[1]?.results ?? []) as T[];
+    } catch (error) {
+      if (error instanceof OperatorWorkspaceFenceError) throw error;
+      throw new OperatorWorkspaceFenceError('Operator workspace authority changed');
+    }
+  }
+
+  /** Maintained by migration triggers, so admission reads one bounded row regardless of draft volume. */
+  async getDraftPopulation(): Promise<number> {
+    const row = await this.db.prepare(`SELECT draft_count FROM operator_draft_actor_population WHERE tenant_id=? AND user_id=?`)
+      .bind(this.scope.tenantId, this.scope.actorId).first<{ draft_count: number }>();
+    const population = row?.draft_count ?? 0;
+    if (!Number.isSafeInteger(population) || population < 0) throw new Error('Invalid operator draft population');
+    return population;
   }
 
   /** An absent preference has an authoritative revision-zero default; a revoked actor has no row. */
