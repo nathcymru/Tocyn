@@ -1,3 +1,9 @@
+## Follow-on review gate — 11 September 2026
+
+213knowledgeDELETE2976336 is delivered but NOT accepted. Root lifecycle review requires a delayed-provider completion regression: expire a source/index lease while its provider promise remains unresolved, run deletion, then resolve the write. Lease expiry alone must not prove producer termination. Knowledge worker owns verification/remediation;130read-only queue preparation pauses for this material review. No integration of213until addressed. This is a validation gate, not an owner permission request. Ingress worker also owns strict combined-policy email entrypoint rejection until51/91durable admission exists, preserving future scope/off-policy compatibility and coordinating only the email block against213scheduler edits.
+
+Storage review found positive R2bytes on upload/source publication, not attachment downloads; knowledge read correction preserved. Full64still needs lifecycle/overhead completion.205CI34616345687 confirmed live in bounded budget-admission/recovery step; do not restart or mark complete on observation timeout.
+
 ## Coordinator check — 11 September 2026, 16:39 BST
 
 30-minute human update delivered; next17:09BST.205head54f0332 equals candidate merge9455b3bb91a80cbb5c74dbbbb7c14b1e710b0a13 tree83f78a765065d6c394246d5c3adf0893896ea367. CodeQL/build/lint/types pass; testjob103319402858 in run34616345687 remains actively in Validate. No unresolved review threads. Rules read back: required checks strict/no bypass; review role5PR-only bypass;22454811 retains deletion/force-push protections without automatic review. Final check completion and signed accepted-tree verification remain mandatory; this is not acceptance.
