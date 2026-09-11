@@ -12,6 +12,7 @@
     "http-ticket-read-admission-runtime.test.ts",
     "budget-admission-runtime-entry.ts",
     "support-sla-admission-runtime.test.ts",
-    "support-sla-mutation-receipts.test.ts"
+    "support-sla-mutation-receipts.test.ts",
+    "admin-settings-admission-runtime.test.ts"
   ]
 }

@@ -1,3 +1,4 @@
+import { formatAgentPolicy } from './capability-policy.repository';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { SessionBudgetCredential, SessionBudgetRequirements } from './session-budget-authority.repository';
@@ -7,7 +8,7 @@ import { CAPABILITY_CATALOG, resolveCapability } from '../auth/capability-policy
 
 export type AdminSettingsMutationOperation = 'dashboard.settings.update' | 'dashboard.settings.theme.update' | 'dashboard.permissions.update';
 export type AdminSettingsMutationNamespace = Readonly<{ principalId: string; operation: AdminSettingsMutationOperation; keyHash: string; payloadHash: string }>;
-export type AdminSettingsMutationCommit = Readonly<{ credential: SessionBudgetCredential; requirements: SessionBudgetRequirements; authority: BudgetCommitAuthority; namespace: AdminSettingsMutationNamespace }>;
+export type AdminSettingsMutationCommit = Readonly<{ credential: SessionBudgetCredential; requirements: SessionBudgetRequirements; authority: BudgetCommitAuthority; namespace: AdminSettingsMutationNamespace; agentRows?: number }>;
 type Receipt = Readonly<{ payload_hash: string; response_status: 200; response_snapshot: string }>;
 
 const where = 'tenant_id=? AND principal_id=? AND operation=? AND key_hash=?';
@@ -46,6 +47,27 @@ export function adminSettingsFenceStatements(db: D1Database, scope: VerifiedTena
 
 export class AdminSettingsMutationRepository {
   constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope) {}
+  async agentPopulation(): Promise<number> {
+    const row=await this.db.prepare('SELECT agent_rows FROM admin_agent_population WHERE tenant_id=?').bind(this.scope.tenantId).first<{agent_rows:number}>();
+    const count=row?.agent_rows ?? 0;
+    if (!Number.isSafeInteger(count) || count<0) throw new Error('Invalid agent population');
+    return count;
+  }
+  async readSettings(commit: AdminSettingsMutationCommit, keys: readonly string[]): Promise<Record<string,string>> {
+    if (!keys.length || keys.length>64) throw new Error('Invalid settings key inventory');
+    const result = await this.db.batch<{key:string;value:string}>([...this.fence(this.db,commit),
+      this.db.prepare(`SELECT key,value FROM tenant_config WHERE tenant_id=? AND key IN (${keys.map(()=>'?').join(',')})`).bind(this.scope.tenantId,...keys)]);
+    return Object.fromEntries((result.at(-1)?.results ?? []).map(row=>[row.key,row.value]));
+  }
+  async readPolicy(commit: AdminSettingsMutationCommit) {
+    const ids=CAPABILITY_CATALOG.map(capability=>capability.id), slots=ids.map(()=>'?').join(',');
+    const result=await this.db.batch<any>([...this.fence(this.db,commit),
+      this.db.prepare(`SELECT capability,enabled,revision FROM deployment_capability_ceiling WHERE capability IN (${slots})`).bind(...ids),
+      this.db.prepare(`SELECT capability,enabled,revision FROM deployment_role_capability_grants WHERE role='agent' AND capability IN (${slots})`).bind(...ids),
+      this.db.prepare(`SELECT capability,enabled,revision FROM tenant_role_capability_policies WHERE tenant_id=? AND role='agent' AND capability IN (${slots})`).bind(this.scope.tenantId,...ids),
+      this.db.prepare("SELECT revision FROM tenant_capability_policy_versions WHERE tenant_id=? AND role='agent'").bind(this.scope.tenantId)]);
+    return formatAgentPolicy(result.at(-4)?.results ?? [],result.at(-3)?.results ?? [],result.at(-2)?.results ?? [],result.at(-1)?.results[0]?.revision ?? 1);
+  }
   async findActive(ns: AdminSettingsMutationNamespace): Promise<Receipt | null> {
     if (ns.principalId !== this.scope.actorId) return null;
     return this.db.prepare(`SELECT payload_hash,response_status,response_snapshot FROM admin_settings_mutation_receipts
@@ -57,11 +79,11 @@ export class AdminSettingsMutationRepository {
       db.prepare(`DELETE FROM admin_settings_mutation_receipts WHERE rowid IN (SELECT rowid FROM admin_settings_mutation_receipts
         WHERE tenant_id=? AND principal_id=? AND expires_at<=unixepoch() ORDER BY expires_at LIMIT 99)`).bind(this.scope.tenantId, ns.principalId)];
   }
-  receipt(db: D1Database, ns: AdminSettingsMutationNamespace, snapshot: string): D1PreparedStatement {
+  receipt(db: D1Database, ns: AdminSettingsMutationNamespace, snapshot: string, condition: {sql:string;values:unknown[]} = {sql:"1",values:[]}): D1PreparedStatement {
     return db.prepare(`INSERT INTO admin_settings_mutation_receipts
       (tenant_id,principal_id,operation,key_hash,payload_hash,response_status,response_snapshot)
-      SELECT ?,?,?,?,?,200,? WHERE EXISTS (SELECT 1 FROM budget_mutation_assertion WHERE tenant_id=? AND accepted=1)
-      RETURNING response_snapshot`).bind(...values(this.scope, ns), ns.payloadHash, snapshot, this.scope.tenantId);
+      SELECT ?,?,?,?,?,200,? WHERE EXISTS (SELECT 1 FROM budget_mutation_assertion WHERE tenant_id=? AND accepted=1) AND (${condition.sql})
+      RETURNING response_snapshot`).bind(...values(this.scope, ns), ns.payloadHash, snapshot, this.scope.tenantId,...condition.values);
   }
   settingWrite(db: D1Database, key: string, value: string): D1PreparedStatement {
     return db.prepare(`INSERT INTO tenant_config (tenant_id,key,value,updated_at)
@@ -93,8 +115,11 @@ export class AdminSettingsMutationRepository {
       .bind(this.scope.tenantId, resolveCapability(legacyKey)!.id, allowed ? 1 : 0, this.scope.tenantId, token));
     const revoke = this.db.prepare(`UPDATE users SET session_version=session_version+1 WHERE tenant_id=? AND role='agent'
       AND EXISTS (SELECT 1 FROM tenant_capability_policy_versions WHERE tenant_id=? AND role='agent' AND change_token=?)`).bind(this.scope.tenantId, this.scope.tenantId, token);
-    const prefix = [...this.fence(this.db, commit), ...this.cleanup(this.db, commit.namespace), ensure, version, ...writes, revoke];
-    const results = await this.db.batch<{ response_snapshot: string }>([...prefix, this.receipt(this.db, commit.namespace, snapshot)]);
+    const countFence=this.db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN
+      COALESCE((SELECT agent_rows FROM admin_agent_population WHERE tenant_id=?),0)<=? THEN 1 ELSE 0 END WHERE tenant_id=?`)
+      .bind(this.scope.tenantId,commit.agentRows ?? -1,this.scope.tenantId);
+    const prefix = [...this.fence(this.db, commit),countFence, ...this.cleanup(this.db, commit.namespace), ensure, version, ...writes, revoke];
+    const results = await this.db.batch<{ response_snapshot: string }>([...prefix, this.receipt(this.db, commit.namespace, snapshot, {sql:"EXISTS (SELECT 1 FROM tenant_capability_policy_versions WHERE tenant_id=? AND role='agent' AND change_token=? AND revision=?)",values:[this.scope.tenantId,token,revision+1]})]);
     const versionResult = results[prefix.length - entries.length - 2];
     const value = results.at(-1)?.results[0]?.response_snapshot;
     return Number(versionResult?.meta?.changes) > 0 && value ? { updated: true, snapshot: value } : { updated: false };

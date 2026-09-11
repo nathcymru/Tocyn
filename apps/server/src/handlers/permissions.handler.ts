@@ -43,7 +43,7 @@ permissions.get("/", roleGuard(["admin"]), permissionGuard("permissions.manage")
   const capability = permissionWriteFence(c, 'permissions.manage'), admission = adminAdmission(c, capability);
   if (admission instanceof Response) return admission;
   if (admission) {
-    try { await admission.read('dashboard.permissions.read', capability); }
+    try { return c.json(await admission.read('dashboard.permissions.read', capability,(repo,commit)=>repo.readPolicy(commit))); }
     catch (error) { if (error instanceof AdminSettingsMutationError) return c.json({ code: error.code, error: error.message }, error.status); throw error; }
   }
   return c.json(await c.get('tenantDeps')!.capabilityPolicy.getAgentPolicy());
@@ -75,7 +75,7 @@ permissions.put("/", roleGuard(["admin"]), permissionGuard("permissions.manage")
     return c.json({ success: true, revision: result.data.revision + 1, sessionsRevoked: true });
   }
   try {
-    const prepared = await admission.prepare('dashboard.permissions.update', capability, result.data, readIdempotencyKey(c));
+    const prepared = await admission.prepareMutation('dashboard.permissions.update', capability, result.data, readIdempotencyKey(c));
     const response = { success: true, revision: result.data.revision + 1, sessionsRevoked: true };
     const outcome = await admission.commit(prepared, async (repo, commit) => {
       const written = await repo.commitAgentPolicy(commit, result.data.revision, result.data.policies, JSON.stringify(response));

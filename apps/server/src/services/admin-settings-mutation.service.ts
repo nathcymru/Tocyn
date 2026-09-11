@@ -9,7 +9,7 @@ import type { BudgetAuthorityRepository } from '../repositories/budget-authority
 import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 
 export const ADMIN_SETTINGS_READ_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({ workerRequests: 1, d1RowsRead: 2_560, d1RowsWritten: 8, logEvents: 128 });
-export const ADMIN_SETTINGS_MUTATION_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({ workerRequests: 1, d1RowsRead: 2_560, d1RowsWritten: 128, logEvents: 128 });
+export const ADMIN_SETTINGS_MUTATION_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({ workerRequests: 1, d1RowsRead: 2_560, d1RowsWritten: 1_024, logEvents: 128 });
 export type AdminSettingsBudgetOperation = 'dashboard.settings.read' | 'dashboard.settings.theme.read' | 'dashboard.permissions.read' | AdminSettingsMutationOperation;
 export class AdminSettingsMutationError extends Error { constructor(readonly status: 400 | 409 | 429 | 503, readonly code: string, message: string) { super(message); } }
 const unavailable = () => new AdminSettingsMutationError(503, 'budget_admission_unavailable', 'Budget admission authority is unavailable');
@@ -38,19 +38,19 @@ export class AdminSettingsMutationService {
     if (!result.commitAuthority || result.commitAuthority.operationId !== intent.operationId || result.commitAuthority.operationFingerprint !== intent.operationFingerprint) throw unavailable();
     return result.commitAuthority;
   }
-  async read(operation: Extract<AdminSettingsBudgetOperation, `${string}.read`>, capability: SessionBudgetRequirements['capability']): Promise<void> {
+  async read<T>(operation: Extract<AdminSettingsBudgetOperation, `${string}.read`>, capability: SessionBudgetRequirements['capability'], execute: (repository:AdminSettingsMutationRepository,commit:AdminSettingsMutationCommit)=>Promise<T>): Promise<T> {
     const requirements = Object.freeze({ capability }); await this.authorize(requirements);
     const intent = Object.freeze({ operationId: crypto.randomUUID(), operationFingerprint: await digest(`admin-settings-read-v1\n${operation}\n${this.scope.tenantId}\n${this.credential.actorId}`), workScopeKey: operation });
     const authority = await this.admit(operation, requirements, intent, ADMIN_SETTINGS_READ_ENVELOPE);
     try {
-      const statements = this.repo.fence(this.db, { credential: this.credential, requirements, authority,
-        namespace: { principalId: this.credential.actorId, operation: 'dashboard.settings.update', keyHash: intent.operationId, payloadHash: intent.operationFingerprint } });
-      const results = await this.db.batch<{ accepted: number }>([...statements, this.db.prepare('SELECT accepted FROM budget_mutation_assertion WHERE tenant_id=?').bind(this.scope.tenantId)]);
-      if (results.at(-1)?.results[0]?.accepted !== 1) throw unavailable();
+      const result=await execute(this.repo,{credential:this.credential,requirements,authority,
+        namespace:{principalId:this.credential.actorId,operation:'dashboard.settings.update',keyHash:intent.operationId,payloadHash:intent.operationFingerprint}});
+      await this.authorize(requirements);
       this.budget.settle(authority, 'committed', this.budget.now());
-    } catch (error) { this.budget.settle(authority, 'unknown', this.budget.now()); throw error; }
+      return result;
+    } catch (error) { this.budget.settle(authority, 'unknown', this.budget.now()); throw error instanceof AdminSettingsMutationError ? error : unavailable(); }
   }
-  async prepare(operation: AdminSettingsMutationOperation, capability: NonNullable<SessionBudgetRequirements['capability']>, payload: unknown, key?: string): Promise<object> {
+  async prepareMutation(operation: AdminSettingsMutationOperation, capability: NonNullable<SessionBudgetRequirements['capability']>, payload: unknown, key?: string): Promise<object> {
     if (key !== undefined && !/^[A-Za-z0-9._~-]{1,128}$/.test(key)) throw invalid();
     const serialized = canonicalMutationJson(payload);
     if (new TextEncoder().encode(serialized).byteLength > 64 * 1024) throw invalid();
@@ -69,8 +69,12 @@ export class AdminSettingsMutationService {
     if (attempt.replay) return { ...attempt.replay, replayed: true, keyed: attempt.keyed };
     const current = await this.repo.findActive(attempt.ns);
     if (current) { if (current.payload_hash !== attempt.ns.payloadHash) throw conflict(); return { status: 200, body: JSON.parse(current.response_snapshot), replayed: true, keyed: attempt.keyed }; }
-    if (attempt.started) throw unavailable(); attempt.authority = await this.admit(attempt.ns.operation, attempt.requirements, attempt.intent, ADMIN_SETTINGS_MUTATION_ENVELOPE); attempt.started = true;
-    const commit = { credential: this.credential, requirements: attempt.requirements, authority: attempt.authority, namespace: attempt.ns };
+    if (attempt.started) throw unavailable();
+    const agentRows=attempt.ns.operation==='dashboard.permissions.update' ? await this.repo.agentPopulation() : undefined;
+    if (agentRows!==undefined && (!Number.isSafeInteger(agentRows*4+2_560))) throw unavailable();
+    const business=agentRows===undefined ? ADMIN_SETTINGS_MUTATION_ENVELOPE : {...ADMIN_SETTINGS_MUTATION_ENVELOPE,d1RowsRead:2_560+agentRows*4,d1RowsWritten:1_024+agentRows*4};
+    attempt.authority = await this.admit(attempt.ns.operation, attempt.requirements, attempt.intent, business); attempt.started = true;
+    const commit = { credential: this.credential, requirements: attempt.requirements, authority: attempt.authority, namespace: attempt.ns, agentRows };
     try {
       const snapshot = await execute(this.repo, commit); await this.authorize(attempt.requirements);
       this.budget.settle(attempt.authority, 'committed', this.budget.now());
@@ -78,7 +82,7 @@ export class AdminSettingsMutationService {
     } catch (error) {
       this.budget.settle(attempt.authority, 'unknown', this.budget.now());
       const winner = await this.repo.findActive(attempt.ns);
-      if (winner) { if (winner.payload_hash !== attempt.ns.payloadHash) throw conflict(); return { status: 200, body: JSON.parse(winner.response_snapshot), replayed: true, keyed: attempt.keyed }; }
+      if (winner) { await this.authorize(attempt.requirements); if (winner.payload_hash !== attempt.ns.payloadHash) throw conflict(); return { status: 200, body: JSON.parse(winner.response_snapshot), replayed: true, keyed: attempt.keyed }; }
       throw error instanceof AdminSettingsMutationError ? error : unavailable();
     }
   }
