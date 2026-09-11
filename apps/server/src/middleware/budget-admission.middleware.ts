@@ -46,20 +46,21 @@ export const API_TICKET_ENVELOPES: Readonly<Record<ApiTicketBudgetOperation, Res
 /**
  * The staff operation reserves these bounded resource dimensions across two HTTP
  * attempts, canonical/current-authority checks, up to two ten-attachment
- * metadata validation passes and one ten-attachment outbound stream pass.
+ * metadata validation passes. Public delivery uses its own post-commit
+ * reservation and durable one-use claim before a ten-attachment stream.
  * It also includes the worst permitted three NotificationDO broadcasts with
- * cleanup. This only covers the listed resource dimensions: CPU/duration,
- * bytes, provider work and billing remain outside this estimate.
+ * cleanup. The separate delivery envelope reserves its one controllable
+ * provider invocation; CPU/duration, bytes and provider billing remain unknown.
  */
 export const STAFF_TICKET_ENVELOPES: Readonly<Record<StaffTicketBudgetOperation, ResourceAmounts>> = Object.freeze({
   'dashboard.ticket.create': Object.freeze(sumResourceEnvelopes({
     workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
-    r2ClassBOperations: 30,
+    r2ClassBOperations: 20,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
   'dashboard.ticket.reply': Object.freeze(sumResourceEnvelopes({
     workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
-    r2ClassBOperations: 30,
+    r2ClassBOperations: 20,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
   // Ticket field changes can write two event categories, their retained system

@@ -108,6 +108,27 @@ test('real disposable Workflow leaves a current bounded manifest pending when AI
   } finally { await miniflare.dispose(); }
 });
 
+test('real disposable Workflow accepts an owned delete continuation but performs no provider work without admission',async()=>{
+  const {miniflare,db}=await createRuntime(await bundledWorker());try{
+    const deleteToken='runtime-delete-token';
+    await db.batch([
+      db.prepare(`INSERT INTO knowledge_delete_jobs
+        (tenant_id,document_id,source_kind,delete_token,legacy_file_path,legacy_vector_count,max_version,state)
+        VALUES (?,?,'document',?,'runtime/delete/source',0,0,'active')`).bind(tenantId,documentId,deleteToken),
+      db.prepare(`INSERT INTO knowledge_delete_work
+        (tenant_id,document_id,source_kind,delete_token,item_key,item_kind,payload_json,state)
+        VALUES (?,?,'document',?,'r2:legacy','r2_source','{"path":"runtime/delete/source"}','pending')`)
+        .bind(tenantId,documentId,deleteToken),
+    ]);
+    const bucket=await miniflare.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;await bucket.put(`${tenantId}/runtime/delete/source`,'owned');
+    const bindings=await miniflare.getBindings<{VECTORIZE_WORKFLOW:{create:(options:{params:unknown})=>Promise<WorkflowInstance>}}>();
+    const instance=await bindings.VECTORIZE_WORKFLOW.create({params:{tenantId,action:'delete_cleanup',documentId,deleteToken,purpose:'new-work'}});
+    assert.equal((await waitForTerminal(instance)).status,'complete');assert.ok(await bucket.get(`${tenantId}/runtime/delete/source`));
+    assert.equal((await db.prepare(`SELECT state FROM knowledge_delete_work WHERE tenant_id=? AND document_id=? AND item_key='r2:legacy'`)
+      .bind(tenantId,documentId).first<{state:string}>())?.state,'pending');
+  }finally{await miniflare.dispose();}
+});
+
 test('real disposable Miniflare Workflow rejects local-beta execution before its step runs', async () => {
   const { miniflare, logs } = await createRuntime(await bundledWorker(), 'true');
   try {
