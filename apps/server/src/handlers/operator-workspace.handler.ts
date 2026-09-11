@@ -9,6 +9,7 @@ import { OPERATOR_WORKSPACE_SORTS, OPERATOR_WORKSPACE_VIEWS } from '../types/ope
 import { OperatorWorkspaceError, OperatorWorkspaceService } from '../services/operator-workspace.service';
 import { AttachmentReferenceError } from '../services/attachment-references';
 import { LOCAL_DRAFT_RETENTION } from '../types/operator-draft-retention';
+import type { OperatorPresentationCredential } from '../repositories/operator-workspace.repository';
 
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const generation = z.string().uuid();
@@ -34,6 +35,13 @@ const stateInput = z.object({
 }).strict();
 
 const workspace = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+const themePreferenceInput = z.object({ expectedRevision: revision, mode: z.enum(['light', 'dark', 'system']) }).strict();
+function themeCredential(c: any): OperatorPresentationCredential {
+  const payload = c.get('jwtPayload');
+  if (!payload || !['admin', 'agent'].includes(payload.role) || !Number.isSafeInteger(payload.session_version ?? 0)
+    || !Number.isSafeInteger(payload.exp)) throw new OperatorWorkspaceError(403, 'Operator session required');
+  return { role: payload.role, sessionVersion: payload.session_version ?? 0, expiresAt: payload.exp };
+}
 workspace.use('*', async (c, next) => {
   c.header('Cache-Control', 'private, no-store');
   await next();
@@ -57,6 +65,28 @@ workspace.put('/state', async c => {
     const parsed = stateInput.safeParse(await readMutationJson(c));
     if (!parsed.success) return c.json({ error: 'Invalid workspace state' }, 400);
     return c.json(await service(c).saveWorkspaceState(parsed.data));
+  } catch (error) { return failure(c, error); }
+});
+workspace.get('/theme-preference', async c => {
+  try {
+    const repository = (c.get('tenantDeps') as TenantRequestDeps).repositories.operatorWorkspace;
+    const result = await repository.getThemePreference(themeCredential(c));
+    if (!result) throw new OperatorWorkspaceError(403, 'Operator session changed');
+    return c.json(result);
+  } catch (error) { return failure(c, error); }
+});
+workspace.put('/theme-preference', async c => {
+  try {
+    const parsed = themePreferenceInput.safeParse(await readMutationJson(c));
+    if (!parsed.success) return c.json({ error: 'Invalid theme preference' }, 400);
+    const repository = (c.get('tenantDeps') as TenantRequestDeps).repositories.operatorWorkspace;
+    const credential = themeCredential(c);
+    const result = await repository.saveThemePreference(parsed.data, credential);
+    if (!result) {
+      if (!await repository.getThemePreference(credential)) throw new OperatorWorkspaceError(403, 'Operator session changed');
+      throw new OperatorWorkspaceError(409, 'Theme preference changed before it could be saved');
+    }
+    return c.json(result);
   } catch (error) { return failure(c, error); }
 });
 workspace.get('/drafts', async c => {
