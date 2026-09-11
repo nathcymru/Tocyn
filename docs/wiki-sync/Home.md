@@ -47,3 +47,6 @@ See [SPONSORS.md](https://github.com/nathcymru/Tocyn/blob/main/SPONSORS.md) or [
 ## Repository sources
 
 The repository contains version-controlled architecture/privacy source under `docs/`, plus community/security policies at root. Where a Wiki page and repository technical page cover the same architecture, code and the reviewed repository source are implementation authority; Wiki is the navigable public presentation.
+
+
+SLA #73 is accepted through signed [PR#180](https://github.com/nathcymru/Tocyn/pull/180), with local calendar, pause/resume, tenant isolation, customer-handler, browser and Safari/VoiceOver evidence. Capacity-aware routing#137 and the full beta.2#140 gate remain outstanding; this is not production clearance.
