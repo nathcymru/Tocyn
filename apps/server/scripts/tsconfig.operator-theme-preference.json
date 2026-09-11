@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["operator-theme-preference.test.ts", "local-tenant-fixture.ts"]
+}

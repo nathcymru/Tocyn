@@ -5,6 +5,8 @@ export const OPERATOR_WORKSPACE_SORTS = ['updated_desc', 'updated_asc', 'created
 export type OperatorWorkspaceSort = typeof OPERATOR_WORKSPACE_SORTS[number];
 
 export type OperatorDraftMode = 'public' | 'internal';
+export type OperatorThemeMode = 'light' | 'dark' | 'system';
+export type OperatorThemePreference = Readonly<{ revision: number; mode: OperatorThemeMode; updatedAt: string | null }>;
 export type OperatorDraftAttachment = Readonly<{ storageKey: string; filename: string; size: number; contentType: string }>;
 
 export type OperatorDraft = Readonly<{

@@ -1,0 +1,17 @@
+TAP version 13
+# \# theme-browser-evidence {"sourceRevision":"f84f625ddfbe920c50886013ca0f29f221c96f03","sourceDirty":true,"dashboardSha256":"4cdd4b3501daddc3486fb70c3f73d48494bb66df5f472f436dc69018c05297f6","firstPaint":"persisted dark tenant palette","persistedMode":"light","tenantBUnchanged":true,"draftContinuity":true,"failedReadRecovery":true,"externalRequests":0,"limitations":["Synthetic local application harness and real D1; one explicitly injected read failure.","Browser evidence does not replace VoiceOver acceptance or deployment CSP validation."]}
+# Subtest: proves operator theme first paint, persistence, recovery and tenant separation in the production dashboard
+ok 1 - proves operator theme first paint, persistence, recovery and tenant separation in the production dashboard
+  ---
+  duration_ms: 5763.321666
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6345.749417

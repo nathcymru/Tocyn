@@ -10,6 +10,9 @@ import filters from "./filters.handler";
 import { CloudflareService } from "../services/cloudflare.service";
 import { encryptString } from "../utils/crypto";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
+import { parseTocynTenantTheme, TOCYN_THEME_CONTRACT_VERSION, type TocynTenantTheme } from "@luminatick/shared/ui-theme";
+import { requestBounds } from '../middleware/request-bounds';
+import { MutationInputError, readMutationJson } from './mutation-request';
 
 const settings = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -58,6 +61,19 @@ const updateSettingsSchema = z.record(
 const settingsPayloadSchema = z.record(z.unknown()).refine(data => Object.keys(data).length <= 50, {
   message: "Too many settings provided",
 });
+const THEME_CONFIG_KEY = 'ui.theme.v1';
+
+function parseTenantTheme(value: string | null): TocynTenantTheme & { fallback: boolean } {
+  const fallback = { version: TOCYN_THEME_CONTRACT_VERSION, light: {}, dark: {} } as const;
+  if (!value) return { ...fallback, fallback: false };
+  try {
+    if (new TextEncoder().encode(value).length > 8192) throw new TypeError('Stored theme exceeds limit');
+    return { ...parseTocynTenantTheme(JSON.parse(value)), fallback: false };
+  } catch {
+    // Never expose corrupt or unsafe stored values; package defaults remain the safe result.
+    return { ...fallback, fallback: true };
+  }
+}
 
 function isSensitiveKey(key: string): boolean {
   if (SENSITIVE_SETTINGS_KEYS.has(key)) return true;
@@ -80,6 +96,33 @@ settings.get("/usage", roleGuard(["admin"]), permissionGuard("usage"), async (c)
     }
     return c.json({ error: err.message }, 500);
   }
+});
+
+/** Branding is readable by authenticated operators; editing requires settings capability. */
+settings.get('/theme', roleGuard(["admin", "agent"]), async c => {
+  c.header('Cache-Control', 'private, no-store');
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  return c.json(parseTenantTheme(await d.repositories.config.get(THEME_CONFIG_KEY)));
+});
+
+settings.put('/theme', roleGuard(["admin", "agent"]), permissionGuard("general"), requestBounds(8192), async c => {
+  let body: unknown;
+  try { body = await readMutationJson(c); }
+  catch (error) {
+    if (error instanceof MutationInputError) return c.json({ error: error.message }, error.status);
+    throw error;
+  }
+  let parsed: TocynTenantTheme;
+  try {
+    parsed = parseTocynTenantTheme(body);
+  } catch {
+    return c.json({ error: 'Invalid tenant theme' }, 400);
+  }
+  const revalidationFailure = await revalidatePermission(c, "general");
+  if (revalidationFailure) return revalidationFailure;
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  await d.repositories.config.set(THEME_CONFIG_KEY, JSON.stringify(parsed), permissionWriteFence(c, "general"));
+  return c.json({ success: true, version: TOCYN_THEME_CONTRACT_VERSION });
 });
 
 /**

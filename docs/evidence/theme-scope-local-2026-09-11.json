@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "source": {
+    "revision": "362a0a04d4a4d06083fc6e898875be07d1f7d3c6",
+    "files": {
+      "packages/ui/src/theme.ts": "2431fad90df7a5491d1d40ffe85abadbc7c0b8fec5670eaba40ef2c4a5ce112f",
+      "packages/ui/src/theme-scope.ts": "5eca6559985678ca8ba46485d0bf8c998d99d9dcd906fca69be57fea3a87962a",
+      "packages/ui/src/styles/tocyn.css": "bc1cb5e973e2c625fbb4c83798e03b4e16f88d957dbdecf1f113feffdd18e8ac",
+      "tools/ui-browser/theme-scope.mjs": "7c4a3f020c5b8516e88d51117be821ba197195f89fd4d9babd6fa5d2193957dd"
+    }
+  },
+  "scenario": "headless Chromium instance-scoped Tocyn theme over loopback HTTP with restrictive CSP",
+  "browser": "151.0.7922.34",
+  "cspViolations": [],
+  "externalRequests": [],
+  "result": {
+    "passed": true,
+    "light": {
+      "surface": "#ffffff",
+      "text": "#0f172a"
+    },
+    "dark": {
+      "surface": "#0f172a",
+      "text": "#f8fafc"
+    },
+    "invalidUpdateAtomic": true,
+    "restoredInlinePriority": "important",
+    "focused": true,
+    "inputValue": "preserved draft"
+  },
+  "firstPaint": "Navigation observes stylesheet/script loading, but this is not input-to-photon or production first-paint timing evidence.",
+  "limitations": [
+    "Synthetic DOM fixture only; no authenticated tenant loading, persistence, deployed CSP headers, screen reader, or cross-browser evidence."
+  ]
+}
