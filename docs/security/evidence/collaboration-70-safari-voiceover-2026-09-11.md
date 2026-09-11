@@ -1,13 +1,11 @@
 # Collaboration reply-recovery Safari and VoiceOver check
 
-Observed 11 September 2026 on `06042c3` (then merged with accepted main
-`f2e8edef412ced26e7320ffb5fd71de8a8a2d65b`) using Safari and the native
-VoiceOver AppleScript dictionary. The dashboard production build ran against a
-disposable loopback-only Miniflare/D1 fixture with two synthetic tenant-A
-operators and a separate synthetic tenant-B identity. The fixture used its own
-ephemeral port and test-only authenticated local session; it did not contact a
-provider or remote service. The Safari test tab and fixture were removed after
-observation. Owner ports and unrelated Safari tabs were left untouched.
+Observed 11 September 2026 on `369c662` using Safari and the native VoiceOver
+AppleScript dictionary. The dashboard production build ran against a disposable
+loopback-only Miniflare/D1 fixture with two synthetic tenant-A operators and a
+separate synthetic tenant-B identity. The fixture used its own ephemeral port
+and a test-only authenticated local session; it did not contact a provider or
+remote service. Owner ports and unrelated Safari tabs were left untouched.
 
 ## Observed recovery journey
 
@@ -15,41 +13,50 @@ Safari performed the real combined-capability journey: operator A saved a
 public draft, operator B created a material public reply, and A's first Send
 Reply received the server's stale-reply conflict. The visible native
 accessibility tree exposed the retained draft, the disabled Send Reply control,
-and the separate **Refresh and review conversation** action.
+and the separate **Refresh and review conversation** action. VoiceOver spoke: “The saved draft or conversation changed. Review and rebase before sending; your draft is retained.”
 
 Selecting that action rendered operator B's exact `AT newer material` reply
-before exposing **Rebase saved draft**. The draft stayed `AT stale draft`.
-Rebase showed “Draft rebased to the reviewed conversation. Review the draft,
-then send manually.” and only then re-enabled Send Reply. The separate manual
-send added exactly `AT stale draft` as the second rendered conversation reply
-and showed “Public reply added to the conversation.”
+before exposing **Rebase saved draft**. VoiceOver spoke: “The latest
+conversation is shown below. Review it, then rebase the saved draft when
+ready.” The draft stayed `AT stale draft`. Rebase visually exposed “Draft
+rebased to the reviewed conversation. Review the draft, then send manually.”
+and only then re-enabled Send Reply. The subsequent separate manual send added
+exactly `AT stale draft` as a rendered conversation reply and showed “Public
+reply added to the conversation.”
 
-A subsequent synthetic lost-response attempt retained `AT lost response retry`
-after the fixture's real admission boundary rejected the operation for capacity.
-That attempt did not reach the planned post-commit 503 response, so it is not
-lost-response/replay acceptance. The production-browser runtime regression
-remains the evidence for the stable idempotency key and single stored reply in
-that path.
+A synthetic lost-response attempt retained `AT lost response retry`; VoiceOver
+spoke: “Synthetic lost response. Your draft is retained. Refresh the
+conversation before trying again if delivery is uncertain.” Retrying stored
+that reply once, rendered three total messages, and cleared the composer. The
+post-action VoiceOver last-phrase reads for rebase and successful sends were
+later ordinary status/count messages (“Draft saved.” and “Showing 3 messages.
+All messages are loaded.”), so this receipt does not treat the visual
+completion strings as separately observed spoken output.
 
-## VoiceOver result and limit
+## Synthetic admission window and limits
 
-The documented read is `get content of last phrase`; it worked and, after
-moving the native VoiceOver cursor to the active Safari item, read the composer
-instruction: “Type / for commands or : followed by an emoji name. Markdown
-toolbar supports headings, emphasis, links, lists and code.” This is actual
-VoiceOver spoken-output retrieval, not a DOM assertion.
+A short-lived fixture policy (60 seconds) had expired during the earlier
+human-paced attempt. Native interception proved the expired direct-combined
+path returns 429 with zero grants and zero articles; a fresh direct
+`off`-to-`combined` admission returns 201. Before this run's first budgeted
+request only, the disposable fixture extended every existing policy window to
+30 minutes. It retained all dimension limits, recovery percentage, 60-second
+grant lifetime, 60-second authority age, and direct combined setup. This is a
+fixture timing correction, not a product policy or capacity change.
 
-Safari's native accessibility tree made each stale/review/rebase/manual-send
-state readable and exposed their named actions, but this session could not move
-the VoiceOver cursor through those specific recovery notices: the documented
-directional cursor form was rejected by the local AppleScript bridge, and the
-last-phrase value remained the web-content group instruction after CUA actions.
-No unsupported command or setting bypass was attempted. Therefore this is
-limited Safari interaction and composer-spoken-label evidence, not spoken
-confirmation of the stale error, refreshed material, rebase status, manual-send
-status, or lost-response retry. Full assistive-technology acceptance remains
-open.
+## Build and scope limits
 
-The separate local browser fixture test continues to cover the two-tenant
-collision/review/rebase/manual-send and lost-response retry protocol paths; it
-is complementary and does not replace the missing VoiceOver traversal.
+The earlier 570,181-byte result was a Node default gzip-level-6 exploratory
+measurement, not the repository resource policy. A fresh Node 22.19 production
+manifest build evaluated by `tools/ui-performance/bundle-evidence.mjs` at its
+policy gzip level 9 measured 569,285 total dashboard JavaScript gzip bytes,
+100,905 initial JavaScript gzip bytes, and 15,603 CSS gzip bytes. These remain
+within the unchanged 570,000, 135,000, and 16,000 limits respectively.
+
+This is partial local accessibility evidence. The stale conflict and rebase
+completion strings were exposed in Safari's native accessibility tree, but only
+the refreshed-review and lost-response messages above were captured as their
+exact VoiceOver spoken output. The bounded multi-page stale-review regression
+is covered by the focused dashboard test rather than this single-page fixture.
+It does not establish whole-issue assistive-technology acceptance, durable
+mentions, interruption preferences, deployment, or beta.2 readiness.
