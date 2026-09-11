@@ -1,0 +1,17 @@
+# Coordinator checkpoint — 11 September 2026,16:55BST
+
+Full beta.2#140 goal incomplete; no owner permission missing. Supersedes earlier active integration queues, preserving history.
+
+## Accepted205
+
+Main70b75aba7de8876328691d1c7f80664d34494974 at15:55:09UTC; reviewed54f0332/tested9455b3bb91a80cbb5c74dbbbb7c14b1e710b0a13/acceptedtree83f78a765065d6c394246d5c3adf0893896ea367 equal. RequiredCI34616345687 including testjob103319402858 passed; CodeQLpass; signaturevalid; threadsnone. OwnerPR-onlyreviewcountbypass used, notindependentreview.64receipt5637101437;151receipt5637101695.64OPEN/ProjectRoadmapInprogressreadback. Source204/206/207/208/209closedassuperseded, notindependentlymerged. Nofull64/151/140completion. WikiHomeunchangedsinceaccepted203; do notclaimnewpublication.
+
+## Integration and workers
+
+210combinesconfig/API/channel with13nativepass, server/sharedtypesandlintpass. Refreshedontoacceptedmain1b29f95withzerocodechange; requirednewheadCIpending.211/212 remainfrozensourceevidenceuntil210accepted.
+
+213knowledgeDELETE e53c426 iscandidate, notaccepted. Rootreviewidentifiedlateprovider race; workerfixedusingproducer_unresolvedownership untilconstructiveprovider actuallysettles. Rootfinalnative7/7andsharedtypespass (logs/private/tmp/tocyn-213-root-{native,types}.log), requiredCIregistrationadded. Retains explicitabandoned-producerandunknownlegacyvector-manifest151gaps; nocancellation/timerguarantee orpermanentmarkerinvented. Nextreview/refresh/integrationandfullrequiredCIpending.
+
+Sol/highnativeworkers: knowledgeworkerread-only64completioncrosswalk; workspaceworkerowner-ingress0063withsame80/20aggregateandstrictlegacyemailguard; retentionworkerticket-emailadmission, no0064migrationneededsofar. Local/syntheticonly,noCopilot/paidAPI/provideractivation. LastobservedCodex20%remaining, reset17Sep23:59:48BST; noassumedseparateallowance.
+
+130read-onlyhandoffin210 .agents/state/beta2-130-ready.md; noimplementationuntilfull64dependencyclears. AllfullSLA/ownership/routingandother140requirementsremain. Baselinesunchanged; forecastandpercentagenotfabricated. Last30minutehumanupdate16:39BST; next17:09BST.
