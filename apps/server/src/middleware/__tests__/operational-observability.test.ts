@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono, type Context } from 'hono';
 import type { Env } from '../../bindings';
 import { operationalObservability } from '../operational-observability';
-import { observeD1 } from '../../repositories/observed-d1';
+import { UserAuthResolver } from '../../auth/user-auth-resolver';
 
 const enabled = { LOCAL_BETA_ENABLED: 'true', OBSERVABILITY_MODE: 'isolated-evidence', ENVIRONMENT: 'test' };
 function context(env: Partial<Env>) {
@@ -101,7 +101,7 @@ describe('optional diagnostics preserve request behavior', () => {
     const app = new Hono<{Bindings: Env; Variables: import('../../types').AppVariables}>();
     app.use('*', operationalObservability);
     app.get('/api/other', async c => {
-      await observeD1(db,c.get('resourceOperationEmitter')).prepare(`SELECT ${secret}`).bind(secret).first();
+      await UserAuthResolver.fromEnvironment({ ...c.env, DB: db }, c.get('resourceOperationEmitter')).resolveCredentialsByEmail(secret);
       return c.text('ok');
     });
     const response=await app.request('/api/other',{},enabled as Env);
