@@ -10,7 +10,8 @@
     "./styles.css": "./src/styles/tocyn.css",
     "./primitives": "./src/primitives.tsx",
     "./ark": "./src/ark.ts",
-    "./dialog": "./src/dialog.tsx"
+    "./dialog": "./src/dialog.tsx",
+    "./brand": "./src/brand.tsx"
   },
   "sideEffects": [
     "./src/styles/tocyn.css"

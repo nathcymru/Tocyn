@@ -65,3 +65,9 @@
 [data-tocyn-confirm-body] > h2 { font-size: 1.125rem; font-weight: 700; }
 [data-tocyn-confirm-actions] { display: flex; flex-wrap: wrap; justify-content: end; gap: .75rem; }
 [data-tocyn-confirm-actions] > button { border: 1px solid currentColor; border-radius: .375rem; padding: .5rem 1rem; }
+
+/* Product lockups follow the same root theme as the application. */
+.tocyn-product-lockup img { width: 100%; height: auto; object-fit: contain; }
+.tocyn-product-lockup-dark { display: none; }
+[data-tocyn-theme-mode="dark"] .tocyn-product-lockup-light { display: none; }
+[data-tocyn-theme-mode="dark"] .tocyn-product-lockup-dark { display: block; }
