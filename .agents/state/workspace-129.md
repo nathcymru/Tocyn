@@ -1,4 +1,8 @@
-## Current candidate — 11 September 2026, 01:35 BST
+## Current candidate — 11 September 2026, 01:41 BST
+
+Combined application candidate23f2e23 is in ready PR174; build/lint/types/security pass, full test job still running. Final review found a late sorted-query listener in the browser harness that depended on the30-second polling refresh. Root registered it before selection; expanded acceptance now passes in12.8s with unchanged9 mutations/no denials and application dist hash6823ae54. Final local receipt preserves actual dirty23f2e23 source. Publish this bounded harness correction and require fresh exact-head CI before merge. No application scope change or new owner approval. All workers idle/completed; root owns integration and next #66/#136 work. Last operational update01:40BST; next02:10BST while active.
+
+## Historical candidate — 11 September 2026, 01:35 BST
 
 PR174 continuation now includes selected-ticket/context-panel persistence, current list view/filter/sort consumers and real server-side six-way sorting with stable ticket-ID ties. Root corrected worker panel semantics (`details` visible, `conversation` collapsed), blocked selection rewriting after failed authority/refresh/conflict, and replaced ineffective conflict retry with explicit server-state restore. One navigation blocker flushes both drafts and preferences. #128 multi-pane layout and #130 future view predicates consume this storage contract; they are not circular prerequisites for #129 persistence completion. #131 retains durable article-send idempotency.
 

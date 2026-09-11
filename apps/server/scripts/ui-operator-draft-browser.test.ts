@@ -231,14 +231,14 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
         if (new URL(response.url()).origin !== server.origin || new URL(response.url()).pathname !== '/api/workspace/state' || response.request().method() !== 'PUT' || response.status() !== 200) return false;
         try { return (response.request().postDataJSON() as { sort?: unknown }).sort === 'priority_asc'; } catch { return false; }
       });
+      const sortedTicketRequest = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
+        new URL(response.url()).pathname === '/api/tickets' && new URL(response.url()).searchParams.get('sort') === 'priority_asc');
       await sort.selectOption('priority_asc');
-      await sortSave;
+      await Promise.all([sortSave, sortedTicketRequest]);
       const savedSortState = await fixture.request('/api/workspace/state', { token: sessionA.token });
       assert.equal(savedSortState.status, 200, 'The real Worker must return the acknowledged list sort preference');
       assert.equal((await savedSortState.json<{ sort?: unknown }>()).sort, 'priority_asc',
         'An acknowledged list sort save must persist through the real Worker before browser reload');
-      await page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
-        new URL(response.url()).pathname === '/api/tickets' && new URL(response.url()).searchParams.get('sort') === 'priority_asc');
       const restoredSortRequest = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
         new URL(response.url()).pathname === '/api/tickets' && new URL(response.url()).searchParams.get('sort') === 'priority_asc');
       await page.reload();
