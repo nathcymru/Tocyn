@@ -58,7 +58,9 @@
     "typecheck:ui-combined-collision-browser": "tsc -p scripts/tsconfig.ui-combined-collision-browser.json",
     "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts scripts/customer-budget-admission-runtime.test.ts scripts/storage-admission-runtime.test.ts scripts/api-ticket-history-admission-runtime.test.ts scripts/api-ticket-detail-admission-runtime.test.ts scripts/http-ai-admission-runtime.test.ts scripts/http-ticket-read-admission-runtime.test.ts scripts/support-sla-admission-runtime.test.ts scripts/support-sla-mutation-receipts.test.ts scripts/ticket-list-admission-runtime.test.ts scripts/configuration-admission-runtime.test.ts scripts/admin-settings-admission-runtime.test.ts scripts/saved-filter-admission-runtime.test.ts scripts/group-directory-admission-runtime.test.ts scripts/operator-workspace-admission-runtime.test.ts scripts/knowledge-read-admission-runtime.test.ts",
     "test:group-directory-admission-runtime": "tsx --test scripts/group-directory-admission-runtime.test.ts",
-    "test:api-key-admin-admission-runtime": "tsx --test scripts/api-key-admin-admission-runtime.test.ts"
+    "test:api-key-admin-admission-runtime": "tsx --test scripts/api-key-admin-admission-runtime.test.ts",
+    "test:channel-configuration-admission-runtime": "tsx --test scripts/channel-configuration-admission-runtime.test.ts",
+    "typecheck:channel-configuration-admission-runtime": "tsc -p scripts/tsconfig.channel-configuration-admission-runtime.json"
   },
   "dependencies": {
     "@luminatick/shared": "*",
