@@ -473,7 +473,11 @@ export function reserveBudgetGrant(state: BudgetCoordinatorState, input: Reserve
     return { state: expired, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
   }
   if (expired.capacityDefects.length > 0) return { state: expired, outcome: { status: 'rejected', reason: 'capacity-defect' } };
-  if (expired.grants.filter(grant => !grant.compacted).length >= expired.maxReservations || expired.grants.length >= MAX_RETAINED_BUDGET_GRANTS) return { state: expired, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
+  // maxReservations remains the total ceiling. One of those slots is reserved
+  // for recovery; a total-one configuration therefore cannot intake new work.
+  if (expired.grants.filter(grant => !grant.compacted).length >= expired.maxReservations
+    || (input.purpose === 'new-work' && expired.grants.filter(grant => !grant.compacted && grant.purpose === 'new-work').length >= expired.maxReservations - 1)
+    || expired.grants.length >= MAX_RETAINED_BUDGET_GRANTS) return { state: expired, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
   const allocations: CoordinatorAllocation[] = [];
   for (const [key, units] of Object.entries(envelope)) {
     const dimension = key as ResourceDimension;

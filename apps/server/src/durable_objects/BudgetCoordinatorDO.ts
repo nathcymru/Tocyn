@@ -33,7 +33,7 @@ function recoveryHeadroom(state: BudgetOwnerAggregateState): number {
     if (grant.compacted || grant.status === 'reconciled' || grant.purpose !== 'new-work') continue;
     for (const allocation of tenant.allocations.filter(allocation => grant.allocations.some(reference => reference.dimension === allocation.dimension
       && reference.allocationId === allocation.allocationId && reference.windowId === allocation.window.id))) {
-      allocationGrowth.set(`${tenant.tenantId}:${allocation.dimension}:${allocation.allocationId}:${allocation.window.id}`, 2 * encodedBytes(allocation));
+      allocationGrowth.set(JSON.stringify([tenant.tenantId, allocation.dimension, allocation.allocationId, allocation.window.id]), 2 * encodedBytes(allocation));
     }
     const prepaid = tenant.grants.filter(candidate => candidate.recoversReservationId === grant.reservationId)
       .reduce((total, candidate) => total + encodedGrantBytes(candidate), 0);

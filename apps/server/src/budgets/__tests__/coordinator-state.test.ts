@@ -92,7 +92,7 @@ describe('budget coordinator pure state', () => {
     expect(expired.grants[0].status).toBe('consumed');
     expect(reserve(expired, 'holder-b', 'not-reissued', 'new-work', { queueOperations: 1 }, 12).outcome).toMatchObject({ reason: 'exhausted' });
     expect(expired.grants).toHaveLength(1);
-    const capped = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 1, authority: { effectivePolicy: policy(), authorityCheckedAt: 0 } });
+    const capped = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 2, authority: { effectivePolicy: policy(), authorityCheckedAt: 0 } });
     const cappedGrant = reserve(capped, 'holder-a', 'capped-consumed', 'new-work', { queueOperations: 1 });
     const cappedConsumed = consumeBudgetGrant(cappedGrant.state, { reservationId: cappedGrant.outcome.reservation!.reservationId, holderId: 'holder-a', expectedPolicyRevision: 3, expectedRestrictionRevision: 2, envelope: { queueOperations: 1 }, now: 2 });
     const cappedExpired = expireBudgetGrants(cappedConsumed.state, 11);
@@ -100,7 +100,7 @@ describe('budget coordinator pure state', () => {
   });
 
   it('compacts only a certified whole-grant closure while retaining its allocation charge and freeing its slot', () => {
-    const capped = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 1, authority: { effectivePolicy: policy(), authorityCheckedAt: 0 } });
+    const capped = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 2, authority: { effectivePolicy: policy(), authorityCheckedAt: 0 } });
     const granted = reserve(capped, 'holder-a', 'certified', 'new-work', { queueOperations: 50 }, 1);
     const grant = granted.outcome.reservation!;
     const reconciled = reconcileBudgetGrant(granted.state, { reservationId: grant.reservationId, holderId: 'holder-a', expectedPolicyId: 'owner-policy',
@@ -120,7 +120,7 @@ describe('budget coordinator pure state', () => {
   });
 
   it('keeps sustained certified closures in one allocation rollup instead of exhausting detailed slots', () => {
-    let state = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 1,
+    let state = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 2,
       authority: { effectivePolicy: policy(3, 2, 100), authorityCheckedAt: 0 } });
     for (let index = 0; index < 5; index++) {
       const granted = reserve(state, `holder-${index}`, `sustained-${index}`, 'new-work', { queueOperations: 10 }, 1);

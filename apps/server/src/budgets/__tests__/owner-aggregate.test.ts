@@ -66,12 +66,12 @@ describe('owner aggregate budget state', () => {
   });
 
   it('bounds retained grants across all tenant allocations', () => {
-    const first = reserveOwnerAggregate(createBudgetOwnerAggregateState(authority(1)), reserve('tenant-a', 'holder-a', 'grant-a', 1));
+    const first = reserveOwnerAggregate(createBudgetOwnerAggregateState(authority(2)), reserve('tenant-a', 'holder-a', 'grant-a', 1));
     expect(reserveOwnerAggregate(first.state, reserve('tenant-b', 'holder-b', 'grant-b', 1)).outcome).toEqual({ status: 'rejected', reason: 'capacity-exhausted' });
   });
 
   it('counts compacted certified charges across tenants without retaining a permanent reservation slot', () => {
-    const first = reserveOwnerAggregate(createBudgetOwnerAggregateState(authority(1)), reserve('tenant-a', 'holder-a', 'grant-a', 50));
+    const first = reserveOwnerAggregate(createBudgetOwnerAggregateState(authority(2)), reserve('tenant-a', 'holder-a', 'grant-a', 50));
     const grant = first.outcome.reservation!;
     const reconciled = reconcileOwnerAggregate(first.state, {
       tenantId: 'tenant-a', reservationId: grant.reservationId, holderId: 'holder-a', expectedPolicyId: 'owner-policy', expectedPolicyRevision: 7,
@@ -85,7 +85,7 @@ describe('owner aggregate budget state', () => {
   });
 
   it('retains closed stock charges across grant expiry and owner allocation replacement', () => {
-    const configured = authority(1);
+    const configured = authority(2);
     const budgets: CostPolicy['budgets'] = [{ dimension: 'r2StorageBytes', allocationId: 'stock-original', window: { kind: 'stock', id: 'stock' },
       limit: 100, recoveryPercent: 20, provenance: 'owner-allocation' }];
     const stock = { ...configured, ownerPolicy: { ...configured.ownerPolicy, budgets },

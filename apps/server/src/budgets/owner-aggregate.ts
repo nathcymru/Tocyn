@@ -294,7 +294,9 @@ export function reserveOwnerAggregate(state: BudgetOwnerAggregateState, input: R
   const expired = expireBudgetGrants(tenant, input.now);
   const expiredState = { ...state, tenantStates: state.tenantStates.map((item, tenantIndex) => tenantIndex === index ? expired : expireBudgetGrants(item, input.now)) };
   if (state.capacityDefects.length > 0) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-defect' } };
-  if (totalGrants(expiredState) >= state.maxReservations || expiredState.tenantStates.reduce((sum, item) => sum + item.grants.length, 0) >= MAX_RETAINED_BUDGET_GRANTS) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
+  if (totalGrants(expiredState) >= state.maxReservations
+    || (input.purpose === 'new-work' && expiredState.tenantStates.reduce((sum, tenant) => sum + tenant.grants.filter(grant => !grant.compacted && grant.purpose === 'new-work').length, 0) >= state.maxReservations - 1)
+    || expiredState.tenantStates.reduce((sum, item) => sum + item.grants.length, 0) >= MAX_RETAINED_BUDGET_GRANTS) return { state: expiredState, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
   if (aggregateExhausted(expiredState, expired, input)) return { state: expiredState, outcome: { status: 'rejected', reason: 'exhausted' } };
   const result = clipGrantToAuthorityLease(reserveBudgetGrant(expired, request), expiredState.authorityExpiresAt);
   return { state: replaceTenant(expiredState, index, result.state), outcome: result.outcome };

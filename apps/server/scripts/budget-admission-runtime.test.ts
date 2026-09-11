@@ -790,10 +790,16 @@ test('four eight-operation blocks cap refill work while the owner recovery parti
   } finally { await h.mf.dispose(); }
 });
 
-test('the shared isolate registry rejects its 65th authorized scope before another DO call', async () => {
+for (const boundary of [
+  { total: 65, ordinary: 64, cache: true, name: 'the shared isolate registry rejects its 65th authorized scope before another DO call' },
+  { total: 64, ordinary: 63, cache: false, name: 'native unchanged total64 cap reserves its last slot for real recovery after63 ordinary scopes' },
+]) test(boundary.name, async () => {
   const h = await warmHarness(policy({ workerRequests: 10_000, d1RowsRead: 5_000_000, d1RowsWritten: 2_000_000,
     doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 1_000_000 }));
   try {
+    // The cache-specific case needs64 ordinary slots plus the dedicated recovery
+    // slot. The separate total64 case below preserves the default owner ceiling.
+    if (boundary.cache) await h.db.prepare('UPDATE budget_owner_policies SET max_reservations=65').run();
     const first = await h.create('scope-fixture'); assert.equal(first.status, 201);
     const firstBody = await first.json() as { id: string };
     const source = await h.db.prepare("SELECT * FROM tickets WHERE tenant_id='runtime-tenant' AND id=?").bind(firstBody.id).first<Record<string, unknown>>();
@@ -810,17 +816,27 @@ test('the shared isolate registry rejects its 65th authorized scope before anoth
     const reply = (target: string) => h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${target}/articles`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey }, body: JSON.stringify({ body: 'synthetic bounded scope' }),
     });
-    for (const target of targets.slice(0, 63)) {
+    for (const target of targets.slice(0, boundary.ordinary - 1)) {
       const response = await reply(target);
       assert.equal(response.status, 201); await response.body?.cancel();
     }
     const before = await h.control();
-    assert.equal(before.cache.scopes, 64);
+    assert.equal(before.cache.scopes, boundary.ordinary);
     console.log('scope-capacity-evidence', { scopes: before.cache.scopes,
       storedBytes: new TextEncoder().encode(encodeCoordinatorState(await h.coordinatorState())).byteLength });
-    const rejected = await reply(targets[63]); assert.equal(rejected.status, 429); await rejected.body?.cancel();
-    assert.deepEqual((await h.control()).calls, before.calls);
-    assert.equal((await h.db.prepare("SELECT count(*) AS count FROM articles WHERE tenant_id='runtime-tenant' AND ticket_id=?").bind(targets[63]).first<{ count: number }>())?.count, 0);
+    const rejected = await reply(targets[boundary.ordinary - 1]); assert.equal(rejected.status, 429); await rejected.body?.cancel();
+    if (boundary.cache) assert.deepEqual((await h.control()).calls, before.calls);
+    else {
+      assert.ok((await h.control()).calls.reserve > before.calls.reserve, 'owner slot exhaustion is checked by the coordinator');
+      assert.equal((await h.grants()).filter(grant => !grant.compacted).length, 63);
+      await h.control({ now: h.initialNow + 30_001 });
+      const recovered = await h.create('ordinary63-after-recovery'); assert.equal(recovered.status, 201); await recovered.body?.cancel();
+      const tenant = (await h.coordinatorState()).tenantStates[0];
+      assert.equal(tenant.closedCharges.find(charge => charge.dimension === 'workerRequests' && charge.purpose === 'recovery')?.units, 2);
+      assert.ok(tenant.grants.filter(grant => !grant.compacted).length <= boundary.total);
+      assert.equal((await h.control()).calls.reconcile, 1);
+    }
+    assert.equal((await h.db.prepare("SELECT count(*) AS count FROM articles WHERE tenant_id='runtime-tenant' AND ticket_id=?").bind(targets[boundary.ordinary - 1]).first<{ count: number }>())?.count, 0);
   } finally { await h.mf.dispose(); }
 });
 
@@ -1263,5 +1279,36 @@ test('native byte capacity rejects new growth before storage and preserves headr
     const afterRecoveryBytes = new TextEncoder().encode(encodeCoordinatorState(state)).byteLength;
     assert.ok(afterRecoveryBytes <= 120 * 1_024);
     console.log('recovery-headroom-evidence', { beforeRecoveryBytes, afterRecoveryBytes, retainedGrants: tenant.grants.length });
+  } finally { await h.mf.dispose(); }
+});
+
+test('native total-two slot limit preserves recovery headroom before ordinary API saturation', async () => {
+  const h = await warmHarness();
+  try {
+    await h.db.prepare('UPDATE budget_owner_policies SET max_reservations=2').run();
+    const first = await h.create('slot-headroom-first'); assert.equal(first.status, 201);
+    const ticket = await first.json() as { id: string };
+    const rejected = await h.mf.dispatchFetch(`http://runtime.test/api/v1/tickets/${ticket.id}/articles`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey }, body: JSON.stringify({ body: 'must not consume recovery slot' }),
+    });
+    assert.equal(rejected.status, 429); await rejected.body?.cancel();
+    assert.equal((await h.db.prepare("SELECT count(*) AS n FROM articles WHERE body='must not consume recovery slot'").first<{ n: number }>())!.n, 0);
+    assert.equal((await h.grants()).filter(grant => !grant.compacted).length, 1);
+    await h.control({ now: h.initialNow + 30_001 });
+    const later = await h.create('slot-headroom-after-recovery'); assert.equal(later.status, 201); await later.body?.cancel();
+    const tenant = (await h.coordinatorState()).tenantStates[0];
+    assert.equal(tenant.closedCharges.find(row => row.dimension === 'workerRequests' && row.purpose === 'new-work')?.units, 2);
+    assert.equal(tenant.closedCharges.find(row => row.dimension === 'workerRequests' && row.purpose === 'recovery')?.units, 2);
+    assert.ok(tenant.grants.filter(grant => !grant.compacted).length <= 2);
+    assert.equal((await h.control()).calls.reconcile, 1);
+  } finally { await h.mf.dispose(); }
+});
+
+test('native total-one slot configuration rejects ordinary work without borrowing recovery capacity', async () => {
+  const h = await warmHarness();
+  try {
+    await h.db.prepare('UPDATE budget_owner_policies SET max_reservations=1').run();
+    const rejected = await h.create('one-slot-cannot-intake'); assert.equal(rejected.status, 429); await rejected.body?.cancel();
+    assert.equal(await h.count(), 0); assert.equal((await h.grants()).length, 0);
   } finally { await h.mf.dispose(); }
 });
