@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import type { DurableObjectNamespace } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement, DurableObjectNamespace } from '@cloudflare/workers-types';
 import type { ResourceAmounts } from '@luminatick/shared';
 import { splitSql } from './split-sql';
 import { createVerifiedTenantScope } from '../src/auth/scope';
@@ -15,8 +15,9 @@ import { estimateNotificationBroadcastWithCleanupEnvelope } from '../src/durable
 import { CUSTOMER_TICKET_ENVELOPES } from '../src/middleware/budget-admission.middleware';
 import { estimateDiagnosticEnvelope } from '../src/observability/resource-envelope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
+import { CustomerAuthBudgetFenceError } from '../src/repositories/customer-auth-budget-fence';
 import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
-import { admitCustomerAuthEffect } from '../src/budgets/customer-auth-admission.service';
+import { admitCustomerAuthEffect, CUSTOMER_AUTH_ENVELOPES } from '../src/budgets/customer-auth-admission.service';
 import {
   CUSTOMER_BUDGET_CREDENTIAL_D1_READ_BOUND,
   CUSTOMER_BUDGET_CURRENT_CREDENTIAL_SQL,
@@ -30,6 +31,43 @@ import { sumResourceEnvelopes } from '../src/utils/cost-policy';
 
 const NOW = Date.UTC(2026, 8, 11, 10, 0, 0);
 const root = resolve(import.meta.dirname, '..');
+
+/** Records native D1 write metadata at the database boundary for one attempt. */
+function meterNativeD1Writes(database: D1Database): Readonly<{
+  database: D1Database; reset: () => void; rowsWritten: () => number; samples: () => readonly (readonly number[])[];
+}> {
+  let rowsWritten = 0;
+  let samples: number[][] = [];
+  const rawStatements = new WeakMap<object, D1PreparedStatement>();
+  const record = (result: any): any => {
+    const results = Array.isArray(result) ? result : [result];
+    for (const item of results) {
+      const rows = item?.meta?.rows_written;
+      assert.equal(Number.isSafeInteger(rows) && rows >= 0, true, 'native D1 result exposes rows_written metadata');
+      rowsWritten += rows;
+    }
+    samples.push(results.map(item => item.meta.rows_written));
+    return result;
+  };
+  const statement = (target: D1PreparedStatement): D1PreparedStatement => {
+    const proxy = new Proxy(target as object, { get(value, property) {
+      if (property === 'bind') return (...args: unknown[]) => statement((value as D1PreparedStatement).bind(...args));
+      if (property === 'run' || property === 'all') return async () => record(await (value as D1PreparedStatement)[property]());
+      const member = Reflect.get(value, property);
+      return typeof member === 'function' ? member.bind(value) : member;
+    } }) as D1PreparedStatement;
+    rawStatements.set(proxy as object, target);
+    return proxy;
+  };
+  const metered = new Proxy(database as object, { get(target, property) {
+    if (property === 'prepare') return (sql: string) => statement((target as D1Database).prepare(sql));
+    if (property === 'batch') return async (statements: D1PreparedStatement[]) => record(await (target as D1Database)
+      .batch(statements.map(item => rawStatements.get(item as object) ?? item)));
+    const member = Reflect.get(target, property);
+    return typeof member === 'function' ? member.bind(target) : member;
+  } }) as D1Database;
+  return { database: metered, reset: () => { rowsWritten = 0; samples = []; }, rowsWritten: () => rowsWritten, samples: () => samples };
+}
 
 /** Native D1/DO proof for the customer reservation seam; route composition is covered separately. */
 async function fixture() {
@@ -130,7 +168,7 @@ test('customer credential failures deny before admission and leave canonical tab
   } finally { await f.mf.dispose(); }
 });
 
-test('customer auth fences native token and session effects after admission-time widget, session, and policy changes', async () => {
+test('customer auth fences native token and session effects after admission-time widget, session, and policy changes', async t => {
   const f = await fixture();
   try {
     const clock = Date.now();
@@ -140,7 +178,8 @@ test('customer auth fences native token and session effects after admission-time
       window: { ...budget.window, startsAt: clock - 1_000, endsAt: clock + 60_000 } }));
     await f.db.prepare("UPDATE budget_owner_policies SET policy_json=? WHERE deployment_id='customer-deployment'").bind(JSON.stringify(currentPolicy)).run();
     const namespace = await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace;
-    const env = { DB: f.db, BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: namespace,
+    const writeMeter = meterNativeD1Writes(f.db);
+    const env = { DB: writeMeter.database, BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: namespace,
       localNow: () => clock } as any;
     const widgetScope = createVerifiedTenantScope('tenant-a', 'widget-anonymous', ['customer'], 1);
     const widgetDeps = createTenantRequestDeps(widgetScope, env);
@@ -155,12 +194,57 @@ test('customer auth fences native token and session effects after admission-time
     first.admission!.settle('committed');
     assert.equal((await f.db.prepare("SELECT count(*) AS n FROM customer_auth_tokens WHERE tenant_id='tenant-a'").first<{ n:number }>())!.n, 1);
 
+    const historicalOtpCount = 512;
+    for (let offset = 0; offset < historicalOtpCount; offset += 64) {
+      await f.db.batch(Array.from({ length: Math.min(64, historicalOtpCount - offset) }, (_, index) => {
+        const token = offset + index;
+        return f.db.prepare(`INSERT INTO customer_auth_tokens (tenant_id,id,user_id,token_hash,type,expires_at)
+          VALUES ('tenant-a',?,'shared-customer',?,'otp','2000-01-01')`).bind(`historical-otp-${token}`, `historical-hash-${token}`);
+      }));
+    }
+    writeMeter.reset();
+    const admitOtpVerify = () => admitCustomerAuthEffect({ env, deps: widgetDeps, operation: 'verify',
+      principal: { kind: 'widget' as const, widgetKey: 'widget-a' }, credentialKey: 'widget:widget-a', now: () => clock });
+    const otpIssue = await admitWidget();
+    await widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'otp-fifth', 'otp-fifth-hash', 'otp', '2099-01-01', otpIssue.admission!.fence);
+    otpIssue.admission!.settle('committed');
+    const otpIssueWrites = writeMeter.rowsWritten();
+    assert.ok(otpIssueWrites <= (CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten ?? 0),
+      `new OTP after ${historicalOtpCount} historical rows wrote ${otpIssueWrites}/${CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten} D1 rows`);
+    t.diagnostic(`native OTP issue after ${historicalOtpCount} historical rows: ${otpIssueWrites}/${CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten} D1 rows written ${JSON.stringify(writeMeter.samples())}`);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const admission = await admitOtpVerify();
+      assert.equal(await widgetDeps.repositories.users.verifyAndConsumeCustomerAuthToken(`wrong-${attempt}`, '2026-09-11T10:00:00.000Z', 'otp-fifth', admission.admission!.fence), null);
+      admission.admission!.settle('committed');
+    }
+    const fifth = await admitOtpVerify();
+    assert.equal((await widgetDeps.repositories.users.verifyAndConsumeCustomerAuthToken('otp-fifth-hash', '2026-09-11T10:00:00.000Z', 'otp-fifth', fifth.admission!.fence))?.id, 'shared-customer');
+    fifth.admission!.settle('committed');
+    const exhaustedIssue = await admitWidget();
+    await widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'otp-exhausted', 'otp-exhausted-hash', 'otp', '2099-01-01', exhaustedIssue.admission!.fence);
+    exhaustedIssue.admission!.settle('committed');
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const admission = await admitOtpVerify();
+      assert.equal(await widgetDeps.repositories.users.verifyAndConsumeCustomerAuthToken(`exhausted-${attempt}`, '2026-09-11T10:00:00.000Z', 'otp-exhausted', admission.admission!.fence), null);
+      admission.admission!.settle('committed');
+    }
+    const exhausted = await admitOtpVerify();
+    assert.equal(await widgetDeps.repositories.users.verifyAndConsumeCustomerAuthToken('otp-exhausted-hash', '2026-09-11T10:00:00.000Z', 'otp-exhausted', exhausted.admission!.fence), null,
+      'an exhausted OTP is not consumed by a later claim');
+    exhausted.admission!.settle('committed');
+    assert.equal((await f.db.prepare("SELECT used_at FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='otp-exhausted'").first<{used_at:string|null}>())!.used_at, null);
+
     const staleWidget = await admitWidget();
     assert.equal(staleWidget.status, 'admitted');
     await f.db.prepare("UPDATE tenant_config SET value='widget-rotated' WHERE tenant_id='tenant-a' AND key='widget.public_key'").run();
+    await assert.rejects(() => widgetDeps.repositories.users.get('shared-customer', staleWidget.admission!.fence), CustomerAuthBudgetFenceError,
+      'a stale fence is not indistinguishable from a missing customer');
+    await assert.rejects(() => widgetDeps.repositories.users.create({ tenant_id: 'tenant-a', email: 'stale-create@example.test', full_name: 'stale', role: 'customer', mfa_enabled: false }, staleWidget.admission!.fence), CustomerAuthBudgetFenceError,
+      'a stale fence cannot report a failed customer creation as an ordinary write failure');
     await assert.rejects(() => widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'auth-widget-revoked', 'hash-widget-revoked', 'magic_link', '2099-01-01', staleWidget.admission!.fence));
     staleWidget.admission!.settle('unknown');
-    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM customer_auth_tokens WHERE tenant_id='tenant-a'").first<{ n:number }>())!.n, 1,
+    const expectedAuthTokens = historicalOtpCount + 3;
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM customer_auth_tokens WHERE tenant_id='tenant-a'").first<{ n:number }>())!.n, expectedAuthTokens,
       'a rotated widget key cannot write an admitted token after the prepay');
 
     await f.db.prepare("UPDATE tenant_config SET value='widget-a' WHERE tenant_id='tenant-a' AND key='widget.public_key'").run();
@@ -169,7 +253,7 @@ test('customer auth fences native token and session effects after admission-time
     await f.db.prepare("UPDATE budget_tenant_allocations SET state='revoked' WHERE tenant_id='tenant-a'").run();
     await assert.rejects(() => widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'auth-policy-revoked', 'hash-policy-revoked', 'magic_link', '2099-01-01', stalePolicy.admission!.fence));
     stalePolicy.admission!.settle('unknown');
-    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM customer_auth_tokens WHERE tenant_id='tenant-a'").first<{ n:number }>())!.n, 1,
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM customer_auth_tokens WHERE tenant_id='tenant-a'").first<{ n:number }>())!.n, expectedAuthTokens,
       'a revoked tenant allocation cannot write an admitted token after the prepay');
 
     await f.db.prepare("UPDATE budget_tenant_allocations SET state='active' WHERE tenant_id='tenant-a'").run();
