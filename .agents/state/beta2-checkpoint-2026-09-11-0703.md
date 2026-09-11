@@ -10,6 +10,12 @@ This checkpoint supersedes older delivery status, including unpublished forecast
 - Published 65 issue forecast paragraphs, 241 Project field changes with 523 expected fields checked, and 31 of 42 inspected milestone groups updated. Three Wiki pages match repository sources at Wiki `879a198`. Receipt: https://github.com/nathcymru/Tocyn/issues/49#issuecomment-5630089452.
 - #66/#136 and earlier #129/#159/#162 acceptance remain intact. No completed issue was reopened.
 
+## Composer accepted — 07:48 BST
+
+- #68 is accepted through PR #183 at signed main `8987f7c1b63349efe78ce1ddeedd5530d7e5c779`. The reviewed head `20c07bf3d7a9f46c59fed328c3509860e9253b86`, tested merge `6eb541498c25c188345652fb6ab67ca87a2ca9c4`, and signed acceptance share tree `11923639a0e6a205ffca8f6830297c2e39de2013`. Required CI `34570775353` and CodeQL `34570773097` passed. Project read-back is Done/100%, actual start and completion 11 September, remaining zero, immutable baseline retained and variance −129 working days. Receipt: https://github.com/nathcymru/Tocyn/issues/68#issuecomment-5630628007.
+- #70 is In progress with actual start 11 September. #69 macros, #76 triage/summarisation, #77 copilot providers, and #134 contextual panels remain pending under their own scope. No provider activation or beta.2 readiness follows from #68 acceptance.
+- The next coordinator queue is #64 resource completion, then #130 queues, #137 ownership/routing and #140 acceptance. This section supersedes the older #68 partial/bundle checkpoint below.
+
 ## Composer update — 07:18 BST
 
 The static-entry ownership correction now measures 567,028 total and 99,178 initial JavaScript gzip bytes under Node 22; existing ceilings are unchanged. Both Vite configs retain the full editor/grammars. All client builds and the five combined production browser tests pass; required exact-revision CI timing checks remain pending. The performance failure described below is historical pre-correction evidence. The higher-effort Terra public-API review completed without code changes; it prevented adopting a lighter entry that would remove highlighting. #64 submitted revision `3ec1159` passes all required CI/security, but integration is held for commit-consistency corrections and staff receipts. Receipt: https://github.com/nathcymru/Tocyn/issues/64#issuecomment-5630315085. Last full human update 07:10 BST; next due 07:40 BST.
@@ -36,6 +42,6 @@ The guarded beta.1 local profile rejects SLA policy administration and clock ini
 
 A real 30-minute thread heartbeat is active: `tocyn-beta-2-delivery-checkpoint`. It resumes authorized work and provides status without creating an approval gate. Use native `followup_task` to restart completed workers; `send_message` alone does not restart them. A prior missed restart was corrected; no source work was lost.
 
-No verified independent Work/Chat worker allowance exists. Last observed Codex allowance was 77% remaining, resetting 17 September at 23:59:48 BST; task-specific use is unknown. Zero Copilot requests, API billing, purchases, overages or resets. Local synthetic testing only. Full and production dependency audits for #64 report zero known vulnerabilities on 11 September; this is not a security clearance.
+No verified independent Work/Chat worker allowance exists. Last observed Codex allowance at 07:55 BST was approximately 67% remaining, resetting 17 September at 23:59:48 BST; task-specific use is unknown. Zero Copilot requests, API billing, purchases, overages or resets. Local synthetic testing only. Full and production dependency audits for #64 report zero known vulnerabilities on 11 September; this is not a security clearance.
 
 Preserve the clean owner checkout, historical worktrees and owner ports 8787/8899/5190. Root owns integration and issue/Project/Wiki acceptance. Next: finish bounded composer build correction, validate/push coherent #64 streaming increment, continue staff/dashboard budget receipts and dependent queue/routing work. Keep all partial issues open.

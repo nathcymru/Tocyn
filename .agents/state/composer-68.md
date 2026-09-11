@@ -1,8 +1,8 @@
 # #68 composer continuation
 
-## Current acceptance candidate — 11 September 2026
+## Accepted completion — 11 September 2026
 
-Root owns acceptance. The current implementation covers rich Markdown/slash/emoji/code composition, versioned draft/article format and safe channel output, authenticated raster previews, upload failure/retry, durable draft/CAS/retention integration and server-derived current reply capabilities. Final exact-revision CI remains required; #68 is not yet closed.
+PR #183 merged at 2026-09-11T06:48:43Z as accepted signed tree `8987f7c1b63349efe78ce1ddeedd5530d7e5c779`. Required CI `34570775353` and CodeQL `34570773097` passed. Acceptance covers 261 dashboard, 67 portal and 557 server units; production composer/drafts/SLA/support-state browser passes; and actual VoiceOver evidence. #68 is complete at 100%; actual completion is 2026-09-11, remaining planning effort is 0h, and variance is −129 Monday–Saturday working days against the immutable 2027-02-09 baseline target. Maintainer receipt: https://github.com/nathcymru/Tocyn/issues/68#issuecomment-5630628007.
 
 Evidence includes actual Safari/VoiceOver composition and internal-note submission, five combined production browser scenarios, prior full dashboard/server/portal suites and real tenant/format runtime tests. See `docs/security/evidence/composer-68-voiceover-2026-09-11.md` and `composer-68-build-layout-2026-09-11.md`. The static-entry chunk ownership correction preserved full editor/language support and passed all 16 controlled CI resource/timing checks at tested merge `50d15d9b39795952101c05e5218589b1684f1a5d` (PR head `d08809f`).
 
