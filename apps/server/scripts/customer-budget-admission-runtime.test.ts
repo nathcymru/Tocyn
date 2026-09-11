@@ -15,6 +15,8 @@ import { estimateNotificationBroadcastWithCleanupEnvelope } from '../src/durable
 import { CUSTOMER_TICKET_ENVELOPES } from '../src/middleware/budget-admission.middleware';
 import { estimateDiagnosticEnvelope } from '../src/observability/resource-envelope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
+import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
+import { admitCustomerAuthEffect } from '../src/budgets/customer-auth-admission.service';
 import {
   CUSTOMER_BUDGET_CREDENTIAL_D1_READ_BOUND,
   CUSTOMER_BUDGET_CURRENT_CREDENTIAL_SQL,
@@ -125,6 +127,62 @@ test('customer credential failures deny before admission and leave canonical tab
     assert.equal(f.cache.inspectForTrustedRuntime().operations, 0);
     assert.equal((await f.db.prepare('SELECT count(*) AS count FROM tickets').first<{ count: number }>())?.count, 2);
     assert.equal((await f.db.prepare('SELECT count(*) AS count FROM articles').first<{ count: number }>())?.count, 0);
+  } finally { await f.mf.dispose(); }
+});
+
+test('customer auth fences native token and session effects after admission-time widget, session, and policy changes', async () => {
+  const f = await fixture();
+  try {
+    const clock = Date.now();
+    const policyRow = await f.db.prepare("SELECT policy_json FROM budget_owner_policies WHERE deployment_id='customer-deployment'").first<{policy_json:string}>();
+    const currentPolicy = JSON.parse(policyRow!.policy_json);
+    currentPolicy.budgets = currentPolicy.budgets.map((budget: any) => ({ ...budget,
+      window: { ...budget.window, startsAt: clock - 1_000, endsAt: clock + 60_000 } }));
+    await f.db.prepare("UPDATE budget_owner_policies SET policy_json=? WHERE deployment_id='customer-deployment'").bind(JSON.stringify(currentPolicy)).run();
+    const namespace = await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace;
+    const env = { DB: f.db, BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: namespace,
+      localNow: () => clock } as any;
+    const widgetScope = createVerifiedTenantScope('tenant-a', 'widget-anonymous', ['customer'], 1);
+    const widgetDeps = createTenantRequestDeps(widgetScope, env);
+    await f.db.prepare("INSERT INTO tenant_config(tenant_id,key,value) VALUES ('tenant-a','widget.public_key','widget-a')").run();
+    const admitWidget = () => admitCustomerAuthEffect({ env, deps: widgetDeps, operation: 'request',
+      principal: { kind: 'widget' as const, widgetKey: 'widget-a' }, credentialKey: 'widget:widget-a', now: () => clock });
+
+    const first = await admitWidget();
+    assert.equal(first.status, 'admitted');
+    assert.ok(first.admission);
+    await widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'auth-success', 'hash-success', 'magic_link', '2099-01-01', first.admission!.fence);
+    first.admission!.settle('committed');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM customer_auth_tokens WHERE tenant_id='tenant-a'").first<{ n:number }>())!.n, 1);
+
+    const staleWidget = await admitWidget();
+    assert.equal(staleWidget.status, 'admitted');
+    await f.db.prepare("UPDATE tenant_config SET value='widget-rotated' WHERE tenant_id='tenant-a' AND key='widget.public_key'").run();
+    await assert.rejects(() => widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'auth-widget-revoked', 'hash-widget-revoked', 'magic_link', '2099-01-01', staleWidget.admission!.fence));
+    staleWidget.admission!.settle('unknown');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM customer_auth_tokens WHERE tenant_id='tenant-a'").first<{ n:number }>())!.n, 1,
+      'a rotated widget key cannot write an admitted token after the prepay');
+
+    await f.db.prepare("UPDATE tenant_config SET value='widget-a' WHERE tenant_id='tenant-a' AND key='widget.public_key'").run();
+    const stalePolicy = await admitWidget();
+    assert.equal(stalePolicy.status, 'admitted');
+    await f.db.prepare("UPDATE budget_tenant_allocations SET state='revoked' WHERE tenant_id='tenant-a'").run();
+    await assert.rejects(() => widgetDeps.repositories.users.storeCustomerAuthToken('shared-customer', 'auth-policy-revoked', 'hash-policy-revoked', 'magic_link', '2099-01-01', stalePolicy.admission!.fence));
+    stalePolicy.admission!.settle('unknown');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM customer_auth_tokens WHERE tenant_id='tenant-a'").first<{ n:number }>())!.n, 1,
+      'a revoked tenant allocation cannot write an admitted token after the prepay');
+
+    await f.db.prepare("UPDATE budget_tenant_allocations SET state='active' WHERE tenant_id='tenant-a'").run();
+    const customerScope = createVerifiedTenantScope('tenant-a', 'shared-customer', ['customer'], 1);
+    const customerDeps = createTenantRequestDeps(customerScope, env);
+    const logout = await admitCustomerAuthEffect({ env, deps: customerDeps, operation: 'logout',
+      principal: { kind: 'session' as const, sessionVersion: 1 }, credentialKey: 'customer:shared-customer:1', now: () => clock });
+    assert.equal(logout.status, 'admitted');
+    await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='tenant-a' AND id='shared-customer'").run();
+    await assert.rejects(() => customerDeps.repositories.users.revokeSessions('shared-customer', logout.admission!.fence));
+    logout.admission!.settle('unknown');
+    assert.equal((await f.db.prepare("SELECT session_version FROM users WHERE tenant_id='tenant-a' AND id='shared-customer'").first<{session_version:number}>())!.session_version, 2,
+      'a revoked customer session cannot perform a later logout write');
   } finally { await f.mf.dispose(); }
 });
 

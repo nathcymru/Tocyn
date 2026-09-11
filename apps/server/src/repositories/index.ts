@@ -17,13 +17,19 @@ import type { RequestCanonicalMutationSli } from '../observability/request-canon
 import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
 import { articleBodyFormat } from '@luminatick/shared';
 import { TicketListScanError, ticketListCurrentCredentialSql, ticketListScanAssertionSql, ticketListScanFenceSql, type TicketListCurrentCredential, type TicketListScanSnapshot } from './ticket-list-scan.repository';
+import { CustomerAuthBudgetFenceError, customerAuthAcceptedSql, customerAuthFenceStatements, type CustomerAuthBudgetFence } from './customer-auth-budget-fence';
 
 const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
 
 export class SqlUserRepository implements UserRepository {
-  async revokeSessions(id: string): Promise<void> {
-    await this.db.prepare('UPDATE users SET session_version = session_version + 1 WHERE tenant_id = ? AND id = ?')
-      .bind(this.scope.tenantId, id).run();
+  async revokeSessions(id: string, fence?: CustomerAuthBudgetFence): Promise<void> {
+    const query = this.db.prepare(`UPDATE users SET session_version = session_version + 1 WHERE tenant_id = ? AND id = ?${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
+      .bind(this.scope.tenantId, id, ...(fence ? [this.scope.tenantId] : []));
+    if (fence) {
+      const result = (await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), query])).at(-1);
+      if (!result?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
+    else await query.run();
   }
 
   /** A late setup request cannot replace an authenticator enabled in the meantime. */
@@ -63,20 +69,27 @@ export class SqlUserRepository implements UserRepository {
     return result || null;
   }
 
-  async get(id: string): Promise<User | null> {
-    const result = await this.db.prepare("SELECT * FROM users WHERE tenant_id = ? AND id = ?")
-      .bind(this.scope.tenantId, id)
-      .first<User>();
+  async get(id: string, fence?: CustomerAuthBudgetFence): Promise<User | null> {
+    const query = this.db.prepare(`SELECT * FROM users WHERE tenant_id = ? AND id = ?${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
+      .bind(this.scope.tenantId, id, ...(fence ? [this.scope.tenantId] : []));
+    const result = fence
+      ? (await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), query])).at(-1)?.results[0] as User | undefined
+      : await query.first<User>();
     return result || null;
   }
 
-  async create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>): Promise<User> {
+  async create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>, fence?: CustomerAuthBudgetFence): Promise<User> {
     const id = crypto.randomUUID();
-    const result = await this.db.prepare(
-      "INSERT INTO users (tenant_id, id, email, full_name, role, mfa_enabled, mfa_secret) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *"
+    const query = this.db.prepare(
+      `INSERT INTO users (tenant_id, id, email, full_name, role, mfa_enabled, mfa_secret)
+       SELECT ?, ?, ?, ?, ?, ?, ?${fence ? ` WHERE ${customerAuthAcceptedSql()}` : ''} RETURNING *`
     ).bind(
-      this.scope.tenantId, id, data.email, data.full_name, data.role, data.mfa_enabled ? 1 : 0, data.mfa_secret || null
-    ).first<User>();
+      this.scope.tenantId, id, data.email, data.full_name, data.role, data.mfa_enabled ? 1 : 0, data.mfa_secret || null,
+      ...(fence ? [this.scope.tenantId] : [])
+    );
+    const result = fence
+      ? (await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), query])).at(-1)?.results[0] as User | undefined
+      : await query.first<User>();
     if (!result) throw new Error("Failed to create user");
     return result;
   }
@@ -100,17 +113,24 @@ export class SqlUserRepository implements UserRepository {
       .run();
   }
 
-  async storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string): Promise<void> {
+  async storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string, fence?: CustomerAuthBudgetFence): Promise<void> {
     const insert = this.db.prepare(
-      'INSERT INTO customer_auth_tokens (tenant_id, id, user_id, token_hash, type, expires_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(this.scope.tenantId, tokenId, userId, tokenHash, type, expiresAt);
+      `INSERT INTO customer_auth_tokens (tenant_id, id, user_id, token_hash, type, expires_at)
+       SELECT ?, ?, ?, ?, ?, ?${fence ? ` WHERE ${customerAuthAcceptedSql()}` : ''}`
+    ).bind(this.scope.tenantId, tokenId, userId, tokenHash, type, expiresAt, ...(fence ? [this.scope.tenantId] : []));
     if (type === 'otp') {
-      await this.db.batch([
-        this.db.prepare("UPDATE customer_auth_tokens SET used_at = ? WHERE tenant_id = ? AND user_id = ? AND type = 'otp' AND used_at IS NULL")
-          .bind(new Date().toISOString(), this.scope.tenantId, userId),
+      const revoke = this.db.prepare(`UPDATE customer_auth_tokens SET used_at = ? WHERE tenant_id = ? AND user_id = ? AND type = 'otp' AND used_at IS NULL${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
+          .bind(new Date().toISOString(), this.scope.tenantId, userId, ...(fence ? [this.scope.tenantId] : []));
+      const results = await this.db.batch([
+        ...(fence ? customerAuthFenceStatements(this.db, this.scope, fence) : []), revoke,
         insert,
       ]);
-    } else await insert.run();
+      if (fence && !results.at(-1)?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    } else if (fence) {
+      const result = (await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), insert])).at(-1);
+      if (!result?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
+    else await insert.run();
   }
 
   async findCustomerAuthTokenUser(tokenHash: string, challengeId?: string): Promise<string | null> {
@@ -123,18 +143,21 @@ export class SqlUserRepository implements UserRepository {
     return candidate?.user_id ?? null;
   }
 
-  async verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string): Promise<User | null> {
+  async verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string, fence?: CustomerAuthBudgetFence): Promise<User | null> {
+    const accepted = fence ? ` AND ${customerAuthAcceptedSql()}` : '';
+    const acceptedValues = fence ? [this.scope.tenantId] : [];
+    const prefix = fence ? customerAuthFenceStatements(this.db, this.scope, fence) : [];
+    let attemptStatement: D1PreparedStatement | undefined;
     if (challengeId) {
       // Claim one of five attempts atomically before comparing the code.
-      const attempt = await this.db.prepare(`UPDATE customer_auth_tokens SET attempts = attempts + 1
+      attemptStatement = this.db.prepare(`UPDATE customer_auth_tokens SET attempts = attempts + 1
         WHERE tenant_id = ? AND id = ? AND type = 'otp' AND used_at IS NULL
-          AND expires_at > ? AND attempts < 5 RETURNING id`)
-        .bind(this.scope.tenantId, challengeId, now).first();
-      if (!attempt) return null;
+          AND expires_at > ? AND attempts < 5${accepted} RETURNING id`)
+        .bind(this.scope.tenantId, challengeId, now, ...acceptedValues);
     }
     // A single conditional write claims the token. Concurrent redemption can return
     // a row to only one caller; the current customer role is checked in that write.
-    const claimed = await this.db.prepare(`
+    const claimStatement = this.db.prepare(`
       UPDATE customer_auth_tokens SET used_at = ?
       WHERE tenant_id = ? AND id = (
         SELECT t.id FROM customer_auth_tokens t
@@ -143,15 +166,25 @@ export class SqlUserRepository implements UserRepository {
           AND t.expires_at > ? AND u.role = 'customer'
           AND ((? IS NULL AND t.type = 'magic_link') OR (t.type = 'otp' AND t.id = ?))
         ORDER BY t.id LIMIT 1
-      ) AND used_at IS NULL AND expires_at > ?
+      ) AND used_at IS NULL AND expires_at > ?${accepted}
       RETURNING user_id
-    `).bind(now, this.scope.tenantId, this.scope.tenantId, tokenHash, now, challengeId || null, challengeId || null, now)
-      .first<{ user_id: string }>();
+    `).bind(now, this.scope.tenantId, this.scope.tenantId, tokenHash, now, challengeId || null, challengeId || null, now, ...acceptedValues);
+    let claimed: { user_id: string } | undefined;
+    if (!fence) {
+      if (attemptStatement && !await attemptStatement.first()) return null;
+      claimed = await claimStatement.first<{ user_id: string }>() ?? undefined;
+    } else {
+      const results = await this.db.batch([...prefix, ...(attemptStatement ? [attemptStatement] : []), claimStatement]);
+      if (attemptStatement && !results[prefix.length]?.results[0]) return null;
+      claimed = results.at(-1)?.results[0] as { user_id: string } | undefined;
+    }
     if (!claimed) return null;
-    const user = await this.get(claimed.user_id);
+    const user = await this.get(claimed.user_id, fence);
     if (!user || user.role !== 'customer') return null;
-    await this.db.prepare('UPDATE users SET last_login_at = ? WHERE tenant_id = ? AND id = ?')
-      .bind(now, this.scope.tenantId, user.id).run();
+    const update = this.db.prepare(`UPDATE users SET last_login_at = ? WHERE tenant_id = ? AND id = ?${accepted}`)
+      .bind(now, this.scope.tenantId, user.id, ...acceptedValues);
+    if (fence) await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), update]);
+    else await update.run();
     user.last_login_at = now;
     return user;
   }
