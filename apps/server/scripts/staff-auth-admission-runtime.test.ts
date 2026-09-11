@@ -9,6 +9,7 @@ import * as OTPAuth from 'otpauth';
 import {RESOURCE_DIMENSIONS,STOCK_DIMENSIONS,type ResourceAmounts} from '@luminatick/shared';
 import {splitSql} from './split-sql';
 import {mfaService} from '../src/services/auth/mfa.service';
+import {authService} from '../src/services/auth/auth.service';
 import {isolateWarmReservedEnvelope} from '../src/budgets/isolate-grant-holder';
 import {staffAuthEnvelope,type StaffAuthOperation} from '../src/budgets/staff-auth-admission.service';
 
@@ -16,6 +17,7 @@ const root=resolve(import.meta.dirname,'..');
 const now=Math.floor(Date.now()/1000)*1000;
 const jwtSecret='synthetic-staff-auth-secret-at-least-32-characters';
 const encryptionKey='synthetic-staff-auth-encryption-key';
+const staffPassword='synthetic-staff-password';
 const mfaSecrets={admin:'JBSWY3DPEHPK3PXP',enroll:'KRSXG5DSNFXGOIDB'};
 
 async function fixture(){
@@ -53,12 +55,13 @@ async function fixture(){
     }
     const encryptedAdmin=await mfaService.encryptSecret(mfaSecrets.admin,encryptionKey);
     const encryptedPending=await mfaService.encryptSecret(mfaSecrets.enroll,encryptionKey);
+    const passwordHash=await authService.hashPassword(staffPassword);
     await db.batch(['staff-a','staff-b','staff-low','staff-zero'].map(tenantId=>db.prepare(`INSERT INTO users
         (tenant_id,id,email,full_name,role,mfa_secret,mfa_enabled,session_version) VALUES (?,'staff-admin',?,?,'admin',?,1,1)`)
       .bind(tenantId,`${tenantId}@example.test`,tenantId,encryptedAdmin)));
     await db.batch([
-      db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,mfa_enabled,session_version)
-        VALUES ('staff-a','staff-enroll','enroll-a@example.test','Enroll A','agent',0,1)`),
+      db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,password_hash,mfa_enabled,session_version)
+        VALUES ('staff-a','staff-enroll','enroll-a@example.test','Enroll A','agent',?,0,1)`).bind(passwordHash),
       db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,mfa_secret,mfa_enabled,session_version)
         VALUES ('staff-zero','staff-enroll','enroll-zero@example.test','Enroll Zero','agent',?,0,1)`).bind(encryptedPending),
       db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,mfa_enabled,session_version)
@@ -193,6 +196,31 @@ test('MFA confirmation and logout commit once, revoke old credentials, and leave
     assert.equal((await request(f,'/me',tenantB)).status,200);
     const current=await f.db.prepare("SELECT mfa_enabled,session_version FROM users WHERE tenant_id='staff-a' AND id='staff-enroll'")
       .first<{mfa_enabled:number;session_version:number}>();assert.deepEqual(current,{mfa_enabled:1,session_version:3});
+  }finally{await f.mf.dispose();}
+});
+
+test('a lost successful confirmation response recovers through fresh password login and MFA verification',async()=>{
+  const f=await fixture();try{
+    const enrollment=await f.token({tenantId:'staff-a',actorId:'staff-enroll',role:'agent',audience:'mfa-challenge',mfaVerified:false});
+    const setup=await request(f,'/mfa/setup',enrollment);assert.equal(setup.status,200,await setup.clone().text());
+    const secret=new URL((await setup.json() as {provisioning_uri:string}).provisioning_uri).searchParams.get('secret');
+    assert.ok(secret);
+    await control(f,{loseConfirmationResponse:true});
+    const lost=await request(f,'/mfa/confirm',enrollment,{code:code(secret)});
+    assert.equal(lost.status,503);assert.deepEqual(await lost.json(),{error:'synthetic lost confirmation response'});
+    assert.deepEqual(await f.db.prepare("SELECT mfa_enabled,session_version FROM users WHERE tenant_id='staff-a' AND id='staff-enroll'")
+      .first<{mfa_enabled:number;session_version:number}>(),{mfa_enabled:1,session_version:2});
+
+    const login=await f.mf.dispatchFetch('http://runtime.test/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:'enroll-a@example.test',password:staffPassword})});
+    assert.equal(login.status,200,await login.clone().text());
+    const challenge=await login.json() as {mfa_required:boolean;token:string;user:{mfa_enabled:boolean}};
+    assert.equal(challenge.mfa_required,true);assert.equal(challenge.user.mfa_enabled,true);
+    const verified=await request(f,'/mfa/verify',challenge.token,{code:code(secret)});
+    assert.equal(verified.status,200,await verified.clone().text());
+    const recovered=(await verified.json() as {token:string}).token;
+    assert.equal((await request(f,'/me',recovered)).status,200);
+    assert.equal((await request(f,'/mfa/confirm',enrollment,{code:code(secret)})).status,401);
   }finally{await f.mf.dispose();}
 });
 
