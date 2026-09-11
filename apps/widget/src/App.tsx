@@ -78,7 +78,7 @@ const App: React.FC = () => {
           </div>
 
           </Tabs.Root>
-          <div className="p-2 text-center text-[10px] text-gray-600 border-t border-gray-100">
+          <div data-product-attribution className="p-2 text-center text-[10px] text-gray-600 border-t border-gray-100">
             Powered by {PRODUCT_BRAND.name}
           </div>
         </div>
