@@ -303,6 +303,109 @@ test('customer auth fences native token and session effects after admission-time
   } finally { await f.mf.dispose(); }
 });
 
+test('customer credential issuance atomically rechecks tenant identity and the current OTP pointer', async t => {
+  const f = await fixture();
+  try {
+    const clock = Date.now();
+    const policyRow = await f.db.prepare("SELECT policy_json FROM budget_owner_policies WHERE deployment_id='customer-deployment'").first<{ policy_json: string }>();
+    const policy = JSON.parse(policyRow!.policy_json);
+    policy.budgets = policy.budgets.map((budget: any) => ({ ...budget,
+      window: { ...budget.window, startsAt: clock - 1_000, endsAt: clock + 60_000 } }));
+    await f.db.prepare("UPDATE budget_owner_policies SET policy_json=? WHERE deployment_id='customer-deployment'").bind(JSON.stringify(policy)).run();
+    const writeMeter = meterNativeD1Writes(f.db);
+    const env = { DB: writeMeter.database, BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', BUDGET_COORDINATOR_DO: await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO'),
+      localNow: () => clock } as any;
+    const depsFor = (tenantId: string) => createTenantRequestDeps(createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1), env);
+    for (const tenantId of ['tenant-a', 'tenant-b']) {
+      await f.db.prepare("INSERT INTO tenant_config(tenant_id,key,value) VALUES (?, 'widget.public_key', ?)")
+        .bind(tenantId, `widget-${tenantId}`).run();
+    }
+    const admit = async (tenantId: string) => {
+      const deps = depsFor(tenantId);
+      const result = await admitCustomerAuthEffect({ env, deps, operation: 'request', principal: { kind: 'widget', widgetKey: `widget-${tenantId}` },
+        credentialKey: `widget:${tenantId}`, now: () => clock });
+      assert.equal(result.status, 'admitted');
+      assert.ok(result.admission);
+      return { deps, admission: result.admission! };
+    };
+    const issue = (email: string, userId: string, tokenId: string, type: 'magic_link' | 'otp' = 'magic_link', expectedUserId: string | null = null,
+      expectedCurrentOtpTokenId: string | null = null, expectedCurrentOtpTokenHash: string | null = null) => ({ email, fullName: email.split('@')[0], expectedUserId, userId, tokenId,
+      tokenHash: `hash-${tokenId}`, type, expiresAt: '2099-01-01T00:00:00.000Z', expectedCurrentOtpTokenId, expectedCurrentOtpTokenHash });
+    const newIssueRows: string[] = [];
+
+    // Matching user IDs in separate tenant scopes must not collide.
+    for (const [tenantId, type] of [['tenant-a', 'magic_link'], ['tenant-b', 'otp']] as const) {
+      writeMeter.reset();
+      const current = await admit(tenantId);
+      await current.deps.repositories.users.issueCustomerAuthCredential(
+        issue(`new-customer-${tenantId}@example.test`, 'new-customer', `credential-${tenantId}`, type), current.admission.fence);
+      current.admission.settle('committed');
+      assert.ok(writeMeter.rowsWritten() <= (CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten ?? 0),
+        `new-user ${type} issue wrote ${writeMeter.rowsWritten()}/${CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten} D1 rows`);
+      newIssueRows.push(`${type}:${writeMeter.rowsWritten()}/${CUSTOMER_AUTH_ENVELOPES.request.d1RowsWritten}`);
+    }
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM users WHERE id='new-customer'").first<{ count: number }>())?.count, 2);
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM customer_auth_tokens WHERE id IN ('credential-tenant-a','credential-tenant-b')").first<{ count: number }>())?.count, 2);
+    assert.equal((await f.db.prepare("SELECT token_id FROM customer_current_otp_challenges WHERE tenant_id='tenant-b' AND user_id='new-customer'").first<{ token_id: string }>())?.token_id, 'credential-tenant-b');
+    t.diagnostic(`native new-customer customer-auth writes ${newIssueRows.join(', ')}`);
+
+    // A customer created after preflight cannot leave the planned shadow user or token behind.
+    const identityRace = await admit('tenant-a');
+    await f.db.prepare("INSERT INTO users(tenant_id,id,email,role) VALUES ('tenant-a','racing-customer','identity-race@example.test','customer')").run();
+    await assert.rejects(() => identityRace.deps.repositories.users.issueCustomerAuthCredential(
+      issue('identity-race@example.test', 'planned-shadow', 'identity-race-token'), identityRace.admission.fence), CustomerAuthBudgetFenceError);
+    identityRace.admission.settle('unknown');
+    assert.equal(await f.db.prepare("SELECT id FROM users WHERE tenant_id='tenant-a' AND id='planned-shadow'").first(), null);
+    assert.equal(await f.db.prepare("SELECT id FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='identity-race-token'").first(), null);
+
+    // A changed OTP pointer invalidates the issue snapshot before the token insert.
+    const pointerRace = await admit('tenant-a');
+    await f.db.batch([
+      f.db.prepare("INSERT INTO customer_auth_tokens(tenant_id,id,user_id,token_hash,type,expires_at) VALUES ('tenant-a','prior-otp','shared-customer','prior-hash','otp','2099-01-01')"),
+      f.db.prepare("INSERT INTO customer_current_otp_challenges(tenant_id,user_id,token_id) VALUES ('tenant-a','shared-customer','prior-otp')"),
+    ]);
+    await assert.rejects(() => pointerRace.deps.repositories.users.issueCustomerAuthCredential(
+      issue('customer-tenant-a@example.test', 'shared-customer', 'pointer-race-token', 'otp', 'shared-customer'), pointerRace.admission.fence), CustomerAuthBudgetFenceError);
+    pointerRace.admission.settle('unknown');
+    assert.equal(await f.db.prepare("SELECT id FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='pointer-race-token'").first(), null);
+    assert.equal((await f.db.prepare("SELECT token_id FROM customer_current_otp_challenges WHERE tenant_id='tenant-a' AND user_id='shared-customer'").first<{ token_id: string }>())?.token_id, 'prior-otp');
+
+    // Keeping the pointer but mutating its token hash also invalidates the snapshot.
+    const hashRace = await admit('tenant-a');
+    await f.db.prepare("UPDATE customer_auth_tokens SET token_hash='mutated-prior-hash' WHERE tenant_id='tenant-a' AND id='prior-otp'").run();
+    await assert.rejects(() => hashRace.deps.repositories.users.issueCustomerAuthCredential(
+      issue('customer-tenant-a@example.test', 'shared-customer', 'hash-race-token', 'otp', 'shared-customer', 'prior-otp', 'prior-hash'), hashRace.admission.fence), CustomerAuthBudgetFenceError);
+    hashRace.admission.settle('unknown');
+    assert.equal(await f.db.prepare("SELECT id FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='hash-race-token'").first(), null);
+
+    // Live credential authority is checked in the same batch, after reservation but before issue.
+    const widgetRace = await admit('tenant-a');
+    await f.db.prepare("UPDATE tenant_config SET value='rotated-widget' WHERE tenant_id='tenant-a' AND key='widget.public_key'").run();
+    await assert.rejects(() => widgetRace.deps.repositories.users.issueCustomerAuthCredential(
+      issue('widget-race@example.test', 'widget-race-user', 'widget-race-token'), widgetRace.admission.fence), CustomerAuthBudgetFenceError);
+    widgetRace.admission.settle('unknown');
+    assert.equal(await f.db.prepare("SELECT id FROM users WHERE tenant_id='tenant-a' AND id='widget-race-user'").first(), null);
+
+    await f.db.prepare("UPDATE tenant_config SET value='widget-tenant-a' WHERE tenant_id='tenant-a' AND key='widget.public_key'").run();
+    const policyRace = await admit('tenant-a');
+    await f.db.prepare("UPDATE budget_tenant_allocations SET state='revoked' WHERE tenant_id='tenant-a'").run();
+    await assert.rejects(() => policyRace.deps.repositories.users.issueCustomerAuthCredential(
+      issue('policy-race@example.test', 'policy-race-user', 'policy-race-token'), policyRace.admission.fence), CustomerAuthBudgetFenceError);
+    policyRace.admission.settle('unknown');
+    assert.equal(await f.db.prepare("SELECT id FROM users WHERE tenant_id='tenant-a' AND id='policy-race-user'").first(), null);
+
+    await f.db.prepare("UPDATE budget_tenant_allocations SET state='active' WHERE tenant_id='tenant-a'").run();
+    const lostAck = await admit('tenant-a');
+    await lostAck.deps.repositories.users.issueCustomerAuthCredential(
+      issue('lost-ack@example.test', 'lost-ack-user', 'lost-ack-token'), lostAck.admission.fence);
+    // A caller that loses the response cannot infer a rollback; it retains the reservation as unknown.
+    lostAck.admission.settle('unknown');
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM users WHERE tenant_id='tenant-a' AND id='lost-ack-user'").first<{ count: number }>())?.count, 1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS count FROM customer_auth_tokens WHERE tenant_id='tenant-a' AND id='lost-ack-token'").first<{ count: number }>())?.count, 1);
+    t.diagnostic('native customer credential issue preserves durable effects when acknowledgement is lost; no storage-stock credit is inferred');
+  } finally { await f.mf.dispose(); }
+});
+
 test('customer read authority resolves current ownership before a warm grant can reveal a target ticket', async () => {
   const f = await fixture();
   try {
