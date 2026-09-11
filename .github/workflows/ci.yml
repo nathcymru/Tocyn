@@ -73,6 +73,11 @@ jobs:
         run: |
           npm run typecheck --workspace=apps/server -- --project scripts/tsconfig.operator-draft-retention.json
           node --import tsx --test apps/server/scripts/operator-draft-retention.test.ts apps/server/scripts/operator-workspace-sort.test.ts
+      - name: Verify bounded operational metrics
+        if: matrix.check == 'test'
+        run: |
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.operational-metrics.json
+          npm run test:operational-metrics --workspace=apps/server
       - name: Retain synthetic UI performance evidence
         if: always() && matrix.check == 'build'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
