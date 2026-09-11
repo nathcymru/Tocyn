@@ -14,8 +14,10 @@ import { TenantTicketService } from "../../services/tenant-ticket.service";
 import { Hono } from 'hono';
 import { operationalObservability } from '../../middleware/operational-observability';
 import type { RequestAuthSliSnapshot } from '../../observability/request-auth-sli';
+import { CustomerAuthBudgetFenceError } from '../../repositories/customer-auth-budget-fence';
 
 // Define mock functions so they can be overridden in tests
+const { mockAdmitCustomerAuthEffect } = vi.hoisted(() => ({ mockAdmitCustomerAuthEffect: vi.fn() }));
 const mockRequestAuth = vi.fn().mockResolvedValue(undefined);
 const mockVerifyAuthWithDecision = vi.fn().mockResolvedValue({
   decision: 'accepted',
@@ -34,6 +36,7 @@ const mockFindTicketById = vi.fn().mockResolvedValue({ id: "ticket-1", customer_
 const mockCreateArticle = vi.fn().mockResolvedValue({ id: "article-1" });
 const mockAddAttachment = vi.fn().mockResolvedValue({ id: "attachment-1" });
 const mockProjectCanonicalConversation = vi.fn().mockReturnValue({ conversation: {}, messages: [] });
+const mockGetCurrentUser = vi.fn().mockResolvedValue({ email: 'test@example.com' });
 
 vi.mock("../../services/customer-auth.service", () => {
   return {
@@ -48,6 +51,10 @@ vi.mock("../../services/customer-auth.service", () => {
     })
   };
 });
+
+vi.mock('../../budgets/customer-auth-admission.service', () => ({
+  admitCustomerAuthEffect: mockAdmitCustomerAuthEffect,
+}));
 
 vi.mock("../../services/tenant-ticket.service", () => {
   return {
@@ -87,7 +94,7 @@ vi.mock("../../middleware/tenant.middleware", async (importOriginal) => {
             getAttachmentWithMeta: async () => ({ r2_key: "test-key", customer_email: "test@example.com", file_name: "test.png" })
           },
           users: {
-            get: async () => ({ email: "test@example.com" })
+            get: mockGetCurrentUser
           }
         },
         attachmentStorage: {
@@ -159,6 +166,8 @@ describe("Customer Handler Integration Tests", () => {
     }));
     mockDB.all.mockResolvedValue({ results: [] });
     mockRequestAuth.mockResolvedValue(undefined);
+    mockAdmitCustomerAuthEffect.mockResolvedValue({ status: 'disabled' });
+    mockGetCurrentUser.mockResolvedValue({ email: 'test@example.com' });
     mockVerifyAuthWithDecision.mockResolvedValue({
       decision: 'accepted',
       result: {
@@ -192,6 +201,19 @@ describe("Customer Handler Integration Tests", () => {
       const body = await res.json();
       expect(body.success).toBe(true);
       expect(mockRequestAuth).toHaveBeenCalledWith("test@example.com", "magic_link");
+    });
+
+    it('returns 503 and leaves the grant unknown when the fenced customer creation path goes stale', async () => {
+      const settle = vi.fn();
+      mockAdmitCustomerAuthEffect.mockResolvedValueOnce({ status: 'admitted', admission: { fence: {}, settle } });
+      mockRequestAuth.mockRejectedValueOnce(new CustomerAuthBudgetFenceError('stale'));
+      const res = await customer.request('/auth/request', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-widget-key': 'test-key' },
+        body: JSON.stringify({ widgetKey: 'test-key', email: 'test@example.com', type: 'magic_link' }),
+      }, { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any });
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ code: 'budget_admission_unavailable' });
+      expect(settle).toHaveBeenCalledWith('unknown');
     });
   });
 
@@ -234,6 +256,18 @@ describe("Customer Handler Integration Tests", () => {
       expect(res.status).toBe(401);
       const body = await res.json();
       expect(body.error).toBe("Invalid token");
+    });
+
+    it('returns 503 and leaves the grant unknown when a fenced verification goes stale', async () => {
+      const settle = vi.fn();
+      mockAdmitCustomerAuthEffect.mockResolvedValueOnce({ status: 'admitted', admission: { fence: {}, settle } });
+      mockVerifyAuthWithDecision.mockRejectedValueOnce(new CustomerAuthBudgetFenceError('stale'));
+      const res = await customer.request('/auth/verify', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-widget-key': 'test-key' }, body: JSON.stringify({ token: 'a'.repeat(64) }),
+      }, { DB: mockDB as any, JWT_SECRET, ENVIRONMENT: 'development' });
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ code: 'budget_admission_unavailable' });
+      expect(settle).toHaveBeenCalledWith('unknown');
     });
 
     it('preserves the enumeration-safe response without a credential decision when local admission suppressed verification', async () => {
@@ -287,6 +321,18 @@ describe("Customer Handler Integration Tests", () => {
       const body = await res.json();
       expect(body.user.email).toBe("test@example.com");
 
+    });
+
+    it('returns 503 and leaves the grant unknown when the current session fence is stale', async () => {
+      const settle = vi.fn();
+      mockAdmitCustomerAuthEffect.mockResolvedValueOnce({ status: 'admitted', admission: { fence: {}, settle } });
+      mockGetCurrentUser.mockRejectedValueOnce(new CustomerAuthBudgetFenceError('stale'));
+      const token = await generateCustomerToken();
+      const res = await customer.request('/auth/me', { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any });
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ code: 'budget_admission_unavailable' });
+      expect(settle).toHaveBeenCalledWith('unknown');
     });
   });
 
