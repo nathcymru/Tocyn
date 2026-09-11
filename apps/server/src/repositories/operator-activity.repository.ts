@@ -159,6 +159,38 @@ export class OperatorActivityRepository {
     return { statement: this.appendStatement(immutable) };
   }
 
+  /**
+   * Direct-assignment activity is derived from the durable internal audit event,
+   * not from the dashboard request. The caller places its event statement first
+   * in the same canonical D1 batch; if that event was not accepted, this SELECT
+   * inserts nothing.
+   */
+  async prepareAssignmentFromCanonicalEvent(input: Readonly<{
+    id: string; ticketId: string; recipientUserId: string; eventId: string; producerId: string;
+  }>): Promise<PreparedActivityAppend> {
+    requireIdentifier(input.eventId, 'event id');
+    const immutable = await this.immutable({
+      id: input.id, ticketId: input.ticketId, recipientUserId: input.recipientUserId,
+      kind: 'assignment', sourceId: `conversation:${input.eventId}`,
+      producer: { kind: 'staff', id: input.producerId }, facts: { eventId: input.eventId },
+    });
+    return { statement: this.db.prepare(`INSERT INTO operator_activities
+      (tenant_id,id,ticket_id,recipient_user_id,kind,source_id,producer_kind,producer_id,facts,receipt_fingerprint,resurfaced_at)
+      SELECT e.tenant_id,?,?,?,?,?,?,?,?,?,?
+      FROM conversation_events e
+      WHERE e.tenant_id=? AND e.id=? AND e.ticket_id=?
+        AND e.kind='ticket.assignment_changed' AND e.actor_kind='staff' AND e.actor_id=?
+        AND e.actor_provenance='mfa-staff' AND e.source='dashboard' AND e.visibility='internal'
+        AND json_extract(e.facts,'$.after.assignedTo')=?
+        AND json_extract(e.facts,'$.before.assignedTo') IS NOT json_extract(e.facts,'$.after.assignedTo')
+      ON CONFLICT (tenant_id,recipient_user_id,kind,source_id) DO NOTHING RETURNING ${columns}`)
+      .bind(
+        immutable.id, immutable.ticketId, immutable.recipientUserId, immutable.kind, immutable.sourceId,
+        immutable.producerKind, immutable.producerId, immutable.facts, immutable.fingerprint, immutable.resurfacedAt,
+        this.scope.tenantId, input.eventId, immutable.ticketId, input.producerId, immutable.recipientUserId,
+      ) };
+  }
+
   private appendStatement(immutable: ImmutableActivity): D1PreparedStatement {
     // The predicate is evaluated in the actual D1 batch. An earlier asynchronous
     // check cannot substitute for the ticket/recipient state at canonical commit.

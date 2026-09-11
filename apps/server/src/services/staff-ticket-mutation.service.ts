@@ -218,8 +218,17 @@ export class StaffTicketMutationService {
       if (verified.length || !attempt.namespace) throw invalid();
       attempt.commitStarted = true;
       try {
+        const assignmentEventId = input.data.assigned_to === undefined || input.data.assigned_to === null
+          ? undefined : crypto.randomUUID();
+        const assignmentActivity = assignmentEventId
+          ? await this.activity?.prepareAssignmentFromCanonicalEvent({
+            id: crypto.randomUUID(), ticketId: input.ticketId, recipientUserId: input.data.assigned_to!,
+            eventId: assignmentEventId, producerId: this.credential.actorId,
+          }) : undefined;
+        if (assignmentEventId && !assignmentActivity) throw unavailable();
         const raw = await this.canonical.commitStaffUpdate(input.ticketId,input.data,{kind:'staff',id:this.credential.actorId,source:'dashboard'},
-          { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace });
+          { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace },
+          assignmentActivity ? { eventId: assignmentEventId!, statement: assignmentActivity.statement } : undefined);
         return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
       } catch (error) {
         await this.authorize(attempt.requirements);
