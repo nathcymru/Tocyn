@@ -10,7 +10,8 @@ import { OPERATOR_WORKSPACE_SORTS, OPERATOR_WORKSPACE_VIEWS } from '../types/ope
 import { OperatorWorkspaceError, OperatorWorkspaceService } from '../services/operator-workspace.service';
 import { AttachmentReferenceError } from '../services/attachment-references';
 import { LOCAL_DRAFT_RETENTION } from '../types/operator-draft-retention';
-import type { OperatorPresentationCredential } from '../repositories/operator-workspace.repository';
+import { OperatorWorkspaceFenceError, type OperatorPresentationCredential, type OperatorWorkspaceCommit } from '../repositories/operator-workspace.repository';
+import { admitOperatorWorkspace, type WorkspaceAdmission, type WorkspaceAdmissionOperation } from '../budgets/operator-workspace-admission.service';
 
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const generation = z.string().uuid();
@@ -53,30 +54,43 @@ workspace.use('*', async (c, next) => {
   await next();
 });
 workspace.use('*', requestBounds(64 * 1024));
-function service(c: any) {
+function service(c: any, admission?: OperatorWorkspaceCommit) {
   const localRetention = c.env.ENVIRONMENT === 'local' && c.env.LOCAL_BETA_ENABLED === 'true';
   return new OperatorWorkspaceService(c.get('tenantDeps') as TenantRequestDeps,
-    localRetention ? { retention: LOCAL_DRAFT_RETENTION } : {});
+    { ...(localRetention ? { retention: LOCAL_DRAFT_RETENTION } : {}), ...(admission ? { admission } : {}) });
 }
 function failure(c: any, error: unknown) {
   if (error instanceof MutationInputError) return c.json({ error: error.message, code: error.code }, error.status);
   if (error instanceof OperatorWorkspaceError) return c.json({ error: error.message }, error.status);
+  if (error instanceof OperatorWorkspaceFenceError) return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   if (error instanceof AttachmentReferenceError) return c.json({ error: 'Invalid attachment reference' }, 400);
   throw error;
 }
+async function admission(c: any, operation: WorkspaceAdmissionOperation, ticketId?: string): Promise<WorkspaceAdmission> {
+  return admitOperatorWorkspace({ env: c.env, deps: c.get('tenantDeps') as TenantRequestDeps, payload: c.get('jwtPayload'), operation, ticketId,
+    now: () => c.env.localNow?.() ?? Date.now() });
+}
+function admissionFailure(c: any, result: WorkspaceAdmission): Response | null {
+  return result.status === 'rejected' ? c.json(result.reason === 'exhausted'
+    ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
+    : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, result.reason === 'exhausted' ? 429 : 503) : null;
+}
+const admittedCommit = (result: WorkspaceAdmission) => result.status === 'admitted' ? result.commit : undefined;
 
-workspace.get('/state', async c => { try { return c.json(await service(c).getWorkspaceState()); } catch (error) { return failure(c, error); } });
+workspace.get('/state', async c => { try { const gate = await admission(c, 'workspace.state.read'); const denied = admissionFailure(c, gate); if (denied) return denied; return c.json(await service(c, admittedCommit(gate)).getWorkspaceState()); } catch (error) { return failure(c, error); } });
 workspace.put('/state', async c => {
   try {
     const parsed = stateInput.safeParse(await readMutationJson(c));
     if (!parsed.success) return c.json({ error: 'Invalid workspace state' }, 400);
-    return c.json(await service(c).saveWorkspaceState(parsed.data));
+    const gate = await admission(c, 'workspace.state.write', parsed.data.selectedTicketId ?? undefined); const denied = admissionFailure(c, gate); if (denied) return denied;
+    return c.json(await service(c, admittedCommit(gate)).saveWorkspaceState(parsed.data));
   } catch (error) { return failure(c, error); }
 });
 workspace.get('/theme-preference', async c => {
   try {
+    const gate = await admission(c, 'workspace.theme.read'); const denied = admissionFailure(c, gate); if (denied) return denied;
     const repository = (c.get('tenantDeps') as TenantRequestDeps).repositories.operatorWorkspace;
-    const result = await repository.getThemePreference(themeCredential(c));
+    const result = await repository.getThemePreference(themeCredential(c), admittedCommit(gate));
     if (!result) throw new OperatorWorkspaceError(403, 'Operator session changed');
     return c.json(result);
   } catch (error) { return failure(c, error); }
@@ -85,11 +99,14 @@ workspace.put('/theme-preference', async c => {
   try {
     const parsed = themePreferenceInput.safeParse(await readMutationJson(c));
     if (!parsed.success) return c.json({ error: 'Invalid theme preference' }, 400);
+    const gate = await admission(c, 'workspace.theme.write'); const denied = admissionFailure(c, gate); if (denied) return denied;
     const repository = (c.get('tenantDeps') as TenantRequestDeps).repositories.operatorWorkspace;
     const credential = themeCredential(c);
-    const result = await repository.saveThemePreference(parsed.data, credential);
+    const result = await repository.saveThemePreference(parsed.data, credential, admittedCommit(gate));
     if (!result) {
-      if (!await repository.getThemePreference(credential)) throw new OperatorWorkspaceError(403, 'Operator session changed');
+      // Enabled admission already placed current session/MFA/policy in the
+      // mutation batch; a null row can therefore only be an exact CAS loss.
+      if (gate.status === 'disabled' && !await repository.getThemePreference(credential)) throw new OperatorWorkspaceError(403, 'Operator session changed');
       throw new OperatorWorkspaceError(409, 'Theme preference changed before it could be saved');
     }
     return c.json(result);
@@ -99,25 +116,27 @@ workspace.get('/drafts', async c => {
   const after = z.string().max(128).safeParse(c.req.query('after') ?? '');
   const limit = z.coerce.number().int().min(1).max(50).safeParse(c.req.query('limit') ?? '50');
   if (!after.success || !limit.success) return c.json({ error: 'Invalid draft page' }, 400);
-  try { return c.json(await service(c).listDrafts(after.data, limit.data)); } catch (error) { return failure(c, error); }
+  try { const gate = await admission(c, 'workspace.drafts.list'); const denied = admissionFailure(c, gate); if (denied) return denied; return c.json(await service(c, admittedCommit(gate)).listDrafts(after.data, limit.data)); } catch (error) { return failure(c, error); }
 });
 workspace.get('/drafts/:ticketId', async c => {
   const parsed = ticketId.safeParse(c.req.param('ticketId'));
   if (!parsed.success) return c.json({ error: 'Invalid ticket ID' }, 400);
-  try { const draft = await service(c).getDraft(parsed.data); return draft ? c.json(draft) : c.body(null, 204); } catch (error) { return failure(c, error); }
+  try { const gate = await admission(c, 'workspace.draft.read', parsed.data); const denied = admissionFailure(c, gate); if (denied) return denied; const draft = await service(c, admittedCommit(gate)).getDraft(parsed.data); return draft ? c.json(draft) : c.body(null, 204); } catch (error) { return failure(c, error); }
 });
 workspace.put('/drafts/:ticketId', async c => {
   try {
     const id = ticketId.safeParse(c.req.param('ticketId')); const parsed = draftInput.safeParse(await readMutationJson(c));
     if (!id.success || !parsed.success) return c.json({ error: 'Invalid draft' }, 400);
-    return c.json(await service(c).saveDraft({ ...parsed.data, ticketId: id.data }));
+    const gate = await admission(c, 'workspace.draft.write', id.data); const denied = admissionFailure(c, gate); if (denied) return denied;
+    return c.json(await service(c, admittedCommit(gate)).saveDraft({ ...parsed.data, ticketId: id.data }));
   } catch (error) { return failure(c, error); }
 });
 workspace.post('/drafts/:ticketId/rebase', async c => {
   try {
     const id = ticketId.safeParse(c.req.param('ticketId')); const parsed = draftRebaseInput.safeParse(await readMutationJson(c));
     if (!id.success || !parsed.success) return c.json({ error: 'Invalid draft rebase' }, 400);
-    return c.json(await service(c).rebaseDraft({ ...parsed.data, ticketId: id.data }));
+    const gate = await admission(c, 'workspace.draft.rebase', id.data); const denied = admissionFailure(c, gate); if (denied) return denied;
+    return c.json(await service(c, admittedCommit(gate)).rebaseDraft({ ...parsed.data, ticketId: id.data }));
   } catch (error) { return failure(c, error); }
 });
 workspace.delete('/drafts/:ticketId', async c => {
@@ -125,7 +144,7 @@ workspace.delete('/drafts/:ticketId', async c => {
   const parsedRevision = revision.safeParse(Number(c.req.query('revision')));
   const parsedGeneration = generation.safeParse(c.req.query('generation'));
   if (!id.success || !parsedRevision.success || parsedRevision.data === 0 || !parsedGeneration.success) return c.json({ error: 'Invalid draft version' }, 400);
-  try { await service(c).deleteDraftIfVersion(id.data, parsedGeneration.data, parsedRevision.data); return c.body(null, 204); } catch (error) { return failure(c, error); }
+  try { const gate = await admission(c, 'workspace.draft.delete', id.data); const denied = admissionFailure(c, gate); if (denied) return denied; await service(c, admittedCommit(gate)).deleteDraftIfVersion(id.data, parsedGeneration.data, parsedRevision.data); return c.body(null, 204); } catch (error) { return failure(c, error); }
 });
 
 export default workspace;

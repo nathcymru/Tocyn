@@ -13,7 +13,7 @@ import { CapabilityPolicyService } from '../src/repositories/capability-policy.r
 import { SESSION_BUDGET_GROUP_CAPABILITY_SQL, SessionBudgetAuthorityRepository, type SessionBudgetCredential, type SessionBudgetRequirements } from '../src/repositories/session-budget-authority.repository';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
-import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_WRITE_ENVELOPE } from '../src/budgets/knowledge-source-admission.service';
+import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_WRITE_ENVELOPES } from '../src/budgets/knowledge-source-admission.service';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
 import { TenantKnowledgeService } from '../src/services/tenant-knowledge.service';
@@ -280,9 +280,9 @@ test('knowledge source upload publishes one immutable source within its whole-at
       .uploadAndProcess('Admitted','source.txt',new TextEncoder().encode('source bytes'),'text/plain',undefined,'answer',admission);
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful upload attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
-    assert.equal(attemptRows,20,'upload native D1 metadata changed');
-    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten ?? 0),
-      `upload wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
+    assert.equal(attemptRows,24,'upload native D1 metadata changed');
+    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document.d1RowsWritten ?? 0),
+      `upload wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document.d1RowsWritten}`);
     const document=await deps.repositories.knowledge.getDocument(id); assert.ok(document); assert.match(document.file_path,/\/versions\/1$/);
     assert.ok(await deps.attachmentStorage.getAttachment(document.file_path));
     assert.equal((await f.db.prepare("SELECT count(*) count FROM knowledge_index_versions WHERE tenant_id='tenant-a' AND document_id=? AND state='preparing'").bind(id).first<{count:number}>())?.count,1);
@@ -305,9 +305,9 @@ test('article update publishes within its whole-attempt D1 write envelope',async
       .updateArticle('updated-doc','Updated','source bytes',null,'answer',admission);
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful article update attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
-    assert.equal(attemptRows,20,'article update native D1 metadata changed');
-    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten ?? 0),
-      `article update wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
+    assert.equal(attemptRows,23,'article update native D1 metadata changed');
+    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPES.article.d1RowsWritten ?? 0),
+      `article update wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPES.article.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT title,status FROM knowledge_docs WHERE tenant_id='tenant-a' AND id='updated-doc'").first(),
       {title:'Updated',status:'pending'});
   } finally {await f.mf.dispose();}
@@ -331,9 +331,9 @@ test('QA staging carries the admitted fence through the retention claim, R2 sour
       .markArticleAsQA('qa-article','answer',admission);
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for successful QA attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
-    assert.equal(attemptRows,20,'QA native D1 metadata changed');
-    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten ?? 0),
-      `QA staging wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
+    assert.equal(attemptRows,21,'QA native D1 metadata changed');
+    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPES.qa.d1RowsWritten ?? 0),
+      `QA staging wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPES.qa.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT qa_type,chunk_count FROM articles WHERE tenant_id='tenant-a' AND id='qa-article'").first(),{qa_type:'answer',chunk_count:0});
     const version=await f.db.prepare("SELECT file_path,state FROM knowledge_index_versions WHERE tenant_id='tenant-a' AND document_id='qa-article'").first<{file_path:string;state:string}>();
     assert.equal(version?.state,'preparing'); assert.ok(version && await deps.attachmentStorage.getAttachment(version.file_path));
@@ -358,9 +358,9 @@ test('failed source recovery remains within the whole-attempt D1 write envelope'
       .uploadAndProcess('Failed','source.txt',new TextEncoder().encode('source bytes'),'text/plain',undefined,'answer',admission));
     const attemptRows=f.writeMeter.rowsWritten();
     t.diagnostic(`native D1 rows_written for failed source recovery attempt: ${attemptRows} ${JSON.stringify(f.writeMeter.samples())}`);
-    assert.equal(attemptRows,16,'failed source recovery native D1 metadata changed');
-    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten ?? 0),
-      `failed source recovery wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPE.d1RowsWritten}`);
+    assert.equal(attemptRows,19,'failed source recovery native D1 metadata changed');
+    assert.ok(attemptRows<=(KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document.d1RowsWritten ?? 0),
+      `failed source recovery wrote ${attemptRows} rows against ${KNOWLEDGE_SOURCE_WRITE_ENVELOPES.document.d1RowsWritten}`);
     assert.deepEqual(await f.db.prepare("SELECT v.state,j.state AS job_state FROM knowledge_index_versions v JOIN knowledge_index_jobs j ON j.tenant_id=v.tenant_id AND j.document_id=v.document_id AND j.version=v.version WHERE v.tenant_id='tenant-a'").first(),
       {state:'failed',job_state:'failed_cleanup'});
     assert.equal((await f.db.prepare("SELECT count(*) count FROM budget_grant_operations WHERE tenant_id='tenant-a'").first<{count:number}>())?.count,1);

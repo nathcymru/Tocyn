@@ -128,6 +128,17 @@ function instrumentDatabase(db: any): any {
           permission:"UPDATE api_keys SET permissions='tickets:read' WHERE tenant_id='runtime-tenant' AND id='runtime-key'",
           customerSession:"UPDATE users SET session_version=2 WHERE tenant_id='runtime-tenant' AND id='runtime-customer'",
         };
+        if (action==='closedLinkedGrant') {
+          // Model a retained operation from an earlier attempt whose whole
+          // reservation became terminal before this business transaction.
+          const linked=batch.find(statement=>statements.get(statement)?.sql.includes('INSERT INTO budget_grant_operations'));
+          if (!linked) throw new Error('Synthetic closure needs the exact operation');
+          await statements.get(linked)!.raw.run();
+          await target.prepare(`INSERT OR IGNORE INTO budget_grant_closures
+            (tenant_id,reservation_id,holder_id,aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json)
+            SELECT tenant_id,reservation_id,holder_id,aggregate_id,reservation_id,'synthetic-closed',1,'{}','{}'
+            FROM budget_grant_operations WHERE tenant_id='runtime-tenant'`).run();
+        }
         if (action==='failure') throw new Error('Synthetic canonical interruption');
         if (action && actions[action]) await target.prepare(actions[action]).run();
         const delay=canonicalDelayMs;canonicalDelayMs=0;if (delay) await new Promise(resolve=>setTimeout(resolve,delay));

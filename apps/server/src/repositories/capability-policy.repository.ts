@@ -84,27 +84,7 @@ export class CapabilityPolicyService {
     this.db.prepare("SELECT capability, enabled, revision FROM tenant_role_capability_policies WHERE tenant_id = ? AND role = 'agent'").bind(tenantId).all<PolicyListRow>(),
     this.db.prepare("SELECT revision FROM tenant_capability_policy_versions WHERE tenant_id = ? AND role = 'agent'").bind(tenantId).first<{ revision: number }>(),
   ]);
-  const owner = new Map((ownerResult.results ?? []).map(row => [row.capability, row]));
-  const role = new Map((roleResult.results ?? []).map(row => [row.capability, row]));
-  const tenant = new Map((tenantResult.results ?? []).map(row => [row.capability, row]));
-
-  return {
-    revision: version?.revision ?? 1,
-    capabilities: CAPABILITY_CATALOG.map(capability => ({
-      key: capability.legacyKey ?? capability.id,
-      capability: capability.id,
-      resource: capability.resource,
-      action: capability.action,
-      risk: capability.risk,
-      label: capability.label,
-      ownerAllowed: enabledValue(owner.get(capability.id)?.enabled),
-      roleAllowed: enabledValue(role.get(capability.id)?.enabled),
-      tenantAllowed: enabledValue(tenant.get(capability.id)?.enabled),
-      effectiveForAgent: enabledValue(owner.get(capability.id)?.enabled)
-        && enabledValue(role.get(capability.id)?.enabled)
-        && enabledValue(tenant.get(capability.id)?.enabled),
-    })),
-  };
+  return formatAgentPolicy(ownerResult.results ?? [], roleResult.results ?? [], tenantResult.results ?? [], version?.revision ?? 1);
   }
   async updateAgentPolicy(revision: number, policies: Record<string, boolean>, fence: CapabilityWriteFence): Promise<boolean> {
     if (fence.tenantId !== this.scope.tenantId || fence.actorId !== this.scope.actorId || !this.scope.roles.includes(fence.role) || fence.capability !== "permissions.manage") return false;
@@ -147,3 +127,27 @@ export class CapabilityPolicyService {
 
 type PolicyListRow = { capability: string; enabled: number | boolean; revision: number };
 function enabledValue(value: number | boolean | undefined) { return value === true || value === 1; }
+
+export function formatAgentPolicy(ownerRows: PolicyListRow[], roleRows: PolicyListRow[], tenantRows: PolicyListRow[], revision: number) {
+  const owner = new Map(ownerRows.map(row => [row.capability, row]));
+  const role = new Map(roleRows.map(row => [row.capability, row]));
+  const tenant = new Map(tenantRows.map(row => [row.capability, row]));
+
+  return {
+    revision: revision,
+    capabilities: CAPABILITY_CATALOG.map(capability => ({
+      key: capability.legacyKey ?? capability.id,
+      capability: capability.id,
+      resource: capability.resource,
+      action: capability.action,
+      risk: capability.risk,
+      label: capability.label,
+      ownerAllowed: enabledValue(owner.get(capability.id)?.enabled),
+      roleAllowed: enabledValue(role.get(capability.id)?.enabled),
+      tenantAllowed: enabledValue(tenant.get(capability.id)?.enabled),
+      effectiveForAgent: enabledValue(owner.get(capability.id)?.enabled)
+        && enabledValue(role.get(capability.id)?.enabled)
+        && enabledValue(tenant.get(capability.id)?.enabled),
+    })),
+  };
+}
