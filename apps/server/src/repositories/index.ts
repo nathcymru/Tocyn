@@ -1,6 +1,7 @@
 import { TicketMutationReplayRepository } from './ticket-mutation-replay.repository';
 import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 import { OperatorWorkspaceRepository } from './operator-workspace.repository';
+import { SupportStateRepository } from './support-state.repository';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
 import { normalizeSupportEmail } from '../utils/email-normalize';
@@ -1019,6 +1020,7 @@ export function createRepositories(scope: VerifiedTenantScope, db: D1Database, b
     ticketFields: new SqlTicketFieldRepository(scope, db),
     groups: new SqlGroupRepository(scope, db),
     ticketFilters: new SqlFilterRepository(scope, db),
+    supportStates: new SupportStateRepository(db, scope, betaAdmission),
     operatorWorkspace: new OperatorWorkspaceRepository(scope, db, betaAdmission)
   };
 }

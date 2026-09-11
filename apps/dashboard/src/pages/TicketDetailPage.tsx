@@ -8,6 +8,7 @@ import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
 import { useRealtime } from '../hooks/useRealtime';
 import { useTicketFields } from '../hooks/useTicketFields';
+import { useSupportStates, useTicketSupportState, useTransitionSupportState } from '../hooks/useSupportStates';
 import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue, type OperatorDraftVersion } from '../hooks/useOperatorDraft';
 import { useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
@@ -56,6 +57,17 @@ function TicketDetail({ id }: { id: string }) {
   const { data: ticketFields } = useTicketFields();
   const customFieldPrefix = useId();
   const updateTicket = useUpdateTicket();
+  const {
+    data: supportStates = [],
+    loadMore: loadMoreSupportStates,
+    hasMore: hasMoreSupportStates,
+    isLoading: isLoadingSupportStates,
+    isLoadingMore: isLoadingMoreSupportStates,
+    isLoadMoreError: isLoadMoreSupportStatesError,
+  } = useSupportStates();
+  const [showSupportState, setShowSupportState] = useState(false);
+  const supportState = useTicketSupportState(id, showSupportState);
+  const transitionSupportState = useTransitionSupportState();
   const { presence, updateLocation, lastMessage } = useRealtime();
   const draft = useOperatorDraft(id);
   const workspace = useOperatorWorkspaceState();
@@ -108,6 +120,36 @@ function TicketDetail({ id }: { id: string }) {
   const pendingTicketSelectFocus = useRef<TicketSelectControl | null>(null);
   const [pendingTicketSelectRefresh, setPendingTicketSelectRefresh] = useState<TicketSelectControl | null>(null);
   const [isConfirmingTicketSelect, setIsConfirmingTicketSelect] = useState(false);
+  const [supportStateDraft, setSupportStateDraft] = useState({ definitionId: '', waitingReason: '', nextAction: '' });
+  const [supportStateError, setSupportStateError] = useState<string | null>(null);
+  const [supportStateNotice, setSupportStateNotice] = useState<string | null>(null);
+  const supportStateSelect = useRef<HTMLSelectElement>(null);
+  const supportStateDraftDirty = useRef(false);
+  const supportStateFlight = useRef(false);
+  const [isSupportStateSubmitting, setIsSupportStateSubmitting] = useState(false);
+  const selectedSupportStateDefinition = supportStates.find(candidate => candidate.id === supportStateDraft.definitionId);
+  const selectedSupportStateNeedsDetails = Boolean(supportState.data?.definition_id) && !selectedSupportStateDefinition;
+
+  const restoreSupportStateDraft = (current = supportState.data) => {
+    if (!current) return;
+    supportStateDraftDirty.current = false;
+    setSupportStateDraft({ definitionId: current.definition_id, waitingReason: current.waiting_reason ?? '', nextAction: current.next_action ?? '' });
+  };
+
+  const updateSupportStateDraft = (change: Partial<{ definitionId: string; waitingReason: string; nextAction: string }>) => {
+    if (supportStateFlight.current) return;
+    supportStateDraftDirty.current = true;
+    setSupportStateDraft(current => ({ ...current, ...change }));
+  };
+
+  useEffect(() => {
+    const current = supportState.data;
+    // A refetch supplies a new concurrency revision, but it must never replace
+    // an operator's local edit. The explicit discard action is the only route
+    // that restores a dirty form from the server.
+    if (!current || supportStateDraftDirty.current) return;
+    restoreSupportStateDraft(current);
+  }, [supportState.data?.definition_id, supportState.data?.revision]);
 
   React.useLayoutEffect(() => {
     const control = pendingTicketSelectFocus.current;
@@ -228,6 +270,44 @@ function TicketDetail({ id }: { id: string }) {
     } finally {
       setIsGeneratingSuggestion(false);
     }
+  };
+
+  const submitSupportState = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (supportStateFlight.current) return;
+    const current = supportState.data;
+    const definition = selectedSupportStateDefinition;
+    if (!current) return;
+    if (!definition) { setSupportStateError('Load the current support-state definition before saving.'); return; }
+    const waitingReason = supportStateDraft.waitingReason.trim();
+    const nextAction = supportStateDraft.nextAction.trim();
+    if (definition.waiting_reason_required && !waitingReason) { setSupportStateError('A waiting reason is required for this support state.'); return; }
+    if (definition.next_action_required && !nextAction) { setSupportStateError('A next action is required for this support state.'); return; }
+    setSupportStateError(null); setSupportStateNotice(null);
+    supportStateFlight.current = true;
+    setIsSupportStateSubmitting(true);
+    try {
+      const saved = await transitionSupportState.mutateAsync({ ticketId: id, definitionId: definition.id, waitingReason: waitingReason || null, nextAction: nextAction || null, expectedRevision: current.revision });
+      restoreSupportStateDraft(saved);
+      setSupportStateNotice('Support state saved.');
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 409) {
+        setSupportStateError('This support state changed elsewhere. Your input is retained. Refresh the current state, then review and retry.');
+      } else setSupportStateError(cause instanceof Error ? `${cause.message}. Your input is retained.` : 'Support state could not be saved. Your input is retained.');
+    } finally { supportStateFlight.current = false; setIsSupportStateSubmitting(false); }
+  };
+
+  const refreshSupportState = async () => {
+    if (supportStateFlight.current) return;
+    setSupportStateError(null);
+    try { await supportState.refetch({ throwOnError: true }); setSupportStateNotice('Current support state refreshed. Your local input is retained; review it before saving.'); }
+    catch { setSupportStateError('Could not refresh the current support state. Your input is retained.'); }
+  };
+
+  const discardSupportStateDraft = () => {
+    restoreSupportStateDraft();
+    setSupportStateError(null);
+    setSupportStateNotice('Local support-state changes discarded.');
   };
 
   const updateDraft = (changes: Partial<OperatorDraftValue>) => {
@@ -394,7 +474,9 @@ function TicketDetail({ id }: { id: string }) {
           <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</TocynButton>
         </div>}
         {changeError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{changeError}</p>}
+        {supportStateError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{supportStateError} <TocynButton type="button" onClick={() => void refreshSupportState()} className="underline">Refresh current support state</TocynButton></p>}
         {notice && <p role="status" className="text-slate-700">{notice}</p>}
+        {supportStateNotice && <p role="status" className="text-slate-700">{supportStateNotice}</p>}
         {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="text-sm text-slate-700">
           {workspace.status === 'saving' && 'Saving workspace preference…'}
           {workspace.status === 'saved' && 'Workspace preference saved.'}
@@ -434,6 +516,27 @@ function TicketDetail({ id }: { id: string }) {
             </TocynSelect>
           </div>
         </div>
+
+        {!showSupportState && <TocynButton type="button" onClick={() => setShowSupportState(true)} className="rounded border border-slate-300 px-3 py-2 text-sm">Manage support state</TocynButton>}
+        {showSupportState && supportState.isLoading && <p role="status">Loading current support state…</p>}
+        {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Support state">
+          <div><h2 className="font-semibold text-slate-900">Support state</h2><p className="text-sm text-slate-600">Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
+          <label className="block text-sm font-medium text-slate-700">State
+            <TocynSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} aria-disabled={isSupportStateSubmitting || isLoadingSupportStates} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+              {!selectedSupportStateDefinition && supportState.data?.definition_id === supportStateDraft.definitionId && <option value={supportStateDraft.definitionId}>{supportState.data.internal_label} ({supportState.data.lifecycle}) — state details loading</option>}
+              {supportStates.map(state => <option key={state.id} value={state.id}>{state.internal_label} ({state.legacy_status})</option>)}
+            </TocynSelect>
+          </label>
+          {isLoadingSupportStates && <p role="status" className="text-sm text-slate-700">Loading support-state definitions…</p>}
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
+          </div>
+          {selectedSupportStateNeedsDetails && <p role="status" className="text-sm text-slate-700">Load the current support-state definition before saving.</p>}
+          <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
+          {hasMoreSupportStates && <TocynButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className="underline">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</TocynButton>}
+          {isLoadMoreSupportStatesError && <p role="alert" className="text-sm text-red-800">Could not load more support states. Try again.</p>}
+        </form>}
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="p-6 border-b border-slate-200 bg-white">

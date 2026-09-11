@@ -7,6 +7,10 @@ export default defineConfig({
   build: {
     rolldownOptions: {
       output: {
+                // Content-hashed names avoid repeating long source names in every import.
+                // The manifest retains source-to-asset mapping; lazy route boundaries stay intact.
+                entryFileNames: 'assets/[hash:6].js',
+                chunkFileNames: 'assets/[hash:6].js',
         // Rolldown otherwise emits each shared Lucide icon as a separately gzipped asset.
         // Keep the icon module family together so the production artifact avoids that
         // per-asset compression overhead while retaining route-level code splitting.
