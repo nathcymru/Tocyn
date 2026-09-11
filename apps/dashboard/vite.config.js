@@ -12,9 +12,16 @@ export default defineConfig({
                 // The manifest retains source-to-asset mapping; lazy route boundaries stay intact.
                 entryFileNames: 'assets/[hash:6].js',
                 chunkFileNames: 'assets/[hash:6].js',
-                // Share icons and workspace data hooks to avoid many separately compressed import wrappers.
-                // Route components remain lazy; initial and all-client transfer limits are checked in CI.
-                manualChunks: (id) => id.includes('lucide-react') ? 'lucide-icons' : /apps\/dashboard\/src\/hooks\//.test(id) ? 'workspace-hooks' : undefined,
+                // Keep the static application closure separate from lazy administration routes.
+                // Native group priority preserves route laziness while sharing its compressed wrappers.
+                codeSplitting: {
+                    groups: [
+                        { name: 'entry-closure', test: /\/apps\/dashboard\/src\/main\.tsx$/, priority: 100 },
+                        { name: 'lucide-icons', test: /lucide-react/, priority: 10 },
+                        { name: 'workspace-hooks', test: /apps\/dashboard\/src\/hooks\//, priority: 10 },
+                        { name: 'administration-routes', test: /\/apps\/dashboard\/src\/pages\/(?:ApiKey|AgentPermissions|FiltersSettings|Groups|Settings|SupportStates|TicketFields|Users)Page\.tsx$/, priority: 0 },
+                    ],
+                },
             },
         },
     },

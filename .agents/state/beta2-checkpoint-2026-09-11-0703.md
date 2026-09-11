@@ -10,6 +10,10 @@ This checkpoint supersedes older delivery status, including unpublished forecast
 - Published 65 issue forecast paragraphs, 241 Project field changes with 523 expected fields checked, and 31 of 42 inspected milestone groups updated. Three Wiki pages match repository sources at Wiki `879a198`. Receipt: https://github.com/nathcymru/Tocyn/issues/49#issuecomment-5630089452.
 - #66/#136 and earlier #129/#159/#162 acceptance remain intact. No completed issue was reopened.
 
+## Composer update — 07:18 BST
+
+The static-entry ownership correction now measures 567,028 total and 99,178 initial JavaScript gzip bytes under Node 22; existing ceilings are unchanged. Both Vite configs retain the full editor/grammars. All client builds and the five combined production browser tests pass; required exact-revision CI timing checks remain pending. The performance failure described below is historical pre-correction evidence. The higher-effort Terra public-API review completed without code changes; it prevented adopting a lighter entry that would remove highlighting. #64 submitted revision `3ec1159` passes all required CI/security, but integration is held for commit-consistency corrections and staff receipts. Receipt: https://github.com/nathcymru/Tocyn/issues/64#issuecomment-5630315085. Last full human update 07:10 BST; next due 07:40 BST.
+
 ## Active implementation and evidence
 
 | Work | Owner / model / effort | State and next action |
