@@ -1,5 +1,5 @@
-import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useStats } from '../hooks/useStats';
 import { 
   BarChart3, 
@@ -58,7 +58,8 @@ export const DashboardPage: React.FC = () => {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 text-sm">Welcome back to {PRODUCT_BRAND.name}. Here's what's happening today.</p>
+        <p className="text-slate-500 text-sm">A quick overview of the support workload.</p>
+        <Link to="/inbox" className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Open Inbox</Link>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -133,15 +134,7 @@ export const DashboardPage: React.FC = () => {
               <p className="text-2xl font-bold text-slate-900">{stats?.totalGroups || 0}</p>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t border-slate-100">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">System Status</span>
-              <span className="flex items-center gap-1.5 text-emerald-600 font-bold">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Operational
-              </span>
-            </div>
-          </div>
+          <p className="mt-8 border-t border-slate-100 pt-6 text-sm text-slate-600">Use Inbox to keep the conversation list in place while reviewing and replying.</p>
         </div>
       </div>
     </div>

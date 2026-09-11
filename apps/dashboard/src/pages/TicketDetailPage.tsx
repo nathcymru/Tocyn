@@ -48,13 +48,14 @@ type PendingAttachment = Readonly<{
 /** A server-derived review revision; retry means that the bracketing reads disagreed. */
 type StaleReplyReview = number | 'refreshing' | 'retry';
 
-export function TicketDetailPage() {
-  const { id } = useParams<{ id: string }>();
+export function TicketDetailPage({id:providedId,workspaceBackHref}:{id?:string;workspaceBackHref?:string}={}) {
+  const { id:routeId } = useParams<{ id: string }>();
+  const id=providedId??routeId;
   const generation = useAuthStore(state => state.sessionGeneration);
-  return <TicketDetail key={`${generation}:${id}`} id={id!} />;
+  return <TicketDetail key={`${generation}:${id}`} id={id!} workspaceBackHref={workspaceBackHref} />;
 }
 
-function TicketDetail({ id }: { id: string }) {
+function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:string }) {
   type TicketSelectControl = 'status' | 'priority' | 'assigned_to' | 'group_id';
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError } = useTicket(id!);
@@ -73,7 +74,7 @@ function TicketDetail({ id }: { id: string }) {
     isLoadingMore: isLoadingMoreSupportStates,
     isLoadMoreError: isLoadMoreSupportStatesError,
   } = useSupportStates();
-  const [showSupportState, setShowSupportState] = useState(false);
+  const [showSupportState, setShowSupportState] = useState(Boolean(workspaceBackHref));
   const supportState = useTicketSupportState(id, showSupportState);
   const transitionSupportState = useTransitionSupportState();
   const { updateLocation, lastMessage, viewersForTicket, typingForTicket, announceTyping, stopTyping } = useCollaboration();
@@ -120,6 +121,8 @@ function TicketDetail({ id }: { id: string }) {
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const contextTriggerRef = useRef<HTMLButtonElement>(null);
   const contextHeadingRef = useRef<HTMLHeadingElement>(null);
+  const conversationHeadingRef = useRef<HTMLHeadingElement>(null);
+  const focusedConversation = useRef(false);
   const [focusContext, setFocusContext] = useState(false);
   const ticketSelectRefs = useRef<Record<TicketSelectControl, HTMLSelectElement | null>>({
     status: null,
@@ -216,6 +219,13 @@ function TicketDetail({ id }: { id: string }) {
     if (!ticket || error || (workspace.status !== 'restored' && workspace.status !== 'saved') || workspace.selectedTicketId === id) return;
     workspace.update({ selectedTicketId: id });
   }, [id, ticket, error, workspace]);
+
+  useEffect(() => {
+    if (ticket && workspaceBackHref && !focusedConversation.current) {
+      focusedConversation.current=true;
+      conversationHeadingRef.current?.focus();
+    }
+  }, [ticket,workspaceBackHref]);
 
   useEffect(() => {
     if (!focusContext || workspace.panel !== 'details') return;
@@ -570,7 +580,7 @@ function TicketDetail({ id }: { id: string }) {
   if (!ticket) return <div className="p-8 space-y-4 text-center text-slate-700">
     <p role="alert">{error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}</p>
     <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</TocynButton>
-    <Link to="/tickets" className="block underline">Back to Tickets</Link>
+    <Link to={workspaceBackHref??'/tickets'} className="block underline">{workspaceBackHref?'Back to conversations':'Back to Tickets'}</Link>
   </div>;
   const reference = ticketReference(ticket, ticketPrefix);
 
@@ -595,9 +605,9 @@ function TicketDetail({ id }: { id: string }) {
           {workspace.status === 'conflict' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.restoreServerState()} className="underline">Restore server preferences</TocynButton></>}
         </p>}
         <div className="flex items-center justify-between">
-          <Link to="/tickets" className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors">
+          <Link to={workspaceBackHref??'/tickets'} className={clsx("flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors",workspaceBackHref&&"lg:hidden")}>
             <ArrowLeft className="w-4 h-4" />
-            Back to Tickets
+            {workspaceBackHref?'Back to conversations':'Back to Tickets'}
           </Link>
           <div className="flex items-center gap-2">
             <TocynButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
@@ -668,7 +678,7 @@ function TicketDetail({ id }: { id: string }) {
                     {reference}
                     {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400 group-hover/copy:text-white transition-colors" />}
                   </TocynButton>
-                  <h1 className="text-2xl font-bold text-slate-900 leading-tight">{ticket.subject}</h1>
+                  <h1 ref={conversationHeadingRef} tabIndex={-1} className="text-2xl font-bold text-slate-900 leading-tight focus:outline-none">{ticket.subject}</h1>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-slate-500">
                   <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100">
@@ -684,7 +694,7 @@ function TicketDetail({ id }: { id: string }) {
 
               {/* Presence Indicator */}
               <div className="flex flex-col items-end gap-2">
-                {viewers.length > 0 && (
+                {!workspaceBackHref && viewers.length > 0 && (
                   <div className="flex items-center gap-2">
                     <div aria-hidden="true" className="flex items-center -space-x-2">
                       {viewers.slice(0, 3).map((viewer, i) => (

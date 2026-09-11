@@ -20,8 +20,8 @@ vi.mock('../api/client', () => ({ dashboardApi: {
 let client: QueryClient;
 const realtime = { isConnected: true, lastMessage: null, presence: [], updateLocation: vi.fn(), connectionDetails: { latency: 10, reconnectCount: 0 }, manualReconnect: vi.fn() };
 function Destination() { const location = useLocation(); return <h1>Route {location.pathname}{location.search}</h1>; }
-function tree() {
-  return <QueryClientProvider client={client}><CollaborationProvider><MemoryRouter initialEntries={['/tickets']}><Routes>
+function tree(initialEntry = '/tickets') {
+  return <QueryClientProvider client={client}><CollaborationProvider><MemoryRouter initialEntries={[initialEntry]}><Routes>
     <Route element={<Layout />}><Route path="*" element={<Destination />} /></Route>
   </Routes></MemoryRouter></CollaborationProvider></QueryClientProvider>;
 }
@@ -58,20 +58,33 @@ it('names global search and shared navigation, focuses its close control and ret
   expect(dialog).toHaveAttribute('aria-modal', 'true'); expect(trigger).toHaveAttribute('aria-expanded', 'true');
   await waitFor(()=>expect(within(dialog).getByRole('button', { name: 'Close navigation' })).toHaveFocus());
   expect(trigger).toHaveAttribute('aria-controls',dialog.id);
-  expect(within(dialog).getByRole('link', { name: 'Filters' })).toHaveAttribute('aria-current', 'page');
+  expect(within(dialog).getByRole('link', { name: 'Inbox' })).toHaveAttribute('href', '/inbox');
   fireEvent.keyDown(document.activeElement!, {key:'Escape'});
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument()); await waitFor(()=>expect(trigger).toHaveFocus());
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });
 
+it('constrains the inbox shell to the viewport while keeping the shared header visible', async () => {
+  render(tree('/inbox/all/synthetic-ticket'));
+  const main = await screen.findByRole('main', { name: 'Workspace' });
+  const shell = main.parentElement?.parentElement;
+  expect(shell).toHaveClass('h-dvh', 'min-h-0', 'overflow-hidden');
+  expect(main).toHaveClass('flex-1', 'min-h-0', 'overflow-hidden');
+  expect(main).not.toHaveClass('h-[calc(100dvh-4rem)]');
+  expect(main.previousElementSibling).toHaveClass('h-16', 'shrink-0');
+});
+
 it('names account/connection disclosures and restores focus when their child actions close', async () => {
-  await renderReady();
+  const result=await renderReady();
   const account = screen.getByRole('button', { name: 'Account options' });
   await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
   const security = await screen.findByRole('link', { name: 'Security Profile' });
   await waitFor(() => expect(security).toHaveFocus()); await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(account).toHaveFocus()); expect(account).toHaveAttribute('aria-expanded', 'false');
-  const connection = screen.getByRole('button', { name: 'Real-time' });
+  expect(screen.queryByRole('button',{name:'Real-time'})).not.toBeInTheDocument();
+  vi.mocked(useRealtime).mockReturnValue({...realtime,isConnected:false} as ReturnType<typeof useRealtime>);
+  act(()=>result.rerender(tree()));
+  const connection = screen.getByRole('button', { name: 'Disconnected' });
   await userEvent.click(connection); expect(connection).toHaveAttribute('aria-expanded', 'true');
   const reconnect = await screen.findByRole('button', { name: 'Force Reconnect' });
   await waitFor(() => expect(reconnect).toHaveFocus()); await userEvent.keyboard('{Escape}');
@@ -98,7 +111,7 @@ it('exposes native notification open and dismiss actions without changing realti
   expect(screen.getByRole('status')).toHaveTextContent('New Ticket');
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ticket', 'synthetic-ticket'] });
   fireEvent.click(open);
-  expect(screen.getByRole('heading')).toHaveTextContent('/tickets/synthetic-ticket');
+  expect(screen.getByRole('heading')).toHaveTextContent('/inbox/all/synthetic-ticket');
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
 });
 

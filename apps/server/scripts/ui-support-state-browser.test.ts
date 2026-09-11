@@ -152,9 +152,8 @@ test('proves production dashboard support-state workflow against disposable two-
           const url = new URL(request.url());
           return request.method() === 'GET' && url.origin === server.origin && url.pathname === '/api/support-states' && !url.searchParams.has('cursor');
         });
-        await candidate.goto(`${server.origin}/tickets/fixture-ticket`);
+        await candidate.goto(`${server.origin}/inbox/all/fixture-ticket`);
         assert.ok((await firstSupportStatePage).headers()['x-next-cursor'], 'The browser fixture must forward the first support-state continuation cursor');
-        await candidate.getByRole('button', { name: 'Manage support state', exact: true }).click();
         await candidate.getByRole('combobox', { name: 'Support state', exact: true }).waitFor();
         await candidate.getByRole('button', { name: 'Load more support states', exact: true }).click();
         await candidate.getByRole('option', { name: 'Waiting on customer (pending)', exact: true }).waitFor({ state: 'attached' });

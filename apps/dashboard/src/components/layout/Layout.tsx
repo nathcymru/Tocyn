@@ -17,7 +17,6 @@ import {
   Book,
   Menu,
   X,
-  Wifi,
   WifiOff,
   Bell,
   ChevronDown,
@@ -182,6 +181,7 @@ function LayoutContent() {
   const navigationTrigger = useRef<HTMLButtonElement>(null);
   const restoreNavigationFocus = useRef(true);
   const main = useRef<HTMLElement>(null);
+  const isInboxRoute = location.pathname.startsWith('/inbox');
 
   useEffect(() => { main.current?.focus(); }, [location.pathname]);
   const [searchInput, setSearchInput] = useState('');
@@ -231,7 +231,7 @@ function LayoutContent() {
   }, [lastMessage, queryClient]);
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className={cn('flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
       {/* Toast Container */}
       <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
         {toasts.map(toast => (
@@ -249,7 +249,7 @@ function LayoutContent() {
               </div>
               <TocynButton type="button" aria-label={`Open ticket notification: ${toast.title}`}
                 onClick={() => {
-                  if (toast.ticketId) navigate(`/tickets/${toast.ticketId}`);
+                  if (toast.ticketId) navigate(`/inbox/all/${toast.ticketId}`);
                   setToasts(prev => prev.filter(t => t.id !== toast.id));
                 }} className="flex-1 min-w-0 text-left rounded focus-visible:outline focus-visible:outline-2">
                 <p role="status" className="text-sm font-semibold text-slate-900">{toast.title}</p>
@@ -288,7 +288,7 @@ function LayoutContent() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
+        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
           <TocynButton
             type="button"
             ref={navigationTrigger}
@@ -324,7 +324,7 @@ function LayoutContent() {
             />
           </div>
 
-          <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
+          {!isConnected && <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
           <div className="flex items-center gap-4 relative">
             <Popover.Trigger asChild>
             <TocynButton
@@ -339,8 +339,8 @@ function LayoutContent() {
                   : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
               )}
             >
-              {isConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
-              <span>{isConnected ? 'Real-time' : 'Disconnected'}</span>
+              <WifiOff className="w-3.5 h-3.5" />
+              <span>Disconnected</span>
               <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showConnDetails && "rotate-180")} />
             </TocynButton></Popover.Trigger>
 
@@ -385,10 +385,10 @@ function LayoutContent() {
               </Popover.Content>
             </Popover.Positioner>
           </div>
-          </Popover.Root>
+          </Popover.Root>}
         </header>
 
-        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn("flex-1 overflow-auto", !location.pathname.startsWith('/settings') && "p-4 lg:p-8")}>
+        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('flex-1 min-h-0', isInboxRoute ? 'overflow-hidden' : 'overflow-auto', !location.pathname.startsWith('/settings') && !isInboxRoute && 'p-4 lg:p-8')}>
           <Outlet />
         </main>
       </div>
@@ -404,6 +404,6 @@ export function Layout() {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Filters', href: '/tickets', icon: TicketIcon },
+  { name: 'Inbox', href: '/inbox', icon: TicketIcon },
   { name: 'Knowledge Base', href: '/knowledge', icon: Book },
 ];

@@ -162,7 +162,7 @@ function requestHeaders(request: IncomingMessage): Record<string, string> {
 }
 
 async function staticResponse(root: string, pathname: string, response: ServerResponse): Promise<void> {
-  const candidate = pathname === '/' || pathname === '/tickets' || pathname.startsWith('/tickets/') || pathname === '/login' || pathname === '/mfa'
+  const candidate = pathname === '/' || pathname === '/tickets' || pathname.startsWith('/tickets/') || pathname === '/inbox' || pathname.startsWith('/inbox/') || pathname === '/login' || pathname === '/mfa'
     ? 'index.html' : pathname.slice(1);
   const path = resolve(root, normalize(candidate));
   if (!path.startsWith(root + sep) && path !== root) { response.writeHead(403).end(); return; }
@@ -295,7 +295,7 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
         localStorage.setItem('lumina-auth', JSON.stringify({ state: { token, user, mfaRequired: false }, version: 0 }));
       }, sessionA);
 
-      const navigation = await page.goto(`${server.origin}/tickets/fixture-ticket`);
+      const navigation = await page.goto(`${server.origin}/inbox/all/fixture-ticket`);
       assert.equal(navigation?.headers()['content-security-policy'], localApplicationCsp, 'The application document must carry the strict local CSP');
       const body = page.getByLabel('Reply message', { exact: true });
       await body.waitFor();
@@ -341,8 +341,8 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       assert.equal(initialState.selectedTicketId, 'fixture-ticket', 'Reloaded current ticket must remain the server-backed selection');
       assert.equal(initialState.panel, 'details', 'Reloaded context panel must remain the server-backed details preference');
 
-      await page.getByRole('link', { name: 'Back to Tickets', exact: true }).click();
-      const sort = page.getByRole('combobox', { name: 'Sort tickets', exact: true });
+      await page.goto(`${server.origin}/inbox/all`);
+      const sort = page.getByRole('combobox', { name: 'Sort conversations', exact: true });
       await sort.waitFor();
       const sortSave = page.waitForResponse(response => {
         if (new URL(response.url()).origin !== server.origin || new URL(response.url()).pathname !== '/api/workspace/state' || response.request().method() !== 'PUT' || response.status() !== 200) return false;
@@ -361,22 +361,23 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       await page.reload();
       await sort.waitFor();
       await restoredSortRequest;
-      await page.waitForFunction(() => (globalThis as any).document.querySelector('select[aria-label="Sort tickets"]')?.value === 'priority_asc');
+      await page.waitForFunction(() => (globalThis as any).document.querySelector('select[aria-label="Sort conversations"]')?.value === 'priority_asc');
       assert.equal(await sort.inputValue(), 'priority_asc', 'Reload must restore the selected list sort');
 
       const selectCreatedSave = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
         new URL(response.url()).pathname === '/api/workspace/state' && response.request().method() === 'PUT' && response.status() === 200);
-      await page.getByRole('link', { name: 'Synthetic browser navigation ticket', exact: true }).click();
-      await page.waitForURL(new RegExp(`/tickets/${createdTicket.id}$`));
+      await page.getByRole('option', { name: /Synthetic browser navigation ticket/ }).click();
+      await page.waitForURL(new RegExp(`/inbox/all/${createdTicket.id}$`));
+      await page.getByRole('heading', { name: 'Synthetic browser navigation ticket', exact: true }).waitFor();
       await selectCreatedSave;
       const selectedCreatedState = await fixture.request('/api/workspace/state', { token: sessionA.token });
       assert.equal(selectedCreatedState.status, 200, 'The real Worker must expose the selected-ticket preference to its scoped operator');
       assert.equal((await selectedCreatedState.json<{ selectedTicketId?: unknown }>()).selectedTicketId, createdTicket.id,
         'Opening a successfully loaded ticket must persist that ticket as the server-backed selection');
-      await page.getByRole('link', { name: 'Back to Tickets', exact: true }).click();
+      await page.goto(`${server.origin}/inbox/all`);
       const selectFixtureSave = page.waitForResponse(response => new URL(response.url()).origin === server.origin &&
         new URL(response.url()).pathname === '/api/workspace/state' && response.request().method() === 'PUT' && response.status() === 200);
-      await page.getByRole('link', { name: 'Fixture ticket A', exact: true }).click();
+      await page.getByRole('option', { name: /Fixture ticket A/ }).click();
       await body.waitFor();
       await selectFixtureSave;
       await page.getByText('Draft saved.', { exact: true }).waitFor();
@@ -386,9 +387,9 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       server.failDraftPuts(2);
       await body.fill('Synthetic retained failed draft');
       await page.getByText('Draft was not saved. Retry to keep this version.', { exact: true }).waitFor();
-      await page.getByRole('link', { name: 'Back to Tickets', exact: true }).click();
+      await page.getByRole('option', { name: /Synthetic browser navigation ticket/ }).click();
       await page.getByText('Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again.', { exact: true }).waitFor();
-      assert.match(page.url(), /\/tickets\/fixture-ticket$/, 'Failed autosave must retain ticket navigation');
+      assert.match(page.url(), /\/inbox\/all\/fixture-ticket$/, 'Failed autosave must retain ticket navigation');
       assert.equal(await body.inputValue(), 'Synthetic retained failed draft', 'Failed autosave must retain editable text');
       await page.getByRole('button', { name: 'Retry draft', exact: true }).click();
       await page.getByText('Draft saved.', { exact: true }).waitFor();
@@ -465,7 +466,7 @@ test('proves operator theme first paint, persistence, recovery and tenant separa
       });`);
       const page = await context.newPage();
       const policyEvidence = await captureBrowserPolicyEvidence(page);
-      const navigation = await page.goto(`${server.origin}/tickets/fixture-ticket`);
+      const navigation = await page.goto(`${server.origin}/inbox/all/fixture-ticket`);
       assert.equal(navigation?.headers()['content-security-policy'], localApplicationCsp, 'The application document must carry the strict local CSP');
       const composer = page.getByLabel('Reply message', { exact: true });
       await composer.waitFor();

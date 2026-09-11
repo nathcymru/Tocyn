@@ -57,7 +57,7 @@ async function digestDirectory(directory: string): Promise<string> {
 }
 
 async function sourceHashes(): Promise<Record<string, string>> {
-  const paths = ['tools/ui-performance/authenticated-navigation.ts', 'apps/server/scripts/ui-authenticated-navigation.test.ts', 'apps/dashboard/src/pages/TicketListPage.tsx', 'apps/dashboard/src/pages/TicketDetailPage.tsx', 'apps/portal/src/pages/TicketListPage.tsx', 'apps/portal/src/pages/TicketDetailPage.tsx'];
+  const paths = ['tools/ui-performance/authenticated-navigation.ts', 'apps/server/scripts/ui-authenticated-navigation.test.ts', 'apps/dashboard/src/pages/InboxWorkspacePage.tsx', 'apps/dashboard/src/pages/TicketDetailPage.tsx', 'apps/portal/src/pages/TicketListPage.tsx', 'apps/portal/src/pages/TicketDetailPage.tsx'];
   return Object.fromEntries(await Promise.all(paths.map(async path => [path, createHash('sha256').update(await readFile(join(repositoryRoot, path))).digest('hex')])));
 }
 
@@ -82,7 +82,7 @@ function requestHeaders(request: IncomingMessage): Record<string, string> {
 }
 
 async function staticResponse(root: string, pathname: string, response: ServerResponse): Promise<void> {
-  const candidate = pathname === '/' || pathname === '/tickets' || pathname.startsWith('/tickets/') ? 'index.html' : pathname.slice(1);
+  const candidate = pathname === '/' || pathname === '/tickets' || pathname.startsWith('/tickets/') || pathname.startsWith('/inbox') ? 'index.html' : pathname.slice(1);
   const path = resolve(root, normalize(candidate));
   if (!path.startsWith(root + sep) && path !== root) { response.writeHead(403).end(); return; }
   try {
@@ -181,9 +181,9 @@ async function measure(client: Client, origin: string, browser: Browser, fixture
     });
     page.setDefaultTimeout(10_000);
     await page.addInitScript(`document.addEventListener('click', event => {
-      const target = event.target instanceof Element ? event.target.closest('a[href="/tickets/fixture-ticket"], button') : null;
+      const target = event.target instanceof Element ? event.target.closest('a[href^="/inbox/"], a[href="/tickets/fixture-ticket"], button') : null;
       if (!target) return;
-      if (target.matches('a[href="/tickets/fixture-ticket"]')) window.__tocynTicketNavigationStart = performance.now();
+      if (target.matches('a[href^="/inbox/"], a[href="/tickets/fixture-ticket"]')) window.__tocynTicketNavigationStart = performance.now();
       if (/^Retry loading (ticket|conversation)$/.test(target.textContent.trim())) window.__tocynTicketRetryStart = performance.now();
     }, true);`);
     if (client === 'dashboard') {
@@ -196,13 +196,22 @@ async function measure(client: Client, origin: string, browser: Browser, fixture
         localStorage.setItem('lumina_customer_token', suppliedToken); sessionStorage.setItem('tocyn_widget_key', widgetKey);
       }, { token, widgetKey: key });
     }
-    await page.goto(`${origin}/tickets${client === 'portal' ? `?key=${fixture.principals.customerA.widgetKey}` : ''}`);
+    const listPath = client === 'dashboard' ? '/inbox/all' : '/tickets';
+    await page.goto(`${origin}${listPath}${client === 'portal' ? `?key=${fixture.principals.customerA.widgetKey}` : ''}`);
+    pageRoute = new URL(page.url()).pathname;
     const subject = 'Fixture ticket A';
-    const link = page.getByRole('link', { name: new RegExp(subject) }).first();
-    await link.waitFor({ state: 'visible' });
+    const ticketTarget = (client === 'dashboard'
+      ? page.getByRole('option', { name: new RegExp(subject) })
+      : page.getByRole('link', { name: new RegExp(subject) })).first();
+    await ticketTarget.waitFor({ state: 'visible' });
+    const href = await ticketTarget.getAttribute('href');
+    assert.ok(href?.startsWith('/'), 'Authenticated ticket list must use a local route');
+    const detailPath = new URL(href!, origin).pathname;
+    assert.equal(detailPath, client === 'dashboard' ? '/inbox/all/fixture-ticket' : '/tickets/fixture-ticket',
+      'Each client must retain its approved detail route');
     injectDetailFault?.();
-    await link.click();
-    await page.waitForURL(/\/tickets\/fixture-ticket/);
+    await ticketTarget.click();
+    await page.waitForURL(url => new URL(url).pathname === detailPath);
     pageRoute = new URL(page.url()).pathname;
     if (injectDetailFault) {
       const retryName = client === 'dashboard' ? 'Retry loading ticket' : 'Retry loading conversation';
