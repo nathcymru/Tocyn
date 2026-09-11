@@ -40,6 +40,8 @@
     "typecheck:local-portal-workflow": "tsc -p scripts/tsconfig.local-portal-workflow.json",
     "test:operator-workflow": "tsx --test scripts/operator-workflow.test.ts scripts/operator-draft-retention.test.ts",
     "typecheck:operator-workflow": "tsc -p scripts/tsconfig.operator-workflow.json",
+    "test:operator-activity": "tsx --test scripts/operator-activity.test.ts",
+    "typecheck:operator-activity": "tsc -p scripts/tsconfig.operator-activity.json",
     "test:operational-performance": "tsx --test scripts/operational-performance.test.ts",
     "test:operational-metrics": "tsx --test scripts/operational-metrics.test.ts",
     "test:observability-config": "node --test scripts/observability-config.test.mjs",
