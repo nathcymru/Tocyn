@@ -24,3 +24,7 @@ Authority: maintainer approvals in this delivery, applied under #126. Full sourc
 | Old local worktrees contain uncommitted changes |Preserve; no automatic cherry-pick/reset/cleanup of source. Relaunch from accepted main, not stale branches. |
 
 No feature code, migrations, provider accounts, DNS, remote data or customer traffic changes are part of alignment. Synthetic/source acceptance never falsely closes real provider integration requirements. Unsupported residency claims fail closed; no legal compliance is inferred from location metadata.
+
+## Subsequent owner clarification — shared snooze
+
+Owner clarification (11 September 2026): snooze is shared across operators at ticket/conversation level, with the initiating actor audited. It removes the item from normal actionable queues and resurfaces it when due or on a canonical customer reply. This is accepted direction, not evidence of completed #130 implementation. [Decision receipt](https://github.com/nathcymru/Tocyn/issues/130#issuecomment-5638637521).

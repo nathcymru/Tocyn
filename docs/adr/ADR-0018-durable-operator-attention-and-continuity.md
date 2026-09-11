@@ -32,6 +32,10 @@ Presentation preferences may be server persisted per tenant/user but cannot gran
 
 Canonical ticket lifecycle remains the source for ticket state. Attention/work state is additive and must not silently invent a second incompatible ticket system.
 
+## Shared snooze clarification
+
+Owner clarification (11 September 2026): snooze is shared across operators at ticket/conversation level, with the initiating actor audited. It removes the item from normal actionable queues and resurfaces it when due or on a canonical customer reply. This is accepted direction, not evidence of completed #130 implementation. [Decision receipt](https://github.com/nathcymru/Tocyn/issues/130#issuecomment-5638637521).
+
 ## Consequences
 
 - #129/04 require additive data/API work.
