@@ -19,3 +19,7 @@ Root is sole integration owner. Detail and staff trees relinquished; never merge
 Combine compatible next-path changes after review; revalidate combined index/receipt envelopes (0045 detail,0046 staff,0047 AI must all be counted), then one coherent PR where practical. Publish Wiki only from accepted repository source and verify byte-identical read-back. Full #64 remains open before #130 → #128/#137 and full #140; no beta.2 acceptance. Preserve owner checkout and ports8787/8899/5190, all local-only restrictions, baselines and historical actuals.
 
 Last full human update12:37BST; next by13:07BST. Reference beta.2 forecast9December2026 is unchanged, not a measured wall-clock ETA. No invented progress percentage.
+
+## Combined candidate
+
+Root integrated accepted main ancestry plus detail3516f75, staff2b60584 and HTTP AIf6e3447 into2b812f5. Server typecheck passes. Combined budget/staff/collision/server validation is owned by the storage worker, with terminal results required. Migration0045/0046/0047 composition must preserve original resource ceilings; no candidate is accepted yet. Wiki source refresh is staged for this PR; live Wiki publication waits for its accepted source.
