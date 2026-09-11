@@ -4,14 +4,17 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
     plugins: [react()],
     build: {
+        minify: 'terser',
+        terserOptions: { compress: { passes: 5 } },
         rolldownOptions: {
             output: {
                 // Content-hashed names avoid repeating long source names in every import.
                 // The manifest retains source-to-asset mapping; lazy route boundaries stay intact.
                 entryFileNames: 'assets/[hash:6].js',
                 chunkFileNames: 'assets/[hash:6].js',
-                // Keep shared icons together instead of emitting each one as a separately gzipped asset.
-                manualChunks: (id) => id.includes('lucide-react') ? 'lucide-icons' : undefined,
+                // Share icons and workspace data hooks to avoid many separately compressed import wrappers.
+                // Route components remain lazy; initial and all-client transfer limits are checked in CI.
+                manualChunks: (id) => id.includes('lucide-react') ? 'lucide-icons' : /apps\/dashboard\/src\/hooks\//.test(id) ? 'workspace-hooks' : undefined,
             },
         },
     },
