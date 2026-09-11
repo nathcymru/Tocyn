@@ -522,9 +522,12 @@ for (const operation of ['create','reply'] as const) for (const change of ['poli
         h.db.prepare('UPDATE budget_owner_policies SET policy_json=?,authority_max_age_ms=?').bind(originalPolicy!.policy_json,originalPolicy!.authority_max_age_ms),
         h.db.prepare("UPDATE budget_tenant_allocations SET restriction_json=? WHERE tenant_id='runtime-tenant'").bind(originalRestriction!.restriction_json),
       ]);
-      const stillRetired=await send('snapshot-denied');assert.equal(stillRetired.status,503);await stillRetired.body?.cancel();
+      const recovered=await send('snapshot-denied');assert.equal(recovered.status,201);await recovered.body?.cancel();
+      const renewed=await h.control(),newGrants=await h.grants();assert.equal(newGrants.length,grants.length+1);
+      assert.ok(newGrants.some(grant=>!grants.some(old=>old.holderId===grant.holderId)),'restored source needs a new paid holder');
+      for(const old of grants)assert.deepEqual(newGrants.find(grant=>grant.holderId===old.holderId)?.accounted,old.accounted);
       const replay=await send('snapshot-warm');assert.equal(replay.status,201);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');await replay.body?.cancel();
-      assert.deepEqual((await h.control()).calls,before.calls);assert.equal((await h.control()).canonicalAttempts,before.canonicalAttempts);
+      assert.deepEqual((await h.control()).calls,renewed.calls);assert.equal((await h.control()).canonicalAttempts,renewed.canonicalAttempts);
     }finally{await h.mf.dispose();}
   });
 }
@@ -536,7 +539,160 @@ test('cold allocation source edits retire the newly charged holder before its fi
     const after=await h.control();assert.deepEqual(after.calls,{refresh:1,reserve:1,revoke:0});
     assert.equal(after.cache.operations,0);assert.equal(after.canonicalAttempts,0);assert.equal(await h.count(),0);
     const grants=await h.grants();assert.equal(grants.length,1);assert.equal(grants[0].accounted.workerRequests,16);
-    const retry=await h.create('changed-during-cold-grant');assert.equal(retry.status,503);await retry.body?.cancel();
-    assert.deepEqual((await h.control()).calls,after.calls);assert.deepEqual(await h.grants(),grants);
+    const retry=await h.create('changed-during-cold-grant');assert.equal(retry.status,201);await retry.body?.cancel();
+    assert.deepEqual((await h.control()).calls,{refresh:2,reserve:2,revoke:0});
+    const renewed=await h.grants();assert.equal(renewed.length,2);assert.notEqual(renewed[0].holderId,renewed[1].holderId);
+    assert.deepEqual(renewed[0].accounted,grants[0].accounted);
+  }finally{await h.mf.dispose();}
+});
+
+async function advanceRuntimePolicy(h:Awaited<ReturnType<typeof warmHarness>>,revision:number,endsAt?:number) {
+  const row=await h.db.prepare('SELECT policy_json FROM budget_owner_policies').first<{policy_json:string}>();
+  const policy=JSON.parse(row!.policy_json);policy.revision=revision;
+  if(endsAt!==undefined)for(const budget of policy.budgets)budget.window={...budget.window,id:`runtime-window-${revision}`,endsAt};
+  await h.db.batch([
+    h.db.prepare('UPDATE budget_deployment_authority SET authority_revision=?').bind(revision),
+    h.db.prepare('INSERT INTO budget_owner_policies SELECT deployment_id,policy_id,?,?,coordinator_id,max_reservations,authority_max_age_ms,? FROM budget_owner_policies LIMIT 1').bind(revision,revision,JSON.stringify(policy)),
+    h.db.prepare("UPDATE budget_tenant_allocations SET policy_revision=?,authority_revision=?,restriction_json=json_set(restriction_json,'$.ownerPolicyRevision',?,'$.revision',?)").bind(revision,revision,revision,revision),
+    h.db.prepare('DELETE FROM budget_owner_policies WHERE policy_revision<>?').bind(revision),
+  ]);
+}
+
+test('valid current source renewal shares one new paid grant and then restores zero-DO warm work',async()=>{
+  const h=await warmHarness();try{
+    const first=await h.create('before-renewal');assert.equal(first.status,201);await first.body?.cancel();
+    const original=(await h.grants())[0];
+    await h.db.prepare("UPDATE budget_owner_policies SET policy_json=policy_json||' '").run();
+    const detecting=await h.create('after-renewal');assert.equal(detecting.status,503);await detecting.body?.cancel();
+    const responses=await Promise.all(Array.from({length:5},(_,i)=>h.create(`renewal-${i}`)));
+    assert.deepEqual(responses.map(response=>response.status),[201,201,201,201,201]);await Promise.all(responses.map(response=>response.body?.cancel()));
+    const before=await h.control(),grants=await h.grants();
+    assert.equal(grants.length,2);assert.notEqual(grants[1].holderId,original.holderId);assert.deepEqual(grants[0].accounted,original.accounted);
+    assert.deepEqual(before.calls,{refresh:2,reserve:2,revoke:0});assert.equal(before.cache.refills,2);assert.equal(before.cache.scopes,1);
+    const warm=await h.create('warm-renewal');assert.equal(warm.status,201);await warm.body?.cancel();
+    const replay=await h.create('before-renewal');assert.equal(replay.status,201);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');await replay.body?.cancel();
+    assert.deepEqual((await h.control()).calls,before.calls);
+  }finally{await h.mf.dispose();}
+});
+
+test('monotonic policy renewal retains old charges and honors new authority',async()=>{
+  const h=await warmHarness();try{
+    const initial=await h.create('old-policy');assert.equal(initial.status,201);await initial.body?.cancel();
+    const old=(await h.grants())[0];await advanceRuntimePolicy(h,2);
+    const detecting=await h.create('new-policy');assert.equal(detecting.status,503);await detecting.body?.cancel();
+    const current=await h.create('new-policy');assert.equal(current.status,201);await current.body?.cancel();
+    const grants=await h.grants();assert.equal(grants.length,2);assert.equal(grants[1].policyRevision,2);
+    assert.deepEqual(grants[0].accounted,old.accounted);assert.equal(grants[0].status,'uncertain');assert.notEqual(grants[1].holderId,old.holderId);
+    assert.equal((await h.control()).cache.refills,2);
+    const calls=(await h.control()).calls;const warm=await h.create('new-policy-warm');assert.equal(warm.status,201);await warm.body?.cancel();
+    assert.deepEqual((await h.control()).calls,calls);
+  }finally{await h.mf.dispose();}
+});
+
+for(const expired of [false,true])test(`late old allocation cannot install or overlap a replacement generation${expired?' across interval reset':''}`,async()=>{
+  const h=await warmHarness();let pending:ReturnType<typeof h.create>|undefined;
+  try{
+    await h.control({pauseNextReserve:true});pending=h.create('late-old');
+    let paused=false;for(let attempt=0;attempt<100;attempt++){
+      if((await h.control()).reservePaused){paused=true;break;}await new Promise(resolve=>setTimeout(resolve,5));
+    }assert.equal(paused,true);
+    if(expired){
+      const policy=JSON.parse((await h.db.prepare('SELECT policy_json FROM budget_owner_policies').first<{policy_json:string}>())!.policy_json);
+      const boundary=policy.budgets[0].window.endsAt;
+      await advanceRuntimePolicy(h,2,boundary+60_000);await h.control({now:boundary+1});
+    }else await h.db.prepare("UPDATE budget_owner_policies SET policy_json=policy_json||' '").run();
+    for(let attempt=0;attempt<3;attempt++){
+      const rejected=await h.create('replacement');assert.equal(rejected.status,503);await rejected.body?.cancel();
+    }
+    assert.deepEqual((await h.control()).calls,{refresh:1,reserve:1,revoke:0});assert.equal((await h.control()).cache.scopes,1);
+    await h.control({releaseReserve:true});const old=await pending;pending=undefined;assert.equal(old.status,503);await old.body?.cancel();
+    const retired=await h.control();assert.equal(retired.cache.holders,0);assert.equal(retired.cache.operations,0);assert.equal(retired.canonicalAttempts,0);
+    const recovered=await h.create('replacement');assert.equal(recovered.status,201);await recovered.body?.cancel();
+    const grants=await h.grants();assert.equal(grants.length,2);assert.notEqual(grants[0].holderId,grants[1].holderId);
+    assert.ok(grants.every(grant=>grant.accounted.workerRequests===16));assert.equal((await h.control()).cache.refills,expired?1:2);
+  }finally{await h.control({releaseReserve:true});if(pending)await (await pending).body?.cancel();await h.mf.dispose();}
+});
+
+test('policy renewal cannot reset four refill credits or the two canonical attempts per paid operation',async()=>{
+  const h=await warmHarness();try{
+    for(let generation=0;generation<4;generation++){
+      if(generation){
+        await h.db.prepare("UPDATE budget_owner_policies SET policy_json=policy_json||' '").run();
+        const detecting=await h.create('failed-renewal');assert.equal(detecting.status,503);await detecting.body?.cancel();
+      }
+      await h.control({failCanonicalAttempts:5});const before=(await h.control()).canonicalAttempts;
+      for(let attempt=0;attempt<5;attempt++){
+        const failed=await h.create('failed-renewal');assert.equal(failed.status,503);await failed.body?.cancel();
+      }
+      assert.equal((await h.control()).canonicalAttempts-before,2);assert.equal((await h.control()).cache.refills,generation+1);
+      const grants=await h.grants();assert.equal(grants.length,generation+1);assert.ok(grants.every(grant=>grant.accounted.workerRequests===16));
+    }
+    const calls=(await h.control()).calls;
+    await h.db.prepare("UPDATE budget_owner_policies SET policy_json=policy_json||' '").run();
+    const detecting=await h.create('failed-renewal');assert.equal(detecting.status,503);await detecting.body?.cancel();
+    for(let attempt=0;attempt<5;attempt++){
+      const exhausted=await h.create('failed-renewal');assert.equal(exhausted.status,429);await exhausted.body?.cancel();
+    }
+    assert.deepEqual((await h.control()).calls,calls);assert.equal((await h.control()).cache.refills,4);assert.equal(await h.count(),0);
+    assert.equal(new Set((await h.grants()).map(grant=>grant.holderId)).size,4);
+  }finally{await h.mf.dispose();}
+});
+
+test('shorter replacement windows cannot erase refill accounting before the retained interval boundary',async()=>{
+  const h=await warmHarness();try{
+    const first=await h.create('horizon-1');assert.equal(first.status,201);await first.body?.cancel();
+    const original=JSON.parse((await h.db.prepare('SELECT policy_json FROM budget_owner_policies').first<{policy_json:string}>())!.policy_json);
+    const originalEnd=original.budgets[0].window.endsAt;
+    await advanceRuntimePolicy(h,2,h.initialNow+20_000);
+    const detecting=await h.create('horizon-2');assert.equal(detecting.status,503);await detecting.body?.cancel();
+    const second=await h.create('horizon-2');assert.equal(second.status,201);await second.body?.cancel();
+    assert.equal((await h.control()).cache.refills,2);
+    await h.control({now:h.initialNow+21_000});await advanceRuntimePolicy(h,3,originalEnd-1_000);
+    const stillAccounted=await h.create('horizon-3');assert.equal(stillAccounted.status,503);await stillAccounted.body?.cancel();
+    const third=await h.create('horizon-3');assert.equal(third.status,201);await third.body?.cancel();
+    assert.equal((await h.control()).cache.refills,3);assert.equal((await h.grants()).length,3);
+    await h.control({now:originalEnd+1});await advanceRuntimePolicy(h,4,originalEnd+60_000);
+    const rollover=await h.create('horizon-4');assert.equal(rollover.status,201);await rollover.body?.cancel();
+    assert.equal((await h.control()).cache.refills,1,'a real elapsed interval can start a new ledger');
+    const grants=await h.grants();assert.equal(grants.length,4);assert.ok(grants.every(grant=>grant.accounted.workerRequests===16));
+  }finally{await h.mf.dispose();}
+});
+
+test('policy identity replacement can start at revision one without erasing old identity rollback floors',async()=>{
+  const h=await warmHarness();try{
+    await advanceRuntimePolicy(h,7);
+    const first=await h.create('identity-old');assert.equal(first.status,201);await first.body?.cancel();
+    const old=(await h.grants())[0];
+    const original=JSON.parse((await h.db.prepare('SELECT policy_json FROM budget_owner_policies').first<{policy_json:string}>())!.policy_json);
+    const policy={...original,policyId:'replacement-policy',revision:1,budgets:original.budgets.map((budget:any)=>({...budget,allocationId:`replacement-${budget.dimension}`}))};
+    await h.db.batch([
+      h.db.prepare("INSERT INTO budget_owner_policies SELECT deployment_id,'replacement-policy',1,8,'replacement-coordinator',max_reservations,authority_max_age_ms,? FROM budget_owner_policies LIMIT 1").bind(JSON.stringify(policy)),
+      h.db.prepare('UPDATE budget_deployment_authority SET authority_revision=8'),
+      h.db.prepare("UPDATE budget_tenant_allocations SET policy_id='replacement-policy',policy_revision=1,authority_revision=8,restriction_json=json_set(restriction_json,'$.ownerPolicyId','replacement-policy','$.ownerPolicyRevision',1,'$.revision',1)"),
+    ]);
+    const detecting=await h.create('identity-new');assert.equal(detecting.status,503);await detecting.body?.cancel();
+    const replacement=await h.create('identity-new');assert.equal(replacement.status,201);await replacement.body?.cancel();
+    const namespace=await h.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    const coordinator=namespace.get(namespace.idFromName('replacement-coordinator')) as unknown as BudgetCoordinatorDO;
+    const fresh=(await coordinator.inspectForTrustedRuntime()).tenantStates[0].grants[0];
+    assert.equal(fresh.policyRevision,1);assert.notEqual(fresh.holderId,old.holderId);
+    assert.ok(fresh.allocations.every(allocation=>allocation.allocationId.startsWith('replacement-')),'new coordinator uses distinct owner allocation identities');
+    assert.deepEqual((await h.grants())[0].accounted,old.accounted);assert.equal((await h.control()).cache.refills,2);
+    const calls=(await h.control()).calls;
+    await h.db.batch([
+      h.db.prepare("INSERT INTO budget_owner_policies SELECT deployment_id,policy_id,6,9,coordinator_id,max_reservations,authority_max_age_ms,? FROM budget_owner_policies WHERE policy_id='runtime-owner-policy' AND policy_revision=7").bind(JSON.stringify({...original,revision:6})),
+      h.db.prepare('UPDATE budget_deployment_authority SET authority_revision=9'),
+      h.db.prepare("UPDATE budget_tenant_allocations SET policy_id='runtime-owner-policy',policy_revision=6,authority_revision=9,restriction_json=json_set(restriction_json,'$.ownerPolicyId','runtime-owner-policy','$.ownerPolicyRevision',6,'$.revision',6)"),
+    ]);
+    const rollback=await h.create('identity-rollback');assert.equal(rollback.status,503);await rollback.body?.cancel();
+    assert.deepEqual((await h.control()).calls,calls,'old identity revision floor rejects before coordinator work');
+    // Restore the still-current replacement policy. The rejected older identity
+    // did not mutate or retire its valid holder.
+    await h.db.batch([
+      h.db.prepare('UPDATE budget_deployment_authority SET authority_revision=8'),
+      h.db.prepare("UPDATE budget_tenant_allocations SET policy_id='replacement-policy',policy_revision=1,authority_revision=8,restriction_json=json_set(restriction_json,'$.ownerPolicyId','replacement-policy','$.ownerPolicyRevision',1,'$.revision',1)"),
+    ]);
+    const warm=await h.create('identity-still-warm');assert.equal(warm.status,201);await warm.body?.cancel();
+    assert.deepEqual((await h.control()).calls,calls);
   }finally{await h.mf.dispose();}
 });

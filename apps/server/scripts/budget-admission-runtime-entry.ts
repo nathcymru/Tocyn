@@ -54,6 +54,8 @@ function instrumentDatabase(db: any): any {
 let clock: number | undefined;
 let lostReserveAcksRemaining = 0;
 let editPolicyAfterReserve = false;
+let pauseNextReserve = false;
+let releaseReserve: (()=>void)|undefined;
 const calls = { refresh: 0, reserve: 0, revoke: 0 };
 function instrument(namespace: any, db: any): any {
   if (wrappedNamespace) return wrappedNamespace;
@@ -67,6 +69,15 @@ function instrument(namespace: any, db: any): any {
         reserveFromTrustedAuthority: async (input: any) => {
           calls.reserve++;
           const result = await target.reserveFromTrustedAuthority(input);
+          if (pauseNextReserve && result.status === 'granted') {
+            pauseNextReserve = false;
+            // Native timer work keeps this synthetic request alive; a bare
+            // promise with no Worker I/O would be rejected as a hung request.
+            let released=false;releaseReserve=()=>{released=true;};
+            for(let tick=0;tick<200&&!released;tick++)await new Promise(resolve=>setTimeout(resolve,10));
+            releaseReserve=undefined;
+            if(!released)throw new Error('Synthetic reservation gate timed out');
+          }
           if (editPolicyAfterReserve && result.status === 'granted') {
             editPolicyAfterReserve = false;
             await db.prepare("UPDATE budget_owner_policies SET policy_json=policy_json||' '").run();
@@ -87,7 +98,9 @@ export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     if (new URL(request.url).pathname === '/__budget-control') {
       if (request.method === 'POST') {
-        const control = await request.json() as { discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean };
+        const control = await request.json() as { discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean };
+        if (control.pauseNextReserve) pauseNextReserve=true;
+        if (control.releaseReserve) releaseReserve?.();
         if (control.editPolicyAfterReserve) editPolicyAfterReserve=true;
         if (control.failCanonicalAttempts && control.failCanonicalAttempts<=5) failCanonicalAttempts=control.failCanonicalAttempts;
         if (control.beforeCanonical) beforeCanonical=control.beforeCanonical;
@@ -98,7 +111,7 @@ export default {
         if (control.loseReserveAck) lostReserveAcksRemaining = 1;
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
       }
-      return Response.json({ calls, canonicalBatches, canonicalAttempts, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
+      return Response.json({ calls, canonicalBatches, canonicalAttempts, reservePaused:!!releaseReserve, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), BUDGET_COORDINATOR_DO: instrument(env.BUDGET_COORDINATOR_DO, env.DB),
       localNow: () => clock ?? Date.now() }, ctx);

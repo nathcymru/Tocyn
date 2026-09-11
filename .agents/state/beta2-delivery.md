@@ -1,3 +1,5 @@
+Current coordinating checkpoint: [11 September 08:25 delivery state](beta2-checkpoint-2026-09-11-0825.md).
+
 # Beta.2 coordinated delivery
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.

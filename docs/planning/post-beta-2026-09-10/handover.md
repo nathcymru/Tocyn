@@ -16,7 +16,7 @@ Use forecast.json for full dependencies and issue numbers. Foundations run indep
 
 ## Acceptance and review
 
-Every worker returns actual changes, positive/negative/failure evidence, limits and remaining acceptance. No issue closes merely because a draft or implementation exists. Full #73 SLA is accepted through signed PR#180 and receipt5629957822; #137 routing remains a beta.2 blocker.#159/#160 feed #42 production readiness; real provider testing remains separately authorized. Preserve local synthetic mail and tenant/privacy boundaries.
+Every worker returns actual changes, positive/negative/failure evidence, limits and remaining acceptance. No issue closes merely because a draft or implementation exists. Full #73 SLA is accepted through signed PR#180 and receipt5629957822. #68 composer is accepted through signed PR#183 and receipt5630628007; #70 typing/collaboration has started, while #69, #76, #77 and #134 remain separately pending. #137 routing remains a beta.2 blocker. #159/#160 feed #42 production readiness; real provider testing remains separately authorized. Preserve local synthetic mail and tenant/privacy boundaries.
 
 Default zero Copilot requests. Automatic review trigger is removed. Standing owner approval permits PR-only review bypass after exact-revision required checks and signing; record bypass and findings disposition honestly. Do not purchase capacity or use API billing. Allocate lowest sufficient model/effort with native controls; escalate only difficult boundary work.
 
