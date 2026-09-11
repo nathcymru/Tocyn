@@ -23,3 +23,9 @@ Last full human update12:37BST; next by13:07BST. Reference beta.2 forecast9Decem
 ## Combined candidate
 
 Root integrated accepted main ancestry plus detail3516f75, staff2b60584 and HTTP AIf6e3447 into2b812f5. Server typecheck passes. Combined budget/staff/collision/server validation is owned by the storage worker, with terminal results required. Migration0045/0046/0047 composition must preserve original resource ceilings; no candidate is accepted yet. Wiki source refresh is staged for this PR; live Wiki publication waits for its accepted source.
+
+## PR198 correction and next work
+
+Draft PR198 head8ca0969 combines detail/staff/AI. Combined Node22 results: budget125/125, staff32/32, collision1/1, server691/691; articles4, attachments3, events7 and receipt4 indexes preserve962/1024 canonical bound. Root found two additional AI authority/input-boundary gaps before acceptance and added readTicketId current-group authorization plus escaping-aware staff history. Corrected AI runtime4/4, server691/691, types and scoped lint pass; current session runtime10/10 also passes; fresh exact-head CI remains required. The first targeted session launch used the wrong working directory and could not resolve its fixture; it was rerun from apps/server, not treated as an application failure.
+
+Next workers: dedicated Terra/high AI worker owns isolated staff/customer detail/history admission from198, including customer-only readTicketId authority; detail worker owns isolated support-state/SLA six-write admission with0049 reserved. 0048 is reserved for reads only if needed. Root alone owns PR198. No owner permission pending.
