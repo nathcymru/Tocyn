@@ -210,6 +210,8 @@ export function RichComposer({
         value={value}
         onChange={(next, event) => updateFromEditor(next ?? '', event?.currentTarget)}
         preview="edit"
+        extraCommands={[]}
+        components={{ preview: source => <SafeMarkdown>{source}</SafeMarkdown> }}
         visibleDragbar={false}
         height={180}
         commandsFilter={command => command.name === 'preview' || command.name === 'fullscreen' ? false : command}

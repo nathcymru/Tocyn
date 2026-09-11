@@ -144,3 +144,13 @@ it('keeps a declared plain draft literal and offers no Markdown toolbar or autoc
   expect(screen.queryByRole('listbox')).toBeNull();
   expect(screen.getByText('**literal** /code', { selector: 'div' }).querySelector('strong')).toBeNull();
 });
+
+
+it('keeps the safe preview as the only available preview mode', () => {
+  render(<RichComposer id="preview-guard" onImageFiles={() => {}} onRejectedImageFiles={() => {}} readOnly={false} value={'![remote](https://tracker.invalid/pixel)'} onChange={() => {}} mode="public" />);
+  expect(screen.queryByRole('button', { name: /Live code|Edit code|Preview code/ })).not.toBeInTheDocument();
+  const editor = screen.getByRole('textbox', { name: 'Reply message' });
+  fireEvent.keyDown(editor, { key: '8', code: 'Digit8', ctrlKey: true });
+  expect(document.querySelector('img')).not.toBeInTheDocument();
+  expect(screen.getByText('[Image omitted: remote]')).toBeInTheDocument();
+});
