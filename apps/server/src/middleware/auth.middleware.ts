@@ -263,14 +263,19 @@ export const loginAuthResolverMiddleware = async (c: Context<{ Bindings: Env; Va
   await next();
 };
 
+export type RealtimeVerifiedUser = Readonly<{
+  id: string; tenant_id: string; email: string; full_name: string; role: 'agent' | 'admin';
+  session_version: number; session_expires_at: number; realtimeScope: ReturnType<typeof createVerifiedTenantScope>;
+}>;
+
 /** WebSocket query tokens use the same current session verifier before constructing scope. */
-export async function authenticateRealtimeToken(env: Env, token: string, record?: (decision: RequestCredentialAuthDecision) => void, emit?: ResourceOperationEmitter) {
+export async function authenticateRealtimeToken(env: Env, token: string, record?: (decision: RequestCredentialAuthDecision) => void, emit?: ResourceOperationEmitter): Promise<RealtimeVerifiedUser | null> {
   const verification = await new AuthService(emit ? { ...env, DB: observeD1(env.DB, emit) } : env).verifyCurrentAppCredential(token);
   if (verification.decision !== 'accepted') {
     try { record?.(verification.decision); } catch { /* Evidence cannot affect authentication. */ }
     return null;
   }
-  const user = verification.user;
+  const user = verification.user as unknown as RealtimeVerifiedUser;
   if (!['agent', 'admin'].includes(user.role)) {
     try { record?.('denied'); } catch { /* Evidence cannot affect authentication. */ }
     return null;
@@ -278,5 +283,7 @@ export async function authenticateRealtimeToken(env: Env, token: string, record?
   try { record?.('accepted'); } catch { /* Evidence cannot affect authentication. */ }
   const scope = createVerifiedTenantScope(user.tenant_id!, user.id, [user.role], user.session_version ?? 0);
   await authorizeLocalBeta(env, scope, undefined, emit);
-  return user;
+  // Keep the verified scope private to trusted route composition.  Realtime
+  // admission must not reconstruct a scope from request-derived headers.
+  return Object.freeze({ ...user, realtimeScope: scope });
 }

@@ -1,0 +1,21 @@
+# #64 realtime admission allocation
+
+Base: accepted main `28e0444`; implementation base/pending #198 `2a6357d`.
+
+## Scope and decision
+
+This increment owns only the authenticated `/api/realtime` upgrade, `NotificationDO`, its broadcast/admission helpers and focused native proof. It applies #50's active-admission requirement to ephemeral realtime connections without changing canonical conversation replay. Canonical ticket mutations already reserve their bounded three-attempt NotificationDO broadcast and cleanup envelope; delivery remains advisory and must not reserve it a second time. No outbox or provider work is introduced.
+
+The proposed boundary obtains one current session-and-policy-fenced connection lease before the upgrade through the existing `BudgetCoordinatorDO` and bounded warm-grant machinery. The signed, server-derived lease is forwarded only by the Worker; client headers cannot establish it. `NotificationDO` persists bounded lease slots/debits before a frame, alarm or cleanup causes side effects, so hibernation/reconstruction and concurrent callbacks neither reissue nor double-spend them. A lease expires no later than its trusted authority freshness and a fixed 30-second realtime interval; stale/revoked authority or corrupt state fails closed. Existing runtime limits remain 128 connections per tenant object, 16 transient typing ticket keys per socket, one typing update per key per second and a 30-second alarm. Presence also needs a finite lease event allowance before it can be actively admitted.
+
+## Implementation status
+
+Implemented locally: explicit `REALTIME_BUDGET_ADMISSION_POLICY=realtime-v1` (unconfigured and `off` preserve legacy behavior); a pre-upgrade session/current-authority `BudgetCoordinatorDO` lease; a domain-separated HMAC forwarder derived from the existing Worker JWT secret; and an atomic NotificationDO lease ledger. Authentication creates the verified tenant scope and request dependency composition once, then admission consumes that trusted scope rather than reconstructing it from forwarding headers.
+
+Each 30-second lease reserves one initial presence action, 510 raw frame slots, 480 typing slots (16 ticket keys × one per second × 30 seconds), 30 presence slots, one shared alarm and one close recovery. The frame debit occurs before JSON parsing; typed/presence paths debit their own slots before their D1/DO side effects. The durable active index remains 128 sockets while an expiry-clipped 1,024-receipt index prevents a closed signed claim from being replayed without blocking ordinary new connections. All ledger writes precede delivery work. A valid lease is clipped to the current authority expiry and 30 seconds; every inbound frame still rechecks the current staff session and enabled mode also requires live MFA.
+
+Canonical mutation delivery now has a separate opaque post-commit grant: staff/customer/API mutation services expose it only for the successful non-replayed prepared attempt. It binds tenant, canonical operation/fingerprint/receipt reservation, exact pre-reserved broadcast envelope, authority revision/policy/restriction and expiry. BroadcastService signs the immutable outbound body; NotificationDO validates the signature/object tenant before recording up to the existing three retry attempts. A missing, forged, mismatched or expired handoff fails advisory delivery safely, leaving the durable canonical row available through existing conversation/ticket recovery. It never debits a connection lease or accepts a client-supplied prepaid marker.
+
+The new native Miniflare D1/DO test is wired into the existing tenant-isolation storage/background command. It covers forged forwarding denial, two-tenant delivery isolation, frame exhaustion, post-close claim replay denial, 128 historical receipts allowing a new slot, 1,024 receipt exhaustion and expiry recovery, hibernation/session-version revocation, authority-lease expiry, and signed canonical broadcast retries/body tampering. Validation on this local branch: `test:tenant-isolation-storage-background` (14/14), `test:staff-ticket-mutation-runtime` (32/32), full server unit suite (692), full and focused type checks, and scoped ESLint.
+
+Migration `0050` is not allocated: NotificationDO's existing SQLite storage retains the bounded ephemeral lease and handoff receipt ledgers atomically.

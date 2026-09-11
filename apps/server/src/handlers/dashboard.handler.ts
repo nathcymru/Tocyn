@@ -497,7 +497,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
       // A raced receipt winner is already durable work. Only the canonical
       // winner performs the existing best-effort delivery side effects.
       if (!outcome.replayed) {
-        await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketCreated(outcome.ticket);
+        await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketCreated(outcome.ticket, mutation.broadcastGrant(prepared,outcome));
         try { await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(outcome.ticket,outcome.article,outcome.attachments); }
         catch { console.error('Initial ticket email delivery failed'); }
       }
@@ -713,7 +713,7 @@ dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10
           try { await new EmailService(c.env,d,(c.env as any).emailTransport).sendTicketReply(outcome.ticket,outcome.article,outcome.attachments); }
           catch { console.error('Ticket reply email delivery failed'); }
         }
-        await new BroadcastService(c.env,d.scope,d.emitResourceOperation).broadcast('article.created',{ticket_id:ticketId,article_id:outcome.article.id});
+        await new BroadcastService(c.env,d.scope,d.emitResourceOperation).broadcast('article.created',{ticket_id:ticketId,article_id:outcome.article.id},2,mutation.broadcastGrant(prepared,outcome));
       }
       if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
       return c.json(outcome.body, outcome.status);
@@ -799,7 +799,7 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
       const rejection = await admitConfiguredStaffTicketMutation(c,'dashboard.ticket.update',mutation,prepared);
       if (rejection) return rejection;
       const outcome = await mutation.commit(prepared);
-      if (!outcome.replayed) await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket);
+      if (!outcome.replayed) await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket,mutation.broadcastGrant(prepared,outcome));
       if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
       return c.json(outcome.body,outcome.status);
     } catch (error) {

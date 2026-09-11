@@ -19,6 +19,8 @@ import { environmentGuard } from './middleware/environment-guard';
 import { operationalObservability } from './middleware/operational-observability';
 import { measureResourceOperation } from './observability/resource-operation';
 import { AppVariables } from './types';
+import { admitRealtimeConnection } from './budgets/realtime-admission.service';
+import { createTenantRequestDeps } from './middleware/tenant.middleware';
 
 export const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 app.onError((error,c) => {
@@ -42,6 +44,17 @@ app.get('/api/realtime', async (c) => {
   }
   const user = await authenticateRealtimeToken(c.env, token, decision => c.get('requestAuthSli')?.record(decision), c.get('resourceOperationEmitter'));
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  // A websocket handshake has no durable client idempotency key. A retry after
+  // a lost 101 is a distinct possible connection and is charged before the DO
+  // can accept it; the signed lease prevents a client from forging that spend.
+  const realtimeDeps = createTenantRequestDeps(user.realtimeScope, c.env, { sessionVersion: user.session_version, expiresAt: user.session_expires_at },
+    undefined, c.get('resourceOperationEmitter'));
+  const admission = await admitRealtimeConnection({ env: c.env, user, deps: realtimeDeps, now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') {
+    return c.json({ code: admission.reason === 'exhausted' ? 'budget_exhausted' : 'budget_admission_unavailable',
+      error: admission.reason === 'exhausted' ? 'Configured budget capacity is exhausted' : 'Budget admission authority is unavailable' },
+    admission.reason === 'exhausted' ? 429 : 503);
+  }
   const internalUrl = new URL(c.req.raw.url); internalUrl.search = '';
   const newReq = new Request(internalUrl, c.req.raw);
   newReq.headers.set('X-User-ID', user.id);
@@ -50,6 +63,10 @@ app.get('/api/realtime', async (c) => {
   newReq.headers.set('X-Session-Expiry', String((user as any).session_expires_at));
   newReq.headers.set('X-Session-Role', user.role);
   newReq.headers.set('X-User-Name', user.full_name || user.email);
+  if (admission.lease) {
+    newReq.headers.set('X-Realtime-Lease', JSON.stringify(admission.lease.claim));
+    newReq.headers.set('X-Realtime-Lease-Signature', admission.lease.signature);
+  }
   const id = c.env.NOTIFICATION_DO.idFromName(`tenant:${user.tenant_id}`);
   return measureResourceOperation({
     resource: 'durable_object', operation: 'invoke', emit: c.get('resourceOperationEmitter'),
