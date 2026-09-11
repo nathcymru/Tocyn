@@ -33,7 +33,7 @@ function owned<T>(value: T): T {
 type Attempt = { input: StaffMutationInput; namespace?: StaffMutationNamespace; requirements: SessionBudgetRequirements;
   intent: CanonicalBudgetIntent; authority?: BudgetCommitAuthority; commitStarted: boolean };
 
-/** Staff-only prerequisite; no dashboard handler is wired by this module. */
+/** Staff canonical mutations and receipts used by the configured dashboard admission path. */
 export class StaffTicketMutationService {
   private readonly receipts: StaffTicketMutationRepository;
   private readonly sessions: SessionBudgetAuthorityRepository;
@@ -106,7 +106,7 @@ export class StaffTicketMutationService {
     if (!await this.receipts.articleExists(ticket.id,receipt.result_article_id)) throw denied();
     return this.render(receipt.response_snapshot,ns.operation,true,true);
   }
-  async prepare(input: StaffMutationInput, key?: string): Promise<PreparedStaffMutation> {
+  async prepareStaffMutation(input: StaffMutationInput, key?: string): Promise<PreparedStaffMutation> {
     await this.authorize({ capability: this.capability });
     if (key !== undefined && !/^[A-Za-z0-9._~-]{1,128}$/.test(key)) throw invalid();
     const normalized = this.normalize(input);

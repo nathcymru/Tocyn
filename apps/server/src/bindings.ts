@@ -6,7 +6,7 @@ export interface Env {
   DB: D1Database;
   ATTACHMENTS_BUCKET: R2Bucket;
   NOTIFICATION_DO: DurableObjectNamespace;
-  /** Internal budget authority; only the explicitly configured API mutation boundary may call it. */
+  /** Internal budget authority; only explicitly configured mutation boundaries may call it. */
   BUDGET_COORDINATOR_DO: DurableObjectNamespace;
   /** Server deployment policy selects a bounded ticket-mutation admission boundary. */
   BUDGET_ADMISSION_POLICY?: string;

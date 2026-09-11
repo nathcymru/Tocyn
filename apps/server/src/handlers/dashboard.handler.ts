@@ -454,7 +454,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
       const parsed = staffCreateTicketSchema.safeParse(body);
       if (!parsed.success) return c.json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors }, 400);
       const mutation = staffMutationService(c, d, 'dashboard.ticket.create');
-      const prepared = await mutation.prepare({ operation: 'dashboard.ticket.create', data: {
+      const prepared = await mutation.prepareStaffMutation({ operation: 'dashboard.ticket.create', data: {
         subject: parsed.data.subject, customer_email: parsed.data.customer_email, body: parsed.data.body,
         bodyFormat: parsed.data.body_format, priority: parsed.data.priority, status: parsed.data.status,
         group_id: parsed.data.group_id, assigned_to: parsed.data.assigned_to, custom_fields: parsed.data.custom_fields,
@@ -656,7 +656,7 @@ dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10
         return { storageKey: raw.storageKey ?? raw.key, filename: raw.filename };
       });
       const mutation = staffMutationService(c,d,'dashboard.ticket.reply');
-      const prepared = await mutation.prepare({ operation: 'dashboard.ticket.reply', ticketId, data: {
+      const prepared = await mutation.prepareStaffMutation({ operation: 'dashboard.ticket.reply', ticketId, data: {
         body: parsed.data.body, bodyFormat: parsed.data.body_format, is_internal: parsed.data.is_internal,
         attachments: requested as any,
       } }, readIdempotencyKey(c));
