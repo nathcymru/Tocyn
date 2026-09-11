@@ -48,6 +48,34 @@ test('theme preference is actor-scoped, CAS-safe and fenced against expired/revo
   });
 });
 
+test('presentation preferences are tenant/actor-scoped, version-safe, CAS-safe and fenced on revocation', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const token = await login(fixture, 'operatorA'); const other = await login(fixture, 'operatorB');
+    const path = '/api/workspace/presentation-preference';
+    const defaults = { version: 1, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
+    assert.equal((await fixture.request(path)).status, 401);
+    assert.deepEqual(await (await fixture.request(path, { token })).json(), defaults);
+    const save = (revision: number, body: Record<string, unknown>, session = token) => fixture.request(path, { method: 'PUT', token: session, body: { version: 1, expectedRevision: revision, density: 'compact', fontScale: 'large', focusMode: true, motion: 'reduced', ...body } });
+    assert.equal((await save(0, { motion: 'blur' })).status, 400);
+    const first = await save(0, {}); assert.equal(first.status, 200);
+    assert.deepEqual(await first.json(), { version: 1, revision: 1, density: 'compact', fontScale: 'large', focusMode: true, motion: 'reduced', updatedAt: (await fixture.db.prepare('SELECT updated_at FROM operator_presentation_preference').first<{updated_at:string}>())?.updated_at });
+    assert.deepEqual(await (await fixture.request(path, { token: other })).json(), defaults);
+    const race = await Promise.all([save(1, { density: 'comfortable' }), save(1, { fontScale: 'larger' })]);
+    assert.deepEqual(race.map(response => response.status).sort(), [200, 409]);
+    await fixture.db.prepare('PRAGMA ignore_check_constraints=ON').run();
+    await fixture.db.prepare("UPDATE operator_presentation_preference SET version=99 WHERE tenant_id=? AND user_id=?").bind(fixture.principals.operatorA.tenantId, fixture.principals.operatorA.localId).run();
+    assert.deepEqual(await (await fixture.request(path, { token })).json(), defaults, 'old or corrupt rows do not become authoritative preferences');
+    await fixture.db.prepare('PRAGMA ignore_check_constraints=OFF').run();
+    assert.equal((await save(0, { density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system' })).status, 200, 'The safe fallback can be repaired through the normal CAS path');
+    const payload = decodeJwt(token); const repository = new OperatorWorkspaceRepository(createVerifiedTenantScope(fixture.principals.operatorA.tenantId, fixture.principals.operatorA.localId, ['admin'], 1), fixture.db);
+    const credential = { role: 'admin' as const, sessionVersion: Number(payload.session_version ?? 0), expiresAt: Number(payload.exp) };
+    assert.equal(await repository.savePresentationPreference({ ...defaults, revision: 0 }, { ...credential, expiresAt: 0 }), null);
+    await fixture.revokePrincipalSessions('operatorA');
+    assert.equal(await repository.getPresentationPreference(credential), null);
+    assert.equal(await fixture.db.prepare('SELECT count(*) AS n FROM operator_workspace_state').first<{n:number}>().then(row => row?.n), 0, 'Presentation settings never overwrite ticket navigation state');
+  });
+});
+
 test('local-beta theme writes share bounded mutation accounting and stop policy', async () => {
   await withTwoTenantFixture(async fixture => {
     const token = await login(fixture, 'operatorA');

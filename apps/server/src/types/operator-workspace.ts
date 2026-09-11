@@ -7,6 +7,20 @@ export type OperatorWorkspaceSort = typeof OPERATOR_WORKSPACE_SORTS[number];
 export type OperatorDraftMode = 'public' | 'internal';
 export type OperatorThemeMode = 'light' | 'dark' | 'system';
 export type OperatorThemePreference = Readonly<{ revision: number; mode: OperatorThemeMode; updatedAt: string | null }>;
+export const OPERATOR_PRESENTATION_PREFERENCES_VERSION = 1 as const;
+export type OperatorDensity = 'comfortable' | 'compact';
+export type OperatorFontScale = 'normal' | 'large' | 'larger';
+export type OperatorMotion = 'system' | 'reduced' | 'full';
+/** Personal presentation choices only; they never change tenant policy or access. */
+export type OperatorPresentationPreference = Readonly<{
+  version: typeof OPERATOR_PRESENTATION_PREFERENCES_VERSION;
+  revision: number;
+  density: OperatorDensity;
+  fontScale: OperatorFontScale;
+  focusMode: boolean;
+  motion: OperatorMotion;
+  updatedAt: string | null;
+}>;
 export type OperatorDraftAttachment = Readonly<{ storageKey: string; filename: string; size: number; contentType: string }>;
 
 export type OperatorDraft = Readonly<{
