@@ -51,6 +51,8 @@ import { GroupDirectoryFenceError, GroupDirectoryRepository, type GroupDirectory
 import { admitApiKeyAdmin, apiKeyCandidate, settleApiKeyAdmin, type ApiKeyAdminAdmission } from '../budgets/api-key-admin-admission.service';
 import { ApiKeyAdminFenceError, ApiKeyAdminRepository, type ApiKeyAdminCommit,
   type ApiKeyCreationReceipt } from '../repositories/api-key-admin.repository';
+import { admitDashboardSummaryRead, settleDashboardSummaryRead, type DashboardSummaryReadAdmission } from '../budgets/dashboard-summary-read-admission.service';
+import { DashboardSummaryReadFenceError, DashboardSummaryReadRepository, projectDashboardSlaRows, type DashboardSummaryReadCommit } from '../repositories/dashboard-summary-read.repository';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -181,6 +183,25 @@ function groupDirectoryBudgetFailure(c: any, reason: 'exhausted'|'unavailable') 
   return reason === 'exhausted'
     ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
     : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+
+function dashboardSummaryBudgetFailure(c: any, reason: 'exhausted'|'unavailable') {
+  return reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+async function admittedDashboardSummary<T>(c:any,d:TenantRequestDeps,admission:DashboardSummaryReadAdmission,
+  work:(repository:DashboardSummaryReadRepository,commit:DashboardSummaryReadCommit)=>Promise<T>):Promise<T|Response> {
+  const commit=admission.commit!;
+  try {
+    const result=await work(new DashboardSummaryReadRepository(d.database,d.scope),commit);
+    settleDashboardSummaryRead(commit,'committed',c.env.localNow?.()??Date.now());
+    return result;
+  } catch(error) {
+    settleDashboardSummaryRead(commit,'unknown',c.env.localNow?.()??Date.now());
+    if(error instanceof DashboardSummaryReadFenceError)return dashboardSummaryBudgetFailure(c,'unavailable');
+    throw error;
+  }
 }
 
 async function admittedGroupDirectoryWork<T>(c:any,d:TenantRequestDeps,admission:GroupDirectoryAdmission,
@@ -415,6 +436,14 @@ dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard(
  */
 dashboard.get("/stats", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'dashboard.stats.read',target:{},now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+  if(admission.status==='admitted'){
+    const result=await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.stats(commit));
+    if(result instanceof Response)return result;
+    return c.json(result);
+  }
   return c.json(await d.repositories.tickets.dashboardStats());
 });
 
@@ -425,6 +454,15 @@ dashboard.get('/support-states', async (c) => {
   const cursor = c.req.query('cursor') || undefined;
   const includeInactive = c.req.query('include_inactive') === 'true';
   try {
+    const d=c.get('tenantDeps') as TenantRequestDeps;
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.support-states.read',target:{limit,cursor:cursor??null,includeInactive},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    if(admission.status==='admitted'){
+      const page=await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.supportStates({limit,cursor:cursor??null,includeInactive},commit));
+      if(page instanceof Response)return page;
+      const response=c.json(page.results);if(page.nextCursor)response.headers.set('X-Next-Cursor',page.nextCursor);return response;
+    }
     const page = await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).listDefinitionsPage(limit, cursor, includeInactive);
     const response = c.json(page.results);
     if (page.nextCursor) response.headers.set('X-Next-Cursor', page.nextCursor);
@@ -434,7 +472,18 @@ dashboard.get('/support-states', async (c) => {
 });
 
 dashboard.get('/sla-policy', async (c) => {
-  try { return c.json(await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getPolicy()); }
+  try {
+    const d=c.get('tenantDeps') as TenantRequestDeps;
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.sla-policy.read',target:{},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    if(admission.status==='admitted'){
+      const policy=await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.policy(commit));
+      if(policy instanceof Response)return policy;
+      return c.json(policy);
+    }
+    return c.json(await new SlaClockService(d).getPolicy());
+  }
   catch (error) { return slaFailure(c, error); }
 });
 
@@ -552,7 +601,14 @@ dashboard.post('/support-states/:id/deactivate', requestBounds(64 * 1024), roleG
 
 dashboard.get('/tickets/:id/support-state', async (c) => {
   try {
-    const state = await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).getTicketState(c.req.param('id'));
+    const d=c.get('tenantDeps') as TenantRequestDeps,id=c.req.param('id');
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.ticket.support-state.read',target:{ticketId:id},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    const state=admission.status==='admitted'
+      ?await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.ticketSupportState(id,commit))
+      :await new SupportStateService(d).getTicketState(id);
+    if(state instanceof Response)return state;
     if (!state) return c.json({ error: 'Ticket not found' }, 404);
     return c.json(state);
   } catch (error) { return supportStateFailure(c, error); }
@@ -560,7 +616,14 @@ dashboard.get('/tickets/:id/support-state', async (c) => {
 
 dashboard.get('/tickets/:id/sla', async (c) => {
   try {
-    const projection = await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getTicketProjection(c.req.param('id'));
+    const d=c.get('tenantDeps') as TenantRequestDeps,id=c.req.param('id');
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.ticket.sla.read',target:{ticketId:id},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    const projection=admission.status==='admitted'
+      ?await admittedDashboardSummary(c,d,admission,async(repository,commit)=>{const rows=await repository.sla({ticketIds:[id]},'dashboard.ticket.sla.read',commit);const row=rows.get(id);return row?projectDashboardSlaRows(row,new Date(c.env.localNow?.()??Date.now())):null;})
+      :await new SlaClockService(d).getTicketProjection(id);
+    if(projection instanceof Response)return projection;
     return projection ? c.json(projection) : c.json({ error: 'SLA clock unavailable' }, 404);
   } catch (error) { return slaFailure(c, error); }
 });
@@ -599,7 +662,22 @@ dashboard.post('/ticket-sla/projections', requestBounds(16 * 1024), async (c) =>
   if ('response' in mutation) return mutation.response;
   const parsed = z.object({ ticketIds: z.array(z.string().min(1).max(120)).min(1).max(25) }).strict().safeParse(mutation.body);
   if (!parsed.success) return c.json({ error: 'Invalid SLA projection batch' }, 400);
-  try { return c.json(await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).getTicketProjections(parsed.data.ticketIds)); }
+  try {
+    const d=c.get('tenantDeps') as TenantRequestDeps,ids=parsed.data.ticketIds;
+    const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+      operation:'dashboard.ticket.sla-batch.read',target:{ticketIds:ids},now:()=>c.env.localNow?.()??Date.now()});
+    if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+    if(admission.status==='admitted'){
+      const projections=await admittedDashboardSummary(c,d,admission,async(repository,commit)=>{
+        const rows=await repository.sla({ticketIds:ids},'dashboard.ticket.sla-batch.read',commit),result:Record<string,unknown>={};
+        for(const id of ids){const row=rows.get(id);if(row)result[id]=projectDashboardSlaRows(row,new Date(c.env.localNow?.()??Date.now()));}
+        return result;
+      });
+      if(projections instanceof Response)return projections;
+      return c.json(projections);
+    }
+    return c.json(await new SlaClockService(d).getTicketProjections(ids));
+  }
   catch (error) { return slaFailure(c, error); }
 });
 
@@ -1004,6 +1082,16 @@ dashboard.get('/tickets/:id/reply-capability', async (c) => {
   const ticketId = c.req.param('id');
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const agent = c.get('jwtPayload') as JWTPayload;
+  const admission=await admitDashboardSummaryRead({env:c.env,deps:d,payload:agent,
+    operation:'dashboard.ticket.reply-capability.read',target:{ticketId},now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return dashboardSummaryBudgetFailure(c,admission.reason!);
+  if(admission.status==='admitted'){
+    const capability=await admittedDashboardSummary(c,d,admission,(repository,commit)=>repository.replyCapability(ticketId,commit));
+    if(capability instanceof Response)return capability;
+    if(capability.status==='missing')return c.json({ error: 'Ticket not found' },404);
+    if(capability.status==='forbidden')return c.json({ error: 'Forbidden', message: 'You do not have access to this ticket\'s group' },403);
+    return c.json(replyCapability(ticketId,{version:1,conversationRevision:capability.revision ?? 0,protocol:'draft-precondition-v1'}));
+  }
   const ticket = await d.repositories.tickets.get(ticketId);
   if (!ticket) return c.json({ error: 'Ticket not found' }, 404);
 

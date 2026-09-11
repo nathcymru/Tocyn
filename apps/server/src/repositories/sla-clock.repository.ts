@@ -22,6 +22,34 @@ export class SlaClockError extends Error {
   constructor(readonly code: 'invalid' | 'not_found' | 'unavailable' | 'conflict', message: string) { super(message); }
 }
 
+/** Shared pure projection over an already authorized, complete clock snapshot. */
+export function projectSlaClock(clock: TicketSlaClock, currentPolicy: SlaPolicy, pauses: SlaPauseInterval[], handlerName: string | null, now = new Date()): TicketSlaProjection {
+  const frozenPolicy = clock.policyCalendarJson ? {
+    calendar: calendar(JSON.parse(clock.policyCalendarJson)), responseTargetMs: clock.policyResponseTargetMs,
+    resolutionTargetMs: clock.policyResolutionTargetMs,
+    reopenPolicy: { response: clock.policyResponseReopenPolicy ?? 'continue', resolution: clock.policyResolutionReopenPolicy ?? 'continue' }, revision: clock.policyRevision,
+  } : currentPolicy;
+  const projectTarget = (targetMs: number | null, startedAt: string, completedAt: string | null, pausedAt: string | null,
+    kind: 'response' | 'resolution'): SlaTargetProjection => {
+    if (targetMs === null) return { state: 'unavailable', phase: 'unavailable', completedAt: null, dueAt: null, remainingWorkingMilliseconds: null, targetWorkingMilliseconds: null };
+    const evaluatedAt = new Date(completedAt ?? pausedAt ?? now.toISOString());
+    const cutoff = evaluatedAt.getTime();
+    const applicablePauses = pauses.flatMap(pause => {
+      const startsAt = Math.max(new Date(pause.startsAt).getTime(), new Date(startedAt).getTime());
+      const endsAt = Math.min(new Date(pause.endsAt).getTime(), cutoff);
+      return startsAt < endsAt ? [{ startsAt, endsAt }] : [];
+    });
+    const result = kind === 'response'
+      ? evaluateResponseSla({ calendar: frozenPolicy.calendar, startedAt: new Date(startedAt), evaluatedAt, targetWorkingMilliseconds: targetMs, pauses: applicablePauses })
+      : evaluateResolutionSla({ calendar: frozenPolicy.calendar, startedAt: new Date(startedAt), evaluatedAt, targetWorkingMilliseconds: targetMs, pauses: applicablePauses });
+    return { state: result.state, phase: completedAt ? 'completed' : pausedAt ? 'paused' : 'running', completedAt,
+      dueAt: !completedAt && pausedAt ? null : result.dueAt?.toISOString() ?? null,
+      remainingWorkingMilliseconds: result.state === 'unavailable' ? null : result.remainingWorkingMilliseconds, targetWorkingMilliseconds: targetMs };
+  };
+  return { response: projectTarget(frozenPolicy.responseTargetMs, clock.responseStartedAt, clock.responseCompletedAt, clock.pausedAt, 'response'),
+    resolution: projectTarget(frozenPolicy.resolutionTargetMs, clock.resolutionStartedAt, clock.resolutionCompletedAt, clock.pausedAt, 'resolution'), handlerName };
+}
+
 function target(value: number | null, name: string): number | null {
   if (value === null) return null;
   if (!Number.isSafeInteger(value) || value < 60_000 || value > maximumTargetMs) {
@@ -169,26 +197,6 @@ export class SlaClockRepository {
     return rows.results.map(row => ({ startsAt: new Date(row.started_at), endsAt: new Date(row.ended_at ?? now.toISOString()) }));
   }
 
-  private projectTarget(targetMs: number | null, startedAt: string, completedAt: string | null, pausedAt: string | null, policy: SlaPolicy, pauses: SlaPauseInterval[], now: Date, kind: 'response' | 'resolution'): SlaTargetProjection {
-    if (targetMs === null) return { state: 'unavailable', phase: 'unavailable', completedAt: null, dueAt: null, remainingWorkingMilliseconds: null, targetWorkingMilliseconds: null };
-    // Completion freezes the outcome. Later waiting periods must not rewrite its
-    // historical deadline. A live pause freezes elapsed work at the pause anchor;
-    // its eventual resume time is unknown, so it cannot have a promised due date.
-    const evaluatedAt = new Date(completedAt ?? pausedAt ?? now.toISOString());
-    const cutoff = evaluatedAt.getTime();
-    const applicablePauses = pauses.flatMap(pause => {
-      const startsAt = Math.max(new Date(pause.startsAt).getTime(), new Date(startedAt).getTime());
-      const endsAt = Math.min(new Date(pause.endsAt).getTime(), cutoff);
-      // Same-instant transitions are valid persisted facts but consume no time.
-      return startsAt < endsAt ? [{ startsAt, endsAt }] : [];
-    });
-    const input = { calendar: policy.calendar, startedAt: new Date(startedAt), evaluatedAt, targetWorkingMilliseconds: targetMs, pauses: applicablePauses };
-    const result = kind === 'response' ? evaluateResponseSla(input) : evaluateResolutionSla(input);
-    return { state: result.state, phase: completedAt ? 'completed' : pausedAt ? 'paused' : 'running', completedAt,
-      dueAt: !completedAt && pausedAt ? null : result.dueAt?.toISOString() ?? null,
-      remainingWorkingMilliseconds: result.state === 'unavailable' ? null : result.remainingWorkingMilliseconds, targetWorkingMilliseconds: targetMs };
-  }
-
   async getProjection(ticketId: string, now = new Date()): Promise<TicketSlaProjection | null> {
     const clock = await this.getClock(ticketId);
     if (!clock) return null;
@@ -197,15 +205,6 @@ export class SlaClockRepository {
       this.db.prepare(`SELECT u.full_name FROM tickets t LEFT JOIN users u ON u.tenant_id=t.tenant_id AND u.id=t.assigned_to
         WHERE t.tenant_id=? AND t.id=?`).bind(this.scope.tenantId,ticketId).first<{ full_name: string | null }>(),
     ]);
-    const frozenPolicy = clock.policyCalendarJson ? {
-      calendar: calendar(JSON.parse(clock.policyCalendarJson)), responseTargetMs: clock.policyResponseTargetMs,
-      resolutionTargetMs: clock.policyResolutionTargetMs,
-      reopenPolicy: { response: clock.policyResponseReopenPolicy ?? 'continue', resolution: clock.policyResolutionReopenPolicy ?? 'continue' }, revision: clock.policyRevision,
-    } : currentPolicy;
-    return {
-      response: this.projectTarget(frozenPolicy.responseTargetMs, clock.responseStartedAt, clock.responseCompletedAt, clock.pausedAt, frozenPolicy, pauses, now, 'response'),
-      resolution: this.projectTarget(frozenPolicy.resolutionTargetMs, clock.resolutionStartedAt, clock.resolutionCompletedAt, clock.pausedAt, frozenPolicy, pauses, now, 'resolution'),
-      handlerName: handler?.full_name ?? null,
-    };
+    return projectSlaClock(clock, currentPolicy, pauses, handler?.full_name ?? null, now);
   }
 }
