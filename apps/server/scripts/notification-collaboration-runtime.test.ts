@@ -3,7 +3,7 @@ import test from 'node:test';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 
-test('real Miniflare typing signals are session, tenant and current-ticket authorized, short lived and reconnect safe', async () => {
+test('real Miniflare canonical ticket events and typing are session, tenant and current-ticket authorized', async () => {
   const bundle = await build({ entryPoints: ['scripts/notification-collaboration-runtime-entry.ts'], bundle: true,
     format: 'esm', platform: 'neutral', write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'notification-collaboration', modules: true,
@@ -38,6 +38,21 @@ test('real Miniflare typing signals are session, tenant and current-ticket autho
     const bob = track(await connect('A', 'bob'));
     const outsider = track(await connect('A', 'outsider'));
     const tenantB = track(await connect('B', 'bob'));
+    const canonical = async (type: string, payload: unknown) => {
+      const response = await namespace.get(namespace.idFromName('tenant:A')).fetch('http://do/broadcast', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type, payload }),
+      });
+      assert.equal(response.status, 200); await response.body?.cancel();
+    };
+    await canonical('ticket.created', { id: 'ticket-1', subject: 'Restricted' });
+    await canonical('ticket.updated', { id: 'ticket-1', status: 'pending' });
+    await canonical('article.created', { ticket_id: 'ticket-1', article_id: 'article-1' });
+    await until(() => bob.messages.filter(event => ['ticket.created','ticket.updated','article.created'].includes(event.type)).length === 3);
+    assert.equal(outsider.messages.some(event => ['ticket.created','ticket.updated','article.created'].includes(event.type)), false);
+    const malformed = await namespace.get(namespace.idFromName('tenant:A')).fetch('http://do/broadcast', {
+      method: 'POST', body: JSON.stringify({ type: 'article.created', payload: { article_id: 'missing-ticket' } }),
+    });
+    assert.equal(malformed.status, 400, 'ticket-bearing canonical events without a bounded ticket id fail closed');
     const before = Date.now();
     alice.client.send(JSON.stringify({ type: 'collaboration.typing.v1', payload: {
       version: 1, ticketId: 'ticket-1', baseConversationRevision: 3, active: true,
@@ -58,6 +73,8 @@ test('real Miniflare typing signals are session, tenant and current-ticket autho
 
     // Membership is checked again for every recipient; a revocation prevents the next event without a replay.
     await db.prepare("DELETE FROM user_groups WHERE tenant_id='A' AND user_id='bob' AND group_id='support'").run();
+    await canonical('article.created', { ticket_id: 'ticket-1', article_id: 'after-revocation' });
+    await pause(30); assert.equal(bob.messages.filter(event => event.type === 'article.created').length, 1);
     await pause(1000);
     alice.client.send(JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'ticket-1', baseConversationRevision: 3, active: false } }));
     await pause(30); assert.equal(bob.messages.filter(event => event.type === 'collaboration.typing.v1').length, 1);
