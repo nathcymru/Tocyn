@@ -20,3 +20,15 @@ Branch: `codex/64-storage-admission` from customer-admission revision `eb8ddaa`.
 ## Remaining #64 work
 
 This is only the authenticated dashboard attachment storage increment. It does not cover portal attachment routes, email/inbound storage, article-body storage, collaboration/composer routes (#70), provider billing measurements, owner/tenant administration (#90), or grant compaction/recovery work owned by the other #64 slices.
+
+## Customer-branch integration refresh
+
+Merged customer candidate `54db56b` (including accepted main #194 and the widget custom-field integration correction) into this storage candidate as `841fb06`. The storage R2 native controls, budget policy closures and customer admission fences are preserved.
+
+- `npx tsx scripts/d1-integration-test.ts` — real Miniflare D1 integration batches 1–5 passed.
+- `npx tsc -p scripts/tsconfig.customer-budget-admission.json` — passed.
+- `npm run typecheck` — passed.
+- `npx eslint src/budgets/storage-admission.service.ts src/handlers/dashboard.handler.ts scripts/storage-admission-runtime.test.ts scripts/budget-admission-runtime-entry.ts` — passed (existing Node module-type warning only).
+- `node --import tsx --test --test-concurrency=1 scripts/storage-admission-runtime.test.ts` — 3 passed, 0 failed.
+
+No full 93-test rerun was needed: the refresh merged disjoint customer/branding work, produced no conflicts and did not change the storage implementation. No remote action was taken; root owns stacked PR creation after #195 is accepted.
