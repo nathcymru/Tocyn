@@ -9,7 +9,13 @@ import { useRealtime } from '../hooks/useRealtime';
 import { useAuthStore } from '../store/authStore';
 
 vi.mock('../hooks/useRealtime', () => ({ useRealtime: vi.fn() }));
-vi.mock('../api/client', () => ({ dashboardApi: { post: vi.fn() } }));
+vi.mock('../api/client', () => ({ dashboardApi: {
+  post: vi.fn(),
+  get: vi.fn(async (path: string) => path === '/workspace/theme-preference'
+    ? { revision: 0, mode: 'system', updatedAt: null }
+    : { version: '1', light: {}, dark: {} }),
+  put: vi.fn(),
+} }));
 let client: QueryClient;
 const realtime = { isConnected: true, lastMessage: null, presence: [], updateLocation: vi.fn(), connectionDetails: { latency: 10, reconnectCount: 0 }, manualReconnect: vi.fn() };
 function Destination() { const location = useLocation(); return <h1>Route {location.pathname}{location.search}</h1>; }
@@ -18,11 +24,16 @@ function tree() {
     <Route element={<Layout />}><Route path="*" element={<Destination />} /></Route>
   </Routes></MemoryRouter></QueryClientProvider>;
 }
+async function renderReady() {
+  const result = render(tree());
+  await screen.findByRole('main', { name: 'Workspace' });
+  return result;
+}
 beforeEach(() => {
   // JSDOM lacks resize observation; browser positioning remains separately verified.
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  useAuthStore.getState().setAuth('synthetic-session', { id: 'operator', email: 'operator@example.invalid', full_name: 'Operator', role: 'agent', mfa_enabled: true });
+  useAuthStore.getState().setAuth('synthetic-session', { id: 'operator', tenant_id: 'synthetic-tenant', email: 'operator@example.invalid', full_name: 'Operator', role: 'agent', mfa_enabled: true });
   vi.mocked(useRealtime).mockReturnValue(realtime as ReturnType<typeof useRealtime>);
   // JSDOM has no layout; supply visible rectangles so Ark can discover focusable controls.
   vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function(this:HTMLElement) {
@@ -35,7 +46,7 @@ afterEach(() => {
 });
 
 it('names global search and shared navigation, focuses its close control and returns focus on Escape', async () => {
-  render(tree());
+  await renderReady();
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   const search = screen.getByRole('textbox', { name: 'Search all tickets' });
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
@@ -53,7 +64,7 @@ it('names global search and shared navigation, focuses its close control and ret
 });
 
 it('names account/connection disclosures and restores focus when their child actions close', async () => {
-  render(tree());
+  await renderReady();
   const account = screen.getByRole('button', { name: 'Account options' });
   await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
   const security = await screen.findByRole('link', { name: 'Security Profile' });
@@ -69,15 +80,15 @@ it('names account/connection disclosures and restores focus when their child act
 });
 
 it('closes mobile navigation after a selected destination and focuses the workspace', async () => {
-  render(tree()); fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+  await renderReady(); fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
   fireEvent.click(within(await screen.findByRole('dialog', { name: 'Navigation' })).getByRole('link', { name: 'Dashboard home' }));
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   expect(screen.getByRole('heading')).toHaveTextContent('Route /');
 });
 
-it('exposes native notification open and dismiss actions without changing realtime invalidation', () => {
-  const result = render(tree());
+it('exposes native notification open and dismiss actions without changing realtime invalidation', async () => {
+  const result = await renderReady();
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.created', payload: { id: 'synthetic-ticket', subject: 'Synthetic arrival' } } } as ReturnType<typeof useRealtime>);
   act(() => result.rerender(tree()));
@@ -90,11 +101,12 @@ it('exposes native notification open and dismiss actions without changing realti
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
 });
 
-it('keeps a focused notification available and returns focus when it is dismissed', () => {
+it('keeps a focused notification available and returns focus when it is dismissed', async () => {
   vi.useFakeTimers();
   try {
     vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.created', payload: { id: 'synthetic-ticket', subject: 'Synthetic arrival' } } } as ReturnType<typeof useRealtime>);
     render(tree());
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
     const dismiss = screen.getByRole('button', { name: 'Dismiss ticket notification' });
     dismiss.focus(); act(() => vi.advanceTimersByTime(8_000));
     expect(dismiss).toHaveFocus();
@@ -105,7 +117,7 @@ it('keeps a focused notification available and returns focus when it is dismisse
 });
 
 it('navigates from the account popover without stealing destination focus', async () => {
-  render(tree()); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
+  await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
   const destination = await screen.findByRole('link', { name: 'Security Profile' });
   await userEvent.click(destination);
   await waitFor(() => expect(screen.getByRole('heading')).toHaveTextContent('/profile/security'));
@@ -116,7 +128,7 @@ it('guards overlapping sign-outs and still clears local authentication when serv
   const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
   let reject!: (error: Error) => void;
   vi.mocked(dashboardApi.post).mockImplementationOnce(() => new Promise((_resolve, failure) => { reject = failure; }));
-  render(tree()); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
+  await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
   const signOut = await screen.findByRole('button', { name: 'Sign out of all sessions' });
   fireEvent.click(signOut); fireEvent.click(signOut); expect(dashboardApi.post).toHaveBeenCalledTimes(1);
   await act(async () => reject(new Error('Synthetic failure')));
@@ -126,7 +138,7 @@ it('guards overlapping sign-outs and still clears local authentication when serv
 });
 
 it('keeps nested account content fixed-positioned and dismisses it before mobile navigation', async () => {
-  render(tree()); await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+  await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
   const navigation=await screen.findByRole('dialog',{name:'Navigation'});
   await waitFor(()=>expect(within(navigation).getByRole('button',{name:'Close navigation'})).toHaveFocus());
   const account=within(navigation).getByRole('button',{name:'Account options'});

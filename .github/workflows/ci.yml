@@ -68,6 +68,9 @@ jobs:
         run: |
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-support-state-browser.json
           node --import tsx --test apps/server/scripts/ui-support-state-browser.test.ts > "$RUNNER_TEMP/tocyn-support-state-browser.tap"
+      - name: Verify theme scopes under browser CSP
+        if: matrix.check == 'build'
+        run: node tools/ui-browser/theme-scope.mjs > "$RUNNER_TEMP/tocyn-theme-scope.json"
       - name: Verify durable drafts against the local Worker
         if: matrix.check == 'build'
         run: |
@@ -88,6 +91,11 @@ jobs:
         run: |
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.operational-metrics.json
           npm run test:operational-metrics --workspace=apps/server
+      - name: Verify operator theme preference isolation and recovery
+        if: matrix.check == 'test'
+        run: |
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.operator-theme-preference.json
+          node --import tsx --test apps/server/scripts/operator-theme-preference.test.ts
       - name: Retain synthetic UI performance evidence
         if: always() && matrix.check == 'build'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -101,5 +109,6 @@ jobs:
             ${{ runner.temp }}/tocyn-ui-authenticated.tap
             ${{ runner.temp }}/tocyn-operator-drafts.tap
             ${{ runner.temp }}/tocyn-support-state-browser.tap
+            ${{ runner.temp }}/tocyn-theme-scope.json
           retention-days: 3
           if-no-files-found: warn
