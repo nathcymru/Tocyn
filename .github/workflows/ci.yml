@@ -86,6 +86,11 @@ jobs:
         run: |
           npm run typecheck --workspace=apps/server -- --project scripts/tsconfig.operator-draft-retention.json
           node --import tsx --test apps/server/scripts/operator-draft-retention.test.ts apps/server/scripts/operator-workspace-sort.test.ts
+      - name: Verify reply capability authorization and local guard
+        if: matrix.check == 'test'
+        run: |
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.reply-capability-runtime.json
+          node --import tsx --test apps/server/scripts/reply-capability-runtime.test.ts
       - name: Verify bounded operational metrics
         if: matrix.check == 'test'
         run: |

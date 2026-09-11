@@ -13,6 +13,7 @@ import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue
 import { useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
+import { AuthenticatedAttachmentImage } from '../components/AuthenticatedAttachmentImage';
 import { RichComposer, SafeMarkdown } from '../components/RichComposer';
 import { ApiError, dashboardApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -631,30 +632,40 @@ function TicketDetail({ id }: { id: string }) {
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <SafeMarkdown className="break-words text-sm leading-relaxed [&_p]:mb-3 [&_pre]:my-3 [&_ul]:ml-5 [&_ul]:list-disc [&_ol]:ml-5 [&_ol]:list-decimal" children={article.body ?? ''} />
+                  {/* Existing articles have no declared Markdown format; preserve their literal content. */}
+                  <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{article.body ?? ''}</div>
 
                   {/* Attachments */}
                   {article.attachments && article.attachments.length > 0 && (
                     <div className="mt-3 space-y-2">
-                      {article.attachments.map((att: any) => (
-                        <TocynButton
-                          key={att.id}
-                          onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, att.filename || att.file_name); }}
-                          className={clsx(
-                            "flex w-full cursor-pointer hover:opacity-80 items-center gap-2 p-2 rounded-lg text-sm",
-                            article.sender_type === 'agent'
-                              ? "bg-brand-700/50 text-white"
-                              : "bg-gray-50 text-gray-700 border border-gray-100",
-                            article.is_internal && "!bg-amber-100/50 !text-amber-900 border border-amber-200/50"
-                          )}
-                        >
-                          <Paperclip className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate flex-1 text-left">{att.filename || att.file_name || 'Attachment'}</span>
-                          <span className="text-xs opacity-75">
-                            {attachmentSize(att.size ?? att.file_size)}
-                          </span>
-                        </TocynButton>
-                      ))}
+                      {article.attachments.map((att: any) => {
+                        const filename = att.filename || att.file_name || 'Attachment';
+                        return <div key={att.id}>
+                          <TocynButton
+                            onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, filename); }}
+                            className={clsx(
+                              "flex w-full cursor-pointer hover:opacity-80 items-center gap-2 p-2 rounded-lg text-sm",
+                              article.sender_type === 'agent'
+                                ? "bg-brand-700/50 text-white"
+                                : "bg-gray-50 text-gray-700 border border-gray-100",
+                              article.is_internal && "!bg-amber-100/50 !text-amber-900 border border-amber-200/50"
+                            )}
+                          >
+                            <Paperclip className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate flex-1 text-left">{filename}</span>
+                            <span className="text-xs opacity-75">
+                              {attachmentSize(att.size ?? att.file_size)}
+                            </span>
+                          </TocynButton>
+                          <AuthenticatedAttachmentImage
+                            ticketId={id}
+                            attachmentId={att.id}
+                            filename={filename}
+                            contentType={att.contentType ?? att.content_type}
+                            size={att.size ?? att.file_size}
+                          />
+                        </div>;
+                      })}
                     </div>
                   )}
 

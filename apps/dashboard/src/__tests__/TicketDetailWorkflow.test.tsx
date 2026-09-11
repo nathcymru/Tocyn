@@ -32,7 +32,7 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
       const body=JSON.parse(String(options.body));
       return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,attachments:body.attachments,baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
     }
-    if(path.startsWith('/api/tickets/')||path==='/api/attachments/upload')return handle(path,options);
+    if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/'))return handle(path,options);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
     if(path==='/api/users/agents')return json([{id:'assigned-agent',full_name:'Assigned agent'}]);
     if(path==='/api/settings')return json({});
@@ -68,6 +68,26 @@ it('converts the legacy attachment byte field when canonical size is absent', as
   })) };
   transport(() => json(data)); showDetail();
   expect(await screen.findByRole('button', { name: /legacy\.txt/ })).toHaveTextContent('2 KB');
+});
+
+it('previews an article raster attachment only through its authenticated download endpoint', async () => {
+  const data = { ...ticket, articles: ticket.articles.map(article => ({ ...article,
+    attachments: [{ id: 'image-fixture', filename: 'article-image.png', size: 15, contentType: 'image/png' }],
+  })) };
+  const createObjectURL = vi.fn(() => 'blob:article-image');
+  const NativeURL = URL;
+  vi.stubGlobal('URL', class extends NativeURL { static createObjectURL = createObjectURL; static revokeObjectURL = vi.fn(); });
+  transport((path) => path === '/api/attachments/image-fixture/download'
+    ? new Response('synthetic-image', { status: 200, headers: { 'Content-Type': 'image/png' } })
+    : json(data));
+  showDetail();
+  expect(await screen.findByRole('button', { name: 'Preview image article-image.png' })).toBeTruthy();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/attachments/image-fixture/download'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Preview image article-image.png' }));
+  await screen.findByRole('img', { name: 'Preview of article-image.png' });
+  const request = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/attachments/image-fixture/download'));
+  expect(new Headers(request?.[1]?.headers).get('Authorization')).toBe('Bearer synthetic-operator-session');
+  expect(createObjectURL).toHaveBeenCalledWith(expect.objectContaining({ type: 'image/png' }));
 });
 
 it('snapshots native file selection before clearing the input and preserves explicit removal focus', async () => {

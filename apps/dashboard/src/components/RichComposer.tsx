@@ -1,5 +1,6 @@
 import MDEditor from '@uiw/react-md-editor';
 import ReactMarkdown from 'react-markdown';
+import rehypePrism from 'rehype-prism-plus';
 import rehypeSanitize from 'rehype-sanitize';
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
 
@@ -77,7 +78,7 @@ function safeLink(url: string) {
 export function SafeMarkdown({ children, className = '' }: { children: string; className?: string }) {
   return <div className={className}><ReactMarkdown
     skipHtml
-    rehypePlugins={[rehypeSanitize]}
+    rehypePlugins={[rehypeSanitize, [rehypePrism, { ignoreMissing: true }]]}
     urlTransform={(url, key) => key === 'href' ? safeLink(url) : undefined}
     components={{
       a: ({ href, children: linkChildren }) => href
@@ -88,8 +89,8 @@ export function SafeMarkdown({ children, className = '' }: { children: string; c
       img: ({ alt }) => <span role="note" className="italic">[Image omitted{alt ? `: ${alt}` : ''}]</span>,
       p: ({ children: paragraphChildren }) => <div className="mb-3">{paragraphChildren}</div>,
       code: ({ className: codeClassName, children: codeChildren, ...props }) => codeClassName
-        ? <code {...props} className={`${codeClassName} block overflow-x-auto rounded bg-slate-950 p-3 font-mono text-xs text-slate-50`}>{codeChildren}</code>
-        : <code {...props} className="rounded bg-slate-200 px-1 font-mono text-[0.9em]">{codeChildren}</code>,
+        ? <code {...props} className={`${codeClassName} tocyn-markdown-code-block`}>{codeChildren}</code>
+        : <code {...props} className="tocyn-markdown-code-inline">{codeChildren}</code>,
     }}
   >{children}</ReactMarkdown></div>;
 }

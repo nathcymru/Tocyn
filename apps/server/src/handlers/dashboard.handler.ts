@@ -21,6 +21,8 @@ import { SupportStateError } from '../repositories/support-state.repository';
 import { MutationInputError, mutationInputErrorBody, readMutationJson } from './mutation-request';
 import { requestBounds } from '../middleware/request-bounds';
 import workspace from "./operator-workspace.handler";
+import { replyCapability } from '../services/reply-capability';
+import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminatick/shared';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -477,6 +479,26 @@ dashboard.get("/tickets/:id", async (c) => {
 });
 
 /**
+ * Describe the existing dashboard reply paths without disclosing a recipient,
+ * provider configuration, or inferring a delivery route from intake provenance.
+ */
+dashboard.get('/tickets/:id/reply-capability', async (c) => {
+  const ticketId = c.req.param('id');
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  const agent = c.get('jwtPayload') as JWTPayload;
+  const ticket = await d.repositories.tickets.get(ticketId);
+  if (!ticket) return c.json({ error: 'Ticket not found' }, 404);
+
+  // Keep the same live group boundary as the corresponding reply mutation.
+  if (agent.role === 'agent' && ticket.group_id
+    && !await d.repositories.groups.isMember(ticket.group_id, agent.sub)) {
+    return c.json({ error: 'Forbidden', message: 'You do not have access to this ticket\'s group' }, 403);
+  }
+
+  return c.json(replyCapability(ticket.id));
+});
+
+/**
  * POST /api/tickets/:id/articles
  * Add a new article (agent response or internal note) to a ticket
  */
@@ -776,7 +798,7 @@ dashboard.post('/attachments/upload', async (c) => {
   const payload = c.get('jwtPayload');
   const d = c.get('tenantDeps') as TenantRequestDeps;
 
-  const MAX_FILE_SIZE = 10 * 1024 * 1024;
+  const MAX_FILE_SIZE = REPLY_ATTACHMENT_RULES.maxBytesPerFile;
   const contentLength = parseInt(c.req.header('content-length') || '0', 10);
   if (contentLength > MAX_FILE_SIZE) {
     return c.json({ error: 'Payload too large. Maximum size is 10MB.' }, 413);
@@ -796,8 +818,7 @@ dashboard.post('/attachments/upload', async (c) => {
     return c.json({ error: 'File too large. Maximum size is 10MB.' }, 413);
   }
 
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/csv'];
-  if (!allowedTypes.includes(file.type)) {
+  if (!(REPLY_ATTACHMENT_CONTENT_TYPES as readonly string[]).includes(file.type)) {
     return c.json({ error: 'Unsupported file type. Please upload images, PDFs, or text files.' }, 415);
   }
 

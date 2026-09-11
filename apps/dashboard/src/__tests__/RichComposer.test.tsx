@@ -22,7 +22,19 @@ it('renders Markdown without executing HTML, unsafe links, or remote images', ()
   expect(document.querySelector('[onerror]')).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'unsafe' })).not.toBeInTheDocument();
   expect(screen.getByText('[Image omitted: remote]')).toBeInTheDocument();
-  expect(screen.getByText('const safe = true;')).toBeInTheDocument();
+  expect(document.querySelector('pre code')).toHaveTextContent('const safe = true;');
+});
+
+it('highlights supported fenced code after sanitization and leaves code HTML as text', () => {
+  const { container } = render(<SafeMarkdown>{'```ts\nconst safe = true;\n```\n\n```not-a-language\n<img src="https://tracker.invalid/pixel" onerror="alert(1)">\n```'}</SafeMarkdown>);
+  const highlighted = container.querySelector('code.language-ts');
+  expect(highlighted).toHaveClass('code-highlight', 'tocyn-markdown-code-block');
+  expect(highlighted?.querySelector('.token.keyword')).toHaveTextContent('const');
+  const fallback = container.querySelector('code.language-not-a-language');
+  expect(fallback).toHaveTextContent('<img src="https://tracker.invalid/pixel" onerror="alert(1)">');
+  expect(fallback?.querySelector('.token')).toBeNull();
+  expect(container.querySelector('img')).toBeNull();
+  expect(container.querySelector('[onerror]')).toBeNull();
 });
 
 it('keeps approved HTTP links readable and isolated from the opener', () => {

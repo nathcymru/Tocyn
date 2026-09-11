@@ -245,3 +245,4 @@ export interface UpdateArticleArgs {
 }
 
 export * from "./cost-policy";
+export * from './src/reply-capability';
