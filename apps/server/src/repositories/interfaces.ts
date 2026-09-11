@@ -10,6 +10,8 @@ import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 import type { SupportStateRepository } from './support-state.repository';
 import type { SlaClockRepository } from './sla-clock.repository';
 import type { TicketListCurrentCredential, TicketListScanSnapshot } from './ticket-list-scan.repository';
+import type { TicketQueueRepository } from './ticket-queue.repository';
+import type { TicketQueueKey } from '../types/ticket-queue';
 
 export interface UserRepository {
   revokeSessions(id: string): Promise<void>;
@@ -45,7 +47,7 @@ export interface TicketRepository {
   completeRetention(id: string, token: string): Promise<boolean>;
   withExternalWrite<T>(id: string, operation: () => Promise<T>, fenceStatements?: () => readonly D1PreparedStatement[]): Promise<T>;
 
-  list(options: {page?: number; limit?: number; filterId?: string; status?: string; priority?: string; assignedTo?: string; groupId?: string; ticketNo?: string; search?: string; customerEmail?: string; sort?: OperatorWorkspaceSort; viewer?: { role: 'admin' | 'agent'; actorId: string }; scanFence?: TicketListScanSnapshot; currentCredential?: TicketListCurrentCredential}): Promise<{data:Ticket[]; total:number; meta:{total:number;page:number;limit:number;total_pages:number}}>;
+  list(options: {page?: number; limit?: number; filterId?: string; status?: string; priority?: string; assignedTo?: string; groupId?: string; ticketNo?: string; search?: string; customerEmail?: string; queue?: TicketQueueKey; sort?: OperatorWorkspaceSort; viewer?: { role: 'admin' | 'agent'; actorId: string }; scanFence?: TicketListScanSnapshot; currentCredential?: TicketListCurrentCredential}): Promise<{data:Ticket[]; total:number; meta:{total:number;page:number;limit:number;total_pages:number}}>;
   dashboardStats(): Promise<any>;
   findBySubject(subject: string): Promise<Ticket | null>;
   get(id: string): Promise<Ticket | null>;
@@ -170,6 +172,7 @@ export interface Repositories {
   groups: GroupRepository;
   ticketFilters: FilterRepository;
   supportStates: SupportStateRepository;
+  queues: TicketQueueRepository;
   slaClocks: SlaClockRepository;
   operatorWorkspace: OperatorWorkspaceRepository;
 }

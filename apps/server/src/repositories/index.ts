@@ -4,6 +4,9 @@ import { TicketMutationReplayRepository } from './ticket-mutation-replay.reposit
 import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 import { OperatorWorkspaceRepository } from './operator-workspace.repository';
 import { SupportStateRepository } from './support-state.repository';
+import { TicketQueueRepository } from './ticket-queue.repository';
+import { ticketQueuePredicate } from './ticket-queue-predicate';
+import type { TicketQueueKey } from '../types/ticket-queue';
 import { SlaClockRepository } from './sla-clock.repository';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
@@ -211,6 +214,8 @@ export class SqlTicketRepository implements TicketRepository {
       ticketNo?: string;
       search?: string;
       customerEmail?: string;
+      /** Server-owned support-state queue predicate; filters only refine it. */
+      queue?: TicketQueueKey;
       sort?: OperatorWorkspaceSort;
       /** Current dashboard viewers retain the same group rule as ticket detail. */
       viewer?: Readonly<{ role: 'admin' | 'agent'; actorId: string }>;
@@ -239,6 +244,13 @@ export class SqlTicketRepository implements TicketRepository {
       query += " AND customer_email = ?";
       countQuery += " AND customer_email = ?";
       params.push(options.customerEmail);
+    }
+
+    if (options.queue) {
+      const queue = ticketQueuePredicate(options.queue);
+      query += ` AND ${queue.sql}`;
+      countQuery += ` AND ${queue.sql}`;
+      params.push(...queue.values);
     }
 
     if (options.search) {
@@ -1124,13 +1136,14 @@ export class SqlRequestLimitRepository {
 }
 
 export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli, budgetBindingIdentity: object = db): Repositories {
+  const tickets = new SqlTicketRepository(scope, db, betaAdmission, canonicalMutationSli);
   return {
     budgetAuthority: new BudgetAuthorityRepository(db, scope, budgetBindingIdentity),
     sessionBudgetAuthority: new SessionBudgetAuthorityRepository(db, scope),
     requestLimits: new SqlRequestLimitRepository(scope, db),
     knowledge: new SqlKnowledgeRepository(scope, db),
     users: new SqlUserRepository(scope, db),
-    tickets: new SqlTicketRepository(scope, db, betaAdmission, canonicalMutationSli),
+    tickets,
     articles: new SqlArticleRepository(scope, db),
     attachments: new SqlAttachmentRepository(scope, db),
     channels: new SqlChannelsRepository(scope, db),
@@ -1141,6 +1154,7 @@ export function createRepositories(scope: VerifiedTenantScope, db: D1Database, b
     groups: new SqlGroupRepository(scope, db),
     ticketFilters: new SqlFilterRepository(scope, db),
     supportStates: new SupportStateRepository(db, scope, betaAdmission),
+    queues: new TicketQueueRepository(tickets),
     slaClocks: new SlaClockRepository(db, scope),
     operatorWorkspace: new OperatorWorkspaceRepository(scope, db, betaAdmission)
   };
