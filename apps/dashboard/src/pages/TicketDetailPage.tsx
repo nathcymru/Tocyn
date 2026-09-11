@@ -38,6 +38,7 @@ import {
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
 import { browserDateTimeLocalToInstant, browserInstantToDateTimeLocal } from '../utils/localDateTime';
+import type { KnowledgeDoc } from '../types';
 
 type PendingAttachment = Readonly<{
   id: string;
@@ -115,6 +116,11 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const [staleReplyReview, setStaleReplyReview] = useState<StaleReplyReview | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeDoc[]>([]);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [knowledgeError, setKnowledgeError] = useState(false);
+  const [knowledgeLoaded, setKnowledgeLoaded] = useState(false);
+  const [knowledgeInserting, setKnowledgeInserting] = useState<string | null>(null);
   const qaChanging = useRef(false);
   const [qaPending, setQaPending] = useState(false);
   const submission = useRef(false);
@@ -306,6 +312,42 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     }
   };
 
+  useEffect(() => {
+    if (workspace.panel !== 'details' || knowledgeLoaded || knowledgeLoading || knowledgeError) return;
+    let active = true;
+    setKnowledgeLoading(true);
+    void dashboardApi.get<KnowledgeDoc[]>('/knowledge/articles').then(articles => {
+      if (active) { setKnowledgeArticles(articles.filter(article => article.status === 'active' && (article.tier === 'answer' || article.tier === 'sop'))); setKnowledgeLoaded(true); }
+    }).catch(() => { if (active) setKnowledgeError(true); }).finally(() => { if (active) setKnowledgeLoading(false); });
+    return () => { active = false; };
+  }, [workspace.panel, knowledgeLoaded, knowledgeLoading, knowledgeError]);
+
+  const insertKnowledgeArticle = async (article: KnowledgeDoc) => {
+    if (knowledgeInserting || submission.current || isSubmitting || draft.status === 'loading') return;
+    setKnowledgeInserting(article.id);
+    setChangeError(null);
+    try {
+      const source = await dashboardApi.get<{ content: string }>(`/knowledge/articles/${encodeURIComponent(article.id)}/content`);
+      const content = source.content.trim();
+      if (!content) { setChangeError('This knowledge article has no insertable content.'); return; }
+      const nextBody = reply.trim() ? `${reply.replace(/\s+$/, '')}\n\n${content}` : content;
+      updateDraft({ body: nextBody });
+      setNotice(`Inserted knowledge: ${article.title}`);
+      requestAnimationFrame(() => {
+        const editor = document.getElementById('reply-message') as HTMLTextAreaElement | null;
+        editor?.focus();
+        editor?.setSelectionRange(nextBody.length, nextBody.length);
+      });
+    } catch (error) {
+      setChangeError(error instanceof ApiError && [401, 403, 404].includes(error.status)
+        ? 'Knowledge content is unavailable for this tenant or session.'
+        : 'Knowledge content could not be loaded. Try again.');
+      } finally { setKnowledgeInserting(null); }
+    };
+
+  
+  const submitSupportState = async (event: React.FormEvent) => {
+    event.preventDefault();
   const submitSupportState = async (event?: React.FormEvent, snoozedUntilOverride?: string | null) => {
     event?.preventDefault();
     if (supportStateFlight.current) return;
@@ -1260,9 +1302,20 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
           <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
             <span className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-slate-400" />Knowledge</span>
           </summary>
-          <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-            Knowledge search and insertion are unavailable until the knowledge integration is connected.
-          </p>
+          <div className="mt-4 space-y-3">
+            <p id="knowledge-insert-help" role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              {knowledgeLoading ? 'Loading tenant knowledge…' : knowledgeError ? 'Knowledge is temporarily unavailable. No content was inserted.' : knowledgeArticles.length ? 'Select an article to append its verified content to the reply.' : 'No eligible internal knowledge articles are available.'}
+            </p>
+            {knowledgeError && <TocynButton type="button" onClick={() => { setKnowledgeError(false); setKnowledgeLoaded(false); }} className="text-sm underline">Retry knowledge</TocynButton>}
+            {knowledgeArticles.length > 0 && <ul aria-describedby="knowledge-insert-help" className="space-y-2">
+              {knowledgeArticles.map(article => <li key={article.id}>
+                <TocynButton type="button" aria-disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} aria-label={`Insert ${article.title} into reply`}
+                  onClick={() => void insertKnowledgeArticle(article)} className="w-full justify-start rounded border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-50">
+                  {knowledgeInserting === article.id ? `Loading ${article.title}…` : `Insert ${article.title}`}
+                </TocynButton>
+              </li>)}
+            </ul>}
+          </div>
         </details>
 
         <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 animate-in slide-in-from-right-4">
