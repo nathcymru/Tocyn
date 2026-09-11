@@ -445,7 +445,15 @@ function TicketDetail({ id }: { id: string }) {
         setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.');
         return;
       }
-      await refetch({ throwOnError: true });
+      const refreshed = await refetch({ throwOnError: true });
+      // Article reads are ascending. Do not acknowledge a revision until the
+      // operator has deliberately loaded the bounded remaining pages, so the
+      // newest material is actually on screen for review.
+      if (refreshed.data?.pages.at(-1)?.pagination?.has_more) {
+        setStaleReplyReview('retry');
+        setReplyError('More messages are available. Load them, then refresh and review the conversation before rebasing. Your draft is retained.');
+        return;
+      }
       const after = await replyCapabilities.refetch({ throwOnError: true });
       const afterCollision = after.data?.collision;
       if (!afterCollision) {
