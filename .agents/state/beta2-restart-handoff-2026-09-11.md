@@ -1,3 +1,9 @@
+## Accepted integration and Spark recovery — 11 September, 19:35 BST
+
+PR210 accepted as signed/verified438cfff2b02c654aa573959a28c2436ccdace095. Required CI34630864486 and CodeQL34630861165 passed; exact tested/accepted tree e789c9233aa591c1a29d8ec85f125e1b27808d5c. Review-count-only standing bypass used, zero Copilot requests, no unresolved threads. Source221 closed; #64 receipt5638994440 preserves remaining acceptance and progress. PR216 refreshed onto acceptedmain, preserving all runtime checks. New native credential-race/rollback regressions2/2 and runtime TypeScript pass. PR219 refreshed separately; inbox conflict recovery tests13/13 passed in the isolated worker tree. Required refreshed CI remains mandatory. #64/#128/#140 remain open.
+
+Spark five-hour allowance exhausted, reset12September00:15:56BST; three workers stopped with partial edits preserved. See spark-delivery-routing.md for actual access failure, remediation and validation. No extra capacity or reset used. Existing guarded inbox preview5190/8899 remains running. Historical /Users/ty/Documents/Tocyn checkout is preserved. Next: push coherent216/219 refreshes, verify exact-revision CI, finish remaining #64 resource evidence; publish forecasts only after their blob is accepted on main.
+
 # Beta.2 restart handoff — 11 September 2026, 18:12 BST
 
 **Owner resumed delivery after restart on 11 September 2026.** Recurring checkpoint automation is ACTIVE. The goal UI still reports paused; no tool is available to change that status, but authorized delivery has resumed. This supersedes the 17:30 checkpoint for current execution state. No approval is missing. No production, provider, paid API or Copilot review.
