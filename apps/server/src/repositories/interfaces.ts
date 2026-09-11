@@ -1,4 +1,5 @@
 import type { SessionBudgetAuthorityRepository } from './session-budget-authority.repository';
+import type { D1PreparedStatement } from '@cloudflare/workers-types';
 import type { BudgetAuthorityRepository } from './budget-authority.repository';
 import type { ConversationActor } from '../types/conversation-audit';
 import { SqlKnowledgeRepository } from './knowledge.repository';
@@ -41,7 +42,7 @@ export interface TicketRepository {
   claimRetention(id: string, cutoff: string): Promise<{ token: string } | null>;
   releaseClaim(id: string, token: string): Promise<void>;
   completeRetention(id: string, token: string): Promise<boolean>;
-  withExternalWrite<T>(id: string, operation: () => Promise<T>): Promise<T>;
+  withExternalWrite<T>(id: string, operation: () => Promise<T>, fenceStatements?: () => readonly D1PreparedStatement[]): Promise<T>;
 
   list(options: {page?: number; limit?: number; filterId?: string; status?: string; priority?: string; assignedTo?: string; groupId?: string; ticketNo?: string; search?: string; customerEmail?: string; sort?: OperatorWorkspaceSort}): Promise<{data:Ticket[]; total:number; meta:{total:number;page:number;limit:number;total_pages:number}}>;
   dashboardStats(): Promise<any>;
@@ -75,6 +76,8 @@ export interface ArticleRepository {
   /** Five newest rows, newest-first, with inline bytes projected before D1 returns them. */
   listRecentAiSuggestionMessages(ticketId: string): Promise<AiSuggestionMessage[]>;
   updateQAState(id: string, type: string | null, chunkCount: number): Promise<void>;
+  updateQAStateStatement(id: string, type: string | null, chunkCount: number): D1PreparedStatement;
+  updateQAStateRequiredStatements(id: string, type: string | null, chunkCount: number): readonly D1PreparedStatement[];
   findByRawEmailId(rawEmailId: string): Promise<Article | null>;
   getRecentCustomerArticleCount(customerId: string, since: string): Promise<number>;
   get(id: string): Promise<Article | null>;

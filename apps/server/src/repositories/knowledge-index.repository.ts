@@ -1,5 +1,8 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
+import type { KnowledgeSourceCommitFence } from '../budgets/knowledge-source-admission.service';
+import { staffMutationStatements } from './staff-ticket-mutation.repository';
+import { budgetGrantOperationStatements } from './budget-commit-fence';
 
 export const KNOWLEDGE_INDEX_CHUNK_BYTES = 512;
 // 127 four-byte scalars plus one ASCII scalar consume 509 bytes; a following
@@ -13,6 +16,13 @@ const encoder = new TextEncoder();
 export type KnowledgeIndexChunk = Readonly<{ index: number; text: string; vectorId: string }>;
 export type KnowledgeIndexVersion = Readonly<{ version: number; state: string; chunk_count: number; file_path: string; tier: 'answer'|'sop'; category_id: string | null; source_kind: 'document'|'article'; source_bytes: number }>;
 export type KnowledgeManifestPreparation = Readonly<{ version: number; filePath: string; tier: 'answer'|'sop'; categoryId: string | null; sourceKind: 'document'|'article'; sourceBytes: number; sourceOffset: number; chunkIndex: number }>;
+
+/** Current staff/session plus the exact locally-spent operation. Every source
+ * D1 mutation places these predicates in its own atomic batch. */
+export function knowledgeSourceFenceStatements(db: D1Database, scope: VerifiedTenantScope,
+  fence: KnowledgeSourceCommitFence): readonly D1PreparedStatement[] {
+  return [staffMutationStatements(db,scope,fence)[0],...budgetGrantOperationStatements(db,scope,fence.authority)];
+}
 
 /** Splits valid JS text only at UTF-8 code-point boundaries; no source bytes are dropped. */
 export function splitKnowledgeIndexText(text: string): readonly string[] {
@@ -71,7 +81,8 @@ export class KnowledgeIndexRepository {
   constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope) {}
 
   async begin(documentId: string, filePath: string, tier: 'answer'|'sop', categoryId: string | null, sourceBytes: number,
-    sourceKind: 'document'|'article' = 'document'): Promise<{ version: number; filePath: string }> {
+    sourceKind: 'document'|'article' = 'document', fence?: KnowledgeSourceCommitFence,
+    sourceStatements: readonly D1PreparedStatement[] = []): Promise<{ version: number; filePath: string }> {
     if (!validSourceBytes(sourceBytes)) throw new Error('Invalid knowledge source size');
     const latest = await this.db.prepare(`SELECT COALESCE(MAX(version),0) AS version FROM knowledge_index_versions
       WHERE tenant_id=? AND document_id=?`).bind(this.scope.tenantId, documentId).first<{ version: number }>();
@@ -81,7 +92,10 @@ export class KnowledgeIndexRepository {
     // This intentionally does not update historical rows. Old sources remain
     // visible until a new manifest is indexed, then cleanup proceeds in 100-row
     // claims; version history can therefore never enlarge this request.
+    if (sourceStatements.length > 2) throw new Error('Knowledge source mutation statement bound exceeded');
     await this.db.batch([
+      ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence) : []),
+      ...sourceStatements,
       this.db.prepare(`INSERT INTO knowledge_index_versions
         (tenant_id,document_id,version,file_path,tier,category_id,source_kind,state,chunk_count,source_bytes) VALUES (?,?,?,?,?,?,?,'source_pending',0,?)`)
         .bind(this.scope.tenantId, documentId, version, versionFilePath, tier, categoryId, sourceKind, sourceBytes),
@@ -92,14 +106,23 @@ export class KnowledgeIndexRepository {
   }
 
   /** Source storage completed. The fixed preparation job is now recoverable. */
-  async sourceCaptured(documentId: string, version: number): Promise<boolean> {
+  async sourceCaptured(documentId: string, version: number, fence?: KnowledgeSourceCommitFence,
+    sourceStatements: readonly D1PreparedStatement[] = []): Promise<boolean> {
+    if (sourceStatements.length > 2) throw new Error('Knowledge source mutation statement bound exceeded');
+    const prefix = fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence) : [];
     const result = await this.db.batch([
+      ...prefix,
       this.db.prepare(`UPDATE knowledge_index_versions SET state='preparing'
         WHERE tenant_id=? AND document_id=? AND version=? AND state='source_pending'`).bind(this.scope.tenantId, documentId, version),
+      this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
+        ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId),
       this.db.prepare(`UPDATE knowledge_index_jobs SET state='preparing',dispatch_attempts=0
         WHERE tenant_id=? AND document_id=? AND version=? AND state='source_pending'`).bind(this.scope.tenantId, documentId, version),
+      this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
+        ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId),
+      ...sourceStatements,
     ]);
-    return result[0].meta.changes === 1 && result[1].meta.changes === 1;
+    return result[prefix.length].meta.changes === 1 && result[prefix.length + 2].meta.changes === 1;
   }
 
   async preparation(documentId: string, version: number): Promise<KnowledgeManifestPreparation | null> {
@@ -139,11 +162,17 @@ export class KnowledgeIndexRepository {
     statements.push(this.db.prepare(`UPDATE knowledge_index_jobs SET next_source_offset=?,next_chunk_index=?,state=?,dispatch_attempts=0
       WHERE tenant_id=? AND document_id=? AND version=? AND state='preparing' AND next_source_offset=? AND next_chunk_index=?`)
       .bind(nextOffset, ready ? 0 : nextIndex, ready ? 'pending' : 'preparing', this.scope.tenantId, documentId, preparation.version, preparation.sourceOffset, preparation.chunkIndex));
+    // A stale/superseded cursor must fail this transaction so the preceding
+    // chunk inserts cannot survive without their cursor advancement.
+    statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
+      ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId));
     statements.push(this.db.prepare(`UPDATE knowledge_index_versions SET state=?,chunk_count=?
       WHERE tenant_id=? AND document_id=? AND version=? AND state='preparing'`)
       .bind(ready ? 'pending' : 'preparing', nextIndex, this.scope.tenantId, documentId, preparation.version));
+    statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN changes()=1 THEN 1 ELSE 0 END)
+      ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId));
     const result = await this.db.batch(statements);
-    if (result[result.length - 2].meta.changes !== 1 || result[result.length - 1].meta.changes !== 1) return 'stale';
+    if (result[result.length - 4].meta.changes !== 1 || result[result.length - 2].meta.changes !== 1) return 'stale';
     return ready ? 'ready' : 'next';
   }
 

@@ -10,7 +10,7 @@ import { AppVariables } from '../types';
 import { z } from 'zod';
 import { admitHttpAi } from '../budgets/http-ai-admission.service';
 import { ticketMutationAdmissionMode } from '../middleware/budget-admission.middleware';
-import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_MAX_BYTES } from '../budgets/knowledge-source-admission.service';
+import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_MAX_BYTES, KnowledgeSourceAdmissionError, type KnowledgeSourceAdmission } from '../budgets/knowledge-source-admission.service';
 
 const staffSuggestionFallback = "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
 
@@ -36,17 +36,20 @@ async function dispatchPendingDocumentCleanup(c: any, service: TenantKnowledgeSe
   catch { /* the durable cleanup target remains recoverable */ }
 }
 
-async function admitSourceOrResponse(c: any, sourceBytes: number, sourceKind: 'document'|'article'|'qa'): Promise<Response | null> {
+async function admitSourceOrResponse(c: any, sourceBytes: number, sourceKind: 'document'|'article'|'qa'): Promise<Response | KnowledgeSourceAdmission> {
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const outcome = await admitKnowledgeSourceWrite({ env: c.env, deps, payload: c.get('jwtPayload'), sourceBytes, sourceKind,
     now: () => c.env.localNow?.() ?? Date.now() });
-  if (outcome.status === 'admitted' || outcome.status === 'disabled') return null;
+  if (outcome.status === 'admitted' || outcome.status === 'disabled') return outcome;
   return outcome.reason === 'exhausted'
     ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
     : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
 }
 
 knowledgeHandler.onError((error, c) => {
+  if (error instanceof KnowledgeSourceAdmissionError) {
+    return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  }
   if (error.message === 'Maximum tag stripping depth exceeded: possible malicious input') {
     return c.json({ error: 'Content exceeds supported markup depth' }, 422);
   }
@@ -109,13 +112,15 @@ knowledgeHandler.post('/articles/:id/qa', async (c) => {
   if (!parsed.success) return c.json({ error: 'Invalid QA marker type' }, 400);
   const { type } = parsed.data;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  let sourceAdmission: KnowledgeSourceAdmission | undefined;
   if (type) {
     const admission = await admitSourceOrResponse(c, KNOWLEDGE_SOURCE_MAX_BYTES, 'qa');
-    if (admission) return admission;
+    if (admission instanceof Response) return admission;
+    sourceAdmission = admission;
   }
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
-  await service.markArticleAsQA(id, type);
+  await service.markArticleAsQA(id, type, sourceAdmission);
   if (type) await dispatchPendingIndex(c, service, id, 'qa_index');
   return type ? c.json({ success: true, indexing: 'pending' }, 202) : c.json({ success: true });
 });
@@ -150,8 +155,8 @@ knowledgeHandler.post('/', async (c) => {
   const content = new Uint8Array(await file.arrayBuffer());
   if (content.byteLength > KNOWLEDGE_SOURCE_MAX_BYTES) return c.json({ error: 'Knowledge source exceeds 10 MiB' }, 422);
   const admission = await admitSourceOrResponse(c, content.byteLength, 'document');
-  if (admission) return admission;
-  const docId = await service.uploadAndProcess(title, file.name, content, file.type);
+  if (admission instanceof Response) return admission;
+  const docId = await service.uploadAndProcess(title, file.name, content, file.type, undefined, undefined, admission);
   await dispatchPendingIndex(c, service, docId);
 
   return c.json({ id: docId, indexing: 'pending' }, 202);
@@ -245,10 +250,10 @@ knowledgeHandler.post('/articles', async (c) => {
   if (sourceBytes > KNOWLEDGE_SOURCE_MAX_BYTES) return c.json({ error: 'Knowledge source exceeds 10 MiB' }, 422);
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const admission = await admitSourceOrResponse(c, sourceBytes, 'article');
-  if (admission) return admission;
+  if (admission instanceof Response) return admission;
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
-  const id = await service.createArticle(title, content, category_id || null, tier);
+  const id = await service.createArticle(title, content, category_id || null, tier, admission);
   await dispatchPendingIndex(c, service, id);
   return c.json({ id, indexing: 'pending' }, 202);
 });
@@ -266,10 +271,10 @@ knowledgeHandler.put('/articles/:id', async (c) => {
   if (sourceBytes > KNOWLEDGE_SOURCE_MAX_BYTES) return c.json({ error: 'Knowledge source exceeds 10 MiB' }, 422);
   const deps = c.get('tenantDeps') as TenantRequestDeps;
   const admission = await admitSourceOrResponse(c, sourceBytes, 'article');
-  if (admission) return admission;
+  if (admission instanceof Response) return admission;
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
-  await service.updateArticle(id, title, content, category_id || null, tier);
+  await service.updateArticle(id, title, content, category_id || null, tier, admission);
   await dispatchPendingIndex(c, service, id);
   return c.json({ success: true, indexing: 'pending' }, 202);
 });

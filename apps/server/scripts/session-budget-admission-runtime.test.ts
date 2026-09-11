@@ -14,8 +14,10 @@ import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.se
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
 import { admitKnowledgeSourceWrite } from '../src/budgets/knowledge-source-admission.service';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
+import { createTenantRequestDeps } from '../src/middleware/tenant.middleware';
+import { TenantKnowledgeService } from '../src/services/tenant-knowledge.service';
 
-const NOW = Date.UTC(2026, 8, 11, 10, 0, 0);
+const NOW = Math.floor(Date.now()/1_000)*1_000;
 const root = resolve(import.meta.dirname, '..');
 
 /** Real D1/DO adapter proof; token signature verification and dashboard HTTP wiring are not claimed here. */
@@ -23,6 +25,7 @@ async function fixture(workerLimit = 1_000) {
   const bundled = await build({ entryPoints: ['scripts/budget-coordinator-do-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'session-budget-proof', modules: true,
     compatibilityDate: '2024-04-03', script: bundled.outputFiles[0].text, d1Databases: { DB: 'session-budget-d1' },
+    r2Buckets: { ATTACHMENTS_BUCKET: 'session-budget-r2' },
     durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' }, unsafeEphemeralDurableObjects: true,
   }] }));
   try {
@@ -169,6 +172,87 @@ test('knowledge source admission rejects a newly revoked current staff session b
     assert.equal((await admitKnowledgeSourceWrite({ env, deps, payload, sourceBytes: 1_024, sourceKind: 'article', now: () => NOW })).status, 'rejected');
     assert.deepEqual(f.calls, before, 'revocation is rejected before a source write can be composed');
   } finally { await f.mf.dispose(); }
+});
+
+for (const [label, mutation] of [
+  ['revoked staff session', "UPDATE users SET session_version=2 WHERE tenant_id='tenant-a' AND id='shared-actor'"],
+] as const) test(`knowledge source commit rejects ${label} after admission with no source side effect`,async()=>{
+  const f=await fixture(); try {
+    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET');
+    const scope=f.scopeFor('tenant-a');
+    const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
+    const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
+      exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
+    const admission=await admitKnowledgeSourceWrite({env:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:f.namespace} as any,
+      deps,payload,sourceBytes:12,sourceKind:'article',now:()=>NOW});
+    assert.equal(admission.status,'admitted');
+    await f.db.prepare(mutation).run();
+    const service=new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array.from({length:1024},()=>0)} as any);
+    await assert.rejects(service.uploadAndProcess('Denied','source.txt',new TextEncoder().encode('source bytes'),'text/plain',undefined,undefined,admission));
+    assert.equal((await f.db.prepare("SELECT count(*) count FROM knowledge_docs WHERE tenant_id='tenant-a'").first<{count:number}>())?.count,0);
+    assert.equal((await f.db.prepare("SELECT count(*) count FROM knowledge_index_versions WHERE tenant_id='tenant-a'").first<{count:number}>())?.count,0);
+    assert.equal((await bucket.list()).objects.length,0);
+  } finally {await f.mf.dispose();}
+});
+
+test('article update rejects an owner policy edit after admission without changing metadata or storage',async()=>{
+  const f=await fixture(); try {
+    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
+    await deps.repositories.knowledge.createDocument({id:'existing-doc',title:'Original',file_path:'knowledge/existing-doc/original',tier:'answer'});
+    const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
+      exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
+    const admission=await admitKnowledgeSourceWrite({env:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:f.namespace} as any,
+      deps,payload,sourceBytes:12,sourceKind:'article',now:()=>NOW});
+    assert.equal(admission.status,'admitted');
+    await f.db.prepare("UPDATE budget_owner_policies SET policy_json=policy_json||' ' WHERE deployment_id='session-deployment' AND policy_id='session-policy'").run();
+    const service=new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array.from({length:1024},()=>0)} as any);
+    await assert.rejects(service.updateArticle('existing-doc','Changed','source bytes',null,'answer',admission));
+    assert.deepEqual(await f.db.prepare("SELECT title,file_path FROM knowledge_docs WHERE tenant_id='tenant-a' AND id='existing-doc'").first(),
+      {title:'Original',file_path:'knowledge/existing-doc/original'});
+    assert.equal((await f.db.prepare("SELECT count(*) count FROM knowledge_index_versions WHERE tenant_id='tenant-a'").first<{count:number}>())?.count,0);
+    assert.equal((await bucket.list()).objects.length,0);
+  } finally {await f.mf.dispose();}
+});
+
+test('knowledge source commit publishes one immutable source with durable exact-operation evidence',async()=>{
+  const f=await fixture(); try {
+    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
+    const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
+      exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
+    const admission=await admitKnowledgeSourceWrite({env:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:f.namespace} as any,
+      deps,payload,sourceBytes:12,sourceKind:'article',now:()=>NOW});
+    assert.equal(admission.status,'admitted');
+    const id=await new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array.from({length:1024},()=>0)} as any)
+      .createArticle('Admitted','source bytes',null,'answer',admission);
+    const document=await deps.repositories.knowledge.getDocument(id); assert.ok(document); assert.match(document.file_path,/\/versions\/1$/);
+    assert.ok(await deps.attachmentStorage.getAttachment(document.file_path));
+    assert.equal((await f.db.prepare("SELECT count(*) count FROM knowledge_index_versions WHERE tenant_id='tenant-a' AND document_id=? AND state='preparing'").bind(id).first<{count:number}>())?.count,1);
+    assert.equal((await f.db.prepare("SELECT count(*) count FROM budget_grant_operations WHERE tenant_id='tenant-a'").first<{count:number}>())?.count,1);
+  } finally {await f.mf.dispose();}
+});
+
+test('QA staging carries the admitted fence through the retention claim, R2 source and article publication',async()=>{
+  const f=await fixture(); try {
+    await f.db.batch([
+      f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('tenant-a','qa-ticket','QA','customer@example.test','dashboard')"),
+      f.db.prepare("INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,is_internal,intake_source) VALUES ('tenant-a','qa-article','qa-ticket','agent','qa source',0,'dashboard')"),
+    ]);
+    const bucket=await f.mf.getR2Bucket('ATTACHMENTS_BUCKET'),scope=f.scopeFor('tenant-a');
+    const deps=createTenantRequestDeps(scope,{DB:f.db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:{upsert:async()=>undefined},JWT_SECRET:'synthetic-test-secret'});
+    const payload={sub:'shared-actor',role:'agent' as const,tenant_id:'tenant-a',session_version:1,mfa_verified:true,
+      exp:NOW/1000+60,email:'tenant-a@example.test',iat:NOW/1000};
+    const admission=await admitKnowledgeSourceWrite({env:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:f.namespace} as any,
+      deps,payload,sourceBytes:10*1024*1024,sourceKind:'qa',now:()=>NOW});
+    assert.equal(admission.status,'admitted');
+    await new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array.from({length:1024},()=>0)} as any)
+      .markArticleAsQA('qa-article','answer',admission);
+    assert.deepEqual(await f.db.prepare("SELECT qa_type,chunk_count FROM articles WHERE tenant_id='tenant-a' AND id='qa-article'").first(),{qa_type:'answer',chunk_count:0});
+    const version=await f.db.prepare("SELECT file_path,state FROM knowledge_index_versions WHERE tenant_id='tenant-a' AND document_id='qa-article'").first<{file_path:string;state:string}>();
+    assert.equal(version?.state,'preparing'); assert.ok(version && await deps.attachmentStorage.getAttachment(version.file_path));
+    assert.equal((await f.db.prepare("SELECT count(*) count FROM ticket_cleanup_claims WHERE tenant_id='tenant-a' AND ticket_id='qa-ticket'").first<{count:number}>())?.count,0);
+  } finally {await f.mf.dispose();}
 });
 
 test('existing capability fences match the current owner/role/tenant/group contract and reject changed policy', async () => {
