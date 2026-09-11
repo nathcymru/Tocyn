@@ -13,6 +13,7 @@
     "budget-admission-runtime-entry.ts",
     "support-sla-admission-runtime.test.ts",
     "support-sla-mutation-receipts.test.ts",
+    "ticket-list-admission-runtime.test.ts",
     "operator-workspace-admission-runtime.test.ts",
     "operator-workspace-admission-runtime-entry.ts"
   ]

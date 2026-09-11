@@ -21,6 +21,7 @@
     "test:budget-coordinator-runtime": "tsx --test scripts/budget-coordinator-do-runtime.test.ts",
     "test:budget-authority-runtime": "tsx --test scripts/budget-authority-runtime.test.ts",
     "test:budget-grant-holder-runtime": "tsx --test scripts/budget-grant-holder-runtime.test.ts",
+    "typecheck:budget-admission-runtime": "tsc -p scripts/tsconfig.budget-runtime.json",
     "typecheck:tenant-isolation-storage-background": "tsc -p scripts/tsconfig.tenant-isolation-storage-background.json",
     "test:local-tenant-realtime": "node --import tsx scripts/local-tenant-realtime-smoke.mjs",
     "test:canonical-conversation": "tsx --test scripts/canonical-conversation.test.ts",
@@ -55,7 +56,7 @@
     "typecheck:combined-collision-runtime": "tsc -p scripts/tsconfig.combined-collision-runtime.json",
     "test:ui-combined-collision-browser": "tsx --test scripts/ui-combined-collision-browser.test.ts",
     "typecheck:ui-combined-collision-browser": "tsc -p scripts/tsconfig.ui-combined-collision-browser.json",
-    "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts scripts/customer-budget-admission-runtime.test.ts scripts/storage-admission-runtime.test.ts scripts/api-ticket-history-admission-runtime.test.ts scripts/api-ticket-detail-admission-runtime.test.ts scripts/http-ai-admission-runtime.test.ts scripts/http-ticket-read-admission-runtime.test.ts scripts/support-sla-admission-runtime.test.ts scripts/support-sla-mutation-receipts.test.ts scripts/operator-workspace-admission-runtime.test.ts"
+    "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts scripts/customer-budget-admission-runtime.test.ts scripts/storage-admission-runtime.test.ts scripts/api-ticket-history-admission-runtime.test.ts scripts/api-ticket-detail-admission-runtime.test.ts scripts/http-ai-admission-runtime.test.ts scripts/http-ticket-read-admission-runtime.test.ts scripts/support-sla-admission-runtime.test.ts scripts/support-sla-mutation-receipts.test.ts scripts/ticket-list-admission-runtime.test.ts scripts/operator-workspace-admission-runtime.test.ts"
   },
   "dependencies": {
     "@luminatick/shared": "*",
