@@ -16,6 +16,8 @@
     "ticket-list-admission-runtime.test.ts",
     "admin-settings-admission-runtime.test.ts",
     "saved-filter-admission-runtime-entry.ts",
-    "saved-filter-admission-runtime.test.ts"
+    "saved-filter-admission-runtime.test.ts",
+    "group-directory-admission-runtime-entry.ts",
+    "group-directory-admission-runtime.test.ts"
   ]
 }
