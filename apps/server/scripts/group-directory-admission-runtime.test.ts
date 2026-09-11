@@ -74,9 +74,9 @@ async function fixture(population=0,limit=10_000_000){
   }catch(error){await mf.dispose();throw error;}
 }
 
-async function request(mf:Miniflare,path:string,auth:string,init:RequestInit={}){
+async function request(mf:Miniflare,path:string,auth:string,init:{method?:string;body?:string;headers?:Record<string,string>}={}){
   const headers=new Headers(init.headers);headers.set('authorization',`Bearer ${auth}`);if(init.body)headers.set('content-type','application/json');
-  return mf.dispatchFetch(`http://runtime.test${path}`,{...init,headers});
+  return mf.dispatchFetch(`http://runtime.test${path}`,{...init,headers:Object.fromEntries(headers.entries())});
 }
 async function control(mf:Miniflare,body?:unknown){return(await(await mf.dispatchFetch('http://runtime.test/__group-directory-control',
   body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:undefined)).json()) as any;}
