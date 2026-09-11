@@ -5,11 +5,25 @@ import { sessionTicketBudgetAdmission, staffTicketAdmissionMode } from '../middl
 import { SessionBudgetAuthorityRepository, type SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
 import type { JWTPayload } from '../types';
 import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
+import type { OperatorWorkspaceCommit, WorkspaceAdmissionOperation } from '../repositories/operator-workspace.repository';
 
-export type WorkspaceAdmissionOperation = 'workspace.state.read'|'workspace.state.write'|'workspace.theme.read'|'workspace.theme.write'|'workspace.drafts.list'|'workspace.draft.read'|'workspace.draft.write'|'workspace.draft.rebase'|'workspace.draft.delete';
-export type WorkspaceAdmission = Readonly<{ status: 'disabled'|'admitted'|'rejected'; reason?: 'exhausted'|'unavailable' }>;
-const READ: ResourceAmounts = Object.freeze({ workerRequests: 1, d1RowsRead: 2_560, ...estimateDiagnosticEnvelope({ httpRequests: 1 }) });
+export type { WorkspaceAdmissionOperation } from '../repositories/operator-workspace.repository';
+
+export type WorkspaceAdmission = Readonly<{ status: 'disabled' } | { status: 'admitted'; commit: OperatorWorkspaceCommit }
+  | { status: 'rejected'; reason: 'exhausted'|'unavailable' }>;
+const READ: ResourceAmounts = Object.freeze({ workerRequests: 1, d1RowsRead: 2_560, ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
 const WRITE: ResourceAmounts = Object.freeze({ workerRequests: 1, d1RowsRead: 4_096, d1RowsWritten: 1_024, ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
+export const OPERATOR_WORKSPACE_ENVELOPES: Readonly<Record<WorkspaceAdmissionOperation, Readonly<ResourceAmounts>>> = Object.freeze({
+  'workspace.state.read': Object.freeze({ ...READ, d1RowsWritten: 4 }),
+  'workspace.state.write': WRITE,
+  'workspace.theme.read': READ,
+  'workspace.theme.write': WRITE,
+  'workspace.drafts.list': Object.freeze({ ...READ, d1RowsWritten: 128 }),
+  'workspace.draft.read': Object.freeze({ ...READ, d1RowsWritten: 128 }),
+  'workspace.draft.write': Object.freeze({ ...WRITE, r2ClassBOperations: 10 }),
+  'workspace.draft.rebase': WRITE,
+  'workspace.draft.delete': WRITE,
+});
 function valid(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value); }
 async function hash(parts: readonly unknown[]) { const value = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(parts))); return Array.from(new Uint8Array(value), byte => byte.toString(16).padStart(2, '0')).join(''); }
 
@@ -22,10 +36,18 @@ export async function admitOperatorWorkspace(input: { env: Env; deps: TenantRequ
   const credential: SessionBudgetCredential = { tenantId: input.deps.scope.tenantId, actorId: input.payload.sub, role: input.payload.role, sessionVersion: version!, expiresAt: input.payload.exp, mfaVerified: true };
   try {
     const sessions = new SessionBudgetAuthorityRepository(input.deps.database, input.deps.scope);
-    if (!await sessions.authorize(credential, input.ticketId ? { readTicketId: input.ticketId } : {}, input.now())) return { status: 'rejected', reason: 'unavailable' };
+    const requirements = input.ticketId ? { readTicketId: input.ticketId } : {};
+    if (!await sessions.authorize(credential, requirements, input.now())) return { status: 'rejected', reason: 'unavailable' };
+    const operationId = crypto.randomUUID();
+    const operationFingerprint = await hash(['workspace-v2',input.operation,input.deps.scope.tenantId,input.deps.scope.actorId,input.ticketId ?? null]);
     const outcome = await sessionTicketBudgetAdmission.admit({ repository: input.deps.repositories.budgetAuthority, sessions, namespace: input.env.BUDGET_COORDINATOR_DO, scope: input.deps.scope, credential,
-      requirements: input.ticketId ? { readTicketId: input.ticketId } : {}, intent: { operationId: crypto.randomUUID(), operationFingerprint: await hash(['workspace-v1',input.operation,input.deps.scope.tenantId,input.deps.scope.actorId,input.ticketId ?? null]), workScopeKey: input.operation },
-      business: input.operation.endsWith('.read') || input.operation === 'workspace.drafts.list' ? READ : WRITE, now: input.now });
-    return outcome.status === 'spent' || outcome.status === 'idempotent' ? { status: 'admitted' } : { status: 'rejected', reason: outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted' ? 'exhausted' : 'unavailable' };
+      requirements, intent: { operationId, operationFingerprint, workScopeKey: input.operation },
+      business: OPERATOR_WORKSPACE_ENVELOPES[input.operation], now: input.now });
+    if ((outcome.status === 'spent' || outcome.status === 'idempotent') && outcome.commitAuthority
+      && outcome.commitAuthority.operationId === operationId && outcome.commitAuthority.operationFingerprint === operationFingerprint) {
+      return { status: 'admitted', commit: structuredClone({ operation: input.operation, ...(input.ticketId ? { ticketId: input.ticketId } : {}),
+        credential, authority: outcome.commitAuthority }) };
+    }
+    return { status: 'rejected', reason: outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted' ? 'exhausted' : 'unavailable' };
   } catch { return { status: 'rejected', reason: 'unavailable' }; }
 }
