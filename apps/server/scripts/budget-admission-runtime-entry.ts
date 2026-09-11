@@ -26,6 +26,7 @@ let historyEventRowsRead = 0;
 let historyRowsRead = 0;
 let detailArticleMetadataQueries = 0;
 let detailArticleRowsRead = 0;
+let detailAttachmentMetadataQueries = 0;
 let detailAttachmentRowsRead = 0;
 let detailReferenceRowsRead = 0;
 let revokeApiKeyAfterAuth: { tenantId: string; apiKeyId: string } | undefined;
@@ -84,6 +85,7 @@ function instrumentDatabase(db: any): any {
           detailArticleMetadataQueries++;
           detailArticleRowsRead += result.meta?.rows_read ?? 0;
         }
+        if (sql.includes('length(CAST(x.file_name AS BLOB))')) detailAttachmentMetadataQueries++;
         if (sql.includes('SELECT x.* FROM attachments x')) detailAttachmentRowsRead += result.meta?.rows_read ?? 0;
         if (sql.includes("SELECT e.id,e.article_id,e.kind FROM conversation_events e")) detailReferenceRowsRead += result.meta?.rows_read ?? 0;
         if (sql.includes('SELECT e.* FROM conversation_events e') || sql.includes('SELECT e.* FROM conversation_public_history p')) {
@@ -214,7 +216,7 @@ export default {
       }
       return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, r2Puts, notificationBroadcasts,
         historyEventQueries, historyEventRowsRead, historyRowsRead, detailArticleMetadataQueries, detailArticleRowsRead,
-        detailAttachmentRowsRead, detailReferenceRowsRead, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical,
+        detailAttachmentMetadataQueries, detailAttachmentRowsRead, detailReferenceRowsRead, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical,
         cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), ATTACHMENTS_BUCKET: instrumentBucket(env.ATTACHMENTS_BUCKET), emailTransport: localCapture,

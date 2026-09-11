@@ -8,6 +8,10 @@ import {
 type ArticleMetadata = {
   id: string; created_at: string; body_bytes: number; legacy_body: number; metadata_bytes: number;
 };
+type AttachmentMetadata = {
+  id: string; article_id: string; created_at: string;
+  file_name_bytes: number; content_type_bytes: number; r2_key_bytes: number;
+};
 type PageOptions = { customerEmail?: string; publicOnly?: boolean; limit?: string; cursor?: string };
 const RAW_PAGE_BUDGET = 256 * 1024;
 
@@ -69,17 +73,33 @@ export class BoundedConversationReadRepository {
     }
     const ids = selected.map(article => article.id);
     const placeholders = ids.map(() => '?').join(',');
-    // Fetch the only attachment projection once, with a sentinel. Aggregates
-    // over all attachments would make a maliciously large article bypass the
-    // read bound even if its response was later rejected.
+    // Inspect only fixed-width attachment metadata before materializing
+    // user-controlled names, media types, or storage keys. LIMIT keeps both
+    // statements finite; no aggregate is permitted over a whole article.
+    const attachmentMetadata = await this.db.prepare(`SELECT x.id,x.article_id,x.created_at,
+      length(CAST(x.file_name AS BLOB)) AS file_name_bytes,
+      length(CAST(x.content_type AS BLOB)) AS content_type_bytes,
+      length(CAST(x.r2_key AS BLOB)) AS r2_key_bytes
+      FROM attachments x
+      WHERE x.tenant_id=? AND x.article_id IN (${placeholders}) LIMIT 501`)
+      .bind(this.scope.tenantId, ...ids).all<AttachmentMetadata>();
+    const attachmentBytes = attachmentMetadata.results.reduce((total, attachment) => total +
+      attachment.file_name_bytes + attachment.content_type_bytes + attachment.r2_key_bytes + 512, 0);
+    if (attachmentMetadata.results.length > 500 || attachmentBytes > RAW_PAGE_BUDGET) {
+      throw new ConversationReadError(413, 'conversation_page_too_large',
+        'Attachment metadata exceeds the local beta page limit. Request fewer articles or contact the operator.');
+    }
     const attachments = await this.db.prepare(`SELECT x.* FROM attachments x
       WHERE x.tenant_id=? AND x.article_id IN (${placeholders}) LIMIT 501`)
       .bind(this.scope.tenantId, ...ids).all<Attachment>();
-    const attachmentBytes = attachments.results.reduce((total, attachment) => total +
+    // As with the final response guard, reject a concurrent metadata change
+    // between the bounded inspection and materialization rather than return a
+    // page outside its announced limit.
+    const hydratedBytes = attachments.results.reduce((total, attachment) => total +
       new TextEncoder().encode(`${attachment.file_name}${attachment.content_type}${attachment.r2_key}`).byteLength + 512, 0);
-    if (attachments.results.length > 500 || attachmentBytes > RAW_PAGE_BUDGET) {
+    if (attachments.results.length > 500 || hydratedBytes > RAW_PAGE_BUDGET) {
       throw new ConversationReadError(413, 'conversation_page_too_large',
-        'Attachment metadata exceeds the local beta page limit. Request fewer articles or contact the operator.');
+        'Attachment metadata changed outside the local beta page limit. Request fewer articles or contact the operator.');
     }
     const articles = await this.db.prepare(`SELECT a.* FROM articles a
       WHERE ${scopeWhere} AND a.id IN (${placeholders})`)

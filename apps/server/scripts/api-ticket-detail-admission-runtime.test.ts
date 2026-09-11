@@ -196,3 +196,24 @@ test('API detail follows current public visibility and rejects oversized bodies 
     assert.equal(control.r2Gets, 0);
   } finally { await f.mf.dispose(); }
 });
+
+test('API detail rejects oversized legacy attachment metadata before full attachment hydration', async () => {
+  const f = await fixture();
+  try {
+    await f.db.batch([
+      f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('detail-a','legacy-attachment-ticket','Legacy attachment','detail-a@example.test','api')"),
+      f.db.prepare("INSERT INTO articles (tenant_id,id,ticket_id,sender_type,body,is_internal) VALUES ('detail-a','legacy-attachment-article','legacy-attachment-ticket','customer','Small',0)"),
+      f.db.prepare("INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key) VALUES ('detail-a','legacy-attachment','legacy-attachment-article','legacy.txt',1,'text/plain',?)")
+        .bind(`detail-a/${'x'.repeat(300 * 1024)}`),
+    ]);
+    const response = await detail(f.mf, f.keys['detail-a'].value, '/api/v1/tickets/legacy-attachment-ticket');
+    assert.equal(response.status, 413);
+    assert.equal((await response.json() as { code: string }).code, 'conversation_page_too_large');
+    const control = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
+      detailAttachmentMetadataQueries: number; detailAttachmentRowsRead: number; r2Gets: number;
+    };
+    assert.equal(control.detailAttachmentMetadataQueries, 1);
+    assert.equal(control.detailAttachmentRowsRead, 0, 'oversized attachment strings are never materialized for the response');
+    assert.equal(control.r2Gets, 0);
+  } finally { await f.mf.dispose(); }
+});
