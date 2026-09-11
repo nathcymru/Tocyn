@@ -1,10 +1,60 @@
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { SignJWT } from 'jose';
 import { CANONICAL_BROADCAST_ENVELOPE, MAX_REALTIME_EVENTS_PER_LEASE, MAX_REALTIME_LEASE_RECEIPTS, MAX_REALTIME_PRESENCE_EVENTS_PER_LEASE, MAX_REALTIME_TYPING_EVENTS_PER_LEASE, realtimeConnectionEnvelope, realtimeReceiptIndexBytes, realtimeReceiptKey, signCanonicalBroadcastHandoff, signRealtimeLease, verifyCanonicalBroadcastHandoff, verifyRealtimeLease, type CanonicalBroadcastGrant, type RealtimeLeaseClaim } from '../src/budgets/realtime-admission.service';
+import { splitSql } from './split-sql';
 
 const secret = 'synthetic-realtime-lease-secret-at-least-32-characters';
+const serverRoot = resolve(import.meta.dirname, '..');
+
+async function applyMigrations(db: D1Database): Promise<void> {
+  const directory = join(serverRoot, 'migrations');
+  for (const file of readdirSync(directory).filter(file => file.endsWith('.sql')).sort()) {
+    await db.batch(splitSql(readFileSync(join(directory, file), 'utf8')).map(statement => db.prepare(statement)));
+  }
+}
+
+function realtimePolicy(limits: Partial<Record<string, number>> = {}) {
+  const dimensions = ['workerRequests', 'd1RowsRead', 'd1RowsWritten', 'r2ClassBOperations',
+    'doRequests', 'doRowsRead', 'doRowsWritten', 'logEvents'];
+  const ceiling = Object.fromEntries(dimensions.map(dimension => [dimension, 20_000_000_000]));
+  Object.assign(ceiling, limits);
+  return {
+    schemaVersion: 1, policyId: 'realtime-worker-policy', revision: 1, deploymentId: 'realtime-worker-deployment',
+    mode: 'conservative', catalogueVersion: 'synthetic-runtime', maxGrantLifetimeMs: 60_000,
+    budgets: dimensions.map(dimension => ({ dimension, allocationId: `realtime-${dimension}`,
+      window: { kind: 'interval', id: 'realtime-window', startsAt: Date.now() - 1_000, endsAt: Date.now() + 60_000 },
+      limit: ceiling[dimension], recoveryPercent: 20, provenance: 'owner-allocation' as const })),
+  };
+}
+
+async function seedWorkerAdmission(db: D1Database, owner = realtimePolicy()): Promise<void> {
+  const tenantId = 'realtime-worker-tenant';
+  const restriction = { schemaVersion: 1, tenantId, ownerPolicyId: owner.policyId, ownerPolicyRevision: 1,
+    revision: 1, mode: 'conservative', limits: Object.fromEntries(owner.budgets.map(item => [item.dimension, item.limit])), disabledFeatures: [] };
+  await db.batch([
+    db.prepare(`INSERT INTO budget_deployment_authority (deployment_id,authority_revision,state,updated_at)
+      VALUES ('realtime-worker-deployment',1,'active',?)`).bind(Date.now()),
+    db.prepare(`INSERT INTO budget_owner_policies
+      (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
+      VALUES ('realtime-worker-deployment','realtime-worker-policy',1,1,'realtime-worker-coordinator',64,60000,?)`).bind(JSON.stringify(owner)),
+    db.prepare(`INSERT INTO budget_tenant_allocations
+      (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
+      VALUES ('realtime-worker-deployment',?,'realtime-worker-policy',1,1,'realtime-worker-namespace',?,'active')`).bind(tenantId, JSON.stringify(restriction)),
+    db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,session_version,mfa_enabled)
+      VALUES (?,'realtime-worker-agent','agent@realtime.test','Realtime Agent','agent',1,1)`).bind(tenantId),
+  ]);
+}
+
+async function realtimeWorkerToken(): Promise<string> {
+  return new SignJWT({ sub: 'realtime-worker-agent', role: 'agent', tenant_id: 'realtime-worker-tenant', session_version: 1, mfa_verified: true })
+    .setProtectedHeader({ alg: 'HS256' }).setAudience('app').setIssuedAt().setExpirationTime('1h')
+    .sign(new TextEncoder().encode(secret));
+}
 
 function headers(claim: RealtimeLeaseClaim, signature: string) {
   return { Upgrade: 'websocket', 'X-Tenant-ID': claim.tenantId, 'X-User-ID': claim.actorId, 'X-User-Name': `${claim.actorId} current`,
@@ -37,10 +87,11 @@ test('real D1/DO realtime leases reject forged forwarding, isolate tenants, cap 
   const maxBroadcastReceipts = Array.from({ length: MAX_REALTIME_LEASE_RECEIPTS }, () => [maxBroadcastKey, Number.MAX_SAFE_INTEGER, 3]);
   assert.notEqual(realtimeReceiptIndexBytes(maxLeaseReceipts), null, '1,024 maximum-length lease IDs are fixed-width before durable storage');
   assert.notEqual(realtimeReceiptIndexBytes(maxBroadcastReceipts), null, '1,024 maximum-length handoff IDs remain within the explicit receipt value ceiling');
-  const bundle = await build({ entryPoints: ['scripts/realtime-admission-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral', write: false });
+  const bundle = await build({ entryPoints: ['scripts/realtime-admission-runtime-entry.ts'], bundle: true, format: 'esm', platform: 'neutral',
+    external: ['cloudflare:workers', 'node:crypto'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'realtime-admission-proof', modules: true,
     script: bundle.outputFiles[0].text, compatibilityDate: '2024-04-03', durableObjects: { NOTIFICATION_DO: 'RealtimeAdmissionFixture' },
-    d1Databases: ['DB'], bindings: { REALTIME_BUDGET_ADMISSION_POLICY: 'realtime-v1', JWT_SECRET: secret }, unsafeEphemeralDurableObjects: true }] }));
+    compatibilityFlags: ['nodejs_compat'], d1Databases: ['DB'], bindings: { REALTIME_BUDGET_ADMISSION_POLICY: 'realtime-v1', JWT_SECRET: secret }, unsafeEphemeralDurableObjects: true }] }));
   const clients: any[] = [];
   try {
     const now = Date.now();
@@ -130,6 +181,68 @@ test('real D1/DO realtime leases reject forged forwarding, isolate tenants, cap 
   } finally {
     for (const client of clients) try { client.close(); } catch { /* Already closed. */ }
     await mf.dispose();
+  }
+});
+
+test('configured Worker realtime admission reaches the coordinator before upgrade and rejects exhausted or revoked authority before NotificationDO accepts', async () => {
+  const bundle = await build({ entryPoints: [resolve(import.meta.dirname, 'realtime-admission-runtime-entry.ts')], bundle: true,
+    format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
+  const start = async (name: string, owner = realtimePolicy()) => {
+    const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
+      name, modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'],
+      bindings: { REALTIME_BUDGET_ADMISSION_POLICY: 'realtime-v1', JWT_SECRET: secret, DISABLE_RATE_LIMIT: 'true', ENVIRONMENT: 'local' },
+      d1Databases: { DB: `${name}-d1` },
+      durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO', NOTIFICATION_DO: 'RealtimeAdmissionFixture' },
+      unsafeEphemeralDurableObjects: true,
+    }] }));
+    const db = await mf.getD1Database('DB');
+    await applyMigrations(db);
+    await seedWorkerAdmission(db, owner);
+    return { mf, db };
+  };
+  const token = await realtimeWorkerToken();
+  const upgrade = (mf: Miniflare) => mf.dispatchFetch(`http://runtime.test/api/realtime?token=${encodeURIComponent(token)}`, {
+    headers: { Upgrade: 'websocket' },
+  });
+  const fetchCount = async (mf: Miniflare) => {
+    const namespace: any = await mf.getDurableObjectNamespace('NOTIFICATION_DO');
+    const object = namespace.get(namespace.idFromName('tenant:realtime-worker-tenant'));
+    return (await (await object.fetch('http://do/fixture-fetch-count')).json() as { fetches: number }).fetches;
+  };
+
+  const admitted = await start('realtime-worker-admitted');
+  let accepted: any;
+  try {
+    accepted = await upgrade(admitted.mf);
+    if (accepted.status !== 101) throw new Error(`Worker realtime admission unexpectedly rejected: ${accepted.status} ${await accepted.text()}`);
+    assert.equal(await fetchCount(admitted.mf), 1, 'the admitted upgrade reaches NotificationDO exactly once');
+    accepted.webSocket?.accept();
+
+    await admitted.db.prepare("UPDATE budget_tenant_allocations SET state='revoked' WHERE tenant_id='realtime-worker-tenant'").run();
+    const revokedAuthority = await upgrade(admitted.mf);
+    assert.equal(revokedAuthority.status, 503, 'a current authority revocation is unavailable before websocket acceptance');
+    assert.equal(await fetchCount(admitted.mf), 1, 'revoked authority never forwards a request to NotificationDO');
+    await revokedAuthority.body?.cancel();
+
+    await admitted.db.prepare("UPDATE budget_tenant_allocations SET state='active' WHERE tenant_id='realtime-worker-tenant'").run();
+    await admitted.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='realtime-worker-tenant' AND id='realtime-worker-agent'").run();
+    const revokedSession = await upgrade(admitted.mf);
+    assert.equal(revokedSession.status, 401, 'a current credential revocation is rejected before budget or websocket work');
+    assert.equal(await fetchCount(admitted.mf), 1, 'revoked credentials never reach NotificationDO');
+    await revokedSession.body?.cancel();
+  } finally {
+    try { accepted?.webSocket?.close(); } catch { /* Already closed. */ }
+    await admitted.mf.dispose();
+  }
+
+  const exhausted = await start('realtime-worker-exhausted', realtimePolicy({ workerRequests: 1 }));
+  try {
+    const denied = await upgrade(exhausted.mf);
+    assert.equal(denied.status, 429, 'a real owner/tenant ceiling rejects the pre-upgrade reservation');
+    assert.deepEqual(await denied.json(), { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' });
+    assert.equal(await fetchCount(exhausted.mf), 0, 'an exhausted reservation cannot enter NotificationDO');
+  } finally {
+    await exhausted.mf.dispose();
   }
 });
 
