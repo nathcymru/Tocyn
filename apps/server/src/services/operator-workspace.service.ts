@@ -3,11 +3,11 @@ import { validateAttachmentReferences } from './attachment-references';
 import type { OperatorDraft, OperatorWorkspaceState } from '../types/operator-workspace';
 import type { DraftRebaseInput, DraftSaveInput, OperatorWorkspaceCommit, WorkspaceStateSaveInput } from '../repositories/operator-workspace.repository';
 import { legacyDraftCutoff } from '../types/operator-draft-retention';
+import { normalizeCollaborationMentionIds } from '@luminatick/shared';
 
-const mentionId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function normalizedMentionIds(input: readonly string[] | undefined, mode: 'public' | 'internal', actorId: string): readonly string[] {
-  const ids = [...new Set(input ?? [])].sort();
-  if (ids.length > 16 || ids.some(id => !mentionId.test(id) || id === actorId) || (ids.length && mode !== 'internal')) {
+  const ids = normalizeCollaborationMentionIds(input, mode, actorId);
+  if (!ids) {
     throw new OperatorWorkspaceError(400, 'Invalid draft mention selection');
   }
   return ids;
