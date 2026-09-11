@@ -16,6 +16,10 @@ import { rateLimiter } from "../middleware/rate-limiter";
 import { tenantMiddleware, TenantRequestDeps } from "../middleware/tenant.middleware";
 import { JWTPayload, AppVariables } from "../types";
 import { TenantTicketService } from "../services/tenant-ticket.service";
+import { SupportStateService } from '../services/support-state.service';
+import { SupportStateError } from '../repositories/support-state.repository';
+import { MutationInputError, mutationInputErrorBody, readMutationJson } from './mutation-request';
+import { requestBounds } from '../middleware/request-bounds';
 import workspace from "./operator-workspace.handler";
 
 const createGroupSchema = z.object({
@@ -53,6 +57,43 @@ const updateTicketSchema = z.object({
   group_id: z.string().uuid().nullable().optional(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
 });
+
+const supportStateDefinitionSchema = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,119}$/i).refine(value => !value.startsWith('legacy-')),
+  legacyStatus: z.enum(['open', 'pending', 'resolved', 'closed']),
+  internalLabel: z.string().trim().min(1).max(120),
+  publicLabel: z.string().trim().min(1).max(120),
+  waitingReasonRequired: z.boolean().optional(),
+  nextActionRequired: z.boolean().optional(),
+}).strict();
+const supportStateDefinitionUpdateSchema = supportStateDefinitionSchema.omit({ id: true, legacyStatus: true }).partial().refine(
+  value => Object.keys(value).length > 0,
+);
+const supportStateTransitionSchema = z.object({
+  definitionId: z.string().min(1).max(120),
+  waitingReason: z.string().trim().min(1).max(512).nullable().optional(),
+  nextAction: z.string().trim().min(1).max(512).nullable().optional(),
+  expectedRevision: z.number().int().positive(),
+}).strict();
+const supportStateDeactivateSchema = z.object({
+  replacementId: z.string().min(1).max(120),
+  waitingReason: z.string().trim().min(1).max(512).nullable().optional(),
+  nextAction: z.string().trim().min(1).max(512).nullable().optional(),
+}).strict();
+
+function supportStateFailure(c: any, error: unknown) {
+  if (!(error instanceof SupportStateError)) throw error;
+  const status = error.code === 'invalid' ? 400 : error.code === 'not_found' ? 404 : 409;
+  return c.json({ error: error.message, code: `support_state_${error.code}` }, status);
+}
+
+async function readSupportStateMutation(c: any): Promise<{ body: unknown } | { response: Response }> {
+  try { return { body: await readMutationJson(c) }; }
+  catch (error) {
+    if (error instanceof MutationInputError) return { response: c.json(mutationInputErrorBody(error), error.status) };
+    throw error;
+  }
+}
 
 function displayUser(user: {id:string;full_name?:string|null;email:string;role:string}|null) {
   return user ? {id:user.id,full_name:user.full_name??null,email:user.email,role:user.role} : null;
@@ -111,6 +152,78 @@ dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard(
 dashboard.get("/stats", async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
   return c.json(await d.repositories.tickets.dashboardStats());
+});
+
+// State definitions are operational settings. They remain separate from the
+// legacy ticket payload and use the existing general-settings capability.
+dashboard.get('/support-states', async (c) => {
+  const limit = Number(c.req.query('limit') ?? '100');
+  const includeInactive = c.req.query('include_inactive') === 'true';
+  try { return c.json(await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).listDefinitions(limit, includeInactive)); }
+  catch (error) { return supportStateFailure(c, error); }
+});
+
+dashboard.post('/support-states', requestBounds(64 * 1024), roleGuard(['admin']), permissionGuard('general'), async (c) => {
+  const mutation = await readSupportStateMutation(c);
+  if ('response' in mutation) return mutation.response;
+  const parsed = supportStateDefinitionSchema.safeParse(mutation.body);
+  if (!parsed.success) return c.json({ error: 'Invalid support-state definition' }, 400);
+  const revalidationFailure = await revalidatePermission(c, 'general');
+  if (revalidationFailure) return revalidationFailure;
+  try {
+    const state = await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps)
+      .createDefinition(parsed.data, permissionWriteFence(c, 'general'));
+    return c.json(state, 201);
+  } catch (error) { return supportStateFailure(c, error); }
+});
+
+dashboard.patch('/support-states/:id', requestBounds(64 * 1024), roleGuard(['admin']), permissionGuard('general'), async (c) => {
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'Missing support-state ID' }, 400);
+  const mutation = await readSupportStateMutation(c);
+  if ('response' in mutation) return mutation.response;
+  const parsed = supportStateDefinitionUpdateSchema.safeParse(mutation.body);
+  if (!parsed.success) return c.json({ error: 'Invalid support-state definition' }, 400);
+  const revalidationFailure = await revalidatePermission(c, 'general');
+  if (revalidationFailure) return revalidationFailure;
+  try {
+    return c.json(await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps)
+      .updateDefinition(id, parsed.data, permissionWriteFence(c, 'general')));
+  } catch (error) { return supportStateFailure(c, error); }
+});
+
+dashboard.post('/support-states/:id/deactivate', requestBounds(64 * 1024), roleGuard(['admin']), permissionGuard('general'), async (c) => {
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'Missing support-state ID' }, 400);
+  const mutation = await readSupportStateMutation(c);
+  if ('response' in mutation) return mutation.response;
+  const parsed = supportStateDeactivateSchema.safeParse(mutation.body);
+  if (!parsed.success) return c.json({ error: 'Invalid support-state replacement' }, 400);
+  const revalidationFailure = await revalidatePermission(c, 'general');
+  if (revalidationFailure) return revalidationFailure;
+  try {
+    await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps)
+      .deactivate(id, parsed.data, permissionWriteFence(c, 'general'));
+    return c.json({ success: true });
+  } catch (error) { return supportStateFailure(c, error); }
+});
+
+dashboard.get('/tickets/:id/support-state', async (c) => {
+  try {
+    const state = await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).getTicketState(c.req.param('id'));
+    if (!state) return c.json({ error: 'Ticket not found' }, 404);
+    return c.json(state);
+  } catch (error) { return supportStateFailure(c, error); }
+});
+
+dashboard.patch('/tickets/:id/support-state', requestBounds(64 * 1024), async (c) => {
+  const mutation = await readSupportStateMutation(c);
+  if ('response' in mutation) return mutation.response;
+  const parsed = supportStateTransitionSchema.safeParse(mutation.body);
+  if (!parsed.success) return c.json({ error: 'Invalid support-state transition' }, 400);
+  try {
+    return c.json(await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).transition(c.req.param('id'), parsed.data));
+  } catch (error) { return supportStateFailure(c, error); }
 });
 
 /**

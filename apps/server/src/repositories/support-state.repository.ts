@@ -1,0 +1,281 @@
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
+import type { VerifiedTenantScope } from '../types/tenant';
+import { capabilityWriteConstraint, type CapabilityWriteFence } from '../auth/capability-policy';
+import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
+import type { ConversationActor } from '../types/conversation-audit';
+import type {
+  SupportStateDeactivation,
+  SupportStateDefinition,
+  SupportStateDefinitionInput,
+  SupportStateDefinitionUpdate,
+  SupportStateTransition,
+  TicketSupportState,
+} from '../types/support-state';
+
+const categories = new Set(['open', 'pending', 'resolved', 'closed']);
+const uuidSql = "lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))";
+const compatibilityDefaults = [
+  ['legacy-open', 'open', 'Open'],
+  ['legacy-pending', 'pending', 'Pending'],
+  ['legacy-resolved', 'resolved', 'Resolved'],
+  ['legacy-closed', 'closed', 'Closed'],
+] as const;
+
+export class SupportStateError extends Error {
+  constructor(public readonly code: 'invalid' | 'not_found' | 'conflict', message: string) { super(message); }
+}
+
+export type TicketStateWriteFence = Readonly<{
+  tenantId: string;
+  actorId: string;
+  role: 'admin' | 'agent';
+  sessionVersion: number;
+}>;
+
+function ticketWriteConstraint(fence: TicketStateWriteFence, ticketAlias: string): { sql: string; values: unknown[] } {
+  return {
+    sql: `EXISTS (SELECT 1 FROM users actor WHERE actor.tenant_id=${ticketAlias}.tenant_id
+      AND actor.id=? AND actor.role=? AND actor.session_version=?
+      AND (actor.role <> 'agent' OR ${ticketAlias}.group_id IS NULL OR EXISTS (
+        SELECT 1 FROM user_groups membership WHERE membership.tenant_id=${ticketAlias}.tenant_id
+          AND membership.user_id=actor.id AND membership.group_id=${ticketAlias}.group_id)))`,
+    values: [fence.actorId, fence.role, fence.sessionVersion],
+  };
+}
+
+function boundedText(value: string | null | undefined, maximum: number, required = false): string | null {
+  if (value === undefined || value === null) {
+    if (required) throw new SupportStateError('invalid', 'Required support-state fact is missing');
+    return null;
+  }
+  const trimmed = value.trim();
+  if ((!trimmed && required) || !trimmed || new TextEncoder().encode(trimmed).byteLength > maximum) {
+    throw new SupportStateError('invalid', 'Invalid support-state text');
+  }
+  return trimmed;
+}
+
+function actorValues(actor: ConversationActor) {
+  if (actor.kind !== 'staff') throw new SupportStateError('invalid', 'Support-state administration requires a staff actor');
+  return [actor.kind, actor.id] as const;
+}
+
+/**
+ * Tenant-scoped state storage. Mutation callers must pass an already
+ * authenticated staff actor; this repository never accepts a client tenant id.
+ */
+export class SupportStateRepository {
+  constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope, private readonly admission?: LocalBetaAdmissionRepository) {}
+
+  private defaultStatements(): D1PreparedStatement[] {
+    return compatibilityDefaults.map(([id, status, label]) => this.db.prepare(
+      `INSERT OR IGNORE INTO support_state_definitions
+        (tenant_id,id,legacy_status,internal_label,public_label,is_compatibility_default)
+       VALUES (?,?,?,?,?,1)`,
+    ).bind(this.scope.tenantId, id, status, label, label));
+  }
+
+  async ensureDefaults(): Promise<void> {
+    await this.db.batch(this.defaultStatements());
+  }
+
+  async listDefinitions(limit: number, includeInactive = false): Promise<SupportStateDefinition[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new SupportStateError('invalid', 'Invalid support-state page');
+    const active = includeInactive ? '' : 'AND is_active=1';
+    const result = await this.db.prepare(`SELECT * FROM support_state_definitions
+      WHERE tenant_id=? ${active} ORDER BY is_compatibility_default DESC, internal_label COLLATE NOCASE, id LIMIT ?`)
+      .bind(this.scope.tenantId, limit).all<SupportStateDefinition>();
+    return result.results;
+  }
+
+  async getDefinition(id: string, includeInactive = false): Promise<SupportStateDefinition | null> {
+    return this.db.prepare(`SELECT * FROM support_state_definitions WHERE tenant_id=? AND id=?
+      ${includeInactive ? '' : 'AND is_active=1'}`).bind(this.scope.tenantId, id).first<SupportStateDefinition>();
+  }
+
+  async getTicketState(ticketId: string): Promise<TicketSupportState | null> {
+    return this.db.prepare(`SELECT s.ticket_id,s.definition_id,d.legacy_status AS lifecycle,
+      d.internal_label,d.public_label,s.waiting_reason,s.next_action,s.changed_at,s.revision
+      FROM ticket_support_state s JOIN support_state_definitions d
+        ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+      WHERE s.tenant_id=? AND s.ticket_id=?`).bind(this.scope.tenantId, ticketId).first<TicketSupportState>();
+  }
+
+  async countReferences(definitionId: string): Promise<number> {
+    const row = await this.db.prepare('SELECT count(*) AS count FROM ticket_support_state WHERE tenant_id=? AND definition_id=?')
+      .bind(this.scope.tenantId, definitionId).first<{ count: number }>();
+    return row?.count ?? 0;
+  }
+
+  async captureTicketWriteFence(expectedSessionVersion?: number): Promise<TicketStateWriteFence> {
+    const actor = await this.db.prepare('SELECT role,session_version FROM users WHERE tenant_id=? AND id=?')
+      .bind(this.scope.tenantId, this.scope.actorId).first<{ role: string; session_version: number }>();
+    if (!actor || (actor.role !== 'admin' && actor.role !== 'agent') || !this.scope.roles.includes(actor.role)
+      || (expectedSessionVersion !== undefined && actor.session_version !== expectedSessionVersion)) {
+      throw new SupportStateError('not_found', 'Ticket not found');
+    }
+    return { tenantId: this.scope.tenantId, actorId: this.scope.actorId, role: actor.role,
+      sessionVersion: expectedSessionVersion ?? actor.session_version };
+  }
+
+  async createDefinition(input: SupportStateDefinitionInput, actor: ConversationActor, fence?: CapabilityWriteFence): Promise<SupportStateDefinition> {
+    const [actorKind, actorId] = actorValues(actor);
+    const id = boundedText(input.id, 120, true)!;
+    if (!/^[a-z0-9][a-z0-9_-]{0,119}$/i.test(id) || id.startsWith('legacy-') || !categories.has(input.legacyStatus)) {
+      throw new SupportStateError('invalid', 'Invalid support-state definition');
+    }
+    const internalLabel = boundedText(input.internalLabel, 120, true)!;
+    const publicLabel = boundedText(input.publicLabel, 120, true)!;
+    const waitingRequired = input.waitingReasonRequired ? 1 : 0;
+    const actionRequired = input.nextActionRequired ? 1 : 0;
+    const guard = capabilityWriteConstraint(fence);
+    const results = await this.db.batch<SupportStateDefinition>([
+      ...compatibilityDefaults.map(([defaultId, status, label]) => this.db.prepare(`INSERT OR IGNORE INTO support_state_definitions
+        (tenant_id,id,legacy_status,internal_label,public_label,is_compatibility_default)
+        SELECT ?,?,?,?,?,1 WHERE ${guard.sql}`).bind(this.scope.tenantId, defaultId, status, label, label, ...guard.values)),
+      this.db.prepare(`INSERT INTO support_state_definitions
+        (tenant_id,id,legacy_status,internal_label,public_label,waiting_reason_required,next_action_required)
+        SELECT ?,?,?,?,?,?,? WHERE ${guard.sql} RETURNING *`).bind(this.scope.tenantId,id,input.legacyStatus,internalLabel,publicLabel,waitingRequired,actionRequired,...guard.values),
+      this.db.prepare(`INSERT INTO support_state_events
+        (tenant_id,id,definition_id,kind,actor_kind,actor_id,facts)
+        SELECT ?,${uuidSql},id,'definition.created',?,?,json_object(
+          'lifecycle',legacy_status,'internalLabel',internal_label,'publicLabel',public_label,
+          'waitingReasonRequired',waiting_reason_required,'nextActionRequired',next_action_required)
+        FROM support_state_definitions WHERE tenant_id=? AND id=? AND ${guard.sql}`)
+        .bind(this.scope.tenantId,actorKind,actorId,this.scope.tenantId,id,...guard.values),
+    ]);
+    const created = results[compatibilityDefaults.length]?.results?.[0];
+    if (!created) throw new SupportStateError('conflict', 'Support-state definition was not created');
+    return created;
+  }
+
+  async updateDefinition(id: string, input: SupportStateDefinitionUpdate, actor: ConversationActor, fence?: CapabilityWriteFence): Promise<SupportStateDefinition> {
+    const [actorKind, actorId] = actorValues(actor);
+    const sets: string[] = [];
+    const values: (string | number)[] = [];
+    if (input.internalLabel !== undefined) { sets.push('internal_label=?'); values.push(boundedText(input.internalLabel, 120, true)!); }
+    if (input.publicLabel !== undefined) { sets.push('public_label=?'); values.push(boundedText(input.publicLabel, 120, true)!); }
+    if (input.waitingReasonRequired !== undefined) { sets.push('waiting_reason_required=?'); values.push(input.waitingReasonRequired ? 1 : 0); }
+    if (input.nextActionRequired !== undefined) { sets.push('next_action_required=?'); values.push(input.nextActionRequired ? 1 : 0); }
+    if (!sets.length) throw new SupportStateError('invalid', 'No support-state definition fields supplied');
+    const guard = capabilityWriteConstraint(fence);
+    const results = await this.db.batch<SupportStateDefinition>([
+      this.db.prepare(`UPDATE support_state_definitions SET ${sets.join(',')},updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        WHERE tenant_id=? AND id=? AND is_compatibility_default=0 AND ${guard.sql} RETURNING *`).bind(...values,this.scope.tenantId,id,...guard.values),
+      this.db.prepare(`INSERT INTO support_state_events
+        (tenant_id,id,definition_id,kind,actor_kind,actor_id,facts)
+        SELECT ?,${uuidSql},id,'definition.updated',?,?,json_object(
+          'lifecycle',legacy_status,'internalLabel',internal_label,'publicLabel',public_label,
+          'waitingReasonRequired',waiting_reason_required,'nextActionRequired',next_action_required)
+        FROM support_state_definitions WHERE tenant_id=? AND id=? AND is_compatibility_default=0 AND ${guard.sql}`)
+        .bind(this.scope.tenantId,actorKind,actorId,this.scope.tenantId,id,...guard.values),
+    ]);
+    const updated = results[0]?.results?.[0];
+    if (!updated) throw new SupportStateError('not_found', 'Support-state definition was not updated');
+    return updated;
+  }
+
+  async transition(ticketId: string, input: SupportStateTransition, actor: ConversationActor, fence: TicketStateWriteFence): Promise<TicketSupportState> {
+    const [actorKind, actorId] = actorValues(actor);
+    const waitingReason = boundedText(input.waitingReason, 512);
+    const nextAction = boundedText(input.nextAction, 512);
+    if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1 || !input.definitionId) throw new SupportStateError('invalid', 'A support-state compare-and-swap value is required');
+    const token = crypto.randomUUID();
+    const live = ticketWriteConstraint(fence, 't');
+    const liveTicket = ticketWriteConstraint(fence, 'tickets');
+    const validTarget = `EXISTS (SELECT 1 FROM support_state_definitions d WHERE d.tenant_id=s.tenant_id AND d.id=?
+      AND d.is_active=1 AND (d.waiting_reason_required=0 OR ? IS NOT NULL) AND (d.next_action_required=0 OR ? IS NOT NULL))`;
+    const sameChange = '(s.definition_id IS NOT ? OR s.waiting_reason IS NOT ? OR s.next_action IS NOT ?)';
+    const beforeAfter = `json_object('before',json_object('definitionId',s.definition_id,'waitingReason',s.waiting_reason,'nextAction',s.next_action),
+      'after',json_object('definitionId',d.id,'lifecycle',d.legacy_status,'waitingReason',?,'nextAction',?))`;
+    const eventWhere = `t.tenant_id=? AND t.id=? AND s.revision=? AND ${sameChange} AND ${validTarget} AND ${live.sql}`;
+    const admission = this.admission?.conditionalConversationStatements({
+      sql: `EXISTS (SELECT 1 FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+        WHERE ${eventWhere})`,
+      values: [this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,input.definitionId,waitingReason,nextAction,...live.values],
+    }) ?? [];
+    const results = await this.db.batch<TicketSupportState>([
+      ...admission,
+      this.db.prepare(`INSERT INTO support_state_events
+        (tenant_id,id,ticket_id,definition_id,kind,actor_kind,actor_id,facts)
+        SELECT t.tenant_id,${uuidSql},t.id,d.id,'ticket.transition',?,?,${beforeAfter}
+        FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=? WHERE ${eventWhere}`)
+        .bind(actorKind,actorId,waitingReason,nextAction,input.definitionId,this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,input.definitionId,waitingReason,nextAction,...live.values),
+      this.db.prepare(`INSERT INTO conversation_events
+        (tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+        SELECT t.tenant_id,${uuidSql},t.id,NULL,(SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=t.tenant_id AND e.ticket_id=t.id),
+          'ticket.state_changed',?,?, 'mfa-staff','dashboard','internal',${beforeAfter}
+        FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=? WHERE ${eventWhere}`)
+        .bind(actorKind,actorId,waitingReason,nextAction,input.definitionId,this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,input.definitionId,waitingReason,nextAction,...live.values),
+      this.db.prepare(`UPDATE ticket_support_state AS s SET definition_id=?,waiting_reason=?,next_action=?,
+        changed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),revision=revision+1,transition_token=?
+        WHERE s.tenant_id=? AND s.ticket_id=? AND s.revision=? AND ${sameChange} AND ${validTarget}
+          AND EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=s.tenant_id AND t.id=s.ticket_id AND ${live.sql}) RETURNING ticket_id`)
+        .bind(input.definitionId,waitingReason,nextAction,token,this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,input.definitionId,waitingReason,nextAction,...live.values),
+      this.db.prepare(`UPDATE tickets SET status=(SELECT legacy_status FROM support_state_definitions WHERE tenant_id=? AND id=?)
+        WHERE tenant_id=? AND id=? AND ${liveTicket.sql} AND EXISTS (SELECT 1 FROM ticket_support_state s WHERE s.tenant_id=tickets.tenant_id AND s.ticket_id=tickets.id AND s.transition_token=?)`)
+        .bind(this.scope.tenantId,input.definitionId,this.scope.tenantId,ticketId,...liveTicket.values,token),
+      this.db.prepare(`UPDATE ticket_support_state SET transition_token=NULL WHERE tenant_id=? AND ticket_id=? AND transition_token=?
+        AND EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=ticket_support_state.tenant_id AND t.id=ticket_support_state.ticket_id AND ${live.sql})`)
+        .bind(this.scope.tenantId,ticketId,token,...live.values),
+      this.db.prepare(`SELECT s.ticket_id,s.definition_id,d.legacy_status AS lifecycle,d.internal_label,d.public_label,
+        s.waiting_reason,s.next_action,s.changed_at,s.revision FROM ticket_support_state s JOIN support_state_definitions d
+        ON d.tenant_id=s.tenant_id AND d.id=s.definition_id WHERE s.tenant_id=? AND s.ticket_id=?`).bind(this.scope.tenantId,ticketId),
+    ]);
+    const offset = admission.length;
+    if (!results[offset + 2]?.results?.[0]) throw new SupportStateError('conflict', 'Support-state transition conflicted or was invalid');
+    const state = results[offset + 5]?.results?.[0];
+    if (!state) throw new SupportStateError('conflict', 'Support-state transition result unavailable');
+    return state;
+  }
+
+  async deactivate(id: string, input: SupportStateDeactivation, actor: ConversationActor, fence?: CapabilityWriteFence): Promise<void> {
+    const [actorKind, actorId] = actorValues(actor);
+    if (!input.replacementId || input.replacementId === id) throw new SupportStateError('invalid', 'A distinct replacement state is required');
+    const waitingReason = boundedText(input.waitingReason, 512);
+    const nextAction = boundedText(input.nextAction, 512);
+    const token = crypto.randomUUID();
+    const guard = capabilityWriteConstraint(fence);
+    const target = `EXISTS (SELECT 1 FROM support_state_definitions d WHERE d.tenant_id=s.tenant_id AND d.id=? AND d.is_active=1
+      AND (d.waiting_reason_required=0 OR ? IS NOT NULL) AND (d.next_action_required=0 OR ? IS NOT NULL))`;
+    const definitionTarget = `EXISTS (SELECT 1 FROM support_state_definitions d WHERE d.tenant_id=o.tenant_id AND d.id=? AND d.is_active=1
+      AND (d.waiting_reason_required=0 OR ? IS NOT NULL) AND (d.next_action_required=0 OR ? IS NOT NULL))`;
+    const old = `EXISTS (SELECT 1 FROM support_state_definitions o WHERE o.tenant_id=s.tenant_id AND o.id=? AND o.is_active=1 AND o.is_compatibility_default=0)`;
+    const facts = `json_object('before',json_object('definitionId',s.definition_id,'waitingReason',s.waiting_reason,'nextAction',s.next_action),
+      'after',json_object('definitionId',d.id,'lifecycle',d.legacy_status,'waitingReason',?,'nextAction',?),'reason','definition_deactivated')`;
+    const rows = `t.tenant_id=? AND s.definition_id=? AND ${old} AND ${target} AND ${guard.sql}`;
+    const results = await this.db.batch([
+      this.db.prepare(`INSERT INTO support_state_events (tenant_id,id,ticket_id,definition_id,kind,actor_kind,actor_id,facts)
+        SELECT t.tenant_id,${uuidSql},t.id,d.id,'ticket.transition',?,?,${facts}
+        FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=? WHERE ${rows}`)
+        .bind(actorKind,actorId,waitingReason,nextAction,input.replacementId,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...guard.values),
+      this.db.prepare(`INSERT INTO conversation_events
+        (tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+        SELECT t.tenant_id,${uuidSql},t.id,NULL,(SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=t.tenant_id AND e.ticket_id=t.id),
+          'ticket.state_changed',?,?, 'mfa-staff','dashboard','internal',${facts}
+        FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+        JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=? WHERE ${rows}`)
+        .bind(actorKind,actorId,waitingReason,nextAction,input.replacementId,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...guard.values),
+      this.db.prepare(`UPDATE ticket_support_state AS s SET definition_id=?,waiting_reason=?,next_action=?,
+        changed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),revision=revision+1,transition_token=? WHERE s.tenant_id=? AND s.definition_id=? AND ${old} AND ${target} AND ${guard.sql}`)
+        .bind(input.replacementId,waitingReason,nextAction,token,this.scope.tenantId,id,id,input.replacementId,waitingReason,nextAction,...guard.values),
+      this.db.prepare(`UPDATE tickets SET status=(SELECT legacy_status FROM support_state_definitions WHERE tenant_id=? AND id=?)
+        WHERE tenant_id=? AND ${guard.sql} AND EXISTS (SELECT 1 FROM ticket_support_state s WHERE s.tenant_id=tickets.tenant_id AND s.ticket_id=tickets.id AND s.transition_token=?)`)
+        .bind(this.scope.tenantId,input.replacementId,this.scope.tenantId,...guard.values,token),
+      this.db.prepare(`UPDATE ticket_support_state SET transition_token=NULL WHERE tenant_id=? AND transition_token=? AND ${guard.sql}`).bind(this.scope.tenantId,token,...guard.values),
+      this.db.prepare(`INSERT INTO support_state_events (tenant_id,id,definition_id,kind,actor_kind,actor_id,facts)
+        SELECT ?,${uuidSql},id,'definition.deactivated',?,?,json_object('replacementId',?)
+        FROM support_state_definitions o WHERE o.tenant_id=? AND o.id=? AND o.is_compatibility_default=0 AND o.is_active=1
+          AND ${definitionTarget} AND ${guard.sql}`)
+        .bind(this.scope.tenantId,actorKind,actorId,input.replacementId,this.scope.tenantId,id,input.replacementId,waitingReason,nextAction,...guard.values),
+      this.db.prepare(`UPDATE support_state_definitions AS o SET is_active=0,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        WHERE o.tenant_id=? AND o.id=? AND o.is_compatibility_default=0 AND o.is_active=1
+          AND ${definitionTarget} AND ${guard.sql} RETURNING id`)
+        .bind(this.scope.tenantId,id,input.replacementId,waitingReason,nextAction,...guard.values),
+    ]);
+    if (!results[6]?.results?.[0]) throw new SupportStateError('conflict', 'Support-state deactivation conflicted or was invalid');
+  }
+}

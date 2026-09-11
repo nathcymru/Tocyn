@@ -72,7 +72,7 @@ jobs:
         if: matrix.check == 'test'
         run: |
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.support-state-migration.json
-          node --import tsx --test apps/server/scripts/support-state-migration.test.ts
+          node --import tsx --test apps/server/scripts/support-state-migration.test.ts apps/server/scripts/support-state-routes.test.ts
       - name: Verify local draft retention and workspace sorting
         if: matrix.check == 'test'
         run: |

@@ -25,6 +25,8 @@ export type TenantRequestDeps = {
   scope: VerifiedTenantScope;
   capabilityPolicy: CapabilityPolicyService;
   betaAdmission?: LocalBetaAdmissionRepository;
+  /** Session claims accepted by authentication; never re-read as a new credential. */
+  credential?: BetaCredential;
   boundedConversationRead?: BoundedConversationReadRepository;
   conversationAudit: ConversationAuditRepository;
   ticketMutations: TicketMutationReplayRepository;
@@ -74,6 +76,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     scope,
     capabilityPolicy: new CapabilityPolicyService(db, scope),
     betaAdmission,
+    credential,
     boundedConversationRead: betaAdmission ? new BoundedConversationReadRepository(db, scope) : undefined,
     conversationAudit: new ConversationAuditRepository(db, scope, betaAdmission, canonicalMutationSli),
     canonicalMutationSli,
