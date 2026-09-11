@@ -1,6 +1,7 @@
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import type { IsolateBudgetAdmissionCache, BudgetCommitAuthority } from '../budgets/isolate-admission.service';
+import { BudgetGrantRecoveryService } from '../budgets/budget-grant-recovery.service';
 import type { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from '../repositories/local-beta-admission.repository';
@@ -40,7 +41,9 @@ async function digest(value: string): Promise<string> {
 }
 
 type MutationAdmissionIntent = Readonly<{ operationId: string; operationFingerprint: string; workScopeKey: string }>;
-type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; budgetIntent?: Promise<MutationAdmissionIntent>; budgetRequired?: boolean; budgetAuthority?: BudgetCommitAuthority; budgetCommitStarted?: boolean };
+type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; budgetIntent?: Promise<MutationAdmissionIntent>; budgetRequired?: boolean; budgetAuthority?: BudgetCommitAuthority; budgetCommitStarted?: boolean;
+  budgetLifecycle?: { cache: IsolateBudgetAdmissionCache; now: () => number } };
+export const API_GRANT_IDLE_SEAL_MS = 30_000;
 
 /**
  * Version 1 renders the fixed original-row snapshot for both first success and
@@ -107,7 +110,7 @@ export class TicketMutationReplayService {
   private readonly repository: TicketMutationReplayRepository;
   private readonly attempts = new WeakMap<PreparedTicketMutation, Attempt>();
 
-  constructor(db: D1Database, private scope: VerifiedTenantScope, private principal: MutationPrincipal, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {
+  constructor(private db: D1Database, private scope: VerifiedTenantScope, private principal: MutationPrincipal, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {
     this.repository = new TicketMutationReplayRepository(db, scope, admission, canonicalMutationSli);
   }
 
@@ -268,13 +271,25 @@ export class TicketMutationReplayService {
     }
     const intent = await this.admissionIntent(prepared);
     const apiKeyId = this.principal.id;
+    // An idle closure runs only on a later API admission. It never waits in a
+    // request and a failed/lost closure leaves the old grant charged and blocks
+    // this credential scope from further work.
+    const credentialKey = `api-key:${apiKeyId}:tickets:write`;
+    const sealed = input.cache.sealIdleApiGrant(this.scope.tenantId,credentialKey,input.now(),API_GRANT_IDLE_SEAL_MS);
+    if (sealed) {
+      const recovery = new BudgetGrantRecoveryService(this.db,input.repository,input.namespace,this.scope,apiKeyId);
+      if (await recovery.recover(sealed,input.now()) !== 'reconciled') return { status: 'rejected' as const, reason: 'capacity-exhausted' as const };
+      input.cache.completeApiGrantRecovery(sealed);
+    }
+    if (input.cache.hasBlockedApiGrantRecovery(this.scope.tenantId,credentialKey,input.now())) return { status: 'rejected' as const, reason: 'capacity-exhausted' as const };
     const result = await input.cache.admit({ repository: input.repository, namespace: input.namespace, scope: this.scope,
       authorization: { authorize: scope => input.repository.authorizeApiKeyTicket(scope,this.scope.tenantId,apiKeyId) },
-      credentialKey: `api-key:${apiKeyId}:tickets:write`, intent, business: input.business, now: input.now });
+      credentialKey, intent, business: input.business, now: input.now });
     if (result.status !== 'rejected' && result.commitAuthority && result.commitAuthority.operationId === intent.operationId
       && result.commitAuthority.operationFingerprint === intent.operationFingerprint) {
       const authority = structuredClone(result.commitAuthority);
       Object.freeze(authority.snapshot); attempt.budgetAuthority = Object.freeze(authority);
+      attempt.budgetLifecycle = { cache: input.cache, now: input.now };
     }
     return result;
   }
@@ -296,6 +311,7 @@ export class TicketMutationReplayService {
       if (attempt.namespace) {
         const current = await this.repository.findActive(attempt.namespace);
         if (current) {
+          if (attempt.budgetAuthority && attempt.budgetLifecycle) attempt.budgetLifecycle.cache.settleOperation(attempt.budgetAuthority,'committed',attempt.budgetLifecycle.now());
           return await this.replay(current, attempt.namespace);
         }
       }
@@ -337,13 +353,18 @@ export class TicketMutationReplayService {
         attempt.budgetCommitStarted = true;
         const snapshot = await this.repository.commit(candidate, attempt.namespace,
           attempt.budgetRequired ? { apiKeyId: this.principal.id, authority: attempt.budgetAuthority! } : undefined);
+        if (attempt.budgetAuthority && attempt.budgetLifecycle) attempt.budgetLifecycle.cache.settleOperation(attempt.budgetAuthority,'committed',attempt.budgetLifecycle.now());
         return renderMutationSnapshot(snapshot, input.operation, false, Boolean(attempt.namespace));
       } catch {
         // A unique receipt collision rolls back all losing writes. Only an
         // authoritative committed receipt can establish a replay/conflict.
         await this.authorize();
         const winner = attempt.namespace ? await this.repository.findActive(attempt.namespace) : null;
-        if (winner && attempt.namespace) return await this.replay(winner, attempt.namespace, 'existing');
+        if (winner && attempt.namespace) {
+          if (attempt.budgetAuthority && attempt.budgetLifecycle) attempt.budgetLifecycle.cache.settleOperation(attempt.budgetAuthority,'committed',attempt.budgetLifecycle.now());
+          return await this.replay(winner, attempt.namespace, 'existing');
+        }
+        if (attempt.budgetAuthority && attempt.budgetLifecycle) attempt.budgetLifecycle.cache.settleOperation(attempt.budgetAuthority,'unknown',attempt.budgetLifecycle.now());
         await this.admission?.authorize(candidate.ticket?'create':'conversation');
         this.canonicalMutationSli?.recordUncertain();
         throw unavailable();
