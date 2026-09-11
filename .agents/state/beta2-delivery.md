@@ -1,3 +1,5 @@
+> Current delivery entry point: [12:41 BST checkpoint](beta2-checkpoint-2026-09-11-1241.md). Earlier entries below are historical.
+
 Latest coordinating review and queue: [11 September active integration review](budget-64-review-2026-09-11-1213.md). Full beta.2 acceptance remains open.
 
 Historical checkpoints: [08:55 BST](beta2-checkpoint-2026-09-11-0855.md), [08:25 BST](beta2-checkpoint-2026-09-11-0825.md).
