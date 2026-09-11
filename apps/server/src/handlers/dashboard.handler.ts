@@ -32,7 +32,7 @@ import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminat
 import { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
 import { OperatorActivityService } from '../services/operator-activity.service';
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
-import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, SUPPORT_SLA_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
+import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, apiTicketBudgetCache, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, SUPPORT_SLA_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { SupportSlaMutationService } from '../services/support-sla-mutation.service';
 import type { SupportSlaBudgetOperation } from '../middleware/budget-admission.middleware';
 import { admitDashboardAttachment } from '../budgets/storage-admission.service';
@@ -40,6 +40,9 @@ import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.servi
 import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
 import { admitHttpTicketList } from '../budgets/http-ticket-list-admission.service';
 import { TicketListScanError } from '../repositories/ticket-list-scan.repository';
+import { ConfigurationAdmissionError, ConfigurationAdmissionService, CONFIGURATION_REQUEST_BYTES } from '../services/configuration-admission.service';
+import type { SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
+import type { AutomationRow, TicketFieldRow } from '../repositories/configuration-admission.repository';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -122,6 +125,31 @@ function supportSlaAdmissionConfigurationFailure(c: any): Response | null {
   return staffTicketAdmissionMode(c.env) === 'invalid'
     ? c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503)
     : null;
+}
+
+function configurationAdmission(c:any):ConfigurationAdmissionService|Response|null {
+  if(c.env.BUDGET_ADMISSION_POLICY===undefined)return null;
+  const mode=staffTicketAdmissionMode(c.env);if(mode==='disabled')return null;
+  const d=c.get('tenantDeps') as TenantRequestDeps|undefined,payload=c.get('jwtPayload') as JWTPayload|undefined;
+  if(mode!=='enabled'||!c.env.BUDGET_COORDINATOR_DO||!d||!payload||payload.sub!==d.scope.actorId||payload.tenant_id!==d.scope.tenantId
+    ||(payload.role!=='admin'&&payload.role!=='agent')||payload.mfa_verified!==true||!Number.isSafeInteger(payload.session_version)||!Number.isSafeInteger(payload.exp))
+    return c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
+  const credential:SessionBudgetCredential={tenantId:d.scope.tenantId,actorId:payload.sub,role:payload.role,
+    sessionVersion:payload.session_version!,expiresAt:payload.exp,mfaVerified:true};
+  return new ConfigurationAdmissionService(d.database,d.scope,credential,{service:sessionTicketBudgetAdmission,
+    repository:d.repositories.budgetAuthority,namespace:c.env.BUDGET_COORDINATOR_DO,now:()=>c.env.localNow?.()??Date.now(),
+    settle:(authority,outcome,now)=>apiTicketBudgetCache.settleOperation(authority,outcome,now)});
+}
+
+function configurationFailure(c:any,error:unknown):Response|null {
+  if(error instanceof MutationInputError)return c.json(mutationInputErrorBody(error),error.status);
+  if(error instanceof ConfigurationAdmissionError)return c.json({code:error.code,error:error.message},error.status);
+  return null;
+}
+
+async function readConfigurationBody(c:any):Promise<unknown|Response>{
+  try{return await readMutationJson(c);}
+  catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 }
 
 const createTicketFieldSchema = z.object({
@@ -227,17 +255,18 @@ dashboard.route("/workspace", workspace);
  * List all custom ticket fields
  */
 dashboard.get("/ticket-fields", async (c) => {
-  const deps = c.get('tenantDeps') as TenantRequestDeps;
-  const results = await deps.repositories.ticketFields.list();
-  return c.json(results);
+  const deps = c.get('tenantDeps') as TenantRequestDeps,admission=configurationAdmission(c);
+  if(admission instanceof Response)return admission;
+  try{return c.json(admission?await admission.read('dashboard.ticket-field.list',{}):await deps.repositories.ticketFields.list());}
+  catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
  * POST /api/ticket-fields
  * Create a new custom ticket field
  */
-dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard("ticket_fields"), async (c) => {
-  const body = await c.req.json();
+dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard("ticket_fields"), requestBounds(CONFIGURATION_REQUEST_BYTES), async (c) => {
+  const body = await readConfigurationBody(c);if(body instanceof Response)return body;
   const result = createTicketFieldSchema.safeParse(body);
 
   if (!result.success) {
@@ -250,11 +279,20 @@ dashboard.post("/ticket-fields", roleGuard(["admin", "agent"]), permissionGuard(
   if (revalidationFailure) return revalidationFailure;
 
   try {
+    const capability=permissionWriteFence(c,"ticket_fields"),admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+    if(admission){
+      const prepared=await admission.prepareMutation('dashboard.ticket-field.create',result.data,capability,readIdempotencyKey(c));
+      const outcome=await admission.commit(prepared,(repo,commit,snapshot)=>repo.createTicketField(commit,snapshot,{
+        tenant_id:d.scope.tenantId,id:crypto.randomUUID(),name,label,field_type,options:options||null,is_active:is_active?1:0,
+      } satisfies TicketFieldRow));
+      if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body,201);
+    }
     const field = await d.repositories.ticketFields.create({
       name, label, field_type, options: options || null, is_active
-    }, permissionWriteFence(c, "ticket_fields"));
+    }, capability);
     return c.json(field, 201);
   } catch (error: any) {
+    const response=configurationFailure(c,error);if(response)return response;
     if (error.message.includes("UNIQUE constraint failed")) {
       return c.json({ error: "Ticket field with this name already exists" }, 409);
     }
@@ -486,16 +524,19 @@ dashboard.patch('/tickets/:id/support-state', requestBounds(64 * 1024), async (c
  */
 dashboard.get("/automations", permissionGuard("automations"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  const results = await d.repositories.automations.list();
-  return c.json(results);
+  const admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+  if(!admission)return c.json(await d.repositories.automations.list());
+  const revalidationFailure=await revalidatePermission(c,"automations");if(revalidationFailure)return revalidationFailure;
+  try{return c.json(await admission.read('dashboard.automation.list',{capability:permissionWriteFence(c,'automations')}));}
+  catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
  * POST /api/automations
  * Create a new automation rule.
  */
-dashboard.post("/automations", permissionGuard("automations"), async (c) => {
-  const payload = await c.req.json();
+dashboard.post("/automations", permissionGuard("automations"), requestBounds(CONFIGURATION_REQUEST_BYTES), async (c) => {
+  const payload = await readConfigurationBody(c) as Record<string,any>|Response;if(payload instanceof Response)return payload;
   const { name, event_type, conditions, action_type, action_config, is_active } = payload;
 
   if (!name || !event_type || !action_type) {
@@ -505,29 +546,37 @@ dashboard.post("/automations", permissionGuard("automations"), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "automations");
   if (revalidationFailure) return revalidationFailure;
-  const rule = await d.repositories.automations.create({
-    name, event_type, conditions: conditions || undefined,
-    action_type, action_config: action_config || undefined,
-    is_active: is_active ? true : false
-  }, permissionWriteFence(c, "automations"));
-
-  return c.json(rule, 201);
+  const capability=permissionWriteFence(c,"automations"),admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+  if(!admission){const rule=await d.repositories.automations.create({name,event_type,conditions:conditions||undefined,
+    action_type,action_config:action_config||undefined,is_active:is_active?true:false},capability);return c.json(rule,201);}
+  try{
+    const prepared=await admission.prepareMutation('dashboard.automation.create',payload,capability,readIdempotencyKey(c));
+    const outcome=await admission.commit(prepared,(repo,commit,snapshot)=>repo.createAutomation(commit,snapshot,{
+      tenant_id:d.scope.tenantId,id:crypto.randomUUID(),name,event_type,conditions:conditions||null,action_type,
+      action_config:action_config||null,is_active:is_active?1:0,
+    } satisfies Omit<AutomationRow,'created_at'>));
+    if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body,201);
+  }catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
  * PATCH /api/automations/:id
  * Update an automation rule.
  */
-dashboard.patch("/automations/:id", permissionGuard("automations"), async (c) => {
+dashboard.patch("/automations/:id", permissionGuard("automations"), requestBounds(CONFIGURATION_REQUEST_BYTES), async (c) => {
   const id = c.req.param("id");
   if (!id) return c.json({ error: "Missing ID" }, 400);
-  const payload = await c.req.json();
+  const payload = await readConfigurationBody(c) as Record<string,any>|Response;if(payload instanceof Response)return payload;
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "automations");
   if (revalidationFailure) return revalidationFailure;
-
-  const rule = await d.repositories.automations.update(id, payload, permissionWriteFence(c, "automations"));
-  return c.json(rule);
+  const capability=permissionWriteFence(c,"automations"),admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+  if(!admission)return c.json(await d.repositories.automations.update(id,payload,capability));
+  try{
+    const prepared=await admission.prepareMutation('dashboard.automation.update',payload,capability,readIdempotencyKey(c),id);
+    const outcome=await admission.commit(prepared,(repo,commit,snapshot)=>repo.updateAutomation(commit,id,snapshot,payload));
+    if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body);
+  }catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**
@@ -540,8 +589,13 @@ dashboard.delete("/automations/:id", permissionGuard("automations"), async (c) =
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const revalidationFailure = await revalidatePermission(c, "automations");
   if (revalidationFailure) return revalidationFailure;
-  await d.repositories.automations.delete(id, permissionWriteFence(c, "automations"));
-  return c.json({ success: true });
+  const capability=permissionWriteFence(c,"automations"),admission=configurationAdmission(c);if(admission instanceof Response)return admission;
+  if(!admission){await d.repositories.automations.delete(id,capability);return c.json({success:true});}
+  try{
+    const prepared=await admission.prepareMutation('dashboard.automation.delete',{id},capability,readIdempotencyKey(c),id);
+    const outcome=await admission.commit(prepared,(repo,commit,snapshot)=>repo.deleteAutomation(commit,id,snapshot));
+    if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body);
+  }catch(error){const response=configurationFailure(c,error);if(response)return response;throw error;}
 });
 
 /**

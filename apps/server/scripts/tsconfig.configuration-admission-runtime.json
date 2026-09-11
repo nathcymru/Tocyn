@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.budget-runtime.json",
+  "include": [
+    "configuration-admission-runtime-entry.ts",
+    "configuration-admission-runtime.test.ts"
+  ]
+}
