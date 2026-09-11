@@ -1265,6 +1265,42 @@ dashboard.patch('/tickets/:id/responsible-owner', requestBounds(1024), async (c)
 });
 
 /**
+ * POST /api/tickets/:id/route
+ *
+ * Server-only balanced queue selection for an unassigned active ticket. The
+ * queue preserves the existing responsible-owner mutation/audit/receipt path;
+ * when every eligible operator is unavailable or at capacity it leaves the
+ * ticket unassigned and reports that explicit fallback.
+ */
+dashboard.post('/tickets/:id/route', requestBounds(1024), async (c) => {
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  if (staffTicketAdmissionMode(c.env) !== 'enabled') {
+    return c.json({ code:'routing_admission_unavailable',error:'Queue routing requires configured mutation admission' },503);
+  }
+  try {
+    const key = readIdempotencyKey(c);
+    if (!key) return c.json({ code:'idempotency_key_required',error:'Idempotency-Key is required for queue routing' },400);
+    const id = c.req.param('id');
+    const mutation = staffMutationService(c,d,'dashboard.ticket.update');
+    const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId:id,data:{routingSelection:true} },key);
+    if (prepared.replay) {
+      c.header('Idempotency-Replayed','true');
+      return c.json({ success:true,responsibleOwnerId:prepared.replay.ticket.assigned_to ?? null },prepared.replay.status);
+    }
+    const rejection = await admitConfiguredStaffTicketMutation(c,'dashboard.ticket.update',mutation,prepared);
+    if (rejection) return rejection;
+    const outcome = await mutation.commit(prepared);
+    await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket,mutation.broadcastGrant(prepared,outcome));
+    c.header('Idempotency-Replayed','false');
+    return c.json({ success:true,responsibleOwnerId:outcome.ticket.assigned_to ?? null },outcome.status);
+  } catch (error) {
+    const failure = staffMutationFailure(c,error); if (failure) return failure;
+    if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard queue routing failed');
+    return c.json({ error:'Queue routing failed' },500);
+  }
+});
+
+/**
  * PUT /api/operators/:id/routing-profile
  *
  * Tenant administrators configure server-side routing facts. Assignment does

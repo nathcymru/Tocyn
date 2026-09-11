@@ -27,6 +27,7 @@ const unavailableMention = () => new TicketMutationError(409,'mention_recipient_
 const ownerConflict = () => new TicketMutationError(409,'responsible_owner_conflict','The responsible owner changed. Refresh the ticket before assigning it.');
 const ownerUnavailable = () => new TicketMutationError(409,'responsible_owner_unavailable','The selected operator is unavailable. Choose an available operator.');
 const ownerAtCapacity = () => new TicketMutationError(409,'responsible_owner_capacity_reached','The selected operator has reached the configured active-work limit.');
+const routingExhausted = () => new TicketMutationError(409,'routing_no_eligible_operator','No eligible operator has remaining capacity. The ticket remains unassigned.');
 // Match the current reply capability and dashboard request contract before
 // admission; Markdown rendering enforces the same character and byte bounds.
 const MAX_ARTICLE_BODY_SIZE = 16_000;
@@ -63,7 +64,7 @@ export class StaffTicketMutationService {
   private normalize(input: StaffMutationInput): StaffMutationInput {
     if (input.operation === 'dashboard.ticket.update') {
       if (typeof input.ticketId !== 'string' || !input.ticketId || !input.data || Object.getPrototypeOf(input.data) !== Object.prototype) throw invalid();
-      const allowed = ['status','priority','assigned_to','group_id','custom_fields','responsibleOwnerAssignment','expectedAssignedTo','capacityOverride'];
+      const allowed = ['status','priority','assigned_to','group_id','custom_fields','responsibleOwnerAssignment','expectedAssignedTo','capacityOverride','routingSelection'];
       const supplied = Object.keys(input.data);
       if (!supplied.length || supplied.some(key => !allowed.includes(key))) throw invalid();
       const data = input.data;
@@ -82,7 +83,11 @@ export class StaffTicketMutationService {
           ...(data.capacityOverride === true ? { capacityOverride:true } : {}),
         } };
       }
-      if (data.responsibleOwnerAssignment !== undefined || data.expectedAssignedTo !== undefined || data.capacityOverride !== undefined) throw invalid();
+      if (data.routingSelection === true) {
+        if (supplied.length !== 1) throw invalid();
+        return { operation:input.operation,ticketId:input.ticketId,data:{ routingSelection:true } };
+      }
+      if (data.responsibleOwnerAssignment !== undefined || data.expectedAssignedTo !== undefined || data.capacityOverride !== undefined || data.routingSelection !== undefined) throw invalid();
       return { operation: input.operation, ticketId: input.ticketId, data: { ...data } };
     }
     const d = input.data;
@@ -239,6 +244,32 @@ export class StaffTicketMutationService {
       if (verified.length || !attempt.namespace) throw invalid();
       attempt.commitStarted = true;
       try {
+        if (input.data.routingSelection) {
+          let previousOwnerId: string | undefined;
+          for (let selectionAttempt = 0; selectionAttempt < 8; selectionAttempt++) {
+            await this.authorize(attempt.requirements);
+            const ownerId = await this.receipts.routingCandidate(input.ticketId);
+            if (!ownerId) throw routingExhausted();
+            // A stable candidate after a failed batch means the failure was not
+            // a capacity/membership race; preserve the normal retry-with-key
+            // contract instead of issuing a second speculative mutation.
+            if (ownerId === previousOwnerId) throw unavailable();
+            previousOwnerId = ownerId;
+            try {
+              const raw = await this.canonical.commitStaffUpdate(input.ticketId,{ assigned_to:ownerId },{kind:'staff',id:this.credential.actorId,source:'dashboard'},
+                { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace,
+                  responsibleOwner:{ticketId:input.ticketId,ownerId,capacityOverride:false},routingSelection:{ticketId:input.ticketId,ownerId} },null);
+              return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
+            } catch {
+              await this.authorize(attempt.requirements);
+              const winner = await this.receipts.findActive(attempt.namespace);
+              if (winner) return this.replay(winner,attempt.namespace);
+              const ticket = await this.receipts.ticket(input.ticketId);
+              if (!ticket || ticket.assigned_to !== null) throw ownerConflict();
+            }
+          }
+          throw routingExhausted();
+        }
         const responsibleOwner = input.data.responsibleOwnerAssignment
           ? { ticketId:input.ticketId,ownerId:input.data.assigned_to ?? null,capacityOverride:input.data.capacityOverride === true } : undefined;
         const raw = await this.canonical.commitStaffUpdate(input.ticketId,input.data,{kind:'staff',id:this.credential.actorId,source:'dashboard'},
@@ -246,6 +277,7 @@ export class StaffTicketMutationService {
           input.data.responsibleOwnerAssignment ? input.data.expectedAssignedTo : undefined);
         return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
       } catch (error) {
+        if (input.data.routingSelection && error instanceof TicketMutationError) throw error;
         await this.authorize(attempt.requirements);
         const winner = await this.receipts.findActive(attempt.namespace);
         if (winner) return this.replay(winner,attempt.namespace);

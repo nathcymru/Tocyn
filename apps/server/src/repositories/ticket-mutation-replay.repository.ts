@@ -1,7 +1,7 @@
 import { apiBudgetMutationStatements, type ApiMutationCommit } from './budget-commit-fence';
 import { customerMutationStatement, type CustomerMutationCommit } from './customer-ticket-mutation.repository';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
-import { staffMutationStatements, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
+import { routingSelectionStatement, staffMutationStatements, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
 import { StaffReplyPreconditionConflictError, staffReplyPreconditionConstraint, staffReplyPreconditionMatches, type StaffReplyPrecondition } from './staff-reply-precondition.repository';
 export { StaffReplyPreconditionConflictError, type StaffReplyPrecondition } from './staff-reply-precondition.repository';
 import { BetaAdmissionError } from '../types/local-beta';
@@ -135,11 +135,15 @@ export class TicketMutationReplayRepository {
       || staff.authority.operationFingerprint !== staff.namespace.payloadHash
       || (expectedAssignedTo !== undefined && (!staff.responsibleOwner || staff.responsibleOwner.ticketId !== ticketId
         || staff.responsibleOwner.ownerId !== (data.assigned_to ?? null)))
+      || (staff.routingSelection !== undefined && (!staff.responsibleOwner || expectedAssignedTo !== null
+        || staff.routingSelection.ticketId !== ticketId || staff.routingSelection.ownerId !== (data.assigned_to ?? null)))
       || (expectedAssignedTo === undefined && staff.responsibleOwner !== undefined)) throw new Error('Invalid staff update mutation');
     const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff)];
-    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo,staff.responsibleOwner?.capacityOverride === true);
+    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo,
+      staff.responsibleOwner?.capacityOverride === true,staff.routingSelection !== undefined);
     const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
     statements.push(...audit.statements);
+    if (staff.routingSelection) statements.push(routingSelectionStatement(this.db,this.scope,staff.routingSelection));
     if (expectedAssignedTo !== undefined) {
       // A stale dashboard observation fails the CHECK and rolls the complete
       // batch back, including the audit event and any local-beta admission row.

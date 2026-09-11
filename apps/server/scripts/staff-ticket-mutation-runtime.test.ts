@@ -156,6 +156,7 @@ const update = (data: AuditedTicketUpdate = { status:'pending' }): StaffMutation
 const responsibleOwner = (ownerId:string|null,expectedOwnerId:string|null,capacityOverride=false, ticketId='ticket'):StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId,data:{
   assigned_to:ownerId,responsibleOwnerAssignment:true,expectedAssignedTo:expectedOwnerId,...(capacityOverride ? {capacityOverride:true as const} : {}),
 } });
+const queueRoute = (ticketId='ticket'):StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId,data:{ routingSelection:true } });
 async function accept(service:StaffTicketMutationService,input:StaffMutationInput,key:string) {
   const prepared = await service.prepareStaffMutation(input,key);assert.equal(prepared.replay,null);
   assert.equal((await service.admit(prepared)).status,'spent');return {prepared,outcome:await service.commit(prepared)};
@@ -232,6 +233,78 @@ test('responsible-owner capacity is tenant-scoped, concurrent, and overrideable 
 
     await f.db.prepare("UPDATE operator_routing_profiles SET is_available=0 WHERE tenant_id='a' AND user_id='owner'").run();
     await assert.rejects(f.service('a','admin').prepareStaffMutation(responsibleOwner('owner',null,true,'ticket-3'),'unavailable-owner'),(error:any)=>error.status===409 && error.code==='responsible_owner_unavailable');
+  } finally { await f.mf.dispose(); }
+});
+
+test('queue routing is tenant-scoped, balanced, retry-safe, and leaves an explicit unassigned fallback when exhausted', async () => {
+  const f=await fixture();try {
+    await f.db.batch([
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('a','alpha','alpha-a@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('a','bravo','bravo-a@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('a','charlie','charlie-a@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES ('a','queue-group','Queue group')"),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('a','staff','queue-group'),('a','alpha','queue-group'),('a','bravo','queue-group'),('a','charlie','queue-group')"),
+      // A colliding operator id in tenant B must never be eligible for tenant A.
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('b','alpha','alpha-b@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('b','alpha','group')"),
+      f.db.prepare("INSERT INTO operator_routing_profiles (tenant_id,user_id,is_available,assignment_capacity) VALUES ('a','staff',0,0),('a','alpha',1,1),('a','bravo',1,1),('a','charlie',1,1),('b','alpha',1,500)"),
+      f.db.prepare("UPDATE tickets SET group_id='queue-group' WHERE tenant_id='a' AND id='ticket'"),
+      f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES ('a','ticket-2','Two','customer-a@example.test','queue-group','dashboard'),('a','ticket-3','Three','customer-a@example.test','queue-group','dashboard'),('a','ticket-4','Four','customer-a@example.test','queue-group','dashboard'),('a','ticket-5','Five','customer-a@example.test','queue-group','dashboard'),('a','ticket-6','Six','customer-a@example.test','queue-group','dashboard')"),
+    ]);
+
+    const first=await accept(f.service(),queueRoute(),'queue-first');
+    assert.equal(first.outcome.ticket.assigned_to,'alpha','tenant A chooses its local least-loaded candidate');
+    const replay=await f.service().prepareStaffMutation(queueRoute(),'queue-first');
+    assert.equal(replay.replay?.ticket.assigned_to,'alpha','the fixed queue intent replays despite a changed queue');
+    const queueAudit=await f.db.prepare("SELECT facts FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket' AND kind='ticket.assignment_changed'").first<{facts:string}>();
+    assert.equal(JSON.parse(queueAudit!.facts).routingSelection,1,'the existing canonical assignment audit identifies queue selection');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_routing_fairness WHERE tenant_id='a' AND user_id='alpha'").first<{n:number}>())?.n,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_routing_fairness WHERE tenant_id='b'").first<{n:number}>())?.n,0);
+
+    // Both concurrent routes initially see bravo. One consumes bravo's last
+    // slot; the other retries selection and lands on charlie.
+    const one=f.service(),two=f.service();
+    const pendingOne=await one.prepareStaffMutation(queueRoute('ticket-2'),'queue-two');
+    const pendingTwo=await two.prepareStaffMutation(queueRoute('ticket-3'),'queue-three');
+    assert.equal((await one.admit(pendingOne)).status,'spent');assert.equal((await two.admit(pendingTwo)).status,'spent');
+    const routed=await Promise.all([one.commit(pendingOne),two.commit(pendingTwo)]);
+    assert.deepEqual(routed.map(result=>result.ticket.assigned_to).sort(),['bravo','charlie']);
+    assert.equal(f.canonicalAttempts(),4,'one contested queue route retried with the next eligible operator');
+    await assert.rejects(accept(f.service(),queueRoute('ticket-4'),'queue-exhausted'),(error:any)=>error.status===409 && error.code==='routing_no_eligible_operator');
+    assert.equal((await f.db.prepare("SELECT assigned_to FROM tickets WHERE tenant_id='a' AND id='ticket-4'").first<{assigned_to:string|null}>())?.assigned_to,null);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket-4'").first<{n:number}>())?.n,0);
+
+    // Once work closes, the per-tenant sequence rotates equal-load selection
+    // in prior queue order even when timestamps share the same second.
+    await f.db.prepare("UPDATE tickets SET status='resolved' WHERE tenant_id='a' AND id IN ('ticket','ticket-2','ticket-3')").run();
+    assert.equal((await accept(f.service(),queueRoute('ticket-5'),'queue-five')).outcome.ticket.assigned_to,'alpha');
+    await f.db.prepare("UPDATE tickets SET status='resolved' WHERE tenant_id='a' AND id='ticket-5'").run();
+    assert.equal((await accept(f.service(),queueRoute('ticket-6'),'queue-six')).outcome.ticket.assigned_to,'bravo');
+  } finally { await f.mf.dispose(); }
+});
+
+test('queue routing reauthorizes live operator membership before selecting and commits no fallback side effect after revocation', async () => {
+  const f=await fixture();try {
+    await f.db.batch([
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('a','only-owner','owner@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES ('a','queue-group','Queue group')"),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('a','staff','queue-group'),('a','only-owner','queue-group')"),
+      f.db.prepare("INSERT INTO operator_routing_profiles (tenant_id,user_id,is_available,assignment_capacity) VALUES ('a','staff',0,0),('a','only-owner',1,1)"),
+      f.db.prepare("UPDATE tickets SET group_id='queue-group' WHERE tenant_id='a' AND id='ticket'"),
+    ]);
+    const service=f.service();const prepared=await service.prepareStaffMutation(queueRoute(),'queue-revoked');
+    assert.equal((await service.admit(prepared)).status,'spent');
+    await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='a' AND user_id='only-owner' AND group_id='queue-group'").run();
+    await assert.rejects(service.commit(prepared),(error:any)=>error.status===409 && error.code==='routing_no_eligible_operator');
+    assert.equal((await f.db.prepare("SELECT assigned_to FROM tickets WHERE tenant_id='a' AND id='ticket'").first<{assigned_to:string|null}>())?.assigned_to,null);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,0);
+
+    await f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('a','only-owner','queue-group')").run();
+    const revokedActor=f.service();const actorPrepared=await revokedActor.prepareStaffMutation(queueRoute(),'queue-actor-revoked');
+    assert.equal((await revokedActor.admit(actorPrepared)).status,'spent');
+    await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='a' AND user_id='staff' AND group_id='queue-group'").run();
+    await assert.rejects(revokedActor.commit(actorPrepared),(error:any)=>error.status===403 && error.code==='staff_mutation_denied');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,0);
   } finally { await f.mf.dispose(); }
 });
 
