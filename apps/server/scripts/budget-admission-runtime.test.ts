@@ -394,6 +394,12 @@ test('native exhausted recovery partition retains sealed new-work charges and bo
     const control = await h.control(); assert.equal(control.calls.reserve, 3); assert.equal(control.calls.reconcile, 0);
     assert.deepEqual((await h.grants()).find(item => item.reservationId === original.reservationId)?.accounted, original.accounted);
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{ n: number }>())!.n, 0);
+    await h.control({ now: original.expiresAt + 1 });
+    await advanceRuntimePolicy(h, 2, original.expiresAt + 60_000);
+    const renewed = await h.create('expired-recovery-new-charge'); assert.equal(renewed.status, 201); await renewed.body?.cancel();
+    assert.deepEqual((await h.grants()).find(item => item.reservationId === original.reservationId)?.accounted, original.accounted,
+      'expiry only permits a fresh paid admission; it never releases the failed closure charge');
+    assert.equal((await h.control()).calls.reconcile, 0);
   } finally { await h.mf.dispose(); }
 });
 
@@ -491,6 +497,7 @@ test('idle API closure reconciles the entire two-operation grant', async () => {
   try {
     for (const key of ['closure-one','closure-two']) {
       const response = await h.create(key); assert.equal(response.status,201); await response.body?.cancel();
+      assert.equal((await h.control()).calls.reconcile, 0, 'individual receipts cannot reconcile an open grant');
     }
     const original = (await h.grants())[0];
     await h.control({ now: h.initialNow + 30_001 });
@@ -505,6 +512,17 @@ test('idle API closure reconciles the entire two-operation grant', async () => {
       WHERE tenant_id='runtime-tenant' AND reservation_id=? AND holder_id=? ORDER BY operation_id`).bind(original.reservationId,original.holderId).all<{
         operation_id:string;operation_fingerprint:string;operation_envelope_json:string
       }>()).results as { operation_id:string;operation_fingerprint:string;operation_envelope_json:string }[];
+    assert.equal(operationRows.length, 2, 'later work cannot spend the original sealed holder');
+    const expectedUncertain: Record<string, number> = { doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 8 };
+    for (const row of operationRows) for (const [dimension,units] of Object.entries(JSON.parse(row.operation_envelope_json) as Record<string,number>)) {
+      expectedUncertain[dimension] = (expectedUncertain[dimension] ?? 0) + units;
+    }
+    const reconciled = afterTrigger.find(grant => grant.reservationId === original.reservationId)!;
+    assert.equal(reconciled.status, 'reconciled');
+    assert.deepEqual(reconciled.accounted, expectedUncertain, 'cold control and all assigned operation envelopes remain charged');
+    assert.equal(original.envelope.workerRequests! - reconciled.accounted.workerRequests!, 12, 'only six unused two-request operations are released');
+    assert.equal(afterTrigger.filter(grant => grant.purpose === 'new-work').length, 2, 'later work uses a newly charged holder');
+    assert.equal((await h.control()).calls.reconcile, 1, 'automatic closure sends one whole-grant reconciliation');
     const recovery = new BudgetGrantRecoveryService(h.db,new BudgetAuthorityRepository(h.db),h.namespace as unknown as DurableObjectNamespace,
       createVerifiedTenantScope('runtime-tenant','runtime-key',['integration'],1),'runtime-key');
     const recovered = await recovery.recover({ ...(await sealedFixture(h)).sealed, tenantId: 'runtime-tenant', aggregateId: 'runtime-owner-coordinator', reservationId: original.reservationId,
@@ -801,7 +819,7 @@ for (const operation of ['create','reply'] as const) for (const change of ['auth
         await h.db.prepare('UPDATE budget_owner_policies SET authority_max_age_ms=1000').run();
       }
       const counts=async()=>{
-        const result:Record<string,number>={};for(const table of ['tickets','articles','attachments','conversation_events','ticket_sla_events','ticket_mutation_receipts']) {
+        const result:Record<string,number>={};for(const table of ['tickets','articles','attachments','conversation_events','ticket_sla_events','ticket_mutation_receipts','budget_grant_operations']) {
           result[table]=(await h.db.prepare(`SELECT count(*) AS n FROM ${table} WHERE tenant_id='runtime-tenant'`).first<{n:number}>())!.n;
         }return result;
       };
@@ -921,11 +939,11 @@ test('cold allocation source edits retire the newly charged holder before its fi
   const h=await warmHarness();try{
     await h.control({editPolicyAfterReserve:true});
     const denied=await h.create('changed-during-cold-grant');assert.equal(denied.status,503);await denied.body?.cancel();
-    const after=await h.control();assert.deepEqual(after.calls,{refresh:1,reserve:1,revoke:0});
+    const after=await h.control();assert.deepEqual(after.calls,{refresh:1,reserve:1,revoke:0,reconcile:0});
     assert.equal(after.cache.operations,0);assert.equal(after.canonicalAttempts,0);assert.equal(await h.count(),0);
     const grants=await h.grants();assert.equal(grants.length,1);assert.equal(grants[0].accounted.workerRequests,16);
     const retry=await h.create('changed-during-cold-grant');assert.equal(retry.status,201);await retry.body?.cancel();
-    assert.deepEqual((await h.control()).calls,{refresh:2,reserve:2,revoke:0});
+    assert.deepEqual((await h.control()).calls,{refresh:2,reserve:2,revoke:0,reconcile:0});
     const renewed=await h.grants();assert.equal(renewed.length,2);assert.notEqual(renewed[0].holderId,renewed[1].holderId);
     assert.deepEqual(renewed[0].accounted,grants[0].accounted);
   }finally{await h.mf.dispose();}
@@ -953,7 +971,7 @@ test('valid current source renewal shares one new paid grant and then restores z
     assert.deepEqual(responses.map(response=>response.status),[201,201,201,201,201]);await Promise.all(responses.map(response=>response.body?.cancel()));
     const before=await h.control(),grants=await h.grants();
     assert.equal(grants.length,2);assert.notEqual(grants[1].holderId,original.holderId);assert.deepEqual(grants[0].accounted,original.accounted);
-    assert.deepEqual(before.calls,{refresh:2,reserve:2,revoke:0});assert.equal(before.cache.refills,2);assert.equal(before.cache.scopes,1);
+    assert.deepEqual(before.calls,{refresh:2,reserve:2,revoke:0,reconcile:0});assert.equal(before.cache.refills,2);assert.equal(before.cache.scopes,1);
     const warm=await h.create('warm-renewal');assert.equal(warm.status,201);await warm.body?.cancel();
     const replay=await h.create('before-renewal');assert.equal(replay.status,201);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');await replay.body?.cancel();
     assert.deepEqual((await h.control()).calls,before.calls);
@@ -989,7 +1007,7 @@ for(const expired of [false,true])test(`late old allocation cannot install or ov
     for(let attempt=0;attempt<3;attempt++){
       const rejected=await h.create('replacement');assert.equal(rejected.status,503);await rejected.body?.cancel();
     }
-    assert.deepEqual((await h.control()).calls,{refresh:1,reserve:1,revoke:0});assert.equal((await h.control()).cache.scopes,1);
+    assert.deepEqual((await h.control()).calls,{refresh:1,reserve:1,revoke:0,reconcile:0});assert.equal((await h.control()).cache.scopes,1);
     await h.control({releaseReserve:true});const old=await pending;pending=undefined;assert.equal(old.status,503);await old.body?.cancel();
     const retired=await h.control();assert.equal(retired.cache.holders,0);assert.equal(retired.cache.operations,0);assert.equal(retired.canonicalAttempts,0);
     const recovered=await h.create('replacement');assert.equal(recovered.status,201);await recovered.body?.cancel();

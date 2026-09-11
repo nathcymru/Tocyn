@@ -281,7 +281,7 @@ export class TicketMutationReplayService {
       if (await recovery.recover(sealed,input.now()) !== 'reconciled') return { status: 'rejected' as const, reason: 'capacity-exhausted' as const };
       input.cache.completeApiGrantRecovery(sealed);
     }
-    if (input.cache.hasBlockedApiGrantRecovery(this.scope.tenantId,credentialKey)) return { status: 'rejected' as const, reason: 'capacity-exhausted' as const };
+    if (input.cache.hasBlockedApiGrantRecovery(this.scope.tenantId,credentialKey,input.now())) return { status: 'rejected' as const, reason: 'capacity-exhausted' as const };
     const result = await input.cache.admit({ repository: input.repository, namespace: input.namespace, scope: this.scope,
       authorization: { authorize: scope => input.repository.authorizeApiKeyTicket(scope,this.scope.tenantId,apiKeyId) },
       credentialKey, intent, business: input.business, now: input.now });

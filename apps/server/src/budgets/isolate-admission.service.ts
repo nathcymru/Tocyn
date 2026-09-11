@@ -311,6 +311,8 @@ export class IsolateBudgetAdmissionCache {
     if (!Number.isSafeInteger(now) || !Number.isSafeInteger(idleMs) || idleMs < 1) return null;
     for (const entry of this.entries) {
       for (const held of entry.holders) {
+        // Expiry retains the central charge; it cannot create closure evidence.
+        if (now >= held.expiresAt) continue;
         if (held.sealed && held.sealedGrant && held.tenantId === tenantId && held.credentialKey === credentialKey) {
           if (held.recoveryCompleted || held.recoveryAttempts >= MAX_ISOLATE_GRANT_RECOVERY_ATTEMPTS) continue;
           held.recoveryAttempts++;
@@ -347,8 +349,8 @@ export class IsolateBudgetAdmissionCache {
   }
 
   /** A sealed grant with exhausted recovery attempts blocks its credential scope; it cannot silently return to spend. */
-  hasBlockedApiGrantRecovery(tenantId: string, credentialKey: string): boolean {
+  hasBlockedApiGrantRecovery(tenantId: string, credentialKey: string, now: number): boolean {
     return this.entries.some(entry => entry.holders.some(held => held.tenantId === tenantId && held.credentialKey === credentialKey
-      && held.sealed && !held.recoveryCompleted && held.recoveryAttempts >= MAX_ISOLATE_GRANT_RECOVERY_ATTEMPTS));
+      && now < held.expiresAt && held.sealed && !held.recoveryCompleted && held.recoveryAttempts >= MAX_ISOLATE_GRANT_RECOVERY_ATTEMPTS));
   }
 }
