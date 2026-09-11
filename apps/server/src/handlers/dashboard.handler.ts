@@ -166,6 +166,11 @@ async function storageDigest(parts: readonly string[]): Promise<string> {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+async function storageByteDigest(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 function attachmentBudgetFailure(c: any, reason: 'exhausted' | 'conflict' | 'unavailable') {
   return reason === 'conflict'
     ? c.json({ error: 'Idempotency-Key conflicts with a different upload' }, 409)
@@ -1037,8 +1042,18 @@ dashboard.post('/attachments/upload', async (c) => {
   if (requestedIdempotency !== undefined && !idempotencyKey) return c.json({ error: 'Invalid Idempotency-Key' }, 400);
   const uploadSeed = idempotencyKey ?? crypto.randomUUID();
   const digest = await storageDigest(['dashboard-attachment-upload-v1', d.scope.tenantId, payload.sub, uploadSeed]);
-  const fingerprint = await storageDigest(['dashboard-attachment-upload-content-v1', file.name, file.type, String(file.size)]);
-  const logicalKey = `agent-attachments/${payload.sub}/${digest}${extPart}`;
+  // FormData has already bounded the file to the endpoint's ten MiB limit.
+  // Hash its exact bytes before admission so an idempotency key cannot replay a
+  // same-size replacement. The original stream remains usable for R2 below.
+  const fileBytes = await file.arrayBuffer();
+  const byteDigest = await storageByteDigest(fileBytes);
+  const fingerprint = await storageDigest(['dashboard-attachment-upload-content-v2', file.name, file.type, String(file.size), byteDigest]);
+  // An idempotent key maps to one immutable logical object. Legacy unkeyed
+  // uploads retain their extension-bearing key shape, and existing stored
+  // references remain readable through the unchanged tenant storage adapter.
+  const logicalKey = idempotencyKey
+    ? `agent-attachments/${payload.sub}/${digest}`
+    : `agent-attachments/${payload.sub}/${digest}${extPart}`;
   const admission = await admitDashboardAttachment({ env: c.env, deps: d, payload, operation: 'dashboard.attachment.upload',
     operationId: `storage-upload:${digest}`, operationFingerprint: `storage-upload:${fingerprint}`, bytes: file.size,
     now: () => c.env.localNow?.() ?? Date.now() });
@@ -1058,7 +1073,7 @@ dashboard.post('/attachments/upload', async (c) => {
       return c.json({ key: logicalKey });
     }
     try {
-      const put = await d.attachmentStorage.putAttachment(logicalKey, c.env.LOCAL_BETA_ENABLED==='true' ? await file.arrayBuffer() : file.stream(), {
+      const put = await d.attachmentStorage.putAttachment(logicalKey, c.env.LOCAL_BETA_ENABLED==='true' ? fileBytes : file.stream(), {
         httpMetadata: { contentType: file.type || 'application/octet-stream' },
         customMetadata: { tocynUploadFingerprint: fingerprint },
         onlyIf: { etagDoesNotMatch: '*' },

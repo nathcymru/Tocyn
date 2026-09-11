@@ -18,6 +18,8 @@ let nextMutationReceiptWinner: any;
 let canonicalAttempts = 0;
 const canonicalBatches: { statements: number; rowsRead: number; rowsWritten: number }[] = [];
 let r2Gets = 0;
+let r2Puts = 0;
+let loseR2PutAcknowledgement = false;
 let notificationBroadcasts = 0;
 const localCapture = new LocalAuthCaptureTransport();
 const broadcast = BroadcastService.prototype.broadcast;
@@ -29,6 +31,12 @@ function instrumentBucket(bucket: any): any {
   if (!bucket) return bucket;
   return new Proxy(bucket, { get(target, property) {
     if (property === 'get') return async (...args: any[]) => { r2Gets++; return target.get(...args); };
+    if (property === 'put') return async (...args: any[]) => {
+      r2Puts++;
+      const result = await target.put(...args);
+      if (loseR2PutAcknowledgement) { loseR2PutAcknowledgement = false; throw new Error('synthetic lost R2 put acknowledgement'); }
+      return result;
+    };
     const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value;
   }});
 }
@@ -154,7 +162,7 @@ export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     if (new URL(request.url).pathname === '/__budget-control') {
       if (request.method === 'POST') {
-        const control = await request.json() as { pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown };
+        const control = await request.json() as { pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown };
         if (control.pauseNextCanonical) pauseNextCanonical = true;
         if (control.releaseCanonical) releaseCanonical?.();
         if (control.pauseNextReserve) pauseNextReserve=true;
@@ -165,13 +173,14 @@ export default {
         if (control.beforeCanonical) beforeCanonical=control.beforeCanonical;
         if (control.canonicalDelayMs && control.canonicalDelayMs<=1500) canonicalDelayMs=control.canonicalDelayMs;
         if (control.loseCanonicalAck) loseCanonicalAck=true;
+        if (control.loseR2PutAcknowledgement) loseR2PutAcknowledgement=true;
         if (control.discard) apiTicketBudgetCache.discardForTrustedRuntime();
         if (control.now !== undefined) clock = control.now;
         if (control.loseReserveAck) lostReserveAcksRemaining = 1;
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
         if (control.loseReconcileAcks && control.loseReconcileAcks <= 5) lostReconcileAcksRemaining = control.loseReconcileAcks;
       }
-      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, notificationBroadcasts, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
+      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, r2Puts, notificationBroadcasts, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), ATTACHMENTS_BUCKET: instrumentBucket(env.ATTACHMENTS_BUCKET), emailTransport: localCapture,
       BUDGET_COORDINATOR_DO: instrument(env.BUDGET_COORDINATOR_DO, env.DB),

@@ -1,7 +1,6 @@
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { Env } from '../bindings';
 import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
-import { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
 import { SessionBudgetAuthorityRepository, type SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
 import type { JWTPayload } from '../types';

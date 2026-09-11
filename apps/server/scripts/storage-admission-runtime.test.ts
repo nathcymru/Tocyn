@@ -71,9 +71,9 @@ async function fixture() {
   } catch (error) { await mf.dispose(); throw error; }
 }
 
-async function upload(mf: Miniflare, token: string, key: string, body = 'synthetic attachment') {
+async function upload(mf: Miniflare, token: string, key: string, body = 'synthetic attachment', filename = 'synthetic.txt', contentType = 'text/plain') {
   const form = new FormData();
-  form.append('file', new Blob([body], { type: 'text/plain' }), 'synthetic.txt');
+  form.append('file', new Blob([body], { type: contentType }), filename);
   // Constructing a Request supplies the multipart boundary; dispatching a raw
   // FormData body does not on Miniflare's lower-level fetch helper.
   const request = new Request('http://runtime.test/api/attachments/upload', {
@@ -87,16 +87,16 @@ test('dashboard storage admission is tenant-scoped, warm, and charges before nat
   try {
     const tokenA = await staffToken('storage-a');
     const tokenB = await staffToken('storage-b');
-    const first = await upload(f.mf, tokenA, 'same-upload');
+    const first = await upload(f.mf, tokenA, 'same-upload', 'aaaaaaaaaaaaaaaaaaaa');
     assert.equal(first.status, 200); const firstBody = await first.json() as { key: string };
     const cold = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { calls: { refresh: number; reserve: number } };
-    const replay = await upload(f.mf, tokenA, 'same-upload');
+    const replay = await upload(f.mf, tokenA, 'same-upload', 'aaaaaaaaaaaaaaaaaaaa');
     assert.equal(replay.status, 200); assert.equal((await replay.json() as { key: string }).key, firstBody.key,
       'a lost upload response can recover through its bounded idempotency marker');
     const warm = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { calls: { refresh: number; reserve: number } };
     assert.deepEqual(warm.calls, cold.calls, 'the recovery spend uses its preallocated isolate grant without another budget DO RPC');
-    const conflict = await upload(f.mf, tokenA, 'same-upload', 'different synthetic attachment');
-    assert.equal(conflict.status, 409, 'the preallocated second attempt rejects a changed payload without overwriting R2'); await conflict.body?.cancel();
+    const conflict = await upload(f.mf, tokenA, 'same-upload', 'bbbbbbbbbbbbbbbbbbbb');
+    assert.equal(conflict.status, 409, 'same-size replacement bytes conflict rather than replaying the old object'); await conflict.body?.cancel();
     const tenantB = await upload(f.mf, tokenB, 'same-upload');
     assert.equal(tenantB.status, 200); const tenantBBody = await tenantB.json() as { key: string };
     assert.notEqual(tenantBBody.key, firstBody.key, 'the same client key never crosses tenant-scoped storage');
@@ -107,9 +107,37 @@ test('dashboard storage admission is tenant-scoped, warm, and charges before nat
       f.db.prepare("INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key) VALUES ('storage-a','storage-attachment','storage-article','synthetic.txt',20,'text/plain',?)").bind(firstBody.key),
     ]);
     const download = await f.mf.dispatchFetch('http://runtime.test/api/attachments/storage-attachment/download', { headers: { authorization: `Bearer ${tokenA}` } });
-    assert.equal(download.status, 200); assert.equal(await download.text(), 'synthetic attachment');
+    assert.equal(download.status, 200); assert.equal(await download.text(), 'aaaaaaaaaaaaaaaaaaaa');
     const foreign = await f.mf.dispatchFetch('http://runtime.test/api/attachments/storage-attachment/download', { headers: { authorization: `Bearer ${tokenB}` } });
     assert.equal(foreign.status, 404, 'the tenant-qualified metadata lookup denies before the foreign R2 key is read'); await foreign.body?.cancel();
+  } finally { await f.mf.dispose(); }
+});
+
+test('idempotent upload key remains one object after cache loss, filename changes, concurrent writes and a lost R2 acknowledgement', async () => {
+  const f = await fixture();
+  try {
+    const token = await staffToken('storage-a');
+    const first = await upload(f.mf, token, 'stable-upload', 'same bytes');
+    assert.equal(first.status, 200); const { key } = await first.json() as { key: string };
+    assert.match(key, /^agent-attachments\/shared-staff\/[a-f0-9]{64}$/, 'idempotent storage key excludes mutable filename and extension');
+    await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ discard: true }) });
+    const renamed = await upload(f.mf, token, 'stable-upload', 'same bytes', 'renamed.pdf', 'application/pdf');
+    assert.equal(renamed.status, 409, 'cache loss cannot turn a filename/extension change into another R2 object'); await renamed.body?.cancel();
+
+    const concurrent = await Promise.all([
+      upload(f.mf, token, 'race-upload', 'race bytes'),
+      upload(f.mf, token, 'race-upload', 'race bytes'),
+    ]);
+    assert.deepEqual(concurrent.map(response => response.status), [200, 200], 'conditional writes recover one concurrent object');
+    const raceKeys = await Promise.all(concurrent.map(async response => (await response.json() as { key: string }).key));
+    assert.equal(raceKeys[0], raceKeys[1]);
+
+    await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ loseR2PutAcknowledgement: true }) });
+    const lostAcknowledgement = await upload(f.mf, token, 'lost-ack-upload', 'lost acknowledgement bytes');
+    assert.equal(lostAcknowledgement.status, 200, 'one bounded marker read recovers a committed write whose acknowledgement was lost'); await lostAcknowledgement.body?.cancel();
+    const bucket = await f.mf.getR2Bucket('ATTACHMENTS_BUCKET');
+    const objects = await bucket.list();
+    assert.equal(objects.objects.length, 3, 'stable, concurrent and lost-ack uploads each leave exactly one tenant-scoped object');
   } finally { await f.mf.dispose(); }
 });
 
@@ -117,8 +145,14 @@ test('storage pressure rejects before an R2 object can be created', async () => 
   const f = await fixture();
   try {
     const token = await staffToken('storage-low');
-    const response = await upload(f.mf, token, 'capacity-rejected');
+    const revokedToken = await staffToken('storage-b');
+    await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='storage-b' AND id='shared-staff'").run();
+    const [response, revoked] = await Promise.all([
+      upload(f.mf, token, 'capacity-rejected'),
+      upload(f.mf, revokedToken, 'revoked-session'),
+    ]);
     assert.equal(response.status, 429); assert.deepEqual(await response.json(), { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' });
+    assert.equal(revoked.status, 401, 'a concurrently revoked session is denied before budget or storage work'); await revoked.body?.cancel();
     const bucket = await f.mf.getR2Bucket('ATTACHMENTS_BUCKET');
     // No key is returned on refusal. The bucket contains no data because this
     // fixture performs no other R2 write; admission precedes every storage call.
