@@ -1,6 +1,6 @@
 # #64 realtime admission allocation
 
-Base: accepted main `28e0444`; implementation base/pending #198 `2a6357d`.
+Base: accepted main `922e2adfff7a0854b5bf612c894280201eae681a` (PR #199). Worker commits04c2be9/7eedc4c are integrated atb5c9971; this realtime candidate is not accepted.
 
 ## Scope and decision
 
@@ -21,3 +21,11 @@ Canonical mutation delivery now has a separate opaque post-commit grant: staff/c
 The new native Miniflare D1/DO test is wired into the existing tenant-isolation storage/background command. It covers forged/malformed forwarding denial, two-tenant delivery isolation, concurrent same-claim upgrade denial, frame exhaustion, post-close claim replay denial, 128 historical receipts allowing a new slot, 1,024 packed-receipt exhaustion and expiry recovery, maximum ID byte ceilings, hibernation/session-version revocation, authority-lease expiry, and concurrent signed canonical retry/body-tampering limits. Validation on this local branch: `test:tenant-isolation-storage-background` (14/14), `test:staff-ticket-mutation-runtime` (32/32), full server unit suite (692), full and focused type checks, and scoped ESLint.
 
 Migration `0050` is not allocated: NotificationDO's existing SQLite storage retains the bounded ephemeral lease and handoff receipt ledgers atomically.
+
+## Integration checkpoint — 11 September13:43BST
+
+Root owns this tree. Reviewed malformed-input, receipt-byte and concurrent same-claim/same-handoff boundaries are corrected in7eedc4c. Merge integration initially truncated three conflict-containing files through an overly broad conflict-marker replacement; package parsing caught it before tests executed. The files were reconstructed from both parent revisions with line-bounded markers, JSON validated and the full accepted-main diff inspected. Do not reuse greedy conflict-marker patterns. The corrected integrated candidate isb5c9971; native storage/background and type checks are running in /private/tmp/tocyn-realtime-integrated-native.log and types.log (handles92951/69183).
+
+PR #199 is accepted with required CI34598242014 and CodeQL, signed merge922e2ad, matching reviewed/tested tree75981cbb96f697fae69d34984cfd93d1377ee1c6. Receipt: https://github.com/nathcymru/Tocyn/issues/64#issuecomment-5634560864. Project remains In progress; full64/130/140 remain open.
+
+PR #200 owns support/SLA admission and atomic clock remaps; its worker is correcting the two-attempt resource envelope. Knowledge candidateb635e07 awaits root integration; that worker moved to isolated scheduled-retention admission (0052), including bounded manifests and charged uncertain-delete recovery. No owner permission pending; no Copilot review or remote resource use.

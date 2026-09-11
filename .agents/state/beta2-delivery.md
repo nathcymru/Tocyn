@@ -1,3 +1,5 @@
+Current realtime integration: [budget-64-realtime-admission.md](budget-64-realtime-admission.md). Accepted main922e2ad (PR #199); further candidates remain unaccepted.
+
 > Current pending integration: [staff/customer read handoff](budget-64-staff-customer-reads.md), with accepted-state evidence in the checkpoint below.
 
 > Current delivery entry point: [12:41 BST checkpoint](beta2-checkpoint-2026-09-11-1241.md). Earlier entries below are historical.
