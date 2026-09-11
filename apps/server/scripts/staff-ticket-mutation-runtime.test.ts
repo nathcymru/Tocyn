@@ -269,6 +269,25 @@ test('two tenants persist shared article formats, reject unknown formats, and re
   }finally{await f.mf.dispose();}
 });
 
+test('staff bodies use the current 16000-character and byte format boundary before canonical admission',async()=>{
+  const f=await fixture();try{
+    const s=f.service();
+    const unicode='é'.repeat(8_000);
+    const accepted=await accept(s,{operation:'dashboard.ticket.create',data:{subject:'Unicode boundary',customer_email:'customer-a@example.test',body:unicode,bodyFormat:'markdown-v1',group_id:'group'}},'unicode-boundary');
+    assert.equal(accepted.outcome.article.body,unicode);assert.equal(accepted.outcome.article.body_format,'markdown-v1');
+    const before={calls:{...f.calls},counts:await f.counts(),attempts:f.canonicalAttempts()};
+    const invalidBodies:StaffMutationInput[]=[
+      {operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'a'.repeat(16_001),bodyFormat:'markdown-v1'}},
+      {operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'é'.repeat(8_001),bodyFormat:'markdown-v1'}},
+      {operation:'dashboard.ticket.create',data:{subject:'Too long',customer_email:'customer-a@example.test',body:'a'.repeat(16_001),bodyFormat:'markdown-v1',group_id:'group'}},
+    ];
+    for (const input of invalidBodies) await assert.rejects(s.prepare(input,crypto.randomUUID()),(error:any)=>error.code==='invalid_mutation');
+    assert.deepEqual(f.calls,before.calls,'oversize bodies do not reserve session budget capacity');
+    assert.equal(f.canonicalAttempts(),before.attempts,'oversize bodies never reach the canonical batch');
+    assert.deepEqual(await f.counts(),before.counts,'oversize bodies do not write tickets, articles, audit, SLA, or receipts');
+  }finally{await f.mf.dispose();}
+});
+
 test('actual #93 beta admission rolls back the entire staff canonical batch on exhaustion and completed receipt replay is quota-free',async()=>{
   const f=await fixture();try{
     const beta=f.betaService();

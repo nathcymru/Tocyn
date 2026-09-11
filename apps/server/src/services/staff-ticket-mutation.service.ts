@@ -19,6 +19,9 @@ const unavailable = () => new TicketMutationError(503,'staff_mutation_unavailabl
 const denied = () => new TicketMutationError(403,'staff_mutation_denied','Ticket mutation is not authorized');
 const invalid = () => new TicketMutationError(400,'invalid_mutation','Invalid ticket mutation');
 const unsupportedFormat = () => new TicketMutationError(400,'unsupported_article_format','Article format is not enabled');
+// Match the current reply capability and dashboard request contract before
+// admission; Markdown rendering enforces the same character and byte bounds.
+const MAX_ARTICLE_BODY_SIZE = 16_000;
 async function digest(text: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))), byte => byte.toString(16).padStart(2,'0')).join('');
 }
@@ -52,7 +55,8 @@ export class StaffTicketMutationService {
     const d = input.data;
     let bodyFormat: ArticleBodyFormat;
     try { bodyFormat = articleBodyFormat(d.bodyFormat); } catch { throw unsupportedFormat(); }
-    if (typeof d.body !== 'string' || !d.body.trim()) throw invalid();
+    if (typeof d.body !== 'string' || !d.body.trim()
+      || d.body.length > MAX_ARTICLE_BODY_SIZE || new TextEncoder().encode(d.body).byteLength > MAX_ARTICLE_BODY_SIZE) throw invalid();
     if (input.operation === 'dashboard.ticket.create') {
       const data = input.data;
       if (typeof data.subject !== 'string' || !data.subject.trim() || typeof data.customer_email !== 'string' || !data.customer_email.trim()) throw invalid();
