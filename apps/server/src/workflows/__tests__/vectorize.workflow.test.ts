@@ -56,7 +56,7 @@ describe('VectorizeWorkflow', () => {
     state.createDeps.mockReset().mockReturnValue({ emitResourceOperation: state.emit });
     state.aiConstructor.mockReset();
     state.knowledgeConstructor.mockReset();
-    state.index = { next: vi.fn().mockResolvedValue(0), completeIfFinished: vi.fn(), reserveDispatch: vi.fn().mockResolvedValue(true) };
+    state.index = { next: vi.fn().mockResolvedValue(0), completeIfFinished: vi.fn(), reserveDispatch: vi.fn().mockResolvedValue(true), reserveDocumentCleanupDispatch: vi.fn().mockResolvedValue(false) };
     state.admit.mockReset().mockResolvedValue({ status: 'admitted' });
     state.service = {
       indexManifestChunk: vi.fn().mockResolvedValue('complete'),

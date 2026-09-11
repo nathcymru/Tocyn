@@ -370,19 +370,16 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     expect(await reposA.tickets.completeRetention(ticket.id, claim.token)).toBe(true);
   });
 
-  it('withdraws QA visibility before a failed vector deletion and retains the cleanup manifest', async () => {
+  it('withdraws QA visibility without an unadmitted legacy vector deletion', async () => {
     const ticket = await reposA.tickets.create({ subject: 'QA', customer_email: 'c@test.com', source: 'email', status: 'closed', priority: 'normal' } as any);
     const article = await reposA.articles.create({ ticket_id: ticket.id, sender_type: 'agent', body: 'Previously public' } as any);
     await reposA.articles.updateQAState(article.id, 'answer', 1);
-    const deleteByIds = vi.fn(async () => {
-      expect((await reposA.articles.get(article.id))?.qa_type).toBeNull();
-      throw new Error('Vector unavailable');
-    });
-    const service = new TenantKnowledgeService({ repositories: reposA, attachmentStorage: {}, vectorStorage: { deleteByIds } } as any, {} as any);
-    await expect(service.markArticleAsQA(article.id, null)).rejects.toThrow('Vector unavailable');
-    expect(await reposA.articles.get(article.id)).toMatchObject({ qa_type: null, chunk_count: 1 });
-    expect(await reposA.tickets.claimRetention(ticket.id, '2099-01-01')).toBeNull();
-    expect(deleteByIds).toHaveBeenCalledWith([`qa_${article.id}_0`]);
+    const deleteByIds = vi.fn();
+    const service = new TenantKnowledgeService({ database: d1, scope: scopeA, repositories: reposA, attachmentStorage: {}, vectorStorage: { deleteByIds } } as any, {} as any);
+    await service.markArticleAsQA(article.id, null);
+    expect(await reposA.articles.get(article.id)).toMatchObject({ qa_type: null, chunk_count: 0 });
+    expect(await reposA.tickets.claimRetention(ticket.id, '2099-01-01')).not.toBeNull();
+    expect(deleteByIds).not.toHaveBeenCalled();
   });
 
   it('marks answer, SOP, and unmarked states without crossing tenants or rewriting legacy questions', async () => {
@@ -393,7 +390,7 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     await reposB.articles.updateQAState(articleB.id, 'question' as any, 7);
     const upsert = vi.fn(async () => undefined);
     const deleteByIds = vi.fn(async () => undefined);
-    const service = new TenantKnowledgeService({ repositories: reposA, attachmentStorage: {}, vectorStorage: { upsert, deleteByIds } } as any, { generateEmbeddings: vi.fn(async () => [0.1]) } as any);
+    const service = new TenantKnowledgeService({ database: d1, scope: scopeA, repositories: reposA, attachmentStorage: { putAttachment: vi.fn() }, vectorStorage: { upsert, deleteByIds } } as any, { generateEmbeddings: vi.fn(async () => [0.1]) } as any);
 
     await service.markArticleAsQA(articleA.id, 'answer');
     expect((await reposA.articles.get(articleA.id))?.qa_type).toBe('answer');
@@ -402,8 +399,8 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
     await service.markArticleAsQA(articleA.id, null);
     expect(await reposA.articles.get(articleA.id)).toMatchObject({ qa_type: null, chunk_count: 0 });
     expect(await reposB.articles.get(articleB.id)).toMatchObject({ qa_type: 'question', chunk_count: 7 });
-    expect(upsert).toHaveBeenCalledTimes(2);
-    expect(deleteByIds).toHaveBeenCalledWith([`qa_${articleA.id}_0`]);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(deleteByIds).not.toHaveBeenCalled();
   });
 
   it('revalidates public QA against tenant rows despite stale Answer vector metadata', async () => {

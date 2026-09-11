@@ -238,7 +238,7 @@ test('workflow source contract: withdrawn/deleted/foreign retries never restore 
     assert.deepEqual({ aiCalls, vectorWrites, r2: fixture.r2.operationCounts() }, afterDelete);
     assert.deepEqual(bVectors(), bBefore);
     assert.deepEqual(await depsB.repositories.knowledge.getDocument('shared-document'), bDocBefore);
-    assert.equal(vectors.size, 1);
+    assert.equal(vectors.size, 2, 'legacy vectors are never synchronously deleted without an admitted durable manifest cleanup');
   });
 });
 
