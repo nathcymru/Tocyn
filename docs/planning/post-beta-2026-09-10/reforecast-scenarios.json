@@ -1,0 +1,272 @@
+{
+  "lower": {
+    "beta2Forecast": "2026-12-16",
+    "remainingPlanningHours": 750.0,
+    "betaPrerequisites": [
+      {
+        "number": 64,
+        "forecastStart": "2026-09-12",
+        "forecastTarget": "2026-10-05",
+        "remainingPlanningHours": 132
+      },
+      {
+        "number": 70,
+        "forecastStart": "2026-11-16",
+        "forecastTarget": "2026-11-18",
+        "remainingPlanningHours": 12
+      },
+      {
+        "number": 71,
+        "forecastStart": "2026-11-04",
+        "forecastTarget": "2026-11-10",
+        "remainingPlanningHours": 36.0
+      },
+      {
+        "number": 128,
+        "forecastStart": "2026-10-19",
+        "forecastTarget": "2026-11-03",
+        "remainingPlanningHours": 96
+      },
+      {
+        "number": 130,
+        "forecastStart": "2026-10-06",
+        "forecastTarget": "2026-10-17",
+        "remainingPlanningHours": 72
+      },
+      {
+        "number": 131,
+        "forecastStart": "2026-11-11",
+        "forecastTarget": "2026-11-17",
+        "remainingPlanningHours": 36
+      },
+      {
+        "number": 132,
+        "forecastStart": "2026-11-07",
+        "forecastTarget": "2026-11-14",
+        "remainingPlanningHours": 48
+      },
+      {
+        "number": 133,
+        "forecastStart": "2026-11-19",
+        "forecastTarget": "2026-11-25",
+        "remainingPlanningHours": 30
+      },
+      {
+        "number": 134,
+        "forecastStart": "2026-11-18",
+        "forecastTarget": "2026-11-28",
+        "remainingPlanningHours": 60
+      },
+      {
+        "number": 135,
+        "forecastStart": "2026-11-26",
+        "forecastTarget": "2026-12-03",
+        "remainingPlanningHours": 48
+      },
+      {
+        "number": 137,
+        "forecastStart": "2026-10-22",
+        "forecastTarget": "2026-11-06",
+        "remainingPlanningHours": 72
+      },
+      {
+        "number": 138,
+        "forecastStart": "2026-11-30",
+        "forecastTarget": "2026-12-05",
+        "remainingPlanningHours": 36
+      },
+      {
+        "number": 139,
+        "forecastStart": "2026-12-04",
+        "forecastTarget": "2026-12-08",
+        "remainingPlanningHours": 24
+      },
+      {
+        "number": 140,
+        "forecastStart": "2026-12-09",
+        "forecastTarget": "2026-12-16",
+        "remainingPlanningHours": 48
+      }
+    ]
+  },
+  "central": {
+    "beta2Forecast": "2026-12-28",
+    "remainingPlanningHours": 813.0,
+    "betaPrerequisites": [
+      {
+        "number": 64,
+        "forecastStart": "2026-09-12",
+        "forecastTarget": "2026-10-13",
+        "remainingPlanningHours": 180
+      },
+      {
+        "number": 70,
+        "forecastStart": "2026-11-24",
+        "forecastTarget": "2026-11-26",
+        "remainingPlanningHours": 18
+      },
+      {
+        "number": 71,
+        "forecastStart": "2026-11-12",
+        "forecastTarget": "2026-11-18",
+        "remainingPlanningHours": 36.0
+      },
+      {
+        "number": 128,
+        "forecastStart": "2026-10-27",
+        "forecastTarget": "2026-11-11",
+        "remainingPlanningHours": 96
+      },
+      {
+        "number": 130,
+        "forecastStart": "2026-10-14",
+        "forecastTarget": "2026-10-26",
+        "remainingPlanningHours": 72
+      },
+      {
+        "number": 131,
+        "forecastStart": "2026-11-19",
+        "forecastTarget": "2026-11-25",
+        "remainingPlanningHours": 36
+      },
+      {
+        "number": 132,
+        "forecastStart": "2026-11-16",
+        "forecastTarget": "2026-11-23",
+        "remainingPlanningHours": 48
+      },
+      {
+        "number": 133,
+        "forecastStart": "2026-11-27",
+        "forecastTarget": "2026-12-08",
+        "remainingPlanningHours": 39
+      },
+      {
+        "number": 134,
+        "forecastStart": "2026-11-26",
+        "forecastTarget": "2026-12-07",
+        "remainingPlanningHours": 60
+      },
+      {
+        "number": 135,
+        "forecastStart": "2026-12-08",
+        "forecastTarget": "2026-12-15",
+        "remainingPlanningHours": 48
+      },
+      {
+        "number": 137,
+        "forecastStart": "2026-10-30",
+        "forecastTarget": "2026-11-14",
+        "remainingPlanningHours": 72
+      },
+      {
+        "number": 138,
+        "forecastStart": "2026-12-09",
+        "forecastTarget": "2026-12-17",
+        "remainingPlanningHours": 36
+      },
+      {
+        "number": 139,
+        "forecastStart": "2026-12-16",
+        "forecastTarget": "2026-12-19",
+        "remainingPlanningHours": 24
+      },
+      {
+        "number": 140,
+        "forecastStart": "2026-12-21",
+        "forecastTarget": "2026-12-28",
+        "remainingPlanningHours": 48
+      }
+    ]
+  },
+  "upper": {
+    "beta2Forecast": "2027-01-05",
+    "remainingPlanningHours": 876.0,
+    "betaPrerequisites": [
+      {
+        "number": 64,
+        "forecastStart": "2026-09-12",
+        "forecastTarget": "2026-10-21",
+        "remainingPlanningHours": 228
+      },
+      {
+        "number": 70,
+        "forecastStart": "2026-12-02",
+        "forecastTarget": "2026-12-05",
+        "remainingPlanningHours": 24
+      },
+      {
+        "number": 71,
+        "forecastStart": "2026-11-20",
+        "forecastTarget": "2026-11-26",
+        "remainingPlanningHours": 36.0
+      },
+      {
+        "number": 128,
+        "forecastStart": "2026-11-04",
+        "forecastTarget": "2026-11-19",
+        "remainingPlanningHours": 96
+      },
+      {
+        "number": 130,
+        "forecastStart": "2026-10-22",
+        "forecastTarget": "2026-11-03",
+        "remainingPlanningHours": 72
+      },
+      {
+        "number": 131,
+        "forecastStart": "2026-11-27",
+        "forecastTarget": "2026-12-03",
+        "remainingPlanningHours": 36
+      },
+      {
+        "number": 132,
+        "forecastStart": "2026-11-24",
+        "forecastTarget": "2026-12-01",
+        "remainingPlanningHours": 48
+      },
+      {
+        "number": 133,
+        "forecastStart": "2026-12-07",
+        "forecastTarget": "2026-12-17",
+        "remainingPlanningHours": 48
+      },
+      {
+        "number": 134,
+        "forecastStart": "2026-12-04",
+        "forecastTarget": "2026-12-15",
+        "remainingPlanningHours": 60
+      },
+      {
+        "number": 135,
+        "forecastStart": "2026-12-16",
+        "forecastTarget": "2026-12-23",
+        "remainingPlanningHours": 48
+      },
+      {
+        "number": 137,
+        "forecastStart": "2026-11-07",
+        "forecastTarget": "2026-11-23",
+        "remainingPlanningHours": 72
+      },
+      {
+        "number": 138,
+        "forecastStart": "2026-12-18",
+        "forecastTarget": "2026-12-25",
+        "remainingPlanningHours": 36
+      },
+      {
+        "number": 139,
+        "forecastStart": "2026-12-24",
+        "forecastTarget": "2026-12-28",
+        "remainingPlanningHours": 24
+      },
+      {
+        "number": 140,
+        "forecastStart": "2026-12-29",
+        "forecastTarget": "2027-01-05",
+        "remainingPlanningHours": 48
+      }
+    ]
+  }
+}
