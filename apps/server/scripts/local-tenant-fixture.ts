@@ -6,6 +6,7 @@ import * as OTPAuth from 'otpauth';
 import * as jose from 'jose';
 import { Headers as MiniflareHeaders, Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
+import { RESOURCE_DIMENSIONS, STOCK_DIMENSIONS } from '@luminatick/shared';
 import { createLocalRuntime } from '../src/local-app';
 import type { Env } from '../src/bindings';
 import { createSystemTenantScope } from '../src/auth/scope';
@@ -209,8 +210,10 @@ async function enableTicketAdmission(env: Env, db: D1Database, policy: 'api-tick
   const policyId = 'fixture-combined-beta-policy';
   const authorityRevision = 1;
   const policyRevision = 1;
-  const dimensions = ['workerRequests', 'd1RowsRead', 'd1RowsWritten', 'r2ClassBOperations',
-    'doRequests', 'doRowsRead', 'doRowsWritten', 'logEvents'] as const;
+  // Keep the disposable authority complete. New admitted paths must not be
+  // rejected merely because this local fixture omitted a catalogue dimension.
+  // Individual negative tests install their own deliberately constrained policy.
+  const dimensions = RESOURCE_DIMENSIONS;
   const limitFor = (dimension: typeof dimensions[number]) => dimension === 'logEvents' ? 200_000_000 : 10_000_000;
   const ownerPolicy = {
     schemaVersion: 1,
@@ -223,7 +226,9 @@ async function enableTicketAdmission(env: Env, db: D1Database, policy: 'api-tick
     budgets: dimensions.map(dimension => ({
       dimension,
       allocationId: `fixture-combined-${dimension}`,
-      window: { kind: 'interval', id: 'fixture-combined-window', startsAt: Date.now() - 1_000, endsAt: Date.now() + 60_000 },
+      window: STOCK_DIMENSIONS.includes(dimension)
+        ? { kind: 'stock', id: `fixture-combined-${dimension}-stock` }
+        : { kind: 'interval', id: 'fixture-combined-window', startsAt: Date.now() - 1_000, endsAt: Date.now() + 60_000 },
       limit: limitFor(dimension),
       recoveryPercent: 20,
       provenance: 'owner-allocation',
