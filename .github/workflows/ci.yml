@@ -68,6 +68,11 @@ jobs:
         run: |
           npm run typecheck --workspace=apps/server -- --project scripts/tsconfig.ui-operator-draft-browser.json
           node --import tsx --test apps/server/scripts/ui-operator-draft-browser.test.ts > "$RUNNER_TEMP/tocyn-operator-drafts.tap"
+      - name: Verify local support-state migration
+        if: matrix.check == 'test'
+        run: |
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.support-state-migration.json
+          node --import tsx --test apps/server/scripts/support-state-migration.test.ts
       - name: Verify local draft retention and workspace sorting
         if: matrix.check == 'test'
         run: |
