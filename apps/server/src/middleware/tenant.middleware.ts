@@ -11,6 +11,7 @@ import type { BetaCredential } from '../types/local-beta';
 import { ConversationAuditRepository } from '../repositories/conversation-audit.repository';
 import { TicketMutationReplayRepository } from '../repositories/ticket-mutation-replay.repository';
 import { OperationalMetricsRepository } from '../repositories/operational-metrics.repository';
+import { OperatorActivityRepository } from '../repositories/operator-activity.repository';
 import { Context, Next } from 'hono';
 import { TicketMutationReplayService, type MutationPrincipal } from '../services/ticket-mutation-replay.service';
 import { VerifiedTenantScope } from '../types/tenant';
@@ -31,6 +32,7 @@ export type TenantRequestDeps = {
   conversationAudit: ConversationAuditRepository;
   ticketMutations: TicketMutationReplayRepository;
   operationalMetrics: OperationalMetricsRepository;
+  operatorActivity: OperatorActivityRepository;
   repositories: Repositories;
   attachmentStorage: TenantAttachmentStorage;
   legacyArticleStorage?: LegacyArticleBodyStorage;
@@ -82,6 +84,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     canonicalMutationSli,
     ticketMutations: new TicketMutationReplayRepository(db, scope, betaAdmission, canonicalMutationSli),
     operationalMetrics: new OperationalMetricsRepository(db, scope),
+    operatorActivity: new OperatorActivityRepository(scope, db),
     repositories,
     attachmentStorage,
     legacyArticleStorage,

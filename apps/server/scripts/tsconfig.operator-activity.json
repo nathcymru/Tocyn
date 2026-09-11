@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "operator-activity.test.ts",
+    "local-tenant-fixture.ts"
+  ]
+}
