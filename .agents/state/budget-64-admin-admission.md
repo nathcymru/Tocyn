@@ -31,3 +31,8 @@ PR205 is now the single integration owner for settings/theme/permissions plus sa
 Combined head4f3baec passes shared runtime types and native12/12 (admin1,groups5,filters2,lists4), logs /private/tmp/tocyn-admin-combined-{types,native}.log. Full exact new-head CI/security remains required. PR208/209 stay draft evidence branches; do not merge them independently or close issue64. They can be superseded after205accepted. Root owns these frozen trees; workers implement separate API-key/configuration successors.
 
 Accepted main20274e0abf has valid signature and testedtreeb25f677c408dee35d03ddafc93c77804a09d6ea7, CI34610532368/CodeQL34610525898. Issue64receipt5636319853 and151receipt5636320126 record partial acceptance. No owner input missing, no Copilot request or deployment. Full140 remains open.
+
+
+## Frozen cross-path batch
+
+PR205 now integrates204/206/207/208/209, not onlyadministration. See current [coordinating checkpoint](beta2-checkpoint-2026-09-11-1600.md). Application342c34c passes69native+server/shared/storage types with all0051–0058. New210/APIkey/DELETE/channel work explicitly remains outside. FullnewCIrequired.

@@ -11,11 +11,12 @@ describe('knowledge read admission',()=>{
     expect(envelope).toMatchObject({workerRequests:1,d1RowsRead:79_096,d1RowsWritten:2});
   });
 
-  it('reserves one class-B read and the exact immutable source bytes for versioned content',()=>{
+  it('reserves one class-B read without charging new persistent stock',()=>{
     const envelope=knowledgeReadEnvelope('knowledge.article.content',{
       exists:true,filePath:'knowledge/doc/body.md/versions/4',sourceBytes:10*1024*1024,versioned:true,
     });
-    expect(envelope).toMatchObject({workerRequests:1,d1RowsRead:4_096,d1RowsWritten:2,r2ClassBOperations:1,r2StorageBytes:10*1024*1024});
+    expect(envelope).toMatchObject({workerRequests:1,d1RowsRead:4_096,d1RowsWritten:2,r2ClassBOperations:1});
+    expect(envelope?.r2StorageBytes??0).toBe(0);
   });
 
   it('rejects unsafe accounting rather than truncating retained history',()=>{

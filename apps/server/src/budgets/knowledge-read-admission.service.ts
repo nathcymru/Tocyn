@@ -36,7 +36,9 @@ export function knowledgeReadEnvelope(operation:KnowledgeReadOperation,snapshot:
   // One exact budget_grant_operations row (table plus its primary-key index) is the
   // durable consumption evidence committed in the same D1 batch as the read.
   return Object.freeze({workerRequests:1,d1RowsRead,d1RowsWritten:2,
-    ...(operation==='knowledge.article.content'?{r2ClassBOperations:1,r2StorageBytes:content?.sourceBytes??0}:{}),
+    // Reading an existing object does not allocate persistent stock. Source
+    // metadata and the handler's size check bound the body independently.
+    ...(operation==='knowledge.article.content'?{r2ClassBOperations:1}:{}),
     ...estimateDiagnosticEnvelope({httpRequests:1,canonicalMutationRequests:0})});
 }
 
@@ -74,9 +76,8 @@ export class KnowledgeReadCommit {
       ||!valid(grant.operationId)||!valid(grant.operationFingerprint)||grant.tenantId!==this.deps.scope.tenantId
       ||grant.operationId!==this.fence.authority.operationId||grant.operationFingerprint!==this.fence.authority.operationFingerprint)
       throw new KnowledgeReadFenceError('authority_changed');
-    const closure=await this.deps.database.prepare(`SELECT 1 FROM budget_grant_closures
-      WHERE tenant_id=? AND reservation_id=? AND holder_id=? LIMIT 1`)
-      .bind(this.deps.scope.tenantId,grant.reservationId,grant.holderId).first();
+    const closure=await new KnowledgeReadAccountingRepository(this.deps.database,this.deps.scope)
+      .isGrantClosed(grant.reservationId,grant.holderId);
     if(closure)throw new KnowledgeReadFenceError('authority_changed');
   }
 

@@ -1,3 +1,27 @@
+## Combined index inventory review
+
+Old combined CI34614351572 exposed an intentionally strict staff-mutation index inventory mismatch after0052retention/0058groups. Updated the exact ticket inventory to seven and exact article inventory to five, preserving the measured resource ceiling assertion. Native ten-attachment/receipt/SLA mutation passes at452reads/181writes; no envelope or ceiling increased. Log /private/tmp/tocyn-205-index-review.log. Old CI failed lint (fixed repository query) and this inventory; build/typecheck passed. New exact-head CI remains required. PR211 root native4/4 and sharedruntime types pass; required workflow registration pushed024fdcb.
+
+# Integration correction — 11 September 2026
+
+Supersedes the active queue below; historical evidence is retained. PR205 remains the frozen batch, with a required correctness fix: existing knowledge-content GETs charge Class B operations, not new persistent R2 storage stock. A native zero-new-storage test first failed with429 and now passes twice with two distinct charged read operations. Source writes retain storage reservations; transfer/CPU accounting remains outstanding under64. The closure query was moved unchanged into the tenant-scoped repository boundary after ESLint identified it.
+
+Validation after both corrections: shared budget-runtime TypeScript and knowledge native10/10 pass; server ESLint passes. Focused knowledge unit5/5 passed for the storage correction. The earlier combined69/69 result remains evidence for the prior combined revision, not a rerun claim. Exact new-head fullCI/security is required before acceptance. Local logs: /private/tmp/tocyn-205-stock-final-{types,native}.log and /private/tmp/tocyn-205-stock-eslint.log. A failed attempt to call nonexistent server npm lint was corrected to the actual ESLint command.
+
+Outside batch:210 configuration ready;211 API-key replay corrected and under root validation;212 channel configuration delivered as a draft stacked on210. Workers continue knowledge deletion/recovery, authentication overhead authority review and mail overhead discovery. No owner approval is currently requested; proposed internal ingress partition is being checked against existing50authority before any escalation. Latest observed Codex remaining20%, reset17September23:59:48BST; task usage unavailable. No separate allowance, paid usage or Copilot review assumed.
+
+# Frozen integration batch — 11September2026,16:09BST
+
+This section supersedes the earlier queue below. Root froze all reviewed increments in PR205: workspace204, retention206, knowledge reads207, groups208 and filters209 plus originaladministration205, based on accepted202. New configuration210, API-key0060, knowledgeDELETE0061 and channelconfiguration0062 remain outside this batch. Source drafts remain evidence and must not merge independently; supersede after205acceptance.
+
+Combined application head342c34c passed server types, shared budget-runtime types, storage/background runtime types and69/69 native tests across eight suites. Logs /private/tmp/tocyn-64-frozen-{types,server-types,storage-types,native}.log. All0051–0058 migration effects are included. Source attempts24/23/21/failure19writes; retention260turns totals54761reads/2600writes, maximum403reads/11writes; discovery[2,3,2,8,1,2,3]. Complete4201-ticket all-miss16811/18801reads;1201-article projection2410/6671reads. No owner ceiling increased. Required exact pushed-head CI/security/signature acceptance is still pending.
+
+Redundant source CI runs34613541240(204),34612976247(206),34613373619(207),34612715945(208),34611861463(209) were cancelled after consolidation; none count as passes. FullCI stays required on combined205. Preserve all source validation/receipts and immutable baselines; no issue closure or newpercentage/ETA.
+
+Active native Sol/high workers: API-key security/UI; knowledgeDELETE lifecycle/recovery; channelconfiguration after completing210. Root owns210review and frozen205integration. No new model/environment/allowance assumed. Last30minutehumanupdate15:40BST; next16:10BST. Full140 remains incomplete, no ownerapprovalmissing.
+
+## Historical16:00 queue (superseded)
+
 # Coordinating checkpoint — 11September2026,16:00BST
 
 Full goal remains beta.2#140, including full SLA/ownership/routing and master-baseline dependencies. Incomplete, no owner permission missing. This current checkpoint supersedes earlier active queues, preserving their historical evidence.

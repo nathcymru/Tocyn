@@ -532,9 +532,12 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
         'The accepted staff and bounded-detail event indexes are accounted for');
       else if (table === 'tickets') {
         const names = indexes.results.map((index: {name:string}) => index.name);
-        assert.deepEqual(names.sort(),['idx_tickets_list_tenant_created_id','idx_tickets_list_tenant_updated_id','idx_tickets_operational_metric_projection','idx_tickets_tenant_customer_created','sqlite_autoindex_tickets_1']);
+        assert.deepEqual(names.sort(),['idx_tickets_list_tenant_created_id','idx_tickets_list_tenant_updated_id','idx_tickets_operational_metric_projection','idx_tickets_retention_cursor','idx_tickets_tenant_customer_created','idx_tickets_tenant_group','sqlite_autoindex_tickets_1']);
         console.log(JSON.stringify({fixture:'reviewed-ticket-indexes',names:names.sort()}));
-        assert.equal(indexes.results.length,5,'Three accepted ticket indexes plus two list sort indexes require measured envelope review');
+        assert.equal(indexes.results.length,7,'Ticket list, retention and group indexes are included in the native measured write bound');
+      } else if(table==='articles') {
+        assert.deepEqual(indexes.results.map((index:{name:string})=>index.name).sort(),
+          ['idx_articles_retention_cursor','idx_articles_tenant_ticket_recent','idx_articles_tenant_ticket_visibility_created_id','idx_articles_ticket','sqlite_autoindex_articles_1']);
       } else assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
