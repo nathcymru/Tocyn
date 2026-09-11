@@ -49,6 +49,10 @@
     "evidence:operational-performance": "tsx scripts/run-operational-performance.ts",
     "test:staff-ticket-mutation-runtime": "tsx --test scripts/staff-ticket-mutation-runtime.test.ts",
     "typecheck:staff-ticket-mutation-runtime": "tsc -p scripts/tsconfig.staff-ticket-mutation-runtime.json",
+    "test:combined-collision-runtime": "tsx --test scripts/combined-collision-runtime.test.ts",
+    "typecheck:combined-collision-runtime": "tsc -p scripts/tsconfig.combined-collision-runtime.json",
+    "test:ui-combined-collision-browser": "tsx --test scripts/ui-combined-collision-browser.test.ts",
+    "typecheck:ui-combined-collision-browser": "tsc -p scripts/tsconfig.ui-combined-collision-browser.json",
     "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts scripts/session-budget-admission-runtime.test.ts"
   },
   "dependencies": {

@@ -45,6 +45,13 @@ type PendingAttachment = Readonly<{
   status: 'uploading' | 'error';
 }>;
 
+type StaleReplyReview = Readonly<{
+  phase: 'refreshing' | 'ready';
+  /** Server-derived full conversation revision fetched with the rendered review. */
+  conversationRevision?: number;
+  renderedMessages?: number;
+}>;
+
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const generation = useAuthStore(state => state.sessionGeneration);
@@ -101,6 +108,7 @@ function TicketDetail({ id }: { id: string }) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [staleReplyReview, setStaleReplyReview] = useState<StaleReplyReview | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const qaChanging = useRef(false);
@@ -424,23 +432,52 @@ function TicketDetail({ id }: { id: string }) {
     } finally { submission.current = false; setIsSubmitting(false); }
   };
 
-  const reviewAndRebaseDraft = async () => {
-    if (submission.current || draft.status !== 'conflict') return;
-    setReplyError(null); setNotice('');
+  const refreshConversationForStaleReply = async () => {
+    if (submission.current || staleReplyReview?.phase === 'refreshing') return;
+    setStaleReplyReview({ phase: 'refreshing' });
+    setNotice('');
     try {
+      // Fetch the conversation before accepting its revision. The following
+      // rebase remains a separate explicit action so the operator can review
+      // the rendered material without losing local draft edits.
+      const refreshed = await refetch({ throwOnError: true });
       const result = await replyCapabilities.refetch({ throwOnError: true });
       const collision = result.data?.collision;
-      if (!collision) { setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.'); return; }
-      if (await draft.rebase(collision.conversationRevision)) {
-        idempotency.current = null;
-        setNotice('Conversation reviewed and draft rebased. Review it, then send manually.');
-      } else setReplyError('The conversation changed again. Your draft is retained; refresh and review before rebasing.');
-    } catch (error) { setReplyError(error instanceof Error ? `${error.message}. Your draft is retained.` : 'Could not review the conversation. Your draft is retained.'); }
+      if (!collision) {
+        setStaleReplyReview(null);
+        setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.');
+        return;
+      }
+      setStaleReplyReview({ phase: 'ready', conversationRevision: collision.conversationRevision,
+        renderedMessages: refreshed.data?.pages.reduce((total, page) => total + page.articles.length, 0) ?? 0 });
+      setReplyError('The latest conversation is shown below. Review it, then rebase the saved draft when ready.');
+    } catch (error) {
+      setStaleReplyReview(null);
+      setReplyError(error instanceof Error ? `${error.message}. Your draft is retained.` : 'Could not refresh the conversation. Your draft is retained.');
+    }
+  };
+
+  const rebaseReviewedStaleDraft = async () => {
+    if (submission.current || staleReplyReview?.phase !== 'ready' || staleReplyReview.conversationRevision === undefined) return;
+    setNotice('');
+    if (await draft.rebase(staleReplyReview.conversationRevision)) {
+      idempotency.current = null;
+      setStaleReplyReview(null);
+      setReplyError(null);
+      setNotice('Draft rebased to the reviewed conversation. Review the draft, then send manually.');
+    } else {
+      setStaleReplyReview(null);
+      setReplyError('The conversation or saved draft changed again. Your draft is retained; refresh and review before rebasing.');
+    }
   };
 
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reply.trim() || submission.current || sentDraftVersion) return;
+    if (staleReplyReview) {
+      setReplyError('Review the refreshed conversation and rebase the saved draft before sending. Your draft is retained.');
+      return;
+    }
     if (!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || reply.length > replyCapability.body.maxCharacters) {
       setReplyError('Reply options do not allow this message. Review its format and length or retry loading reply options.'); return;
     }
@@ -492,8 +529,9 @@ function TicketDetail({ id }: { id: string }) {
         queryClient.invalidateQueries({ queryKey: ['tickets'] }),
       ]);
     } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        if (error instanceof ApiError && error.status === 409 && replyCapabilities.data?.collision) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          if (error instanceof ApiError && error.status === 409 && replyCapabilities.data?.collision) {
+          setStaleReplyReview({ phase: 'ready' });
           setReplyError('The saved draft or conversation changed. Review and rebase before sending; your draft is retained.');
         } else setReplyError(`${error.message}. Your draft is retained. Refresh the conversation before trying again if delivery is uncertain.`);
       }
@@ -773,7 +811,16 @@ function TicketDetail({ id }: { id: string }) {
             </p>
           </div>}
           <div className="p-6 border-t border-slate-200 bg-white">
-            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton></p>}
+            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} {' '}
+              {staleReplyReview ? <>
+                {staleReplyReview.phase === 'refreshing'
+                  ? <span role="status">Refreshing the latest conversation…</span>
+                  : staleReplyReview.conversationRevision === undefined
+                    ? <TocynButton type="button" onClick={() => void refreshConversationForStaleReply()} className="underline">Refresh and review conversation</TocynButton>
+                    : <><span> {staleReplyReview.renderedMessages ?? 0} messages are now rendered.</span>{' '}
+                      <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="underline">Rebase saved draft</TocynButton></>}
+              </> : <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton>}
+            </p>}
             {(draft.status !== 'idle' && draft.status !== 'discarded') && <div role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} className={clsx(
               'mb-4 flex flex-wrap items-center justify-between gap-3 rounded border p-3 text-sm',
               draft.status === 'error' || draft.status === 'conflict' ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50 text-slate-700'
@@ -788,7 +835,6 @@ function TicketDetail({ id }: { id: string }) {
               </span>
               <span className="flex items-center gap-3">
                 {draft.status === 'error' && <TocynButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className="underline">Retry draft</TocynButton>}
-                {draft.status === 'conflict' && replyCapabilities.data?.collision && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void reviewAndRebaseDraft()} className="underline">Review and rebase draft</TocynButton>}
                 {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="underline">Discard draft</TocynButton>}
               </span>
             </div>}
@@ -972,7 +1018,7 @@ function TicketDetail({ id }: { id: string }) {
                   </TocynButton>
                   <TocynButton
                     type="submit"
-                    aria-disabled={!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion)}
+                    aria-disabled={!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion) || Boolean(staleReplyReview)}
                     className={clsx(
                       "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
                       isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"

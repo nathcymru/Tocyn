@@ -21,7 +21,7 @@ let client:QueryClient;
 let ticket:ReturnType<typeof initialTicket>;
 function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'assigned-agent' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
 const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
-function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined, sla: (path: string, options: RequestInit) => Response | Promise<Response> = () => json(unavailableSla), collision = false) {
+function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined, sla: (path: string, options: RequestInit) => Response | Promise<Response> = () => json(unavailableSla), collision: boolean | (() => number) = false) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
     if(path==='/api/workspace/state') {
@@ -38,7 +38,7 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
     if(path === '/api/tickets/workflow-ticket/reply-capability') return json({version:1,ticketId:'workflow-ticket',modes:[
       {visibility:'public',channel:'email',delivery:'email_attempted',recipient:'ticket_customer',record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}},
       {visibility:'internal',channel:'internal',delivery:'recorded_only',recipient:null,record:'ticket_article',body:{acceptedFormats:['plain','markdown-v1'],maxCharacters:16000},attachments:{maxCount:10,maxBytesPerFile:10485760,contentTypes:['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain','text/csv']}}
-    ], ...(collision ? { collision: { version: 1, protocol: 'draft-precondition-v1', conversationRevision: 0 } } : {})});
+    ], ...(collision ? { collision: { version: 1, protocol: 'draft-precondition-v1', conversationRevision: typeof collision === 'function' ? collision() : 0 } } : {})});
     if(path===`/api/tickets/${ticket.id}/sla`) return sla(path,options);
     if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/'))return handle(path,options);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
@@ -793,4 +793,53 @@ it('sends an acknowledged collision-safe draft with one stable idempotency key',
   const body = JSON.parse(String(requests[0].body));
   expect(body.draft).toMatchObject({ generation: '99999999-9999-4999-8999-999999999999', revision: 1, baseConversationRevision: 0 });
   expect(new Headers(requests[0].headers).get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/);
+});
+
+it('requires a rendered conversation review and explicit CAS rebase after a stale reply before manual resend', async () => {
+  let conversationRevision = 0;
+  let sendAttempts = 0;
+  const replyRequests: RequestInit[] = [];
+  const material = { ...ticket, articles: [...ticket.articles, {
+    id: 'new-customer-material', body: 'A newer customer reply', sender_type: 'customer', is_internal: false, created_at: '2026-09-10T00:00:00Z',
+  }] };
+  transport((path, options) => {
+    if (path === `/api/tickets/${ticket.id}/articles`) {
+      replyRequests.push(options);
+      sendAttempts++;
+      return sendAttempts === 1 ? json({ code: 'staff_reply_stale', error: 'stale' }, 409) : json({ id: 'manual-reviewed-send' });
+    }
+    if (path === `/api/tickets/${ticket.id}`) return json(conversationRevision === 1 ? material : ticket);
+    return json(ticket);
+  }, [], options => {
+    if (!options.body) return undefined;
+    const body = JSON.parse(String(options.body));
+    if ('expectedReviewedConversationRevision' in body) {
+      expect(body).toMatchObject({ expectedReviewedConversationRevision: 1, expectedRevision: 1 });
+      return json({ ticketId: ticket.id, generation: '99999999-9999-4999-8999-999999999999', revision: 2,
+        mode: 'public', body: 'Keep this draft through review', bodyFormat: 'plain', attachments: [], baseConversationRevision: 1, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
+    }
+    return json({ ticketId: ticket.id, generation: '99999999-9999-4999-8999-999999999999', revision: 1,
+      mode: body.mode, body: body.body, bodyFormat: body.bodyFormat, attachments: body.attachments, baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
+  }, undefined, () => conversationRevision);
+  showDetail(); await screen.findByText('Customer question');
+  const message = screen.getByRole('textbox', { name: 'Reply message' });
+  fireEvent.change(message, { target: { value: 'Keep this draft through review' } });
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
+  fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
+  await screen.findByText(/Review and rebase before sending/);
+  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('button', { name: 'Send Reply' })).toHaveAttribute('aria-disabled', 'true');
+
+  conversationRevision = 1;
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
+  await screen.findByText('A newer customer reply');
+  await screen.findByText(/2 messages are now rendered/);
+  expect(message).toHaveValue('Keep this draft through review');
+  fireEvent.click(screen.getByRole('button', { name: 'Rebase saved draft' }));
+  await screen.findByText(/Draft rebased to the reviewed conversation/);
+  expect(message).toHaveValue('Keep this draft through review');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
+  await waitFor(() => expect(replyRequests).toHaveLength(2));
+  expect(JSON.parse(String(replyRequests[1].body)).draft).toMatchObject({ revision: 2, baseConversationRevision: 1 });
 });
