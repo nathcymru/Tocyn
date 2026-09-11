@@ -112,6 +112,25 @@ describe('realtime session lifecycle', () => {
     await instance.webSocketMessage(sender as any, JSON.stringify({ type: 'collaboration.typing.v1', payload: { version: 1, ticketId: 'allowed', baseConversationRevision: 0, active: false } }));
     expect(recipient.send).toHaveBeenCalledTimes(2);
   });
+  it('does not evict live ticket throttles when a connection rotates 17 ticket ids', async () => {
+    const sender = socket({ connectionId: 'sender', userId: 'sender' }), recipient = socket({ connectionId: 'recipient', userId: 'recipient' });
+    sockets.push(sender, recipient);
+    env.DB.prepare = (sql: string) => ({ bind: (...values: string[]) => ({ first: async () => {
+      if (sql.includes('FROM users')) return { tenant_id: 'A', id: values[1], role: 'agent', session_version: 0, full_name: values[1] };
+      if (sql.includes('FROM tickets')) return { group_id: null };
+      return null;
+    } }) });
+    const message = (ticketId: string) => JSON.stringify({ type: 'collaboration.typing.v1', payload: {
+      version: 1, ticketId, baseConversationRevision: 0, active: true,
+    } });
+    for (let index = 0; index < 16; index++) await instance.webSocketMessage(sender as any, message(`ticket-${index}`));
+    await instance.webSocketMessage(sender as any, message('ticket-16'));
+    await instance.webSocketMessage(sender as any, message('ticket-0'));
+    expect(recipient.send).toHaveBeenCalledTimes(16);
+    vi.advanceTimersByTime(6000);
+    await instance.webSocketMessage(sender as any, message('ticket-16'));
+    expect(recipient.send).toHaveBeenCalledTimes(17);
+  });
   it('clears transient typing throttles on a reconnect and denies revoked recipients', async () => {
     const sender = socket({ connectionId: 'sender', userId: 'sender' }), revoked = socket({ connectionId: 'revoked', userId: 'revoked', version: 0 });
     sockets.push(sender, revoked);

@@ -106,8 +106,9 @@ export class NotificationDO {
     for (const [key, timestamp] of updates) if (now - timestamp >= COLLABORATION_TYPING_TTL_MS) updates.delete(key);
     const previous = updates.get(ticketId);
     if (previous !== undefined && now - previous < COLLABORATION_TYPING_MIN_EMIT_INTERVAL_MS) return false;
-    // A connection can actively type on only a small bounded number of tickets at once.
-    if (!updates.has(ticketId) && updates.size >= 16) updates.delete(updates.keys().next().value!);
+    // Do not evict a live key: rotating ticket ids could otherwise bypass its one-second throttle.
+    // New keys wait for the short transient window to expire once this bounded map is full.
+    if (!updates.has(ticketId) && updates.size >= 16) return false;
     updates.set(ticketId, now);
     return true;
   }
