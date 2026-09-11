@@ -21,11 +21,19 @@ const qaMarkerSchema = z.object({ type: z.enum(['answer', 'sop']).nullable() });
  * visible and recoverable if the workflow binding is unavailable. */
 async function dispatchPendingIndex(c: any, service: TenantKnowledgeService, documentId: string, action: 'index'|'qa_index' = 'index'): Promise<void> {
   if (ticketMutationAdmissionMode(c.env) !== 'combined' || !c.env.VECTORIZE_WORKFLOW) return;
-  const version = await service.pendingIndexVersion(documentId);
+  const preparation = await service.pendingPreparationVersion(documentId);
+  const version = preparation ?? await service.pendingIndexVersion(documentId);
   if (version === null) return;
   if (!await service.reservePendingIndexDispatch(documentId, version)) return;
-  try { await c.env.VECTORIZE_WORKFLOW.create({ params: { tenantId: c.get('tenantDeps').scope.tenantId, action, documentId, version } }); }
+  try { await c.env.VECTORIZE_WORKFLOW.create({ params: { tenantId: c.get('tenantDeps').scope.tenantId, action: preparation === null ? action : 'prepare', documentId, version } }); }
   catch { /* durable job remains pending; do not misreport source capture as indexed */ }
+}
+
+async function dispatchPendingDocumentCleanup(c: any, service: TenantKnowledgeService, documentId: string): Promise<void> {
+  if (ticketMutationAdmissionMode(c.env) !== 'combined' || !c.env.VECTORIZE_WORKFLOW) return;
+  if (!await service.reservePendingDocumentCleanupDispatch(documentId)) return;
+  try { await c.env.VECTORIZE_WORKFLOW.create({ params: { tenantId: c.get('tenantDeps').scope.tenantId, action: 'cleanup', documentId } }); }
+  catch { /* the durable cleanup target remains recoverable */ }
 }
 
 async function admitSourceOrResponse(c: any, sourceBytes: number, sourceKind: 'document'|'article'|'qa'): Promise<Response | null> {
@@ -74,6 +82,7 @@ knowledgeHandler.delete('/articles/:id', async (c) => {
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   await service.deleteDocument(id);
+  await dispatchPendingDocumentCleanup(c, service, id);
   return c.json({ success: true });
 });
 
@@ -84,6 +93,7 @@ knowledgeHandler.delete('/:id', async (c) => {
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   await service.deleteDocument(id);
+  await dispatchPendingDocumentCleanup(c, service, id);
   return c.json({ success: true });
 });
 

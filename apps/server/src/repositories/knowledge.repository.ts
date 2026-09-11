@@ -43,10 +43,11 @@ export class SqlKnowledgeRepository {
     return id;
   }
 
-  async updateDocument(id: string, data: { title?: string; category_id?: string | null; chunk_count?: number; tier?: 'answer' | 'sop', status?: 'draft'|'pending'|'published' }): Promise<void> {
+  async updateDocument(id: string, data: { title?: string; file_path?: string; category_id?: string | null; chunk_count?: number; tier?: 'answer' | 'sop', status?: 'draft'|'pending'|'published' }): Promise<void> {
     const updates: string[] = [];
     const values: any[] = [];
     if (data.title !== undefined) { updates.push('title = ?'); values.push(data.title); }
+    if (data.file_path !== undefined) { updates.push('file_path = ?'); values.push(data.file_path); }
     if (data.category_id !== undefined) { updates.push('category_id = ?'); values.push(data.category_id); }
     if (data.chunk_count !== undefined) { updates.push('chunk_count = ?'); values.push(data.chunk_count); }
     if (data.status !== undefined) { updates.push('status = ?'); values.push(data.status); }

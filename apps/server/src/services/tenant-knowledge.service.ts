@@ -3,7 +3,7 @@ import { AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_R2_KEY_BYTES } f
 import { StatelessAiService } from './ai.service';
 import { TenantArticleBodyHydrator } from '../storage/adapters';
 import { KnowledgeDoc, KnowledgeCategory } from '../repositories/knowledge.repository';
-import { KnowledgeIndexRepository } from '../repositories/knowledge-index.repository';
+import { KnowledgeIndexRepository, decodeCompleteKnowledgePrefix, KNOWLEDGE_INDEX_MANIFEST_READ_BYTES, splitKnowledgeManifestBatch } from '../repositories/knowledge-index.repository';
 import { KNOWLEDGE_SOURCE_MAX_BYTES, validKnowledgeSourceText } from '../budgets/knowledge-source-admission.service';
 import crypto from 'node:crypto';
 import { MAX_BGE_REQUEST_BYTES, MAX_STAFF_CONTEXT_BYTES, MAX_STAFF_HISTORY_BYTES, boundUntrustedAiText, truncateUtf8, truncateUtf8Tail } from './ai-input-bounds';
@@ -107,13 +107,40 @@ export class TenantKnowledgeService {
     categoryId: string | null, tier: 'answer'|'sop'): Promise<void> {
     if (!validKnowledgeSourceText(text)) throw new Error(`Knowledge source exceeds ${KNOWLEDGE_SOURCE_MAX_BYTES} bytes`);
     const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
-    const staged = await index.begin(documentId, filePath, tier, categoryId, text);
+    const sourceBytes = typeof source === 'string' ? new TextEncoder().encode(source).byteLength : source.byteLength;
+    const staged = await index.begin(documentId, filePath, tier, categoryId, sourceBytes);
     try {
-      await this.deps.attachmentStorage.putAttachment(filePath, source, { httpMetadata: { contentType } });
-      await index.sourcePublished(documentId, staged.version, staged.chunks);
-      await this.deps.repositories.knowledge.updateDocument(documentId, { chunk_count: staged.chunks.length, status: 'pending' });
+      await this.deps.attachmentStorage.putAttachment(staged.filePath, source, { httpMetadata: { contentType } });
+      if (!await index.sourceCaptured(documentId, staged.version)) throw new Error('Knowledge source capture was superseded');
+      await this.deps.repositories.knowledge.updateDocument(documentId, { file_path: staged.filePath, chunk_count: 0, status: 'pending' });
     } catch (error) {
       await index.sourceFailed(documentId, staged.version);
+      throw error;
+    }
+  }
+
+  /** One workflow callback turns at most 100 R2-backed chunks into durable
+   * manifest rows. It never reloads a full 10 MiB source. */
+  async prepareManifestBatch(documentId: string, version: number): Promise<'next'|'ready'|'stale'|'missing'> {
+    const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
+    const preparation = await index.preparation(documentId, version);
+    if (!preparation) return 'missing';
+    try {
+      const object = await this.deps.attachmentStorage.getAttachmentRange(preparation.filePath, preparation.sourceOffset, KNOWLEDGE_INDEX_MANIFEST_READ_BYTES);
+      if (!object) { await index.sourceFailed(documentId, version); return 'missing'; }
+      const bytes = new Uint8Array(await object.arrayBuffer());
+      const decoded = decodeCompleteKnowledgePrefix(bytes);
+      const sourceComplete = preparation.sourceOffset + bytes.byteLength >= preparation.sourceBytes;
+      const chunks = splitKnowledgeManifestBatch(decoded.text, sourceComplete);
+      if (!chunks.length || (!sourceComplete && chunks.reduce((sum, chunk) => sum + new TextEncoder().encode(chunk).byteLength, 0) === 0)) {
+        await index.sourceFailed(documentId, version); return 'missing';
+      }
+      const consumed = chunks.reduce((sum, chunk) => sum + new TextEncoder().encode(chunk).byteLength, 0);
+      const outcome = await index.publishPreparationBatch(documentId, preparation, chunks, consumed);
+      if (outcome === 'ready') await this.deps.repositories.knowledge.updateDocument(documentId, { chunk_count: preparation.chunkIndex + chunks.length, status: 'pending' });
+      return outcome;
+    } catch (error) {
+      await index.sourceFailed(documentId, version);
       throw error;
     }
   }
@@ -134,6 +161,7 @@ export class TenantKnowledgeService {
       await this.deps.vectorStorage.upsert(chunk.vectorId, embedding, { source_id: documentId, type: 'document', text: chunk.text,
         category_id: source.category_id, tier: source.tier, status: doc.status, source_version: version, chunk_index: chunkIndex });
       await index.indexed(documentId, version, chunkIndex);
+      if (chunkIndex + 1 < source.chunk_count) return 'next';
       const complete = await index.completeIfFinished(documentId, version);
       if (complete) {
         // Re-checking the durable completion before publication prevents a
@@ -153,8 +181,31 @@ export class TenantKnowledgeService {
     return new KnowledgeIndexRepository(this.deps.database, this.deps.scope).latestPending(documentId);
   }
 
+  async pendingPreparationVersion(documentId: string): Promise<number | null> {
+    return new KnowledgeIndexRepository(this.deps.database, this.deps.scope).latestPreparation(documentId);
+  }
+
   async reservePendingIndexDispatch(documentId: string, version: number): Promise<boolean> {
     return new KnowledgeIndexRepository(this.deps.database, this.deps.scope).reserveDispatch(documentId, version);
+  }
+
+  async reservePendingDocumentCleanupDispatch(documentId: string): Promise<boolean> {
+    return new KnowledgeIndexRepository(this.deps.database, this.deps.scope).reserveDocumentCleanupDispatch(documentId);
+  }
+
+  /** A deferred document-vector cleanup is one bounded external batch. */
+  async cleanupDocumentManifestBatch(documentId: string): Promise<'next'|'complete'> {
+    const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
+    const chunks = await index.claimDocumentCleanup(documentId);
+    if (!chunks.length) return 'complete';
+    try {
+      await this.deps.vectorStorage.deleteByIds(chunks.map(chunk => chunk.vectorId));
+      await index.completeDocumentCleanup(documentId, chunks);
+      return await index.hasPendingDocumentCleanup(documentId) ? 'next' : 'complete';
+    } catch (error) {
+      await index.releaseDocumentCleanup(documentId, chunks);
+      throw error;
+    }
   }
 
   /** Retention-claimed article counterpart of document indexing. */
@@ -172,6 +223,7 @@ export class TenantKnowledgeService {
       await this.deps.vectorStorage.upsert(chunk.vectorId, embedding, {
         source_id: articleId, type: 'qa', text: chunk.text, tier: source.tier, status: 'published', source_version: version, chunk_index: chunkIndex });
       await index.indexed(articleId, version, chunkIndex);
+      if (chunkIndex + 1 < source.chunk_count) return 'next';
       return await index.completeIfFinished(articleId, version) ? 'complete' : 'next';
     } catch (error) { await index.uncertain(articleId, version, chunkIndex); throw error; }
   }
@@ -179,21 +231,10 @@ export class TenantKnowledgeService {
   async publishDocument(id: string): Promise<void> {
     const doc = await this.getDocument(id);
     if (!doc) throw new Error('Document not found');
-    await this.deps.repositories.knowledge.updateDocument(id, { status: 'published' });
-    const content = await this.getArticleContent(id);
-    const chunks = [content];
-    for (let i = 0; i < chunks.length; i++) {
-      const chunkId = `doc_${id}_${i}`;
-      const embedding = await this.aiService.generateEmbeddings(chunks[i]);
-      await this.deps.vectorStorage.upsert(chunkId, embedding, {
-        source_id: id,
-        type: 'document',
-        text: chunks[i],
-        category_id: doc.category_id,
-        tier: doc.tier,
-        status: 'published'
-      });
-    }
+    // Legacy direct publication embedded an arbitrary source in this HTTP
+    // route. A manifest is the only admitted provider path.
+    if (await new KnowledgeIndexRepository(this.deps.database, this.deps.scope).hasAny(id)) return;
+    throw new Error('Legacy vector publication requires a durable manifest migration');
   }
 
   async unpublishDocument(id: string): Promise<void> {
@@ -202,17 +243,14 @@ export class TenantKnowledgeService {
     const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
     await this.deps.repositories.knowledge.updateDocument(id, { status: 'pending' });
     if (await index.hasAny(id)) await index.withdrawAll(id);
-    else await this.deps.vectorStorage.deleteByIds(Array.from({ length: doc.chunk_count || 1 }, (_, i) => `doc_${id}_${i}`));
   }
 
   async deleteDocument(id: string): Promise<void> {
     const doc = await this.getDocument(id);
     if (!doc) return;
     const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
-    const legacy = !await index.hasAny(id);
-    if (!legacy) await index.withdrawAll(id);
+    if (await index.hasAny(id)) await index.withdrawAll(id);
     await this.deps.repositories.knowledge.deleteDocument(id);
-    if (legacy) await this.deps.vectorStorage.deleteByIds(Array.from({ length: doc.chunk_count || 1 }, (_, i) => `doc_${id}_${i}`));
   }
 
   async markArticleAsQA(articleId: string, type: 'answer' | 'sop' | null): Promise<void> {
@@ -228,21 +266,24 @@ export class TenantKnowledgeService {
         const content = current.body || '';
         if (!validKnowledgeSourceText(content)) throw new Error('Knowledge source exceeds 10 MiB');
         const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
-        const staged = await index.begin(articleId, current.body_r2_key || `article/${articleId}`, type, null, content, 'article');
+        const staged = await index.begin(articleId, current.body_r2_key || `article/${articleId}`, type, null, new TextEncoder().encode(content).byteLength, 'article');
         try {
-          await index.sourcePublished(articleId, staged.version, staged.chunks);
-          await this.deps.repositories.articles.updateQAState(articleId, type, staged.chunks.length);
+          // Article bodies are already durable on the ticket row; their
+          // manifest preparation still needs an R2 source, so retain the body
+          // under its scoped key before exposing the continuation.
+          await this.deps.attachmentStorage.putAttachment(staged.filePath, content, { httpMetadata: { contentType: 'text/plain' } });
+          if (!await index.sourceCaptured(articleId, staged.version)) throw new Error('Knowledge source capture was superseded');
+          await this.deps.repositories.articles.updateQAState(articleId, type, 0);
         } catch (error) {
           await index.sourceFailed(articleId, staged.version);
           throw error;
         }
       } else {
-        const count = current.chunk_count || 1;
+        const count = current.chunk_count || 0;
         // Revoke visibility before external deletion, retaining its cleanup manifest.
         await this.deps.repositories.articles.updateQAState(articleId, null, count);
         const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
         if (await index.hasAny(articleId)) await index.withdrawAll(articleId);
-        else await this.deps.vectorStorage.deleteByIds(Array.from({ length: count }, (_, i) => `qa_${articleId}_${i}`));
         await this.deps.repositories.articles.updateQAState(articleId, null, 0);
       }
     });

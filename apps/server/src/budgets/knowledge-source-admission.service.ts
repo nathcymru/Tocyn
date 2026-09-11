@@ -8,10 +8,12 @@ import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
 import { KNOWLEDGE_INDEX_CHUNK_BYTES, KNOWLEDGE_INDEX_MAX_CHUNKS } from '../repositories/knowledge-index.repository';
 
 export const KNOWLEDGE_SOURCE_MAX_BYTES = 10 * 1024 * 1024;
-// Version + every manifest row + job + document state. A three-byte UTF-8
-// source is the worst chunk packing case, so this is not inferred from an
-// average token or character conversion.
-const KNOWLEDGE_SOURCE_D1_WRITES = KNOWLEDGE_INDEX_MAX_CHUNKS + 3;
+// The HTTP request stores the source and creates one durable preparation job.
+// Manifest and cleanup rows are admitted in fixed continuation batches.
+// Version, preparation-job and current-document writes each maintain their
+// primary/secondary lookup structures. Sixteen leaves room for the measured
+// D1 row result plus those maintained indexes and a retry-safe state change.
+const KNOWLEDGE_SOURCE_D1_WRITES = 16;
 
 export const KNOWLEDGE_SOURCE_WRITE_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({
   workerRequests: 1, d1RowsRead: 2_560, d1RowsWritten: KNOWLEDGE_SOURCE_D1_WRITES,
@@ -21,9 +23,7 @@ export const KNOWLEDGE_SOURCE_WRITE_ENVELOPE: Readonly<ResourceAmounts> = Object
 });
 
 function sourceEnvelope(sourceBytes: number): Readonly<ResourceAmounts> {
-  // Three-byte UTF-8 scalars are the least dense legal chunk packing.
-  const chunks = Math.max(1, Math.ceil(sourceBytes / 510));
-  return Object.freeze({ ...KNOWLEDGE_SOURCE_WRITE_ENVELOPE, r2StorageBytes: sourceBytes, d1RowsWritten: chunks + 3 });
+  return Object.freeze({ ...KNOWLEDGE_SOURCE_WRITE_ENVELOPE, r2StorageBytes: sourceBytes });
 }
 
 export type KnowledgeSourceAdmission = Readonly<{ status: 'disabled' | 'admitted' | 'rejected'; reason?: 'exhausted' | 'unavailable' }>;
