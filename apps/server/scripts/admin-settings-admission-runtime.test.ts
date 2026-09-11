@@ -132,6 +132,12 @@ test('native D1/DO admission fences bounded settings, themes and delegated-polic
     const revokedRead=await pausedRead;assert.equal(revokedRead.status,503);assert.doesNotMatch(await revokedRead.text(),/Bounded tenant/);
     admin=await token('admin','admin',2);
 
+    await (await mf.dispatchFetch('http://runtime.test/__budget-control',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({beforeCanonical:'closedLinkedGrant'})})).body?.cancel();
+    const closedAttempt=await request('/api/settings','PUT',admin,{COMPANY_NAME:'Closed grant must not commit'},'closed-grant');
+    assert.equal(closedAttempt.status,503);await closedAttempt.body?.cancel();
+    assert.ok((await db.prepare('SELECT count(*) AS n FROM budget_grant_closures WHERE tenant_id=?').bind(tenant).first<{n:number}>())!.n>0);
+    assert.equal(await db.prepare("SELECT value FROM tenant_config WHERE tenant_id=? AND key='COMPANY_NAME'").bind(tenant).first(),null);
+
     const control = await mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ beforeCanonical: 'authority' }) }); await control.body?.cancel();
     const raced = await request('/api/settings', 'PUT', admin, { COMPANY_NAME: 'Must roll back' }, 'reset-race');
     assert.equal(raced.status, 503); await raced.body?.cancel();

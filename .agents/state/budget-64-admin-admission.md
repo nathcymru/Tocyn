@@ -18,3 +18,7 @@ Settings/theme and permission reads share current session/MFA/capability and exa
 Other administration, usage/provider, auth/ingress, mail/jobs and broader resource overhead remain #64 work. No full-issue completion percentage asserted. Local synthetic Miniflare evidence does not establish deployed Cloudflare behavior. No remote resources, external mail or Copilot reviews requested. No owner approval missing.
 
 Next: publish coherent draft PR, review exact-head CI/security, preserve required signing/review-thread checks, integrate under existing owner review-only bypass when accepted, then issue/Project/Wiki receipt.
+
+## Closed-reservation final review correction
+
+Root found the exact operation check could accept a retained operation from a now-closed grant. It now also requires absence of the whole-grant closure. Native regression stages a retained exact operation and closes its reservation before the business batch: old code returned200; fixed code returns503 with no settings mutation. Complete native case passes, runtime types and focused lint pass. Logs /private/tmp/tocyn-admin-closed-grant{,-red}.log. Previous cancelled/superseded remote runs are not final evidence; exact new revision still requires all CI/security/signing gates.

@@ -37,10 +37,11 @@ export function adminSettingsFenceStatements(db: D1Database, scope: VerifiedTena
     .bind(scope.tenantId, grant?.reservationId ?? '', grant?.holderId ?? '', grant?.operationId ?? '', grant?.aggregateId ?? '',
       grant?.operationFingerprint ?? '', JSON.stringify(grant?.operationEnvelope ?? {}), linked ? 1 : 0,
       scope.tenantId, grant?.reservationId ?? '', grant?.holderId ?? '');
-  const exact = db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN EXISTS (SELECT 1 FROM budget_grant_operations
+  const exact = db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN NOT EXISTS (SELECT 1 FROM budget_grant_closures
+    WHERE tenant_id=? AND reservation_id=? AND holder_id=?) AND EXISTS (SELECT 1 FROM budget_grant_operations
     WHERE tenant_id=? AND reservation_id=? AND holder_id=? AND operation_id=? AND aggregate_id=?
       AND operation_fingerprint=? AND operation_envelope_json=?) THEN 1 ELSE 0 END WHERE tenant_id=?`)
-    .bind(scope.tenantId, grant?.reservationId ?? '', grant?.holderId ?? '', grant?.operationId ?? '', grant?.aggregateId ?? '',
+    .bind(scope.tenantId, grant?.reservationId ?? '', grant?.holderId ?? '', scope.tenantId, grant?.reservationId ?? '', grant?.holderId ?? '', grant?.operationId ?? '', grant?.aggregateId ?? '',
       grant?.operationFingerprint ?? '', JSON.stringify(grant?.operationEnvelope ?? {}), scope.tenantId);
   return [base, operation, exact];
 }
