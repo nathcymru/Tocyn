@@ -437,18 +437,32 @@ function TicketDetail({ id }: { id: string }) {
     setStaleReplyReview({ phase: 'refreshing' });
     setNotice('');
     try {
-      // Fetch the conversation before accepting its revision. The following
-      // rebase remains a separate explicit action so the operator can review
-      // the rendered material without losing local draft edits.
-      const refreshed = await refetch({ throwOnError: true });
-      const result = await replyCapabilities.refetch({ throwOnError: true });
-      const collision = result.data?.collision;
-      if (!collision) {
+      // Bracket the ticket read with two server-derived revisions. The ticket
+      // response is a real read between them, so matching values prove no
+      // material event arrived before, during, or after that rendered review.
+      // The following rebase remains a separate explicit action so the
+      // operator can review the material without losing local draft edits.
+      const before = await replyCapabilities.refetch({ throwOnError: true });
+      const beforeCollision = before.data?.collision;
+      if (!beforeCollision) {
         setStaleReplyReview(null);
         setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.');
         return;
       }
-      setStaleReplyReview({ phase: 'ready', conversationRevision: collision.conversationRevision,
+      const refreshed = await refetch({ throwOnError: true });
+      const after = await replyCapabilities.refetch({ throwOnError: true });
+      const afterCollision = after.data?.collision;
+      if (!afterCollision) {
+        setStaleReplyReview(null);
+        setReplyError('Collision-safe replies are unavailable for this session. Your draft is retained.');
+        return;
+      }
+      if (beforeCollision.conversationRevision !== afterCollision.conversationRevision) {
+        setStaleReplyReview({ phase: 'ready' });
+        setReplyError('The conversation changed while it was being refreshed. Your draft is retained; refresh and review the latest material before rebasing.');
+        return;
+      }
+      setStaleReplyReview({ phase: 'ready', conversationRevision: afterCollision.conversationRevision,
         renderedMessages: refreshed.data?.pages.reduce((total, page) => total + page.articles.length, 0) ?? 0 });
       setReplyError('The latest conversation is shown below. Review it, then rebase the saved draft when ready.');
     } catch (error) {

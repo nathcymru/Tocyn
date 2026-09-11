@@ -797,6 +797,7 @@ it('sends an acknowledged collision-safe draft with one stable idempotency key',
 
 it('requires a rendered conversation review and explicit CAS rebase after a stale reply before manual resend', async () => {
   let conversationRevision = 0;
+  let injectMaterialBetweenTicketAndRevisionRead = false;
   let sendAttempts = 0;
   const replyRequests: RequestInit[] = [];
   const material = { ...ticket, articles: [...ticket.articles, {
@@ -808,7 +809,14 @@ it('requires a rendered conversation review and explicit CAS rebase after a stal
       sendAttempts++;
       return sendAttempts === 1 ? json({ code: 'staff_reply_stale', error: 'stale' }, 409) : json({ id: 'manual-reviewed-send' });
     }
-    if (path === `/api/tickets/${ticket.id}`) return json(conversationRevision === 1 ? material : ticket);
+    if (path === `/api/tickets/${ticket.id}`) {
+      if (injectMaterialBetweenTicketAndRevisionRead) {
+        injectMaterialBetweenTicketAndRevisionRead = false;
+        conversationRevision = 1;
+        return json(ticket);
+      }
+      return json(conversationRevision === 1 ? material : ticket);
+    }
     return json(ticket);
   }, [], options => {
     if (!options.body) return undefined;
@@ -830,7 +838,12 @@ it('requires a rendered conversation review and explicit CAS rebase after a stal
   expect(message).toHaveValue('Keep this draft through review');
   expect(screen.getByRole('button', { name: 'Send Reply' })).toHaveAttribute('aria-disabled', 'true');
 
-  conversationRevision = 1;
+  injectMaterialBetweenTicketAndRevisionRead = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
+  await screen.findByText(/conversation changed while it was being refreshed/i);
+  expect(screen.queryByText('A newer customer reply')).not.toBeInTheDocument();
+  expect(message).toHaveValue('Keep this draft through review');
+
   fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
   await screen.findByText('A newer customer reply');
   await screen.findByText(/2 messages are now rendered/);
