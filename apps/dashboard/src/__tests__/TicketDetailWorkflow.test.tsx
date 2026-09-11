@@ -339,6 +339,38 @@ it('discovers a later current support state, recovers its page load, and enforce
   expect(saved).toMatchObject({ definitionId: 'late-waiting', expectedRevision: 4, waitingReason: 'Need account number', nextAction: 'Follow up tomorrow' });
 });
 
+it('snoozes and unsnoozes through the shared revision-fenced transition', async () => {
+  const transition = { ticket_id: 'workflow-ticket', definition_id: 'legacy-open', lifecycle: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason: null, next_action: null, snoozed_until: null, resurface_reason: null, changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const definitions = [{ id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 }];
+  let current = transition as { ticket_id: string; definition_id: string; lifecycle: 'open'; internal_label: string; public_label: string; waiting_reason: null; next_action: null; snoozed_until: string | null; resurface_reason: 'manual' | 'due' | 'customer_reply' | null; changed_at: string; revision: number };
+  const writes: Record<string, unknown>[] = [];
+  transport((path, options) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') {
+      if (options.method === 'PATCH') {
+        const body = JSON.parse(String(options.body)); writes.push(body);
+        current = { ...current, snoozed_until: body.snoozedUntil, resurface_reason: body.snoozedUntil ? null : 'manual', revision: current.revision + 1 };
+        return json(current);
+      }
+      return json(current);
+    }
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => new URL(url, 'http://localhost').pathname === '/api/support-states' ? json(definitions) : original(url, options)));
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  await screen.findByRole('textbox', { name: 'Snooze until (UTC)' });
+  const snooze = screen.getByRole('textbox', { name: 'Snooze until (UTC)' });
+  fireEvent.change(snooze, { target: { value: '2026-09-13T14:30' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Snooze ticket' }));
+  await screen.findByText(/Snoozed until/);
+  expect(writes[0]).toMatchObject({ definitionId: 'legacy-open', expectedRevision: 4, snoozedUntil: new Date('2026-09-13T14:30').toISOString() });
+  expect(screen.getByRole('button', { name: 'Unsnooze ticket' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Unsnooze ticket' }));
+  await waitFor(() => expect(writes).toHaveLength(2));
+  expect(writes[1]).toMatchObject({ expectedRevision: 5, snoozedUntil: null });
+});
+
 it('uses a synchronous support-state flight guard to prevent duplicate delayed saves and locks fields while pending', async () => {
   const transition = { ticket_id: 'workflow-ticket', definition_id: 'awaiting-customer', lifecycle: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason: 'Awaiting account number', next_action: 'Follow up tomorrow', changed_at: '2026-09-11T00:00:00Z', revision: 4 };
   const definitions = [{ id: 'awaiting-customer', legacy_status: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason_required: 1, next_action_required: 1, is_compatibility_default: 0, is_active: 1 }];
