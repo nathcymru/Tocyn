@@ -17,6 +17,9 @@ import { TicketDetailPage } from './TicketDetailPage';
 const statusStyle={open:'bg-emerald-50 text-emerald-800 border-emerald-200',pending:'bg-amber-50 text-amber-900 border-amber-200',
   resolved:'bg-slate-100 text-slate-700 border-slate-200',closed:'bg-slate-100 text-slate-700 border-slate-200'} as const;
 const priorityStyle={low:'text-slate-500',normal:'text-blue-600',high:'text-orange-700',urgent:'text-red-700'} as const;
+const queueViews={actionable:{label:'Actionable',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
+type QueueView=keyof typeof queueViews;
+function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed';}
 function pageFromAnchor(anchor:string){const match=/^page:([1-9]\d*)$/.exec(anchor);const page=match?Number(match[1]):1;return Number.isSafeInteger(page)?page:1;}
 function pageAnchor(page:number){return `page:${Math.max(1,Math.floor(page))}`;}
 
@@ -31,8 +34,8 @@ function InboxWorkspace(){
   const workspace=useOperatorWorkspaceState();
   const {data:filters,isLoading:isLoadingFilters}=useFilters();
   const lastRouteView=useRef<string|null>(null);
-  const routeFilter=useMemo(()=>viewId&&viewId!=='all'?filters?.find(filter=>filter.id===viewId):undefined,[filters,viewId]);
-  const routeReady=!isLoadingFilters&&(viewId==='all'||Boolean(routeFilter));
+  const routeFilter=useMemo(()=>viewId&&viewId!=='all'&&!isQueueView(viewId)?filters?.find(filter=>filter.id===viewId):undefined,[filters,viewId]);
+  const routeReady=!isLoadingFilters&&(viewId==='all'||isQueueView(viewId)||Boolean(routeFilter));
 
   useEffect(()=>{
     if(workspace.status==='loading'||isLoadingFilters)return;
@@ -51,7 +54,7 @@ function InboxWorkspace(){
     else if(routeFilter&&(workspace.view!=='custom'||workspace.filters.filterId!==routeFilter.id))workspace.update({view:'custom',filters:{...workspace.filters,filterId:routeFilter.id},...clearSelection});
   },[conversationId,filters,isLoadingFilters,navigate,routeFilter,viewId,workspace]);
 
-  if(viewId&&viewId!=='all'&&!isLoadingFilters&&!routeFilter)return <section className="p-6" aria-labelledby="inbox-view-unavailable">
+  if(viewId&&viewId!=='all'&&!isQueueView(viewId)&&!isLoadingFilters&&!routeFilter)return <section className="p-6" aria-labelledby="inbox-view-unavailable">
     <h1 id="inbox-view-unavailable" tabIndex={-1} className="text-xl font-bold text-slate-900">Inbox view unavailable</h1>
     <p className="mt-2 text-slate-600">This saved view is unavailable for the current account.</p>
     <Link to="/inbox/all" replace className="mt-4 inline-flex rounded border border-slate-300 px-4 py-2 font-semibold">Open All tickets</Link>
@@ -82,7 +85,8 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   const drafts=useOperatorDraftIndicators();
   const {data:settings}=useSettings();
   const prefix=settings?.TICKET_PREFIX||'#';
-  const filterId=activeView==='all'?'':activeView;
+  const queue=isQueueView(activeView)?activeView:undefined;
+  const filterId=activeView==='all'||queue?'':activeView;
   const page=pageFromAnchor(workspace.listAnchor);
   const [filterInput,setFilterInput]=useState(workspace.listQuery);
   const [focusedIndex,setFocusedIndex]=useState(0);
@@ -90,7 +94,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   const heading=useRef<HTMLHeadingElement>(null);
   const paging=useRef(false);
   const [status,setStatus]=useState('');
-  const query=useTickets({page:String(page),sort:workspace.sort,...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{})});
+  const query=useTickets({page:String(page),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{})});
   const tickets=query.data?.data??[];
   const meta=query.data?.meta??{page:1,limit:20,total:0,total_pages:1};
   const ticketSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
@@ -115,6 +119,10 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
         <h1 ref={heading} tabIndex={-1} className="mt-1 text-2xl font-bold text-slate-900">Inbox</h1></div>
         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{meta.total} conversations</span></div>
       <nav aria-label="Work views" className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <TocynButton type="button" aria-pressed={activeView==='actionable'} onClick={()=>selectView('actionable')}
+          className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='actionable'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>Actionable</TocynButton>
+        <TocynButton type="button" aria-pressed={activeView==='snoozed'} onClick={()=>selectView('snoozed')}
+          className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='snoozed'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>Snoozed</TocynButton>
         <TocynButton type="button" aria-pressed={activeView==='all'} onClick={()=>selectView('all')}
           className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='all'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>All tickets</TocynButton>
         {isLoadingFilters?<span role="status" className="px-2 py-2 text-sm text-slate-500">Loading saved views…</span>:filters?.map(filter=><TocynButton key={filter.id} type="button"
@@ -137,7 +145,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
       <TocynButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave} className="ml-2 font-semibold underline">{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</TocynButton></div>:null}
     {drafts.status==='partial'&&<p role="status" className="mx-4 mt-3 text-xs text-amber-900">Some draft indicators are still loading.</p>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className="flex-1 divide-y divide-slate-200">
-      {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:tickets.length===0&&!query.error?<div className="p-8 text-center"><p className="font-semibold text-slate-800">No conversations in this view</p><p className="mt-1 text-sm text-slate-600">Clear the view filter or choose another saved view.</p></div>:tickets.map((ticket,index)=>{
+      {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:tickets.length===0&&!query.error?<div className="p-8 text-center"><p className="font-semibold text-slate-800">{queue?`No ${queueViews[queue].label.toLowerCase()} conversations`: 'No conversations in this view'}</p><p className="mt-1 text-sm text-slate-600">{queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'}</p></div>:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
           to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} onFocus={()=>setFocusedIndex(index)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();moveFocus(index+1);}if(event.key==='ArrowUp'){event.preventDefault();moveFocus(index-1);}}}
@@ -147,6 +155,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
           {ticket.snippet&&<p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600">{ticket.snippet}</p>}
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="font-mono font-semibold text-slate-600">{reference}</span>
             <span className={clsx('rounded-full border px-2 py-0.5 font-semibold capitalize',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span>
+            {queue&&<span className="rounded bg-brand-50 px-2 py-0.5 font-semibold text-brand-800" aria-label={`Inclusion reason: ${queue}`}>{queue==='actionable'?'Actionable':'Snoozed'}</span>}
             <span className={clsx('inline-flex items-center gap-1 font-semibold capitalize',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{ticket.priority}</span>
             {drafts.ticketIds.has(ticket.id)&&<span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">Draft</span>}</div>
           <div className="mt-2">{ticketSla.isLoading?<span className="inline-flex items-center gap-1 text-xs text-slate-500"><Clock className="h-3 w-3" aria-hidden="true" />Loading service level…</span>
