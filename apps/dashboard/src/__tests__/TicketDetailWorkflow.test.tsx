@@ -18,7 +18,8 @@ function deferred<T>() {let resolve!:(value:T)=>void;const promise=new Promise<T
 let client:QueryClient;
 let ticket:ReturnType<typeof initialTicket>;
 function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'assigned-agent' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
-function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined) {
+const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
+function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined, sla: (path: string, options: RequestInit) => Response | Promise<Response> = () => json(unavailableSla)) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
     if(path==='/api/workspace/state') {
@@ -32,6 +33,7 @@ function transport(handle:(path:string,options:RequestInit)=>Response|Promise<Re
       const body=JSON.parse(String(options.body));
       return json({ticketId:'workflow-ticket',generation:'99999999-9999-4999-8999-999999999999',revision:1,mode:body.mode,body:body.body,attachments:body.attachments,baseConversationRevision:0,expiresAt:null,updatedAt:'2026-09-10T00:00:00Z'});
     }
+    if(path===`/api/tickets/${ticket.id}/sla`) return sla(path,options);
     if(path.startsWith('/api/tickets/')||path==='/api/attachments/upload')return handle(path,options);
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
     if(path==='/api/users/agents')return json([{id:'assigned-agent',full_name:'Assigned agent'}]);
@@ -99,6 +101,17 @@ it('distinguishes a recoverable detail failure from not found and recovers throu
   expect(screen.queryByText('Ticket not found.')).not.toBeInTheDocument();
   failed=false;fireEvent.click(screen.getByRole('button',{name:'Retry loading ticket'}));
   await screen.findByRole('heading',{name:ticket.subject});
+});
+
+it('shows a mounted service-level failure and retries its shared detail query without blocking the ticket', async () => {
+  let failSla = true;
+  transport(() => json(ticket), [], undefined, () => failSla ? json({ error: 'Unavailable' }, 503) : json({ ...unavailableSla, resolution: { state: 'on-track', phase: 'running', completedAt: null, dueAt: '2026-09-11T10:00:00.000Z', remainingWorkingMilliseconds: 60000, targetWorkingMilliseconds: 3600000 } }));
+  showDetail();
+  await screen.findByRole('heading', { name: ticket.subject });
+  expect(await screen.findByText('Service level is unavailable.')).toBeTruthy();
+  failSla = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect((await screen.findAllByText(/^Due /)).length).toBe(2);
 });
 
 it('persists explicit assignment clearing and exposes pending/rejected state changes without displaying false success',async()=>{

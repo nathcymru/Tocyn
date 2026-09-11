@@ -1,3 +1,5 @@
+import { useTicketSlaBatch } from '../hooks/useTicketSla';
+import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
@@ -113,6 +115,7 @@ export function TicketListPage() {
   });
 
   const tickets = paginatedData?.data || [];
+  const ticketSla = useTicketSlaBatch(tickets.map(ticket => ticket.id), !isPlaceholderData && !ticketsError && Boolean(paginatedData));
   const meta = paginatedData?.meta || { page: 1, limit: 20, total: 0, total_pages: 1 };
 
   const { data: groups } = useGroups();
@@ -248,6 +251,8 @@ export function TicketListPage() {
         <p role="status" aria-label="Workspace preference status" className="text-sm text-slate-700">
           {workspace.status === 'loading' ? 'Restoring workspace preferences…' : workspace.status === 'saving' ? 'Saving workspace preferences…' : workspace.status === 'saved' ? 'Workspace preferences saved.' : ''}
         </p>
+        {tickets.length > 0 && ticketSla.isLoading && <p role="status">Loading service levels…</p>}
+        {tickets.length > 0 && ticketSla.isError && <p role="status">Service levels could not be refreshed. <TocynButton type="button" disabled={ticketSla.isFetching} onClick={() => void ticketSla.refetch()} className="underline">Retry service levels</TocynButton></p>}
         {draftIndicators.status === 'partial' && <p role="status" aria-label="Draft indicator status" className="text-sm text-amber-800">Draft indicators are incomplete. Only the first 200 drafts were checked.</p>}
         {workspace.status === 'error' && (
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
@@ -372,6 +377,7 @@ export function TicketListPage() {
                         <Link to={`/tickets/${ticket.id}`} className="block font-medium text-slate-900 hover:text-brand-600">
                           {ticket.subject}
                         </Link>
+                        {!ticketSla.isLoading && <ConversationSlaStatus sla={ticketSla.isError || isPlaceholderData ? undefined : ticketSla.data?.[ticket.id]} />}
                         {draftIndicators.ticketIds.has(ticket.id) && <span className="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" aria-label="Draft available">Draft</span>}
                         {ticket.snippet && (
                           <div className="text-xs text-slate-500 truncate max-w-sm mt-1" title={ticket.snippet}>

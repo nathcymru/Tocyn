@@ -63,6 +63,11 @@ jobs:
         run: npm exec -- playwright install --with-deps chromium
       - name: Validate
         run: ${{ matrix.command }}
+      - name: Verify service-level browser acceptance
+        if: matrix.check == 'build'
+        run: |
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-sla-browser.json
+          node --import tsx --test apps/server/scripts/ui-sla-browser.test.ts > "$RUNNER_TEMP/tocyn-sla-browser.tap"
       - name: Verify support-state browser acceptance
         if: matrix.check == 'build'
         run: |
@@ -90,7 +95,7 @@ jobs:
         if: matrix.check == 'test'
         run: |
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.operational-metrics.json
-          npm run test:operational-metrics --workspace=apps/server
+          node --import tsx --test apps/server/scripts/operational-metrics.test.ts apps/server/scripts/sla-operational-metrics.test.ts
       - name: Verify bounded budget admission and durable recovery
         if: matrix.check == 'test'
         run: |
@@ -116,6 +121,7 @@ jobs:
             ${{ runner.temp }}/tocyn-ui-authenticated.tap
             ${{ runner.temp }}/tocyn-operator-drafts.tap
             ${{ runner.temp }}/tocyn-support-state-browser.tap
+            ${{ runner.temp }}/tocyn-sla-browser.tap
             ${{ runner.temp }}/tocyn-theme-scope.json
           retention-days: 3
           if-no-files-found: warn

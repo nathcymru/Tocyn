@@ -7,6 +7,7 @@ import type { CapabilityWriteFence } from '../auth/capability-policy';
 import type { OperatorWorkspaceRepository } from './operator-workspace.repository';
 import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 import type { SupportStateRepository } from './support-state.repository';
+import type { SlaClockRepository } from './sla-clock.repository';
 
 export interface UserRepository {
   revokeSessions(id: string): Promise<void>;
@@ -149,5 +150,6 @@ export interface Repositories {
   groups: GroupRepository;
   ticketFilters: FilterRepository;
   supportStates: SupportStateRepository;
+  slaClocks: SlaClockRepository;
   operatorWorkspace: OperatorWorkspaceRepository;
 }

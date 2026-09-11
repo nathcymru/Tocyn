@@ -9,6 +9,7 @@ class Socket { static OPEN=1; readyState=1; onopen:null|(()=>void)=null; onclose
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 const preference=(revision:number,panel:'conversation'|'details'='conversation',selectedTicketId:string|null=null)=>({revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId,panel,updatedAt:'2026-09-11T00:00:00Z'});
 const ticket={id:'workspace-ticket',subject:'Workspace ticket',customer_email:'customer@example.invalid',ticket_no:1,status:'open',priority:'normal',assigned_to:null,group_id:null,created_at:'2026-09-11T00:00:00Z',articles:[],pagination:{limit:20,next_cursor:null,has_more:false}};
+const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
 
 function show(initial=preference(3), writeStatus=200) {
   const writes:unknown[]=[];
@@ -16,6 +17,7 @@ function show(initial=preference(3), writeStatus=200) {
     const path=new URL(url,'http://localhost').pathname;
     if(path==='/api/workspace/state') { if(options.method==='PUT'){const body=JSON.parse(String(options.body));writes.push(body);return writeStatus===200 ? json({...body,revision:4,updatedAt:'2026-09-11T00:00:01Z'}) : json({error:'Conflict'},writeStatus);} return json(initial); }
     if(path.startsWith('/api/workspace/drafts')) return new Response(null,{status:204});
+    if(path===`/api/tickets/${ticket.id}/sla`) return json(unavailableSla);
     if(path.startsWith('/api/tickets/')) return json(ticket);
     if(path==='/api/groups'||path==='/api/users/agents'||path==='/api/ticket-fields') return json([]);
     if(path==='/api/settings') return json({});
