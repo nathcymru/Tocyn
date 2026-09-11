@@ -125,6 +125,21 @@ it('keeps connection recovery visible without healthy latency diagnostics', asyn
   expect(screen.queryByText(/Latency/)).not.toBeInTheDocument();
 });
 
+it('re-reads bounded durable activity when realtime is restored', async () => {
+  const result = await renderReady();
+  const activityReads = () => vi.mocked(dashboardApi.get).mock.calls.filter(([path]) => path === '/activities?limit=20').length;
+  const initialReads = activityReads();
+
+  vi.mocked(useRealtime).mockReturnValue({ ...realtime, isConnected: false } as ReturnType<typeof useRealtime>);
+  act(() => result.rerender(tree()));
+  vi.mocked(useRealtime).mockReturnValue({ ...realtime, isConnected: true } as ReturnType<typeof useRealtime>);
+  act(() => result.rerender(tree()));
+
+  await waitFor(() => expect(activityReads()).toBe(initialReads + 1));
+  expect(dashboardApi.get).toHaveBeenLastCalledWith('/activities?limit=20');
+  expect(await screen.findByText('Connection restored. Durable activity refreshed.')).toHaveAttribute('role', 'status');
+});
+
 it('navigates from the account popover without stealing destination focus', async () => {
   await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
   const destination = await screen.findByRole('link', { name: 'Security Profile' });
