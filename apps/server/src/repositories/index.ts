@@ -18,6 +18,7 @@ import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admi
 import { articleBodyFormat } from '@luminatick/shared';
 import { TicketListScanError, ticketListCurrentCredentialSql, ticketListScanAssertionSql, ticketListScanFenceSql, type TicketListCurrentCredential, type TicketListScanSnapshot } from './ticket-list-scan.repository';
 import { CustomerAuthBudgetFenceError, customerAuthAcceptanceStatement, customerAuthAcceptedSql, customerAuthCredentialIssueAssertionStatement, customerAuthFenceStatements, type CustomerAuthBudgetFence } from './customer-auth-budget-fence';
+import { D1PhysicalStorageReconciliationRepository } from './d1-physical-storage-reconciliation';
 
 const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
 const customerAuthAccepted = (result: unknown): boolean => (result as { results?: readonly { accepted?: unknown }[] } | undefined)?.results?.[0]?.accepted === 1;
@@ -172,6 +173,15 @@ export class SqlUserRepository implements UserRepository {
       || writeResults.some(result => !result?.meta.changes)) {
       throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
     }
+    // `size_after` is available only in a successful post-commit D1 result.
+    // Keep it as opaque database evidence for this exact admitted operation;
+    // it cannot establish this tenant's physical storage or a safe refund.
+    const grant = fence?.authority.grant;
+    if (grant) await new D1PhysicalStorageReconciliationRepository(this.db).retain({
+      tenantId: this.scope.tenantId, reservationId: grant.reservationId, holderId: grant.holderId,
+      aggregateId: grant.aggregateId, operationId: grant.operationId,
+      operationFingerprint: grant.operationFingerprint, observedAt: Date.now(),
+    }, results);
   }
 
   async storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string, fence?: CustomerAuthBudgetFence): Promise<void> {
