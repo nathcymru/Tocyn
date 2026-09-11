@@ -22,3 +22,11 @@ The original local prerequisite (`5ad5eae` and `a637fcb`) introduced `CustomerCu
 ## Remaining #64 limits
 
 This does not complete #64 or establish whole-operation/provider coverage. Customer upload/download and reads, widget AI chat, CPU/duration, request/response bytes, R2 storage/bytes, NotificationDO duration/storage, delivery recovery and provider billing remain outside these envelopes. No provider, production, email or remote measurement was performed.
+
+## Coordinator integration — 11 September 2026
+
+Combined with recovery PR #194 (`a838cb7`) at local merge `b75cf59`. Resolved shared canonical service/repository and native fixture controls additively: customer commit fence and response projection remain distinct from API whole-grant lifecycle and staff checks. Integrated package native run passed90/90, zero failures/cancellations/skips,81.5seconds (actual completed handle5205, local log `/private/tmp/tocyn-64-customer-integrated-native.log`). Full server and API runtime types pass. Customer runtime config name is `scripts/tsconfig.customer-budget-admission.json`; an attempted incorrect filename produced no check and was corrected. Required PRCI and exact accepted-base refresh remain pending.
+
+Recovery PR194 CI is active under34582825330,CodeQL34582823135; receipt https://github.com/nathcymru/Tocyn/issues/64#issuecomment-5632194228. Root watch85459. Do not restart a running check from an observation timeout.
+
+Collaboration dashboard bundle overrun was a measurement error: exact Node22.19 repository gzip9 gate gives569159/570000totalJS,100896/135000initialJS,15603/16000CSS. No gate changed; Astra restored experiments. Actual AT has a local fixture capacity rejection under diagnosis. Root additionally found ascending paginated conversation refresh could authorize rebasing before later material was rendered; #70 worker must fix bounded review coverage and retain a multi-page regression. No owner approval pending.
