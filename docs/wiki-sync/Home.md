@@ -50,3 +50,7 @@ The repository contains version-controlled architecture/privacy source under `do
 
 
 SLA #73 is accepted through signed [PR#180](https://github.com/nathcymru/Tocyn/pull/180), with local calendar, pause/resume, tenant isolation, customer-handler, browser and Safari/VoiceOver evidence. Capacity-aware routing#137 and the full beta.2#140 gate remain outstanding; this is not production clearance.
+
+Composer #68 is accepted through signed [PR #183](https://github.com/nathcymru/Tocyn/pull/183), with safe versioned Markdown/plain rendering, durable draft continuity, local email and browser/VoiceOver evidence. Downstream AI/context providers remain their own pending work.
+
+Resource-budget foundation [PR #182](https://github.com/nathcymru/Tocyn/pull/182) is integrated at signed `1245ec5b463f8434eb59134a89759f327a4ce059` with matching tested contents and required CI/CodeQL. It adds bounded configured API mutation grants, policy renewal, transaction receipts and bounded realtime/email foundations. Full #64 application-path enforcement and recovery remain incomplete; staff integration, collaboration and durable activity work are active. Local-only restrictions and the full beta.2 gate remain in effect.

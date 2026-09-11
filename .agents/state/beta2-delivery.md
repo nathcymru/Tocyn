@@ -1,3 +1,5 @@
+Latest coordinating checkpoint: [11 September 08:55 BST](beta2-checkpoint-2026-09-11-0855.md). Full beta.2 acceptance remains open.
+
 Current coordinating checkpoint: [11 September 08:25 delivery state](beta2-checkpoint-2026-09-11-0825.md).
 
 # Beta.2 coordinated delivery
