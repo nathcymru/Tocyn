@@ -118,6 +118,19 @@ export type HandoffOwnerIngressOutcome = Readonly<{
   status: 'handed-off' | 'already-handed-off' | 'rejected';
   reason?: 'stale-policy' | 'exhausted' | 'capacity-exhausted' | 'capacity-defect' | 'invalid-closure';
 }>;
+export type OwnerIngressBatchTransfer = Readonly<{
+  tenantId: string;
+  expectedPolicyId: string;
+  expectedPolicyRevision: number;
+  expectedRestrictionRevision: number;
+  operationId: string;
+  envelope: Readonly<ResourceAmounts>;
+}>;
+export type HandoffOwnerIngressBatchInput = Readonly<{
+  ownerClosure: ReconcileOwnerIngressInput;
+  transfers: readonly OwnerIngressBatchTransfer[];
+  now: number;
+}>;
 
 function assertIdentity(value: unknown, description: string): asserts value is string {
   if (typeof value !== 'string' || value.length < 1 || value.length > 160 || /[\u0000-\u001F\u007F]/.test(value)) {
@@ -613,6 +626,56 @@ export function handoffOwnerIngress(state: BudgetOwnerAggregateState, input: Han
   const tenantClosed = closeTenant(reserved.outcome.reservation, reserved.state);
   if (tenantClosed.outcome !== 'reconciled') return reject(tenantClosed.outcome === 'capacity-defect' ? 'capacity-defect' : 'invalid-closure');
   return { state: tenantClosed.state, outcome: { status: 'handed-off' } };
+}
+
+/**
+ * Closes one preallocated ingress block and moves only durably proven
+ * executions into tenant ledgers. This is one aggregate transition: any
+ * invalid proof or tenant capacity failure retains the original owner block.
+ */
+export function handoffOwnerIngressBatch(state: BudgetOwnerAggregateState, input: HandoffOwnerIngressBatchInput): Readonly<{
+  state: BudgetOwnerAggregateState;
+  outcome: HandoffOwnerIngressOutcome;
+}> {
+  const reject = (reason: NonNullable<HandoffOwnerIngressOutcome['reason']>) => ({ state, outcome: { status: 'rejected' as const, reason } });
+  if (!Number.isSafeInteger(input.now) || input.now < 0 || input.transfers.length > 8
+    || input.ownerClosure.now !== input.now || !input.ownerClosure.certifiedClosure) return reject('invalid-closure');
+  const ingress = state.ownerIngress.grants.find(grant => grant.reservationId === input.ownerClosure.reservationId);
+  if (!ingress || ingress.holderId !== input.ownerClosure.holderId) return reject('invalid-closure');
+  const totals: ResourceAmounts = { ...input.ownerClosure.measured };
+  for (const transfer of input.transfers) {
+    assertIdentity(transfer.operationId,'ingress transfer operation');
+    for (const [dimension,units] of Object.entries(transfer.envelope) as [ResourceDimension,number][]) {
+      if (!Number.isSafeInteger(units) || units < 0) return reject('invalid-closure');
+      totals[dimension] = (totals[dimension] ?? 0) + units;
+    }
+  }
+  if (JSON.stringify(Object.fromEntries(Object.entries(totals).filter(([,v]) => v !== 0).sort()))
+    !== JSON.stringify(Object.fromEntries(Object.entries(ingress.envelope).filter(([,v]) => v !== 0).sort()))) return reject('invalid-closure');
+  const ownerClosed = reconcileOwnerIngress(state,input.ownerClosure);
+  if (ownerClosed.outcome === 'already-reconciled') return { state: ownerClosed.state, outcome: { status: 'already-handed-off' } };
+  if (ownerClosed.outcome !== 'reconciled') return reject('invalid-closure');
+  let next = ownerClosed.state;
+  for (const transfer of input.transfers) {
+    const tenant = next.tenantStates.find(item => item.tenantId === transfer.tenantId);
+    if (!tenant || tenant.policyId !== transfer.expectedPolicyId || tenant.policyRevision !== transfer.expectedPolicyRevision
+      || tenant.restrictionRevision !== transfer.expectedRestrictionRevision) return reject('stale-policy');
+    const holderId = `${ingress.holderId}:${transfer.operationId}`;
+    const reserved = reserveOwnerAggregate(next,{ tenantId:transfer.tenantId,holderId,idempotencyKey:transfer.operationId,
+      expectedPolicyId:transfer.expectedPolicyId,expectedPolicyRevision:transfer.expectedPolicyRevision,
+      expectedRestrictionRevision:transfer.expectedRestrictionRevision,purpose:ingress.purpose,envelope:transfer.envelope,now:input.now });
+    if (reserved.outcome.status !== 'granted' || !reserved.outcome.reservation) return reject(
+      reserved.outcome.reason === 'exhausted' ? 'exhausted' : reserved.outcome.reason === 'capacity-defect' ? 'capacity-defect'
+        : reserved.outcome.reason === 'stale-policy' ? 'stale-policy' : 'capacity-exhausted');
+    const closed = reconcileOwnerAggregate(reserved.state,{tenantId:transfer.tenantId,reservationId:reserved.outcome.reservation.reservationId,
+      holderId,expectedPolicyId:transfer.expectedPolicyId,expectedPolicyRevision:transfer.expectedPolicyRevision,
+      expectedRestrictionRevision:transfer.expectedRestrictionRevision,terminalEvidenceId:`${input.ownerClosure.terminalEvidenceId}:${transfer.operationId}`,
+      measured:transfer.envelope,uncertain:{},now:input.now,certifiedClosure:{operationSetFingerprint:transfer.operationId,
+        expiresAt:reserved.outcome.reservation.expiresAt}});
+    if (closed.outcome !== 'reconciled') return reject(closed.outcome === 'capacity-defect' ? 'capacity-defect' : 'invalid-closure');
+    next = closed.state;
+  }
+  return { state: next, outcome: { status: 'handed-off' } };
 }
 
 export const BUDGET_COORDINATOR_BOUNDS = Object.freeze({ maxTenantAllocations: MAX_TENANT_ALLOCATIONS, maxReservations: MAX_RESERVATIONS });

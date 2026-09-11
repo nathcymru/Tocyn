@@ -8,9 +8,7 @@ import type { D1Database, D1PreparedStatement, DurableObjectNamespace } from '@c
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 import { OWNER_INGRESS_EXECUTION_ENVELOPE } from '../src/budgets/owner-ingress-admission.service';
 import { OwnerIngressAdmissionCache } from '../src/budgets/owner-ingress-admission.service';
-import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { BudgetAuthorityRepository, OWNER_INGRESS_AUTHORITY_D1_READ_BOUND } from '../src/repositories/budget-authority.repository';
-import { createVerifiedTenantScope } from '../src/auth/scope';
 import { splitSql } from './split-sql';
 import { SignJWT } from 'jose';
 
@@ -101,14 +99,14 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
     assert.equal(ownerOnly.status, 401);
     const afterOwner = await coordinator.inspectForTrustedRuntime();
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
-      assert.equal(afterOwner.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units, units);
+      assert.equal(afterOwner.ownerIngress.grants[0].accounted[dimension as keyof typeof OWNER_INGRESS_EXECUTION_ENVELOPE], units * 8);
     }
 
     const token = await new SignJWT({ tenant_id: 'tenant-a', role: 'admin', session_version: 1, mfa_verified: true })
       .setProtectedHeader({ alg: 'HS256' }).setSubject('actor-a').setAudience('app').setIssuedAt().setExpirationTime('5m')
       .sign(new TextEncoder().encode(JWT_SECRET));
     const handoffStatuses: number[] = [];
-    for (let index = 0; index < 12; index++) {
+    for (let index = 0; index < 15; index++) {
       handoffStatuses.push((await f.mf.dispatchFetch(`http://example.test/api/handoff?tenant=tenant-b&n=${index}`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` },
       })).status);
@@ -117,7 +115,7 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
     const afterHandoff = await coordinator.inspectForTrustedRuntime();
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
       assert.equal(afterHandoff.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units, units,
-        `${dimension} owner charge must not grow after exact tenant handoff`);
+        `${dimension} keeps only the owner-only execution after exact warm-block handoff`);
     }
     const tenantA = afterHandoff.tenantStates.find(tenant => tenant.tenantId === 'tenant-a');
     const tenantB = afterHandoff.tenantStates.find(tenant => tenant.tenantId === 'tenant-b');
@@ -126,7 +124,7 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
     assert.ok(tenantA.grants.some(grant => (grant.envelope.d1RowsRead ?? 0) >= OWNER_INGRESS_EXECUTION_ENVELOPE.d1RowsRead!));
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
       assert.equal(tenantA.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units,
-        units * 12, `${dimension} is charged once per successful tenant handoff`);
+        units * 15, `${dimension} is charged once per durably proven tenant execution`);
     }
 
     const tenantGrantCount = tenantA.grants.length;
@@ -138,14 +136,14 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
     const afterRevocation = await coordinator.inspectForTrustedRuntime();
     assert.equal(afterRevocation.tenantStates[0].grants.length, tenantGrantCount);
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
-      assert.equal(afterRevocation.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units,
-        units * 2, `${dimension} keeps the denied current-credential attempt in owner ingress`);
+      assert.equal(afterRevocation.ownerIngress.grants.filter(grant => !grant.compacted).at(-1)?.accounted[dimension as keyof typeof OWNER_INGRESS_EXECUTION_ENVELOPE],
+        units * 8, `${dimension} conservatively retains the denied execution's warm block`);
     }
 
     const recovery = await f.mf.dispatchFetch('http://example.test/api/auth/logout', { method: 'POST' });
     assert.equal(recovery.status, 401);
     const afterRecovery = await coordinator.inspectForTrustedRuntime();
-    assert.equal(afterRecovery.ownerIngress.closedCharges.find(charge => charge.dimension === 'workerRequests' && charge.purpose === 'recovery')?.units, 1);
+    assert.equal(afterRecovery.ownerIngress.grants.find(grant => !grant.compacted && grant.purpose === 'recovery')?.accounted.workerRequests, 8);
   } finally { await f.mf.dispose(); }
 });
 
@@ -223,61 +221,29 @@ test('native lost acknowledgements reuse one ingress reservation and terminal ce
           if (reserveCalls === 1) throw new Error('synthetic lost reserve acknowledgement');
           return result;
         },
-        reconcileIngressFromTrustedAuthority: async (input: Parameters<BudgetCoordinatorDO['reconcileIngressFromTrustedAuthority']>[0]) => {
+        handoffIngressBatchFromTrustedAuthority: async (input: Parameters<BudgetCoordinatorDO['handoffIngressBatchFromTrustedAuthority']>[0]) => {
           reconcileCalls++;
-          const result = await target.reconcileIngressFromTrustedAuthority(input);
+          const result = await target.handoffIngressBatchFromTrustedAuthority(input);
           if (reconcileCalls === 1) throw new Error('synthetic lost closure acknowledgement');
           return result;
         },
       }),
     } as unknown as DurableObjectNamespace;
     const cache = new OwnerIngressAdmissionCache();
-    const admitted = await cache.admit({ repository: new BudgetAuthorityRepository(f.db), namespace: lossy, purpose: 'new-work', now: () => NOW });
-    assert.equal(admitted.status, 'admitted');
-    if (admitted.status !== 'admitted') throw new Error('expected recovered ingress admission');
-    assert.equal(await admitted.admission.finish(NOW + 1), 'closed');
+    const admissions = [];
+    for(let index=0;index<8;index++){
+      const admitted=await cache.admit({repository:new BudgetAuthorityRepository(f.db),namespace:lossy,purpose:'new-work',now:()=>NOW});
+      assert.equal(admitted.status,'admitted');if(admitted.status!=='admitted')throw new Error('expected warm admission');
+      admissions.push(admitted.admission);
+    }
+    for(const admission of admissions.slice(0,-1))assert.equal(await admission.finish(NOW+1),'retained');
+    assert.equal(await admissions.at(-1)!.finish(NOW+1),'closed');
     assert.equal(reserveCalls, 2);
     assert.equal(reconcileCalls, 2);
     const state = await target.inspectForTrustedRuntime();
     assert.equal(state.ownerIngress.grants.length, 1, 'lost delivery acknowledgement does not create another credential/grant');
     assert.equal(state.ownerIngress.grants[0].holderSeedAttempts, 2);
-    assert.equal(state.ownerIngress.closedCharges.find(charge => charge.dimension === 'workerRequests')?.units, 1);
-
-    const transferable = await cache.admit({ repository: new BudgetAuthorityRepository(f.db), namespace: raw as unknown as DurableObjectNamespace, purpose: 'new-work', now: () => NOW + 2 });
-    assert.equal(transferable.status, 'admitted');
-    if (transferable.status !== 'admitted') throw new Error('expected transferable ingress admission');
-    let handoffCalls = 0;
-    const handoffLossy = {
-      idFromName: raw.idFromName.bind(raw),
-      get: () => ({
-        refreshFromTrustedAuthority: target.refreshFromTrustedAuthority.bind(target),
-        reserveFromTrustedAuthority: target.reserveFromTrustedAuthority.bind(target),
-        handoffIngressFromTrustedAuthority: async (input: Parameters<BudgetCoordinatorDO['handoffIngressFromTrustedAuthority']>[0]) => {
-          handoffCalls++;
-          const result = await target.handoffIngressFromTrustedAuthority(input);
-          if (handoffCalls === 1) throw new Error('synthetic lost atomic handoff acknowledgement');
-          return result;
-        },
-      }),
-    } as unknown as DurableObjectNamespace;
-    const scope = createVerifiedTenantScope('tenant-a', 'actor-a', ['admin'], 1);
-    const tenantAdmission = await new IsolateBudgetAdmissionCache().admit({
-      repository: new BudgetAuthorityRepository(f.db, scope, f.db, transferable.admission),
-      namespace: handoffLossy,
-      authorization: { authorize: async () => ({ kind: 'session' as const, sessionVersion: 1 }) },
-      scope,
-      credentialKey: 'staff:actor-a:1',
-      intent: { operationId: 'lost-handoff-operation', operationFingerprint: 'lost-handoff-fingerprint', workScopeKey: 'lost-handoff-scope' },
-      business: { workerRequests: 1, d1RowsWritten: 1 },
-      now: () => NOW + 2,
-    });
-    assert.equal(tenantAdmission.status, 'spent');
-    assert.equal(handoffCalls, 2, 'one lost transfer acknowledgement replays the exact atomic handoff once');
-    assert.equal(await transferable.admission.finish(NOW + 3), 'closed');
-    const afterTransfer = await target.inspectForTrustedRuntime();
-    assert.equal(afterTransfer.ownerIngress.grants.filter(grant => !grant.compacted).length, 0);
-    assert.equal(afterTransfer.tenantStates[0].grants.filter(grant => grant.holderId.startsWith('owner-ingress:')).length, 1,
-      'lost acknowledgement retains one exact compacted tenant ingress record');
+    assert.equal(state.ownerIngress.closedCharges.find(charge => charge.dimension === 'workerRequests')?.units,8);
 
     let failedRefreshes = 0;
     const unavailable = { idFromName: raw.idFromName.bind(raw), get: () => ({ refreshFromTrustedAuthority: async () => {
@@ -290,4 +256,18 @@ test('native lost acknowledgements reuse one ingress reservation and terminal ce
     assert.equal(failedRefreshes, 6, 'three executions receive two finite delivery attempts; later requests perform no D1/DO loop');
     assert.deepEqual(bounded.inspectForTrustedRuntime(), { bindings: 1, failedAdmissions: 3, terminalFailures: 1 });
   } finally { await f.mf.dispose(); }
+});
+
+test('concurrent failed discovery is serialized and trips the bounded latch by wave', async()=>{
+  const cache=new OwnerIngressAdmissionCache(),identity={},namespace={} as DurableObjectNamespace;
+  let discoveries=0;
+  const repository={bindingIdentity:identity,resolveForDeploymentIngress:async()=>{discoveries++;await Promise.resolve();return null;}} as unknown as BudgetAuthorityRepository;
+  for(let wave=1;wave<=3;wave++){
+    const results=await Promise.all(Array.from({length:32},()=>cache.admit({repository,namespace,purpose:'new-work',now:()=>NOW})));
+    assert.equal(results.every(result=>result.status==='rejected'),true);
+    assert.equal(discoveries,wave,'one discovery is shared by all concurrent requests in a failed wave');
+  }
+  await Promise.all(Array.from({length:32},()=>cache.admit({repository,namespace,purpose:'new-work',now:()=>NOW})));
+  assert.equal(discoveries,3,'terminal failure blocks later discovery without additional I/O');
+  assert.deepEqual(cache.inspectForTrustedRuntime(),{bindings:1,failedAdmissions:3,terminalFailures:1});
 });
