@@ -2,7 +2,11 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 11 September 2026, 06:36 BST
+## Current checkpoint
+
+Read [the 07:10 BST checkpoint](beta2-checkpoint-2026-09-11-0710.md) first. It supersedes the historical status below.
+
+## Historical state — 11 September 2026, 06:36 BST
 
 Accepted main: `0db69bb00e4dd820e3b735c206bc008d22e6edca`, PR#180/#73 at05:29:26UTC. Reviewed `dcbc4753`, tested merge `02b0bf7d` and accepted signed commit share tree `3eb70c3442b1b8573f646f0b339db36e9d38c45f`; mandatoryCI/security passed, threads clear. Owner PR-only approval bypass used, not independent review. #73 closed; ProjectDone/100/actual11September/remaining0/variance−144, receipt5629957822. No owner permission outstanding.
 
