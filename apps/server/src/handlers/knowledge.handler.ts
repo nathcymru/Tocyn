@@ -9,10 +9,15 @@ import { tenantMiddleware, TenantRequestDeps } from '../middleware/tenant.middle
 import { AppVariables } from '../types';
 import { z } from 'zod';
 import { admitHttpAi } from '../budgets/http-ai-admission.service';
-import { ticketMutationAdmissionMode } from '../middleware/budget-admission.middleware';
+import { apiTicketBudgetCache, sessionTicketBudgetAdmission, staffTicketAdmissionMode, ticketMutationAdmissionMode } from '../middleware/budget-admission.middleware';
 import { admitKnowledgeSourceWrite, KNOWLEDGE_SOURCE_MAX_BYTES, KnowledgeSourceAdmissionError, type KnowledgeSourceAdmission } from '../budgets/knowledge-source-admission.service';
 import { admitKnowledgeRead, type KnowledgeReadAdmission, type KnowledgeReadOperation } from '../budgets/knowledge-read-admission.service';
 import { KnowledgeReadFenceError, KnowledgeReadRepository } from '../repositories/knowledge-read.repository';
+import { requestBounds } from '../middleware/request-bounds';
+import { MutationInputError, mutationInputErrorBody, readIdempotencyKey } from './mutation-request';
+import { KnowledgeCategoryAdmissionError, KnowledgeCategoryAdmissionService, KNOWLEDGE_CATEGORY_REQUEST_BYTES } from '../services/knowledge-category-admission.service';
+import type { SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
+import type { JWTPayload } from '../types';
 
 const staffSuggestionFallback = "I'm sorry, I'm having trouble generating a suggestion right now. Please try again or draft a manual response.";
 
@@ -55,6 +60,26 @@ async function admitReadOrResponse(c:any,operation:KnowledgeReadOperation,docume
   return outcome.reason==='exhausted'
     ?c.json({code:'budget_exhausted',error:'Configured budget capacity is exhausted'},429)
     :c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
+}
+
+function categoryAdmission(c:any):KnowledgeCategoryAdmissionService|Response|null{
+  if(c.env.BUDGET_ADMISSION_POLICY===undefined)return null;
+  const mode=staffTicketAdmissionMode(c.env);if(mode==='disabled')return null;
+  const deps=c.get('tenantDeps') as TenantRequestDeps|undefined,payload=c.get('jwtPayload') as JWTPayload|undefined;
+  if(mode!=='enabled'||!c.env.BUDGET_COORDINATOR_DO||!deps||!payload||payload.sub!==deps.scope.actorId||payload.tenant_id!==deps.scope.tenantId
+    ||(payload.role!=='admin'&&payload.role!=='agent')||payload.mfa_verified!==true||!Number.isSafeInteger(payload.session_version)||!Number.isSafeInteger(payload.exp))
+    return c.json({code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},503);
+  const credential:SessionBudgetCredential={tenantId:deps.scope.tenantId,actorId:payload.sub,role:payload.role,
+    sessionVersion:payload.session_version!,expiresAt:payload.exp,mfaVerified:true};
+  return new KnowledgeCategoryAdmissionService(deps.database,deps.scope,credential,{service:sessionTicketBudgetAdmission,
+    repository:deps.repositories.budgetAuthority,namespace:c.env.BUDGET_COORDINATOR_DO,now:()=>c.env.localNow?.()??Date.now(),
+    settle:(authority,outcome,now)=>apiTicketBudgetCache.settleOperation(authority,outcome,now)});
+}
+
+function categoryFailure(c:any,error:unknown):Response|null{
+  if(error instanceof MutationInputError)return c.json(mutationInputErrorBody(error),error.status);
+  if(error instanceof KnowledgeCategoryAdmissionError)return c.json({code:error.code,error:error.message},error.status);
+  return null;
 }
 
 knowledgeHandler.onError((error, c) => {
@@ -241,13 +266,17 @@ const articleSchema = z.object({
 // Category endpoints
 knowledgeHandler.get('/categories', async (c) => {
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=categoryAdmission(c);if(admission instanceof Response)return admission;
+  if(admission){try{return c.json(await admission.list());}catch(error){const response=categoryFailure(c,error);if(response)return response;throw error;}}
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const categories = await service.getCategories();
   return c.json(categories);
 });
 
-knowledgeHandler.post('/categories', async (c) => {
+knowledgeHandler.post('/categories', requestBounds(KNOWLEDGE_CATEGORY_REQUEST_BYTES), async (c) => {
+  const admission=categoryAdmission(c);if(admission instanceof Response)return admission;
+  if(admission){try{await admission.preauthorize();}catch(error){const response=categoryFailure(c,error);if(response)return response;throw error;}}
   const body = await c.req.json();
   const result = categorySchema.safeParse(body);
   if (!result.success) {
@@ -256,6 +285,11 @@ knowledgeHandler.post('/categories', async (c) => {
 
   const { name, parent_id } = result.data;
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  if(admission){try{
+    const prepared=await admission.prepareMutation('knowledge.category.create',{name,parent_id:parent_id??null},readIdempotencyKey(c),parent_id??undefined);
+    const outcome=await admission.create(prepared,name,parent_id??undefined);
+    if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body);
+  }catch(error){const response=categoryFailure(c,error);if(response)return response;throw error;}}
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   const id = await service.createCategory(name, parent_id || undefined);
@@ -265,6 +299,12 @@ knowledgeHandler.post('/categories', async (c) => {
 knowledgeHandler.delete('/categories/:id', async (c) => {
   const id = c.req.param('id');
   const deps = c.get('tenantDeps') as TenantRequestDeps;
+  const admission=categoryAdmission(c);if(admission instanceof Response)return admission;
+  if(admission){try{
+    const prepared=await admission.prepareMutation('knowledge.category.delete',{id},readIdempotencyKey(c),id,true);
+    const outcome=await admission.delete(prepared,id);
+    if(outcome.replayed&&outcome.keyed)c.header('Idempotency-Replayed','true');return c.json(outcome.body);
+  }catch(error){const response=categoryFailure(c,error);if(response)return response;throw error;}}
   const aiService = new StatelessAiService(c.env.AI, deps.emitResourceOperation);
   const service = new TenantKnowledgeService(deps, aiService);
   try {
