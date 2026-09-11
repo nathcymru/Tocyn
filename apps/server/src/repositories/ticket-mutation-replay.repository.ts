@@ -1,4 +1,4 @@
-import { apiBudgetMutationStatement, type ApiMutationCommit } from './budget-commit-fence';
+import { apiBudgetMutationStatements, type ApiMutationCommit } from './budget-commit-fence';
 import { customerMutationStatement, type CustomerMutationCommit } from './customer-ticket-mutation.repository';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
 import { staffMutationStatements, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
@@ -117,7 +117,7 @@ export class TicketMutationReplayRepository {
     // constructing the authoritative D1 batch. No HTTP response establishes this.
     this.canonicalMutationSli?.recordAttempt();
     const operation=candidate.ticket?'create':'conversation';
-    const statements: D1PreparedStatement[] = [...(api ? [apiBudgetMutationStatement(this.db,this.scope,api)] : []),
+    const statements: D1PreparedStatement[] = [...(api ? apiBudgetMutationStatements(this.db,this.scope,api) : []),
       ...(staff ? staffMutationStatements(this.db,this.scope,staff) : []),
       ...(customer ? [customerMutationStatement(this.db,this.scope,customer)] : []), ...(this.admission?.statements(operation)??[])];
     if (ns) {
