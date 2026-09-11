@@ -1,7 +1,16 @@
 import { encryptString } from '../../../utils/crypto';
 let encryptedTestKey = '';
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { EmailService } from "../outbound.service";
+import { EmailService as ProductionEmailService } from "../outbound.service";
+import { HttpResendTransport, type EmailTransport } from "../transport";
+
+// Sender/subject tests retain the explicit buffered injection seam; native
+// ticket streaming is exercised in email-ticket-stream-runtime.test.ts.
+class EmailService extends ProductionEmailService {
+  constructor(env: any, deps: any, transport?: EmailTransport) {
+    super(env, deps, transport ?? { send: (options, creds) => new HttpResendTransport().send(options, creds) });
+  }
+}
 import { LOCAL_AUTH_CAPTURE_RECIPIENT, LocalAuthCaptureTransport } from '../transport';
 import { Ticket, Article } from "../../types";
 // eslint-disable-next-line no-restricted-imports
@@ -18,6 +27,9 @@ const createMockDB = (mockGroupEmail: string | null = null, mockDefaultEmail: st
             if (boundKey === 'RESEND_FROM_EMAIL') return { value: 'support@test.com' };
             if (boundKey === 'TICKET_PREFIX') return { value: '#' };
             return { value: encryptedTestKey };
+          }
+          if (query.includes('normalized_email = ?') && [mockGroupEmail, mockDefaultEmail].includes(boundKey || null) && boundKey) {
+            return { email_address: boundKey };
           }
           if (query.includes('group_id = ?') && mockGroupEmail) {
             return { email_address: mockGroupEmail };

@@ -1,8 +1,10 @@
 import { Env } from '../src/bindings';
-import { createLocalRuntime } from '../src/local-index';
+import { createLocalRuntime } from '../src/local-app';
 import { LocalAuthCaptureTransport } from '../src/services/email/transport';
 
 export { NotificationDO } from '../src/durable_objects/NotificationDO';
+export { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
+export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
 
 type LocalWorkflowEnv = Env & {
   LOCAL_TEST_CLOCK_MS?: string;
