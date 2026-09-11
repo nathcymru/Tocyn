@@ -1,3 +1,7 @@
+# Current acceptance pointer
+
+PR175 now contains the complete local #66 acceptance candidate; all required checks passed on78cd241. See `docs/ui-theme-contract.md` final acceptance and the linked actual VoiceOver receipt. The historical foundation entries below are superseded as current status. Root must verify final checks/signature and publish issue/Project completion after merge. No production or beta.2 clearance is implied.
+
 # #66 tenant theme delivery
 
 Current continuation: root prepared isolated workspace dependency links at `/private/tmp/tocyn-66-node-links` so local imports resolve this worktree's own UI/shared packages while reusing third-party dependencies without copies. The original provider and owner checkouts are unchanged. Native Luna/medium moved the pure token contract byte-identically to `packages/shared/ui-theme.ts`; UI re-exports it. UI types/14 tests and browser fixture pass. Root updated receipt source hashing to include the canonical shared module. This enables future server validation without importing browser/UI code into Worker; it does not implement authenticated theme APIs or preferences. Keep this continuation on PR175 and batch with the next bounded integration work; workers have stopped edits.
