@@ -50,3 +50,47 @@ export function estimateNotificationBroadcastWithCleanupEnvelope(): ResourceAmou
     durableObjectRevalidations: callbacks * MAX_NOTIFICATION_CONNECTIONS,
   }));
 }
+
+/**
+ * One accepted advisory typing frame reaches at most the sender plus 127 other
+ * registered sockets. Every participant has one live-session read and one
+ * current-ticket read; grouped agents can require one membership read. The
+ * transient 16-ticket throttle can only reject work, so it does not increase
+ * this ceiling. Ticket authorization creates a second independent #159
+ * emitter alongside the live-session revalidation.
+ *
+ * This is a conservative local planning envelope, not a billable CPU,
+ * duration, byte-transfer or complete event-metering assertion.
+ */
+export function estimateNotificationTypingEnvelope(): ResourceAmounts {
+  const participants = MAX_NOTIFICATION_CONNECTIONS;
+  const authorizationCompositions = participants * 2;
+  return sumResourceEnvelopes({
+    doRequests: 1,
+    d1RowsRead: participants * 3,
+    // A typing delivery failure is reported by the callback; resource events
+    // belong to the independent emitters below.
+    logEvents: 1,
+  }, estimateDiagnosticEnvelope({ httpRequests: 0, durableObjectRevalidations: authorizationCompositions }));
+}
+
+/**
+ * A typing frame can close at most the full 128-socket registry: revoked
+ * recipients fail closed during fanout and a failed delivery can close the
+ * sender. Error and close callbacks each revalidate a complete current
+ * registry, but cleanup never performs ticket/group checks or recursive closes.
+ * These are reservation units only; platform billing and CPU/duration remain
+ * unknown.
+ */
+export function estimateNotificationTypingWithCleanupEnvelope(): ResourceAmounts {
+  const callbacks = MAX_NOTIFICATION_CONNECTIONS * 2;
+  return sumResourceEnvelopes(estimateNotificationTypingEnvelope(), {
+    doRequests: callbacks,
+    doRowsWritten: callbacks,
+    logEvents: callbacks,
+    d1RowsRead: callbacks * MAX_NOTIFICATION_CONNECTIONS,
+  }, estimateDiagnosticEnvelope({
+    httpRequests: 0,
+    durableObjectRevalidations: callbacks * MAX_NOTIFICATION_CONNECTIONS,
+  }));
+}
