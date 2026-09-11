@@ -7,6 +7,7 @@ import { EmailService } from './email/outbound.service';
 import { EmailTransport } from './email/transport';
 import { UserAuthResolver } from '../auth/user-auth-resolver';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
+import type { CustomerAuthBudgetFence } from '../repositories/customer-auth-budget-fence';
 import * as jose from 'jose';
 
 export type CustomerAuthVerification =
@@ -24,6 +25,7 @@ export class CustomerAuthService {
     private transport?: EmailTransport,
     private identityResolver?: Pick<UserAuthResolver, 'resolveCredentialsByEmail'>,
     private now: () => number = () => Date.now(),
+    private customerAuthFence?: CustomerAuthBudgetFence,
   ) {
     if (deps) {
       this.emailService = new EmailService(env, deps, transport);
@@ -92,7 +94,7 @@ export class CustomerAuthService {
         full_name: lowerEmail.split('@')[0],
         role: 'customer',
         mfa_enabled: false,
-      });
+      }, this.customerAuthFence);
       userId = createdUser.id;
     }
 
@@ -106,7 +108,7 @@ export class CustomerAuthService {
     const expiresAt = new Date(requestedAt + 15 * 60 * 1000).toISOString();
 
     // 3. Store Token securely via repository
-    if (type === 'magic_link') await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, tokenHash, type, expiresAt);
+    if (type === 'magic_link') await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, tokenHash, type, expiresAt, this.customerAuthFence);
 
     // 4. Send Email via Tenant EmailService
     const emailSvc = this.emailService || new EmailService(this.env, this.deps, this.transport);
@@ -133,7 +135,7 @@ export class CustomerAuthService {
       const otp = Math.floor(100000 + (array[0] % 900000)).toString();
       const otpHash = await this.hashToken(`${tokenId}\0${otp}`);
 
-      await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, otpHash, type, expiresAt);
+      await this.deps.repositories.users.storeCustomerAuthToken(userId, tokenId, otpHash, type, expiresAt, this.customerAuthFence);
 
       await emailSvc.send({
         to: [lowerEmail],
@@ -164,7 +166,7 @@ export class CustomerAuthService {
       catch (error) { if (error instanceof BetaAdmissionError && error.code === 'beta_not_invited') return { decision: 'admission-suppressed' }; throw error; }
     }
     // Use isolated verification
-    const user = await this.deps.repositories.users.verifyAndConsumeCustomerAuthToken(tokenHash, now, challengeId);
+    const user = await this.deps.repositories.users.verifyAndConsumeCustomerAuthToken(tokenHash, now, challengeId, this.customerAuthFence);
 
     if (!user) {
       return { decision: 'denied' };
