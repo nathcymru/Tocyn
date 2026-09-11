@@ -24,6 +24,8 @@
     "operator-workspace-admission-runtime.test.ts",
     "operator-workspace-admission-runtime-entry.ts",
     "knowledge-read-admission-runtime-entry.ts",
-    "knowledge-read-admission-runtime.test.ts"
+    "knowledge-read-admission-runtime.test.ts",
+    "api-key-admin-admission-runtime-entry.ts",
+    "api-key-admin-admission-runtime.test.ts"
   ]
 }

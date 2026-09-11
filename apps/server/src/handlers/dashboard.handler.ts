@@ -45,6 +45,9 @@ import type { SessionBudgetCredential } from '../repositories/session-budget-aut
 import type { AutomationRow, TicketFieldRow } from '../repositories/configuration-admission.repository';
 import { admitGroupDirectory, settleGroupDirectory, type GroupDirectoryAdmission } from '../budgets/group-directory-admission.service';
 import { GroupDirectoryFenceError, GroupDirectoryRepository, type GroupDirectoryCommit } from '../repositories/group-directory.repository';
+import { admitApiKeyAdmin, apiKeyCandidate, settleApiKeyAdmin, type ApiKeyAdminAdmission } from '../budgets/api-key-admin-admission.service';
+import { ApiKeyAdminFenceError, ApiKeyAdminRepository, type ApiKeyAdminCommit,
+  type ApiKeyCreationReceipt } from '../repositories/api-key-admin.repository';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -54,6 +57,10 @@ const createGroupSchema = z.object({
 const addMemberSchema = z.object({
   userId: z.string().uuid("Invalid User ID format"),
 });
+
+const createApiKeySchema = z.object({
+  name: z.string().min(1, 'Name is required').max(120).refine(value => new TextEncoder().encode(value).length <= 512),
+}).strict();
 
 const createTicketSchema = z.object({
   subject: z.string().min(1, "Subject is required"),
@@ -192,6 +199,50 @@ function groupDirectoryPermissionGuard(key:'users'|'groups') {
       capability:fence.capability,policyFingerprint:fence.policyFingerprint}});
     await next();
   };
+}
+
+function apiKeyAdminFailure(c: any, reason: 'exhausted' | 'unavailable' | 'conflict', receipt?: ApiKeyCreationReceipt) {
+  if (reason === 'exhausted') return c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429);
+  if (reason === 'conflict') return c.json({ code: 'idempotency_conflict', error: 'Idempotency-Key was already used with a different API-key name' }, 409);
+  if (receipt) return c.json({ code: 'api_key_plaintext_unavailable',
+    error: 'The API key was created, but its one-time plaintext cannot be shown again',
+    key: { id: receipt.api_key_id, name: receipt.name, prefix: receipt.prefix, created_at: receipt.created_at } }, 409);
+  return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+}
+
+function apiKeyAdminPermissionGuard() {
+  return async (c: any, next: () => Promise<void>) => {
+    if (staffTicketAdmissionMode(c.env) !== 'enabled') return permissionGuard('api_keys')(c, next);
+    const deps = c.get('tenantDeps') as TenantRequestDeps | undefined;
+    const payload = c.get('jwtPayload') as JWTPayload | undefined;
+    const sessionVersion = payload?.session_version;
+    if (!deps || !payload || (payload.role !== 'admin' && payload.role !== 'agent')
+      || typeof sessionVersion !== 'number' || !Number.isSafeInteger(sessionVersion)) {
+      return c.json({ error: 'Unauthorized', message: 'No session found' }, 401);
+    }
+    const credential = { tenantId: deps.scope.tenantId, actorId: payload.sub, role: payload.role, sessionVersion,
+      expiresAt: payload.exp, mfaVerified: payload.mfa_verified === true } as const;
+    const fence = await new ApiKeyAdminRepository(deps.scope, deps.database).capabilityFence(credential);
+    if (!fence) return c.json({ error: 'Forbidden', message: 'Capability denied: api-keys.manage' }, 403);
+    c.set('permissionFences', { ...(c.get('permissionFences') ?? {}), [fence.capability]: {
+      allowed: true, reason: 'allowed', capability: fence.capability, policyFingerprint: fence.policyFingerprint,
+    } });
+    await next();
+  };
+}
+
+async function admittedApiKeyWork<T>(c: any, deps: TenantRequestDeps, admission: ApiKeyAdminAdmission,
+  work: (repository: ApiKeyAdminRepository, commit: ApiKeyAdminCommit) => Promise<T>): Promise<T | Response> {
+  const commit = admission.commit!;
+  try {
+    const result = await work(new ApiKeyAdminRepository(deps.scope, deps.database), commit);
+    settleApiKeyAdmin(commit, 'committed', c.env.localNow?.() ?? Date.now());
+    return result;
+  } catch (error) {
+    settleApiKeyAdmin(commit, 'unknown', c.env.localNow?.() ?? Date.now());
+    if (error instanceof ApiKeyAdminFenceError) return apiKeyAdminFailure(c, 'unavailable');
+    throw error;
+  }
 }
 
 const createTicketFieldSchema = z.object({
@@ -644,9 +695,16 @@ dashboard.delete("/automations/:id", permissionGuard("automations"), async (c) =
  * GET /api/api-keys
  * List all API keys for management (metadata only, never hashes/secrets).
  */
-dashboard.get("/api-keys", permissionGuard("api_keys"), async (c) => {
+dashboard.get("/api-keys", apiKeyAdminPermissionGuard(), async (c) => {
   const d = c.get('tenantDeps') as TenantRequestDeps;
-  const keys = await d.repositories.apiKeys.list();
+  const admission = await admitApiKeyAdmin({ env: c.env, deps: d, payload: c.get('jwtPayload') as JWTPayload,
+    operation: 'api-key.list', target: {}, capability: permissionWriteFence(c, 'api_keys'),
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return apiKeyAdminFailure(c, admission.reason!);
+  const keys = admission.status === 'admitted'
+    ? await admittedApiKeyWork(c, d, admission, (repository, commit) => repository.list(commit))
+    : await d.repositories.apiKeys.list();
+  if (keys instanceof Response) return keys;
   return c.json(keys);
 });
 
@@ -654,13 +712,37 @@ dashboard.get("/api-keys", permissionGuard("api_keys"), async (c) => {
  * POST /api/api-keys
  * Generate a new API key. Plaintext returned once only.
  */
-dashboard.post("/api-keys", permissionGuard("api_keys"), async (c) => {
-  const { name } = await c.req.json();
-  if (!name) {
-    return c.json({ error: "Name is required" }, 400);
+dashboard.post("/api-keys", requestBounds(2 * 1024), apiKeyAdminPermissionGuard(), async (c) => {
+  let body: unknown;
+  let idempotencyKey: string | undefined;
+  try { body = await readMutationJson(c); idempotencyKey = readIdempotencyKey(c); }
+  catch (error) {
+    if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
+    throw error;
   }
-
+  const parsed = createApiKeySchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: parsed.error.errors[0].message }, 400);
+  const { name } = parsed.data;
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitApiKeyAdmin({ env: c.env, deps: d, payload: c.get('jwtPayload') as JWTPayload,
+    operation: 'api-key.create', target: { name }, capability: permissionWriteFence(c, 'api_keys'), idempotencyKey,
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') {
+    if (!idempotencyKey && staffTicketAdmissionMode(c.env) === 'enabled') {
+      return c.json({ error: 'Idempotency-Key is required', code: 'invalid_idempotency_key' }, 400);
+    }
+    return apiKeyAdminFailure(c, admission.reason!);
+  }
+  if (admission.status === 'admitted') {
+    const candidate = await apiKeyCandidate(name);
+    const outcome = await admittedApiKeyWork(c, d, admission, (repository, commit) =>
+      repository.create(candidate, admission.idempotencyHash!, admission.payloadHash!, commit));
+    if (outcome instanceof Response) return outcome;
+    if (outcome.kind === 'conflict') return apiKeyAdminFailure(c, 'conflict');
+    if (outcome.kind === 'unavailable') return apiKeyAdminFailure(c, 'unavailable', outcome.receipt);
+    return c.json({ apiKey: outcome.value.apiKey, id: outcome.value.id, name: outcome.value.name,
+      prefix: outcome.value.prefix, permissions: [...outcome.value.permissions] }, 201);
+  }
   const revalidationFailure = await revalidatePermission(c, "api_keys");
   if (revalidationFailure) return revalidationFailure;
   const result = await d.repositories.apiKeys.create(name, undefined, permissionWriteFence(c, "api_keys"));
@@ -671,10 +753,19 @@ dashboard.post("/api-keys", permissionGuard("api_keys"), async (c) => {
  * DELETE /api/api-keys/:id
  * Revoke/Delete an API key.
  */
-dashboard.delete("/api-keys/:id", permissionGuard("api_keys"), async (c) => {
+dashboard.delete("/api-keys/:id", apiKeyAdminPermissionGuard(), async (c) => {
   const id = c.req.param("id");
   if (!id) return c.json({ error: 'Missing ID' }, 400);
   const d = c.get('tenantDeps') as TenantRequestDeps;
+  const admission = await admitApiKeyAdmin({ env: c.env, deps: d, payload: c.get('jwtPayload') as JWTPayload,
+    operation: 'api-key.delete', target: { id }, capability: permissionWriteFence(c, 'api_keys'),
+    now: () => c.env.localNow?.() ?? Date.now() });
+  if (admission.status === 'rejected') return apiKeyAdminFailure(c, admission.reason!);
+  if (admission.status === 'admitted') {
+    const result = await admittedApiKeyWork(c, d, admission, (repository, commit) => repository.delete(id, commit));
+    if (result instanceof Response) return result;
+    return c.json({ success: true });
+  }
   const revalidationFailure = await revalidatePermission(c, "api_keys");
   if (revalidationFailure) return revalidationFailure;
   await d.repositories.apiKeys.delete(id, permissionWriteFence(c, "api_keys"));
