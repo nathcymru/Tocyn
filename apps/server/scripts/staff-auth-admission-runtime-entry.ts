@@ -6,6 +6,7 @@ import { app } from '../src/application';
 type Action='session'|'role'|'policy'|'mfa';
 let beforeFence:Action|undefined;
 let loseEnrollmentAcknowledgement=false;
+let loseConfirmationResponse=false;
 let wrappedDatabase:any;
 let fullUserReads=0,fullUserRows=0,staffRowsRead=0,staffRowsWritten=0;
 
@@ -46,12 +47,18 @@ function instrumentDatabase(db:any){
 export default {async fetch(request:Request,env:any,ctx:ExecutionContext){
   if(new URL(request.url).pathname==='/__staff-auth-control'){
     if(request.method==='POST'){
-      const value=await request.json() as {beforeFence?:Action;loseEnrollmentAcknowledgement?:boolean;reset?:boolean};
+      const value=await request.json() as {beforeFence?:Action;loseEnrollmentAcknowledgement?:boolean;loseConfirmationResponse?:boolean;reset?:boolean};
       beforeFence=value.beforeFence;
       loseEnrollmentAcknowledgement=value.loseEnrollmentAcknowledgement===true;
+      loseConfirmationResponse=value.loseConfirmationResponse===true;
       if(value.reset){fullUserReads=0;fullUserRows=0;staffRowsRead=0;staffRowsWritten=0;}
     }
     return Response.json({fullUserReads,fullUserRows,staffRowsRead,staffRowsWritten});
   }
-  return app.fetch(request,{...env,DB:instrumentDatabase(env.DB)},ctx);
+  const response=await app.fetch(request,{...env,DB:instrumentDatabase(env.DB)},ctx);
+  if(loseConfirmationResponse&&new URL(request.url).pathname==='/api/auth/mfa/confirm'&&response.status===200){
+    loseConfirmationResponse=false;
+    return Response.json({error:'synthetic lost confirmation response'},{status:503});
+  }
+  return response;
 }};
