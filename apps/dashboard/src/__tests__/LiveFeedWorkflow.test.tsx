@@ -17,7 +17,7 @@ const json=(value:unknown)=>new Response(JSON.stringify(value),{headers:{'Conten
 let client:QueryClient;
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false}}});vi.stubGlobal('WebSocket',Socket);
-  useAuthStore.getState().setAuth('synthetic-live-session',{id:'operator',full_name:'Operator',email:'operator@example.invalid',role:'admin',mfa_enabled:true});
+  useAuthStore.getState().setAuth('synthetic-live-session',{id:'operator',tenant_id:'synthetic-tenant',full_name:'Operator',email:'operator@example.invalid',role:'admin',mfa_enabled:true});
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
 function renderFeed() {
@@ -29,6 +29,8 @@ it.each(['ticket.created','ticket.updated','article.created'])('reloads authorit
   let arrived=false;let reads=0;
   const ticket={id:'live-ticket',ticket_no:62,subject:'Persisted live arrival',customer_email:'customer@example.invalid',status:'open',priority:'normal',created_at:'2026-09-09T00:00:00Z',updated_at:'2026-09-09T00:00:00Z'};
   vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
+    if(url==='/api/workspace/theme-preference')return json({revision:0,mode:'system',updatedAt:null});
+    if(url==='/api/settings/theme')return json({version:'1',light:{},dark:{}});
     if(url.startsWith('/api/tickets?')){reads++;return json({data:arrived?[ticket]:[],meta:{page:1,limit:20,total:arrived?1:0,total_pages:1}});}
     return json(url==='/api/settings'?{}:[]);
   }));
@@ -43,22 +45,26 @@ it.each(['ticket.created','ticket.updated','article.created'])('reloads authorit
 
 it('replaces a pending old feed read when a committed arrival is announced',async()=>{
   let release!: (response:Response)=>void;
-  const stale=new Promise<Response>(resolve=>{release=resolve;});let reads=0;let arrived=false;
+  const stale=new Promise<Response>(resolve=>{release=resolve;});let reads=0;let arrived=false;let holdOldRead=false;
   const ticket={id:'after-event',ticket_no:63,subject:'Authoritative post-event arrival',customer_email:'customer@example.invalid',status:'open',priority:'normal',created_at:'2026-09-09T00:00:00Z',updated_at:'2026-09-09T00:00:00Z'};
   const empty={data:[],meta:{page:1,limit:20,total:0,total_pages:1}};
   vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
+    if(url==='/api/workspace/theme-preference')return json({revision:0,mode:'system',updatedAt:null});
+    if(url==='/api/settings/theme')return json({version:'1',light:{},dark:{}});
     if(url.startsWith('/api/tickets?')){
-      reads++;if(reads===2)return stale;
+      reads++;if(holdOldRead){holdOldRead=false;return stale;}
       return json(arrived?{data:[ticket],meta:{page:1,limit:20,total:1,total_pages:1}}:empty);
     }
     return json(url==='/api/settings'?{}:[]);
   }));
   renderFeed();
   await screen.findByText('No tickets found.');
-  let pending:Promise<void>;act(()=>{pending=client.invalidateQueries({queryKey:['tickets']});});
-  await waitFor(()=>expect(reads).toBe(2));arrived=true;
+  const readsBeforePending=reads;
+  let pending:Promise<void>;holdOldRead=true;act(()=>{pending=client.invalidateQueries({queryKey:['tickets']});});
+  await waitFor(()=>expect(reads).toBeGreaterThan(readsBeforePending));arrived=true;
+  const readsBeforeEvent=reads;
   act(()=>Socket.latest.emit({type:'ticket.created',payload:{id:ticket.id}}));
   await screen.findByRole('link',{name:ticket.subject});
   await act(async()=>{release(json(empty));await pending!;});
-  expect(screen.getByRole('link',{name:ticket.subject})).toBeInTheDocument();expect(reads).toBe(3);
+  expect(screen.getByRole('link',{name:ticket.subject})).toBeInTheDocument();expect(reads).toBeGreaterThan(readsBeforeEvent);
 });

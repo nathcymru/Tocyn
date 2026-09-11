@@ -6,6 +6,7 @@ import { DRAFT_EXPIRY_SQL } from '../types/operator-draft-retention';
 import type {
   OperatorDraft, OperatorDraftAttachment, OperatorDraftMode, OperatorWorkspaceFilters,
   OperatorWorkspaceSort, OperatorWorkspaceState, OperatorWorkspaceView,
+  OperatorThemeMode, OperatorThemePreference,
 } from '../types/operator-workspace';
 
 type DraftRow = {
@@ -44,6 +45,7 @@ export type WorkspaceStateSaveInput = Readonly<{
   filters: OperatorWorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: 'conversation' | 'details';
 }>;
 type MutationCondition = Readonly<{ sql: string; values: unknown[] }>;
+export type OperatorPresentationCredential = Readonly<{ sessionVersion: number; expiresAt: number; role: 'agent' | 'admin' }>;
 
 /** D1 persistence only; caller supplies trusted actor and ticket authorization. */
 export class OperatorWorkspaceRepository {
@@ -52,6 +54,43 @@ export class OperatorWorkspaceRepository {
     private readonly db: D1Database,
     private readonly betaAdmission?: LocalBetaAdmissionRepository,
   ) {}
+
+  private themeAuthority(credential: OperatorPresentationCredential): MutationCondition {
+    if (!this.scope.roles.includes(credential.role) || !Number.isSafeInteger(credential.sessionVersion)
+      || credential.sessionVersion < 0 || !Number.isSafeInteger(credential.expiresAt)) return { sql: '0', values: [] };
+    return {
+      sql: `EXISTS (SELECT 1 FROM users WHERE tenant_id=? AND id=? AND role=? AND session_version=? AND ? > unixepoch())`,
+      values: [this.scope.tenantId, this.scope.actorId, credential.role, credential.sessionVersion, credential.expiresAt],
+    };
+  }
+
+  /** An absent preference has an authoritative revision-zero default; a revoked actor has no row. */
+  async getThemePreference(credential: OperatorPresentationCredential): Promise<OperatorThemePreference | null> {
+    const authority = this.themeAuthority(credential);
+    const row = await this.db.prepare(`SELECT COALESCE(p.revision,0) AS revision,COALESCE(p.mode,'system') AS mode,p.updated_at
+      FROM users u LEFT JOIN operator_theme_preference p ON p.tenant_id=u.tenant_id AND p.user_id=u.id
+      WHERE u.tenant_id=? AND u.id=? AND ${authority.sql}`)
+      .bind(this.scope.tenantId, this.scope.actorId, ...authority.values)
+      .first<{revision: number; mode: OperatorThemeMode; updated_at: string | null}>();
+    return row ? { revision: row.revision, mode: row.mode, updatedAt: row.updated_at } : null;
+  }
+
+  async saveThemePreference(input: { expectedRevision: number; mode: OperatorThemeMode }, credential: OperatorPresentationCredential): Promise<OperatorThemePreference | null> {
+    const authority = this.themeAuthority(credential);
+    const condition: MutationCondition = {
+      sql: `${authority.sql} AND ((?=0 AND NOT EXISTS (SELECT 1 FROM operator_theme_preference WHERE tenant_id=? AND user_id=?))
+        OR EXISTS (SELECT 1 FROM operator_theme_preference WHERE tenant_id=? AND user_id=? AND revision=?))`,
+      values: [...authority.values, input.expectedRevision, this.scope.tenantId, this.scope.actorId, this.scope.tenantId, this.scope.actorId, input.expectedRevision],
+    };
+    const statement = this.db.prepare(`INSERT INTO operator_theme_preference (tenant_id,user_id,revision,mode,updated_at)
+      SELECT ?,?,1,?,strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE ${condition.sql}
+      ON CONFLICT(tenant_id,user_id) DO UPDATE SET revision=operator_theme_preference.revision+1,
+        mode=excluded.mode,updated_at=excluded.updated_at WHERE operator_theme_preference.revision=?
+      RETURNING revision,mode,updated_at`)
+      .bind(this.scope.tenantId, this.scope.actorId, input.mode, ...condition.values, input.expectedRevision);
+    const row = await this.runWorkspaceMutation<{ revision: number; mode: OperatorThemeMode; updated_at: string }>(statement, condition);
+    return row ? { revision: row.revision, mode: row.mode, updatedAt: row.updated_at } : null;
+  }
 
   /** A local-beta assertion and counter share the same D1 batch as the CAS mutation. */
   private async runWorkspaceMutation<T>(statement: D1PreparedStatement, condition: MutationCondition): Promise<T | null> {

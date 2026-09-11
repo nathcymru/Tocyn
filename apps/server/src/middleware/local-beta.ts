@@ -24,6 +24,8 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
   if ((method === 'POST' && /^\/api\/auth\/(login|logout|mfa\/(verify|setup|confirm|disable))$/.test(path)) || (method === 'GET' && path === '/api/auth/me') ||
     (method === 'POST' && /^\/api\/v1\/customer\/auth\/(request|verify|logout)$/.test(path)) || (method === 'GET' && path === '/api/v1/customer/auth/me')) return 'auth';
   if (method === 'GET' && path === '/api/v1/customer/config') return 'configuration';
+  if (method === 'GET' && (path === '/api/workspace/theme-preference' || path === '/api/settings/theme')) return 'conversation-read';
+  if (method === 'PUT' && path === '/api/workspace/theme-preference') return 'conversation-write';
   if (method === 'GET' && /^\/api(?:\/v1(?:\/customer)?)?\/tickets(?:\/[^/]+(?:\/history)?)?$/.test(path)) return 'conversation-read';
   if (method === 'GET' && /^\/api\/(stats|ticket-fields|users\/agents|groups|settings(?:\/filters(?:\/[^/]+)?)?\/?|permissions\/?|realtime)$/.test(path)) return 'conversation-read';
   if (method === 'GET' && (path === '/api/workspace/state' || path === '/api/workspace/drafts' || /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) return 'conversation-read';

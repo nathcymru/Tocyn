@@ -28,6 +28,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useRealtime } from '../../hooks/useRealtime';
 import { clsx } from 'clsx';
+import { OperatorThemeControl, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
 
 function cn(...inputs: any[]) {
   return clsx(inputs);
@@ -50,6 +51,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
   const restoreAccountFocus = useRef(true);
   const loggingOut = useRef(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  const securityProfile = useRef<HTMLAnchorElement>(null);
   const disclosureId = React.useId();
 
   const handleLogout = async () => {
@@ -64,7 +66,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
   };
 
   return (
-    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
+    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} initialFocusEl={() => securityProfile.current} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
     <div className="relative mt-2">
       <Popover.Trigger asChild>
       <TocynButton
@@ -80,12 +82,13 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
       </TocynButton></Popover.Trigger>
 
       <Popover.Positioner>
-        <Popover.Content aria-label="Account options" className=" w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
+        <Popover.Content aria-label="Account options" data-tocyn-inverse="" className=" w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
           <div className="px-4 py-2 border-b border-slate-700">
             <p className="text-sm font-medium text-white truncate">{user?.full_name}</p>
             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
           </div>
           <Link
+            ref={securityProfile}
             to="/profile/security"
             onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); }}
             className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
@@ -100,6 +103,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
             <LogOut className="w-4 h-4" />
             Sign out of all sessions
           </TocynButton>
+          <OperatorThemeControl />
         </Popover.Content>
       </Popover.Positioner>
     </div>
@@ -161,7 +165,7 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   );
 }
 
-export function Layout() {
+function LayoutContent() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -267,13 +271,13 @@ export function Layout() {
         ))}
       </div>
 
-      <aside className="hidden lg:block w-16 shrink-0 bg-slate-900 border-r border-slate-800">
+      <aside data-tocyn-inverse="" className="hidden lg:block w-16 shrink-0 bg-slate-900 border-r border-slate-800">
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
         <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
           labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
           finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
-          data-tocyn-dialog-edge=""
+          data-tocyn-dialog-edge="" data-tocyn-inverse=""
           className="fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none w-20 overflow-visible border-0 bg-slate-900 text-white p-2 backdrop:bg-slate-900/50">
           <h2 id={`${mobileDialogId}-title`} className="sr-only">Navigation</h2>
           <TocynButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
@@ -389,6 +393,12 @@ export function Layout() {
       </div>
     </div>
   );
+}
+
+export function Layout() {
+  const { user, sessionGeneration } = useAuthStore();
+  const identity = `${sessionGeneration}:${user?.tenant_id ?? ''}:${user?.id ?? ''}`;
+  return <OperatorThemeProvider key={identity}><LayoutContent /></OperatorThemeProvider>;
 }
 
 const navigation = [
