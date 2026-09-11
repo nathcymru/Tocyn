@@ -118,10 +118,17 @@ async function fixture() {
     const betaService = (tenant='a',actor='staff') => {
       const activeScope=scope(tenant,actor),activeCredential=credential(tenant,actor);
       const canonicalSli=createRequestCanonicalMutationSli();
-      const canonical=new TicketMutationReplayRepository(canonicalDb,activeScope,
+      class BetaCanonical extends TicketMutationReplayRepository {
+        override async commitStaff(candidate: MutationCandidate, commit: StaffMutationCommit, precondition?: StaffReplyPrecondition) {
+          canonicalAttempts++; return super.commitStaff(candidate, commit, precondition);
+        }
+      }
+      const canonical=new BetaCanonical(canonicalDb,activeScope,
         new LocalBetaAdmissionRepository(canonicalDb,activeScope,{kind:'staff',id:actor},{sessionVersion:activeCredential.sessionVersion,expiresAt:activeCredential.expiresAt}),canonicalSli);
+      const activity = new OperatorActivityService({ scope: activeScope,
+        operatorActivity: new OperatorActivityRepository(activeScope, canonicalDb) } as TenantRequestDeps);
       return {service:new StaffTicketMutationService(db,activeScope,activeCredential,canonical,
-        {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()}),canonicalSli};
+        {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},undefined,activity),canonicalSli};
     };
     const counts = async () => {
       const result:Record<string,number> = {};
@@ -524,6 +531,67 @@ test('a full bounded mention list remains within the existing staff reservation 
     assert.ok(mentionBatch.rowsRead <= 2_570,
       'the observed recipient authorization reads remain inside the existing staff envelope');
   } finally { await baseline.mf.dispose(); await projected.mf.dispose(); }
+});
+
+test('combined worst-case reply keeps durable mentions, attachments, precondition, and receipt inside the operation envelope', async () => {
+  const f = await fixture(); try {
+    const generation = '44444444-4444-4444-8444-444444444444';
+    const attachments = Array.from({ length: 10 }, (_, index) => ({
+      storageKey: `agent-attachments/staff/combined-${index}`, filename: `combined-${index}.txt`, size: 10 * 1024 * 1024, contentType: 'text/plain',
+    }));
+    await f.db.prepare(`INSERT INTO operator_drafts
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'internal','Combined worst-case','plain',?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
+      .bind(generation, JSON.stringify(attachments)).run();
+    const { service } = f.betaService();
+    const input: StaffMutationInput = { operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: {
+      body: 'Combined worst-case', is_internal: true, attachments, mentionedUserIds: mentionRecipientIds,
+      draft: { generation, revision: 1, baseConversationRevision: 0 },
+    } };
+    const prepared = await service.prepareStaffMutation(input, 'combined-mention-envelope');
+    assert.equal((await service.admit(prepared)).status, 'spent');
+    const result = await service.commit(prepared, attachments);
+    const measured = f.batches.at(-1)!;
+    assert.equal(result.attachments.length, 10);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a'").first<{n:number}>())!.n, 16);
+    console.log(JSON.stringify({ fixture: 'native-d1-combined-mention-attachment-precondition-envelope', measured }));
+    assert.ok(measured.rowsWritten > 128,
+      'the accepted worst case proves a 128-row estimate is insufficient for this composition');
+    assert.ok(measured.rowsWritten <= CANONICAL_MUTATION_ATTEMPT_D1_WRITES,
+      'the complete accepted canonical attempt remains within the existing 1,024-row per-attempt reservation');
+    assert.ok(measured.rowsRead <= 2_570,
+      'the complete accepted canonical attempt remains within the configured staff read envelope');
+  } finally { await f.mf.dispose(); }
+});
+
+test('concurrent worst-case combined attempts produce one receipt winner and bounded durable projections', async () => {
+  const f = await fixture(); try {
+    const generation = '55555555-5555-4555-8555-555555555555';
+    const attachments = Array.from({ length: 10 }, (_, index) => ({
+      storageKey: `agent-attachments/staff/race-${index}`, filename: `race-${index}.txt`, size: 10 * 1024 * 1024, contentType: 'text/plain',
+    }));
+    await f.db.prepare(`INSERT INTO operator_drafts
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'internal','Concurrent worst-case','plain',?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
+      .bind(generation, JSON.stringify(attachments)).run();
+    const { service } = f.betaService();
+    const input: StaffMutationInput = { operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: {
+      body: 'Concurrent worst-case', is_internal: true, attachments, mentionedUserIds: mentionRecipientIds,
+      draft: { generation, revision: 1, baseConversationRevision: 0 },
+    } };
+    const [left, right] = await Promise.all([
+      service.prepareStaffMutation(input, 'combined-mention-race'), service.prepareStaffMutation(input, 'combined-mention-race'),
+    ]);
+    assert.deepEqual((await Promise.all([service.admit(left), service.admit(right)])).map(outcome => outcome.status).sort(), ['idempotent', 'spent']);
+    const outcomes = await Promise.all([service.commit(left, attachments), service.commit(right, attachments)]);
+    assert.equal(outcomes[0].article.id, outcomes[1].article.id);
+    assert.equal(f.canonicalAttempts(), 2, 'only the admitted contender and its receipt loser reach a bounded canonical attempt');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM articles WHERE tenant_id='a'").first<{n:number}>())!.n, 1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM attachments WHERE tenant_id='a'").first<{n:number}>())!.n, 10);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a'").first<{n:number}>())!.n, 16);
+    const retry = await service.prepareStaffMutation(input, 'combined-mention-race');
+    assert.equal(retry.replay?.replayed, true, 'a later lost-response retry returns the existing receipt without new fanout');
+  } finally { await f.mf.dispose(); }
 });
 
 test('staff reply precondition stays in the fingerprint and atomically retains a stale acknowledged draft', async () => {
