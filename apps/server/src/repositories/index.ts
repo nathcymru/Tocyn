@@ -14,6 +14,7 @@ import { AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_MESSAGES, AI_SUG
 import { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
+import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
 import { articleBodyFormat } from '@luminatick/shared';
 import { TicketListScanError, ticketListCurrentCredentialSql, ticketListScanAssertionSql, ticketListScanFenceSql, type TicketListCurrentCredential, type TicketListScanSnapshot } from './ticket-list-scan.repository';
 
@@ -1123,9 +1124,9 @@ export class SqlRequestLimitRepository {
   }
 }
 
-export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli, budgetBindingIdentity: object = db): Repositories {
+export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli, budgetBindingIdentity: object = db, ownerIngressAdmission?: OwnerIngressRequestAdmission): Repositories {
   return {
-    budgetAuthority: new BudgetAuthorityRepository(db, scope, budgetBindingIdentity),
+    budgetAuthority: new BudgetAuthorityRepository(db, scope, budgetBindingIdentity, ownerIngressAdmission),
     sessionBudgetAuthority: new SessionBudgetAuthorityRepository(db, scope),
     requestLimits: new SqlRequestLimitRepository(scope, db),
     knowledge: new SqlKnowledgeRepository(scope, db),
