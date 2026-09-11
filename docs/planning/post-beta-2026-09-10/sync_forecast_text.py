@@ -19,10 +19,10 @@ for n,v in nodes.items():
  if not p.exists():continue
  s=p.read_text();a,sep,b=s.partition('\n<details>\n')
  if v['done'] and n in (48,50,68,73,79,129,160):
-  text=f"Remaining baseline effort: 0h; remaining planning allowance: 0h. Accepted completion: {v['actualCompletion']} (100% of this issue's scoped acceptance). Historical forecast: {v['forecastStart']}–{v['forecastTarget']}."
+  text=f"Remaining estimated effort: 0h; remaining planning allowance: 0h. Accepted completion: {v['actualCompletion']} (100% of this issue's scoped acceptance). Historical forecast: {v['forecastStart']}–{v['forecastTarget']}."
  elif not v['done']:
-  text=f"Remaining baseline effort: {v['effort']:g}h; remaining planning allowance: {v['remainingPlanningHours']:g}h. Forecast: {v['forecastStart']}–{v['forecastTarget']}, {v['workstream']}."
+  text=f"Remaining estimated effort: {v['effort']:g}h; remaining planning allowance: {v['remainingPlanningHours']:g}h. Forecast: {v['forecastStart']}–{v['forecastTarget']}, {v['workstream']}."
  else:continue
- a=re.sub(r'Remaining baseline effort:.*?(?= Existing baseline history is immutable;)',text,a,flags=re.S)
+ a=re.sub(r'Remaining (?:baseline|estimated) effort:.*?(?= Existing baseline history is immutable;)',text,a,flags=re.S)
  save(p,a+sep+b)
 print(f['beta2Forecast'],f['expandedForecast'],f['dependencyOnlyHours'])

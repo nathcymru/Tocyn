@@ -145,6 +145,7 @@ jobs:
             apps/server/scripts/group-directory-admission-runtime.test.ts \
             apps/server/scripts/operator-workspace-admission-runtime.test.ts \
             apps/server/scripts/knowledge-read-admission-runtime.test.ts \
+            apps/server/scripts/owner-ingress-admission-runtime.test.ts \
             apps/server/scripts/knowledge-delete-admission-runtime.test.ts \
             apps/server/scripts/knowledge-category-admission-runtime.test.ts \
             apps/server/scripts/ticket-email-admission-runtime.test.ts

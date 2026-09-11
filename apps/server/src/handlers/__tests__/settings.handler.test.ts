@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import settings from "../settings.handler";
+import { CloudflareService } from "../../services/cloudflare.service";
 import * as jose from "jose";
 
 // Mock DB
@@ -312,4 +313,23 @@ describe("Settings Handler Integration Tests", () => {
       expect(body.error).toBe("APP_MASTER_KEY is missing. Cannot encrypt sensitive settings.");
     });
   });
+  it.each(['ticket-mutations-v1','unsupported-policy'])('does not enter unadmitted provider analytics under %s', async policy => {
+    const provider=vi.spyOn(CloudflareService.prototype,'getUsageStats').mockResolvedValue({source:'synthetic'} as any);
+    try {
+      const response=await settings.request('/usage',{headers:{Authorization:`Bearer ${await generateAdminToken()}`}},
+        {DB:mockDB as any,JWT_SECRET,APP_MASTER_KEY,BUDGET_ADMISSION_POLICY:policy});
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({code:'provider_usage_not_admitted',error:'Provider usage analytics is unavailable under the active budget policy.'});
+      expect(provider).not.toHaveBeenCalled();
+    } finally {provider.mockRestore();}
+  });
+  it.each([undefined,'off','api-ticket-mutations-v1'])('preserves explicitly legacy analytics behavior under %s', async policy => {
+    const provider=vi.spyOn(CloudflareService.prototype,'getUsageStats').mockResolvedValue({source:'synthetic'} as any);
+    try {
+      const response=await settings.request('/usage',{headers:{Authorization:`Bearer ${await generateAdminToken()}`}},
+        {DB:mockDB as any,JWT_SECRET,APP_MASTER_KEY,...(policy===undefined?{}:{BUDGET_ADMISSION_POLICY:policy})});
+      expect(response.status).toBe(200);expect(provider).toHaveBeenCalledTimes(1);
+    } finally {provider.mockRestore();}
+  });
+
 });
