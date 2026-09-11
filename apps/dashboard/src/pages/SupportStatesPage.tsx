@@ -9,7 +9,7 @@ const blank = () => ({ id: '', legacyStatus: 'open' as SupportLifecycle, interna
 
 export function SupportStatesPage() {
   const { user } = useAuthStore();
-  const { data: states = [], isLoading, error, refetch } = useSupportStates(true);
+  const { data: states = [], isLoading, error, refetch, loadMore, hasMore, isLoadingMore, isLoadMoreError } = useSupportStates(true);
   const create = useCreateSupportState();
   const update = useUpdateSupportState();
   const deactivate = useDeactivateSupportState();
@@ -47,7 +47,7 @@ export function SupportStatesPage() {
   return <div className="max-w-4xl space-y-6">
     <div><h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Support states</h1><p className="mt-1 text-slate-600">Name the operator workflow separately from the customer-facing label. State labels do not change access permissions.</p></div>
     {notice && <p role="status">{notice}</p>}{errorMessage && <p role="alert">{errorMessage}</p>}
-    {error && <div role="alert">Could not load support states. <TocynButton type="button" onClick={() => void refetch()} className="underline">Retry loading support states</TocynButton></div>}
+    {error && states.length === 0 && <div role="alert">Could not load support states. <TocynButton type="button" onClick={() => void refetch()} className="underline">Retry loading support states</TocynButton></div>}
     <form onSubmit={save} className="rounded-xl border border-slate-200 bg-white p-5 space-y-4" aria-label={editing ? 'Edit support state' : 'Create support state'}>
       <h2 className="font-semibold">{editing ? `Edit ${editing}` : 'Create support state'}</h2>
       <div className="grid gap-4 md:grid-cols-2">
@@ -59,9 +59,9 @@ export function SupportStatesPage() {
       <div className="flex flex-wrap gap-5"><label><input type="checkbox" checked={form.waitingReasonRequired} onChange={event => setForm(current => ({ ...current, waitingReasonRequired: event.target.checked }))} /> Require waiting reason</label><label><input type="checkbox" checked={form.nextActionRequired} onChange={event => setForm(current => ({ ...current, nextActionRequired: event.target.checked }))} /> Require next action</label></div>
       <div className="flex gap-3"><TocynButton type="submit" aria-disabled={create.isPending || update.isPending} className="rounded bg-brand-600 px-4 py-2 text-white">{editing ? 'Save state' : 'Create state'}</TocynButton>{editing && <TocynButton type="button" onClick={reset} className="underline">Cancel edit</TocynButton>}</div>
     </form>
-    {isLoading ? <p role="status">Loading support states…</p> : <ul className="space-y-3" aria-label="Support state definitions">{states.map(state => <li key={state.id} className="rounded-xl border border-slate-200 bg-white p-4">
+    {isLoading ? <p role="status">Loading support states…</p> : <><ul className="space-y-3" aria-label="Support state definitions">{states.map(state => <li key={state.id} className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{state.internal_label} {!state.is_active && <span className="text-slate-500">(inactive)</span>}</h2><p className="text-sm text-slate-600">Customer label: {state.public_label} · Legacy lifecycle: {state.legacy_status}</p><p className="text-sm text-slate-600">{state.waiting_reason_required ? 'Waiting reason required' : 'Waiting reason optional'} · {state.next_action_required ? 'Next action required' : 'Next action optional'}</p></div><div className="flex gap-3"><TocynButton type="button" onClick={() => beginEdit(state)} className="underline">Edit {state.internal_label}</TocynButton>{state.is_active === 1 && state.is_compatibility_default === 0 && <TocynButton type="button" onClick={() => { setDeactivating(state.id); setReplacementId(''); setErrorMessage(''); }} className="text-red-700 underline">Deactivate {state.internal_label}</TocynButton>}</div></div>
       {deactivating === state.id && <div className="mt-4 border-t pt-4"><p className="text-sm">Active tickets must move to an active replacement; this cannot leave tickets without a state.</p><label className="mt-2 block text-sm font-medium">Replacement state<TocynSelect autoFocus value={replacementId} onChange={event => setReplacementId(event.target.value)} className="mt-1 w-full border rounded px-3 py-2"><option value="">Choose a replacement</option>{states.filter(candidate => candidate.is_active === 1 && candidate.id !== state.id).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.internal_label} ({candidate.legacy_status})</option>)}</TocynSelect></label><div className="mt-3 flex gap-3"><TocynButton type="button" aria-disabled={deactivate.isPending} onClick={() => void confirmDeactivate(state)} className="rounded bg-red-700 px-4 py-2 text-white">Remap and deactivate</TocynButton><TocynButton type="button" onClick={() => setDeactivating(null)} className="underline">Cancel</TocynButton></div></div>}
-    </li>)}</ul>}
+    </li>)}</ul>{hasMore && <TocynButton type="button" onClick={() => void loadMore()} aria-disabled={isLoadingMore} className="underline">{isLoadingMore ? 'Loading more support states…' : 'Load more support states'}</TocynButton>}{isLoadMoreError && <p role="alert" className="text-sm text-red-800">Could not load more support states. Try again.</p>}</>}
   </div>;
 }

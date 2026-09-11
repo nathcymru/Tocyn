@@ -158,8 +158,14 @@ dashboard.get("/stats", async (c) => {
 // legacy ticket payload and use the existing general-settings capability.
 dashboard.get('/support-states', async (c) => {
   const limit = Number(c.req.query('limit') ?? '100');
+  const cursor = c.req.query('cursor') || undefined;
   const includeInactive = c.req.query('include_inactive') === 'true';
-  try { return c.json(await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).listDefinitions(limit, includeInactive)); }
+  try {
+    const page = await new SupportStateService(c.get('tenantDeps') as TenantRequestDeps).listDefinitionsPage(limit, cursor, includeInactive);
+    const response = c.json(page.results);
+    if (page.nextCursor) response.headers.set('X-Next-Cursor', page.nextCursor);
+    return response;
+  }
   catch (error) { return supportStateFailure(c, error); }
 });
 

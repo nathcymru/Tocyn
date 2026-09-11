@@ -54,3 +54,46 @@ it('does not expose state administration to an agent', () => {
   expect(screen.getByRole('alert')).toHaveTextContent('Only administrators');
   expect(screen.queryByRole('button', { name: 'Create state' })).not.toBeInTheDocument();
 });
+
+it('loads later definition pages explicitly for replacement choices', async () => {
+  let page = 0;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    const request = new URL(url, 'http://localhost');
+    if (request.pathname === '/api/support-states' && options.method === 'GET') {
+      page += 1;
+      if (page === 1) return new Response(JSON.stringify(states), { headers: { 'Content-Type': 'application/json', 'X-Next-Cursor': 'cursor-2' } });
+      return new Response(JSON.stringify([{ ...states[0], id: 'late-state', internal_label: 'Late replacement' }]), { headers: { 'Content-Type': 'application/json' } });
+    }
+    return json({});
+  }));
+  renderPage();
+  expect(await screen.findByText('Waiting on customer')).toBeInTheDocument();
+  expect(screen.queryByText('Late replacement')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
+  expect(await screen.findByText('Late replacement')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Load more support states' })).not.toBeInTheDocument();
+});
+
+it('keeps the first page and offers a retry when a later definition page fails', async () => {
+  let laterPageAttempts = 0;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    const request = new URL(url, 'http://localhost');
+    if (request.pathname === '/api/support-states' && options.method === 'GET') {
+      if (!request.searchParams.has('cursor')) {
+        return new Response(JSON.stringify(states), { headers: { 'Content-Type': 'application/json', 'X-Next-Cursor': 'cursor-2' } });
+      }
+      laterPageAttempts += 1;
+      if (laterPageAttempts === 1) throw new Error('synthetic later-page failure');
+      return json([{ ...states[0], id: 'recovered-state', internal_label: 'Recovered replacement' }]);
+    }
+    return json({});
+  }));
+  renderPage();
+  expect(await screen.findByText('Waiting on customer')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
+  expect(await screen.findByText('Could not load more support states. Try again.')).toBeInTheDocument();
+  expect(screen.getByText('Waiting on customer')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
+  expect(await screen.findByText('Recovered replacement')).toBeInTheDocument();
+  expect(screen.queryByText('Could not load more support states. Try again.')).not.toBeInTheDocument();
+});

@@ -136,3 +136,56 @@ test('support-state ticket routes enforce live agent group membership', async ()
     assert.equal((await fixture.request('/api/tickets/fixture-ticket/support-state', { token: agent })).status, 200);
   });
 });
+
+test('support-state listing paginates deterministically within the tenant boundary', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const operatorA = await operatorToken(fixture, 'operatorA');
+    await fixture.db.batch(Array.from({ length: 101 }, (_, index) => fixture.db.prepare(
+      `INSERT INTO support_state_definitions
+        (tenant_id,id,legacy_status,internal_label,public_label)
+       VALUES ('fixture-tenant-a',?,'open',?,?)`,
+    ).bind(`state-${String(index).padStart(3, '0')}`, `State ${String(index).padStart(3, '0')}`, `State ${index}`)));
+    await fixture.db.prepare(`INSERT INTO support_state_definitions
+      (tenant_id,id,legacy_status,internal_label,public_label) VALUES ('fixture-tenant-b','state-999','open','State 999','State 999')`).run();
+
+    const first = await fixture.request('/api/support-states?limit=100', { token: operatorA });
+    assert.equal(first.status, 200);
+    const firstPage = await first.json<Array<{ id: string }>>();
+    const cursor = first.headers.get('X-Next-Cursor');
+    assert.equal(firstPage.length, 100);
+    assert.ok(cursor);
+    assert.equal(firstPage.some(state => state.id === 'state-999'), false);
+
+    const second = await fixture.request(`/api/support-states?limit=100&cursor=${encodeURIComponent(cursor!)}`, { token: operatorA });
+    assert.equal(second.status, 200);
+    const secondPage = await second.json<Array<{ id: string }>>();
+    assert.equal(secondPage.length, 5);
+    assert.equal(second.headers.get('X-Next-Cursor'), null);
+    assert.equal([...firstPage, ...secondPage].filter(state => state.id.startsWith('state-')).length, 101);
+    assert.equal([...firstPage, ...secondPage].some(state => state.id === 'state-999'), false, 'foreign tenant definitions never cross the cursor pages');
+    assert.equal((await fixture.request('/api/support-states?cursor=bad', { token: operatorA })).status, 400);
+    assert.equal((await fixture.request(`/api/support-states?cursor=${'a'.repeat(1025)}`, { token: operatorA })).status, 400);
+  });
+});
+
+test('support-state cursor preserves Unicode labels across pages', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const operatorA = await operatorToken(fixture, 'operatorA');
+    await fixture.db.batch([
+      fixture.db.prepare(`INSERT INTO support_state_definitions
+        (tenant_id,id,legacy_status,internal_label,public_label) VALUES ('fixture-tenant-a','unicode-greek','open','Ω waiting','Waiting')`),
+      fixture.db.prepare(`INSERT INTO support_state_definitions
+        (tenant_id,id,legacy_status,internal_label,public_label) VALUES ('fixture-tenant-a','unicode-emoji','open','🔥 later','Later')`),
+    ]);
+
+    const first = await fixture.request('/api/support-states?limit=5', { token: operatorA });
+    assert.equal(first.status, 200);
+    const cursor = first.headers.get('X-Next-Cursor');
+    assert.ok(cursor, 'a full page with another state has a cursor');
+    const second = await fixture.request(`/api/support-states?limit=5&cursor=${encodeURIComponent(cursor!)}`, { token: operatorA });
+    assert.equal(second.status, 200);
+    const definitions = [...await first.json<Array<{ id: string }>>(), ...await second.json<Array<{ id: string }>>()];
+    assert.deepEqual(definitions.filter(state => state.id.startsWith('unicode-')).map(state => state.id), ['unicode-greek', 'unicode-emoji']);
+    assert.equal(second.headers.get('X-Next-Cursor'), null);
+  });
+});

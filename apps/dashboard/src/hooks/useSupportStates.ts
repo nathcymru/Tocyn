@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
 
 export type SupportLifecycle = 'open' | 'pending' | 'resolved' | 'closed';
@@ -36,10 +36,26 @@ export type SupportStateDefinitionInput = Readonly<{
 }>;
 
 export function useSupportStates(includeInactive = false) {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['support-states', { includeInactive }],
-    queryFn: () => dashboardApi.get<SupportStateDefinition[]>(`/support-states${includeInactive ? '?include_inactive=true' : ''}`),
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: '100' });
+      if (includeInactive) params.set('include_inactive', 'true');
+      if (pageParam) params.set('cursor', pageParam);
+      const response = await dashboardApi.getWithHeaders<SupportStateDefinition[]>(`/support-states?${params}`);
+      return { definitions: response.data, nextCursor: response.headers.get('X-Next-Cursor') };
+    },
+    getNextPageParam: page => page.nextCursor ?? undefined,
   });
+  return {
+    ...query,
+    data: query.data?.pages.flatMap(page => page.definitions) ?? [],
+    loadMore: () => query.fetchNextPage({ cancelRefetch: false }),
+    hasMore: query.hasNextPage,
+    isLoadingMore: query.isFetchingNextPage,
+    isLoadMoreError: query.isFetchNextPageError,
+  };
 }
 
 export function useTicketSupportState(ticketId: string, enabled = true) {

@@ -252,6 +252,53 @@ it('transitions a custom waiting state with its required private facts and retai
   expect(JSON.parse(String(requests[1]?.[1]?.body))).toMatchObject({ expectedRevision: 5, waitingReason: 'Waiting for their account number', nextAction: 'Follow up tomorrow' });
 });
 
+it('discovers a later current support state, recovers its page load, and enforces its required facts', async () => {
+  const current = { ticket_id: 'workflow-ticket', definition_id: 'late-waiting', lifecycle: 'pending', internal_label: 'Later queue', public_label: 'We need more information', waiting_reason: '', next_action: '', changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const firstPage = [{ id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 }];
+  const laterPage = [{ id: 'late-waiting', legacy_status: 'pending', internal_label: 'Later queue', public_label: 'We need more information', waiting_reason_required: 1, next_action_required: 1, is_compatibility_default: 0, is_active: 1 }];
+  let pageAttempts = 0;
+  let saved: Record<string, unknown> | undefined;
+  transport((path, options) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') {
+      if (options.method === 'PATCH') { saved = JSON.parse(String(options.body)); return json({ ...current, waiting_reason: 'Need account number', next_action: 'Follow up tomorrow', revision: 5 }); }
+      return json(current);
+    }
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    const request = new URL(url, 'http://localhost');
+    if (request.pathname === '/api/support-states') {
+      if (!request.searchParams.has('cursor')) return new Response(JSON.stringify(firstPage), { headers: { 'Content-Type': 'application/json', 'X-Next-Cursor': 'later-page' } });
+      pageAttempts += 1;
+      if (pageAttempts === 1) throw new Error('synthetic later-state failure');
+      return json(laterPage);
+    }
+    return original(url, options);
+  }));
+  showDetail(); await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  const select = await screen.findByRole('combobox', { name: 'Support state' });
+  expect(select).toHaveValue('late-waiting');
+  expect(screen.getByRole('option', { name: 'Later queue (pending) — state details loading' })).toBeInTheDocument();
+  expect(screen.getByText(/Customer-facing label: We need more information/)).toBeInTheDocument();
+  expect(screen.getByLabelText('Waiting reason')).toHaveAttribute('aria-required', 'false');
+  expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
+  expect(await screen.findByText('Could not load more support states. Try again.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
+  await waitFor(() => expect(screen.getByRole('option', { name: 'Later queue (pending)' })).toBeInTheDocument());
+  expect(screen.getByLabelText('Waiting reason')).toHaveAttribute('aria-required', 'true');
+  expect(screen.getByLabelText('Next action')).toHaveAttribute('aria-required', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('waiting reason is required');
+  fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: 'Need account number' } });
+  fireEvent.change(screen.getByLabelText('Next action'), { target: { value: 'Follow up tomorrow' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
+  await screen.findByText('Support state saved.');
+  expect(saved).toMatchObject({ definitionId: 'late-waiting', expectedRevision: 4, waitingReason: 'Need account number', nextAction: 'Follow up tomorrow' });
+});
+
 it('uses a synchronous support-state flight guard to prevent duplicate delayed saves and locks fields while pending', async () => {
   const transition = { ticket_id: 'workflow-ticket', definition_id: 'awaiting-customer', lifecycle: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason: 'Awaiting account number', next_action: 'Follow up tomorrow', changed_at: '2026-09-11T00:00:00Z', revision: 4 };
   const definitions = [{ id: 'awaiting-customer', legacy_status: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason_required: 1, next_action_required: 1, is_compatibility_default: 0, is_active: 1 }];

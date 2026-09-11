@@ -2,6 +2,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { VerifiedTenantScope } from '../types/tenant';
 import { capabilityWriteConstraint, type CapabilityWriteFence } from '../auth/capability-policy';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
+import { arrayBufferToBase64, base64ToArrayBuffer } from '../utils/encoding';
 import type { ConversationActor } from '../types/conversation-audit';
 import type {
   SupportStateDeactivation,
@@ -20,6 +21,25 @@ const compatibilityDefaults = [
   ['legacy-resolved', 'resolved', 'Resolved'],
   ['legacy-closed', 'closed', 'Closed'],
 ] as const;
+const supportStateCursorVersion = 1;
+const maxSupportStateCursorLength = 1024;
+
+function encodeSupportStateCursor(value: { compatibility: number; label: string; id: string }): string {
+  return arrayBufferToBase64(new TextEncoder().encode(JSON.stringify({ v: supportStateCursorVersion, ...value })))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeSupportStateCursor(value: string): { compatibility: number; label: string; id: string } {
+  try {
+    if (value.length > maxSupportStateCursorLength || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error('invalid');
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
+    const decoded = JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(padded))) as Record<string, unknown>;
+    if (decoded.v !== supportStateCursorVersion || !Number.isInteger(decoded.compatibility) ||
+      (decoded.compatibility !== 0 && decoded.compatibility !== 1) || typeof decoded.label !== 'string' ||
+      typeof decoded.id !== 'string' || !decoded.label || !decoded.id || decoded.label.length > 120 || decoded.id.length > 120) throw new Error('invalid');
+    return { compatibility: decoded.compatibility, label: decoded.label, id: decoded.id };
+  } catch { throw new SupportStateError('invalid', 'Invalid support-state cursor'); }
+}
 
 export class SupportStateError extends Error {
   constructor(public readonly code: 'invalid' | 'not_found' | 'conflict', message: string) { super(message); }
@@ -80,12 +100,26 @@ export class SupportStateRepository {
   }
 
   async listDefinitions(limit: number, includeInactive = false): Promise<SupportStateDefinition[]> {
+    return (await this.listDefinitionsPage(limit, undefined, includeInactive)).results;
+  }
+
+  async listDefinitionsPage(limit: number, cursor?: string, includeInactive = false): Promise<{ results: SupportStateDefinition[]; nextCursor: string | null }> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new SupportStateError('invalid', 'Invalid support-state page');
+    const decoded = cursor ? decodeSupportStateCursor(cursor) : null;
     const active = includeInactive ? '' : 'AND is_active=1';
+    const after = decoded ? `AND (is_compatibility_default < ? OR (is_compatibility_default = ? AND
+      (internal_label COLLATE NOCASE > ? OR (internal_label COLLATE NOCASE = ? AND id > ?))))` : '';
+    const values = decoded
+      ? [this.scope.tenantId, decoded.compatibility, decoded.compatibility, decoded.label, decoded.label, decoded.id]
+      : [this.scope.tenantId];
     const result = await this.db.prepare(`SELECT * FROM support_state_definitions
-      WHERE tenant_id=? ${active} ORDER BY is_compatibility_default DESC, internal_label COLLATE NOCASE, id LIMIT ?`)
-      .bind(this.scope.tenantId, limit).all<SupportStateDefinition>();
-    return result.results;
+      WHERE tenant_id=? ${active} ${after} ORDER BY is_compatibility_default DESC, internal_label COLLATE NOCASE, id LIMIT ?`)
+      .bind(...values, limit + 1).all<SupportStateDefinition>();
+    const hasMore = result.results.length > limit;
+    const results = result.results.slice(0, limit);
+    const last = results.at(-1);
+    return { results, nextCursor: hasMore && last
+      ? encodeSupportStateCursor({ compatibility: last.is_compatibility_default, label: last.internal_label, id: last.id }) : null };
   }
 
   async getDefinition(id: string, includeInactive = false): Promise<SupportStateDefinition | null> {

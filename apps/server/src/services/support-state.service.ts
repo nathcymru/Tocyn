@@ -46,6 +46,11 @@ export class SupportStateService {
     return this.deps.repositories.supportStates.listDefinitions(limit, includeInactive);
   }
 
+  async listDefinitionsPage(limit = 100, cursor?: string, includeInactive = false) {
+    await this.assertLiveStaff();
+    return this.deps.repositories.supportStates.listDefinitionsPage(limit, cursor, includeInactive);
+  }
+
   async getTicketState(ticketId: string) {
     await this.ticketActor(ticketId);
     return this.deps.repositories.supportStates.getTicketState(ticketId);

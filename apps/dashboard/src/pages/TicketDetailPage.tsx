@@ -56,7 +56,13 @@ function TicketDetail({ id }: { id: string }) {
   const { data: ticketFields } = useTicketFields();
   const customFieldPrefix = useId();
   const updateTicket = useUpdateTicket();
-  const { data: supportStates = [] } = useSupportStates();
+  const {
+    data: supportStates = [],
+    loadMore: loadMoreSupportStates,
+    hasMore: hasMoreSupportStates,
+    isLoadingMore: isLoadingMoreSupportStates,
+    isLoadMoreError: isLoadMoreSupportStatesError,
+  } = useSupportStates();
   const [showSupportState, setShowSupportState] = useState(false);
   const supportState = useTicketSupportState(id, showSupportState);
   const transitionSupportState = useTransitionSupportState();
@@ -114,6 +120,8 @@ function TicketDetail({ id }: { id: string }) {
   const supportStateDraftDirty = useRef(false);
   const supportStateFlight = useRef(false);
   const [isSupportStateSubmitting, setIsSupportStateSubmitting] = useState(false);
+  const selectedSupportStateDefinition = supportStates.find(candidate => candidate.id === supportStateDraft.definitionId);
+  const selectedSupportStateNeedsDetails = Boolean(supportState.data?.definition_id) && !selectedSupportStateDefinition;
 
   const restoreSupportStateDraft = (current = supportState.data) => {
     if (!current) return;
@@ -261,8 +269,9 @@ function TicketDetail({ id }: { id: string }) {
     event.preventDefault();
     if (supportStateFlight.current) return;
     const current = supportState.data;
-    const definition = supportStates.find(candidate => candidate.id === supportStateDraft.definitionId);
-    if (!current || !definition) return;
+    const definition = selectedSupportStateDefinition;
+    if (!current) return;
+    if (!definition) { setSupportStateError('Load the current support-state definition before saving.'); return; }
     const waitingReason = supportStateDraft.waitingReason.trim();
     const nextAction = supportStateDraft.nextAction.trim();
     if (definition.waiting_reason_required && !waitingReason) { setSupportStateError('A waiting reason is required for this support state.'); return; }
@@ -506,14 +515,18 @@ function TicketDetail({ id }: { id: string }) {
           <div><h2 className="font-semibold text-slate-900">Support state</h2><p className="text-sm text-slate-600">Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
           <label className="block text-sm font-medium text-slate-700">State
             <TocynSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+              {!selectedSupportStateDefinition && supportState.data?.definition_id === supportStateDraft.definitionId && <option value={supportStateDraft.definitionId}>{supportState.data.internal_label} ({supportState.data.lifecycle}) — state details loading</option>}
               {supportStates.map(state => <option key={state.id} value={state.id}>{state.internal_label} ({state.legacy_status})</option>)}
             </TocynSelect>
           </label>
-          {(() => { const definition = supportStates.find(candidate => candidate.id === supportStateDraft.definitionId); return <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">Waiting reason{definition?.waiting_reason_required ? ' (required)' : ' (optional)'}<TocynInput aria-label="Waiting reason" aria-required={Boolean(definition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
-            <label className="text-sm font-medium text-slate-700">Next action{definition?.next_action_required ? ' (required)' : ' (optional)'}<TocynInput aria-label="Next action" aria-required={Boolean(definition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
-          </div>; })()}
-          <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting} aria-disabled={isSupportStateSubmitting} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
+          </div>
+          {selectedSupportStateNeedsDetails && <p role="status" className="text-sm text-slate-700">Load the current support-state definition before saving.</p>}
+          <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
+          {hasMoreSupportStates && <TocynButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className="underline">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</TocynButton>}
+          {isLoadMoreSupportStatesError && <p role="alert" className="text-sm text-red-800">Could not load more support states. Try again.</p>}
         </form>}
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
