@@ -39,8 +39,8 @@ export function supportSlaReceiptStatement(db: D1Database, scope: VerifiedTenant
   responseStatus: 200 | 201, snapshot: string, snapshotValues: unknown[], requirePreviousChange = false): D1PreparedStatement {
   return db.prepare(`INSERT INTO support_sla_mutation_receipts
     (tenant_id,principal_id,operation,key_hash,payload_hash,result_ticket_id,response_status,response_snapshot)
-    SELECT ?,?,?,?,?,?,?,${snapshot} WHERE json_type(${snapshot})='object' AND (?=0 OR changes()=1)`)
-    .bind(...values(scope, ns), ns.payloadHash, ns.ticketId ?? null, responseStatus, ...snapshotValues, ...snapshotValues, requirePreviousChange ? 1 : 0);
+    SELECT ?,?,?,?,?,?,CASE WHEN ?='dashboard.ticket.sla.initialize' THEN CASE WHEN changes()=1 THEN 201 ELSE 200 END ELSE ? END,${snapshot} WHERE json_type(${snapshot})='object' AND (?=0 OR changes()=1)`)
+    .bind(...values(scope, ns), ns.payloadHash, ns.ticketId ?? null, ns.operation, responseStatus, ...snapshotValues, ...snapshotValues, requirePreviousChange ? 1 : 0);
 }
 
 const definitionSnapshot = `json((SELECT json_object('tenant_id',tenant_id,'id',id,'legacy_status',legacy_status,
@@ -58,6 +58,6 @@ export const SUPPORT_SLA_RECEIPT_SNAPSHOTS = Object.freeze({
   definition: definitionSnapshot,
   state: stateSnapshot,
   policy: `json((SELECT ${policySnapshot} FROM sla_policies WHERE tenant_id=?))`,
-  success: `json_object('success',true)`,
-  initialized: `json_object('initialized',true)`,
+  success: `json_object('success',json('true'))`,
+  initialized: `json_object('initialized',json(CASE WHEN changes()=1 THEN 'true' ELSE 'false' END))`,
 });

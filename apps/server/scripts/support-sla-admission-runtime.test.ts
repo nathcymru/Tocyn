@@ -85,7 +85,7 @@ test('real combined admission protects all bounded support-state/SLA writes with
       method, headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', ...(key ? { 'idempotency-key': key } : {}) }, body: JSON.stringify(body),
     });
 
-    const control = async (body?: { rollbackNextCanonical?: boolean }) => {
+    const control = async (body?: { rollbackNextCanonical?: boolean; afterSlaPolicyCommit?: string; afterSupportStateCommit?: { tenantId: string; id: string; label: string } }) => {
       const response = await mf.dispatchFetch('http://runtime.test/__budget-control', {
         method: body ? 'POST' : 'GET', headers: body ? { 'content-type': 'application/json' } : undefined,
         ...(body ? { body: JSON.stringify(body) } : {}),
@@ -136,22 +136,37 @@ test('real combined admission protects all bounded support-state/SLA writes with
 
     const calendar = { timeZone: 'UTC', weekly: { monday: [{ startMinute: 0, endMinute: 1440 }] }, exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } };
     const policyRevision = (await db.prepare('SELECT revision FROM sla_policies WHERE tenant_id=?').bind(tenant).first<{ revision: number }>())!.revision;
+    await control({ afterSlaPolicyCommit: tenant });
     const configured = await request('/api/sla-policy', 'PUT', admin, { expectedRevision: policyRevision, calendar, responseTargetMs: 60_000, resolutionTargetMs: null }, 'sla-policy');
-    assert.equal(configured.status, 200); await configured.body?.cancel();
+    assert.equal(configured.status, 200); const configuredBody=await configured.json() as { responseTargetMs: number };
+    assert.equal(configuredBody.responseTargetMs, 60_000, 'policy first response is the committed revision, not a later concurrent policy');
     const policyReplay = await request('/api/sla-policy', 'PUT', admin, { expectedRevision: policyRevision, calendar, responseTargetMs: 60_000, resolutionTargetMs: null }, 'sla-policy');
-    assert.equal(policyReplay.status, 200); assert.equal(policyReplay.headers.get('Idempotency-Replayed'), 'true'); await policyReplay.body?.cancel();
+    assert.equal(policyReplay.status, 200); assert.equal(policyReplay.headers.get('Idempotency-Replayed'), 'true'); assert.deepEqual(await policyReplay.json(), configuredBody);
 
     const initialized = await request('/api/tickets/legacy/sla/initialize', 'POST', admin, {}, 'initialize');
-    assert.equal(initialized.status, 201); await initialized.body?.cancel();
+    assert.equal(initialized.status, 201); assert.deepEqual(await initialized.json(), { initialized: true });
     const initializeReplay = await request('/api/tickets/legacy/sla/initialize', 'POST', admin, {}, 'initialize');
-    assert.equal(initializeReplay.status, 201); assert.equal(initializeReplay.headers.get('Idempotency-Replayed'), 'true'); await initializeReplay.body?.cancel();
+    assert.equal(initializeReplay.status, 201); assert.equal(initializeReplay.headers.get('Idempotency-Replayed'), 'true'); assert.deepEqual(await initializeReplay.json(), { initialized: true });
+    const alreadyInitialized = await request('/api/tickets/legacy/sla/initialize', 'POST', admin, {}, 'initialize-existing');
+    assert.equal(alreadyInitialized.status, 200); assert.deepEqual(await alreadyInitialized.json(), { initialized: false });
+    const alreadyReplay = await request('/api/tickets/legacy/sla/initialize', 'POST', admin, {}, 'initialize-existing');
+    assert.equal(alreadyReplay.status, 200); assert.equal(alreadyReplay.headers.get('Idempotency-Replayed'), 'true');
+    assert.deepEqual(await alreadyReplay.json(), { initialized: false });
 
+    await control({ afterSupportStateCommit: { tenantId: tenant, id: 'awaiting', label: 'Later concurrent label' } });
     const updated = await request('/api/support-states/awaiting', 'PATCH', admin, { publicLabel: 'Updated public' }, 'state-update');
-    assert.equal(updated.status, 200); await updated.body?.cancel();
+    assert.equal(updated.status, 200); const updatedBody=await updated.json() as { public_label: string };
+    assert.equal(updatedBody.public_label, 'Updated public', 'first response uses the immutable committed receipt, not a later edit');
+    const updateReplay=await request('/api/support-states/awaiting', 'PATCH', admin, { publicLabel: 'Updated public' }, 'state-update');
+    assert.equal(updateReplay.status, 200); assert.deepEqual(await updateReplay.json(), updatedBody);
+    assert.equal((await db.prepare('SELECT public_label FROM support_state_definitions WHERE tenant_id=? AND id=?').bind(tenant,'awaiting').first<{ public_label: string }>())?.public_label, 'Later concurrent label');
     const replacement = await request('/api/support-states', 'POST', admin, { id: 'replacement', legacyStatus: 'open', internalLabel: 'Working internal', publicLabel: 'Working public' }, 'replacement');
     assert.equal(replacement.status, 201); await replacement.body?.cancel();
     const deactivated = await request('/api/support-states/awaiting/deactivate', 'POST', admin, { replacementId: 'replacement', waitingReason: 'Carry forward' }, 'deactivate');
-    assert.equal(deactivated.status, 200); await deactivated.body?.cancel();
+    assert.equal(deactivated.status, 200); assert.deepEqual(await deactivated.json(), { success: true });
+    const deactivationReplay = await request('/api/support-states/awaiting/deactivate', 'POST', admin, { replacementId: 'replacement', waitingReason: 'Carry forward' }, 'deactivate');
+    assert.equal(deactivationReplay.status, 200); assert.equal(deactivationReplay.headers.get('Idempotency-Replayed'), 'true');
+    assert.deepEqual(await deactivationReplay.json(), { success: true });
     assert.deepEqual(await db.prepare(`SELECT paused_at,pause_reason,last_support_state_revision FROM ticket_sla_clocks
       WHERE tenant_id=? AND ticket_id='ticket'`).bind(tenant).first(), { paused_at: null, pause_reason: null, last_support_state_revision: transitioned.revision + 1 },
       'deactivation resumes the initialized waiting clock at the remapped support-state revision');

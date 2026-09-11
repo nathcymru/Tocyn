@@ -9,6 +9,8 @@ import { LocalAuthCaptureTransport } from '../src/services/email/transport';
 let wrappedNamespace: any;
 let wrappedDatabase: any;
 let beforeCanonical: string | undefined;
+let afterSlaPolicyCommit: string | undefined;
+let afterSupportStateCommit: { tenantId: string; id: string; label: string } | undefined;
 let canonicalDelayMs = 0;
 let pauseNextCanonical = false;
 let releaseCanonical: (() => void) | undefined;
@@ -149,6 +151,14 @@ function instrumentDatabase(db: any): any {
       });
       if (canonical) {
         canonicalBatches.push({statements:results.length,rowsRead:results.reduce((n:number,r:any)=>n+r.meta.rows_read,0),rowsWritten:results.reduce((n:number,r:any)=>n+r.meta.rows_written,0)});
+        if (afterSlaPolicyCommit) {
+          const tenant=afterSlaPolicyCommit; afterSlaPolicyCommit=undefined;
+          await target.prepare('UPDATE sla_policies SET response_target_ms=90000,revision=revision+1 WHERE tenant_id=?').bind(tenant).run();
+        }
+        if (afterSupportStateCommit) {
+          const edit=afterSupportStateCommit; afterSupportStateCommit=undefined;
+          await target.prepare('UPDATE support_state_definitions SET public_label=? WHERE tenant_id=? AND id=?').bind(edit.label,edit.tenantId,edit.id).run();
+        }
         if (loseCanonicalAck) {loseCanonicalAck=false;throw new Error('Synthetic lost canonical acknowledgement');}
       }
       return results;
@@ -211,7 +221,7 @@ export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     if (new URL(request.url).pathname === '/__budget-control') {
       if (request.method === 'POST') {
-        const control = await request.json() as { pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown; rollbackNextCanonical?: boolean; revokeApiKeyAfterAuth?: { tenantId?: unknown; apiKeyId?: unknown } };
+        const control = await request.json() as { afterSlaPolicyCommit?: string; afterSupportStateCommit?: { tenantId: string; id: string; label: string }; pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown; rollbackNextCanonical?: boolean; revokeApiKeyAfterAuth?: { tenantId?: unknown; apiKeyId?: unknown } };
         if (control.pauseNextCanonical) pauseNextCanonical = true;
         if (control.releaseCanonical) releaseCanonical?.();
         if (control.pauseNextReserve) pauseNextReserve=true;
@@ -221,6 +231,8 @@ export default {
         if (control.editPolicyAfterReserve) editPolicyAfterReserve=true;
         if (control.failCanonicalAttempts && control.failCanonicalAttempts<=5) failCanonicalAttempts=control.failCanonicalAttempts;
         if (control.beforeCanonical) beforeCanonical=control.beforeCanonical;
+        if (control.afterSlaPolicyCommit) afterSlaPolicyCommit=control.afterSlaPolicyCommit;
+        if (control.afterSupportStateCommit) afterSupportStateCommit=control.afterSupportStateCommit;
         if (control.canonicalDelayMs && control.canonicalDelayMs<=1500) canonicalDelayMs=control.canonicalDelayMs;
         if (control.loseCanonicalAck) loseCanonicalAck=true;
         if (control.loseR2PutAcknowledgement) loseR2PutAcknowledgement=true;

@@ -435,7 +435,7 @@ dashboard.post('/tickets/:id/sla/initialize', requestBounds(1024), roleGuard(['a
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.ticket.sla.initialize',mutation,prepared); if(rejection) return rejection;
       const initialized=await mutation.commit(prepared,201,SUPPORT_SLA_RECEIPT_SNAPSHOTS.initialized,[],database=>
-        new SlaClockService(supportSlaDeps(d,database)).initializeExistingTicket(id),true,3,body=>Boolean((body as { initialized?: unknown }).initialized));
+        new SlaClockService(supportSlaDeps(d,database)).initializeExistingTicket(id),false,3,body=>Boolean((body as { initialized?: unknown }).initialized));
       const body={initialized}; if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(body,initialized?201:200);
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? slaFailure(c,error); }
   }

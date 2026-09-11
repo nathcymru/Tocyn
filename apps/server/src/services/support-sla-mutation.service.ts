@@ -91,7 +91,16 @@ export class SupportSlaMutationService {
       const start=prefix.length;
       return [...results.slice(start,start+at),...results.slice(start+at+1,start+business.length+1)];
     } : typeof Reflect.get(target,property)==='function' ? Reflect.get(target,property).bind(target) : Reflect.get(target,property)}) as D1Database;
-    try { return await execute(proxy); }
+    try {
+      await execute(proxy);
+      // The response belongs to this committed revision. A later policy or
+      // definition edit must not replace it between commit and HTTP delivery.
+      await this.authorize(attempt.requirements);
+      const committed = await this.receipts.findActive(attempt.namespace);
+      if (!committed?.response_snapshot) throw unavailable();
+      if (committed.payload_hash !== attempt.namespace.payloadHash) throw conflict();
+      return decodeWinner(JSON.parse(committed.response_snapshot));
+    }
     catch (error) {
       await this.authorize(attempt.requirements); const winner=await this.receipts.findActive(attempt.namespace);
       if (winner?.response_snapshot) {
