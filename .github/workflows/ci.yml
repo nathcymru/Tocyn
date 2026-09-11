@@ -151,7 +151,10 @@ jobs:
           do
             name="${test_file##*/}"
             printf 'Running bounded admission test: %s\\n' "$test_file"
-            timeout --signal=TERM --kill-after=30s 180s node --import tsx --test --test-concurrency=1 "$test_file" 2>&1 | tee "$diagnostics/$name.log"
+            # The largest serialized local runtime takes about 150 seconds; CI has
+            # additional Worker startup overhead. Keep a finite, diagnostic-friendly
+            # allowance without misclassifying that known workload as a hang.
+            timeout --signal=TERM --kill-after=30s 240s node --import tsx --test --test-concurrency=1 "$test_file" 2>&1 | tee "$diagnostics/$name.log"
           done
       - name: Verify operator theme preference isolation and recovery
         if: matrix.check == 'test'
