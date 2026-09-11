@@ -530,7 +530,12 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
       const indexes=await f.db.prepare(`PRAGMA index_list(${table})`).all();inventory[table]=indexes.results.length;
       if (table === 'conversation_events') assert.deepEqual(indexes.results.map((index: { name: string }) => index.name).sort(), conversationEventIndexes,
         'The accepted staff and bounded-detail event indexes are accounted for');
-      else assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
+      else if (table === 'tickets') {
+        const names = indexes.results.map((index: {name:string}) => index.name);
+        assert.deepEqual(names.sort(),['idx_tickets_list_tenant_created_id','idx_tickets_list_tenant_updated_id','idx_tickets_operational_metric_projection','idx_tickets_tenant_customer_created','sqlite_autoindex_tickets_1']);
+        console.log(JSON.stringify({fixture:'reviewed-ticket-indexes',names:names.sort()}));
+        assert.equal(indexes.results.length,5,'Three accepted ticket indexes plus two list sort indexes require measured envelope review');
+      } else assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
     assert.equal(inventory.conversation_events,7, 'Two unique keys and five deliberate query indexes are accounted for');
