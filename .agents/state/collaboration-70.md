@@ -1,3 +1,19 @@
+# #70 current integration candidate — 11 September 2026
+
+Current application revision: `e538af9`, including accepted branding main `f5f19f2`; scoped accessibility receipt `10e38ee`. Root owns integration and issue acceptance. Earlier sections below are historical development checkpoints, not outstanding instructions where this paragraph supersedes them.
+
+The candidate implements shared advisory typing/presence, atomic draft/conversation preconditions, receipt-safe lost-response retry, explicit refresh/review/rebase/manual-send, and bounded multi-page review. Revision reads bracket conversation refresh; when ascending pages remain unloaded, rebase is unavailable until the operator loads and reviews the later material. No automatic send or draft discard occurs on conflict.
+
+Latest checks: 46 focused dashboard tests; combined native collision/runtime types and production-browser proof; fresh Node 22 repository gzip-level-9 build at e538af9: total JS 569435/570000, initial 101086/135000, CSS 15644/16000. The former default-level-6 overrun is superseded measurement error. Full exact PR CI/security is pending.
+
+Safari/VoiceOver evidence is in `docs/security/evidence/collaboration-70-safari-voiceover-2026-09-11.md`. The final branded journey exposed separate rebase/manual actions; spoken output after rebase was “Draft saved.” and after send was “Showing 2 messages. All messages are loaded.” Longer action notices were accessibility-tree visible, not separately captured as speech. Earlier exact stale/review/lost-response speech retains its stated revision. Do not broaden these observations into full #70 acceptance.
+
+The manual fixture uses a 30-minute budget window established before admission, preserving ceilings, recovery partition and the 60-second grant lifetime. Native evidence proved direct combined mode succeeds while a genuinely expired window rejects with zero grants/articles. An intermediate API-only transition is not required for combined activation.
+
+Remaining #70 work: durable authorized mentions through #133, interruption/motion preference integration through #132, remaining private colleague workflow and final combined accessibility/tenant/resource acceptance. Typing resource estimates do not prove full #64 active admission. Keep #70 and #140 open. No Copilot review or remote/provider action.
+
+## Historical development checkpoints — superseded by current candidate above
+
 # #70 collaboration delivery
 
 ## Current partial candidate — 11 September 2026
