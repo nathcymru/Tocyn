@@ -45,6 +45,35 @@ export class StaffTicketMutationRepository {
       .first<{ result: 'eligible' | 'unavailable' | 'at_capacity' | 'denied' }>();
     return row?.result ?? 'denied';
   }
+  /**
+   * Select one candidate from the authoritative tenant queue. Current work is
+   * the primary fairness measure; the persisted selection time only breaks
+   * equal-load ties. Missing profiles deliberately retain the established
+   * available/unlimited default, while a configured profile supplies hard
+   * availability and capacity facts.
+   */
+  async routingCandidate(ticketId: string): Promise<string | null> {
+    const row = await this.db.prepare(`WITH ticket AS (
+      SELECT id,group_id FROM tickets WHERE tenant_id=? AND id=? AND assigned_to IS NULL AND status IN ('open','pending')
+    ), candidates AS (
+      SELECT operator.id,
+        (SELECT count(*) FROM tickets active WHERE active.tenant_id=operator.tenant_id
+          AND active.assigned_to=operator.id AND active.status IN ('open','pending')) AS active_work,
+        fairness.last_selection_sequence
+      FROM ticket
+      JOIN users operator ON operator.tenant_id=? AND operator.role IN ('admin','agent')
+      LEFT JOIN operator_routing_profiles profile ON profile.tenant_id=operator.tenant_id AND profile.user_id=operator.id
+      LEFT JOIN operator_routing_fairness fairness ON fairness.tenant_id=operator.tenant_id AND fairness.user_id=operator.id
+      WHERE (ticket.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership
+          WHERE membership.tenant_id=operator.tenant_id AND membership.user_id=operator.id AND membership.group_id=ticket.group_id))
+        AND COALESCE(profile.is_available,1)=1
+        AND (profile.assignment_capacity IS NULL OR (SELECT count(*) FROM tickets active WHERE active.tenant_id=operator.tenant_id
+          AND active.assigned_to=operator.id AND active.status IN ('open','pending')) < profile.assignment_capacity)
+    ) SELECT id FROM candidates
+      ORDER BY active_work ASC,CASE WHEN last_selection_sequence IS NULL THEN 0 ELSE 1 END ASC,last_selection_sequence ASC,id ASC LIMIT 1`)
+      .bind(this.scope.tenantId,ticketId,this.scope.tenantId).first<{ id: string }>();
+    return row?.id ?? null;
+  }
 }
 
 /** Fixed guard only: no request-provided SQL or assertion callbacks. */
@@ -82,6 +111,14 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
     values.push(assignment.ownerId,assignment.capacityOverride && c.role === 'admin' ? 1 : 0,scope.tenantId,assignment.ownerId,
       scope.tenantId,assignment.ownerId,assignment.ticketId,scope.tenantId,assignment.ownerId);
   }
+  if (commit.routingSelection) {
+    const assignment = commit.routingSelection;
+    // A queue route is only for an unassigned active ticket. This makes a
+    // concurrent manual/automatic assignment fail the whole batch rather than
+    // becoming a receipted no-op under a different routing decision.
+    sql.push(`EXISTS (SELECT 1 FROM tickets WHERE tenant_id=? AND id=? AND assigned_to IS NULL AND status IN ('open','pending'))`);
+    values.push(scope.tenantId,assignment.ticketId);
+  }
   if (requirement.capability) {
     const f = requirement.capability;
     const same = f.tenantId === c.tenantId && f.actorId === c.actorId && f.role === c.role && f.sessionVersion === c.sessionVersion;
@@ -114,6 +151,16 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
       .bind(scope.tenantId,c.actorId));
   }
   return statements;
+}
+
+/** Written after the audited ticket update, so failed/no-op routes never move the fairness cursor. */
+export function routingSelectionStatement(db: D1Database, scope: VerifiedTenantScope,
+  selection: Readonly<{ ticketId: string; ownerId: string }>): D1PreparedStatement {
+  return db.prepare(`INSERT INTO operator_routing_fairness (tenant_id,user_id,last_selection_sequence,last_selected_at)
+    SELECT ?,?,COALESCE((SELECT max(last_selection_sequence) FROM operator_routing_fairness WHERE tenant_id=?),0)+1,CURRENT_TIMESTAMP
+    FROM tickets WHERE tenant_id=? AND id=? AND assigned_to=?
+    ON CONFLICT(tenant_id,user_id) DO UPDATE SET last_selection_sequence=excluded.last_selection_sequence,last_selected_at=excluded.last_selected_at`)
+    .bind(scope.tenantId,selection.ownerId,scope.tenantId,scope.tenantId,selection.ticketId,selection.ownerId);
 }
 
 export function staffMutationReceiptStatement(db: D1Database, scope: VerifiedTenantScope, ns: StaffMutationNamespace,
