@@ -145,7 +145,7 @@ test('real local combined policy admits API, staff, portal and widget mutations 
       bindings: { BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', DISABLE_RATE_LIMIT: 'true', ENVIRONMENT: 'local', JWT_SECRET: jwtSecret },
       d1Databases: { DB: 'combined-ticket-admission-d1' },
       r2Buckets: { ATTACHMENTS_BUCKET: 'combined-ticket-admission-r2' },
-      durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' },
+      durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO', NOTIFICATION_DO: 'NotificationDO' },
       unsafeEphemeralDurableObjects: true,
     }] }));
     const db = await mf.getD1Database('DB');
@@ -154,15 +154,20 @@ test('real local combined policy admits API, staff, portal and widget mutations 
       doRequests: 10_000_000, doRowsRead: 10_000_000, doRowsWritten: 10_000_000, logEvents: 200_000_000, r2ClassBOperations: 10_000_000 }));
     const customerLimits = policy({ workerRequests: 10_000_000, d1RowsRead: 10_000_000, d1RowsWritten: 10_000_000,
       doRequests: 10_000_000, doRowsRead: 10_000_000, doRowsWritten: 10_000_000, logEvents: 200_000_000, r2ClassBOperations: 10_000_000 });
-    const customerRestriction = (tenantId: string) => JSON.stringify({ schemaVersion: 1, tenantId,
-      ownerPolicyId: customerLimits.policyId, ownerPolicyRevision: 1, revision: 1, mode: 'conservative',
-      limits: Object.fromEntries(customerLimits.budgets.map(item => [item.dimension, item.limit])), disabledFeatures: [] });
+    const customerRestriction = (tenantId: string, limits: Record<string, number> = {}, revision = 1, ownerPolicyRevision = 1) => JSON.stringify({ schemaVersion: 1, tenantId,
+      ownerPolicyId: customerLimits.policyId, ownerPolicyRevision, revision, mode: 'conservative',
+      limits: { ...Object.fromEntries(customerLimits.budgets.map(item => [item.dimension, item.limit])), ...limits }, disabledFeatures: [] });
     await db.batch([
       db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version) VALUES ('runtime-tenant','runtime-customer','customer@runtime.test','customer',1)"),
       db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version) VALUES ('runtime-tenant-b','runtime-customer','customer@runtime-b.test','customer',1)"),
+      db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version) VALUES ('runtime-tenant-c','runtime-customer','customer@runtime-c.test','customer',1)"),
+      db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_id,customer_email,source) VALUES ('runtime-tenant-c','r2-budget-ticket','R2 budget boundary','runtime-customer','customer@runtime-c.test','portal')"),
       db.prepare(`INSERT INTO budget_tenant_allocations
         (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
         VALUES ('runtime-deployment','runtime-tenant-b','runtime-owner-policy',1,1,'runtime-namespace-b',?,'active')`).bind(customerRestriction('runtime-tenant-b')),
+      db.prepare(`INSERT INTO budget_tenant_allocations
+        (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
+        VALUES ('runtime-deployment','runtime-tenant-c','runtime-owner-policy',1,1,'runtime-namespace-c',?,'active')`).bind(customerRestriction('runtime-tenant-c', { r2ClassBOperations: 1 })),
     ]);
     const staffToken = await new SignJWT({ sub: 'runtime-staff', role: 'agent', tenant_id: 'runtime-tenant', session_version: 1, mfa_verified: true })
       .setProtectedHeader({ alg: 'HS256' }).setAudience('app').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(jwtSecret));
@@ -209,13 +214,14 @@ test('real local combined policy admits API, staff, portal and widget mutations 
 
     const firstCustomerToken = await customerToken(jwtSecret, 'runtime-tenant', 'customer@runtime.test', 1);
     const secondTenantToken = await customerToken(jwtSecret, 'runtime-tenant-b', 'customer@runtime-b.test', 1);
+    const r2BudgetToken = await customerToken(jwtSecret, 'runtime-tenant-c', 'customer@runtime-c.test', 1);
     const portalCreate = (token: string, key: string, subject: string) => mf!.dispatchFetch('http://runtime.test/api/v1/customer/tickets', {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'idempotency-key': key },
       body: JSON.stringify({ subject, message: 'synthetic customer message' }),
     });
-    const portalReply = (token: string, ticketId: string, key: string) => mf!.dispatchFetch(`http://runtime.test/api/v1/customer/tickets/${ticketId}/messages`, {
+    const portalReply = (token: string, ticketId: string, key: string, attachments?: { storageKey: string; filename: string }[]) => mf!.dispatchFetch(`http://runtime.test/api/v1/customer/tickets/${ticketId}/messages`, {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'idempotency-key': key },
-      body: JSON.stringify({ message: 'synthetic public reply' }),
+      body: JSON.stringify({ message: 'synthetic public reply', ...(attachments ? { attachments } : {}) }),
     });
     let widgetRequest = 0;
     const widgetCreate = (token: string, key: string, subject: string) => mf!.dispatchFetch('http://runtime.test/api/v1/widget/tickets', {
@@ -228,12 +234,31 @@ test('real local combined policy admits API, staff, portal and widget mutations 
     assert.equal(portalFirst.status, 201); const portalBody = await portalFirst.json() as { ticket: { id: string } };
     const portalReplay = await portalCreate(firstCustomerToken, 'customer-portal-create', 'Portal customer receipt');
     assert.equal(portalReplay.status, 201); assert.equal(portalReplay.headers.get('Idempotency-Replayed'), 'true'); await portalReplay.body?.cancel();
+    const notificationsBeforeReply = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { notificationBroadcasts: number };
     const portalReplyFirst = await portalReply(firstCustomerToken, portalBody.ticket.id, 'customer-portal-reply');
-    assert.equal(portalReplyFirst.status, 201); await portalReplyFirst.body?.cancel();
+    assert.equal(portalReplyFirst.status, 201); assert.equal(portalReplyFirst.headers.get('Idempotency-Replayed'), 'false'); await portalReplyFirst.body?.cancel();
     const portalReplyReplay = await portalReply(firstCustomerToken, portalBody.ticket.id, 'customer-portal-reply');
     assert.equal(portalReplyReplay.status, 201); assert.equal(portalReplyReplay.headers.get('Idempotency-Replayed'), 'true'); await portalReplyReplay.body?.cancel();
+    const notificationsAfterReplay = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { notificationBroadcasts: number };
+    assert.equal(notificationsAfterReplay.notificationBroadcasts - notificationsBeforeReply.notificationBroadcasts, 1,
+      'only the winning customer reply performs its bounded NotificationDO broadcast');
     assert.equal((await db.prepare("SELECT is_internal FROM articles WHERE tenant_id='runtime-tenant' AND ticket_id=? AND body='synthetic public reply'")
       .bind(portalBody.ticket.id).first<{ is_internal: number }>())?.is_internal, 0, 'customer reply remains public');
+
+    const r2Key = 'customer-attachments/runtime-customer/r2-budget.txt';
+    await bucket.put(`runtime-tenant-c/${r2Key}`, 'customer reply attachment', { httpMetadata: { contentType: 'text/plain' } });
+    const r2Attachment = [{ storageKey: r2Key, filename: 'r2-budget.txt' }];
+    const r2BeforeRejected = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number };
+    const r2Rejected = await portalReply(r2BudgetToken, 'r2-budget-ticket', 'customer-r2-budget-retry', r2Attachment);
+    assert.equal(r2Rejected.status, 429, 'customer capacity rejects before an attachment reference can read R2');
+    assert.deepEqual(await r2Rejected.json(), { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' });
+    const r2AfterRejected = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number };
+    assert.equal(r2AfterRejected.r2Gets, r2BeforeRejected.r2Gets, 'a rejected reply performs zero R2 reads');
+    const r2Retried = await portalReply(r2BudgetToken, 'r2-budget-ticket', 'customer-r2-budget-retry', r2Attachment);
+    assert.equal(r2Retried.status, 429, 'a retry of rejected capacity remains outside attachment storage');
+    assert.deepEqual(await r2Retried.json(), { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' });
+    const r2AfterRetry = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number };
+    assert.equal(r2AfterRetry.r2Gets, r2AfterRejected.r2Gets, 'a rejected retry also performs zero R2 reads');
 
     const crossSurface = await widgetCreate(firstCustomerToken, 'customer-portal-create', 'Portal customer receipt');
     assert.equal(crossSurface.status, 409, 'the trusted widget source changes the canonical request fingerprint'); await crossSurface.body?.cancel();

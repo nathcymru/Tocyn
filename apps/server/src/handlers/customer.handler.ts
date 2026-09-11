@@ -350,15 +350,15 @@ app.post('/tickets/:id/messages', widgetAuthMiddleware, roleGuard(['customer']),
       if (prepared.replay.keyed) c.header('Idempotency-Replayed', 'true');
       return c.json(prepared.replay.body, prepared.replay.status);
     }
+    if (admissionMode === 'enabled') {
+      const rejection = await admitConfiguredCustomerTicketMutation(c, 'portal.ticket.reply', mutation, prepared);
+      if (rejection) return rejection;
+    }
     let verifiedAttachments;
     try {
       verifiedAttachments = await validateAttachmentReferences(deps, `customer-attachments/${payload.sub}/`, attachments);
     } catch {
       return c.json({ error: 'Invalid attachment reference' }, 400);
-    }
-    if (admissionMode === 'enabled') {
-      const rejection = await admitConfiguredCustomerTicketMutation(c, 'portal.ticket.reply', mutation, prepared);
-      if (rejection) return rejection;
     }
     const outcome = await mutation.commit(prepared, verifiedAttachments);
     if (!outcome.replayed) {

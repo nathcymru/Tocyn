@@ -56,15 +56,18 @@ export const STAFF_TICKET_ENVELOPES: Readonly<Record<StaffTicketBudgetOperation,
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
 });
 /**
- * Customer messages have no outbound email work, but preserve the bounded
- * attachment-reference and post-commit broadcast allowance. Provider billing,
+ * Customer messages have no outbound email work. Replies validate up to ten
+ * attachment references and then broadcast one committed public article with
+ * cleanup; creates and widget creates do not broadcast. Provider billing,
  * bytes and CPU remain outside this local reservation estimate.
  */
 export const CUSTOMER_TICKET_ENVELOPES: Readonly<Record<CustomerTicketBudgetOperation, ResourceAmounts>> = Object.freeze({
   'portal.ticket.create': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     r2ClassBOperations: 30, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
-  'portal.ticket.reply': Object.freeze({ workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
-    r2ClassBOperations: 30, ...estimateDiagnosticEnvelope({ httpRequests: 2 }) }),
+  'portal.ticket.reply': Object.freeze(sumResourceEnvelopes({ workerRequests: 2, d1RowsRead: 2_570,
+    d1RowsWritten: CANONICAL_MUTATION_D1_WRITES, r2ClassBOperations: 30,
+    ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
+  }, estimateNotificationBroadcastWithCleanupEnvelope())),
 });
 /** One bounded registry across binding contexts in this isolate; no request creates a new cache. */
 export const apiTicketBudgetCache = new IsolateBudgetAdmissionCache();

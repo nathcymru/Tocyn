@@ -1,7 +1,9 @@
 export { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
+export { NotificationDO } from '../src/durable_objects/NotificationDO';
 import { app } from '../src/application';
 import { apiTicketBudgetCache } from '../src/middleware/budget-admission.middleware';
+import { BroadcastService } from '../src/services/broadcast.service';
 import { LocalAuthCaptureTransport } from '../src/services/email/transport';
 
 let wrappedNamespace: any;
@@ -14,7 +16,13 @@ let nextMutationReceiptWinner: any;
 let canonicalAttempts = 0;
 const canonicalBatches: { statements: number; rowsRead: number; rowsWritten: number }[] = [];
 let r2Gets = 0;
+let notificationBroadcasts = 0;
 const localCapture = new LocalAuthCaptureTransport();
+const broadcast = BroadcastService.prototype.broadcast;
+BroadcastService.prototype.broadcast = async function(...args) {
+  notificationBroadcasts++;
+  return broadcast.apply(this, args);
+};
 function instrumentBucket(bucket: any): any {
   if (!bucket) return bucket;
   return new Proxy(bucket, { get(target, property) {
@@ -144,7 +152,7 @@ export default {
         if (control.loseReserveAck) lostReserveAcksRemaining = 1;
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
       }
-      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, reservePaused:!!releaseReserve, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
+      return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, notificationBroadcasts, reservePaused:!!releaseReserve, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), ATTACHMENTS_BUCKET: instrumentBucket(env.ATTACHMENTS_BUCKET), emailTransport: localCapture,
       BUDGET_COORDINATOR_DO: instrument(env.BUDGET_COORDINATOR_DO, env.DB),
