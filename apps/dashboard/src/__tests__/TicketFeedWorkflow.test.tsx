@@ -44,7 +44,7 @@ it('distinguishes a failed feed from an empty feed and lets the operator retry',
   fails=false;fireEvent.click(screen.getByRole('button',{name:'Retry loading tickets'}));
   await screen.findByRole('link',{name:ticket.subject});
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  expect(screen.getByRole('textbox',{name:'Search tickets'})).toBeInTheDocument();
+  expect(screen.getByRole('textbox',{name:'Search all authorised tickets'})).toBeInTheDocument();
 });
 
 it('keeps confirmed feed data visible with a clear warning when a refresh fails', async () => {
@@ -108,14 +108,14 @@ it('uses the requested page, search, and saved filter when loading the feed', as
   fireEvent.click(screen.getByRole('button',{name:'Next'}));
   await screen.findByRole('link',{name:'Result page 2'});
   expect(queries.at(-1)?.get('page')).toBe('2');
-  const search=screen.getByRole('textbox',{name:'Search tickets'});
+  const search=screen.getByRole('textbox',{name:'Search all authorised tickets'});
   fireEvent.change(search,{target:{value:'API intake'}});fireEvent.keyDown(search,{key:'Enter'});
   await waitFor(()=>expect(queries.at(-1)?.get('search')).toBe('API intake'));
   expect(queries.at(-1)?.get('page')).toBe('1');
   fireEvent.click(screen.getByRole('button',{name:'Awaiting response'}));
   await waitFor(()=>expect(queries.at(-1)?.get('filter_id')).toBe('open-filter'));
   expect(queries.at(-1)?.get('page')).toBe('1');
-  expect(queries.at(-1)?.get('search')).toBe('API intake');
+  expect(queries.at(-1)?.get('search')).toBeNull();
 });
 
 it.each([null,62])('displays and copies the actual ticket reference when the number is %s',async number=>{

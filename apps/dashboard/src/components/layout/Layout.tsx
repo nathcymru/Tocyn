@@ -196,6 +196,11 @@ function LayoutContent() {
     }
   }, [location.pathname, location.search]);
 
+  const clearGlobalTicketSearch = () => {
+    setSearchInput('');
+    navigate('/tickets');
+  };
+
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -306,8 +311,9 @@ function LayoutContent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <TocynInput
               type="text"
-              placeholder="Search tickets..."
-              aria-label="Search all tickets"
+              placeholder="Search all authorised tickets..."
+              aria-label="Search all authorised tickets"
+              aria-describedby="global-ticket-search-scope"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
@@ -318,10 +324,16 @@ function LayoutContent() {
                   } else {
                     navigate('/tickets');
                   }
+                } else if (e.key === 'Escape' && searchInput) {
+                  e.preventDefault();
+                  clearGlobalTicketSearch();
                 }
               }}
-              className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full text-sm focus:ring-2 focus:ring-brand-500 transition-all focus:bg-white focus:shadow-inner"
+              className="w-full pl-10 pr-20 py-2 bg-slate-100 border-none rounded-full text-sm focus:ring-2 focus:ring-brand-500 transition-all focus:bg-white focus:shadow-inner"
             />
+            <TocynButton type="button" aria-label="Clear global ticket search" disabled={!searchInput} onClick={clearGlobalTicketSearch}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
+            <p id="global-ticket-search-scope" className="sr-only">Searches all tickets you are authorised to access. Filter this view is available in the Inbox.</p>
           </div>
 
           {!isConnected && <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
