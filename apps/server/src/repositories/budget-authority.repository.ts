@@ -31,6 +31,7 @@ type AuthorityRow = OwnerAuthorityRow & Readonly<{
 export type BudgetAuthorityPrincipal =
   | Readonly<{ kind: 'session'; sessionVersion: number }>
   | Readonly<{ kind: 'api-key'; apiKeyId: string; requiredPermission: string }>
+  | Readonly<{ kind: 'widget'; widgetKey: string }>
   /** Trusted workflow composition only; never constructed from a request. */
   | Readonly<{ kind: 'system'; actor: 'vectorize-workflow' | 'scheduled-retention' | 'knowledge-delete' }>;
 
@@ -100,6 +101,12 @@ export class BudgetAuthorityRepository {
   }
 
   private async livePrincipal(scope: VerifiedTenantScope, principal: BudgetAuthorityPrincipal): Promise<boolean> {
+    if (principal.kind === 'widget') {
+      if (scope.actorId !== 'widget-anonymous' || !scope.roles.includes('customer') || principal.widgetKey.length < 1 || principal.widgetKey.length > 256) return false;
+      const current = await this.db.prepare("SELECT 1 AS active FROM tenant_config WHERE tenant_id=? AND key='widget.public_key' AND value=? LIMIT 1")
+        .bind(scope.tenantId, principal.widgetKey).first<{ active: number }>();
+      return current?.active === 1;
+    }
     if (principal.kind === 'session') {
       const membership = await this.db.prepare(`SELECT role,session_version FROM users
         WHERE tenant_id=? AND id=? LIMIT 1`).bind(scope.tenantId, scope.actorId).first();
