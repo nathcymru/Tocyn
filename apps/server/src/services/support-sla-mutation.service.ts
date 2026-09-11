@@ -36,7 +36,7 @@ export class SupportSlaMutationService {
   }
   private now() { return this.budget.now?.() ?? Date.now(); }
   private async authorize(requirements: Attempt['requirements']) { if (!await this.sessions.authorize(this.credential,requirements,this.now())) throw denied(); }
-  async prepare(input: SupportSlaMutationInput, key?: string): Promise<PreparedSupportSlaMutation> {
+  async prepareMutation(input: SupportSlaMutationInput, key?: string): Promise<PreparedSupportSlaMutation> {
     if (key !== undefined && !/^[A-Za-z0-9._~-]{1,128}$/.test(key)) throw invalid();
     const serialized = canonicalMutationJson(omitUndefined({ operation: input.operation, ticketId: input.ticketId, payload: input.payload }));
     if (new TextEncoder().encode(serialized).byteLength > 128 * 1024) throw new TicketMutationError(413,'payload_too_large','Payload too large');
@@ -47,7 +47,7 @@ export class SupportSlaMutationService {
     // reading a ticket to construct the group-qualified fence.
     await this.authorize(requirements);
     if (input.ticketId) {
-      const ticket = await this.db.prepare('SELECT group_id FROM tickets WHERE tenant_id=? AND id=? LIMIT 1').bind(this.scope.tenantId,input.ticketId).first<{group_id:string|null}>();
+      const ticket = await this.receipts.ticketGroup(input.ticketId);
       if (!ticket) throw denied(); requirements.ticket = { id:input.ticketId,groupId:ticket.group_id };
     }
     await this.authorize(requirements);

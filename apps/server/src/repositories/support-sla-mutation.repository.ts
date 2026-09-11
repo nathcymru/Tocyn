@@ -8,6 +8,10 @@ const values = (scope: VerifiedTenantScope, ns: SupportSlaMutationNamespace) => 
 
 export class SupportSlaMutationRepository {
   constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope) {}
+  async ticketGroup(ticketId: string): Promise<{ group_id: string | null } | null> {
+    return this.db.prepare('SELECT group_id FROM tickets WHERE tenant_id=? AND id=? LIMIT 1')
+      .bind(this.scope.tenantId, ticketId).first<{ group_id: string | null }>();
+  }
   async findActive(ns: SupportSlaMutationNamespace): Promise<SupportSlaMutationReceipt | null> {
     if (ns.principalId !== this.scope.actorId) return null;
     return this.db.prepare(`SELECT payload_hash,lifecycle,response_status,response_snapshot FROM support_sla_mutation_receipts
@@ -38,3 +42,22 @@ export function supportSlaReceiptStatement(db: D1Database, scope: VerifiedTenant
     SELECT ?,?,?,?,?,?,?,${snapshot} WHERE json_type(${snapshot})='object' AND (?=0 OR changes()=1)`)
     .bind(...values(scope, ns), ns.payloadHash, ns.ticketId ?? null, responseStatus, ...snapshotValues, ...snapshotValues, requirePreviousChange ? 1 : 0);
 }
+
+const definitionSnapshot = `json((SELECT json_object('tenant_id',tenant_id,'id',id,'legacy_status',legacy_status,
+  'internal_label',internal_label,'public_label',public_label,'waiting_reason_required',waiting_reason_required,
+  'next_action_required',next_action_required,'is_compatibility_default',is_compatibility_default,'is_active',is_active,
+  'created_at',created_at,'updated_at',updated_at) FROM support_state_definitions WHERE tenant_id=? AND id=?))`;
+const stateSnapshot = `json((SELECT json_object('ticket_id',s.ticket_id,'definition_id',s.definition_id,'lifecycle',d.legacy_status,
+  'internal_label',d.internal_label,'public_label',d.public_label,'waiting_reason',s.waiting_reason,'next_action',s.next_action,
+  'changed_at',s.changed_at,'revision',s.revision) FROM ticket_support_state s JOIN support_state_definitions d
+  ON d.tenant_id=s.tenant_id AND d.id=s.definition_id WHERE s.tenant_id=? AND s.ticket_id=?))`;
+const policySnapshot = `json_object('calendar',json(calendar_json),'responseTargetMs',response_target_ms,
+  'resolutionTargetMs',resolution_target_ms,'reopenPolicy',json_object('response',response_reopen_policy,'resolution',resolution_reopen_policy),'revision',revision)`;
+
+export const SUPPORT_SLA_RECEIPT_SNAPSHOTS = Object.freeze({
+  definition: definitionSnapshot,
+  state: stateSnapshot,
+  policy: `json((SELECT ${policySnapshot} FROM sla_policies WHERE tenant_id=?))`,
+  success: `json_object('success',true)`,
+  initialized: `json_object('initialized',true)`,
+});

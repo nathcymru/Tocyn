@@ -1,3 +1,4 @@
+import { SUPPORT_SLA_RECEIPT_SNAPSHOTS } from '../repositories/support-sla-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import { articlePageQuery, assertConversationResponseBounds, ConversationReadError } from '../services/conversation-read-bounds';
 import { conversationHistory } from './conversation-history';
@@ -108,16 +109,6 @@ function supportSlaDeps(d: TenantRequestDeps, database: D1Database): TenantReque
     slaClocks:new SlaClockRepository(database,d.scope)}};
 }
 
-const definitionSnapshot = `json((SELECT json_object('tenant_id',tenant_id,'id',id,'legacy_status',legacy_status,
-  'internal_label',internal_label,'public_label',public_label,'waiting_reason_required',waiting_reason_required,
-  'next_action_required',next_action_required,'is_compatibility_default',is_compatibility_default,'is_active',is_active,
-  'created_at',created_at,'updated_at',updated_at) FROM support_state_definitions WHERE tenant_id=? AND id=?))`;
-const stateSnapshot = `json((SELECT json_object('ticket_id',s.ticket_id,'definition_id',s.definition_id,'lifecycle',d.legacy_status,
-  'internal_label',d.internal_label,'public_label',d.public_label,'waiting_reason',s.waiting_reason,'next_action',s.next_action,
-  'changed_at',s.changed_at,'revision',s.revision) FROM ticket_support_state s JOIN support_state_definitions d
-  ON d.tenant_id=s.tenant_id AND d.id=s.definition_id WHERE s.tenant_id=? AND s.ticket_id=?))`;
-const policySnapshot = `json_object('calendar',json(calendar_json),'responseTargetMs',response_target_ms,
-  'resolutionTargetMs',resolution_target_ms,'reopenPolicy',json_object('response',response_reopen_policy,'resolution',resolution_reopen_policy),'revision',revision)`;
 
 function staffMutationFailure(c: any, error: unknown): Response | null {
   if (error instanceof MutationInputError) return c.json(mutationInputErrorBody(error), error.status);
@@ -311,10 +302,10 @@ dashboard.put('/sla-policy', requestBounds(64 * 1024), roleGuard(['admin']), per
     try {
       const d=c.get('tenantDeps') as TenantRequestDeps, fence=permissionWriteFence(c,'general');
       const mutation=supportSlaMutationService(c,d,'dashboard.sla.policy.set');
-      const prepared=await mutation.prepare({operation:'dashboard.sla.policy.set',payload:parsed.data,capability:fence},readIdempotencyKey(c));
+      const prepared=await mutation.prepareMutation({operation:'dashboard.sla.policy.set',payload:parsed.data,capability:fence},readIdempotencyKey(c));
       if (prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.sla.policy.set',mutation,prepared); if(rejection) return rejection;
-      const result=await mutation.commit(prepared,200,`json((SELECT ${policySnapshot} FROM sla_policies WHERE tenant_id=?))`,[d.scope.tenantId],
+      const result=await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.policy,[d.scope.tenantId],
         database=>new SlaClockService(supportSlaDeps(d,database)).setPolicy(parsed.data as SlaPolicyInput,fence),true,1);
       if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(result);
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? slaFailure(c,error); }
@@ -336,10 +327,10 @@ dashboard.post('/support-states', requestBounds(64 * 1024), roleGuard(['admin'])
     try {
       const d=c.get('tenantDeps') as TenantRequestDeps, fence=permissionWriteFence(c,'general');
       const mutation=supportSlaMutationService(c,d,'dashboard.support-state.create');
-      const prepared=await mutation.prepare({operation:'dashboard.support-state.create',payload:parsed.data,capability:fence},readIdempotencyKey(c));
+      const prepared=await mutation.prepareMutation({operation:'dashboard.support-state.create',payload:parsed.data,capability:fence},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.support-state.create',mutation,prepared); if(rejection) return rejection;
-      const state=await mutation.commit(prepared,201,definitionSnapshot,[d.scope.tenantId,parsed.data.id],database=>
+      const state=await mutation.commit(prepared,201,SUPPORT_SLA_RECEIPT_SNAPSHOTS.definition,[d.scope.tenantId,parsed.data.id],database=>
         new SupportStateService(supportSlaDeps(d,database)).createDefinition(parsed.data,fence),true,5);
       if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(state,201);
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? supportStateFailure(c,error); }
@@ -366,10 +357,10 @@ dashboard.patch('/support-states/:id', requestBounds(64 * 1024), roleGuard(['adm
     try {
       const d=c.get('tenantDeps') as TenantRequestDeps, fence=permissionWriteFence(c,'general');
       const mutation=supportSlaMutationService(c,d,'dashboard.support-state.update');
-      const prepared=await mutation.prepare({operation:'dashboard.support-state.update',payload:{id,...parsed.data},capability:fence},readIdempotencyKey(c));
+      const prepared=await mutation.prepareMutation({operation:'dashboard.support-state.update',payload:{id,...parsed.data},capability:fence},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.support-state.update',mutation,prepared); if(rejection) return rejection;
-      const state=await mutation.commit(prepared,200,definitionSnapshot,[d.scope.tenantId,id],database=>
+      const state=await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.definition,[d.scope.tenantId,id],database=>
         new SupportStateService(supportSlaDeps(d,database)).updateDefinition(id,parsed.data,fence),true,1);
       if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(state);
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? supportStateFailure(c,error); }
@@ -395,10 +386,10 @@ dashboard.post('/support-states/:id/deactivate', requestBounds(64 * 1024), roleG
     try {
       const d=c.get('tenantDeps') as TenantRequestDeps, fence=permissionWriteFence(c,'general');
       const mutation=supportSlaMutationService(c,d,'dashboard.support-state.deactivate');
-      const prepared=await mutation.prepare({operation:'dashboard.support-state.deactivate',payload:{id,...parsed.data},capability:fence},readIdempotencyKey(c));
+      const prepared=await mutation.prepareMutation({operation:'dashboard.support-state.deactivate',payload:{id,...parsed.data},capability:fence},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.support-state.deactivate',mutation,prepared); if(rejection) return rejection;
-      await mutation.commit(prepared,200,`json_object('success',true)`,[],database=>
+      await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.success,[],database=>
         new SupportStateService(supportSlaDeps(d,database)).deactivate(id,parsed.data,fence),true);
       if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json({success:true});
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? supportStateFailure(c,error); }
@@ -440,10 +431,10 @@ dashboard.post('/tickets/:id/sla/initialize', requestBounds(1024), roleGuard(['a
     try {
       const id=c.req.param('id'), d=c.get('tenantDeps') as TenantRequestDeps, fence=permissionWriteFence(c,'general');
       const mutation=supportSlaMutationService(c,d,'dashboard.ticket.sla.initialize');
-      const prepared=await mutation.prepare({operation:'dashboard.ticket.sla.initialize',ticketId:id,payload:{},capability:fence},readIdempotencyKey(c));
+      const prepared=await mutation.prepareMutation({operation:'dashboard.ticket.sla.initialize',ticketId:id,payload:{},capability:fence},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.ticket.sla.initialize',mutation,prepared); if(rejection) return rejection;
-      const initialized=await mutation.commit(prepared,201,`json_object('initialized',true)`,[],database=>
+      const initialized=await mutation.commit(prepared,201,SUPPORT_SLA_RECEIPT_SNAPSHOTS.initialized,[],database=>
         new SlaClockService(supportSlaDeps(d,database)).initializeExistingTicket(id),true,3,body=>Boolean((body as { initialized?: unknown }).initialized));
       const body={initialized}; if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(body,initialized?201:200);
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? slaFailure(c,error); }
@@ -474,10 +465,10 @@ dashboard.patch('/tickets/:id/support-state', requestBounds(64 * 1024), async (c
     try {
       const id=c.req.param('id'), d=c.get('tenantDeps') as TenantRequestDeps;
       const admission=supportSlaMutationService(c,d,'dashboard.ticket.support-state.transition');
-      const prepared=await admission.prepare({operation:'dashboard.ticket.support-state.transition',ticketId:id,payload:parsed.data},readIdempotencyKey(c));
+      const prepared=await admission.prepareMutation({operation:'dashboard.ticket.support-state.transition',ticketId:id,payload:parsed.data},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await admission.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.ticket.support-state.transition',admission,prepared); if(rejection) return rejection;
-      const state=await admission.commit(prepared,200,stateSnapshot,[d.scope.tenantId,id],database=>
+      const state=await admission.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.state,[d.scope.tenantId,id],database=>
         new SupportStateService(supportSlaDeps(d,database)).transition(id,parsed.data),true,d.betaAdmission ? 5 : 3);
       if(admission.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(state);
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? supportStateFailure(c,error); }
