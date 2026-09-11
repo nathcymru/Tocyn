@@ -9,7 +9,7 @@ import { chromium } from 'playwright';
 const root = resolve(import.meta.dirname, '../..');
 const source = {
   revision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-  files: Object.fromEntries(['packages/ui/src/theme.ts', 'packages/ui/src/theme-scope.ts', 'packages/ui/src/styles/tocyn.css', 'tools/ui-browser/theme-scope.mjs']
+  files: Object.fromEntries(['packages/shared/ui-theme.ts', 'packages/ui/src/theme.ts', 'packages/ui/src/theme-scope.ts', 'packages/ui/src/styles/tocyn.css', 'tools/ui-browser/theme-scope.mjs']
     .map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])),
 };
 const css = readFileSync(join(root, 'packages/ui/src/styles/tocyn.css'), 'utf8');

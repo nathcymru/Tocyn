@@ -2,6 +2,8 @@
 
 The shared UI package exposes a versioned, static-CSS theme contract through `resolveTocynTheme`. The resolver is pure: it does not write to the DOM, persist preferences, inject a stylesheet, or cross an application/server boundary. Consumers apply its returned `variables` to a root or an instance container using ordinary `style.setProperty` calls or an equivalent CSP-approved mechanism.
 
+The canonical data-only validation module is `@luminatick/shared/ui-theme`; the UI package re-exports it for compatibility. Server validation may import this pure shared module without importing UI components, DOM helpers, React or stylesheets. Browser application remains in `packages/ui/src/theme-scope.ts`.
+
 ## Scope and precedence
 
 The contract version is `1`. A theme has a `light` or `dark` mode and the token groups below. Values are resolved in this order, with later values winning:

@@ -134,6 +134,66 @@ describe("Settings Handler Integration Tests", () => {
   });
 
   describe("PUT /api/settings", () => {
+    it('rejects malformed, oversized and non-JSON theme payloads without writes', async () => {
+      const token = await generateAdminToken();
+      for (const [body, type, status] of [
+        ['{', 'application/json', 400],
+        ['{}', 'text/plain', 415],
+        ['x'.repeat(8193), 'application/json', 413],
+        [JSON.stringify({ version: '2', tenant: {} }), 'application/json', 400],
+      ] as const) {
+        const response = await settings.request('/theme', {
+          method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': type }, body,
+        }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
+        expect(response.status).toBe(status);
+      }
+      expect(mockDB.run).not.toHaveBeenCalled();
+    });
+
+    it('requires operator authentication for theme reads and writes', async () => {
+      for (const method of ['GET', 'PUT']) {
+        const response = await settings.request('/theme', { method }, { DB: mockDB as any, JWT_SECRET });
+        expect(response.status).toBe(401);
+      }
+      expect(mockDB.run).not.toHaveBeenCalled();
+    });
+
+    it('validates the dedicated tenant theme atomically before its fenced write', async () => {
+      const token = await generateAdminToken();
+      const invalid = await settings.request('/theme', {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: '1', tenant: { colorSurface: 'url(https://invalid.test)' } }),
+      }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
+      expect(invalid.status).toBe(400);
+      expect(mockDB.run).not.toHaveBeenCalled();
+
+      const valid = await settings.request('/theme', {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: '1', tenant: { colorSurface: '#ffffff', colorText: '#0f172a' } }),
+      }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
+      expect(valid.status).toBe(200);
+      const themeBind = vi.mocked(mockDB.bind).mock.calls.find(call => call[1] === 'ui.theme.v1');
+      expect(themeBind?.slice(0, 3)).toEqual(['default-tenant', 'ui.theme.v1', expect.stringContaining('"version":"1"')]);
+    });
+
+    it('rejects unknown theme keys and returns safe fallback for corrupt stored theme', async () => {
+      const token = await generateAdminToken();
+      const invalid = await settings.request('/theme', {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: '1', tenant: { madeUp: '#fff' } }),
+      }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
+      expect(invalid.status).toBe(400);
+      const normalRead = mockDB.first.getMockImplementation()!;
+      mockDB.first.mockImplementation(async () => {
+        const query = mockDB.prepare.mock.lastCall?.[0];
+        if (typeof query === 'string' && query.includes('FROM tenant_config')) return { value: '{"version":"1","tenant":{"colorSurface":"url(https://invalid.test)"}}' };
+        return normalRead();
+      });
+      const read = await settings.request('/theme', { headers: { Authorization: `Bearer ${token}` } }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
+      expect(read.status).toBe(200);
+      expect(await read.json()).toEqual({ version: '1', tenant: {}, fallback: true });
+    });
+
     it("rejects unknown suffixed keys before writing any setting", async () => {
       const token = await generateAdminToken();
       for (const key of ['UNEXPECTED_KEY', 'UNEXPECTED_URL']) {
