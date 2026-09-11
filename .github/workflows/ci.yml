@@ -18,7 +18,8 @@ jobs:
   validate:
     name: Tocyn / ${{ matrix.check }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The expanded native suite needs more runner time; every check remains required.
+    timeout-minutes: ${{ matrix.check == 'test' && 35 || 20 }}
     strategy:
       fail-fast: false
       matrix:
