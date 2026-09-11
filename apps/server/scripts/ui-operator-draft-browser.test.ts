@@ -6,13 +6,16 @@ import { createRequire } from 'node:module';
 import { join, normalize, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { test } from 'node:test';
-import { chromium, type Route } from 'playwright';
+import { chromium, type Page, type Route } from 'playwright';
 import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fixture';
 import { betaCounters, initializeLocalBetaFixture } from './local-beta-fixture';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const require = createRequire(import.meta.url);
 const maximumBodyBytes = 1024 * 1024;
+// This deliberately excludes `unsafe-inline` and `unsafe-eval`: the production bundle
+// must load its static assets and apply validated theme variables through CSSOM.
+const localApplicationCsp = "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; worker-src 'none'; form-action 'self'; frame-ancestors 'none'";
 
 type Operator = 'operatorA' | 'operatorB';
 type Server = Readonly<{
@@ -20,6 +23,47 @@ type Server = Readonly<{
   failDraftPuts: (count: number) => void;
   close: () => Promise<void>;
 }>;
+
+type BrowserPolicyEvidence = Readonly<{
+  cspViolations: string[];
+  consoleErrors: string[];
+  expectedConsoleErrors: string[];
+  unexpectedConsoleErrors: string[];
+}>;
+
+async function captureBrowserPolicyEvidence(page: Page): Promise<BrowserPolicyEvidence> {
+  const cspViolations: string[] = [];
+  const consoleErrors: string[] = [];
+  const expectedConsoleErrors: string[] = [];
+  const unexpectedConsoleErrors: string[] = [];
+  await page.exposeBinding('__tocynRecordCspViolation', (_source, violation: unknown) => {
+    cspViolations.push(JSON.stringify(violation));
+  });
+  await page.addInitScript(`document.addEventListener('securitypolicyviolation', event => {
+      window.__tocynRecordCspViolation({
+        blockedResource: event.blockedURI === 'inline' || event.blockedURI === 'eval' ? event.blockedURI : 'external-or-resource',
+        violatedDirective: event.violatedDirective,
+        effectiveDirective: event.effectiveDirective,
+        originalPolicy: event.originalPolicy,
+      });
+    });`);
+  const recordConsoleError = (message: string) => {
+    const sanitized = message.replace(/([?&]token=)[^'\s]+/g, '$1<redacted>');
+    consoleErrors.push(sanitized);
+    if (sanitized === 'WebSocket error: Event' || sanitized.includes('WebSocket connection to') && sanitized.includes('Unexpected response code: 426')) {
+      expectedConsoleErrors.push(sanitized);
+    } else if (sanitized === 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') {
+      expectedConsoleErrors.push(sanitized);
+    } else {
+      unexpectedConsoleErrors.push(sanitized);
+    }
+  };
+  page.on('console', message => {
+    if (message.type() === 'error') recordConsoleError(message.text());
+  });
+  page.on('pageerror', error => recordConsoleError(error.message));
+  return { cspViolations, consoleErrors, expectedConsoleErrors, unexpectedConsoleErrors };
+}
 
 async function digestDirectory(directory: string): Promise<string> {
   const hash = createHash('sha256');
@@ -63,7 +107,7 @@ async function staticResponse(root: string, pathname: string, response: ServerRe
     const bytes = await readFile(path);
     const extension = path.slice(path.lastIndexOf('.'));
     const contentType = ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' } as Record<string, string>)[extension] ?? 'application/octet-stream';
-    response.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-store' }).end(bytes);
+    response.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-store', 'Content-Security-Policy': localApplicationCsp }).end(bytes);
   } catch { response.writeHead(404).end(); }
 }
 
@@ -159,6 +203,7 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
         return route.continue();
       });
       const page = await context.newPage();
+      const policyEvidence = await captureBrowserPolicyEvidence(page);
       page.on('response', response => {
         const url = new URL(response.url());
         if (url.origin === server.origin && url.pathname === '/api/workspace/drafts/fixture-ticket') {
@@ -179,7 +224,8 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
         localStorage.setItem('lumina-auth', JSON.stringify({ state: { token, user, mfaRequired: false }, version: 0 }));
       }, sessionA);
 
-      await page.goto(`${server.origin}/tickets/fixture-ticket`);
+      const navigation = await page.goto(`${server.origin}/tickets/fixture-ticket`);
+      assert.equal(navigation?.headers()['content-security-policy'], localApplicationCsp, 'The application document must carry the strict local CSP');
       const body = page.getByLabel('Reply message', { exact: true });
       await body.waitFor();
       await page.locator('#reply-message:not([readonly])').waitFor();
@@ -281,6 +327,8 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
       assert.equal(foreignDraft.status, 204, 'Tenant B must not observe tenant A\'s draft through the real Worker');
 
       assert.equal(externalRequests.length, 0, 'The browser must not reach a non-loopback origin');
+      assert.deepEqual(policyEvidence.cspViolations, [], 'The strict local CSP must report no browser policy violations during draft persistence and recovery');
+      assert.deepEqual(policyEvidence.unexpectedConsoleErrors, [], 'The strict local CSP scenario must complete without unclassified browser console errors');
       assert.ok(workspaceResponses.some(response => response.method === 'GET' && response.status === 200), 'The browser must restore through the real Worker route');
       assert.ok(workspaceResponses.some(response => response.method === 'PUT' && response.status === 200), 'The browser must persist through the real Worker route');
       assert.ok(workspaceStateResponses.some(response => response.method === 'PUT' && response.status === 200), 'The browser must persist selected-ticket, panel, and sort preferences through the real Worker route');
@@ -299,6 +347,7 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
         dirty,
         scope: { worker: 'disposable-miniflare', tenants: 2, localBeta: { invitedPrincipals: 4, ticketLimit: 1, mutationLimit: 16, recoveryReserve: 2, uploadLimit: 1, actualSuccessfulMutations: counters?.mutations ?? null }, dashboard: 'production-dist', remoteBindings: 0, externalNetworkRequests: 0 },
         artifact: { dashboardDistSha256: await digestDirectory(resolve(repositoryRoot, 'apps/dashboard/dist')) },
+        csp: { policy: localApplicationCsp, violations: policyEvidence.cspViolations, consoleErrors: policyEvidence.consoleErrors },
         checks: { reloadRestoresTextModeAndAttachment: true, ticketNavigationRestoresDraft: true, reloadRestoresSelectedTicketAndContextPanel: true, restoredListSortDrivesServerPagination: true, failedAutosaveShowsFeedbackAndRetainsNavigation: true, wrongTenantHasNoDraft: true },
         syntheticFault: { boundary: 'ephemeral loopback forwarding server', route: 'PUT /api/workspace/drafts/fixture-ticket', responses: 2, persistedWorkerRequests: true, capacityDenials: 0 },
         attachment: { uploadRoute: 'POST /api/attachments/upload', uploadStatuses: attachmentUploadStatuses, filenameRestored: true },
@@ -306,7 +355,7 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
         workspaceRouteStatuses: workspaceResponses,
         workspaceStateRouteStatuses: workspaceStateResponses,
         ticketSortRequests,
-        limitations: ['Node application harness with disposable Miniflare D1/R2 bindings and an ephemeral loopback static server; this is not a Worker-hosted full-application runtime, deployed Worker, or provider evidence.', 'The two 503 responses are deliberately injected at the loopback forwarding boundary to prove browser recovery; all other observed draft requests use the real Worker route.', 'Synthetic tenant identities and fixture data only; no production credentials, customer data, remote bindings, or external network requests.'],
+        limitations: ['Node application harness with disposable Miniflare D1/R2 bindings and an ephemeral loopback static server; this is not a Worker-hosted full-application runtime, deployed Worker, or provider evidence. Deployment CSP headers remain #42.', 'The two 503 responses are deliberately injected at the loopback forwarding boundary to prove browser recovery; all other observed draft requests use the real Worker route.', 'Synthetic tenant identities and fixture data only; no production credentials, customer data, remote bindings, or external network requests.'],
       })}\n`);
       await context.close();
     } finally {
@@ -343,7 +392,9 @@ test('proves operator theme first paint, persistence, recovery and tenant separa
         } else requestAnimationFrame(observePaint);
       });`);
       const page = await context.newPage();
-      await page.goto(`${server.origin}/tickets/fixture-ticket`);
+      const policyEvidence = await captureBrowserPolicyEvidence(page);
+      const navigation = await page.goto(`${server.origin}/tickets/fixture-ticket`);
+      assert.equal(navigation?.headers()['content-security-policy'], localApplicationCsp, 'The application document must carry the strict local CSP');
       const composer = page.getByLabel('Reply message', { exact: true });
       await composer.waitFor();
       await page.waitForFunction(() => !!(globalThis as any).__firstWorkspacePaint);
@@ -377,7 +428,9 @@ test('proves operator theme first paint, persistence, recovery and tenant separa
       await page.waitForFunction(() => (globalThis as any).document.documentElement.getAttribute('data-tocyn-theme-mode') === 'light');
       assert.equal(await composer.inputValue(), 'Synthetic theme continuity draft');
       assert.deepEqual(external, []);
-      process.stdout.write(`# theme-browser-evidence ${JSON.stringify({ sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repositoryRoot, encoding: 'utf8' }).trim(), sourceDirty: execFileSync('git', ['status', '--porcelain'], { cwd: repositoryRoot, encoding: 'utf8' }).trim().length > 0, dashboardSha256: await digestDirectory(resolve(repositoryRoot, 'apps/dashboard/dist')), firstPaint: 'persisted dark tenant palette', persistedMode: 'light', tenantBUnchanged: true, draftContinuity: true, failedReadRecovery: true, externalRequests: external.length, limitations: ['Synthetic local application harness and real D1; one explicitly injected read failure.', 'Browser evidence does not replace VoiceOver acceptance or deployment CSP validation.'] })}\n`);
+      assert.deepEqual(policyEvidence.cspViolations, [], 'The strict local CSP must report no browser policy violations during CSSOM theme persistence and recovery');
+      assert.deepEqual(policyEvidence.unexpectedConsoleErrors, [], 'The strict local CSP scenario must complete without unclassified browser console errors');
+      process.stdout.write(`# theme-browser-evidence ${JSON.stringify({ sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repositoryRoot, encoding: 'utf8' }).trim(), sourceDirty: execFileSync('git', ['status', '--porcelain'], { cwd: repositoryRoot, encoding: 'utf8' }).trim().length > 0, dashboardSha256: await digestDirectory(resolve(repositoryRoot, 'apps/dashboard/dist')), csp: { policy: localApplicationCsp, violations: policyEvidence.cspViolations, consoleErrors: policyEvidence.consoleErrors }, firstPaint: 'persisted dark tenant palette', persistedMode: 'light', tenantBUnchanged: true, draftContinuity: true, failedReadRecovery: true, externalRequests: external.length, limitations: ['Synthetic local application harness and real D1; one explicitly injected read failure. Deployment CSP headers remain #42.', 'Browser evidence does not replace VoiceOver acceptance or deployed CSP validation.'] })}\n`);
       await context.close();
     } finally { await browser.close(); await server.close(); }
   });
