@@ -113,6 +113,14 @@ async function admitRead(c: any, operation: 'dashboard.settings.read' | 'dashboa
  * Fetch usage stats from Cloudflare GraphQL Analytics API
  */
 settings.get("/usage", roleGuard(["admin"]), permissionGuard("usage"), async (c) => {
+  // Provider analytics is optional #90 work, not authoritative admission data.
+  // Combined/invalid policies must not read provider credentials or call an
+  // unadmitted external analytics endpoint. Explicit legacy modes stay compatible.
+  if (c.env.BUDGET_ADMISSION_POLICY !== undefined && staffTicketAdmissionMode(c.env) !== 'disabled') {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({ code: 'provider_usage_not_admitted',
+      error: 'Provider usage analytics is unavailable under the active budget policy.' }, 503);
+  }
   try {
     const cfService = new CloudflareService(c.env, c.get('tenantDeps') as TenantRequestDeps);
     const stats = await cfService.getUsageStats();

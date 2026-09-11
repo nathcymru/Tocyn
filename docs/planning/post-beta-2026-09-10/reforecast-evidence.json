@@ -1,0 +1,78 @@
+{
+  "asOf": "2026-09-11T16:15:00Z",
+  "acceptedRevision": "70b75aba7de8876328691d1c7f80664d34494974",
+  "anchor": "2026-09-12",
+  "confidence": "low; planning scenarios, not a statistical confidence interval or measured agent-hour throughput",
+  "remainingEffortEstimates": {
+    "64": {
+      "lower": 44,
+      "central": 60,
+      "upper": 76,
+      "breakdown": [
+        {
+          "outcome": "authentication/session/customer authentication and API pre-business accounting",
+          "lower": 12,
+          "upper": 20
+        },
+        {
+          "outcome": "categories and remaining direct configuration/dashboard/provider reads",
+          "lower": 4,
+          "upper": 8
+        },
+        {
+          "outcome": "CPU/duration/stock/transfer estimates and durable stock reconciliation",
+          "lower": 12,
+          "upper": 24
+        },
+        {
+          "outcome": "review and integrate current candidates without rebuilding them",
+          "lower": 4,
+          "upper": 8
+        },
+        {
+          "outcome": "final strict-profile reachability, combined recovery and resource proof",
+          "lower": 12,
+          "upper": 16
+        }
+      ]
+    },
+    "70": {
+      "lower": 4,
+      "central": 6,
+      "upper": 8,
+      "reason": "PR189 accepted typing/private collaboration/draft conflict/durable mention foundations. Remaining preference integration and its focused acceptance depend on132."
+    },
+    "133": {
+      "lower": 10,
+      "central": 13,
+      "upper": 16,
+      "reason": "Accepted durable per-recipient activity and workspace state reduce backend work; full attention UI, preferences, recovery and accessibility remain. No credit for unaccepted UI code."
+    }
+  },
+  "otherIssues": "Retain existing remaining estimates with the mandatory 3x allowance; do not reduce acceptance for lack of new evidence.",
+  "integrationDependencyAdded": {
+    "issue": 70,
+    "dependency": 132,
+    "evidence": "Accepted PR189 receipt explicitly leaves interruption-preference integration owned by132 outstanding."
+  },
+  "observedCapacity": {
+    "activeWorkers": 3,
+    "workerConfiguration": "Sol/high (existing workers; no supported followup retuning)",
+    "accepted205RequiredCiMinutesApproximately": 25,
+    "interpretation": "CI latency is measured elapsed integration overhead, not productive engineering throughput. No reliable task-hour or token consumption meter is available. Reference schedule remains two 8h lanes, Mon-Sat, 3x effort including shared integration."
+  },
+  "range": {
+    "lower": "2026-12-16",
+    "central": "2026-12-28",
+    "upper": "2027-01-05"
+  },
+  "dependencyCriticalPath": [
+    64,
+    130,
+    128,
+    132,
+    134,
+    140
+  ],
+  "dependencyCriticalPlanningHours": 504
+}
