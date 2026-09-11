@@ -18,8 +18,10 @@ export type CustomerBudgetCredential = Readonly<{
   email: string;
 }>;
 export type CustomerBudgetRequirements = Readonly<{
-  /** Absent only for a new ticket owned by the current customer. */
+  /** Existing mutation snapshot, retained for its canonical commit fence. */
   ticket?: Readonly<{ id: string; customerId: string | null; customerEmail: string }>;
+  /** Read routes supply only an opaque target; current ownership is resolved here before any business read. */
+  readTicketId?: string;
 }>;
 
 function normalizedEmail(value: unknown): string | null {
@@ -54,14 +56,23 @@ export class CustomerCurrentCredentialRepository {
     if (!user || user.role !== 'customer' || user.session_version !== credential.sessionVersion
       || normalizedEmail(user.email) !== email) return null;
 
+    if (requirements.ticket && requirements.readTicketId !== undefined) return null;
     if (requirements.ticket) {
       const requiredEmail = normalizedEmail(requirements.ticket.customerEmail);
       if (!safeId(requirements.ticket.id) || !requiredEmail || (requirements.ticket.customerId !== null && requirements.ticket.customerId !== credential.actorId)) return null;
-      const ticket = await this.db.prepare(CUSTOMER_BUDGET_TICKET_OWNERSHIP_SQL)
-        .bind(this.scope.tenantId, requirements.ticket.id).first<{ customer_id: string | null; customer_email: string }>();
-      if (!ticket || ticket.customer_id !== requirements.ticket.customerId || normalizedEmail(ticket.customer_email) !== requiredEmail
-        || normalizedEmail(ticket.customer_email) !== email || (ticket.customer_id !== null && ticket.customer_id !== credential.actorId)) return null;
+      const ticket = await this.currentOwner(requirements.ticket.id, email);
+      if (!ticket || ticket.customer_id !== requirements.ticket.customerId || normalizedEmail(ticket.customer_email) !== requiredEmail) return null;
     }
+    if (requirements.readTicketId !== undefined && (!safeId(requirements.readTicketId)
+      || !await this.currentOwner(requirements.readTicketId, email))) return null;
     return { kind: 'session', sessionVersion: credential.sessionVersion };
+  }
+
+  private async currentOwner(ticketId: string, email: string): Promise<{ customer_id: string | null; customer_email: string } | null> {
+    const ticket = await this.db.prepare(CUSTOMER_BUDGET_TICKET_OWNERSHIP_SQL)
+      .bind(this.scope.tenantId, ticketId).first<{ customer_id: string | null; customer_email: string }>();
+    if (!ticket || normalizedEmail(ticket.customer_email) !== email
+      || (ticket.customer_id !== null && ticket.customer_id !== this.scope.actorId)) return null;
+    return ticket;
   }
 }

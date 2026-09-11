@@ -128,6 +128,19 @@ test('customer credential failures deny before admission and leave canonical tab
   } finally { await f.mf.dispose(); }
 });
 
+test('customer read authority resolves current ownership before a warm grant can reveal a target ticket', async () => {
+  const f = await fixture();
+  try {
+    const read = { readTicketId: 'shared-ticket' };
+    assert.equal((await f.reserve('read-before-change', 'tenant-a', f.credentialFor('tenant-a'), read)).result.status, 'spent');
+    const before = { ...f.calls };
+    await f.db.prepare("UPDATE tickets SET customer_id='other-customer',customer_email='other-tenant-a@example.test' WHERE tenant_id='tenant-a' AND id='shared-ticket'").run();
+    assert.equal((await f.reserve('read-after-owner-change', 'tenant-a', f.credentialFor('tenant-a'), read)).result.status, 'rejected');
+    assert.deepEqual(f.calls, before, 'current ownership denial consumes no further coordinator work');
+    assert.equal((await f.reserve('read-tenant-b', 'tenant-b', f.credentialFor('tenant-b'), { readTicketId: 'shared-ticket' })).result.status, 'spent');
+  } finally { await f.mf.dispose(); }
+});
+
 for (const [label, mutation] of [
   ['customer session revocation', "UPDATE users SET session_version=2 WHERE tenant_id='tenant-a' AND id='shared-customer'"],
   ['customer role change', "UPDATE users SET role='agent' WHERE tenant_id='tenant-a' AND id='shared-customer'"],
