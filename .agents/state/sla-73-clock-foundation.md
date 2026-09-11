@@ -68,3 +68,12 @@ Root mounted both SLA clocks in the conversation list, action bar and detail pan
 Remaining: exact combined revision CI/browser/resource/keyboard/VoiceOver/contrast demonstration, metric contract inspection, and final acceptance mapping. #137 retains responsible-handler routing ownership; #133 retains optional policy-driven durable risk activity. Full #73 remains open. No production/provider actions or Copilot reviews.
 
 After refresh from accepted main in `3ecfad2`, dashboard 222 tests and server 542 tests pass. Dedicated metric script typechecking passes and CI includes the SLA runtime metrics tests. The unoptimized SLA dashboard measured 572,886 gzip bytes, over the unchanged 570,000 limit. Shared workspace-hook grouping with pinned build-only Terser 5.51.2/five standard passes reduced it to 568,459 (initial 114,319); grammar support, browser target, code behavior and limits are unchanged. This remains preliminary artifact evidence until clean-candidate browser timing validation; no threshold increase or production action.
+
+
+## Final candidate evidence — 11 September 2026, 06:22 BST
+
+Supersedes earlier remaining-validation notes above: accepted #136 is merged; customer presentation and #162 metric integration are complete in this candidate. Actual Safari/VoiceOver evidence is in `docs/security/evidence/sla-73-voiceover-2026-09-11.md`. Dedicated production browser evidence covers initialization, policy conflict/retry, waiting pause/resume, breaches in list/action/detail, safe customer identity, tenant isolation and keyboard behavior. Dark breach contrast was corrected using static theme tokens; measured minimum SLA text contrast is 5.48:1. Browser SLA 1/1 and existing draft browser 2/2 pass.
+
+Clean application revision `59d962496a63ef4f780c6c7ad612282739353b88` passes all 16 unchanged client size/startup/recovery checks with 20 samples against owner baseline `1c684300154187ccf8af5cd6dfcb06afe031ba6b`; receipt `docs/security/evidence/sla-73-performance-59d9624.json`. Dashboard gzip JS 568479, initial 114323, CSS 15208. No resource-limit increase, external request, deployment or provider activation.
+
+Next: push metadata-only evidence revision, require exact-revision CI/security and acceptance review, then integrate with standing owner PR-only review bypass. Issue #73 remains open until accepted. #137 capacity-aware routing and the full #140 beta.2 gate remain separate outstanding work. No Copilot request.
