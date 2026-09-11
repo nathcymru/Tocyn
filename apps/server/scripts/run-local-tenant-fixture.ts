@@ -23,6 +23,7 @@ let configPath: string | undefined;
 let workerLog: number | undefined;
 let child: ChildProcess | undefined;
 let cleanupPromise: Promise<void> | undefined;
+let draftCleanupTimer: NodeJS.Timeout | undefined;
 
 function localSecret(): string {
   return randomBytes(32).toString('hex');
@@ -75,6 +76,7 @@ async function stopWorker(): Promise<void> {
 
 async function cleanup(): Promise<void> {
   if (!cleanupPromise) cleanupPromise = (async () => {
+    if (draftCleanupTimer) { clearInterval(draftCleanupTimer); draftCleanupTimer = undefined; }
     try {
       await stopWorker();
     } finally {
@@ -165,6 +167,21 @@ async function main(): Promise<void> {
     cwd: temporary, env: localEnvironment(), stdio: ['ignore', workerLog, workerLog], detached: process.platform !== 'win32',
   });
   await waitForHealth();
+  if (localBeta) {
+    const purgeDrafts = () => {
+      try {
+        const db = openLocalBetaState(state!);
+        try { new LocalBetaOperator(db).purgeExpiredDrafts(); }
+        finally { db.close(); }
+      } catch {
+        // No draft content, credentials or filesystem details enter the diagnostic.
+        console.error('Local draft cleanup failed; expired drafts remain inaccessible and cleanup will retry in one minute.');
+      }
+    };
+    purgeDrafts();
+    draftCleanupTimer = setInterval(purgeDrafts, 60_000);
+    draftCleanupTimer.unref();
+  }
   process.stdout.write('\nSynthetic local fixture is ready at http://localhost:8787 (bound to 127.0.0.1).\n');
   process.stdout.write('Passwords and operator enrollment URIs appear once below. They are synthetic, terminal-only values.\n\n');
   for (const credential of bootstrap.credentials) {
@@ -175,6 +192,7 @@ async function main(): Promise<void> {
   }
   if (localBeta) {
     process.stdout.write('Guarded local beta is enabled with exactly two tenants and explicit invitations.\n');
+    process.stdout.write('Unsent drafts expire48hours after the last saved edit. Bounded local cleanup runs every minute while this command is running.\n');
     process.stdout.write(`Local operator state: ${state}\n`);
     for (const key of betaApiKeys) process.stdout.write(`Synthetic local API key (${key.tenantId}): ${key.apiKey}\n`);
     betaApiKeys = [];

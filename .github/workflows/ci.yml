@@ -68,6 +68,11 @@ jobs:
         run: |
           npm run typecheck --workspace=apps/server -- --project scripts/tsconfig.ui-operator-draft-browser.json
           node --import tsx --test apps/server/scripts/ui-operator-draft-browser.test.ts > "$RUNNER_TEMP/tocyn-operator-drafts.tap"
+      - name: Verify local draft retention
+        if: matrix.check == 'test'
+        run: |
+          npm run typecheck --workspace=apps/server -- --project scripts/tsconfig.operator-draft-retention.json
+          node --import tsx --test apps/server/scripts/operator-draft-retention.test.ts
       - name: Retain synthetic UI performance evidence
         if: always() && matrix.check == 'build'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

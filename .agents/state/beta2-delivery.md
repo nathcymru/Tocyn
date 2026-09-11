@@ -2,7 +2,11 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 11 September 2026, 00:40 BST
+## Current state — 11 September 2026, 01:15 BST
+
+Owner approved 48-hour unsent draft retention from last saved edit. No outstanding approval blocks #129. Local-only implementation and targeted tests are in continuation PR174; exact-head CI and remaining preference interactions are still required. #66 is In progress from11September with its independent token foundation under coordinator review. See [workspace-129.md](workspace-129.md) for ownership, evidence and exact next actions. Main remains33dfe0b, beta.2 remains incomplete, and forecasts remain unchanged. Native worker concurrency was used for the theme foundation; further worker starts were rejected by the native thread limit, so root continues locally without a billing workaround.
+
+## Historical state — 11 September 2026, 00:40 BST
 
 Accepted main33dfe0baae890ce61de66f4d6d204432e0763c9c integrates partial #129 via PR173. Signature valid; reviewed/CI/merge trees match; mandatory CI/security and guarded browser gate passed. Standing PR-only review bypass recorded in issue receipt5626987921; zero Copilot. #129 stays OPEN/In progress with remaining preference/retention acceptance. No workers active; continuation branch `codex/129-workspace-continuation` preserves exact next actions in [workspace-129.md](workspace-129.md). #66 is ready. Beta2 remains unready and conservative forecasts unchanged. Owner servers/VoiceOver preserved.
 

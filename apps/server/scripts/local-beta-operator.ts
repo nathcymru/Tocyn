@@ -1,10 +1,26 @@
 import type Database from 'better-sqlite3';
 import { validateBetaInitialization, type BetaInitialization } from '../src/types/local-beta';
+import { DRAFT_EXPIRY_SQL } from '../src/types/operator-draft-retention';
 
 type Action = 'stop-intake' | 'stop-writes' | 'resume';
 /** Local filesystem operator only. Never import into a Worker or expose through HTTP. */
 export class LocalBetaOperator {
   constructor(private db: Database.Database) { }
+
+  /** Privacy housekeeping only, restricted to this initialized local run's two tenants. */
+  purgeExpiredDrafts(now = new Date(), limit = 100): number {
+    if (!Number.isFinite(now.getTime()) || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid local draft cleanup bounds');
+    return this.db.transaction(() => {
+      const tenants = this.db.prepare(`SELECT tenant_id FROM local_beta_tenants
+        WHERE run_id=(SELECT run_id FROM local_beta_policy WHERE singleton=1)`).all();
+      if (tenants.length !== 2) throw new Error('Initialized two-tenant local beta required for cleanup');
+      return this.db.prepare(`DELETE FROM operator_drafts WHERE rowid IN (
+        SELECT rowid FROM operator_drafts WHERE tenant_id IN (
+          SELECT tenant_id FROM local_beta_tenants WHERE run_id=(SELECT run_id FROM local_beta_policy WHERE singleton=1)
+        ) AND ${DRAFT_EXPIRY_SQL}<=? ORDER BY ${DRAFT_EXPIRY_SQL},rowid LIMIT ?
+      )`).run(now.toISOString(), limit).changes;
+    }).immediate();
+  }
 
   status() {
     return this.db.prepare(`SELECT p.run_id,p.revision,p.state,r.ticket_limit,r.mutation_limit,r.recovery_reserve,r.upload_limit,r.tickets,r.mutations,r.upload_attempts
