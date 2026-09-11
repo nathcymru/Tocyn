@@ -12,20 +12,21 @@ import type { SlaClockRepository } from './sla-clock.repository';
 import type { TicketListCurrentCredential, TicketListScanSnapshot } from './ticket-list-scan.repository';
 import type { TicketQueueRepository } from './ticket-queue.repository';
 import type { TicketQueueKey } from '../types/ticket-queue';
+import type { CustomerAuthBudgetFence } from './customer-auth-budget-fence';
 
 export interface UserRepository {
-  revokeSessions(id: string): Promise<void>;
+  revokeSessions(id: string, fence?: CustomerAuthBudgetFence): Promise<void>;
   beginMfaEnrollment(id: string, encryptedSecret: string, sessionVersion: number): Promise<boolean>;
   completeMfaEnrollment(id: string, expectedSecret: string, sessionVersion: number): Promise<boolean>;
   list(options: {role?: string; page: number; limit: number; staffOnly?: boolean}): Promise<any[]>;
   findByEmail(email: string): Promise<User | null>;
-  get(id: string): Promise<User | null>;
-  create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>): Promise<User>;
+  get(id: string, fence?: CustomerAuthBudgetFence): Promise<User | null>;
+  create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>, fence?: CustomerAuthBudgetFence): Promise<User>;
   update(id: string, data: Partial<User>): Promise<void>;
   delete(id: string): Promise<void>;
-  storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string): Promise<void>;
+  storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string, fence?: CustomerAuthBudgetFence): Promise<void>;
   findCustomerAuthTokenUser(tokenHash: string, challengeId?: string): Promise<string | null>;
-  verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string): Promise<User | null>;
+  verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string, fence?: CustomerAuthBudgetFence): Promise<User | null>;
 }
 
 export type InitialTicketArticleData = {
