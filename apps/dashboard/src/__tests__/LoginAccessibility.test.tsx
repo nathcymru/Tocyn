@@ -46,7 +46,8 @@ describe('staff login accessibility', () => {
     fireEvent.change(screen.getByLabelText('Email Address'), { target: { value: staff.email } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'synthetic-password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
-    await screen.findByText('MFA destination');
+    await screen.findByLabelText('Authentication Code');
+    expect(screen.queryByLabelText('Password')).toBeNull();
     expect(useAuthStore.getState().mfaRequired).toBe(true);
   });
 

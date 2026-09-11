@@ -71,3 +71,16 @@
 .tocyn-product-lockup-dark { display: none; }
 [data-tocyn-theme-mode="dark"] .tocyn-product-lockup-light { display: none; }
 [data-tocyn-theme-mode="dark"] .tocyn-product-lockup-dark { display: block; }
+
+/* Public authentication shell; no runtime CSS or tenant-controlled asset URLs. */
+.tocyn-auth { min-height: 100dvh; display: flex; background: var(--tocyn-color-surface); color: var(--tocyn-color-text); }
+.tocyn-auth-splash { position: relative; flex: 0 0 45%; max-width: 45vw; }
+.tocyn-auth-splash img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; }
+.tocyn-auth-main { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 3rem 1.5rem; }
+.tocyn-auth-form { width: 100%; max-width: 28rem; }
+.tocyn-auth-logo { display: block; width: 14rem; max-width: 100%; margin: 0 auto 2rem; }
+[data-auth-mode="dark"] :is([class*="text-slate-"],[class*="text-gray-"]) { color: #cbd5e1; }
+[data-auth-mode="dark"] input { background: #1e293b; color: #f8fafc; border-color: #475569; }
+@media (prefers-reduced-motion: reduce) { .tocyn-auth *, .tocyn-auth *::before, .tocyn-auth *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+[data-auth-mode="dark"] .bg-white { background: #1e293b; }
