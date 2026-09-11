@@ -526,6 +526,29 @@ test('retry-safe mutations: real D1 receipt, second-write, and attachment insert
   });
 });
 
+test('first public staff response is atomic with the durable replay receipt and initializes an untouched clock', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const key = await apiKey(fixture);
+    const tenantId = fixture.principals.customerA.tenantId;
+    const beforeArticles = (await fixture.db.prepare("SELECT count(*) AS n FROM articles WHERE tenant_id=? AND ticket_id='fixture-ticket'").bind(tenantId).first<{ n: number }>())!.n;
+    await fixture.db.prepare(`CREATE TRIGGER fail_sla_response_event BEFORE INSERT ON ticket_sla_events
+      BEGIN SELECT RAISE(ABORT, 'synthetic SLA audit failure'); END`).run();
+    const failed = await apiReply(fixture, key, 'fixture-ticket', 'sla-response-retry', { body: 'Synthetic staff response', sender_type: 'agent' }, 'sla-failure');
+    assert.notEqual(failed.status, 201);
+    assert.equal((await fixture.db.prepare("SELECT count(*) AS n FROM articles WHERE tenant_id=? AND ticket_id='fixture-ticket'").bind(tenantId).first<{ n: number }>())!.n, beforeArticles,
+      'a failed SLA audit rolls back the public reply rather than accepting an ambiguous response');
+    assert.equal((await fixture.db.prepare("SELECT count(*) AS n FROM ticket_sla_clocks WHERE tenant_id=? AND ticket_id='fixture-ticket'").bind(tenantId).first<{ n: number }>())!.n, 0);
+    await fixture.db.prepare('DROP TRIGGER fail_sla_response_event').run();
+    const accepted = await apiReply(fixture, key, 'fixture-ticket', 'sla-response-retry', { body: 'Synthetic staff response', sender_type: 'agent' }, 'sla-recovery');
+    await expectStatus(accepted, 201, 'retry after SLA audit failure');
+    const replay = await apiReply(fixture, key, 'fixture-ticket', 'sla-response-retry', { sender_type: 'agent', body: 'Synthetic staff response' }, 'sla-replay');
+    await expectStatus(replay, 201, 'same-key staff reply replay');
+    assert.equal(replay.headers.get('Idempotency-Replayed'), 'true');
+    assert.equal((await fixture.db.prepare("SELECT count(*) AS n FROM ticket_sla_events WHERE tenant_id=? AND ticket_id='fixture-ticket' AND kind='clock.responded'").bind(tenantId).first<{ n: number }>())!.n, 1,
+      'a receipt replay does not duplicate first-response evidence');
+  });
+});
+
 test('receipts respect expiry races, bounded tenant cleanup, tombstones, and external notification failure recovery', async t => {
   await withTwoTenantFixture(async fixture => {
     const aKey = await apiKey(fixture);

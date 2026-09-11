@@ -21,6 +21,7 @@ const articleJson = `json_object('tenant_id',a.tenant_id,'id',a.id,'ticket_id',a
 const attachmentJson = `json_object('tenant_id',x.tenant_id,'id',x.id,'article_id',x.article_id,'file_name',x.file_name,
   'file_size',x.file_size,'content_type',x.content_type,'r2_key',x.r2_key,'created_at',x.created_at)`;
 const namespaceWhere = 'tenant_id = ? AND principal_kind = ? AND principal_id = ? AND operation = ? AND key_hash = ?';
+const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
 
 export type MutationCandidate = {
   ticketId: string; articleId?: string;
@@ -113,6 +114,38 @@ export class TicketMutationReplayRepository {
     }
     if (!candidate.ticket) statements.push(this.db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?')
       .bind(this.scope.tenantId, candidate.ticketId));
+
+    // Clock initialization and the first public staff response share the same
+    // canonical mutation batch and, when supplied, its replay receipt. A crash
+    // therefore cannot accept a reply without durable SLA evidence.
+    statements.push(this.db.prepare(`INSERT OR IGNORE INTO sla_policies
+      (tenant_id,calendar_json,response_target_ms,resolution_target_ms,response_reopen_policy,resolution_reopen_policy)
+      SELECT ?,?,NULL,NULL,'continue','continue' WHERE EXISTS (SELECT 1 FROM tickets WHERE tenant_id=? AND id=?)`)
+      .bind(this.scope.tenantId,defaultSlaCalendarJson,this.scope.tenantId,candidate.ticketId));
+    statements.push(this.db.prepare(`INSERT OR IGNORE INTO ticket_sla_clocks
+      (tenant_id,ticket_id,response_started_at,resolution_started_at,paused_at,pause_reason,last_support_state_revision,
+       policy_revision,policy_calendar_json,policy_response_target_ms,policy_resolution_target_ms,policy_response_reopen_policy,policy_resolution_reopen_policy)
+      SELECT t.tenant_id,t.id,t.created_at,t.created_at,
+        CASE WHEN d.legacy_status='pending' AND s.waiting_reason IS NOT NULL THEN s.changed_at ELSE NULL END,
+        CASE WHEN d.legacy_status='pending' AND s.waiting_reason IS NOT NULL THEN 'waiting' ELSE NULL END,COALESCE(s.revision,0),
+        p.revision,p.calendar_json,p.response_target_ms,p.resolution_target_ms,p.response_reopen_policy,p.resolution_reopen_policy
+      FROM tickets t LEFT JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
+      LEFT JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
+      JOIN sla_policies p ON p.tenant_id=t.tenant_id WHERE t.tenant_id=? AND t.id=?`).bind(this.scope.tenantId,candidate.ticketId));
+    statements.push(this.db.prepare(`INSERT OR IGNORE INTO ticket_sla_events (tenant_id,id,ticket_id,kind,support_state_revision,facts)
+      SELECT tenant_id,lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6))),
+        ticket_id,'clock.initialized',last_support_state_revision,json_object('source','canonical-mutation')
+      FROM ticket_sla_clocks WHERE tenant_id=? AND ticket_id=?`).bind(this.scope.tenantId,candidate.ticketId));
+    if (candidate.article && candidate.article.sender_type === 'agent' && !candidate.article.is_internal) {
+      statements.push(this.db.prepare(`UPDATE ticket_sla_clocks SET response_completed_at=(SELECT created_at FROM articles WHERE tenant_id=? AND id=? AND ticket_id=?),
+        revision=revision+1,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        WHERE tenant_id=? AND ticket_id=? AND response_completed_at IS NULL`).bind(this.scope.tenantId,candidate.articleId!,candidate.ticketId,this.scope.tenantId,candidate.ticketId));
+      statements.push(this.db.prepare(`INSERT OR IGNORE INTO ticket_sla_events (tenant_id,id,ticket_id,kind,support_state_revision,facts)
+        SELECT tenant_id,lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6))),
+          ticket_id,'clock.responded',last_support_state_revision,json_object('articleId',?)
+        FROM ticket_sla_clocks WHERE tenant_id=? AND ticket_id=? AND response_completed_at=(SELECT created_at FROM articles WHERE tenant_id=? AND id=?)`)
+        .bind(candidate.articleId!,this.scope.tenantId,candidate.ticketId,this.scope.tenantId,candidate.articleId!));
+    }
 
     const eventId = candidate.audit ? crypto.randomUUID() : undefined;
     if (candidate.audit && eventId) statements.push(conversationMutationEvent(this.db,this.scope,{

@@ -2,6 +2,7 @@ import { TicketMutationReplayRepository } from './ticket-mutation-replay.reposit
 import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 import { OperatorWorkspaceRepository } from './operator-workspace.repository';
 import { SupportStateRepository } from './support-state.repository';
+import { SlaClockRepository } from './sla-clock.repository';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
 import { normalizeSupportEmail } from '../utils/email-normalize';
@@ -11,6 +12,8 @@ import { UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepo
 import { D1Database } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
+
+const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
 
 export class SqlUserRepository implements UserRepository {
   async revokeSessions(id: string): Promise<void> {
@@ -421,6 +424,22 @@ export class SqlTicketRepository implements TicketRepository {
         article.raw_email_id || null, article.qa_type || null, article.is_internal ? 1 : 0,
         article.intake_source, article.received_at, article.processed_at,
       ),
+      // The ordinary dashboard intake batch is canonical too. Keep its
+      // configured policy snapshot and initialized clock in this transaction.
+      this.db.prepare(`INSERT OR IGNORE INTO sla_policies
+        (tenant_id,calendar_json,response_target_ms,resolution_target_ms,response_reopen_policy,resolution_reopen_policy)
+        VALUES (?, ?, NULL, NULL, 'continue', 'continue')`).bind(this.scope.tenantId, defaultSlaCalendarJson),
+      this.db.prepare(`INSERT INTO ticket_sla_clocks
+        (tenant_id,ticket_id,response_started_at,resolution_started_at,last_support_state_revision,
+         policy_revision,policy_calendar_json,policy_response_target_ms,policy_resolution_target_ms,policy_response_reopen_policy,policy_resolution_reopen_policy)
+        SELECT ?,?,t.created_at,t.created_at,0,p.revision,p.calendar_json,p.response_target_ms,p.resolution_target_ms,
+          p.response_reopen_policy,p.resolution_reopen_policy
+        FROM tickets t JOIN sla_policies p ON p.tenant_id=t.tenant_id WHERE t.tenant_id=? AND t.id=?`)
+        .bind(this.scope.tenantId,ticketId,this.scope.tenantId,ticketId),
+      this.db.prepare(`INSERT INTO ticket_sla_events (tenant_id,id,ticket_id,kind,support_state_revision,facts)
+        VALUES (?,lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6))),?,
+          'clock.initialized',0,json_object('source','canonical-dashboard-intake'))`)
+        .bind(this.scope.tenantId,ticketId),
       ...(data.audit ? [conversationMutationEvent(this.db,this.scope,{id:crypto.randomUUID(),ticketId,articleId,actor:data.audit,intake:true,internal:false})] : []),
     ]); } catch (error) { this.canonicalMutationSli?.recordUncertain(); throw error; }
     const createdTicket = results[0].results[0] as Ticket | undefined;
@@ -1021,6 +1040,7 @@ export function createRepositories(scope: VerifiedTenantScope, db: D1Database, b
     groups: new SqlGroupRepository(scope, db),
     ticketFilters: new SqlFilterRepository(scope, db),
     supportStates: new SupportStateRepository(db, scope, betaAdmission),
+    slaClocks: new SlaClockRepository(db, scope),
     operatorWorkspace: new OperatorWorkspaceRepository(scope, db, betaAdmission)
   };
 }
