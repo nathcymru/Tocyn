@@ -3,6 +3,7 @@ import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service
 import type { BudgetAuthorityPrincipal } from './budget-authority.repository';
 import { budgetCommitConstraint } from './budget-commit-fence';
 import type { VerifiedTenantScope } from '../types/tenant';
+import type { CustomerAuthCredentialIssue } from './interfaces';
 
 /** The admission identity is server-composed and used only in the D1 batch that changes auth state. */
 export type CustomerAuthBudgetFence = Readonly<{ principal: BudgetAuthorityPrincipal; authority: BudgetCommitAuthority }>;
@@ -63,4 +64,40 @@ export function customerAuthAcceptedSql(): string {
 
 export function customerAuthAcceptanceStatement(db: D1Database, scope: VerifiedTenantScope): D1PreparedStatement {
   return db.prepare('SELECT accepted FROM customer_auth_budget_assertions WHERE tenant_id=?').bind(scope.tenantId);
+}
+
+/**
+ * Reuse the per-tenant assertion row for the final credential-issue snapshot.
+ * The batch is atomic: a changed customer identity or OTP pointer changes this
+ * guard to zero before either a shadow user or token can be written.
+ */
+export function customerAuthCredentialIssueAssertionStatement(db: D1Database, scope: VerifiedTenantScope,
+  input: CustomerAuthCredentialIssue, fenced: boolean): D1PreparedStatement {
+  const expectedExisting = input.expectedUserId !== null;
+  const identitySql = expectedExisting
+    ? `EXISTS (SELECT 1 FROM users WHERE tenant_id=? AND id=? AND lower(trim(email))=? AND role='customer')`
+    : `NOT EXISTS (SELECT 1 FROM users WHERE tenant_id=? AND lower(trim(email))=?)`;
+  const identityValues = expectedExisting
+    ? [scope.tenantId, input.expectedUserId, input.email]
+    : [scope.tenantId, input.email];
+  const pointerSql = input.type !== 'otp'
+    ? '1'
+    : input.expectedCurrentOtpTokenId === null
+      ? `NOT EXISTS (SELECT 1 FROM customer_current_otp_challenges WHERE tenant_id=? AND user_id=?)`
+      : `EXISTS (SELECT 1 FROM customer_current_otp_challenges current
+          JOIN customer_auth_tokens token ON token.tenant_id=current.tenant_id AND token.id=current.token_id AND token.user_id=current.user_id
+          WHERE current.tenant_id=? AND current.user_id=? AND current.token_id=? AND token.token_hash=?)`;
+  const pointerValues = input.type !== 'otp'
+    ? []
+    : input.expectedCurrentOtpTokenId === null
+      ? [scope.tenantId, input.userId]
+      : [scope.tenantId, input.userId, input.expectedCurrentOtpTokenId, input.expectedCurrentOtpTokenHash];
+  const admissionSql = fenced
+    ? `EXISTS (SELECT 1 FROM customer_auth_budget_assertions WHERE tenant_id=? AND accepted=1)`
+    : '1';
+  const admissionValues = fenced ? [scope.tenantId] : [];
+  return db.prepare(`INSERT INTO customer_auth_budget_assertions(tenant_id,accepted)
+    VALUES (?,CASE WHEN ${admissionSql} AND ${identitySql} AND ${pointerSql} THEN 1 ELSE 0 END)
+    ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
+    .bind(scope.tenantId, ...admissionValues, ...identityValues, ...pointerValues);
 }

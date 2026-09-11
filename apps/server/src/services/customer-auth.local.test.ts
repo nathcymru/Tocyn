@@ -17,11 +17,13 @@ function customerDeps(tenantId: string, tokenStore: { hash?: string; expiresAt?:
     repositories: {
       config: { get: async (key: string) => ({ PORTAL_URL: 'http://localhost:5174', 'widget.public_key': 'local-widget-key' }[key]) },
       users: {
-        create: async () => user,
-        storeCustomerAuthToken: async (_userId: string, _tokenId: string, hash: string, _type: string, expiresAt: string) => {
-          tokenStore.hash = hash;
-          tokenStore.expiresAt = expiresAt;
+        create: async () => { throw new Error('legacy shadow-user create must not run'); },
+        getCurrentCustomerOtpChallenge: async () => null,
+        issueCustomerAuthCredential: async (input: { tokenHash: string; expiresAt: string }) => {
+          tokenStore.hash = input.tokenHash;
+          tokenStore.expiresAt = input.expiresAt;
         },
+        storeCustomerAuthToken: async () => { throw new Error('legacy credential store must not run'); },
         verifyAndConsumeCustomerAuthToken: async (hash: string) => hash === tokenStore.hash ? user : null,
       },
       channels: { listSupportEmails: async () => [] },
