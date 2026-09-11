@@ -74,7 +74,7 @@ app.get('/config', async (c) => {
   const tenantId = (await createCustomerAuthResolvers(c.env, c.get('resourceOperationEmitter')).widget.resolveTenantByKey(widgetKey.trim()))?.tenantId;
   if (!tenantId) return c.json({ error: 'Widget configuration not found' }, 404);
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
-  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
   return c.json(await new CustomerAuthService(c.env, deps).getConfig());
 });
 
@@ -103,7 +103,7 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
   }
 
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
-  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
 
   if (localBetaEnabled(c.env)) {
     const generic=()=>c.json({success:true,...(parsedAuth.data.type==='otp'?{challengeId:crypto.randomUUID()}: {})});
@@ -154,7 +154,7 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
   }
 
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
-  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
 
   const authService = new CustomerAuthService(c.env, deps, undefined, undefined, c.env.localNow);
   if (typeof body.token !== 'string' || !body.token || body.token.length > 512) {

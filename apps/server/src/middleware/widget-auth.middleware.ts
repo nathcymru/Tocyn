@@ -99,7 +99,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
     // are all verified before this credential is accepted.
     record('accepted');
     await authorizeLocalBeta(c.env, scope, undefined, c.get('resourceOperationEmitter'));
-    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
     c.set('tenantScope', scope);
     c.set('tenantDeps', deps);
     c.set('jwtPayload', payload);
@@ -138,7 +138,7 @@ export const widgetTenantMiddleware = async (c: Context, next: Next) => {
   }
 
   const scope = createVerifiedTenantScope(resolution.tenantId, 'widget-anonymous', ['customer'], 1);
-  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
   c.set('tenantDeps', deps);
   await next();
 };
