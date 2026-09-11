@@ -119,3 +119,7 @@ WHEN EXISTS (SELECT 1 FROM ticket_cleanup_claims c JOIN articles a ON a.tenant_i
  AND NOT EXISTS (SELECT 1 FROM retention_finalization_gates g JOIN articles a ON a.tenant_id=g.tenant_id AND a.ticket_id=g.ticket_id
   WHERE g.tenant_id=OLD.tenant_id AND a.id=OLD.article_id)
 BEGIN SELECT RAISE(ABORT, 'Ticket retention in progress'); END;
+
+-- Discovery must seek to the cursor without scanning earlier eligible rows.
+CREATE INDEX idx_retention_rules_cursor ON automation_rules(tenant_id,event_type,is_active,id);
+CREATE INDEX idx_retention_progress_rule_cursor ON retention_ticket_progress(tenant_id,rule_id,ticket_id,claim_token);

@@ -24,9 +24,10 @@ export class RetentionAdmissionRepository {
   constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope) {}
 
   async nextRules(after: string | null): Promise<readonly RetentionRule[]> {
+    const cursor=after===null ? '' : ' AND id>?';
     return (await this.db.prepare(`SELECT id,conditions,action_config FROM automation_rules
-      WHERE tenant_id=? AND is_active=1 AND event_type='scheduled.retention' AND (? IS NULL OR id>?) ORDER BY id LIMIT ?`)
-      .bind(this.scope.tenantId,after,after,RETENTION_RULE_BATCH).all<RetentionRule>()).results;
+      WHERE tenant_id=? AND is_active=1 AND event_type='scheduled.retention'${cursor} ORDER BY id LIMIT ?`)
+      .bind(this.scope.tenantId,...(after===null ? [] : [after]),RETENTION_RULE_BATCH).all<RetentionRule>()).results;
   }
   async currentRule(id: string, expected: { conditions?: string; action_config: string }): Promise<boolean> {
     const row = await this.db.prepare(`SELECT id,conditions,action_config FROM automation_rules
@@ -36,18 +37,27 @@ export class RetentionAdmissionRepository {
   }
 
   async nextTickets(cutoff: string, after: RetentionTicketCursor | null): Promise<readonly RetentionTicketCursor[]> {
-    return (await this.db.prepare(`SELECT id,updated_at AS updatedAt FROM tickets WHERE tenant_id=? AND julianday(updated_at)<julianday(?)
-      AND (? IS NULL OR julianday(updated_at)>julianday(?) OR (julianday(updated_at)=julianday(?) AND id>?))
-      ORDER BY julianday(updated_at),id LIMIT ?`).bind(this.scope.tenantId, cutoff, after?.updatedAt ?? null, after?.updatedAt ?? null,
-      after?.updatedAt ?? null, after?.id ?? null, RETENTION_TICKET_BATCH).all<RetentionTicketCursor>()).results;
+    // SQLite does not seek the trailing id of an expression-index tuple range.
+    // Read the equal-timestamp tail first, then later timestamps, with one
+    // shared page limit. Neither query rescans the earlier same-time prefix.
+    const same=after ? (await this.db.prepare(`SELECT id,updated_at AS updatedAt FROM tickets
+      WHERE tenant_id=? AND julianday(updated_at)=julianday(?) AND id>? AND julianday(updated_at)<julianday(?)
+      ORDER BY id LIMIT ?`).bind(this.scope.tenantId,after.updatedAt,after.id,cutoff,RETENTION_TICKET_BATCH)
+      .all<RetentionTicketCursor>()).results : [];
+    if(same.length===RETENTION_TICKET_BATCH)return same;
+    const later=await this.db.prepare(`SELECT id,updated_at AS updatedAt FROM tickets
+      WHERE tenant_id=? AND julianday(updated_at)<julianday(?) ${after ? 'AND julianday(updated_at)>julianday(?)' : ''}
+      ORDER BY julianday(updated_at),id LIMIT ?`).bind(this.scope.tenantId,cutoff,...(after ? [after.updatedAt] : []),RETENTION_TICKET_BATCH-same.length)
+      .all<RetentionTicketCursor>();
+    return [...same,...later.results];
   }
 
   async resumableTickets(ruleId: string): Promise<readonly { id: string; token: string }[]> {
-    return (await this.db.prepare(`SELECT t.id,c.token FROM ticket_cleanup_claims c JOIN tickets t
-      ON t.tenant_id=c.tenant_id AND t.id=c.ticket_id JOIN retention_ticket_progress p
-      ON p.tenant_id=c.tenant_id AND p.ticket_id=c.ticket_id AND p.claim_token=c.token
-      WHERE c.tenant_id=? AND c.mode='retention' AND p.rule_id=?
-      ORDER BY t.id LIMIT ?`).bind(this.scope.tenantId, ruleId, RETENTION_TICKET_BATCH).all<{id:string;token:string}>()).results;
+    return (await this.db.prepare(`SELECT p.ticket_id AS id,c.token FROM retention_ticket_progress p
+      JOIN ticket_cleanup_claims c ON c.tenant_id=p.tenant_id AND c.ticket_id=p.ticket_id AND c.token=p.claim_token
+      JOIN tickets t ON t.tenant_id=p.tenant_id AND t.id=p.ticket_id
+      WHERE p.tenant_id=? AND p.rule_id=? AND c.mode='retention'
+      ORDER BY p.ticket_id LIMIT ?`).bind(this.scope.tenantId,ruleId,RETENTION_TICKET_BATCH).all<{id:string;token:string}>()).results;
   }
 
   /** Atomically creates both the freeze and its immutable authorization

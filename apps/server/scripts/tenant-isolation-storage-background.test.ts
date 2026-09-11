@@ -530,3 +530,39 @@ test('trusted tenant composition enables only bounded local D1 diagnostics', asy
     assert.equal(emitted.length, 1);
   });
 });
+
+
+test('retention discovery seeks past large historical prefixes', async context => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId=fixture.principals.customerA.tenantId;
+    const scope=createSystemTenantScope({tenantId,actor:'scheduled-retention'});
+    await fixture.db.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<4000)
+      INSERT INTO automation_rules(tenant_id,id,name,event_type,action_type,action_config,is_active)
+      SELECT ?,printf('seek-rule-%05d',x),printf('Seek %05d',x),'scheduled.retention','retention','{}',1 FROM n`).bind(tenantId).run();
+    await fixture.db.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<4000)
+      INSERT INTO tickets(tenant_id,id,subject,customer_email,status,priority,source,updated_at)
+      SELECT ?,printf('seek-ticket-%05d',x),'Seek','seek@example.invalid','closed','normal','web','2000-01-01T00:00:00.000Z' FROM n`).bind(tenantId).run();
+    await fixture.db.prepare(`INSERT INTO ticket_cleanup_claims(tenant_id,ticket_id,token,mode)
+      SELECT tenant_id,id,id,'retention' FROM tickets WHERE tenant_id=? AND id LIKE 'seek-ticket-%'`).bind(tenantId).run();
+    await fixture.db.prepare(`INSERT INTO retention_ticket_progress(tenant_id,ticket_id,claim_token,rule_id,rule_action_config,candidate_updated_at)
+      SELECT tenant_id,ticket_id,token,CASE WHEN ticket_id='seek-ticket-04000' THEN 'seek-rule-04000' ELSE 'seek-rule-00001' END,'{}','2000-01-01T00:00:00.000Z'
+      FROM ticket_cleanup_claims WHERE tenant_id=? AND ticket_id LIKE 'seek-ticket-%'`).bind(tenantId).run();
+    await fixture.db.prepare(`INSERT INTO tickets(tenant_id,id,subject,customer_email,status,priority,source,updated_at)
+      VALUES (?,'seek-later','Later','seek@example.invalid','closed','normal','web','2001-01-01T00:00:00.000Z')`).bind(tenantId).run();
+    const costs:number[]=[];
+    const wrap=(statement:any):any=>new Proxy(statement,{get(target,key){
+      if(key==='bind')return (...values:unknown[])=>wrap(target.bind(...values));
+      if(key==='all')return async()=>{const result=await target.all();costs.push(result.meta.rows_read);return result;};
+      const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+    }});
+    const measured=new Proxy(fixture.db,{get(target,key){if(key==='prepare')return(sql:string)=>wrap(target.prepare(sql));const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});
+    const work=new RetentionAdmissionRepository(measured,scope);
+    assert.deepEqual((await work.nextRules('seek-rule-03998')).map(row=>row.id),['seek-rule-03999','seek-rule-04000']);
+    assert.deepEqual((await work.nextTickets('2020-01-01T00:00:00.000Z',{id:'seek-ticket-03998',updatedAt:'2000-01-01T00:00:00.000Z'})).map(row=>row.id),['seek-ticket-03999','seek-ticket-04000','seek-later']);
+    assert.deepEqual((await work.nextTickets('2020-01-01T00:00:00.000Z',null)).map(row=>row.id),['seek-ticket-00001','seek-ticket-00002','seek-ticket-00003','seek-ticket-00004','seek-ticket-00005','seek-ticket-00006','seek-ticket-00007','seek-ticket-00008']);
+    assert.deepEqual((await work.nextTickets('2020-01-01T00:00:00.000Z',{id:'seek-ticket-04000',updatedAt:'2000-01-01T00:00:00.000Z'})).map(row=>row.id),['seek-later']);
+    assert.deepEqual(await work.resumableTickets('seek-rule-04000'),[{id:'seek-ticket-04000',token:'seek-ticket-04000'}]);
+    context.diagnostic(JSON.stringify({fixture:'retention-discovery-4000-prefixes',rowsRead:costs}));
+    assert.ok(costs.every(cost=>cost<128),'Bounded seeks must not rescan historical prefixes');
+  });
+});
