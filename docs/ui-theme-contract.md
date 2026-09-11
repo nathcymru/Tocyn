@@ -29,6 +29,10 @@ The resolver accepts only declared token keys on plain data objects: opaque thre
 
 The package ships a static stylesheet (`@luminatick/ui/styles.css`) and standard custom properties. No CSS-in-JS, `<style>` text generation, URL-backed stylesheet, or browser-to-API-Worker UI import is part of this contract. A consumer may set validated properties through DOM CSSOM APIs under its existing CSP. The application adapter still needs to define first-paint bootstrapping, authenticated tenant loading, persistent preference restore, wrapper lifecycle, and the CSP directive/test for the deployed shell; those are outside this bounded foundation.
 
+`createTocynThemeScope(element, input)` applies a fully resolved theme through CSSOM and returns `apply` and `remove`. Supply the tenant and instance inputs together; it does not discover inherited tenant data. Invalid input is rejected before DOM mutation. One active scope owns an element; removing it restores original managed inline properties (including priority) and the original mode attribute, while leaving unrelated properties intact. A removed scope cannot apply again or overwrite a newer owner. The helper preserves DOM nodes, focus and entered input values. Applications must dispose their scope when the authorized identity or owning container changes; this helper does not authorize tenant access or persist preferences.
+
 ## Evidence and limitations
 
 `packages/ui/src/__tests__/theme.test.ts` covers versioning, precedence, light/dark defaults, CSS injection rejection, unknown-key rejection, and reset-property enumeration. Existing primitive tests continue to cover native focus, keyboard, form and ref behavior. Browser first-paint timing, multiple live DOM instances, persistence/reload, computed contrast, assistive technology, CSP headers, and the application adapter remain integration acceptance work.
+
+`theme-scope.test.ts` adds four DOM tests for isolation, replacement/removal, focus and input preservation, invalid-update atomicity, exclusive ownership and disposal fencing. These use jsdom and do not substitute for real browser/CSP acceptance.

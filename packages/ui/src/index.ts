@@ -3,3 +3,4 @@ export * from './primitives';
 export * from './workspace';
 export * from './ark';
 export * from './theme';
+export * from './theme-scope';
