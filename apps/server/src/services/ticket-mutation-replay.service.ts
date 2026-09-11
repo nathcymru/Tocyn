@@ -170,7 +170,7 @@ export class TicketMutationReplayService {
           subject: d.subject, customer_email: customerEmail, ...(body === undefined ? {} : { body }),
           status: portal ? 'open' : d.status ?? 'open', priority: portal ? 'normal' : d.priority ?? 'normal',
           assigned_to: portal ? null : d.assigned_to ?? null, group_id: portal ? null : d.group_id ?? null,
-          ...(portal || d.custom_fields == null ? {} : { custom_fields: d.custom_fields }),
+          ...((portal && input.source !== 'widget') || d.custom_fields == null ? {} : { custom_fields: d.custom_fields }),
         },
       };
     }

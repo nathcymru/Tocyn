@@ -30,3 +30,7 @@ Combined with recovery PR #194 (`a838cb7`) at local merge `b75cf59`. Resolved sh
 Recovery PR194 CI is active under34582825330,CodeQL34582823135; receipt https://github.com/nathcymru/Tocyn/issues/64#issuecomment-5632194228. Root watch85459. Do not restart a running check from an observation timeout.
 
 Collaboration dashboard bundle overrun was a measurement error: exact Node22.19 repository gzip9 gate gives569159/570000totalJS,100896/135000initialJS,15603/16000CSS. No gate changed; Astra restored experiments. Actual AT has a local fixture capacity rejection under diagnosis. Root additionally found ascending paginated conversation refresh could authorize rebasing before later material was rendered; #70 worker must fix bounded review coverage and retain a multi-page regression. No owner approval pending.
+
+## CI compatibility correction — 11 September 2026
+
+PR #195 at c03a2da failed its full D1 integration assertion: canonical normalization dropped widget custom fields. The corrected normalization retains validated fields only for the existing widget source; normal portal semantics remain unchanged. Native combined-mode tests now prove persisted fields, exact replay and changed-field conflict. The separate tenant's untouched request window keeps the existing rate limits intact. Full `scripts/d1-integration-test.ts` passes, including the original failing assertion and all five integration batches. Server and runtime types plus scoped lint pass. Required CI must rerun on the corrected revision; no acceptance is inferred from the earlier failure.
