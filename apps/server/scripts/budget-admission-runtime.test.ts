@@ -307,7 +307,7 @@ test('real local combined policy admits API, staff, portal and widget mutations 
     assert.equal(revokedWidget.status, 401, 'widget rejects a revoked current session before admission'); await revokedWidget.body?.cancel();
     const rotatedToken = await customerToken(jwtSecret, 'runtime-tenant', 'customer@runtime.test', 2);
     const rotatedWidget = await widgetCreate(rotatedToken, 'customer-widget-rotated', 'Current widget session', { product: 'Test' });
-    const rotatedBody = await rotatedWidget.json();
+    const rotatedBody = await rotatedWidget.json() as { custom_fields: string };
     assert.equal(rotatedWidget.status, 201, `the verified widget scope carries the current session version into its canonical fence: ${JSON.stringify(rotatedBody)}`);
     assert.deepEqual(JSON.parse(rotatedBody.custom_fields), { product: 'Test' }, 'widget custom fields survive canonical persistence');
     // Use the independent tenant's untouched three-request widget window;
