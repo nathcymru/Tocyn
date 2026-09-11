@@ -23,7 +23,9 @@ describe('realtime session lifecycle', () => {
   it('delivers only to current staff in this tenant and rejects legacy attachments', async () => {
     const valid = socket(), foreign = socket({ tenantId: 'B' }), legacy = socket({ expiresAt: undefined });
     sockets.push(valid, foreign, legacy);
-    await instance.broadcast({ type: 'ticket.updated' });
+    env.DB.prepare = (sql: string) => ({ bind: () => ({ first: async () =>
+      sql.includes('FROM tickets') ? { group_id: null } : user }) });
+    await instance.broadcast({ type: 'ticket.updated', payload: { id: 'ticket-1' } });
     expect(valid.send).toHaveBeenCalledOnce();
     for (const ws of [foreign, legacy]) { expect(ws.send).not.toHaveBeenCalled(); expect(ws.close).toHaveBeenCalled(); }
   });

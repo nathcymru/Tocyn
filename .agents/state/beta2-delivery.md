@@ -1,4 +1,4 @@
-Current support/SLA integration: [budget-64-support-sla-admission.md](budget-64-support-sla-admission.md). Candidate only; retry-envelope proof is pending.
+Current coordinator: [realtime integration](budget-64-realtime-admission.md). Accepted main `fd8a679a46ba7752c946f07848371a6cab9376aa` (PR #200), required CI/security passed and signed tested-tree equality verified; #64 receipt5635048529. Support/SLA retry and exact-response corrections are accepted. Realtime, knowledge, retention and list candidates remain unaccepted. Full #64/#130/#140 remain open. Historical checkpoints below do not override this current state.
 
 > Current pending integration: [staff/customer read handoff](budget-64-staff-customer-reads.md), with accepted-state evidence in the checkpoint below.
 

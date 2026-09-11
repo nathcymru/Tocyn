@@ -15,6 +15,7 @@ import { TicketMutationReplayRepository, StaffReplyPreconditionConflictError, ty
 import { StaffTicketMutationRepository } from '../repositories/staff-ticket-mutation.repository';
 import type { OperatorActivityService } from './operator-activity.service';
 import { TicketMutationError, canonicalMutationJson } from './ticket-mutation-replay.service';
+import { canonicalBroadcastGrantAfterCommit, type CanonicalBroadcastGrant } from '../budgets/realtime-admission.service';
 
 const unavailable = () => new TicketMutationError(503,'staff_mutation_unavailable','Ticket mutation unavailable; retry with the same key');
 const denied = () => new TicketMutationError(403,'staff_mutation_denied','Ticket mutation is not authorized');
@@ -34,7 +35,8 @@ function owned<T>(value: T): T {
   freeze(clone); return clone;
 }
 type Attempt = { input: StaffMutationInput; namespace?: StaffMutationNamespace; requirements: SessionBudgetRequirements;
-  intent: CanonicalBudgetIntent; authority?: BudgetCommitAuthority; commitStarted: boolean; keyed: boolean };
+  intent: CanonicalBudgetIntent; authority?: BudgetCommitAuthority; commitStarted: boolean; keyed: boolean;
+  broadcastGrant?: CanonicalBroadcastGrant };
 
 /** Staff canonical mutations and receipts used by the configured dashboard admission path. */
 export class StaffTicketMutationService {
@@ -179,6 +181,20 @@ export class StaffTicketMutationService {
       && authority.operationFingerprint === attempt.intent.operationFingerprint ? owned(authority) : undefined;
     return result;
   }
+  /**
+   * Available only after this exact prepared attempt observed a winning D1
+   * commit.  Receipt replays never receive it, so a lost HTTP response cannot
+   * create an additional advisory broadcast.
+   */
+  broadcastGrant(prepared: PreparedStaffMutation, outcome: StaffMutationOutcome): CanonicalBroadcastGrant | null {
+    const attempt = this.attempts.get(prepared);
+    return attempt && !outcome.replayed ? attempt.broadcastGrant ?? null : null;
+  }
+  private committed(prepared: PreparedStaffMutation, outcome: StaffMutationOutcome): StaffMutationOutcome {
+    const attempt = this.attempts.get(prepared);
+    if (attempt && !outcome.replayed) attempt.broadcastGrant = canonicalBroadcastGrantAfterCommit(attempt.authority, this.scope.tenantId, this.now()) ?? undefined;
+    return outcome;
+  }
   async commit(prepared: PreparedStaffMutation, verified: VerifiedMutationAttachment[] = []): Promise<StaffMutationOutcome> {
     const attempt = this.attempts.get(prepared); if (!attempt) throw unavailable();
     await this.authorize(attempt.requirements);
@@ -194,7 +210,7 @@ export class StaffTicketMutationService {
       try {
         const raw = await this.canonical.commitStaffUpdate(input.ticketId,input.data,{kind:'staff',id:this.credential.actorId,source:'dashboard'},
           { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace });
-        return this.render(raw,input.operation,false,attempt.keyed);
+        return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
       } catch (error) {
         await this.authorize(attempt.requirements);
         const winner = await this.receipts.findActive(attempt.namespace);
@@ -239,7 +255,7 @@ export class StaffTicketMutationService {
     try {
       const raw = await this.canonical.commitStaff(candidate,{ credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace },
         input.operation === 'dashboard.ticket.reply' && input.data.draft ? { ticketId: candidate.ticketId, ...input.data.draft } : undefined);
-      return this.render(raw,input.operation,false,attempt.keyed);
+      return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
     } catch (error) {
       await this.authorize(attempt.requirements);
       const winner = attempt.namespace ? await this.receipts.findActive(attempt.namespace) : null;
