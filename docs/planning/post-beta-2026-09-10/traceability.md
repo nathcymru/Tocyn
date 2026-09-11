@@ -4,7 +4,7 @@ All 54 source files are covered by 4858 source-clause records. This is a traceab
 
 Source wording is preserved as evidence. The [decision record](decisions.md), [issue ownership](issue-map.json) and [forecast graph](forecast.json) supply current authority. Implementation status and acceptance evidence are maintained per source record in the machine ledger; retained direction is separate from implementation status. Existing closed foundations are preserved without claiming they satisfy successor UI or integration acceptance.
 
-Accepted SLA #73: 14 solely owned source records link to signed PR #180 and its completion receipt. Accepted composer #68: 23 solely owned source records link to signed PR #183 and its completion receipt. Shared requirements retain their other outstanding owners; #69, #76, #77, #134, #137 routing and #140 beta.2 remain open.
+Accepted SLA #73: 14 solely owned source records link to signed PR #180 and its completion receipt. Accepted composer #68: 18 solely owned source records link to signed PR #183 and its completion receipt. Two shared records preserve accepted composer foundations while concrete transforms (#77) and support-email integration (#89) remain pending; provider mapping and future channel/UI or applet/workflow integration remain assigned to #49, #153 and #154. #69, #76, #77, #134, #137 routing and #140 beta.2 remain open.
 
 | ID | Source file and line | Owner(s) | Disposition |
 |---|---|---|---|
