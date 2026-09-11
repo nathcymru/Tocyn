@@ -4,7 +4,7 @@ import type { VerifiedTenantScope } from '../types/tenant';
 import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO';
 import { BudgetAuthorityRepository, type BudgetCommitSnapshot } from '../repositories/budget-authority.repository';
 import type { CurrentBudgetAuthorityGate } from './budget-coordinator.service';
-import type { TrustedBudgetCoordinatorAuthority } from './owner-aggregate';
+import type { HandoffOwnerIngressInput, TrustedBudgetCoordinatorAuthority } from './owner-aggregate';
 import { IsolateBudgetGrantHolder, isolateWarmReservedEnvelope, type CurrentIsolateGrantAuthority, type IsolateGrantScope, type IsolateGrantSpendResult } from './isolate-grant-holder';
 
 export const MAX_ACTIVE_ISOLATE_SCOPES = 64;
@@ -193,6 +193,8 @@ export class IsolateBudgetAdmissionCache {
     /** Recovery is a separately charged, bounded reservation purpose. */
     purpose?: BudgetPurpose;
   }): Promise<IsolateAdmissionResult> {
+    const ownerIngress = input.repository.ownerIngressAdmission;
+    let business = input.business;
     const holderScope: IsolateGrantScope = { tenantId: input.scope.tenantId, credentialKey: input.credentialKey,
       workScopeKey: input.intent.workScopeKey, purpose: input.purpose ?? 'new-work' };
     const key = JSON.stringify(holderScope);
@@ -218,6 +220,43 @@ export class IsolateBudgetAdmissionCache {
     entry = this.entries.find(candidate => candidate.bindingIdentity === input.repository.bindingIdentity && candidate.namespace === input.namespace && candidate.key === key);
     if (entry && observedEntry === entry && observedGeneration !== entry.generation) return stale();
     if (!authority) { if (entry) this.retire(entry); return stale(); }
+    const offeredIngress = ownerIngress?.tenantHandoff(input.scope.tenantId, input.now());
+    if (offeredIngress) {
+      const coordinator = input.namespace.get(input.namespace.idFromName(authority.trusted.aggregateId)) as unknown as BudgetCoordinatorDO;
+      const handoff: HandoffOwnerIngressInput = {
+        tenantId: input.scope.tenantId,
+        expectedPolicyId: authority.policy.policyId,
+        expectedPolicyRevision: authority.policy.revision,
+        expectedRestrictionRevision: authority.policy.restrictionRevision,
+        ownerClosure: offeredIngress.closure,
+        now: offeredIngress.closure.now,
+      };
+      let transferred = false;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const outcome = await coordinator.handoffIngressFromTrustedAuthority({ authority: authority.trusted, handoff });
+          if (outcome.status === 'handed-off' || outcome.status === 'already-handed-off') {
+            transferred = true;
+            ownerIngress?.handoffToTenant(input.scope.tenantId);
+            // The ingress charge already accounts for this HTTP invocation.
+            // Keep downstream D1/DO/R2 work in the business grant, but do not
+            // reserve the same Worker invocation a second time.
+            const remainingWorkerRequests = (input.business.workerRequests ?? 0) - 1;
+            business = { ...input.business };
+            if (remainingWorkerRequests > 0) business.workerRequests = remainingWorkerRequests;
+            else delete business.workerRequests;
+            break;
+          }
+          if (outcome.reason === 'exhausted') return exhausted();
+          if (outcome.reason === 'capacity-exhausted') return { status: 'rejected', reason: 'capacity-exhausted' };
+          return stale();
+        } catch {
+          // The same immutable transfer is retried once. An unknown second
+          // response leaves the full transferred/owner charge unavailable.
+        }
+      }
+      if (!transferred) return stale();
+    }
     if (entry && !this.observeAuthority(entry,authority)) return stale();
     if (entry?.blocked) {
       if (entry.pending) return stale();
@@ -238,9 +277,9 @@ export class IsolateBudgetAdmissionCache {
     const spend = (held: HeldGrant): IsolateAdmissionResult => {
       if (held.sealed) return exhausted();
       const result = held.holder.spend({ holderId: held.holder.holderId, reservationId: held.reservationId,
-        operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint, envelope: input.business }, localForGrant(authority!, held), input.now());
+        operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint, envelope: business }, localForGrant(authority!, held), input.now());
       if (result.status === 'rejected') return result;
-      const operationEnvelope = isolateWarmReservedEnvelope(input.business);
+      const operationEnvelope = isolateWarmReservedEnvelope(business);
       if (!operationEnvelope) return { status: 'rejected', reason: 'invalid-request' };
       if (result.status === 'spent' && !held.operations.has(input.intent.operationId)) {
         held.operations.set(input.intent.operationId, { activeAttempts: 1, fingerprint: input.intent.operationFingerprint, envelope: structuredClone(operationEnvelope), state: 'in-flight' });
@@ -269,7 +308,7 @@ export class IsolateBudgetAdmissionCache {
     }
     if (!entry.pending) {
       entry.failure = undefined;
-      entry.pending = this.allocate(entry, generation, authority, holderScope, input.business, input.now);
+      entry.pending = this.allocate(entry, generation, authority, holderScope, business, input.now);
     }
     const pending = entry.pending;
     const held = await pending;

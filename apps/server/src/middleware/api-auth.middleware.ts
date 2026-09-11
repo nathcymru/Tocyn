@@ -40,7 +40,7 @@ export const apiAuthMiddleware = async (c: Context<{ Bindings: Env; Variables: A
   // permission checks remain later, separate decisions.
   record('accepted');
   let result;
-  try { result = await composeApiKeyRequestDeps(resolution, c.env, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter')); }
+  try { result = await composeApiKeyRequestDeps(resolution, c.env, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission')); }
   catch (error) { if (error instanceof BetaAdmissionError) return c.json({code:error.code,error:error.message},error.status); throw error; }
 
   c.set('tenantDeps', result.deps);

@@ -30,16 +30,22 @@ function unpackedGrant(value: unknown[], metadata: readonly CoordinatorAllocatio
       : reconciliation } : {}) } as CoordinatorGrant;
 }
 export function encodeCoordinatorState(state: BudgetOwnerAggregateState): string {
-  return JSON.stringify({ format: 2, state: { ...state, tenantStates: state.tenantStates.map(tenant => ({ ...tenant,
-    grants: tenant.grants.map(grant => packedGrant(grant, tenant.allocations)) })) } });
+  return JSON.stringify({ format: 2, state: { ...state,
+    ownerIngress: state.ownerIngress ? { ...state.ownerIngress,
+      grants: state.ownerIngress.grants.map(grant => packedGrant(grant, state.ownerIngress.allocations)) } : undefined,
+    tenantStates: state.tenantStates.map(tenant => ({ ...tenant,
+      grants: tenant.grants.map(grant => packedGrant(grant, tenant.allocations)) })) } });
 }
 export function decodeCoordinatorState(value: BudgetOwnerAggregateState | string | Uint8Array): BudgetOwnerAggregateState {
   if (value instanceof Uint8Array) value = new TextDecoder().decode(value);
   if (typeof value !== 'string') return value;
   const parsed = JSON.parse(value);
   if (parsed.format !== 2) return parsed as BudgetOwnerAggregateState;
-  return { ...parsed.state, tenantStates: parsed.state.tenantStates.map((tenant: Omit<BudgetOwnerAggregateState['tenantStates'][number], 'grants'> & { grants: unknown[][] }) => ({
-    ...tenant, grants: tenant.grants.map(grant => unpackedGrant(grant, tenant.allocations)),
-  })) };
+  return { ...parsed.state,
+    ...(parsed.state.ownerIngress ? { ownerIngress: { ...parsed.state.ownerIngress,
+      grants: parsed.state.ownerIngress.grants.map((grant: unknown[]) => unpackedGrant(grant, parsed.state.ownerIngress.allocations)) } } : {}),
+    tenantStates: parsed.state.tenantStates.map((tenant: Omit<BudgetOwnerAggregateState['tenantStates'][number], 'grants'> & { grants: unknown[][] }) => ({
+      ...tenant, grants: tenant.grants.map(grant => unpackedGrant(grant, tenant.allocations)),
+    })) };
 }
 export const encodedGrantBytes = (grant: CoordinatorGrant): number => new TextEncoder().encode(JSON.stringify(packedGrant(grant))).byteLength;

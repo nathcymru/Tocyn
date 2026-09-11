@@ -5,6 +5,7 @@ import { ApiAuthResolver, ApiKeyResolution } from './api-key-resolver';
 import { createVerifiedTenantScope } from './scope';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import type { ResourceOperationEmitter } from '../observability/resource-operation';
+import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
 
 /**
  * Trusted API-auth composition boundary.
@@ -17,6 +18,7 @@ export async function resolveApiKeyRequestDeps(
   env: Env,
   canonicalMutationSli?: RequestCanonicalMutationSli,
   sharedEmitter?: ResourceOperationEmitter,
+  ownerIngressAdmission?: OwnerIngressRequestAdmission,
 ): Promise<{ deps: TenantRequestDeps; resolution: ApiKeyResolution } | null> {
   const resolution = await resolver.resolveKey(apiKeyRaw);
 
@@ -24,7 +26,7 @@ export async function resolveApiKeyRequestDeps(
     return null;
   }
 
-  return composeApiKeyRequestDeps(resolution, env, canonicalMutationSli, sharedEmitter);
+  return composeApiKeyRequestDeps(resolution, env, canonicalMutationSli, sharedEmitter, ownerIngressAdmission);
 }
 
 /** Builds trusted dependencies only after API-key credential resolution. */
@@ -33,6 +35,7 @@ export async function composeApiKeyRequestDeps(
   env: Env,
   canonicalMutationSli?: RequestCanonicalMutationSli,
   sharedEmitter?: ResourceOperationEmitter,
+  ownerIngressAdmission?: OwnerIngressRequestAdmission,
 ): Promise<{ deps: TenantRequestDeps; resolution: ApiKeyResolution }> {
 
   // Integration principal — NOT createSystemTenantScope
@@ -44,7 +47,7 @@ export async function composeApiKeyRequestDeps(
   );
 
   await authorizeLocalBeta(env, scope, { kind: 'api-key', id: resolution.apiKeyId }, sharedEmitter);
-  const deps = createTenantRequestDeps(scope, env, undefined, canonicalMutationSli, sharedEmitter);
+  const deps = createTenantRequestDeps(scope, env, undefined, canonicalMutationSli, sharedEmitter, ownerIngressAdmission);
   // Usage metadata is not authentication authority. Record it only after scoped composition.
   try { await deps.repositories.apiKeys.recordUsage(resolution.apiKeyId); }
   catch { /* Best-effort telemetry must not reject an already validated key. */ }
