@@ -138,7 +138,7 @@ export class KnowledgeIndexRepository {
         `${prefix}_${documentId}_v${preparation.version}_${preparation.chunkIndex + offset}`));
     statements.push(this.db.prepare(`UPDATE knowledge_index_jobs SET next_source_offset=?,next_chunk_index=?,state=?,dispatch_attempts=0
       WHERE tenant_id=? AND document_id=? AND version=? AND state='preparing' AND next_source_offset=? AND next_chunk_index=?`)
-      .bind(nextOffset, nextIndex, ready ? 'pending' : 'preparing', this.scope.tenantId, documentId, preparation.version, preparation.sourceOffset, preparation.chunkIndex));
+      .bind(nextOffset, ready ? 0 : nextIndex, ready ? 'pending' : 'preparing', this.scope.tenantId, documentId, preparation.version, preparation.sourceOffset, preparation.chunkIndex));
     statements.push(this.db.prepare(`UPDATE knowledge_index_versions SET state=?,chunk_count=?
       WHERE tenant_id=? AND document_id=? AND version=? AND state='preparing'`)
       .bind(ready ? 'pending' : 'preparing', nextIndex, this.scope.tenantId, documentId, preparation.version));

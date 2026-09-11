@@ -28,6 +28,8 @@ async function ready(repo:KnowledgeIndexRepository,id:string,text:string,kind:'d
   const prep=await repo.preparation(id,started.version); assert.ok(prep);
   const chunks=splitKnowledgeIndexText(text); assert.ok(chunks.length<=KNOWLEDGE_INDEX_MANIFEST_BATCH);
   assert.equal(await repo.publishPreparationBatch(id,prep!,chunks,size(text)),'ready');
+  assert.equal(await repo.next(id,started.version),0,'Manifest preparation must start provider indexing at the first chunk');
+  assert.equal(await repo.completeIfFinished(id,started.version),false,'Preparation is not provider indexing completion');
   return {version:started.version,chunks,filePath:started.filePath};
 }
 test('preserves full-size multibyte and 509-byte mixed-width source bounds',()=>{
