@@ -12,6 +12,7 @@ import { ConversationAuditRepository } from '../repositories/conversation-audit.
 import { TicketMutationReplayRepository } from '../repositories/ticket-mutation-replay.repository';
 import { OperationalMetricsRepository } from '../repositories/operational-metrics.repository';
 import { Context, Next } from 'hono';
+import type { D1Database } from '@cloudflare/workers-types';
 import { TicketMutationReplayService, type MutationPrincipal } from '../services/ticket-mutation-replay.service';
 import { VerifiedTenantScope } from '../types/tenant';
 import { Repositories } from '../repositories/interfaces';
@@ -20,6 +21,8 @@ import { TenantAttachmentStorage, LegacyArticleBodyStorage, TenantVectorStorage 
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 
 export type TenantRequestDeps = {
+  /** Request-observed D1 boundary for fixed, server-composed mutation services. */
+  database: D1Database;
   emitResourceOperation?: ResourceOperationEmitter;
   canonicalMutationSli?: RequestCanonicalMutationSli;
   scope: VerifiedTenantScope;
@@ -72,6 +75,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
   const vectorStorage = new TenantVectorStorage(scope, env.VECTOR_INDEX);
 
   return {
+    database: db,
     emitResourceOperation,
     scope,
     capabilityPolicy: new CapabilityPolicyService(db, scope),
