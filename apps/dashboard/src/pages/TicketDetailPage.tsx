@@ -101,8 +101,9 @@ function TicketDetail({ id }: { id: string }) {
   const reply = draft.body;
   const isInternal = draft.mode === 'internal';
   const [suggestion, setSuggestion] = React.useState<string | null>(null);
-  const [mentionedUserIds, setMentionedUserIds] = React.useState<readonly string[]>([]);
-  const mentionCandidates = (agents ?? []).filter(agent => agent.id !== currentUserId).slice(0, replyCapabilities.data?.internalMentions?.maxRecipients ?? 0);
+  const mentionedUserIds = draft.mentionedUserIds ?? [];
+  // The existing roster is already bounded server-side; selection has its own 16-person cap.
+  const mentionCandidates = (agents ?? []).filter(agent => agent.id !== currentUserId);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -332,6 +333,7 @@ function TicketDetail({ id }: { id: string }) {
       body: changes.body ?? current.body,
       bodyFormat: changes.bodyFormat ?? current.bodyFormat,
       attachments: changes.attachments ?? current.attachments,
+      mentionedUserIds: changes.mentionedUserIds ?? current.mentionedUserIds ?? [],
       baseConversationRevision: current.baseConversationRevision,
     }));
     if (changes.body !== undefined) announceTyping(id, draft.baseConversationRevision, changes.body.trim().length > 0);
@@ -528,14 +530,14 @@ function TicketDetail({ id }: { id: string }) {
         baseConversationRevision: sendingDraft.baseConversationRevision,
       } : undefined;
       const intent = JSON.stringify({ ticketId: id, draft: precondition, mode: sendingDraft.mode, body: sendingDraft.body,
-        bodyFormat: sendingDraft.bodyFormat, mentionedUserIds: sendingDraft.mode === 'internal' && replyCapabilities.data?.internalMentions ? mentionedUserIds : [], attachments: sendingDraft.attachments.map(({ storageKey, filename, size, contentType }) => ({ storageKey, filename, size, contentType })) });
+        bodyFormat: sendingDraft.bodyFormat, mentionedUserIds: sendingDraft.mode === 'internal' && replyCapabilities.data?.internalMentions ? (sendingDraft.mentionedUserIds ?? []) : [], attachments: sendingDraft.attachments.map(({ storageKey, filename, size, contentType }) => ({ storageKey, filename, size, contentType })) });
       if (!idempotency.current || idempotency.current.intent !== intent) idempotency.current = { intent, key: crypto.randomUUID() };
       const article = await dashboardApi.post<{ id?: string }>(`/tickets/${id}/articles`, {
         body: sendingDraft.body,
         body_format: sendingDraft.bodyFormat,
         is_internal: sendingDraft.mode === 'internal',
         attachments: sendingDraft.attachments,
-        ...(sendingDraft.mode === 'internal' && replyCapabilities.data?.internalMentions && mentionedUserIds.length ? { mentioned_user_ids: mentionedUserIds } : {}),
+        ...(sendingDraft.mode === 'internal' && replyCapabilities.data?.internalMentions && (sendingDraft.mentionedUserIds?.length ?? 0) ? { mentioned_user_ids: sendingDraft.mentionedUserIds } : {}),
         ...(precondition ? { draft: precondition } : {}),
       }, { headers: { 'Idempotency-Key': idempotency.current.key } });
       if (!article?.id) throw new Error('The reply was not confirmed.');
@@ -547,7 +549,6 @@ function TicketDetail({ id }: { id: string }) {
         ? isInternal ? 'Internal note added.' : 'Public reply added to the conversation.'
         : `${isInternal ? 'Internal note added.' : 'Public reply added to the conversation.'} Draft cleanup could not be confirmed; the draft is retained.`);
       setSuggestion(null);
-      setMentionedUserIds([]);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['ticket', id] }),
         queryClient.invalidateQueries({ queryKey: ['tickets'] }),
@@ -868,7 +869,7 @@ function TicketDetail({ id }: { id: string }) {
                   <TocynButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={!isInternal}
-                    onClick={() => { if (!submission.current) updateDraft({ mode: 'public' }); }}
+                    onClick={() => { if (!submission.current) updateDraft({ mode: 'public', mentionedUserIds: [] }); }}
                     className={clsx(
                       "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
                       !isInternal ? "bg-brand-600 text-white border-brand-700 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
@@ -952,7 +953,8 @@ function TicketDetail({ id }: { id: string }) {
                     const checked = mentionedUserIds.includes(agent.id);
                     return <label key={agent.id} className="flex min-h-11 items-center gap-2 text-sm text-slate-900">
                       <input type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
-                        onChange={() => setMentionedUserIds(current => checked ? current.filter(id => id !== agent.id) : current.length < 16 ? [...current, agent.id] : current)} />
+                        onChange={() => updateDraft({ mentionedUserIds: checked ? mentionedUserIds.filter(id => id !== agent.id)
+                          : mentionedUserIds.length < (replyCapabilities.data?.internalMentions?.maxRecipients ?? 0) ? [...mentionedUserIds, agent.id] : mentionedUserIds })} />
                       <span>{agent.full_name || agent.email}</span>
                     </label>;
                   })}

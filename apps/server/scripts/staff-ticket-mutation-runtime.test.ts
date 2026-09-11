@@ -10,7 +10,7 @@ import { splitSql } from './split-sql';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
 import { TicketMutationReplayRepository, type MutationCandidate, type StaffReplyPrecondition } from '../src/repositories/ticket-mutation-replay.repository';
-import { staffReplyPreconditionMatches } from '../src/repositories/staff-reply-precondition.repository';
+import { staffReplyPreconditionConstraint, staffReplyPreconditionMatches } from '../src/repositories/staff-reply-precondition.repository';
 import { CapabilityPolicyService } from '../src/repositories/capability-policy.repository';
 import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-admission.repository';
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
@@ -426,12 +426,19 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
     assert.equal((await s.admit(p)).status,'spent');const result=await s.commit(p,attachments);assert.equal(result.attachments.length,10);
     const measured=f.batches.at(-1)!;console.log(JSON.stringify({fixture:'native-d1-canonical-metadata',operation:'staff-reply-ten-attachments',...measured}));
     assert.ok(measured.rowsWritten>100);assert.ok(measured.rowsRead>0);assert.ok(measured.rowsWritten<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
-    const inventory:Record<string,number>={};
+    const inventory:Record<string,number>={}; const conversationEventIndexes = [
+      'idx_conversation_events_article', 'idx_conversation_events_operational_metric_projection',
+      'idx_conversation_events_staff_reply_precondition', 'sqlite_autoindex_conversation_events_1',
+      'sqlite_autoindex_conversation_events_2',
+    ].sort();
     for(const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','support_state_definitions','ticket_support_state','budget_mutation_assertion','local_beta_assertion','local_beta_runs','ticket_mutation_receipts','staff_ticket_mutation_receipts']) {
       const indexes=await f.db.prepare(`PRAGMA index_list(${table})`).all();inventory[table]=indexes.results.length;
-      assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
+      if (table === 'conversation_events') assert.deepEqual(indexes.results.map((index: { name: string }) => index.name).sort(), conversationEventIndexes,
+        'The material-event reread index is deliberate; any further event index needs an envelope review');
+      else assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
+    assert.equal(inventory.conversation_events,5, 'The two unique keys and three deliberate query indexes are accounted for');
     assert.ok(100*5+32*5<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
@@ -441,15 +448,23 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
 test('native stale-reply precondition is tenant-and-actor scoped, ignores metadata, and expires after 48 hours', async () => {
   const f = await fixture(); try {
     const generation = '11111111-1111-4111-8111-111111111111';
+    const mentionedUserId = mentionRecipientIds[0];
     const candidate = {
-      ticketId: 'ticket', articleId: '11111111-1111-4111-8111-111111111112', attachments: [],
-      article: { sender_type: 'agent', body: 'Draft reply', body_format: 'markdown-v1', is_internal: false, intake_source: 'dashboard', received_at: '2030-01-01T00:00:00.000Z', processed_at: '2030-01-01T00:00:00.000Z' },
+      ticketId: 'ticket', articleId: '11111111-1111-4111-8111-111111111112', attachments: [], mentionedUserIds: [mentionedUserId],
+      article: { sender_type: 'agent', body: 'Draft reply', body_format: 'markdown-v1', is_internal: true, intake_source: 'dashboard', received_at: '2030-01-01T00:00:00.000Z', processed_at: '2030-01-01T00:00:00.000Z' },
     } as MutationCandidate;
     const precondition = { ticketId: 'ticket', generation, revision: 1, baseConversationRevision: 0 } as const;
     await f.db.prepare(`INSERT INTO operator_drafts
-      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,updated_at)
-      VALUES ('a','staff','ticket',?,1,'public','Draft reply','markdown-v1','[]',0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`).bind(generation).run();
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'internal','Draft reply','markdown-v1','[]',?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`).bind(generation, JSON.stringify([mentionedUserId])).run();
     assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), true);
+    const condition = staffReplyPreconditionConstraint(f.scope(), candidate, precondition);
+    const plan = await f.db.prepare(`EXPLAIN QUERY PLAN SELECT CASE WHEN ${condition.sql} THEN 1 ELSE 0 END`).bind(...condition.values).all<{ detail: string }>();
+    const details = plan.results.map((row: { detail: string }) => row.detail).join(' ');
+    assert.match(details, /idx_conversation_events_staff_reply_precondition/);
+    assert.doesNotMatch(details, /SCAN conversation_events|TEMP B-TREE/);
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), { ...candidate, mentionedUserIds: [mentionRecipientIds[1]] }, precondition), false,
+      'A different recipient selection cannot satisfy an acknowledged draft precondition');
     await f.db.prepare(`INSERT INTO conversation_events
       (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
       VALUES ('a',?,'ticket',1,'ticket.state_changed','staff','staff','mfa-staff','dashboard','internal','{}')`).bind(crypto.randomUUID()).run();
@@ -540,9 +555,9 @@ test('combined worst-case reply keeps durable mentions, attachments, preconditio
       storageKey: `agent-attachments/staff/combined-${index}`, filename: `combined-${index}.txt`, size: 10 * 1024 * 1024, contentType: 'text/plain',
     }));
     await f.db.prepare(`INSERT INTO operator_drafts
-      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,updated_at)
-      VALUES ('a','staff','ticket',?,1,'internal','Combined worst-case','plain',?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
-      .bind(generation, JSON.stringify(attachments)).run();
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'internal','Combined worst-case','plain',?,?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
+      .bind(generation, JSON.stringify(attachments), JSON.stringify(mentionRecipientIds)).run();
     const { service } = f.betaService();
     const input: StaffMutationInput = { operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: {
       body: 'Combined worst-case', is_internal: true, attachments, mentionedUserIds: mentionRecipientIds,
@@ -571,9 +586,9 @@ test('concurrent worst-case combined attempts produce one receipt winner and bou
       storageKey: `agent-attachments/staff/race-${index}`, filename: `race-${index}.txt`, size: 10 * 1024 * 1024, contentType: 'text/plain',
     }));
     await f.db.prepare(`INSERT INTO operator_drafts
-      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,updated_at)
-      VALUES ('a','staff','ticket',?,1,'internal','Concurrent worst-case','plain',?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
-      .bind(generation, JSON.stringify(attachments)).run();
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'internal','Concurrent worst-case','plain',?,?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
+      .bind(generation, JSON.stringify(attachments), JSON.stringify(mentionRecipientIds)).run();
     const { service } = f.betaService();
     const input: StaffMutationInput = { operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: {
       body: 'Concurrent worst-case', is_internal: true, attachments, mentionedUserIds: mentionRecipientIds,

@@ -11,6 +11,7 @@ export type OperatorDraftValue = Readonly<{
   body: string;
   bodyFormat: ArticleBodyFormat;
   attachments: readonly OperatorDraftAttachment[];
+  mentionedUserIds?: readonly string[];
   baseConversationRevision: number;
 }>;
 type StoredDraft = OperatorDraftValue & OperatorDraftVersion;
@@ -18,18 +19,18 @@ type DraftStatus = 'idle' | 'loading' | 'unsaved' | 'saving' | 'saved' | 'error'
 type DraftState = OperatorDraftValue & { status: DraftStatus; error: string | null; version: OperatorDraftVersion | null };
 type CleanupResult = 'cleared' | 'conflict' | 'error';
 
-const EMPTY_DRAFT: OperatorDraftValue = Object.freeze({ mode: 'public', body: '', bodyFormat: 'markdown-v1', attachments: [], baseConversationRevision: 0 });
+const EMPTY_DRAFT: OperatorDraftValue = Object.freeze({ mode: 'public', body: '', bodyFormat: 'markdown-v1', attachments: [], mentionedUserIds: [], baseConversationRevision: 0 });
 function empty(status: DraftStatus = 'idle'): DraftState {
   return { ...EMPTY_DRAFT, status, error: null, version: null };
 }
 function withinBounds(value: OperatorDraftValue) {
-  return value.attachments.length <= 10 && new TextEncoder().encode(value.body).length <= 16_000;
+  return value.attachments.length <= 10 && (value.mentionedUserIds?.length ?? 0) <= 16 && new Set(value.mentionedUserIds ?? []).size === (value.mentionedUserIds?.length ?? 0) && new TextEncoder().encode(value.body).length <= 16_000;
 }
 function sameVersion(a: OperatorDraftVersion | null, b: OperatorDraftVersion) {
   return a?.generation === b.generation && a.revision === b.revision;
 }
 function toStored(value: StoredDraft): DraftState {
-  return { mode: value.mode, body: value.body, bodyFormat: articleBodyFormat(value.bodyFormat), attachments: [...value.attachments],
+  return { mode: value.mode, body: value.body, bodyFormat: articleBodyFormat(value.bodyFormat), attachments: [...value.attachments], mentionedUserIds: [...(value.mentionedUserIds ?? [])],
     baseConversationRevision: value.baseConversationRevision, status: 'saved', error: null,
     version: { generation: value.generation, revision: value.revision } };
 }
@@ -114,7 +115,7 @@ function createController(identity: string | null, ticketId: string | null) {
       try {
         const saved = await dashboardApi.put<StoredDraft>(path, {
           expectedGeneration: snapshot.version?.generation ?? null, expectedRevision: snapshot.version?.revision ?? 0,
-          mode: snapshot.mode, body: snapshot.body, bodyFormat: snapshot.bodyFormat, attachments: snapshot.attachments,
+          mode: snapshot.mode, body: snapshot.body, bodyFormat: snapshot.bodyFormat, attachments: snapshot.attachments, mentionedUserIds: snapshot.mentionedUserIds ?? [],
         });
         if (!isCurrent(requestEpoch)) return;
         const restored = toStored(saved);
@@ -161,7 +162,7 @@ function createController(identity: string | null, ticketId: string | null) {
     cancelTimer();
     // A local edit cannot unlock a failed restore or an unresolved remote conflict.
     const blocked = state.status === 'conflict' || !known;
-    replace({ ...state, ...next, attachments: next.attachments.map(attachment => ({ ...attachment })),
+    replace({ ...state, ...next, attachments: next.attachments.map(attachment => ({ ...attachment })), mentionedUserIds: [...(next.mentionedUserIds ?? [])],
       status: blocked ? state.status : withinBounds(next) ? 'unsaved' : 'error',
       error: blocked ? state.error : withinBounds(next) ? null : 'Draft exceeds the server size limit.' });
     schedule();

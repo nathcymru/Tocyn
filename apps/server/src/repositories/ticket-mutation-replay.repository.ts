@@ -37,6 +37,8 @@ export type MutationCandidate = {
   attachments: (VerifiedMutationAttachment & { id: string })[];
   /** Prepared #133 projections that must commit with this canonical mutation. */
   activityStatements?: readonly D1PreparedStatement[];
+  /** Normalized internal mention IDs bound to the acknowledged draft precondition. */
+  mentionedUserIds?: readonly string[];
 };
 
 /** Only fixed ticket mutations; all SQL authority comes from the verified scope. */
@@ -93,7 +95,8 @@ export class TicketMutationReplayRepository {
       || (staff.requirements.ticket?.id !== (candidate.ticket ? undefined : candidate.ticketId))
       || (staff.namespace && (staff.authority.operationId !== staff.namespace.keyHash || staff.authority.operationFingerprint !== staff.namespace.payloadHash))
       || (staff.namespace && staff.namespace.operation !== (candidate.ticket ? 'dashboard.ticket.create' : 'dashboard.ticket.reply'))
-      || (candidate.activityStatements && (!candidate.article.is_internal || candidate.activityStatements.length > 16))) {
+      || (candidate.activityStatements && (!candidate.article.is_internal || candidate.activityStatements.length > 16))
+      || (candidate.mentionedUserIds?.length && (!candidate.article.is_internal || candidate.mentionedUserIds.length > 16))) {
       throw new Error('Invalid staff mutation');
     }
     return this.commitCanonical(candidate, undefined, staff, undefined, precondition);

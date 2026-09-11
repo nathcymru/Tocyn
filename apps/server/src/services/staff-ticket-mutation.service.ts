@@ -165,7 +165,8 @@ export class StaffTicketMutationService {
     if (!attempt.authority || this.now() >= attempt.authority.expiresAt || attempt.commitStarted) throw unavailable();
     const input = attempt.input, now = new Date(this.now()).toISOString();
     const candidate: MutationCandidate = { ticketId:'ticketId' in input ? input.ticketId : crypto.randomUUID(),articleId:crypto.randomUUID(),
-      audit:{kind:'staff',id:this.credential.actorId,source:'dashboard'},attachments:[] };
+      audit:{kind:'staff',id:this.credential.actorId,source:'dashboard'},attachments:[],
+      ...('ticketId' in input ? { mentionedUserIds: input.data.mentionedUserIds ?? [] } : {}) };
     if (input.operation === 'dashboard.ticket.create') {
       if (verified.length) throw invalid();
       const customer = await this.receipts.customer(input.data.customer_email);

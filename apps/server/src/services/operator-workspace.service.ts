@@ -4,6 +4,15 @@ import type { OperatorDraft, OperatorWorkspaceState } from '../types/operator-wo
 import type { DraftRebaseInput, DraftSaveInput, WorkspaceStateSaveInput } from '../repositories/operator-workspace.repository';
 import { legacyDraftCutoff } from '../types/operator-draft-retention';
 
+const mentionId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function normalizedMentionIds(input: readonly string[] | undefined, mode: 'public' | 'internal', actorId: string): readonly string[] {
+  const ids = [...new Set(input ?? [])].sort();
+  if (ids.length > 16 || ids.some(id => !mentionId.test(id) || id === actorId) || (ids.length && mode !== 'internal')) {
+    throw new OperatorWorkspaceError(400, 'Invalid draft mention selection');
+  }
+  return ids;
+}
+
 export class OperatorWorkspaceError extends Error {
   constructor(public readonly status: 400 | 403 | 404 | 409, message: string) { super(message); }
 }
@@ -43,10 +52,11 @@ export class OperatorWorkspaceService {
   async saveDraft(input: Omit<DraftSaveInput, 'attachments' | 'expiresAt' | 'notExpiredAt'> & { attachments: unknown }): Promise<OperatorDraft> {
     await this.authorizeTicket(input.ticketId);
     const attachments = await validateAttachmentReferences(this.deps, `agent-attachments/${this.deps.scope.actorId}/`, input.attachments);
+    const mentionedUserIds = normalizedMentionIds(input.mentionedUserIds, input.mode, this.deps.scope.actorId);
     const now = this.now();
     const notExpiredAt = await this.expireLocalDrafts(now);
     const expiresAt = this.options.retention?.expiresAt(now) ?? null;
-    const saved = await this.deps.repositories.operatorWorkspace.saveDraft({ ...input, attachments, expiresAt, notExpiredAt });
+    const saved = await this.deps.repositories.operatorWorkspace.saveDraft({ ...input, attachments, mentionedUserIds, expiresAt, notExpiredAt });
     if (!saved) throw new OperatorWorkspaceError(409, 'Draft changed before it could be saved');
     return saved;
   }
