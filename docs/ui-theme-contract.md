@@ -44,3 +44,9 @@ The package ships a static stylesheet (`@luminatick/ui/styles.css`) and standard
 ## Stored tenant palettes
 
 The dedicated settings resource uses `{ version: "1", light: { ...tokens }, dark: { ...tokens } }`. Both palettes are validated against their own package defaults before any write; omitted palettes use defaults. Unknown fields, null palettes and unsupported versions are rejected. This draft shape supersedes the earlier unmerged light-only `tenant` sketch; no accepted storage migration is implied. A malformed stored record falls back to both safe package palettes with a bounded `fallback` signal, without returning corrupt values. Operator mode persistence and guarded application integration remain pending #66 acceptance.
+
+### Operator preference persistence
+
+Authenticated operators store their light/dark/system preference separately from workspace navigation at `/api/workspace/theme-preference`. Migration `0031_operator_theme_preference.sql` qualifies the row by tenant and actor and gives it an independent revision. Saving requires the expected revision; concurrent changes return conflict rather than overwriting another session. Both reads and writes check the live role/session and expiry. Theme changes do not overwrite ticket selection, draft content or list preferences.
+
+The local-beta write path shares atomic mutation accounting and the stopped-write policy. Rejected compare-and-swap attempts do not consume a mutation. The real local D1 fixture in `apps/server/scripts/operator-theme-preference.test.ts` covers two tenants with colliding actor IDs, revocation, expiry, concurrent saves and bounded/stopped writes. This receipt does not establish final application first-paint or assistive-technology acceptance; those remain required by #66.

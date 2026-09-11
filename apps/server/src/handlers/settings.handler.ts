@@ -100,6 +100,7 @@ settings.get("/usage", roleGuard(["admin"]), permissionGuard("usage"), async (c)
 
 /** Branding is readable by authenticated operators; editing requires settings capability. */
 settings.get('/theme', roleGuard(["admin", "agent"]), async c => {
+  c.header('Cache-Control', 'private, no-store');
   const d = c.get('tenantDeps') as TenantRequestDeps;
   return c.json(parseTenantTheme(await d.repositories.config.get(THEME_CONFIG_KEY)));
 });
