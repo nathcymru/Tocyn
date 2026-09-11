@@ -56,6 +56,11 @@ describe('SLA calendar clock', () => {
     expect(result.dueAt).toEqual(at('2026-03-29T02:00:00Z'));
     const rejectGap = calendar('Europe/London', { sunday: [{ startMinute: 60, endMinute: 120 }] }, [], { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'reject' });
     expect(() => deadlineAfterWorkingTime({ calendar: rejectGap, startedAt: at('2026-03-29T00:00:00Z'), targetWorkingMilliseconds: hour })).toThrow(/DST gap/);
+    const nextValid = calendar('Europe/London', { sunday: [{ startMinute: 60, endMinute: 120 }] });
+    const previousValid = calendar('Europe/London', { sunday: [{ startMinute: 60, endMinute: 120 }] }, [], { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'previous-valid' });
+    const range = { startedAt: at('2026-03-29T00:00:00Z'), evaluatedAt: at('2026-03-29T03:00:00Z') };
+    expect(elapsedWorkingTime({ calendar: nextValid, ...range }).elapsedWorkingMilliseconds).toBe(0);
+    expect(elapsedWorkingTime({ calendar: previousValid, ...range }).elapsedWorkingMilliseconds).toBe(60_000);
   });
 
   it('makes a DST fold policy explicit and deterministic', () => {
@@ -63,7 +68,36 @@ describe('SLA calendar clock', () => {
     const later = calendar('Europe/London', { sunday: [{ startMinute: 60, endMinute: 120 }] }, [], { ambiguousLocalTime: 'later', nonexistentLocalTime: 'next-valid' });
     const range = { startedAt: at('2026-10-25T00:00:00Z'), evaluatedAt: at('2026-10-25T03:00:00Z') };
     expect(elapsedWorkingTime({ calendar: both, ...range }).elapsedWorkingMilliseconds).toBe(2 * hour);
+    const earlier = calendar('Europe/London', { sunday: [{ startMinute: 60, endMinute: 120 }] }, [], { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' });
+    expect(elapsedWorkingTime({ calendar: earlier, ...range }).elapsedWorkingMilliseconds).toBe(2 * hour);
     expect(elapsedWorkingTime({ calendar: later, ...range }).elapsedWorkingMilliseconds).toBe(hour);
+  });
+
+  it('counts only the two narrow scheduled windows inside a DST fold', () => {
+    const folded = calendar('Europe/London', {
+      sunday: [{ startMinute: 75, endMinute: 90 }],
+    }, [], { ambiguousLocalTime: 'both', nonexistentLocalTime: 'next-valid' });
+    expect(elapsedWorkingTime({ calendar: folded, startedAt: at('2026-10-25T00:00:00Z'), evaluatedAt: at('2026-10-25T03:00:00Z') }).elapsedWorkingMilliseconds)
+      .toBe(30 * 60 * 1000);
+  });
+
+  it('unions both occurrences for another IANA fold zone within the interval limit', () => {
+    const folded = calendar('America/New_York', {
+      sunday: [{ startMinute: 75, endMinute: 90 }],
+    }, [], { ambiguousLocalTime: 'both', nonexistentLocalTime: 'next-valid' });
+    const range = { startedAt: at('2026-11-01T04:00:00Z'), evaluatedAt: at('2026-11-01T08:00:00Z') };
+    expect(elapsedWorkingTime({ calendar: folded, ...range }).elapsedWorkingMilliseconds).toBe(30 * 60 * 1000);
+    expect(() => elapsedWorkingTime({ calendar: folded, ...range, limits: { maxIntervals: 1 } })).toThrow(/evaluation limits/);
+  });
+
+  it('preserves an unscheduled UTC gap when a both-occurrences window crosses into a fold', () => {
+    const folded = calendar('Europe/London', {
+      sunday: [{ startMinute: 30, endMinute: 75 }],
+    }, [], { ambiguousLocalTime: 'both', nonexistentLocalTime: 'next-valid' });
+    const range = { startedAt: at('2026-10-24T23:00:00Z'), evaluatedAt: at('2026-10-25T03:00:00Z') };
+    expect(elapsedWorkingTime({ calendar: folded, ...range }).elapsedWorkingMilliseconds).toBe(hour);
+    expect(deadlineAfterWorkingTime({ calendar: folded, startedAt: range.startedAt, targetWorkingMilliseconds: 50 * 60_000 }).dueAt)
+      .toEqual(at('2026-10-25T01:05:00Z'));
   });
 
   it('normalizes locally adjacent windows that overlap when a fold covers both occurrences', () => {

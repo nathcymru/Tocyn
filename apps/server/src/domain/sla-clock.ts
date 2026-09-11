@@ -287,9 +287,55 @@ function boundaryInstant(local: LocalDateTime, calendar: SlaCalendar, edge: 'sta
   throw new SlaClockError('nonexistent-local-time', 'no valid instant was found within the DST gap bound');
 }
 
+function normalizeEpochIntervals(intervals: readonly EpochInterval[]): readonly EpochInterval[] {
+  const normalized: EpochInterval[] = [];
+  for (const interval of [...intervals].filter(interval => interval.startsAt < interval.endsAt).sort((left, right) => left.startsAt - right.startsAt)) {
+    const previous = normalized[normalized.length - 1];
+    if (previous && interval.startsAt <= previous.endsAt) {
+      normalized[normalized.length - 1] = { startsAt: previous.startsAt, endsAt: Math.max(previous.endsAt, interval.endsAt) };
+    } else normalized.push(interval);
+  }
+  return normalized;
+}
+
+function localMinute(date: LocalDate, minute: number): LocalDateTime {
+  return {
+    ...date,
+    hour: Math.floor(minute / 60),
+    minute: minute % 60,
+  };
+}
+
+function hasFoldedMinute(date: LocalDate, interval: SlaWorkingInterval, timeZone: string): boolean {
+  // Avoid inspecting every scheduled minute on dates whose nearby UTC offsets
+  // are stable. A transition date is still checked at minute precision.
+  const midday = Date.UTC(date.year, date.month - 1, date.day, 12);
+  if (offsetsNear(midday, timeZone).length < 2) return false;
+  for (let minute = interval.startMinute; minute < interval.endMinute; minute += 1) {
+    if (localMinuteToInstants(localMinute(date, minute), timeZone).length > 1) return true;
+  }
+  return false;
+}
+
+function bothFoldIntervals(date: LocalDate, interval: SlaWorkingInterval, timeZone: string): readonly EpochInterval[] {
+  const mapped: EpochInterval[] = [];
+  for (let minute = interval.startMinute; minute < interval.endMinute; minute += 1) {
+    for (const startsAt of localMinuteToInstants(localMinute(date, minute), timeZone)) {
+      // Schedules are minute-precise. Every existing local minute therefore
+      // contributes its own UTC minute, which preserves any gap between the
+      // two occurrences of a folded local window.
+      mapped.push({ startsAt, endsAt: startsAt + MS_PER_MINUTE });
+    }
+  }
+  return normalizeEpochIntervals(mapped);
+}
+
 function dateIntervals(date: LocalDate, calendar: SlaCalendar, exceptions: ReadonlyMap<string, readonly SlaWorkingInterval[]>): readonly EpochInterval[] {
   const intervals = exceptions.get(localDateKey(date)) ?? calendar.weekly[date.weekday] ?? [];
-  const mapped = intervals.map(interval => {
+  const mapped = intervals.flatMap(interval => {
+    if (calendar.dst.ambiguousLocalTime === 'both' && hasFoldedMinute(date, interval, calendar.timeZone)) {
+      return bothFoldIntervals(date, interval, calendar.timeZone);
+    }
     const startHour = Math.floor(interval.startMinute / 60);
     const startMinute = interval.startMinute % 60;
     const endDate = interval.endMinute === 1_440 ? nextLocalDate(date) : date;
@@ -297,16 +343,9 @@ function dateIntervals(date: LocalDate, calendar: SlaCalendar, exceptions: Reado
     const endMinute = interval.endMinute === 1_440 ? 0 : interval.endMinute % 60;
     const startsAt = boundaryInstant({ ...date, hour: startHour, minute: startMinute }, calendar, 'start');
     const endsAt = boundaryInstant({ ...endDate, hour: endHour, minute: endMinute }, calendar, 'end');
-    return Object.freeze({ startsAt, endsAt });
-  }).filter(interval => interval.startsAt < interval.endsAt).sort((left, right) => left.startsAt - right.startsAt);
-  const normalized: EpochInterval[] = [];
-  for (const interval of mapped) {
-    const previous = normalized[normalized.length - 1];
-    if (previous && interval.startsAt <= previous.endsAt) {
-      normalized[normalized.length - 1] = { startsAt: previous.startsAt, endsAt: Math.max(previous.endsAt, interval.endsAt) };
-    } else normalized.push(interval);
-  }
-  return normalized;
+    return [Object.freeze({ startsAt, endsAt })];
+  });
+  return normalizeEpochIntervals(mapped);
 }
 
 function pauseIntervals(value: readonly SlaPauseInterval[] | undefined): readonly EpochInterval[] {
@@ -319,14 +358,7 @@ function pauseIntervals(value: readonly SlaPauseInterval[] | undefined): readonl
     if (startsAt >= endsAt) throw new SlaClockError('invalid-pause', 'pause interval must end after it starts');
     return { startsAt, endsAt };
   }).sort((left, right) => left.startsAt - right.startsAt);
-  const merged: EpochInterval[] = [];
-  for (const interval of sorted) {
-    const previous = merged[merged.length - 1];
-    if (previous && interval.startsAt <= previous.endsAt) {
-      merged[merged.length - 1] = { startsAt: previous.startsAt, endsAt: Math.max(previous.endsAt, interval.endsAt) };
-    } else merged.push({ ...interval });
-  }
-  return merged;
+  return normalizeEpochIntervals(sorted);
 }
 
 function unpausedSlices(interval: EpochInterval, pauses: readonly EpochInterval[]): readonly EpochInterval[] {
