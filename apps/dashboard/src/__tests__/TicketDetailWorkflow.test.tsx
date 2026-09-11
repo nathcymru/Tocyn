@@ -548,3 +548,24 @@ it('associates every retained custom field label with its native control', async
   expect(screen.getByRole('combobox',{name:'Custom select'})).toBeVisible();
   expect(screen.getByRole('checkbox',{name:'Custom checkbox'})).toBeVisible();
 });
+
+
+it('bounds two same-turn image drops to ten admitted uploads', async () => {
+  let uploads = 0;
+  const held = deferred<Response>();
+  transport(path => {
+    if (path === '/api/attachments/upload') { uploads++; return held.promise; }
+    return json(ticket);
+  });
+  showDetail();
+  await screen.findByText('Customer question');
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Reply message' })).not.toHaveAttribute('readonly'));
+  const composer = screen.getByRole('region', { name: 'Rich message composer' });
+  const files = Array.from({ length: 8 }, (_, index) => new File(['synthetic'], `image-${index}.png`, { type: 'image/png' }));
+  act(() => {
+    fireEvent.drop(composer, { dataTransfer: { files } });
+    fireEvent.drop(composer, { dataTransfer: { files } });
+  });
+  await waitFor(() => expect(uploads).toBe(10));
+  expect(screen.getAllByRole('button', { name: /^Remove image-/ })).toHaveLength(10);
+});

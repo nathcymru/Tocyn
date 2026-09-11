@@ -64,7 +64,12 @@ function TicketDetail({ id }: { id: string }) {
   sessionGenerationRef.current = sessionGeneration;
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const [pendingAttachments, setPendingAttachments] = React.useState<readonly PendingAttachment[]>([]);
+  const [pendingAttachments, renderPendingAttachments] = React.useState<readonly PendingAttachment[]>([]);
+  const pendingAttachmentsRef = useRef<readonly PendingAttachment[]>([]);
+  const setPendingAttachments = (update: (current: readonly PendingAttachment[]) => readonly PendingAttachment[]) => {
+    pendingAttachmentsRef.current = update(pendingAttachmentsRef.current);
+    renderPendingAttachments(pendingAttachmentsRef.current);
+  };
   const [sentDraftVersion, setSentDraftVersion] = useState<OperatorDraftVersion | null>(null);
   const pendingAttachmentIds = useRef(0);
   const activeUploads = useRef(new Set<string>());
@@ -261,8 +266,9 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   const addAttachments = (files: readonly File[]) => {
-    if (draft.currentSnapshot()?.status === 'loading') return;
-    const available = 10 - draftRef.current.attachments.length - visiblePendingAttachments.length;
+    const snapshot = draft.currentSnapshot();
+    if (submission.current || !snapshot || snapshot.status === 'loading') return;
+    const available = 10 - snapshot.attachments.length - pendingAttachmentsRef.current.filter(attachment => attachment.sessionGeneration === sessionGeneration).length;
     const selected = files.slice(0, Math.max(0, available));
     if (!selected.length) {
       setNotice('A draft can include at most ten attachments.');
