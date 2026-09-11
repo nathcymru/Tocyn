@@ -17,6 +17,7 @@ import widget from './handlers/widget.handler';
 import customerHandler from './handlers/customer.handler';
 import { environmentGuard } from './middleware/environment-guard';
 import { operationalObservability } from './middleware/operational-observability';
+import { measureResourceOperation } from './observability/resource-operation';
 import { AppVariables } from './types';
 
 export const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
@@ -28,8 +29,8 @@ app.onError((error,c) => {
   return c.text('Internal Server Error',500);
 });
 app.use('*', environmentGuard);
-app.use('*', localBetaGuard);
 app.use('*', operationalObservability);
+app.use('*', localBetaGuard);
 
 app.get('/api/realtime', async (c) => {
   const upgradeHeader = c.req.header('Upgrade');
@@ -39,7 +40,7 @@ app.get('/api/realtime', async (c) => {
     try { c.get('requestAuthSli')?.record('denied'); } catch { /* Evidence cannot affect authentication. */ }
     return c.json({ error: 'Unauthorized' }, 401);
   }
-  const user = await authenticateRealtimeToken(c.env, token, decision => c.get('requestAuthSli')?.record(decision));
+  const user = await authenticateRealtimeToken(c.env, token, decision => c.get('requestAuthSli')?.record(decision), c.get('resourceOperationEmitter'));
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
   const internalUrl = new URL(c.req.raw.url); internalUrl.search = '';
   const newReq = new Request(internalUrl, c.req.raw);
@@ -50,7 +51,11 @@ app.get('/api/realtime', async (c) => {
   newReq.headers.set('X-Session-Role', user.role);
   newReq.headers.set('X-User-Name', user.full_name || user.email);
   const id = c.env.NOTIFICATION_DO.idFromName(`tenant:${user.tenant_id}`);
-  return c.env.NOTIFICATION_DO.get(id).fetch(newReq);
+  return measureResourceOperation({
+    resource: 'durable_object', operation: 'invoke', emit: c.get('resourceOperationEmitter'),
+    execute: () => c.env.NOTIFICATION_DO.get(id).fetch(newReq),
+    isFailureResult: response => response.status >= 500,
+  });
 });
 
 app.use('/api/*', apiCors);

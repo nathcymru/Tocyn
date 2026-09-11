@@ -4,6 +4,7 @@ import { Env } from "../bindings";
 import { ApiAuthResolver } from "../auth/api-key-resolver";
 import { composeApiKeyRequestDeps } from "../auth/api-key-composition";
 import { AppVariables } from "../types";
+import { observeD1 } from '../repositories/observed-d1';
 
 /**
  * Middleware to authenticate requests using an API Key in the X-API-Key header.
@@ -27,7 +28,7 @@ export const apiAuthMiddleware = async (c: Context<{ Bindings: Env; Variables: A
     record('unavailable');
     return c.json({ error: 'Authentication unavailable' }, 503);
   }
-  const resolver = new ApiAuthResolver(c.env.DB);
+  const resolver = new ApiAuthResolver(observeD1(c.env.DB, c.get('resourceOperationEmitter')));
   let resolution;
   try { resolution = await resolver.resolveKey(apiKey); }
   catch (error) { record('unavailable'); throw error; }
@@ -39,7 +40,7 @@ export const apiAuthMiddleware = async (c: Context<{ Bindings: Env; Variables: A
   // permission checks remain later, separate decisions.
   record('accepted');
   let result;
-  try { result = await composeApiKeyRequestDeps(resolution, c.env, c.get('requestCanonicalMutationSli')); }
+  try { result = await composeApiKeyRequestDeps(resolution, c.env, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter')); }
   catch (error) { if (error instanceof BetaAdmissionError) return c.json({code:error.code,error:error.message},error.status); throw error; }
 
   c.set('tenantDeps', result.deps);

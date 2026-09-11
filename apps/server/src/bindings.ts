@@ -20,6 +20,8 @@ export interface Env {
   OBSERVABILITY_MODE?: 'off' | 'isolated-evidence';
   /** Explicit guarded local-only beta profile; malformed values fail closed. */
   LOCAL_BETA_ENABLED?: string;
+  /** Temporary loopback origin for an isolated local runtime rehearsal; never deployed. */
+  LOCAL_RUNTIME_ORIGIN?: string;
   INBOUND_EMAIL_AUTH_VERIFIED?: string;
   PORTAL_URL?: string;
   DASHBOARD_URL?: string;

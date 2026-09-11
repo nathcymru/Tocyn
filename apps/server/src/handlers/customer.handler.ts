@@ -39,10 +39,10 @@ app.get('/config', async (c) => {
   }
   const widgetKey = c.req.header('X-Widget-Key') || c.req.query('key');
   if (!widgetKey?.trim()) return c.json({ error: 'Widget key required' }, 400);
-  const tenantId = (await createCustomerAuthResolvers(c.env).widget.resolveTenantByKey(widgetKey.trim()))?.tenantId;
+  const tenantId = (await createCustomerAuthResolvers(c.env, c.get('resourceOperationEmitter')).widget.resolveTenantByKey(widgetKey.trim()))?.tenantId;
   if (!tenantId) return c.json({ error: 'Widget configuration not found' }, 404);
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
-  const deps = createTenantRequestDeps(scope, c.env);
+  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
   return c.json(await new CustomerAuthService(c.env, deps).getConfig());
 });
 
@@ -64,20 +64,20 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Widget key required' }, 400);
   }
 
-  const resolvers = createCustomerAuthResolvers(c.env);
+  const resolvers = createCustomerAuthResolvers(c.env, c.get('resourceOperationEmitter'));
   const tenantId = (await resolvers.widget.resolveTenantByKey(widgetKey.trim()))?.tenantId;
   if (!tenantId) {
     return c.json({ error: 'Widget configuration not found' }, 404);
   }
 
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
-  const deps = createTenantRequestDeps(scope, c.env);
+  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
 
   if (localBetaEnabled(c.env)) {
     const generic=()=>c.json({success:true,...(parsedAuth.data.type==='otp'?{challengeId:crypto.randomUUID()}: {})});
     const user=await resolvers.identity.resolveCredentialsByEmail(parsedAuth.data.email.toLowerCase());
     if(!user || user.tenantId!==tenantId || user.role!=='customer' || !LOCAL_AUTH_CAPTURE_RECIPIENTS.includes(parsedAuth.data.email.toLowerCase()))return generic();
-    try {await authorizeLocalBeta(c.env,scope,{kind:'customer',id:user.userId});}
+    try {await authorizeLocalBeta(c.env,scope,{kind:'customer',id:user.userId},c.get('resourceOperationEmitter'));}
     catch(error) {if(error instanceof BetaAdmissionError && error.code==='beta_not_invited')return generic();throw error;}
   }
 
@@ -115,14 +115,14 @@ app.post('/auth/verify', rateLimiter(5, 60000), async (c) => {
     return c.json({ error: 'Widget key required' }, 400);
   }
 
-  const resolvers = createCustomerAuthResolvers(c.env);
+  const resolvers = createCustomerAuthResolvers(c.env, c.get('resourceOperationEmitter'));
   const tenantId = (await resolvers.widget.resolveTenantByKey(widgetKey.trim()))?.tenantId;
   if (!tenantId) {
     return c.json({ error: 'Widget configuration not found' }, 404);
   }
 
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
-  const deps = createTenantRequestDeps(scope, c.env);
+  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
 
   const authService = new CustomerAuthService(c.env, deps, undefined, undefined, c.env.localNow);
   if (typeof body.token !== 'string' || !body.token || body.token.length > 512) {

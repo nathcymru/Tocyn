@@ -8,6 +8,7 @@ import { createTenantRequestDeps } from './tenant.middleware';
 import { WidgetTenantResolver } from '../auth/widget-tenant-resolver';
 import { UserAuthResolver } from '../auth/user-auth-resolver';
 import type { RequestCredentialAuthDecision } from '../observability/request-auth-sli';
+import { observeD1 } from '../repositories/observed-d1';
 
 function explicitJoseCredentialFailure(error: unknown): boolean {
   return error instanceof jose.errors.JOSEAlgNotAllowed
@@ -68,7 +69,7 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
       return c.json({ error: "Unauthorized: Database unavailable" }, 401);
     }
 
-    const resolver = new UserAuthResolver(c.env.DB);
+    const resolver = new UserAuthResolver(observeD1(c.env.DB, c.get('resourceOperationEmitter')));
     const userRes = await resolver.resolveUserById(payload.tenant_id as string, payload.sub as string);
     if (userRes && (!Number.isSafeInteger(payload.session_version ?? 0) || (payload.session_version ?? 0) !== userRes.sessionVersion)) {
       record('denied');
@@ -97,8 +98,8 @@ export const widgetAuthMiddleware = async (c: Context, next: Next) => {
     // Current signed claims, tenant-scoped identity, email, role and session
     // are all verified before this credential is accepted.
     record('accepted');
-    await authorizeLocalBeta(c.env, scope);
-    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'));
+    await authorizeLocalBeta(c.env, scope, undefined, c.get('resourceOperationEmitter'));
+    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
     c.set('tenantScope', scope);
     c.set('tenantDeps', deps);
     c.set('jwtPayload', payload);
@@ -129,7 +130,7 @@ export const widgetTenantMiddleware = async (c: Context, next: Next) => {
     return c.json({ error: 'Database unavailable' }, 500);
   }
 
-  const resolver = new WidgetTenantResolver(c.env.DB);
+  const resolver = new WidgetTenantResolver(observeD1(c.env.DB, c.get('resourceOperationEmitter')));
   const resolution = await resolver.resolveTenantByKey(widgetKey.trim());
 
   if (!resolution || !resolution.tenantId) {
@@ -137,7 +138,7 @@ export const widgetTenantMiddleware = async (c: Context, next: Next) => {
   }
 
   const scope = createVerifiedTenantScope(resolution.tenantId, 'widget-anonymous', ['customer'], 1);
-  const deps = createTenantRequestDeps(scope, c.env);
+  const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
   c.set('tenantDeps', deps);
   await next();
 };

@@ -3,6 +3,7 @@ import type { Env } from '../bindings';
 import { observabilityEnabled, operationalEvent, type OperationalEvent } from '../observability/operational-events';
 import { createRequestAuthSli, type RequestAuthSliSnapshot } from '../observability/request-auth-sli';
 import { createRequestCanonicalMutationSli, type RequestCanonicalMutationSliSnapshot } from '../observability/request-canonical-mutation-sli';
+import { createResourceOperationEmitter } from '../observability/resource-operation';
 import type { AppVariables } from '../types';
 
 export type OperationalEventSink = (event: OperationalEvent) => void | Promise<void>;
@@ -28,6 +29,7 @@ export async function operationalObservability(c: Context<{ Bindings: Env; Varia
       c.set('requestAuthSli', requestAuthSli);
       requestCanonicalMutationSli = createRequestCanonicalMutationSli();
       c.set('requestCanonicalMutationSli', requestCanonicalMutationSli);
+      c.set('resourceOperationEmitter', createResourceOperationEmitter(c.env));
     }
   } catch { /* Diagnostic initialization cannot prevent the request. */ }
   let failed = false;

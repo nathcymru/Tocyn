@@ -46,15 +46,15 @@ export const tenantMiddleware = async (c: Context, next: Next) => {
   // Trusted composition boundary
   const payload = c.get('jwtPayload') as { session_version?: number; exp?: number ;} | undefined;
   const credential = payload?.exp ? { sessionVersion: payload.session_version ?? 0, expiresAt: payload.exp } : undefined;
-  const deps = createTenantRequestDeps(scope, c.env, credential, c.get('requestCanonicalMutationSli'));
+  const deps = createTenantRequestDeps(scope, c.env, credential, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
 
   c.set('tenantDeps', deps);
   await next();
 };
 
 
-export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, credential?: BetaCredential, canonicalMutationSli?: RequestCanonicalMutationSli): TenantRequestDeps {
-  const emitResourceOperation = createResourceOperationEmitter(env);
+export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, credential?: BetaCredential, canonicalMutationSli?: RequestCanonicalMutationSli, sharedEmitter?: ResourceOperationEmitter): TenantRequestDeps {
+  const emitResourceOperation = sharedEmitter ?? createResourceOperationEmitter(env);
   const db = observeD1(env.DB, emitResourceOperation);
   const guarded = localBetaEnabled(env);
   const kind = scope.roles.includes('integration') ? 'api-key'
@@ -66,7 +66,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
   const attachmentStorage = betaAdmission
     ? new LocalBetaAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, betaAdmission, emitResourceOperation)
     : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation);
-  const legacyArticleStorage = scope.tenantId === 'default-tenant' ? new LegacyArticleBodyStorage(scope, env.ATTACHMENTS_BUCKET) : undefined;
+  const legacyArticleStorage = scope.tenantId === 'default-tenant' ? new LegacyArticleBodyStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation) : undefined;
   const vectorStorage = new TenantVectorStorage(scope, env.VECTOR_INDEX);
 
   return {
@@ -100,16 +100,17 @@ export function createInboundResolver(env: any): InboundTenantResolver {
 
 import { UserAuthResolver } from '../auth/user-auth-resolver';
 import { WidgetTenantResolver } from '../auth/widget-tenant-resolver';
-export function createCustomerAuthResolvers(env: any) {
+export function createCustomerAuthResolvers(env: any, emit?: ResourceOperationEmitter) {
   if (!env.DB) throw new Error('Authentication database unavailable');
-  return { widget: new WidgetTenantResolver(env.DB), identity: new UserAuthResolver(env.DB) };
+  const db = observeD1(env.DB, emit);
+  return { widget: new WidgetTenantResolver(db), identity: new UserAuthResolver(db) };
 }
 
 /** Local policy is composed at the same trusted D1 boundary as tenant request repositories. */
-export function createLocalBetaRuntimeRepository(env: Env): LocalBetaRuntimeRepository {
-  return new LocalBetaRuntimeRepository(env.DB);
+export function createLocalBetaRuntimeRepository(env: Env, emit?: ResourceOperationEmitter): LocalBetaRuntimeRepository {
+  return new LocalBetaRuntimeRepository(observeD1(env.DB, emit));
 }
 
-export function createLocalBetaAdmission(env: Env, scope: VerifiedTenantScope, principal: BetaPrincipal) {
-  return new LocalBetaAdmissionRepository(env.DB, scope, principal);
+export function createLocalBetaAdmission(env: Env, scope: VerifiedTenantScope, principal: BetaPrincipal, emit?: ResourceOperationEmitter) {
+  return new LocalBetaAdmissionRepository(observeD1(env.DB, emit), scope, principal);
 }

@@ -4,6 +4,7 @@ import { ApiKeyResolution } from '../auth/api-key-resolver';
 import type { CapabilityDecision } from '../auth/capability-policy';
 import type { RequestAuthSli } from '../observability/request-auth-sli';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
+import type { ResourceOperationEmitter } from '../observability/resource-operation';
 export interface AppVariables {
   tenantScope?: VerifiedTenantScope;
   tenantDeps?: TenantRequestDeps;
@@ -17,6 +18,8 @@ export interface AppVariables {
   requestAuthSli?: RequestAuthSli;
   /** Request-owned, isolated-evidence canonical mutation SLI only. */
   requestCanonicalMutationSli?: RequestCanonicalMutationSli;
+  /** One bounded diagnostic emitter shared by the current HTTP request. */
+  resourceOperationEmitter?: ResourceOperationEmitter;
 }
 
 export interface Ticket {
