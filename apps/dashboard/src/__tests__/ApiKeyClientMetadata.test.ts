@@ -24,5 +24,6 @@ it('exposes only the metadata-only uncertain-key error body to the caller', asyn
   const conflict = await dashboardApi.post('/api-keys', { name: 'Different' }, { headers: { 'Idempotency-Key': 'key-1' } })
     .catch(error => error as ApiError);
   expect(conflict).toMatchObject({ status: 409, code: 'idempotency_conflict' });
+  if (!(conflict instanceof ApiError)) throw new Error('Expected an API-key conflict error');
   expect(conflict.body).toBeUndefined();
 });

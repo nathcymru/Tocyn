@@ -1,3 +1,9 @@
+## Dashboard CI correction — 11 September 2026,17:00BST
+
+210CI34619016371 buildjob103328013095 failed TS18046 in ApiKeyClientMetadata.test.ts: conflict response was unknown. Added an actual ApiError instance check before body inspection; production behavior unchanged. Local affectedUI9/9 anddashboardbuildpass, logs/private/tmp/tocyn-210-api-ui-fix-{tests,build}.log. Local dependency overlay reused205packages withoutinstallation/sharedmutation; firstlaunchmissingvite didnotcountasatest. LocalVitest4.1.4; final exactlockfileCIremainsauthority. FreshheadCIrequired; don'tmergeearlierhead.
+
+205isacceptedmain70b75aba7de8876328691d1c7f80664d34494974.210refresh1b29f95hadnoapplicationdiff.213mainbased1746a67hasnative7pass/roottypes; requiredchecksongoing. Latestfullcoordinatorrecordin213 .agents/state/beta2-checkpoint-2026-09-11-1655.md. Noownerapprovalmissing, full140incomplete.
+
 ## Follow-on review gate — 11 September 2026
 
 213knowledgeDELETE2976336 is delivered but NOT accepted. Root lifecycle review requires a delayed-provider completion regression: expire a source/index lease while its provider promise remains unresolved, run deletion, then resolve the write. Lease expiry alone must not prove producer termination. Knowledge worker owns verification/remediation;130read-only queue preparation pauses for this material review. No integration of213until addressed. This is a validation gate, not an owner permission request. Ingress worker also owns strict combined-policy email entrypoint rejection until51/91durable admission exists, preserving future scope/off-policy compatibility and coordinating only the email block against213scheduler edits.
