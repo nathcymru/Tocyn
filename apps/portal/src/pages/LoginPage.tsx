@@ -56,7 +56,7 @@ export function LoginPage() {
       if (type === 'otp') {
         const next = { email, challengeId: result.challengeId };
         setChallenge(next);
-        navigate('/login', { replace: true, state: { authStep: 'verify', challenge: next } });
+        navigate('/login' + location.search, { replace: true, state: { authStep: 'verify', challenge: next } });
       }
     } catch (err: unknown) {
       const error = err as Error;
@@ -66,7 +66,7 @@ export function LoginPage() {
     }
   };
 
-  if (challenge) return <VerifyPage challenge={challenge} onBack={() => { setChallenge(null); setSuccess(false); setTurnstileToken(null); navigate('/login', { replace: true, state: null }); }} />;
+  if (challenge) return <VerifyPage challenge={challenge} onBack={() => { setChallenge(null); setSuccess(false); setTurnstileToken(null); navigate('/login' + location.search, { replace: true, state: null }); }} />;
 
   if (success && type === 'magic_link') {
     return (

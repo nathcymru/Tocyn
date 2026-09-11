@@ -2,7 +2,7 @@ import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { User } from '../types';
-import { portalApi } from '../api/client';
+import { portalApi, getWidgetKey } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { Loader2, CheckCircle } from 'lucide-react';
 
@@ -147,7 +147,7 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
 
           <div className="mt-6 text-center">
             <TocynButton
-              onClick={() => { if (!loading) { if (onBack) onBack(); else navigate('/login'); } }}
+              onClick={() => { if (!loading) { if (onBack) onBack(); else { const key = getWidgetKey(); navigate('/login' + (key ? '?key=' + encodeURIComponent(key) : '')); } } }}
               disabled={loading}
               className="text-sm text-brand-600 hover:text-brand-500 font-medium"
             >
