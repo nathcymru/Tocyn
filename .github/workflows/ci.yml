@@ -102,6 +102,8 @@ jobs:
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.budget-runtime.json
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.email-sender-selection.json
           node --import tsx --test apps/server/scripts/email-sender-selection-runtime.test.ts
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.email-ticket-stream.json
+          node --import tsx --test apps/server/scripts/email-streaming-platform-runtime.test.ts apps/server/scripts/email-ticket-stream-runtime.test.ts
           node --import tsx --test --test-concurrency=1 apps/server/scripts/budget-coordinator-do-runtime.test.ts apps/server/scripts/budget-authority-runtime.test.ts apps/server/scripts/budget-grant-holder-runtime.test.ts apps/server/scripts/budget-admission-runtime.test.ts
       - name: Verify operator theme preference isolation and recovery
         if: matrix.check == 'test'

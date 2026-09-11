@@ -88,6 +88,19 @@ export class TenantOutboundEmailService {
       filename: a.file_name, contentType: a.content_type, size: a.file_size,
     })));
 
+    if (this.transport.sendTicketSources) {
+      await this.transport.sendTicketSources(prepared.options, savedAttachments.map(attachment => ({
+        filename: attachment.file_name, contentType: attachment.content_type, size: attachment.file_size,
+        open: async () => {
+          const object = await this.deps.attachmentStorage.getAttachment(attachment.r2_key);
+          if (!object) throw new OutboundEmailPreparationError();
+          return { size: object.size, contentType: object.httpMetadata?.contentType, body: object.body };
+        },
+      })), prepared.creds);
+      return;
+    }
+    // Explicit compatibility path for existing capture/custom buffer transports.
+    // The active HttpResendTransport ticket path above never enters it.
     // Read one object at a time. The transport still retains/encodes the full
     // accepted payload, so this alone does not establish isolate memory safety.
     const resendAttachments: NonNullable<SendEmailOptions['attachments']> = [];

@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["email-streaming-platform-runtime.test.ts", "email-ticket-stream-runtime.test.ts", "email-ticket-stream-runtime-entry.ts"]
+}
