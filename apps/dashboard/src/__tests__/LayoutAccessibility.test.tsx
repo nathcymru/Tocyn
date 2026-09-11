@@ -14,6 +14,8 @@ vi.mock('../api/client', () => ({ dashboardApi: {
   post: vi.fn(),
   get: vi.fn(async (path: string) => path === '/workspace/theme-preference'
     ? { revision: 0, mode: 'system', updatedAt: null }
+    : path === '/activities?limit=20'
+    ? { page: { items: [], next: null }, unread: { status: 'available', count: 0 } }
     : { version: '1', light: {}, dark: {} }),
   put: vi.fn(),
 } }));
@@ -101,33 +103,26 @@ it('closes mobile navigation after a selected destination and focuses the worksp
   expect(screen.getByRole('heading')).toHaveTextContent('Route /');
 });
 
-it('exposes native notification open and dismiss actions without changing realtime invalidation', async () => {
+it('uses realtime only to refresh an already-open durable activity panel', async () => {
   const result = await renderReady();
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.created', payload: { id: 'synthetic-ticket', subject: 'Synthetic arrival' } } } as ReturnType<typeof useRealtime>);
   act(() => result.rerender(tree()));
-  const open = screen.getByRole('button', { name: 'Open ticket notification: New Ticket' });
-  expect(open.tagName).toBe('BUTTON');
-  expect(screen.getByRole('status')).toHaveTextContent('New Ticket');
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ticket', 'synthetic-ticket'] });
-  fireEvent.click(open);
-  expect(screen.getByRole('heading')).toHaveTextContent('/inbox/all/synthetic-ticket');
-  expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
+  expect(screen.queryByText('New Ticket')).not.toBeInTheDocument();
+  const trigger = screen.getByRole('button', { name: 'Activity' });
+  await userEvent.click(trigger);
+  expect(await screen.findByText('No current activity.')).toBeInTheDocument();
+  expect(dashboardApi.get).toHaveBeenCalledWith('/activities?limit=20');
 });
 
-it('keeps a focused notification available and returns focus when it is dismissed', async () => {
-  vi.useFakeTimers();
-  try {
-    vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.created', payload: { id: 'synthetic-ticket', subject: 'Synthetic arrival' } } } as ReturnType<typeof useRealtime>);
-    render(tree());
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
-    const dismiss = screen.getByRole('button', { name: 'Dismiss ticket notification' });
-    dismiss.focus(); act(() => vi.advanceTimersByTime(8_000));
-    expect(dismiss).toHaveFocus();
-    fireEvent.click(dismiss);
-    expect(screen.queryByRole('button', { name: 'Dismiss ticket notification' })).not.toBeInTheDocument();
-    expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
-  } finally { vi.useRealTimers(); }
+it('keeps connection recovery visible without healthy latency diagnostics', async () => {
+  const result = await renderReady();
+  vi.mocked(useRealtime).mockReturnValue({...realtime,isConnected:false} as ReturnType<typeof useRealtime>);
+  act(()=>result.rerender(tree()));
+  await userEvent.click(screen.getByRole('button', { name: 'Disconnected' }));
+  expect(await screen.findByText('Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.')).toBeInTheDocument();
+  expect(screen.queryByText(/Latency/)).not.toBeInTheDocument();
 });
 
 it('navigates from the account popover without stealing destination focus', async () => {

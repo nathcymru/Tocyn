@@ -7,7 +7,7 @@ import { OperatorActivityRepository, OperatorActivityConflictError } from '../sr
 import { OperatorActivityService } from '../src/services/operator-activity.service';
 import type { TenantRequestDeps } from '../src/middleware/tenant.middleware';
 import type { ActivityPresentationCredential, TrustedActivityAppend } from '../src/types/operator-activity';
-import { withTwoTenantFixture } from './local-tenant-fixture';
+import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fixture';
 
 const cursorSecret = 'synthetic-activity-cursor-secret-for-local-tests';
 const futureExpiry = Math.floor(Date.now() / 1000) + 3600;
@@ -22,6 +22,18 @@ function append(overrides: Partial<TrustedActivityAppend> = {}): TrustedActivity
     sourceId: 'conversation-event-1', producer: { kind: 'staff', id: 'fixture-operator' }, facts: { reason: 'mention' },
     ...overrides,
   };
+}
+
+async function operatorToken(fixture: LocalTenantFixture, principal: 'operatorA' | 'operatorB' = 'operatorA'): Promise<string> {
+  const challenge = await (await fixture.login(principal)).json<{ token?: string; mfa_required?: boolean }>();
+  assert.equal(challenge.mfa_required, true);
+  assert.ok(challenge.token);
+  const verified = await fixture.request('/api/auth/mfa/verify', { method: 'POST', token: challenge.token,
+    body: { code: fixture.currentMfaCode(principal) } });
+  assert.equal(verified.status, 200);
+  const body = await verified.json<{ token?: string }>();
+  assert.ok(body.token);
+  return body.token;
 }
 
 type QueryObservation = { sql: string; values: unknown[]; rowsRead: number };
@@ -135,6 +147,31 @@ test('durable activity is tenant/recipient-scoped, bounded, source-idempotent, a
     const dismissed = await serviceA.dismiss(firstRead!.id, firstRead!.revision, credential());
     assert.equal(dismissed?.revision, 3);
     assert.deepEqual(await serviceA.unreadCount(credential()), { status: 'available', count: 2 }, 'read or dismissed rows do not contribute to unread count');
+  });
+});
+
+test('dashboard recovery reads the durable projection and exposes only recipient CAS transitions', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const scope = createVerifiedTenantScope(fixture.principals.operatorA.tenantId, fixture.principals.operatorA.localId, ['admin'], 0);
+    const repository = new OperatorActivityRepository(scope, fixture.db, cursorSecret);
+    await repository.appendTrusted(append({ id: 'activity-route-a', sourceId: 'activity-route-source-a' }));
+    const token = await operatorToken(fixture);
+    const listed = await fixture.request('/api/activities?limit=20', { token });
+    assert.equal(listed.status, 200);
+    const body = await listed.json<{ page: { items: Array<{ id: string; revision: number }> }; unread: { status: string; count: number | null } }>();
+    const activity = body.page.items.find(item => item.id === 'activity-route-a');
+    assert.ok(activity);
+    assert.deepEqual(body.unread, { status: 'available', count: 1 });
+    const read = await fixture.request(`/api/activities/${activity.id}/read`, { method: 'PATCH', token, body: { expectedRevision: activity.revision } });
+    assert.equal(read.status, 200);
+    assert.equal((await read.json<{ revision: number }>()).revision, activity.revision + 1);
+    assert.equal((await fixture.request(`/api/activities/${activity.id}/dismiss`, { method: 'PATCH', token, body: { expectedRevision: activity.revision } })).status, 404,
+      'a stale revision cannot overwrite the winning transition');
+    assert.equal((await fixture.request('/api/activities?limit=21', { token })).status, 400);
+    assert.equal((await fixture.request('/api/activities?cursor=not-a-cursor', { token })).status, 400);
+    const tenantB = await fixture.request('/api/activities?limit=20', { token: await operatorToken(fixture, 'operatorB') });
+    assert.equal(tenantB.status, 200);
+    assert.equal((await tenantB.json<{ page: { items: unknown[] } }>()).page.items.length, 0, 'same local activity identity cannot cross the tenant boundary');
   });
 });
 
