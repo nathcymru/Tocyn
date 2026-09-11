@@ -261,8 +261,8 @@ test('idle API closure reconciles the entire two-operation grant', async () => {
     const operationRows = (await h.db.prepare(`SELECT operation_id,operation_fingerprint,operation_envelope_json FROM budget_grant_operations
       WHERE tenant_id='runtime-tenant' AND reservation_id=? AND holder_id=? ORDER BY operation_id`).bind(original.reservationId,original.holderId).all<{
         operation_id:string;operation_fingerprint:string;operation_envelope_json:string
-      }>()).results;
-    const recovery = new BudgetGrantRecoveryService(h.db,new BudgetAuthorityRepository(h.db),h.namespace,
+      }>()).results as { operation_id:string;operation_fingerprint:string;operation_envelope_json:string }[];
+    const recovery = new BudgetGrantRecoveryService(h.db,new BudgetAuthorityRepository(h.db),h.namespace as unknown as DurableObjectNamespace,
       createVerifiedTenantScope('runtime-tenant','runtime-key',['integration'],1),'runtime-key');
     const recovered = await recovery.recover({ tenantId: 'runtime-tenant', aggregateId: 'runtime-owner-coordinator', reservationId: original.reservationId,
       holderId: original.holderId, policyId: 'runtime-owner-policy', policyRevision: 1, restrictionRevision: 1,
@@ -277,6 +277,39 @@ test('idle API closure reconciles the entire two-operation grant', async () => {
       terminalEvidenceId: closure!.terminal_evidence_id, measured: {}, uncertain, now: h.initialNow + 30_001 });
     assert.equal(result,'already-reconciled',`direct coordinator outcome: ${result}; trigger=${trigger.status} ${triggerBody}`);
     assert.equal(trigger.status,201,`${triggerBody}; afterTrigger=${JSON.stringify(afterTrigger.map(grant => [grant.reservationId,grant.purpose,grant.status]))}`);
+  } finally { await h.mf.dispose(); }
+});
+
+test('an unknown canonical outcome never seals or reconciles its prepaid grant', async () => {
+  const owner = policy({ workerRequests: 1_000, d1RowsRead: 1_000_000, d1RowsWritten: 100_000,
+    doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 });
+  const h = await warmHarness(owner);
+  try {
+    await h.control({ failCanonicalAttempts: 1 });
+    const failed = await h.create('unknown-canonical'); assert.equal(failed.status,503); await failed.body?.cancel();
+    const original = (await h.grants())[0];
+    await h.control({ now: h.initialNow + 30_001 });
+    const later = await h.create('after-unknown'); assert.equal(later.status,201); await later.body?.cancel();
+    assert.equal((await h.db.prepare('SELECT count(*) AS count FROM budget_grant_closures').first<{count:number}>())?.count,0);
+    assert.equal((await h.grants()).find(grant => grant.reservationId === original.reservationId)?.status,'reserved');
+    assert.equal((await h.control()).calls.reconcile,0);
+  } finally { await h.mf.dispose(); }
+});
+
+test('lost reconciliation replies use two bounded attempts and then block the sealed scope', async () => {
+  const owner = policy({ workerRequests: 1_000, d1RowsRead: 1_000_000, d1RowsWritten: 100_000,
+    doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 });
+  const h = await warmHarness(owner);
+  try {
+    for (const key of ['lost-reconcile-one','lost-reconcile-two']) { const response = await h.create(key); assert.equal(response.status,201); await response.body?.cancel(); }
+    await h.control({ now: h.initialNow + 30_001, loseReconcileAcks: 2 });
+    for (const key of ['lost-reconcile-trigger-one','lost-reconcile-trigger-two','lost-reconcile-trigger-three']) {
+      const response = await h.create(key); assert.equal(response.status,429); await response.body?.cancel();
+    }
+    const control = await h.control();
+    assert.equal(control.calls.reconcile,2);
+    assert.equal((await h.grants()).filter(grant => grant.purpose === 'recovery').length,1);
+    assert.equal((await h.grants()).find(grant => grant.purpose === 'new-work')?.status,'reconciled');
   } finally { await h.mf.dispose(); }
 });
 

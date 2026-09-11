@@ -63,6 +63,7 @@ function instrumentDatabase(db: any): any {
 
 let clock: number | undefined;
 let lostReserveAcksRemaining = 0;
+let lostReconcileAcksRemaining = 0;
 let editPolicyAfterReserve = false;
 let pauseNextReserve = false;
 let releaseReserve: (()=>void)|undefined;
@@ -98,7 +99,12 @@ function instrument(namespace: any, db: any): any {
           }
           return result;
         },
-        reconcileFromTrustedAuthority: async (input: any) => { calls.reconcile++; return target.reconcileFromTrustedAuthority(input); },
+        reconcileFromTrustedAuthority: async (input: any) => {
+          calls.reconcile++;
+          const result = await target.reconcileFromTrustedAuthority(input);
+          if (lostReconcileAcksRemaining > 0) { lostReconcileAcksRemaining--; throw new Error('synthetic lost reconciliation acknowledgement'); }
+          return result;
+        },
       };
     },
   };
@@ -109,7 +115,7 @@ export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     if (new URL(request.url).pathname === '/__budget-control') {
       if (request.method === 'POST') {
-        const control = await request.json() as { discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean };
+        const control = await request.json() as { discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean };
         if (control.pauseNextReserve) pauseNextReserve=true;
         if (control.releaseReserve) releaseReserve?.();
         if (control.editPolicyAfterReserve) editPolicyAfterReserve=true;
@@ -121,6 +127,7 @@ export default {
         if (control.now !== undefined) clock = control.now;
         if (control.loseReserveAck) lostReserveAcksRemaining = 1;
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
+        if (control.loseReconcileAcks && control.loseReconcileAcks <= 5) lostReconcileAcksRemaining = control.loseReconcileAcks;
       }
       return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, reservePaused:!!releaseReserve, cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
