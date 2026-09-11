@@ -25,6 +25,12 @@ export function decodeArticleCursor(raw?: string): ArticleCursor | undefined {
     return value;
   } catch { throw new ConversationReadError(400, 'invalid_pagination', 'Invalid article cursor.'); }
 }
+/** Validate query input before a metered detail read can reserve capacity. */
+export function articlePageQuery(input: { limit?: string; cursor?: string }): { limit?: string; cursor?: string } {
+  boundedInteger(input.limit, 50, 50);
+  decodeArticleCursor(input.cursor);
+  return input;
+}
 export const MAX_CONVERSATION_RESPONSE_BYTES = 1024 * 1024;
 export function assertConversationResponseBounds(value: unknown) {
   const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;

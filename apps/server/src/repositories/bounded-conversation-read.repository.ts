@@ -23,10 +23,10 @@ export class BoundedConversationReadRepository {
     const limit = boundedInteger(options.limit, 50, 50);
     const cursor = decodeArticleCursor(options.cursor);
     const publicOnly = options.publicOnly || options.customerEmail !== undefined;
-    const owner = options.customerEmail !== undefined ? ' AND t.customer_email=?' : '';
+    const owner = options.customerEmail !== undefined ? ` AND EXISTS (SELECT 1 FROM tickets t
+      WHERE t.tenant_id=a.tenant_id AND t.id=a.ticket_id AND t.customer_email=?)` : '';
     const visibility = publicOnly ? ' AND a.is_internal=0' : '';
-    const scopeWhere = `a.tenant_id=? AND a.ticket_id=? AND EXISTS
-      (SELECT 1 FROM tickets t WHERE t.tenant_id=a.tenant_id AND t.id=a.ticket_id${owner})${visibility}`;
+    const scopeWhere = `a.tenant_id=? AND a.ticket_id=?${visibility}${owner}`;
     const baseValues = [this.scope.tenantId, ticketId, ...(options.customerEmail !== undefined ? [options.customerEmail] : [])];
     const cursorWhere = cursor ? ' AND (a.created_at>? OR (a.created_at=? AND a.id>?))' : '';
     const metadata = await this.db.prepare(`SELECT a.id,a.created_at,
@@ -56,26 +56,27 @@ export class BoundedConversationReadRepository {
     }
     const ids = selected.map(article => article.id);
     const placeholders = ids.map(() => '?').join(',');
-    // One aggregate and one result query, independently of page length. Never fetch legacy bodies.
-    const attachmentStats = await this.db.prepare(`SELECT count(*) AS count,
-      COALESCE(sum(length(CAST(x.file_name||x.content_type||x.r2_key AS BLOB))+512),0) AS bytes
-      FROM attachments x JOIN articles a ON a.tenant_id=x.tenant_id AND a.id=x.article_id
-      WHERE ${scopeWhere} AND a.id IN (${placeholders})`)
-      .bind(...baseValues, ...ids).first<{ count: number; bytes: number }>();
-    if (!attachmentStats || attachmentStats.count > 500 || attachmentStats.bytes > RAW_PAGE_BUDGET) {
+    // Fetch the only attachment projection once, with a sentinel. Aggregates
+    // over all attachments would make a maliciously large article bypass the
+    // read bound even if its response was later rejected.
+    const attachments = await this.db.prepare(`SELECT x.* FROM attachments x
+      WHERE x.tenant_id=? AND x.article_id IN (${placeholders}) LIMIT 501`)
+      .bind(this.scope.tenantId, ...ids).all<Attachment>();
+    const attachmentBytes = attachments.results.reduce((total, attachment) => total +
+      new TextEncoder().encode(`${attachment.file_name}${attachment.content_type}${attachment.r2_key}`).byteLength + 512, 0);
+    if (attachments.results.length > 500 || attachmentBytes > RAW_PAGE_BUDGET) {
       throw new ConversationReadError(413, 'conversation_page_too_large',
         'Attachment metadata exceeds the local beta page limit. Request fewer articles or contact the operator.');
     }
     const articles = await this.db.prepare(`SELECT a.* FROM articles a
-      WHERE ${scopeWhere} AND a.id IN (${placeholders}) ORDER BY a.created_at,a.id`)
+      WHERE ${scopeWhere} AND a.id IN (${placeholders})`)
       .bind(...baseValues, ...ids).all<Article>();
-    const attachments = await this.db.prepare(`SELECT x.* FROM attachments x
-      JOIN articles a ON a.tenant_id=x.tenant_id AND a.id=x.article_id
-      WHERE ${scopeWhere} AND a.id IN (${placeholders}) ORDER BY x.article_id,x.created_at,x.id LIMIT 501`)
-      .bind(...baseValues, ...ids).all<Attachment>();
-    if (attachments.results.length > 500) {
-      throw new ConversationReadError(413, 'conversation_page_too_large', 'Attachment metadata exceeds the local beta page limit.');
-    }
+    // SQL ordering over an IN list can require a full temporary sort. These
+    // sets are independently bounded (50 articles, 500 attachments), so keep
+    // the stable public response order in memory instead.
+    attachments.results.sort((left, right) => left.article_id.localeCompare(right.article_id)
+      || left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id));
+    const articleById = new Map(articles.results.map(article => [article.id, article]));
     const byArticle = new Map<string, Attachment[]>();
     for (const attachment of attachments.results) {
       byArticle.set(attachment.article_id, [...(byArticle.get(attachment.article_id) ?? []), attachment]);
@@ -83,7 +84,7 @@ export class BoundedConversationReadRepository {
     const hasMore = metadata.results.length > selected.length;
     const last = selected.at(-1)!;
     return {
-      articles: articles.results.map(article => ({
+      articles: selected.map(metadata => articleById.get(metadata.id)).filter((article): article is Article => !!article).map(article => ({
         ...article,
         is_internal: Boolean(article.is_internal),
         attachments: byArticle.get(article.id) ?? [],

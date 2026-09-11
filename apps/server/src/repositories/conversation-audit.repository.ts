@@ -117,20 +117,22 @@ export class ConversationAuditRepository {
     return { rows, nextCursor: more ? rows[rows.length-1].id : null };
   }
 
-  async references(ticketId: string, articleIds?: readonly string[]) {
-    if (articleIds && articleIds.length > 50) throw new Error('Bounded reference page required');
-    // Intake belongs to the conversation, even when its initial message is on another page.
-    const visibleIntake = `(kind='ticket.intake' AND (article_id IS NULL OR EXISTS (
-      SELECT 1 FROM articles a WHERE a.tenant_id=conversation_events.tenant_id
-      AND a.ticket_id=conversation_events.ticket_id AND a.id=conversation_events.article_id AND a.is_internal=0)))`;
-    const selectedArticles = articleIds?.length ? ` OR article_id IN (${articleIds.map(() => '?').join(',')})` : '';
-    const boundedReferences = articleIds ? `AND (${visibleIntake}${selectedArticles})` : '';
-    const result = await this.db.prepare(`SELECT id,article_id,kind FROM conversation_events
-      WHERE tenant_id=? AND ticket_id=? AND kind IN ('ticket.intake','message.reply') AND visibility='public'
-      ${boundedReferences} ORDER BY sequence ${articleIds ? 'LIMIT 51' : ''}`)
-      .bind(this.scope.tenantId, ticketId, ...(articleIds ?? []))
-      .all<Pick<ConversationEvent, 'id' | 'article_id' | 'kind'>>();
-    return result.results;
+  async references(ticketId: string, articleIds: readonly string[]) {
+    if (articleIds.length > 50) throw new Error('Bounded reference page required');
+    const placeholders = articleIds.map(() => '?').join(',');
+    // The intake is a ticket-level fact: retain it on every article page. The
+    // keyed event index finds it without scanning public replies, while the
+    // projection point lookup proves its article is still currently public.
+    const intake = this.db.prepare(`SELECT e.id,e.article_id,e.kind FROM conversation_events e
+      WHERE e.tenant_id=? AND e.ticket_id=? AND e.kind='ticket.intake' AND e.visibility='public'
+        AND EXISTS (SELECT 1 FROM conversation_public_history p WHERE p.tenant_id=e.tenant_id AND p.event_id=e.id)
+      ORDER BY e.sequence LIMIT 2`).bind(this.scope.tenantId, ticketId);
+    const replies = articleIds.length ? this.db.prepare(`SELECT e.id,e.article_id,e.kind FROM conversation_events e
+      WHERE e.tenant_id=? AND e.ticket_id=? AND e.kind='message.reply' AND e.article_id IN (${placeholders})
+        AND EXISTS (SELECT 1 FROM conversation_public_history p WHERE p.tenant_id=e.tenant_id AND p.event_id=e.id)
+      LIMIT 51`).bind(this.scope.tenantId, ticketId, ...articleIds) : null;
+    const result = replies ? await this.db.batch([intake, replies]) : await this.db.batch([intake]);
+    return result.flatMap(row => row.results as Pick<ConversationEvent, 'id' | 'article_id' | 'kind'>[]);
   }
 
   async updateWithEvents(id: string, data: AuditedTicketUpdate, actor: ConversationActor, retainSystemNote = false): Promise<AuditedTicketUpdateOutcome> {

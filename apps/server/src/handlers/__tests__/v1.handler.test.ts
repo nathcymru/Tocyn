@@ -237,7 +237,8 @@ describe("v1 Handler Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.id).toBe("t-123");
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("SELECT * FROM articles WHERE tenant_id = ? AND ticket_id = ? ORDER BY created_at ASC"));
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("FROM articles a WHERE a.tenant_id=? AND a.ticket_id=?"));
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("ORDER BY a.created_at,a.id LIMIT ?"));
     });
   });
 

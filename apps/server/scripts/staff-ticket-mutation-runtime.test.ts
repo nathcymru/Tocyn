@@ -428,18 +428,19 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
     assert.ok(measured.rowsWritten>100);assert.ok(measured.rowsRead>0);assert.ok(measured.rowsWritten<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     const inventory:Record<string,number>={}; const conversationEventIndexes = [
       'idx_conversation_events_article', 'idx_conversation_events_operational_metric_projection',
-      'idx_conversation_events_staff_reply_precondition', 'sqlite_autoindex_conversation_events_1',
+      'idx_conversation_events_staff_reply_precondition', 'idx_conversation_events_ticket_article_kind',
+      'idx_conversation_events_ticket_kind_visibility_sequence', 'sqlite_autoindex_conversation_events_1',
       'sqlite_autoindex_conversation_events_2',
     ].sort();
     for(const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','support_state_definitions','ticket_support_state','budget_mutation_assertion','local_beta_assertion','local_beta_runs','ticket_mutation_receipts','staff_ticket_mutation_receipts']) {
       const indexes=await f.db.prepare(`PRAGMA index_list(${table})`).all();inventory[table]=indexes.results.length;
       if (table === 'conversation_events') assert.deepEqual(indexes.results.map((index: { name: string }) => index.name).sort(), conversationEventIndexes,
-        'The material-event reread index is deliberate; any further event index needs an envelope review');
+        'The accepted staff and bounded-detail event indexes are accounted for');
       else assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
-    assert.equal(inventory.conversation_events,5, 'The two unique keys and three deliberate query indexes are accounted for');
-    assert.ok(100*5+50*9+4<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+    assert.equal(inventory.conversation_events,7, 'Two unique keys and five deliberate query indexes are accounted for');
+    assert.ok(100*5+50*9+(2*3*2)<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
 });
