@@ -7,6 +7,7 @@ import {
   type TrustedTenantAllocation,
 } from '../budgets/owner-aggregate';
 import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
+import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 
 type OwnerAuthorityRow = Readonly<{
   deployment_id: string;
@@ -196,6 +197,18 @@ export class BudgetAuthorityRepository {
     } catch {
       return null;
     }
+  }
+
+  /** Exact, bounded retirement proof for an already admitted tenant operation. */
+  async hasDurableGrantOperation(link: NonNullable<BudgetCommitAuthority['grant']>): Promise<boolean> {
+    try {
+      const row = await this.db.prepare(`SELECT 1 AS present FROM budget_grant_operations
+        WHERE tenant_id=? AND reservation_id=? AND holder_id=? AND operation_id=? AND aggregate_id=?
+          AND operation_fingerprint=? AND operation_envelope_json=? LIMIT 1`)
+        .bind(link.tenantId,link.reservationId,link.holderId,link.operationId,link.aggregateId,
+          link.operationFingerprint,JSON.stringify(link.operationEnvelope)).first<{present:number}>();
+      return row?.present === 1;
+    } catch { return false; }
   }
 
   /**
