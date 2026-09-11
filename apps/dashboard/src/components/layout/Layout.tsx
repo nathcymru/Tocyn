@@ -25,7 +25,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
-import { OperatorThemeControl, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
+import { OperatorPreferencesControl, OperatorThemeControl, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
 
 function cn(...inputs: any[]) {
   return clsx(inputs);
@@ -98,6 +98,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
             Sign out of all sessions
           </TocynButton>
           <OperatorThemeControl />
+          <OperatorPreferencesControl />
         </Popover.Content>
       </Popover.Positioner>
     </div>
