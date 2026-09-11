@@ -215,6 +215,19 @@ describe("Customer Handler Integration Tests", () => {
       expect(await res.json()).toMatchObject({ code: 'budget_admission_unavailable' });
       expect(settle).toHaveBeenCalledWith('unknown');
     });
+
+    it('does not expose an unexpected credential-storage failure', async () => {
+      const settle = vi.fn();
+      mockAdmitCustomerAuthEffect.mockResolvedValueOnce({ status: 'admitted', admission: { fence: {}, settle } });
+      mockRequestAuth.mockRejectedValueOnce(new Error('UNIQUE constraint failed: users.email'));
+      const res = await customer.request('/auth/request', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-widget-key': 'test-key' },
+        body: JSON.stringify({ widgetKey: 'test-key', email: 'test@example.com', type: 'magic_link' }),
+      }, { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any });
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ error: 'Authentication request could not be completed' });
+      expect(settle).toHaveBeenCalledWith('unknown');
+    });
   });
 
   describe("POST /auth/verify", () => {
