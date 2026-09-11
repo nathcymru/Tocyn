@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { ARTICLE_BODY_FORMATS, DEFAULT_ARTICLE_BODY_FORMAT } from '@luminatick/shared';
 import type { Env } from '../bindings';
 import type { AppVariables } from '../types';
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
@@ -18,7 +19,7 @@ const ticketId = z.string().min(1).max(128);
 const attachment = z.object({ storageKey: z.string().min(1).max(1024), filename: z.string().min(1).max(255) }).passthrough();
 const draftInput = z.object({
   expectedGeneration: generation.nullable(), expectedRevision: revision, mode: z.enum(['public', 'internal']),
-  body: boundedText(16000, 16000), attachments: z.array(attachment).max(10),
+  body: boundedText(16000, 16000), bodyFormat: z.enum(ARTICLE_BODY_FORMATS).default(DEFAULT_ARTICLE_BODY_FORMAT), attachments: z.array(attachment).max(10),
 }).strict().superRefine((value, ctx) => {
   if ((value.expectedRevision === 0) !== (value.expectedGeneration === null)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Draft version must be empty only for a new draft' });

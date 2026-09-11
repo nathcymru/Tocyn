@@ -2,6 +2,7 @@ import { Ticket, Article, Attachment, SendEmailOptions } from '../../types';
 import { decryptString } from '../../utils/crypto';
 import { TenantRequestDeps } from '../../middleware/tenant.middleware';
 import { EmailTransport, HttpResendTransport, isLocalAuthCaptureTransport } from './transport';
+import { renderPublicArticleForEmail } from './article-body-renderer';
 
 export class TenantOutboundEmailService {
   constructor(
@@ -63,6 +64,7 @@ export class TenantOutboundEmailService {
     attachments: Attachment[] = [],
     replyToEmailId?: string
   ): Promise<void> {
+    const rendered = renderPublicArticleForEmail(article);
     const prefixResult = await this.deps.repositories.config.get('TICKET_PREFIX');
     const prefix = prefixResult || '#';
 
@@ -107,7 +109,8 @@ export class TenantOutboundEmailService {
       from: fromEmail || undefined,
       to: [ticket.customer_email],
       subject: subject,
-      html: article.body || '',
+      html: rendered.html,
+      text: rendered.text,
       headers: headers,
       attachments: resendAttachments,
     });

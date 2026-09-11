@@ -358,7 +358,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                       : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap break-words text-sm">{article.body}</div>
+                  <div className="whitespace-pre-wrap break-words text-sm">{article.body_format === 'markdown-v1' && typeof article.body_text === 'string' ? article.body_text : article.body}</div>
 
                   {article.attachments && article.attachments.length > 0 && (
                     <div className="mt-3 space-y-2">

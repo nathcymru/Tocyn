@@ -11,10 +11,10 @@ let renders: { ticketId: string | null; body: string; session: number }[] = [];
 function Harness({ ticketId }: { ticketId: string | null }) {
   controller = useOperatorDraft(ticketId, { debounceMs: 100 });
   renders.push({ ticketId, body: controller.body, session: useAuthStore.getState().sessionGeneration });
-  return <output data-testid="draft">{JSON.stringify({ status: controller.status, body: controller.body, mode: controller.mode, attachments: controller.attachments, base: controller.baseConversationRevision, error: controller.error, version: controller.version })}</output>;
+  return <output data-testid="draft">{JSON.stringify({ status: controller.status, body: controller.body, bodyFormat: controller.bodyFormat, mode: controller.mode, attachments: controller.attachments, base: controller.baseConversationRevision, error: controller.error, version: controller.version })}</output>;
 }
 function current() { return JSON.parse(screen.getByTestId('draft').textContent || '{}'); }
-const edited = (body: string): OperatorDraftValue => ({ mode: 'internal', body, attachments: [{ storageKey: 'agent-attachments/operator/a.txt', filename: 'a.txt', size: 1, contentType: 'text/plain' }], baseConversationRevision: 7 });
+const edited = (body: string): OperatorDraftValue => ({ mode: 'internal', body, bodyFormat: 'markdown-v1', attachments: [{ storageKey: 'agent-attachments/operator/a.txt', filename: 'a.txt', size: 1, contentType: 'text/plain' }], baseConversationRevision: 7 });
 
 beforeEach(() => {
   localStorage.clear();
@@ -26,7 +26,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.resto
 
 it('restores the server draft, debounces edits, and only reports Saved after its returned version', async () => {
   const restored = { generation: '11111111-1111-4111-8111-111111111111', revision: 4, mode: 'public', body: 'restored', attachments: [], baseConversationRevision: 3, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' };
-  const saved = { ...restored, revision: 5, mode: 'internal', body: 'latest', attachments: edited('latest').attachments, baseConversationRevision: 3 };
+  const saved = { ...restored, revision: 5, mode: 'internal', body: 'latest', bodyFormat: 'markdown-v1', attachments: edited('latest').attachments, baseConversationRevision: 3 };
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(restored)).mockResolvedValueOnce(json(saved)));
   render(<Harness ticketId="ticket-a" />);
   await waitFor(() => expect(current()).toMatchObject({ status: 'saved', body: 'restored', base: 3 }));
@@ -37,7 +37,7 @@ it('restores the server draft, debounces edits, and only reports Saved after its
   await waitFor(() => expect(current()).toMatchObject({ status: 'saved', body: 'latest', base: 3, version: { generation: restored.generation, revision: 5 } }));
   const savedRequest = vi.mocked(fetch).mock.calls[1]?.[1] as RequestInit;
   expect(JSON.parse(String(savedRequest.body))).toEqual({
-    expectedGeneration: restored.generation, expectedRevision: 4, mode: 'internal', body: 'latest', attachments: edited('latest').attachments,
+    expectedGeneration: restored.generation, expectedRevision: 4, mode: 'internal', body: 'latest', bodyFormat: 'markdown-v1', attachments: edited('latest').attachments,
   });
   expect(localStorage.getItem('lumina-auth')).not.toContain('latest');
 });
@@ -357,4 +357,35 @@ it('clears previously restored content when a save confirms lost ticket authorit
   expect(current()).toMatchObject({ body: '', attachments: [], version: null, status: 'error' });
   await act(async () => { await controller.saveNow(); });
   expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+});
+
+
+it('restores legacy drafts as plain without interpreting content and persists an explicit format change', async () => {
+  const legacy = { generation: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', revision: 2, mode: 'public', body: '**literal**', attachments: [], baseConversationRevision: 0 };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(legacy)).mockResolvedValueOnce(json({ ...legacy, revision: 3, bodyFormat: 'markdown-v1' })));
+  render(<Harness ticketId="ticket-a" />);
+  await waitFor(() => expect(current()).toMatchObject({ status: 'saved', body: '**literal**', bodyFormat: 'plain' }));
+  act(() => controller.update(value => ({ ...value, bodyFormat: 'markdown-v1' })));
+  await act(async () => { await controller.flushBeforeNavigation(); });
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body))).toMatchObject({ expectedRevision: 2, body: '**literal**', bodyFormat: 'markdown-v1' });
+  expect(current()).toMatchObject({ bodyFormat: 'markdown-v1', status: 'saved' });
+});
+
+it('does not accept a restored unknown format as a successful draft restore', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...stored('unchanged'), bodyFormat: 'html' })));
+  render(<Harness ticketId="ticket-a" />);
+  await waitFor(() => expect(current().status).toBe('error'));
+  expect(current().body).toBe('');
+  expect(await controller.flushBeforeNavigation()).toBe(false);
+});
+
+
+it('retains an unsaved format when the save acknowledgement silently changes it', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(json({ ...stored('new Markdown'), bodyFormat: 'plain' })));
+  render(<Harness ticketId="ticket-a" />);
+  await waitFor(() => expect(current().status).toBe('idle'));
+  act(() => controller.update(edited('new Markdown')));
+  await act(async () => { expect(await controller.flushBeforeNavigation()).toBe(false); });
+  expect(current()).toMatchObject({ status: 'error', body: 'new Markdown', bodyFormat: 'markdown-v1' });
 });

@@ -53,6 +53,7 @@ CREATE TABLE articles (
     sender_id TEXT,
     sender_type TEXT NOT NULL,
     body TEXT,
+    body_format TEXT NOT NULL DEFAULT 'plain' CHECK (body_format IN ('plain', 'markdown-v1')),
     body_r2_key TEXT,
     snippet TEXT,
     raw_email_id TEXT,

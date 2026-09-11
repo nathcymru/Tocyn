@@ -19,6 +19,8 @@ export interface Article {
   id: string;
   ticket_id: string;
   body: string;
+  body_format?: 'plain' | 'markdown-v1';
+  body_text?: string;
   sender_type: 'customer' | 'agent' | 'system';
   sender_id?: string;
   is_internal: boolean;

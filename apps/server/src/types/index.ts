@@ -1,4 +1,5 @@
 import { VerifiedTenantScope } from '../types/tenant';
+import type { ArticleBodyFormat } from '@luminatick/shared';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { ApiKeyResolution } from '../auth/api-key-resolver';
 import type { CapabilityDecision } from '../auth/capability-policy';
@@ -49,6 +50,8 @@ export interface Article {
   sender_id?: string;
   sender_type: 'customer' | 'agent' | 'system';
   body?: string;
+  /** Missing is a pre-format row and is read as plain text. */
+  body_format?: ArticleBodyFormat;
   body_r2_key?: string;
   snippet?: string;
   raw_email_id?: string;

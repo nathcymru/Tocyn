@@ -413,7 +413,64 @@ describe("Dashboard Handler Integration Tests", () => {
     });
   });
 
+  describe('GET /tickets/:id/reply-capability', () => {
+    it('returns the current server-owned contract without recipient data', async () => {
+      firstQueue.push({ id: 't-1', group_id: null, customer_email: 'private@example.test' });
+
+      const res = await request('/tickets/t-1/reply-capability', {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toMatchObject({
+        version: 1,
+        ticketId: 't-1',
+        modes: [
+          { visibility: 'public', channel: 'email', delivery: 'email_attempted', recipient: 'ticket_customer', body: { maxCharacters: 16000, acceptedFormats: ['plain', 'markdown-v1'] } },
+          { visibility: 'internal', channel: 'internal', delivery: 'recorded_only', recipient: null, body: { maxCharacters: 16000, acceptedFormats: ['plain', 'markdown-v1'] } },
+        ],
+      });
+      expect(JSON.stringify(body)).not.toContain('private@example.test');
+    });
+
+    it('matches the reply mutation group boundary for agents', async () => {
+      firstQueue.push({ id: 't-1', group_id: 'group-1' }, null);
+
+      const res = await request('/tickets/t-1/reply-capability', {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: 'Forbidden', message: "You do not have access to this ticket's group" });
+    });
+
+    it('uses the tenant-scoped lookup and keeps missing tickets opaque', async () => {
+      firstQueue.push(null);
+
+      const res = await request('/tickets/other-tenant-ticket/reply-capability', {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: 'Ticket not found' });
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining('WHERE tenant_id = ? AND id = ?'));
+      expect(mockDB.bind).toHaveBeenCalledWith('default-tenant', 'other-tenant-ticket');
+    });
+  });
+
   describe("POST /tickets/:id/articles", () => {
+    it('rejects unknown article body formats before any ticket or email side effect', async () => {
+      const res = await request('/tickets/t-1/articles', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${validToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: 'Synthetic', body_format: 'markdown-v2' }),
+      });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'Invalid bounded reply' });
+      expect(mockDB.prepare).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO articles'));
+    });
+
     it("should create an article with attachments", async () => {
       const mockTicket = { id: "t-1", group_id: "g-1", customer_id: "c-1" };
       const mockArticle = { id: "art-1", ticket_id: "t-1", body: "Here is the requested file." };

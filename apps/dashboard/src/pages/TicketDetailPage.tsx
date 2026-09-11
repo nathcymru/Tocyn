@@ -4,6 +4,7 @@ import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
 import { useTicket, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
@@ -15,6 +16,9 @@ import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue
 import { useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
+import { AuthenticatedAttachmentImage } from '../components/AuthenticatedAttachmentImage';
+import { useReplyCapability } from '../hooks/useReplyCapability';
+import { RichComposer, SafeMarkdown } from '../components/RichComposer';
 import { ApiError, dashboardApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -71,13 +75,20 @@ function TicketDetail({ id }: { id: string }) {
   const transitionSupportState = useTransitionSupportState();
   const { presence, updateLocation, lastMessage } = useRealtime();
   const draft = useOperatorDraft(id);
+  const replyCapabilities = useReplyCapability(id);
+  const replyCapability = replyCapabilities.data?.modes.find(mode => mode.visibility === draft.mode);
   const workspace = useOperatorWorkspaceState();
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
   const sessionGenerationRef = useRef(sessionGeneration);
   sessionGenerationRef.current = sessionGeneration;
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const [pendingAttachments, setPendingAttachments] = React.useState<readonly PendingAttachment[]>([]);
+  const [pendingAttachments, renderPendingAttachments] = React.useState<readonly PendingAttachment[]>([]);
+  const pendingAttachmentsRef = useRef<readonly PendingAttachment[]>([]);
+  const setPendingAttachments = (update: (current: readonly PendingAttachment[]) => readonly PendingAttachment[]) => {
+    pendingAttachmentsRef.current = update(pendingAttachmentsRef.current);
+    renderPendingAttachments(pendingAttachmentsRef.current);
+  };
   const [sentDraftVersion, setSentDraftVersion] = useState<OperatorDraftVersion | null>(null);
   const pendingAttachmentIds = useRef(0);
   const activeUploads = useRef(new Set<string>());
@@ -311,6 +322,7 @@ function TicketDetail({ id }: { id: string }) {
     draft.update(current => ({
       mode: changes.mode ?? current.mode,
       body: changes.body ?? current.body,
+      bodyFormat: changes.bodyFormat ?? current.bodyFormat,
       attachments: changes.attachments ?? current.attachments,
       baseConversationRevision: current.baseConversationRevision,
     }));
@@ -329,10 +341,14 @@ function TicketDetail({ id }: { id: string }) {
         size: pending.file.size,
         storageKey: response.key,
       };
-      draft.update(current => ({ ...current, attachments: current.attachments.some(attachment => attachment.storageKey === uploaded.storageKey)
-        ? current.attachments : [...current.attachments, uploaded] }));
-      activeUploads.current.delete(pending.id);
-      setPendingAttachments(currentAttachments => currentAttachments.filter(attachment => attachment.id !== pending.id));
+      // Draft subscriptions can render before ordinary component state. Promote
+      // the pending and saved lists together, without an intermediate duplicate.
+      flushSync(() => {
+        draft.update(current => ({ ...current, attachments: current.attachments.some(attachment => attachment.storageKey === uploaded.storageKey)
+          ? current.attachments : [...current.attachments, uploaded] }));
+        activeUploads.current.delete(pending.id);
+        setPendingAttachments(currentAttachments => currentAttachments.filter(attachment => attachment.id !== pending.id));
+      });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       if (sessionGenerationRef.current !== pending.sessionGeneration || !activeUploads.current.has(pending.id)) return;
@@ -342,11 +358,15 @@ function TicketDetail({ id }: { id: string }) {
   };
 
   const addAttachments = (files: readonly File[]) => {
-    if (draft.currentSnapshot()?.status === 'loading') return;
-    const available = 10 - draftRef.current.attachments.length - visiblePendingAttachments.length;
-    const selected = files.slice(0, Math.max(0, available));
+    const snapshot = draft.currentSnapshot();
+    if (submission.current || !snapshot || snapshot.status === 'loading') return;
+    if (!replyCapability) { setNotice('Reply options are unavailable. Retry loading them before attaching files.'); return; }
+    const allowed = files.filter(file => file.size <= replyCapability.attachments.maxBytesPerFile && (replyCapability.attachments.contentTypes as readonly string[]).includes(file.type));
+    const rejected = files.length - allowed.length;
+    const available = replyCapability.attachments.maxCount - snapshot.attachments.length - pendingAttachmentsRef.current.filter(attachment => attachment.sessionGeneration === sessionGeneration).length;
+    const selected = allowed.slice(0, Math.max(0, available));
     if (!selected.length) {
-      setNotice('A draft can include at most ten attachments.');
+      setNotice(rejected ? 'Files were not attached: their type or size is not allowed for this reply.' : `A draft can include at most ${replyCapability.attachments.maxCount} attachments.`);
       return;
     }
     const pending = selected.map(file => ({
@@ -358,7 +378,7 @@ function TicketDetail({ id }: { id: string }) {
     setPendingAttachments(current => [...current, ...pending]);
     pending.forEach(attachment => activeUploads.current.add(attachment.id));
     for (const attachment of pending) void uploadAttachment(attachment);
-    setNotice(`${selected.length} attachment${selected.length === 1 ? '' : 's'} selected and uploading.`);
+    setNotice(`${selected.length} attachment${selected.length === 1 ? '' : 's'} selected and uploading.${rejected ? ` ${rejected} rejected because their type or size is not allowed.` : ''}`);
   };
 
   const retryAttachment = (attachment: PendingAttachment) => {
@@ -404,6 +424,9 @@ function TicketDetail({ id }: { id: string }) {
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reply.trim() || submission.current || sentDraftVersion) return;
+    if (!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || reply.length > replyCapability.body.maxCharacters) {
+      setReplyError('Reply options do not allow this message. Review its format and length or retry loading reply options.'); return;
+    }
     if (visiblePendingAttachments.some(attachment => attachment.status === 'uploading')) return;
     const failedAttachments = visiblePendingAttachments.filter(attachment => attachment.status === 'error');
     if (failedAttachments.length) {
@@ -425,6 +448,7 @@ function TicketDetail({ id }: { id: string }) {
       }
       const article = await dashboardApi.post<{ id?: string }>(`/tickets/${id}/articles`, {
         body: sendingDraft.body,
+        body_format: sendingDraft.bodyFormat,
         is_internal: sendingDraft.mode === 'internal',
         attachments: sendingDraft.attachments
       });
@@ -628,32 +652,42 @@ function TicketDetail({ id }: { id: string }) {
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                    {article.body}
-                  </div>
+                  {/* Only explicitly versioned new content is interpreted as Markdown. */}
+                  {article.body_format === 'markdown-v1'
+                    ? <SafeMarkdown className="break-words text-sm leading-relaxed">{article.body ?? ''}</SafeMarkdown>
+                    : <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{article.body ?? ''}</div>}
 
                   {/* Attachments */}
                   {article.attachments && article.attachments.length > 0 && (
                     <div className="mt-3 space-y-2">
-                      {article.attachments.map((att: any) => (
-                        <TocynButton
-                          key={att.id}
-                          onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, att.filename || att.file_name); }}
-                          className={clsx(
-                            "flex w-full cursor-pointer hover:opacity-80 items-center gap-2 p-2 rounded-lg text-sm",
-                            article.sender_type === 'agent'
-                              ? "bg-brand-700/50 text-white"
-                              : "bg-gray-50 text-gray-700 border border-gray-100",
-                            article.is_internal && "!bg-amber-100/50 !text-amber-900 border border-amber-200/50"
-                          )}
-                        >
-                          <Paperclip className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate flex-1 text-left">{att.filename || att.file_name || 'Attachment'}</span>
-                          <span className="text-xs opacity-75">
-                            {attachmentSize(att.size ?? att.file_size)}
-                          </span>
-                        </TocynButton>
-                      ))}
+                      {article.attachments.map((att: any) => {
+                        const filename = att.filename || att.file_name || 'Attachment';
+                        return <div key={att.id}>
+                          <TocynButton
+                            onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, filename); }}
+                            className={clsx(
+                              "flex w-full cursor-pointer hover:opacity-80 items-center gap-2 p-2 rounded-lg text-sm",
+                              article.sender_type === 'agent'
+                                ? "bg-brand-700/50 text-white"
+                                : "bg-gray-50 text-gray-700 border border-gray-100",
+                              article.is_internal && "!bg-amber-100/50 !text-amber-900 border border-amber-200/50"
+                            )}
+                          >
+                            <Paperclip className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate flex-1 text-left">{filename}</span>
+                            <span className="text-xs opacity-75">
+                              {attachmentSize(att.size ?? att.file_size)}
+                            </span>
+                          </TocynButton>
+                          <AuthenticatedAttachmentImage
+                            ticketId={id}
+                            attachmentId={att.id}
+                            filename={filename}
+                            contentType={att.contentType ?? att.content_type}
+                            size={att.size ?? att.file_size}
+                          />
+                        </div>;
+                      })}
                     </div>
                   )}
 
@@ -800,20 +834,30 @@ function TicketDetail({ id }: { id: string }) {
                 </div>
               )}
 
-              <div className="relative">
-                <label htmlFor="reply-message" className="sr-only">Reply message</label>
-                <TocynTextarea id="reply-message" readOnly={isSubmitting || draft.status === 'loading'} aria-busy={isSubmitting || draft.status === 'loading'}
-                  className={clsx(
-                    "w-full rounded-xl border p-4 text-sm focus:ring-4 outline-none min-h-[140px] transition-all resize-none shadow-inner",
-                    isInternal
-                      ? "bg-amber-50/50 border-amber-200 focus:ring-amber-500/10"
-                      : "bg-slate-50/50 border-slate-200 focus:ring-brand-500/10"
-                  )}
-                  placeholder={isInternal ? "Type an internal note only visible to agents..." : "Type your reply to the customer..."}
-                  value={reply}
-                  onChange={(e) => { if (!submission.current) updateDraft({ body: e.target.value }); }}
-                />
-              </div>
+              {!replyCapability ? <div role="status" className="mb-2 text-sm text-slate-700">
+                {replyCapabilities.isLoading ? 'Loading reply options…' : 'Reply options are unavailable.'}
+                {replyCapabilities.isError && <button type="button" className="ml-2 underline" onClick={() => void replyCapabilities.refetch()}>Retry reply options</button>}
+              </div> : <p className="mb-2 text-sm text-slate-600">{replyCapability.channel === 'email'
+                ? `Email reply to ${ticket.customer_email}. Delivery is attempted after saving.`
+                : 'Internal note. No email is sent.'} Up to {replyCapability.attachments.maxCount} attachments, {replyCapability.attachments.maxBytesPerFile / 1024 / 1024} MB each.</p>}
+              <label className="mb-2 block text-sm text-slate-700">
+                Message format
+                <select aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
+                  onChange={event => { if (!submission.current && (event.target.value === 'plain' || event.target.value === 'markdown-v1') && replyCapability?.body.acceptedFormats.includes(event.target.value)) updateDraft({ bodyFormat: event.target.value }); }}
+                  className="ml-2 rounded border border-slate-300 bg-white p-2 text-slate-900 focus-visible:outline focus-visible:outline-2">
+                  <option value="plain" disabled={!replyCapability?.body.acceptedFormats.includes('plain')}>Plain text</option><option value="markdown-v1" disabled={!replyCapability?.body.acceptedFormats.includes('markdown-v1')}>Markdown</option>
+                </select>
+              </label>
+              <RichComposer
+                id="reply-message"
+                value={reply}
+                format={draft.bodyFormat ?? 'plain'}
+                readOnly={isSubmitting || draft.status === 'loading'}
+                mode={isInternal ? 'internal' : 'public'}
+                onChange={body => { if (!submission.current) updateDraft({ body }); }}
+                onImageFiles={files => addAttachments(files)}
+                onRejectedImageFiles={count => setNotice(`${count} image${count === 1 ? '' : 's'} was not attached. Use JPEG, PNG, GIF, or WebP images up to 10 MB.`)}
+              />
 
               {(draft.attachments.length > 0 || visiblePendingAttachments.length > 0) && (
                 <div className="flex flex-wrap gap-2 mt-2">
@@ -884,8 +928,8 @@ function TicketDetail({ id }: { id: string }) {
                   <TocynButton
                     type="button"
                     ref={attachButtonRef}
-                    aria-disabled={isSubmitting} aria-label="Attach files"
-                    onClick={() => { if (!submission.current) fileInputRef.current?.click(); }}
+                    aria-disabled={!replyCapability || isSubmitting} aria-label="Attach files"
+                    onClick={() => { if (!submission.current && replyCapability) fileInputRef.current?.click(); }}
                     className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
                     title="Attach files"
                   >
@@ -893,7 +937,7 @@ function TicketDetail({ id }: { id: string }) {
                   </TocynButton>
                   <TocynButton
                     type="submit"
-                    aria-disabled={!reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion)}
+                    aria-disabled={!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion)}
                     className={clsx(
                       "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
                       isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"

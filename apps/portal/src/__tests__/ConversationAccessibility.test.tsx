@@ -245,3 +245,17 @@ describe('portal conversation accessibility and recovery', () => {
     expect(portalApi.download).toHaveBeenCalledTimes(2);
   });
 });
+
+
+it('uses the safe public text projection only for declared Markdown articles', async () => {
+  const data = { ...detail, articles: [
+    { ...article, id: 'legacy', body: '**literal legacy**', body_text: 'must not replace legacy', attachments: [] },
+    { ...article, id: 'markdown', body: '**formatted**', body_format: 'markdown-v1', body_text: 'formatted <script>literal</script>', attachments: [] },
+  ] };
+  vi.mocked(portalApi.get).mockImplementation(async path => (path === '/config' ? {} : data) as never);
+  mountDetail();
+  expect(await screen.findByText('**literal legacy**')).toBeTruthy();
+  expect(await screen.findByText('formatted <script>literal</script>')).toBeTruthy();
+  expect(screen.queryByText('must not replace legacy')).toBeNull();
+  expect(document.querySelector('script')).toBeNull();
+});

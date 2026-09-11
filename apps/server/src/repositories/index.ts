@@ -12,6 +12,7 @@ import { UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepo
 import { D1Database } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
+import { articleBodyFormat } from '@luminatick/shared';
 
 const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
 
@@ -417,10 +418,10 @@ export class SqlTicketRepository implements TicketRepository {
         ticket.intake_received_at, ticket.intake_processed_at,
       ),
       this.db.prepare(`INSERT INTO articles
-        (tenant_id, id, ticket_id, sender_id, sender_type, body, body_r2_key, snippet, raw_email_id, qa_type, is_internal, intake_source, received_at, processed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`).bind(
+        (tenant_id, id, ticket_id, sender_id, sender_type, body, body_format, body_r2_key, snippet, raw_email_id, qa_type, is_internal, intake_source, received_at, processed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`).bind(
         this.scope.tenantId, articleId, ticketId, article.sender_id || null, article.sender_type,
-        article.body || null, article.body_r2_key || null, article.snippet || null,
+        article.body || null, articleBodyFormat(article.body_format), article.body_r2_key || null, article.snippet || null,
         article.raw_email_id || null, article.qa_type || null, article.is_internal ? 1 : 0,
         article.intake_source, article.received_at, article.processed_at,
       ),
@@ -532,9 +533,9 @@ export class SqlArticleRepository implements ArticleRepository {
   async create(data: Omit<Article, 'id' | 'created_at'>): Promise<Article> {
     const id = crypto.randomUUID();
     const result = await this.db.prepare(
-      "INSERT INTO articles (tenant_id, id, ticket_id, sender_id, sender_type, body, body_r2_key, snippet, raw_email_id, qa_type, is_internal, intake_source, received_at, processed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *"
+      "INSERT INTO articles (tenant_id, id, ticket_id, sender_id, sender_type, body, body_format, body_r2_key, snippet, raw_email_id, qa_type, is_internal, intake_source, received_at, processed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *"
     ).bind(
-      this.scope.tenantId, id, data.ticket_id, data.sender_id || null, data.sender_type, data.body || null, data.body_r2_key || null, data.snippet || null, data.raw_email_id || null, data.qa_type || null, data.is_internal ? 1 : 0,
+      this.scope.tenantId, id, data.ticket_id, data.sender_id || null, data.sender_type, data.body || null, articleBodyFormat(data.body_format), data.body_r2_key || null, data.snippet || null, data.raw_email_id || null, data.qa_type || null, data.is_internal ? 1 : 0,
       data.intake_source ?? null, data.received_at ?? null, data.processed_at ?? null,
     ).first<Article>();
     if (!result) throw new Error("Failed to create article");

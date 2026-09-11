@@ -89,6 +89,52 @@ export function requestEmpty(path: string, options: RequestInit = {}): Promise<v
   return sessionRequest(path, options, async () => undefined);
 }
 
+export type BoundedBlob = Readonly<{ blob: Blob; contentType: string }>;
+
+function mediaType(value: string | null): string {
+  return value?.split(';', 1)[0]?.trim().toLowerCase() || '';
+}
+
+/** Read an authenticated binary response without retaining more than the caller's declared limit. */
+export function requestBoundedBlob(path: string, options: RequestInit, maximumBytes: number, allowedContentTypes: readonly string[]): Promise<BoundedBlob> {
+  return sessionRequest(path, options, async response => {
+    const contentType = mediaType(response.headers.get('Content-Type'));
+    if (!allowedContentTypes.includes(contentType)) {
+      await response.body?.cancel();
+      throw new ApiError('Attachment type cannot be previewed.', 415);
+    }
+
+    const contentLength = response.headers.get('Content-Length');
+    if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maximumBytes) {
+      await response.body?.cancel();
+      throw new ApiError('Attachment is too large to preview.', 413);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) return { blob: new Blob([], { type: contentType }), contentType };
+
+    const chunks: ArrayBuffer[] = [];
+    let received = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > maximumBytes) {
+          await reader.cancel();
+          throw new ApiError('Attachment is too large to preview.', 413);
+        }
+        const copy = new Uint8Array(value.byteLength);
+        copy.set(value);
+        chunks.push(copy.buffer);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return { blob: new Blob(chunks, { type: contentType }), contentType };
+  });
+}
+
 export const dashboardApi = {
   get: <T>(path: string, options?: RequestInit) => request<T>(path, {...options,method:'GET'}),
   getWithHeaders: <T>(path: string, options?: RequestInit) => requestWithHeaders<T>(path, {...options,method:'GET'}),
@@ -99,6 +145,8 @@ export const dashboardApi = {
   put: <T>(path: string, body?: unknown, options?: RequestInit) => request<T>(path,{...options,method:'PUT',body:JSON.stringify(body)}),
   delete: <T>(path: string, options?: RequestInit) => request<T>(path,{...options,method:'DELETE'}),
   deleteEmpty: (path: string, options?: RequestInit) => requestEmpty(path,{...options,method:'DELETE'}),
+  boundedBlob: (path: string, maximumBytes: number, allowedContentTypes: readonly string[], options?: RequestInit) =>
+    requestBoundedBlob(path, {...options, method:'GET'}, maximumBytes, allowedContentTypes),
   download: async (path: string, filename: string) => {
     // The body is fenced too: a late old-session attachment must not be downloaded.
     const session = useAuthStore.getState();

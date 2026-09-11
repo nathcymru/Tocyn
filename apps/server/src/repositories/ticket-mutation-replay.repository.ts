@@ -16,6 +16,7 @@ const ticketJson = `json_object('tenant_id',t.tenant_id,'id',t.id,'subject',t.su
   'intake_received_at',t.intake_received_at,'intake_processed_at',t.intake_processed_at)`;
 const articleJson = `json_object('tenant_id',a.tenant_id,'id',a.id,'ticket_id',a.ticket_id,'sender_id',a.sender_id,
   'sender_type',a.sender_type,'body',a.body,'body_r2_key',a.body_r2_key,'snippet',a.snippet,
+  'body_format',a.body_format,
   'raw_email_id',a.raw_email_id,'qa_type',a.qa_type,'chunk_count',a.chunk_count,'is_internal',a.is_internal,
   'created_at',a.created_at,'intake_source',a.intake_source,'received_at',a.received_at,'processed_at',a.processed_at)`;
 const attachmentJson = `json_object('tenant_id',x.tenant_id,'id',x.id,'article_id',x.article_id,'file_name',x.file_name,
@@ -100,10 +101,10 @@ export class TicketMutationReplayRepository {
     if (candidate.article) {
       const a = candidate.article;
       statements.push(this.db.prepare(`INSERT INTO articles
-        (tenant_id,id,ticket_id,sender_id,sender_type,body,body_r2_key,snippet,raw_email_id,qa_type,is_internal,intake_source,received_at,processed_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        (tenant_id,id,ticket_id,sender_id,sender_type,body,body_format,body_r2_key,snippet,raw_email_id,qa_type,is_internal,intake_source,received_at,processed_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
         this.scope.tenantId, candidate.articleId!, candidate.ticketId, a.sender_id ?? null, a.sender_type,
-        a.body || null, a.body_r2_key ?? null, a.snippet ?? null, a.raw_email_id ?? null, a.qa_type ?? null,
+        a.body || null, a.body_format ?? 'plain', a.body_r2_key ?? null, a.snippet ?? null, a.raw_email_id ?? null, a.qa_type ?? null,
         a.is_internal ? 1 : 0, a.intake_source, a.received_at, a.processed_at,
       ));
     }
