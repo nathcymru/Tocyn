@@ -6,6 +6,7 @@ import test from 'node:test';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { splitSql } from './split-sql';
+import { dashboardAttachmentEnvelope } from '../src/budgets/storage-admission.service';
 
 const root = resolve(import.meta.dirname, '..');
 const now = Date.now();
@@ -132,9 +133,21 @@ test('idempotent upload key remains one object after cache loss, filename change
     const raceKeys = await Promise.all(concurrent.map(async response => (await response.json() as { key: string }).key));
     assert.equal(raceKeys[0], raceKeys[1]);
 
+    const beforeLost = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number; r2Puts: number };
     await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ loseR2PutAcknowledgement: true }) });
     const lostAcknowledgement = await upload(f.mf, token, 'lost-ack-upload', 'lost acknowledgement bytes');
     assert.equal(lostAcknowledgement.status, 200, 'one bounded marker read recovers a committed write whose acknowledgement was lost'); await lostAcknowledgement.body?.cancel();
+    const retry = await upload(f.mf, token, 'lost-ack-upload', 'lost acknowledgement bytes');
+    assert.equal(retry.status, 200); await retry.body?.cancel();
+    const afterRetry = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number; r2Puts: number };
+    assert.equal(afterRetry.r2Gets - beforeLost.r2Gets, 3, 'lost provider acknowledgement plus HTTP retry performs three metadata reads');
+    const envelope = dashboardAttachmentEnvelope('dashboard.attachment.upload', 26)!;
+    assert.ok((envelope.r2ClassBOperations ?? 0) >= afterRetry.r2Gets - beforeLost.r2Gets);
+    assert.ok((envelope.r2ClassAOperations ?? 0) >= afterRetry.r2Puts - beforeLost.r2Puts);
+    const exhaustedRetry = await upload(f.mf, token, 'lost-ack-upload', 'lost acknowledgement bytes');
+    assert.equal(exhaustedRetry.status, 503); await exhaustedRetry.body?.cancel();
+    const afterExhaustion = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number; r2Puts: number };
+    assert.equal(afterExhaustion.r2Gets, afterRetry.r2Gets, 'third attempt cannot perform uncharged storage reads');
     const bucket = await f.mf.getR2Bucket('ATTACHMENTS_BUCKET');
     const objects = await bucket.list();
     assert.equal(objects.objects.length, 3, 'stable, concurrent and lost-ack uploads each leave exactly one tenant-scoped object');

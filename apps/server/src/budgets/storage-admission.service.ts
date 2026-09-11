@@ -11,19 +11,21 @@ export type DashboardAttachmentBudgetOperation = 'dashboard.attachment.upload' |
 /**
  * Conservative per-operation envelopes, in addition to the prepaid isolate
  * credential/authority controls. Upload reserves two Class-A attempts and two
- * metadata reads: a lost response can retry one conditional write, while an
+ * metadata reads per attempt: a lost response can retry one conditional write, while an
  * ambiguous R2 result remains charged. `r2StorageBytes` is a workload guard,
  * not a claim about R2's average-peak billing.
+ * Both permitted HTTP attempts are prepaid. An extra 1,536 D1 reads cover
+ * the authority refresh after a cold grant; two cover attachment metadata.
  */
 export function dashboardAttachmentEnvelope(operation: DashboardAttachmentBudgetOperation, bytes = 0): ResourceAmounts | null {
   if (!Number.isSafeInteger(bytes) || bytes < 0) return null;
-  const diagnostics = estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 });
+  const diagnostics = estimateDiagnosticEnvelope({ httpRequests: 2, canonicalMutationRequests: 0 });
   if (operation === 'dashboard.attachment.upload') {
-    return Object.freeze({ workerRequests: 1, d1RowsRead: 2, r2StorageBytes: bytes,
-      r2ClassAOperations: 2, r2ClassBOperations: 2, ...diagnostics });
+    return Object.freeze({ workerRequests: 2, d1RowsRead: 1_538, r2StorageBytes: bytes,
+      r2ClassAOperations: 2, r2ClassBOperations: 4, ...diagnostics });
   }
   if (operation === 'dashboard.attachment.download') {
-    return Object.freeze({ workerRequests: 1, d1RowsRead: 2, r2ClassBOperations: 1, ...diagnostics });
+    return Object.freeze({ workerRequests: 2, d1RowsRead: 1_538, r2ClassBOperations: 2, ...diagnostics });
   }
   return null;
 }

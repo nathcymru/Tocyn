@@ -32,3 +32,9 @@ Merged customer candidate `54db56b` (including accepted main #194 and the widget
 - `node --import tsx --test --test-concurrency=1 scripts/storage-admission-runtime.test.ts` — 3 passed, 0 failed.
 
 No full 93-test rerun was needed: the refresh merged disjoint customer/branding work, produced no conflicts and did not change the storage implementation. No remote action was taken; root owns stacked PR creation after #195 is accepted.
+
+### Coordinator retry-envelope correction — 11 September, 11:03 BST
+
+Review of both permitted HTTP attempts found the initial two-Class-B allowance insufficient: a lost R2 acknowledgement followed by an HTTP retry performs three native metadata reads. Upload now prepays four Class-B reads, two Class-A writes and two request diagnostics; download reserves both allowed attempts. Both include the existing 1,536-read cold authority refresh plus two metadata reads. Stock bytes remain charged once per immutable upload object; ambiguous work is not refunded.
+
+The native regression observes the three reads, compares actual calls with the declared envelope, and proves an exhausted third attempt performs no R2 read. Storage native tests 3/3, server typecheck and scoped lint passed on this correction. Log: `/private/tmp/tocyn-64-storage-retry-envelope.log`. This is a bounded admission increment; full #64 remains open.
