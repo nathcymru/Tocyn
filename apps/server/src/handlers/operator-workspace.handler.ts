@@ -25,6 +25,10 @@ const draftInput = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Draft version must be empty only for a new draft' });
   }
 });
+const draftRebaseInput = z.object({
+  expectedGeneration: generation, expectedRevision: revision.min(1),
+  expectedReviewedConversationRevision: revision,
+}).strict();
 const filters = z.object({
   status: z.enum(['open', 'pending', 'resolved', 'closed']).optional(), priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
   assignedTo: z.string().min(1).max(128).nullable().optional(), groupId: z.string().min(1).max(128).nullable().optional(),
@@ -106,6 +110,13 @@ workspace.put('/drafts/:ticketId', async c => {
     const id = ticketId.safeParse(c.req.param('ticketId')); const parsed = draftInput.safeParse(await readMutationJson(c));
     if (!id.success || !parsed.success) return c.json({ error: 'Invalid draft' }, 400);
     return c.json(await service(c).saveDraft({ ...parsed.data, ticketId: id.data }));
+  } catch (error) { return failure(c, error); }
+});
+workspace.post('/drafts/:ticketId/rebase', async c => {
+  try {
+    const id = ticketId.safeParse(c.req.param('ticketId')); const parsed = draftRebaseInput.safeParse(await readMutationJson(c));
+    if (!id.success || !parsed.success) return c.json({ error: 'Invalid draft rebase' }, 400);
+    return c.json(await service(c).rebaseDraft({ ...parsed.data, ticketId: id.data }));
   } catch (error) { return failure(c, error); }
 });
 workspace.delete('/drafts/:ticketId', async c => {

@@ -1,6 +1,8 @@
 import { apiBudgetMutationStatement, type ApiMutationCommit } from './budget-commit-fence';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
 import { staffMutationStatements, staffMutationSnapshot, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
+import { StaffReplyPreconditionConflictError, staffReplyPreconditionConstraint, staffReplyPreconditionMatches, type StaffReplyPrecondition } from './staff-reply-precondition.repository';
+export { StaffReplyPreconditionConflictError, type StaffReplyPrecondition } from './staff-reply-precondition.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
@@ -83,7 +85,7 @@ export class TicketMutationReplayRepository {
     return this.commitCanonical(candidate, ns, undefined, api);
   }
 
-  async commitStaff(candidate: MutationCandidate, staff: StaffMutationCommit): Promise<string> {
+  async commitStaff(candidate: MutationCandidate, staff: StaffMutationCommit, precondition?: StaffReplyPrecondition): Promise<string> {
     if (candidate.audit?.kind !== 'staff' || candidate.audit.id !== staff.credential.actorId
       || candidate.audit.source !== 'dashboard' || !candidate.articleId || !candidate.article
       || (staff.requirements.ticket?.id !== (candidate.ticket ? undefined : candidate.ticketId))
@@ -91,15 +93,16 @@ export class TicketMutationReplayRepository {
       || (staff.namespace && staff.namespace.operation !== (candidate.ticket ? 'dashboard.ticket.create' : 'dashboard.ticket.reply'))) {
       throw new Error('Invalid staff mutation');
     }
-    return this.commitCanonical(candidate, undefined, staff);
+    return this.commitCanonical(candidate, undefined, staff, undefined, precondition);
   }
 
-  private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit, api?: ApiMutationCommit): Promise<string> {
+  private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit, api?: ApiMutationCommit, precondition?: StaffReplyPrecondition): Promise<string> {
     // This is after caller authorization/admission preparation and before
     // constructing the authoritative D1 batch. No HTTP response establishes this.
     this.canonicalMutationSli?.recordAttempt();
     const operation=candidate.ticket?'create':'conversation';
-    const statements: D1PreparedStatement[] = [...(api ? [apiBudgetMutationStatement(this.db,this.scope,api)] : []), ...(staff ? staffMutationStatements(this.db,this.scope,staff) : []), ...(this.admission?.statements(operation)??[])];
+    const staffPrecondition = staff && precondition ? staffReplyPreconditionConstraint(this.scope, candidate, precondition) : undefined;
+    const statements: D1PreparedStatement[] = [...(api ? [apiBudgetMutationStatement(this.db,this.scope,api)] : []), ...(staff ? staffMutationStatements(this.db,this.scope,staff,staffPrecondition) : []), ...(this.admission?.statements(operation)??[])];
     if (ns) {
       // Exact expired-key reuse and at most 99 other expired rows: bounded 100.
       statements.push(this.db.prepare(`DELETE FROM ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at <= unixepoch()`)
@@ -199,6 +202,13 @@ export class TicketMutationReplayRepository {
     let results;
     try { results = await this.db.batch<{ response_snapshot: string }>(statements); }
     catch(error) {
+      if (staff && precondition) {
+        try {
+          if (!await staffReplyPreconditionMatches(this.db, this.scope, candidate, precondition)) throw new StaffReplyPreconditionConflictError();
+        } catch (classification) {
+          if (classification instanceof StaffReplyPreconditionConflictError) throw classification;
+        }
+      }
       if (!ns && this.admission) { await this.admission.authorize(operation); throw new BetaAdmissionError('beta_admission_unavailable',503); }
       throw error;
     }

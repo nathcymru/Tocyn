@@ -10,6 +10,7 @@ import { splitSql } from './split-sql';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
 import { TicketMutationReplayRepository, type MutationCandidate } from '../src/repositories/ticket-mutation-replay.repository';
+import { staffReplyPreconditionMatches } from '../src/repositories/staff-reply-precondition.repository';
 import { CapabilityPolicyService } from '../src/repositories/capability-policy.repository';
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
@@ -329,4 +330,35 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
     assert.ok(100*5+32*5<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
+});
+
+
+test('native stale-reply precondition is tenant-and-actor scoped, ignores metadata, and expires after 48 hours', async () => {
+  const f = await fixture(); try {
+    const generation = '11111111-1111-4111-8111-111111111111';
+    const candidate = {
+      ticketId: 'ticket', articleId: '11111111-1111-4111-8111-111111111112', attachments: [],
+      article: { sender_type: 'agent', body: 'Draft reply', body_format: 'markdown-v1', is_internal: false, intake_source: 'dashboard', received_at: '2030-01-01T00:00:00.000Z', processed_at: '2030-01-01T00:00:00.000Z' },
+    } as MutationCandidate;
+    const precondition = { ticketId: 'ticket', generation, revision: 1, baseConversationRevision: 0 } as const;
+    await f.db.prepare(`INSERT INTO operator_drafts
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'public','Draft reply','markdown-v1','[]',0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`).bind(generation).run();
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), true);
+    await f.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES ('a',?,'ticket',1,'ticket.state_changed','staff','staff','mfa-staff','dashboard','internal','{}')`).bind(crypto.randomUUID()).run();
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), true,
+      'Metadata does not force a fresh content review');
+    await f.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES ('a',?,'ticket',2,'message.reply','customer','customer','authenticated-customer','portal','public','{}')`).bind(crypto.randomUUID()).run();
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), false,
+      'New material customer content blocks the stale reply before any mutation writes');
+    await f.db.prepare("DELETE FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'").run();
+    await f.db.prepare("UPDATE operator_drafts SET expires_at='2020-01-01T00:00:00.000Z' WHERE tenant_id='a' AND user_id='staff'").run();
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), false);
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope('b'), candidate, precondition), false,
+      'A colliding ticket and generation in another tenant cannot satisfy the precondition');
+  } finally { await f.mf.dispose(); }
 });

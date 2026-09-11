@@ -104,3 +104,44 @@ test('local timer cleanup is bounded to100 rows and the current two tenants, ret
     assert.throws(() => operator.purgeExpiredDrafts(new Date('invalid')));
   } finally { db.close(); }
 });
+
+test('explicit rebase preserves the exact retained draft only when the reviewed full revision is still current', async () => {
+  await withTwoTenantFixture(async fixture => {
+    let now = new Date('2030-02-01T00:00:00.000Z');
+    const scope = createVerifiedTenantScope(fixture.principals.operatorA.tenantId, fixture.principals.operatorA.localId, ['admin'], 1);
+    const repositories = createRepositories(scope, fixture.db);
+    const service = new OperatorWorkspaceService({ scope, repositories,
+      attachmentStorage: new TenantAttachmentStorage(scope, fixture.r2.bucket) } as TenantRequestDeps,
+    { now: () => now, retention: LOCAL_DRAFT_RETENTION });
+    const saved = await service.saveDraft({ ticketId: 'fixture-ticket', expectedGeneration: null, expectedRevision: 0,
+      mode: 'internal', body: 'retain body', bodyFormat: 'markdown-v1', attachments: [] });
+    const insertEvent = async (sequence: number, kind: 'ticket.state_changed' | 'message.reply') => fixture.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES (?,?,?,?,?,'staff',?,'mfa-staff','dashboard','internal','{}')`).bind(scope.tenantId,crypto.randomUUID(),'fixture-ticket',sequence,kind,scope.actorId).run();
+    await insertEvent(1, 'ticket.state_changed');
+    const rebased = await service.rebaseDraft({ ticketId: saved.ticketId, expectedGeneration: saved.generation,
+      expectedRevision: saved.revision, expectedReviewedConversationRevision: 1 });
+    assert.equal(rebased.baseConversationRevision, 1);
+    assert.equal(rebased.revision, saved.revision + 1);
+    assert.deepEqual({ body: rebased.body, mode: rebased.mode, bodyFormat: rebased.bodyFormat, attachments: rebased.attachments },
+      { body: saved.body, mode: saved.mode, bodyFormat: saved.bodyFormat, attachments: saved.attachments });
+
+    await insertEvent(2, 'message.reply');
+    const before = await repositories.operatorWorkspace.getDraft('fixture-ticket', now.toISOString());
+    await assert.rejects(service.rebaseDraft({ ticketId: saved.ticketId, expectedGeneration: rebased.generation,
+      expectedRevision: rebased.revision, expectedReviewedConversationRevision: 1 }), { status: 409 });
+    assert.deepEqual(await repositories.operatorWorkspace.getDraft('fixture-ticket', now.toISOString()), before,
+      'A stale review does not modify a newer retained draft');
+
+    const current = await service.rebaseDraft({ ticketId: saved.ticketId, expectedGeneration: rebased.generation,
+      expectedRevision: rebased.revision, expectedReviewedConversationRevision: 2 });
+    await assert.rejects(service.rebaseDraft({ ticketId: saved.ticketId, expectedGeneration: rebased.generation,
+      expectedRevision: rebased.revision, expectedReviewedConversationRevision: 2 }), { status: 409 });
+    assert.equal((await repositories.operatorWorkspace.getDraft('fixture-ticket', now.toISOString()))?.revision, current.revision,
+      'Generation and revision CAS prevents a stale rebase from replacing the winner');
+
+    now = new Date('2030-02-03T00:00:00.000Z');
+    await assert.rejects(service.rebaseDraft({ ticketId: saved.ticketId, expectedGeneration: current.generation,
+      expectedRevision: current.revision, expectedReviewedConversationRevision: 2 }), { status: 409 });
+  });
+});

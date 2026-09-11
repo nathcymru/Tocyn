@@ -1,7 +1,7 @@
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { validateAttachmentReferences } from './attachment-references';
 import type { OperatorDraft, OperatorWorkspaceState } from '../types/operator-workspace';
-import type { DraftSaveInput, WorkspaceStateSaveInput } from '../repositories/operator-workspace.repository';
+import type { DraftRebaseInput, DraftSaveInput, WorkspaceStateSaveInput } from '../repositories/operator-workspace.repository';
 import { legacyDraftCutoff } from '../types/operator-draft-retention';
 
 export class OperatorWorkspaceError extends Error {
@@ -48,6 +48,17 @@ export class OperatorWorkspaceService {
     const expiresAt = this.options.retention?.expiresAt(now) ?? null;
     const saved = await this.deps.repositories.operatorWorkspace.saveDraft({ ...input, attachments, expiresAt, notExpiredAt });
     if (!saved) throw new OperatorWorkspaceError(409, 'Draft changed before it could be saved');
+    return saved;
+  }
+
+  /** The reviewed revision is supplied from bounded history; it is never silently replaced with a newer value. */
+  async rebaseDraft(input: Omit<DraftRebaseInput, 'expiresAt' | 'notExpiredAt'>): Promise<OperatorDraft> {
+    await this.authorizeTicket(input.ticketId);
+    const now = this.now();
+    const notExpiredAt = await this.expireLocalDrafts(now);
+    const expiresAt = this.options.retention?.expiresAt(now) ?? null;
+    const saved = await this.deps.repositories.operatorWorkspace.rebaseDraft({ ...input, expiresAt, notExpiredAt });
+    if (!saved) throw new OperatorWorkspaceError(409, 'Draft or conversation changed before it could be rebased');
     return saved;
   }
 

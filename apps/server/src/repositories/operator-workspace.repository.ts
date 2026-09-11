@@ -48,6 +48,10 @@ export type WorkspaceStateSaveInput = Readonly<{
   expectedRevision: number; view: OperatorWorkspaceView; sort: OperatorWorkspaceSort;
   filters: OperatorWorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: 'conversation' | 'details';
 }>;
+export type DraftRebaseInput = Readonly<{
+  ticketId: string; expectedGeneration: string; expectedRevision: number; expectedReviewedConversationRevision: number;
+  expiresAt: string | null; notExpiredAt?: string;
+}>;
 type MutationCondition = Readonly<{ sql: string; values: unknown[] }>;
 export type OperatorPresentationCredential = Readonly<{ sessionVersion: number; expiresAt: number; role: 'agent' | 'admin' }>;
 
@@ -169,6 +173,29 @@ export class OperatorWorkspaceRepository {
         this.scope.tenantId, this.scope.actorId, input.ticketId, input.expectedRevision, input.expectedGeneration,
         input.notExpiredAt ?? null, input.notExpiredAt ?? null,
       ],
+    };
+    const row = await this.runWorkspaceMutation<DraftRow>(statement, condition);
+    return row ? draftFromRow(row) : null;
+  }
+
+  /** Rebase only an exact retained draft after the caller reviewed the current full event revision. */
+  async rebaseDraft(input: DraftRebaseInput): Promise<OperatorDraft | null> {
+    const statement = this.db.prepare(`UPDATE operator_drafts SET revision=revision+1,
+      base_conversation_revision=?,expires_at=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      WHERE tenant_id=? AND user_id=? AND ticket_id=? AND generation=? AND revision=?
+        AND (? IS NULL OR ${DRAFT_EXPIRY_SQL}>?)
+        AND ?=COALESCE((SELECT MAX(sequence) FROM conversation_events WHERE tenant_id=? AND ticket_id=?),0)
+      RETURNING ${draftColumns}`).bind(
+      input.expectedReviewedConversationRevision,input.expiresAt,this.scope.tenantId,this.scope.actorId,input.ticketId,
+      input.expectedGeneration,input.expectedRevision,input.notExpiredAt ?? null,input.notExpiredAt ?? null,
+      input.expectedReviewedConversationRevision,this.scope.tenantId,input.ticketId,
+    );
+    const condition: MutationCondition = {
+      sql: `EXISTS (SELECT 1 FROM operator_drafts WHERE tenant_id=? AND user_id=? AND ticket_id=? AND generation=? AND revision=?
+        AND (? IS NULL OR ${DRAFT_EXPIRY_SQL}>?))
+        AND ?=COALESCE((SELECT MAX(sequence) FROM conversation_events WHERE tenant_id=? AND ticket_id=?),0)`,
+      values: [this.scope.tenantId,this.scope.actorId,input.ticketId,input.expectedGeneration,input.expectedRevision,
+        input.notExpiredAt ?? null,input.notExpiredAt ?? null,input.expectedReviewedConversationRevision,this.scope.tenantId,input.ticketId],
     };
     const row = await this.runWorkspaceMutation<DraftRow>(statement, condition);
     return row ? draftFromRow(row) : null;
