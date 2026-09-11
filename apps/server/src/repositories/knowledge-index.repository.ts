@@ -178,8 +178,9 @@ export class KnowledgeIndexRepository {
 
   /** A failed source remains durably terminal. Partial rows are reclaimed later
    * in bounded batches; failure never performs an unbounded DELETE. */
-  async sourceFailed(documentId: string, version: number): Promise<void> {
+  async sourceFailed(documentId: string, version: number, fence?: KnowledgeSourceCommitFence): Promise<void> {
     await this.db.batch([
+      ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence) : []),
       this.db.prepare(`UPDATE knowledge_index_versions SET state='failed'
         WHERE tenant_id=? AND document_id=? AND version=? AND state IN ('source_pending','preparing')`).bind(this.scope.tenantId, documentId, version),
       this.db.prepare(`UPDATE knowledge_index_jobs SET state='failed_cleanup',dispatch_attempts=0

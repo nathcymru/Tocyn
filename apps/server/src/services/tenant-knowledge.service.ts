@@ -130,15 +130,20 @@ export class TenantKnowledgeService {
     const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
     const sourceBytes = typeof source === 'string' ? new TextEncoder().encode(source).byteLength : source.byteLength;
     const staged = await index.begin(documentId,filePath,tier,categoryId,sourceBytes,'document',commit?.fence,initialStatements);
-    await commit?.authorizeCurrent();
-    const bytes = typeof source === 'string' ? new TextEncoder().encode(source) : source;
-    const fingerprint = crypto.createHash('sha256').update(bytes).digest('hex');
-    const put = await this.deps.attachmentStorage.putAttachment(staged.filePath,source,{ httpMetadata:{contentType},
-      customMetadata:{tocynKnowledgeSourceFingerprint:fingerprint},onlyIf:{etagDoesNotMatch:'*'} });
-    if (put?.res === null) throw new Error('Knowledge source capture conflicted');
-    if (!await index.sourceCaptured(documentId,staged.version,commit?.fence,
-      this.deps.repositories.knowledge.updateDocumentRequiredStatements(documentId,{file_path:staged.filePath,chunk_count:0,status:'pending'}))) {
-      throw new Error('Knowledge source capture was superseded');
+    try {
+      await commit?.authorizeCurrent();
+      const bytes = typeof source === 'string' ? new TextEncoder().encode(source) : source;
+      const fingerprint = crypto.createHash('sha256').update(bytes).digest('hex');
+      const put = await this.deps.attachmentStorage.putAttachment(staged.filePath,source,{ httpMetadata:{contentType},
+        customMetadata:{tocynKnowledgeSourceFingerprint:fingerprint},onlyIf:{etagDoesNotMatch:'*'} });
+      if (put?.res === null) throw new Error('Knowledge source capture conflicted');
+      if (!await index.sourceCaptured(documentId,staged.version,commit?.fence,
+        this.deps.repositories.knowledge.updateDocumentRequiredStatements(documentId,{file_path:staged.filePath,chunk_count:0,status:'pending'}))) {
+        throw new Error('Knowledge source capture was superseded');
+      }
+    } catch(error) {
+      try { await commit?.authorizeCurrent(); await index.sourceFailed(documentId,staged.version,commit?.fence); } catch { /* unresolved authority/result remains charged and source_pending */ }
+      throw error;
     }
   }
 
@@ -299,13 +304,18 @@ export class TenantKnowledgeService {
         if (!validKnowledgeSourceText(content)) throw new Error('Knowledge source exceeds 10 MiB');
         const index = new KnowledgeIndexRepository(this.deps.database, this.deps.scope);
         const staged = await index.begin(articleId,current.body_r2_key || `article/${articleId}`,type,null,new TextEncoder().encode(content).byteLength,'article',commit?.fence);
-        await commit?.authorizeCurrent();
-        const fingerprint=crypto.createHash('sha256').update(content).digest('hex');
-        const put=await this.deps.attachmentStorage.putAttachment(staged.filePath,content,{httpMetadata:{contentType:'text/plain'},
-          customMetadata:{tocynKnowledgeSourceFingerprint:fingerprint},onlyIf:{etagDoesNotMatch:'*'}});
-        if(put?.res===null)throw new Error('Knowledge source capture conflicted');
-        if(!await index.sourceCaptured(articleId,staged.version,commit?.fence,
-          this.deps.repositories.articles.updateQAStateRequiredStatements(articleId,type,0)))throw new Error('Knowledge source capture was superseded');
+        try {
+          await commit?.authorizeCurrent();
+          const fingerprint=crypto.createHash('sha256').update(content).digest('hex');
+          const put=await this.deps.attachmentStorage.putAttachment(staged.filePath,content,{httpMetadata:{contentType:'text/plain'},
+            customMetadata:{tocynKnowledgeSourceFingerprint:fingerprint},onlyIf:{etagDoesNotMatch:'*'}});
+          if(put?.res===null)throw new Error('Knowledge source capture conflicted');
+          if(!await index.sourceCaptured(articleId,staged.version,commit?.fence,
+            this.deps.repositories.articles.updateQAStateRequiredStatements(articleId,type,0)))throw new Error('Knowledge source capture was superseded');
+        } catch(error) {
+          try { await commit?.authorizeCurrent(); await index.sourceFailed(articleId,staged.version,commit?.fence); } catch { /* unresolved authority/result remains charged and source_pending */ }
+          throw error;
+        }
       } else {
         const count = current.chunk_count || 0;
         // Revoke visibility before external deletion, retaining its cleanup manifest.
