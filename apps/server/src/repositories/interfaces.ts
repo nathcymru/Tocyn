@@ -14,6 +14,31 @@ import type { TicketQueueRepository } from './ticket-queue.repository';
 import type { TicketQueueKey } from '../types/ticket-queue';
 import type { CustomerAuthBudgetFence } from './customer-auth-budget-fence';
 
+/**
+ * The identity snapshot is captured before admission is spent and rechecked in
+ * the same D1 batch that writes the credential.  It intentionally contains no
+ * storage-byte estimate: #64 still lacks the bounded stock model for token
+ * history.
+ */
+export type CustomerAuthCredentialIssue = Readonly<{
+  email: string;
+  fullName: string;
+  /** Null means the preflight observed no customer for this tenant/email. */
+  expectedUserId: string | null;
+  /** Existing user ID, or the ID reserved for an atomically-created shadow user. */
+  userId: string;
+  tokenId: string;
+  tokenHash: string;
+  type: 'magic_link' | 'otp';
+  expiresAt: string;
+  /** OTP only: null means no current challenge was observed. */
+  expectedCurrentOtpTokenId: string | null;
+  /** The pointed token hash is part of the OTP snapshot, not a byte estimate. */
+  expectedCurrentOtpTokenHash: string | null;
+}>;
+
+export type CustomerAuthOtpChallengeSnapshot = Readonly<{ tokenId: string; tokenHash: string }>;
+
 export interface UserRepository {
   revokeSessions(id: string, fence?: CustomerAuthBudgetFence): Promise<void>;
   beginMfaEnrollment(id: string, encryptedSecret: string, sessionVersion: number): Promise<boolean>;
@@ -24,6 +49,8 @@ export interface UserRepository {
   create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>, fence?: CustomerAuthBudgetFence): Promise<User>;
   update(id: string, data: Partial<User>): Promise<void>;
   delete(id: string): Promise<void>;
+  getCurrentCustomerOtpChallenge(userId: string): Promise<CustomerAuthOtpChallengeSnapshot | null>;
+  issueCustomerAuthCredential(input: CustomerAuthCredentialIssue, fence?: CustomerAuthBudgetFence): Promise<void>;
   storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string, fence?: CustomerAuthBudgetFence): Promise<void>;
   findCustomerAuthTokenUser(tokenHash: string, challengeId?: string): Promise<string | null>;
   verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string, fence?: CustomerAuthBudgetFence): Promise<User | null>;
