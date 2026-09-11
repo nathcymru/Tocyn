@@ -299,24 +299,26 @@ export class TenantAutomationService {
           let materialized = true;
           try {
           if (!('token' in candidate)) await work.setTicketCursor(rule.id, candidate);
-          // Never create a durable freeze for a ticket that this rule does not
-          // currently select. The claim itself blocks updates, so the second
-          // current read below is the required post-claim eligibility fence.
+          // Evaluate the exact source row before asking the repository to
+          // atomically compare that snapshot, the cutoff and the current rule
+          // while it creates both the claim and its progress authority.
           if (!('token' in candidate)) {
             const beforeClaim = await this.deps.repositories.tickets.get(candidate.id);
             if (!beforeClaim || !this.evaluateConditions(rule.conditions, { ticket: beforeClaim })) continue;
+            const claim = await work.claimEligible(beforeClaim,cutoff,rule);
+            if (!claim) continue;
+            const result = await this.processRetentionWork(work,candidate.id,claim.token,rule,config,input.env,now);
+            deleted_attachments += result.deleted_attachments;
+            deleted_tickets += result.deleted_tickets;
+            continue;
           }
-          const claim: { token: string } | null = 'token' in candidate
-            ? { token: candidate.token as string } : await this.deps.repositories.tickets.claimRetention(candidate.id, cutoff);
-          if (!claim) continue;
           const current = await this.deps.repositories.tickets.get(candidate.id);
           if (!current || !this.evaluateConditions(rule.conditions, { ticket: current })) continue;
-          await work.begin(candidate.id, claim.token, rule.id);
-          const result = await this.processRetentionWork(work, candidate.id, claim.token, rule, config, input.env, now);
+          const result = await this.processRetentionWork(work, candidate.id, candidate.token, rule, config, input.env, now);
           deleted_attachments += result.deleted_attachments;
           deleted_tickets += result.deleted_tickets;
           } catch {
-            if (materialization.authority) apiTicketBudgetCache.settleOperation(materialization.authority,'unknown',now());
+            materialized = false;
             continue;
           } finally {
             if (materialization.authority) apiTicketBudgetCache.settleOperation(materialization.authority,materialized ? 'committed' : 'unknown',now());
@@ -342,15 +344,16 @@ export class TenantAutomationService {
     // Off/undefined policy preserves the established local scheduler behavior;
     // every configured active policy needs a current paid authority first.
     if (admission.status === 'rejected') { await work.uncertain(ticketId,item.itemKey,token,item.attemptToken); return { deleted_attachments: 0, deleted_tickets: 0 }; }
-    if (admission.authority?.grant && !await work.recordAdmission(ticketId,item.itemKey,token,item.attemptToken,admission.authority.snapshot.authority_revision,admission.authority.grant.reservationId)) {
-      // A lease recovered between reservation and the provider call. Its paid
-      // grant remains charged, but this stale runner cannot create an effect.
+    if (!await work.recordAdmission(ticketId,item.itemKey,token,item.attemptToken,rule,admission.authority)) {
+      // Rule/budget revocation or lease recovery after reservation cannot
+      // create an effect. Keep the durable attempt available for recovery.
+      await work.uncertain(ticketId,item.itemKey,token,item.attemptToken);
       if (admission.authority) apiTicketBudgetCache.settleOperation(admission.authority,'unknown',now());
       return { deleted_attachments: 0, deleted_tickets: 0 };
     }
     try {
       if (item.itemKind === 'finalize') {
-        const outcome = await work.finalizeOne(ticketId,token,item.attemptToken);
+        const outcome = await work.finalizeOne(ticketId,token,item.attemptToken,rule,admission.authority);
         if (outcome === 'stale') throw new Error('Retention finalization lease superseded');
         if (outcome === 'more') {
           if (!await work.continueItem(ticketId,item.itemKey,token,item.attemptToken)) throw new Error('Retention finalization continuation lost');
@@ -363,10 +366,12 @@ export class TenantAutomationService {
       if (item.itemKind === 'attachment') {
         const id = item.itemKey.slice('attachment:'.length);
         const key = await work.attachmentKey(ticketId,id);
+        if (!await work.authorizeEffect(ticketId,item.itemKey,token,item.attemptToken,rule,admission.authority)) throw new Error('Retention authority revoked');
         if (key) await this.deps.attachmentStorage.deleteAttachment(key);
       } else if (item.itemKind === 'article_body') {
         const id = item.itemKey.slice('body:'.length);
         const key = await work.bodyKey(ticketId,id);
+        if (!await work.authorizeEffect(ticketId,item.itemKey,token,item.attemptToken,rule,admission.authority)) throw new Error('Retention authority revoked');
         if (key) {
           if (this.deps.legacyArticleStorage && /^tickets\/[a-zA-Z0-9-]+\/articles\/[a-zA-Z0-9-]+\/body\.txt$/.test(key)) await this.deps.legacyArticleStorage.deleteLegacyArticleBody(key);
           else await this.deps.attachmentStorage.deleteAttachment(key);
@@ -380,10 +385,14 @@ export class TenantAutomationService {
           // This is an O(1) durable all-version cleanup target (implemented by
           // the indexing prerequisite). It preserves active QA rows until the
           // admitted retention delete claims them in fixed-size batches.
+          if (!await work.authorizeEffect(ticketId,item.itemKey,token,item.attemptToken,rule,admission.authority)) throw new Error('Retention authority revoked');
           await index.withdrawAll(articleId);
           const chunks = await index.claimArticleCleanup(articleId, RETENTION_EXTERNAL_BATCH);
           if (chunks.length) {
-            try { await this.deps.vectorStorage.deleteByIds(chunks.map(chunk => chunk.vectorId)); await index.completeArticleCleanup(articleId,chunks); }
+            try {
+              if (!await work.authorizeEffect(ticketId,item.itemKey,token,item.attemptToken,rule,admission.authority)) throw new Error('Retention authority revoked');
+              await this.deps.vectorStorage.deleteByIds(chunks.map(chunk => chunk.vectorId)); await index.completeArticleCleanup(articleId,chunks);
+            }
             catch (error) { await index.releaseArticleCleanup(articleId,chunks); throw error; }
           }
           // A current article can have more historical versions than its
@@ -398,6 +407,7 @@ export class TenantAutomationService {
           const chunkCount = await work.legacyChunkCount(ticketId,articleId);
           if (!Number.isSafeInteger(chunkCount) || !chunkCount || chunkCount < 1 || chunkCount > 10_000) throw new Error('Vector cleanup manifest unavailable');
           const count = Math.min(RETENTION_EXTERNAL_BATCH, chunkCount - offset);
+          if (!await work.authorizeEffect(ticketId,item.itemKey,token,item.attemptToken,rule,admission.authority)) throw new Error('Retention authority revoked');
           if (count > 0) await this.deps.vectorStorage.deleteByIds(Array.from({length:count},(_, index) => `qa_${articleId}_${offset + index}`));
         }
       }

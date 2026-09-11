@@ -3,9 +3,10 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { VerifiedTenantScope } from '../types/tenant';
 
 /** Actor-independent, exact admitted policy fence, evaluated inside canonical D1 batches. */
-export function budgetCommitConstraint(authority: BudgetCommitAuthority, tenantId: string): { sql: string; values: unknown[] } {
+export function budgetCommitConstraint(authority: BudgetCommitAuthority, tenantId: string,
+  acceptedPurposes: readonly BudgetCommitAuthority['purpose'][] = ['new-work']): { sql: string; values: unknown[] } {
   const s = authority.snapshot;
-  if (authority.purpose !== 'new-work' || s.tenant_id !== tenantId || !Number.isSafeInteger(authority.expiresAt)) {
+  if (!acceptedPurposes.includes(authority.purpose) || s.tenant_id !== tenantId || !Number.isSafeInteger(authority.expiresAt)) {
     return { sql: '0', values: [] };
   }
   return { sql: `EXISTS (SELECT 1 FROM budget_tenant_allocations a

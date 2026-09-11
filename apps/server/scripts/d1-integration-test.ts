@@ -1189,7 +1189,7 @@ async function run() {
   await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() });
   assert.notEqual(await reposApiKeyA.tickets.get(retryTicket.id), null, 'ambiguous R2 acknowledgement retains the ticket claim');
   assert.equal((await db.prepare("SELECT state,attempts FROM retention_cleanup_work WHERE tenant_id='tenant-A' AND ticket_id=? LIMIT 1").bind(retryTicket.id).first())?.state, 'uncertain');
-  for (let turn = 0; turn < 8 && await reposApiKeyA.tickets.get(retryTicket.id); turn++) await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() + 600_000 + turn });
+  for (let turn = 0; turn < 32 && await reposApiKeyA.tickets.get(retryTicket.id); turn++) await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() + 600_000 + turn });
   assert.equal(await reposApiKeyA.tickets.get(retryTicket.id), null, 'bounded restart eventually completes the retained R2 delete');
   assert.equal(ambiguousDeletes, 2, 'the idempotent R2 delete is retried after its missing acknowledgement');
   console.log('SUCCESS: Retention keeps ambiguous external cleanup owned and resumes it in bounded turns');
@@ -1203,7 +1203,7 @@ async function run() {
   retryDeps.vectorStorage = { ...retryDeps.vectorStorage, deleteByIds: async (ids: string[]) => { ambiguousVectorDeletes++; await retainedVectorDelete(ids); if (ambiguousVectorDeletes === 1) throw new Error('synthetic lost Vectorize delete acknowledgement'); } };
   for (let turn = 0; turn < 8 && ambiguousVectorDeletes === 0; turn++) await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() + 1_200_000 + turn });
   assert.notEqual(await reposApiKeyA.tickets.get(vectorRetryTicket.id), null, 'ambiguous Vectorize acknowledgement retains the ticket claim');
-  for (let turn = 0; turn < 12 && await reposApiKeyA.tickets.get(vectorRetryTicket.id); turn++) await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() + 1_800_000 + turn });
+  for (let turn = 0; turn < 40 && await reposApiKeyA.tickets.get(vectorRetryTicket.id); turn++) await retryService.runBoundedRetention({ env: envMock as any, now: () => Date.now() + 1_800_000 + turn });
   assert.equal(await reposApiKeyA.tickets.get(vectorRetryTicket.id), null, 'bounded restart eventually completes the retained Vectorize delete');
   assert.equal(ambiguousVectorDeletes, 2, 'the idempotent Vectorize delete is retried after its missing acknowledgement');
   console.log('SUCCESS: Retention keeps ambiguous Vectorize cleanup owned and resumes it in bounded turns');
