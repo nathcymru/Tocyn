@@ -36,8 +36,13 @@ export const BUDGET_AUTHORITY_SNAPSHOT_D1_READ_BOUND = 1_024 as const;
 export const BUDGET_AUTHORITY_MAX_JSON_BYTES = 64 * 1024;
 export const BUDGET_AUTHORITY_MAX_SERIALIZED_BYTES = 96 * 1024;
 
+/** Exact bounded source rows used by admission; staff commits compare them atomically. */
+export type BudgetCommitSnapshot = Readonly<Pick<AuthorityRow,
+  'deployment_id' | 'authority_revision' | 'coordinator_id' | 'max_reservations' | 'authority_max_age_ms' |
+  'policy_id' | 'policy_revision' | 'policy_json' | 'tenant_id' | 'reservation_namespace' | 'restriction_json'>>;
+
 export type BudgetAuthorityResolution =
-  | Readonly<{ kind: 'active'; authority: TrustedBudgetCoordinatorAuthority }>
+  | Readonly<{ kind: 'active'; authority: TrustedBudgetCoordinatorAuthority; commitSnapshot: BudgetCommitSnapshot }>
   | Readonly<{ kind: 'revoked'; revocation: TrustedBudgetCoordinatorRevocation }>
   | Readonly<{ kind: 'unavailable' }>;
 
@@ -158,7 +163,7 @@ export class BudgetAuthorityRepository {
         maxReservations: row.max_reservations,
       };
       if (new TextEncoder().encode(JSON.stringify(authority)).byteLength > BUDGET_AUTHORITY_MAX_SERIALIZED_BYTES) return { kind: 'unavailable' };
-      return { kind: 'active', authority };
+      return { kind: 'active', authority, commitSnapshot: Object.freeze({ ...row }) };
     } catch {
       return { kind: 'unavailable' };
     }

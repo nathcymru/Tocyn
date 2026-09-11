@@ -1,3 +1,5 @@
+import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
+import { staffMutationStatements, staffMutationSnapshot, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
@@ -73,11 +75,26 @@ export class TicketMutationReplayRepository {
   }
 
   async commit(candidate: MutationCandidate, ns?: MutationNamespace): Promise<string> {
+    return this.commitCanonical(candidate, ns);
+  }
+
+  async commitStaff(candidate: MutationCandidate, staff: StaffMutationCommit): Promise<string> {
+    if (candidate.audit?.kind !== 'staff' || candidate.audit.id !== staff.credential.actorId
+      || candidate.audit.source !== 'dashboard' || !candidate.articleId || !candidate.article
+      || (staff.requirements.ticket?.id !== (candidate.ticket ? undefined : candidate.ticketId))
+      || (staff.namespace && (staff.authority.operationId !== staff.namespace.keyHash || staff.authority.operationFingerprint !== staff.namespace.payloadHash))
+      || (staff.namespace && staff.namespace.operation !== (candidate.ticket ? 'dashboard.ticket.create' : 'dashboard.ticket.reply'))) {
+      throw new Error('Invalid staff mutation');
+    }
+    return this.commitCanonical(candidate, undefined, staff);
+  }
+
+  private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit): Promise<string> {
     // This is after caller authorization/admission preparation and before
     // constructing the authoritative D1 batch. No HTTP response establishes this.
     this.canonicalMutationSli?.recordAttempt();
     const operation=candidate.ticket?'create':'conversation';
-    const statements: D1PreparedStatement[] = [...(this.admission?.statements(operation)??[])];
+    const statements: D1PreparedStatement[] = [...(staff ? staffMutationStatements(this.db,this.scope,staff) : []), ...(this.admission?.statements(operation)??[])];
     if (ns) {
       // Exact expired-key reuse and at most 99 other expired rows: bounded 100.
       statements.push(this.db.prepare(`DELETE FROM ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at <= unixepoch()`)
@@ -154,13 +171,16 @@ export class TicketMutationReplayRepository {
     }));
     const version = candidate.audit ? 2 : 1;
     const attachmentSnapshots = candidate.attachments.map(() => `json((SELECT ${attachmentJson} FROM attachments x WHERE x.tenant_id = ? AND x.id = ?))`);
-    const snapshot = `json_object('version',${version},
+    const rawSnapshot = `json_object('version',${version},
       'ticket',json((SELECT ${ticketJson} FROM tickets t WHERE t.tenant_id = ? AND t.id = ?)),
       'article',json((SELECT ${articleJson} FROM articles a WHERE a.tenant_id = ? AND a.id = ?)),
       'attachments',json_array(${attachmentSnapshots.join(',')})${eventId ? ", 'audit',json_array(json_object('eventId',?,'articleId',?))" : ''})`;
     const snapshotValues = [this.scope.tenantId, candidate.ticketId, this.scope.tenantId, candidate.articleId ?? null,
       ...candidate.attachments.flatMap(a => [this.scope.tenantId, a.id]), ...(eventId ? [eventId,candidate.articleId ?? null] : [])];
-    if (ns) {
+    const snapshot = staff ? staffMutationSnapshot(rawSnapshot) : rawSnapshot;
+    if (staff?.namespace) {
+      statements.push(staffMutationReceiptStatement(this.db,this.scope,staff.namespace,candidate.ticketId,candidate.articleId!,snapshot,snapshotValues));
+    } else if (ns) {
       // Deliberately last: uniqueness failure rolls back every losing mutation.
       statements.push(this.db.prepare(`INSERT INTO ticket_mutation_receipts
         (tenant_id,principal_kind,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,
@@ -168,6 +188,7 @@ export class TicketMutationReplayRepository {
         VALUES (?,?,?,?,?,?,1,${version},?,?,201,${snapshot}) RETURNING response_snapshot`)
         .bind(...this.namespaceValues(ns), ns.payloadHash, candidate.ticketId, candidate.articleId ?? null, ...snapshotValues));
     } else {
+      if (staff) statements.push(this.db.prepare(`UPDATE staff_mutation_assertion SET accepted=CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END WHERE tenant_id=?`).bind(...snapshotValues,this.scope.tenantId));
       statements.push(this.db.prepare(`SELECT ${snapshot} AS response_snapshot`).bind(...snapshotValues));
     }
     let results;

@@ -9,6 +9,8 @@ import { IsolateBudgetAdmissionCache, type CanonicalBudgetIntent } from './isola
  * Session credential adapter only; it does not introduce a route permission,
  * authenticate JWTs, commit work, or represent an active dashboard integration.
  * Callers supply verified token facts and the canonical authorization target.
+ * Successful spends carry the exact commitAuthority for an atomic mutation
+ * fence; the staff adapter retains that result privately in its prepared attempt.
  */
 export class SessionBudgetAdmissionService {
   constructor(private readonly cache: IsolateBudgetAdmissionCache) {}

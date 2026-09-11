@@ -2,7 +2,7 @@ import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { RESOURCE_DIMENSIONS, type EffectiveTenantCostPolicy, type ResourceAmounts } from '@luminatick/shared';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO';
-import { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
+import { BudgetAuthorityRepository, type BudgetCommitSnapshot } from '../repositories/budget-authority.repository';
 import type { CurrentBudgetAuthorityGate } from './budget-coordinator.service';
 import type { TrustedBudgetCoordinatorAuthority } from './owner-aggregate';
 import { IsolateBudgetGrantHolder, isolateWarmReservedEnvelope, type CurrentIsolateGrantAuthority, type IsolateGrantScope, type IsolateGrantSpendResult } from './isolate-grant-holder';
@@ -13,7 +13,10 @@ export const MAX_ISOLATE_SCOPE_REFILLS = 4;
 /** Estimated bound: two allocation sizes, each with one lost-response retry; four refresh/reserve pairs. */
 export const ISOLATE_COLD_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({ doRequests: 8, doRowsRead: 8, doRowsWritten: 8, logEvents: 8 });
 export type CanonicalBudgetIntent = Readonly<{ operationId: string; operationFingerprint: string; workScopeKey: string }>;
-type ActiveAuthority = { trusted: TrustedBudgetCoordinatorAuthority; policy: EffectiveTenantCostPolicy; local: CurrentIsolateGrantAuthority };
+export type BudgetCommitAuthority = Readonly<{ snapshot: BudgetCommitSnapshot; expiresAt: number;
+  purpose: 'new-work'; operationId: string; operationFingerprint: string }>;
+export type IsolateAdmissionResult = IsolateGrantSpendResult & Readonly<{ commitAuthority?: BudgetCommitAuthority }>;
+type ActiveAuthority = { commitSnapshot: BudgetCommitSnapshot; trusted: TrustedBudgetCoordinatorAuthority; policy: EffectiveTenantCostPolicy; local: CurrentIsolateGrantAuthority };
 type HeldGrant = { holder: IsolateBudgetGrantHolder; reservationId: string; expiresAt: number; dimensions: readonly string[] };
 type CacheEntry = {
   bindingIdentity: object; namespace: DurableObjectNamespace; key: string; epoch: string; expiresAt: number; refills: number;
@@ -119,7 +122,7 @@ export class IsolateBudgetAdmissionCache {
   async admit(input: {
     repository: BudgetAuthorityRepository; namespace: DurableObjectNamespace; authorization: CurrentBudgetAuthorityGate; scope: VerifiedTenantScope;
     credentialKey: string; intent: CanonicalBudgetIntent; business: ResourceAmounts; now: () => number;
-  }): Promise<IsolateGrantSpendResult> {
+  }): Promise<IsolateAdmissionResult> {
     const holderScope: IsolateGrantScope = { tenantId: input.scope.tenantId, credentialKey: input.credentialKey,
       workScopeKey: input.intent.workScopeKey, purpose: 'new-work' };
     const key = JSON.stringify(holderScope);
@@ -133,7 +136,7 @@ export class IsolateBudgetAdmissionCache {
       if (authority.kind !== 'active') return null;
       const policy = authority.authority.tenantAllocations.find(allocation => allocation.effectivePolicy.tenantId === input.scope.tenantId)?.effectivePolicy;
       if (!policy) return null;
-      return { trusted: authority.authority, policy, local: { ...holderScope, aggregateId: authority.authority.aggregateId,
+      return { commitSnapshot: authority.commitSnapshot, trusted: authority.authority, policy, local: { ...holderScope, aggregateId: authority.authority.aggregateId,
         policyId: policy.policyId, policyRevision: policy.revision, restrictionRevision: policy.restrictionRevision,
         authorityRevision: authority.authority.authorityRevision, authorityCheckedAt: authority.authority.authorityCheckedAt,
         authorityExpiresAt: authority.authority.authorityExpiresAt,
@@ -152,8 +155,14 @@ export class IsolateBudgetAdmissionCache {
         refills: 0, holders: [], operations: new Map(), blocked: false };
       this.entries.push(entry);
     }
-    const spend = (held: HeldGrant) => held.holder.spend({ holderId: held.holder.holderId, reservationId: held.reservationId,
-      operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint, envelope: input.business }, localForGrant(authority!, held), input.now());
+    const spend = (held: HeldGrant): IsolateAdmissionResult => {
+      const result = held.holder.spend({ holderId: held.holder.holderId, reservationId: held.reservationId,
+        operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint, envelope: input.business }, localForGrant(authority!, held), input.now());
+      if (result.status === 'rejected') return result;
+      return { ...result, commitAuthority: Object.freeze({ snapshot: authority!.commitSnapshot,
+        expiresAt: Math.min(held.expiresAt, authority!.trusted.authorityExpiresAt), purpose: 'new-work',
+        operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint }) };
+    };
     const prior = entry.operations.get(input.intent.operationId);
     if (prior) return spend(prior);
     const latest = entry.holders.at(-1);

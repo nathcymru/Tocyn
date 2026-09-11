@@ -100,6 +100,8 @@ jobs:
         if: matrix.check == 'test'
         run: |
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.budget-runtime.json
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.staff-ticket-mutation.json
+          node --import tsx --test apps/server/scripts/staff-ticket-mutation-runtime.test.ts
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.email-sender-selection.json
           node --import tsx --test apps/server/scripts/email-sender-selection-runtime.test.ts
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.email-ticket-stream.json
