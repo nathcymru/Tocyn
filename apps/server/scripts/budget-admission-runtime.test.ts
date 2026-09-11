@@ -1,6 +1,7 @@
 import { CANONICAL_MUTATION_ATTEMPT_D1_WRITES, CANONICAL_MUTATION_D1_WRITES } from '../src/budgets/canonical-mutation-envelope';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
+import { SignJWT } from 'jose';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -31,9 +32,13 @@ async function applyMigrations(db: D1Database): Promise<void> {
   }
 }
 
-function policy(overrides: Partial<Record<'workerRequests' | 'd1RowsRead' | 'd1RowsWritten' | 'doRequests' | 'doRowsWritten' | 'doRowsRead' | 'logEvents', number>> = {}) {
-  const dimensions = ['workerRequests', 'd1RowsRead', 'd1RowsWritten', 'doRequests', 'doRowsWritten', 'doRowsRead', 'logEvents'] as const;
-  const limits = { workerRequests: 3, d1RowsRead: 8_000, d1RowsWritten: 4_000, doRequests: 10, doRowsWritten: 10, doRowsRead: 10, logEvents: 200, ...overrides };
+function policy(overrides: Partial<Record<string, number>> = {}) {
+  // These are the complete active ticket-operation dimensions. Keeping the
+  // authority snapshot to this bounded set also exercises its real RPC cap.
+  const dimensions = ['workerRequests', 'd1RowsRead', 'd1RowsWritten', 'r2ClassBOperations',
+    'doRequests', 'doRowsRead', 'doRowsWritten', 'logEvents'] as const;
+  const limits: Record<string, number> = Object.fromEntries(dimensions.map(dimension => [dimension, 1_000_000]));
+  Object.assign(limits, { workerRequests: 3, d1RowsRead: 8_000, d1RowsWritten: 4_000, doRequests: 10, doRowsWritten: 10, doRowsRead: 10, logEvents: 200 }, overrides);
   return {
     schemaVersion: 1, policyId: 'runtime-owner-policy', revision: 1, deploymentId: 'runtime-deployment',
     mode: 'conservative', catalogueVersion: 'runtime-catalogue', maxGrantLifetimeMs: 60_000,
@@ -59,6 +64,8 @@ async function seed(db: D1Database, extraTenants = 31, owner = policy()): Promis
     db.prepare(`INSERT INTO budget_tenant_allocations
       (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
       VALUES ('runtime-deployment',?,'runtime-owner-policy',1,1,'runtime-namespace',?,'active')`).bind(tenantId, JSON.stringify(restriction)),
+    db.prepare(`INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled)
+      VALUES (?,'runtime-staff','runtime-staff@example.test','agent',1,1)`).bind(tenantId),
   ]);
   // Exercise an enabled multi-tenant authority below the serialized RPC cap;
   // the separate authority test covers the 128-allocation sentinel and plan.
@@ -119,6 +126,68 @@ test('real local API-key create reserves configured aggregate capacity before it
   } finally {
     await mf?.dispose();
   }
+});
+
+test('real local combined policy admits API and authenticated staff receipts without duplicate staff side effects', async () => {
+  const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
+  const jwtSecret = 'synthetic-runtime-staff-secret-at-least-32-chars';
+  let mf: Miniflare | undefined;
+  try {
+    mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
+      name: 'combined-ticket-admission-proof', modules: true, compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'], script: bundled.outputFiles[0].text,
+      bindings: { BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', DISABLE_RATE_LIMIT: 'true', ENVIRONMENT: 'local', JWT_SECRET: jwtSecret },
+      d1Databases: { DB: 'combined-ticket-admission-d1' },
+      r2Buckets: { ATTACHMENTS_BUCKET: 'combined-ticket-admission-r2' },
+      durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' },
+      unsafeEphemeralDurableObjects: true,
+    }] }));
+    const db = await mf.getD1Database('DB');
+    await applyMigrations(db);
+    await seed(db, 0, policy({ workerRequests: 20_000, d1RowsRead: 2_000_000, d1RowsWritten: 100_000,
+      doRequests: 20_000, doRowsRead: 20_000, doRowsWritten: 20_000, logEvents: 200_000_000, r2ClassBOperations: 1_000 }));
+    const staffToken = await new SignJWT({ sub: 'runtime-staff', role: 'agent', tenant_id: 'runtime-tenant', session_version: 1, mfa_verified: true })
+      .setProtectedHeader({ alg: 'HS256' }).setAudience('app').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(jwtSecret));
+    const api = await mf.dispatchFetch('http://runtime.test/api/v1/tickets', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ subject: 'API remains enabled', customer_email: 'runtime@example.test', body: 'synthetic' }),
+    });
+    assert.equal(api.status, 201, 'combined mode retains the active API-key route'); await api.body?.cancel();
+    const request = (key: string, body = 'staff synthetic') => mf!.dispatchFetch('http://runtime.test/api/tickets', {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${staffToken}`, 'idempotency-key': key },
+      body: JSON.stringify({ subject: 'Staff receipt', customer_email: 'runtime@example.test', body, body_format: 'markdown-v1' }),
+    });
+    const first = await request('staff-combined');
+    assert.equal(first.status, 201); const ticket = await first.json() as { id: string };
+    const replay = await request('staff-combined');
+    assert.equal(replay.status, 201); assert.equal(replay.headers.get('Idempotency-Replayed'), 'true'); await replay.body?.cancel();
+    const conflict = await request('staff-combined', 'different canonical payload');
+    assert.equal(conflict.status, 409); await conflict.body?.cancel();
+    assert.equal((await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant' AND subject='Staff receipt'").first<{count:number}>())?.count, 1);
+    assert.equal((await db.prepare("SELECT count(*) AS count FROM staff_ticket_mutation_receipts WHERE tenant_id='runtime-tenant'").first<{count:number}>())?.count, 1);
+    // Miniflare's prerelease binding proxy types currently infer Request here.
+    const bucket = await mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
+    await bucket.put('runtime-tenant/agent-attachments/runtime-staff/retry.txt', 'retry attachment', { httpMetadata: { contentType: 'text/plain' } });
+    const beforeRetry = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number };
+    await mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ beforeCanonical: 'failure' }) });
+    const replyRequest = () => mf!.dispatchFetch(`http://runtime.test/api/tickets/${ticket.id}/articles`, {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${staffToken}`, 'idempotency-key': 'staff-reply' },
+      body: JSON.stringify({ body: 'public **reply**', body_format: 'markdown-v1', is_internal: false,
+        attachments: [{ storageKey: 'agent-attachments/runtime-staff/retry.txt', filename: 'retry.txt' }] }),
+    });
+    const failedReply = await replyRequest();
+    assert.equal(failedReply.status, 503, 'the first canonical failure retains a charged retry rather than delivering'); await failedReply.body?.cancel();
+    const reply = await replyRequest();
+    assert.equal(reply.status, 201); await reply.body?.cancel();
+    const afterRetry = await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { r2Gets: number };
+    assert.equal(afterRetry.r2Gets - beforeRetry.r2Gets, 3, 'two metadata validation reads plus one winning outbound stream read are bounded');
+    await db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='runtime-tenant' AND id='runtime-staff'").run();
+    const revoked = await mf.dispatchFetch(`http://runtime.test/api/tickets/${ticket.id}/articles`, {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${staffToken}`, 'idempotency-key': 'revoked-staff-reply' },
+      body: JSON.stringify({ body: 'must not commit' }),
+    });
+    assert.equal(revoked.status, 401); await revoked.body?.cancel();
+    assert.equal((await db.prepare("SELECT count(*) AS count FROM articles WHERE tenant_id='runtime-tenant' AND body='must not commit'").first<{count:number}>())?.count, 0);
+  } finally { await mf?.dispose(); }
 });
 
 async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1_000_000, d1RowsWritten: 100_000,
