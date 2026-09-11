@@ -9,6 +9,7 @@ import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { splitSql } from './split-sql';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
+import { BudgetGrantRecoveryService } from '../src/budgets/budget-grant-recovery.service';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 import type { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
@@ -213,7 +214,7 @@ async function warmHarness(owner = policy({ workerRequests: 1_000, d1RowsRead: 1
   const coordinator = namespace.get(namespace.idFromName('runtime-owner-coordinator')) as unknown as BudgetCoordinatorDO;
   const grants = async () => (await coordinator.inspectForTrustedRuntime()).tenantStates.flatMap(state => state.grants);
   const count = async () => (await db.prepare("SELECT count(*) AS count FROM tickets WHERE tenant_id='runtime-tenant'").first<{ count: number }>())?.count;
-  return { mf, db, control, create, coordinator, grants, count, initialNow };
+  return { mf, db, control, create, coordinator, namespace, grants, count, initialNow };
 }
 
 test('concurrent cold admission shares one allocation and warm canonical replay never repeats a mutation', async () => {
@@ -222,7 +223,7 @@ test('concurrent cold admission shares one allocation and warm canonical replay 
     const concurrent = await Promise.all(Array.from({ length: 5 }, (_, index) => h.create(`concurrent-${index}`)));
     assert.deepEqual(concurrent.map(response => response.status), [201, 201, 201, 201, 201]);
     await Promise.all(concurrent.map(response => response.body?.cancel()));
-    assert.deepEqual((await h.control()).calls, { refresh: 1, reserve: 1, revoke: 0 });
+    assert.deepEqual((await h.control()).calls, { refresh: 1, reserve: 1, revoke: 0, reconcile: 0 });
     assert.equal((await h.grants()).length, 1);
     const before = await h.control();
     const same = await Promise.all([h.create('same-operation'), h.create('same-operation')]);
@@ -240,16 +241,55 @@ test('concurrent cold admission shares one allocation and warm canonical replay 
   } finally { await h.mf.dispose(); }
 });
 
+test('idle API closure reconciles the entire two-operation grant', async () => {
+  const owner = policy({ workerRequests: 1_000, d1RowsRead: 1_000_000, d1RowsWritten: 100_000,
+    doRequests: 1_000, doRowsRead: 1_000, doRowsWritten: 1_000, logEvents: 100_000 });
+  const h = await warmHarness(owner);
+  try {
+    for (const key of ['closure-one','closure-two']) {
+      const response = await h.create(key); assert.equal(response.status,201); await response.body?.cancel();
+    }
+    const original = (await h.grants())[0];
+    await h.control({ now: h.initialNow + 30_001 });
+    const trigger = await h.create('closure-after-idle');
+    const triggerBody = await trigger.text();
+    const afterTrigger = await h.grants();
+    const closure = await h.db.prepare(`SELECT terminal_evidence_id,uncertain_json FROM budget_grant_closures
+      WHERE tenant_id='runtime-tenant' AND reservation_id=? AND holder_id=?`).bind(original.reservationId,original.holderId)
+      .first<{terminal_evidence_id:string;uncertain_json:string}>();
+    assert.ok(closure,'closure is durable before coordinator reconciliation');
+    const operationRows = (await h.db.prepare(`SELECT operation_id,operation_fingerprint,operation_envelope_json FROM budget_grant_operations
+      WHERE tenant_id='runtime-tenant' AND reservation_id=? AND holder_id=? ORDER BY operation_id`).bind(original.reservationId,original.holderId).all<{
+        operation_id:string;operation_fingerprint:string;operation_envelope_json:string
+      }>()).results;
+    const recovery = new BudgetGrantRecoveryService(h.db,new BudgetAuthorityRepository(h.db),h.namespace,
+      createVerifiedTenantScope('runtime-tenant','runtime-key',['integration'],1),'runtime-key');
+    const recovered = await recovery.recover({ tenantId: 'runtime-tenant', aggregateId: 'runtime-owner-coordinator', reservationId: original.reservationId,
+      holderId: original.holderId, policyId: 'runtime-owner-policy', policyRevision: 1, restrictionRevision: 1,
+      terminalEvidenceId: closure!.terminal_evidence_id, operations: operationRows.map(row => ({ operationId: row.operation_id,
+        operationFingerprint: row.operation_fingerprint, operationEnvelope: JSON.parse(row.operation_envelope_json) })),
+      operationIds: operationRows.map(row => row.operation_id), operationFingerprint: 'test',
+      operationEnvelopes: operationRows.map(row => JSON.parse(row.operation_envelope_json)), envelope: original.envelope },h.initialNow + 30_001);
+    assert.equal(recovered,'reconciled',`recovery service result: ${recovered}`);
+    const uncertain = Object.fromEntries(JSON.parse(closure!.uncertain_json)) as Record<string,number>;
+    const result = await h.coordinator.reconcileFromTrustedAuthority({ tenantId: 'runtime-tenant', reservationId: original.reservationId,
+      holderId: original.holderId, expectedPolicyId: 'runtime-owner-policy', expectedPolicyRevision: 1, expectedRestrictionRevision: 1,
+      terminalEvidenceId: closure!.terminal_evidence_id, measured: {}, uncertain, now: h.initialNow + 30_001 });
+    assert.equal(result,'already-reconciled',`direct coordinator outcome: ${result}; trigger=${trigger.status} ${triggerBody}`);
+    assert.equal(trigger.status,201,`${triggerBody}; afterTrigger=${JSON.stringify(afterTrigger.map(grant => [grant.reservationId,grant.purpose,grant.status]))}`);
+  } finally { await h.mf.dispose(); }
+});
+
 test('one lost committed cold response retries into the same live holder and keeps warm execution local', async () => {
   const h = await warmHarness();
   try {
     await h.control({ loseReserveAck: true });
     const first = await h.create('lost-allocation-ack'); assert.equal(first.status, 201); await first.body?.cancel();
-    assert.deepEqual((await h.control()).calls, { refresh: 2, reserve: 2, revoke: 0 });
+    assert.deepEqual((await h.control()).calls, { refresh: 2, reserve: 2, revoke: 0, reconcile: 0 });
     assert.equal((await h.grants()).length, 1);
     assert.equal((await h.grants())[0].holderSeedAttempts, 2);
     const second = await h.create('warm-after-recovered-ack'); assert.equal(second.status, 201); await second.body?.cancel();
-    assert.deepEqual((await h.control()).calls, { refresh: 2, reserve: 2, revoke: 0 });
+    assert.deepEqual((await h.control()).calls, { refresh: 2, reserve: 2, revoke: 0, reconcile: 0 });
     assert.equal(await h.count(), 2);
   } finally { await h.mf.dispose(); }
 });
@@ -259,7 +299,7 @@ test('two lost committed responses exhaust the finite cold retry and retain the 
   try {
     await h.control({ loseReserveAcks: 2 });
     const failed = await h.create('twice-lost-allocation'); assert.equal(failed.status, 503); await failed.body?.cancel();
-    assert.deepEqual((await h.control()).calls, { refresh: 2, reserve: 2, revoke: 0 });
+    assert.deepEqual((await h.control()).calls, { refresh: 2, reserve: 2, revoke: 0, reconcile: 0 });
     assert.equal(await h.count(), 0, 'uncertain allocation delivery never authorizes canonical work');
     const lost = (await h.grants())[0];
     assert.equal(lost.holderSeedAttempts, 2); assert.equal(lost.accounted.workerRequests, 16);
@@ -267,7 +307,7 @@ test('two lost committed responses exhaust the finite cold retry and retain the 
     const grants = await h.grants();
     assert.equal(grants.length, 2); assert.notEqual(grants[0].holderId, grants[1].holderId);
     assert.equal(grants[0].accounted.workerRequests, 16, 'replacement holder receives a separately charged block');
-    assert.deepEqual((await h.control()).calls, { refresh: 3, reserve: 3, revoke: 0 });
+    assert.deepEqual((await h.control()).calls, { refresh: 3, reserve: 3, revoke: 0, reconcile: 0 });
   } finally { await h.mf.dispose(); }
 });
 
@@ -309,7 +349,7 @@ for (const loss of ['discard', 'expiry'] as const) test(`${loss} retains the ori
     assert.equal(grants[0].accounted.workerRequests, 16, 'lost/expired unused balance is not returned');
     assert.equal(grants[1].accounted.workerRequests, 2, 'only the explicit one-operation fallback fits remaining owner capacity');
     if (loss === 'expiry') assert.equal(grants[0].status, 'uncertain');
-    assert.deepEqual((await h.control()).calls, { refresh: 3, reserve: 3, revoke: 0 }, 'one initial block plus one rejected large block and one bounded fallback');
+    assert.deepEqual((await h.control()).calls, { refresh: 3, reserve: 3, revoke: 0, reconcile: 0 }, 'one initial block plus one rejected large block and one bounded fallback');
     assert.equal(await h.count(), 2);
   } finally { await h.mf.dispose(); }
 });

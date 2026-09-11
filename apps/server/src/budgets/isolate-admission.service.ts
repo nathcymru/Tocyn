@@ -10,6 +10,7 @@ import { IsolateBudgetGrantHolder, isolateWarmReservedEnvelope, type CurrentIsol
 export const MAX_ACTIVE_ISOLATE_SCOPES = 64;
 export const MAX_ISOLATE_BLOCK_OPERATIONS = 8;
 export const MAX_ISOLATE_SCOPE_REFILLS = 4;
+export const MAX_ISOLATE_GRANT_RECOVERY_ATTEMPTS = 2;
 // One initial identity plus two observations per possible renewal: retirement
 // may see one policy, and the subsequent fresh attempt may see another.
 const MAX_OBSERVED_POLICY_IDENTITIES = 1 + 2 * MAX_ISOLATE_SCOPE_REFILLS;
@@ -24,7 +25,8 @@ export type IsolateAdmissionResult = IsolateGrantSpendResult & Readonly<{ commit
 type ActiveAuthority = { commitSnapshot: BudgetCommitSnapshot; trusted: TrustedBudgetCoordinatorAuthority; policy: EffectiveTenantCostPolicy; local: CurrentIsolateGrantAuthority };
 type HeldOperation = { fingerprint: string; envelope: ResourceAmounts; state: 'in-flight' | 'committed' | 'unknown'; settledAt?: number };
 type HeldGrant = { holder: IsolateBudgetGrantHolder; reservationId: string; expiresAt: number; dimensions: readonly string[];
-  aggregateId: string; tenantId: string; credentialKey: string; envelope: ResourceAmounts; operations: Map<string,HeldOperation>; sealed: boolean; sealedGrant?: SealedIsolateBudgetGrant; lastSettledAt?: number };
+  aggregateId: string; tenantId: string; credentialKey: string; envelope: ResourceAmounts; operations: Map<string,HeldOperation>; sealed: boolean;
+  sealedGrant?: SealedIsolateBudgetGrant; recoveryAttempts: number; recoveryCompleted: boolean; lastSettledAt?: number };
 export type SealedIsolateBudgetGrant = Readonly<{ tenantId: string; aggregateId: string; reservationId: string; holderId: string;
   policyId: string; policyRevision: number; restrictionRevision: number;
   terminalEvidenceId: string; operations: readonly Readonly<{ operationId: string; operationFingerprint: string; operationEnvelope: ResourceAmounts }>[];
@@ -163,7 +165,8 @@ export class IsolateBudgetAdmissionCache {
           if (!this.currentGeneration(entry,generation)) { holder.invalidate(); entry.failure = stale(); return null; }
           if ((outcome.status === 'granted' || outcome.status === 'idempotent') && outcome.reservation) {
             const held: HeldGrant = { holder, reservationId: outcome.reservation.reservationId, expiresAt: outcome.reservation.expiresAt, dimensions: Object.keys(envelope),
-              aggregateId: authority.trusted.aggregateId, tenantId: scope.tenantId, credentialKey: scope.credentialKey, envelope: structuredClone(envelope), operations: new Map(), sealed: false };
+              aggregateId: authority.trusted.aggregateId, tenantId: scope.tenantId, credentialKey: scope.credentialKey, envelope: structuredClone(envelope), operations: new Map(), sealed: false,
+              recoveryAttempts: 0, recoveryCompleted: false };
             if (!holder.install(outcome.reservation, localForGrant(authority, held), now())) { holder.invalidate(); entry.failure = stale(); return null; }
             // Delivery only to this isolate instance: never seed BudgetGrantHolderDO.
             entry.holders.push(held);
@@ -298,7 +301,11 @@ export class IsolateBudgetAdmissionCache {
     if (!Number.isSafeInteger(now) || !Number.isSafeInteger(idleMs) || idleMs < 1) return null;
     for (const entry of this.entries) {
       for (const held of entry.holders) {
-        if (held.sealed && held.sealedGrant && held.tenantId === tenantId && held.credentialKey === credentialKey) return held.sealedGrant;
+        if (held.sealed && held.sealedGrant && held.tenantId === tenantId && held.credentialKey === credentialKey) {
+          if (held.recoveryCompleted || held.recoveryAttempts >= MAX_ISOLATE_GRANT_RECOVERY_ATTEMPTS) continue;
+          held.recoveryAttempts++;
+          return held.sealedGrant;
+        }
         if (held.sealed || held.operations.size < 1 || held.tenantId !== tenantId || held.credentialKey !== credentialKey || !held.lastSettledAt || now - held.lastSettledAt < idleMs) continue;
         const operations = [...held.operations.entries()];
         if (operations.some(([, operation]) => operation.state !== 'committed')) continue;
@@ -314,9 +321,23 @@ export class IsolateBudgetAdmissionCache {
           operationIds: Object.freeze(ids), operationFingerprint: fingerprint,
           operationEnvelopes: Object.freeze(ids.map(id => Object.freeze(structuredClone(held.operations.get(id)!.envelope)))), envelope: Object.freeze(structuredClone(held.envelope)) });
         held.sealedGrant = sealed;
+        held.recoveryAttempts = 1;
         return sealed;
       }
     }
     return null;
+  }
+
+  /** A completed closure may make room for a later freshly charged holder; a failed bounded attempt never does. */
+  completeApiGrantRecovery(sealed: SealedIsolateBudgetGrant): void {
+    for (const entry of this.entries) for (const held of entry.holders) {
+      if (held.sealedGrant?.terminalEvidenceId === sealed.terminalEvidenceId) { held.recoveryCompleted = true; return; }
+    }
+  }
+
+  /** A sealed grant with exhausted recovery attempts blocks its credential scope; it cannot silently return to spend. */
+  hasBlockedApiGrantRecovery(tenantId: string, credentialKey: string): boolean {
+    return this.entries.some(entry => entry.holders.some(held => held.tenantId === tenantId && held.credentialKey === credentialKey
+      && held.sealed && !held.recoveryCompleted && held.recoveryAttempts >= MAX_ISOLATE_GRANT_RECOVERY_ATTEMPTS));
   }
 }

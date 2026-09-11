@@ -7,7 +7,9 @@ import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO
 import type { SealedIsolateBudgetGrant } from './isolate-admission.service';
 
 /** Conservative recovery-only allowance; it is reserved from the 20% purpose partition and never reclaimed here. */
-export const API_GRANT_CLOSURE_RECOVERY_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({ workerRequests: 1, d1RowsRead: 64, d1RowsWritten: 16, doRequests: 1, doRowsRead: 1, doRowsWritten: 1, logEvents: 1 });
+export const API_GRANT_CLOSURE_RECOVERY_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({
+  workerRequests: 2, d1RowsRead: 4_096, d1RowsWritten: 64, doRequests: 6, doRowsRead: 12, doRowsWritten: 12, logEvents: 6,
+});
 
 /** Composes current API authority, durable closure, and one whole-grant reconciliation. */
 export class BudgetGrantRecoveryService {

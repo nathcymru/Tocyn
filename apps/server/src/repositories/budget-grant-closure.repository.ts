@@ -56,13 +56,20 @@ export class BudgetGrantClosureRepository {
     }
     // The count predicate and the operation-link closure predicate jointly fence
     // races: a late canonical batch cannot add a row after this insert.
-    const write = await this.db.prepare(`INSERT INTO budget_grant_closures
+    await this.db.prepare(`INSERT INTO budget_grant_closures
       (tenant_id,reservation_id,holder_id,aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json)
       SELECT ?,?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM budget_grant_operations
         WHERE tenant_id=? AND reservation_id=? AND holder_id=?)=?`)
       .bind(sealed.tenantId,sealed.reservationId,sealed.holderId,sealed.aggregateId,sealed.terminalEvidenceId,operationSetFingerprint,rows.length,
         canonical(measured),canonical(uncertain),sealed.tenantId,sealed.reservationId,sealed.holderId,rows.length).run();
-    if (write.meta.changes !== 1) return null;
+    // D1's changes count for INSERT…SELECT is not portable evidence of an
+    // insert. Read the bounded primary-key row and require the exact payload.
+    const written = await this.db.prepare(`SELECT aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json
+      FROM budget_grant_closures WHERE tenant_id=? AND reservation_id=? AND holder_id=?`)
+      .bind(sealed.tenantId,sealed.reservationId,sealed.holderId).first<ClosureRow>();
+    if (!written || written.aggregate_id !== sealed.aggregateId || written.terminal_evidence_id !== sealed.terminalEvidenceId
+      || written.operation_set_fingerprint !== operationSetFingerprint || written.operation_count !== rows.length
+      || written.measured_json !== canonical(measured) || written.uncertain_json !== canonical(uncertain)) return null;
     return { terminalEvidenceId: sealed.terminalEvidenceId, uncertain, operationSetFingerprint };
   }
 }

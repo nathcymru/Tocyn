@@ -66,7 +66,7 @@ let lostReserveAcksRemaining = 0;
 let editPolicyAfterReserve = false;
 let pauseNextReserve = false;
 let releaseReserve: (()=>void)|undefined;
-const calls = { refresh: 0, reserve: 0, revoke: 0 };
+const calls = { refresh: 0, reserve: 0, revoke: 0, reconcile: 0 };
 function instrument(namespace: any, db: any): any {
   if (wrappedNamespace) return wrappedNamespace;
   wrappedNamespace = {
@@ -98,6 +98,7 @@ function instrument(namespace: any, db: any): any {
           }
           return result;
         },
+        reconcileFromTrustedAuthority: async (input: any) => { calls.reconcile++; return target.reconcileFromTrustedAuthority(input); },
       };
     },
   };

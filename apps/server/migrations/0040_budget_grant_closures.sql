@@ -10,10 +10,9 @@ CREATE TABLE budget_grant_operations (
   operation_fingerprint TEXT NOT NULL,
   operation_envelope_json TEXT NOT NULL CHECK (json_valid(operation_envelope_json)),
   committed_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  PRIMARY KEY (tenant_id,reservation_id,holder_id,operation_id)
+  PRIMARY KEY (tenant_id,reservation_id,holder_id,operation_id),
+  FOREIGN KEY (tenant_id) REFERENCES budget_tenant_allocations(tenant_id) ON DELETE RESTRICT
 );
-CREATE INDEX idx_budget_grant_operations_closure
-  ON budget_grant_operations(tenant_id,reservation_id,holder_id,operation_id);
 
 CREATE TABLE budget_grant_closures (
   tenant_id TEXT NOT NULL,
@@ -27,5 +26,6 @@ CREATE TABLE budget_grant_closures (
   uncertain_json TEXT NOT NULL CHECK (json_valid(uncertain_json)),
   closed_at INTEGER NOT NULL DEFAULT (unixepoch()),
   PRIMARY KEY (tenant_id,reservation_id,holder_id),
-  UNIQUE (tenant_id,terminal_evidence_id)
+  UNIQUE (tenant_id,terminal_evidence_id),
+  FOREIGN KEY (tenant_id) REFERENCES budget_tenant_allocations(tenant_id) ON DELETE RESTRICT
 );
