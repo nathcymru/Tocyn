@@ -9,8 +9,15 @@ import {StatelessAiService} from '../src/services/ai.service';
 
 let beforeRevoke:'session'|'policy'|undefined,beforeEffect:'closure'|undefined,failR2Once=false,failVectorOnce=false,wrapped:any;
 let r2Deletes=0,vectorDeleteCalls=0,vectorIds=0,d1Reads=0,d1Writes=0,meterActive=false;
-const vector={upsert:async()=>undefined,query:async()=>({matches:[]}),deleteByIds:async(ids:string[])=>{
+type Gate={armed:boolean;started:boolean;wait:Promise<void>;release?:()=>void};
+function gate():Gate{return {armed:false,started:false,wait:Promise.resolve()};}
+const putGate=gate(),upsertGate=gate(),storedVectors=new Set<string>();
+function arm(value:Gate){value.armed=true;value.started=false;value.wait=new Promise(resolve=>{value.release=resolve;});}
+function release(value:Gate){value.release?.();value.release=undefined;value.armed=false;}
+const vector={upsert:async(items:{id:string}[])=>{if(upsertGate.armed){upsertGate.started=true;await upsertGate.wait;}for(const item of items)storedVectors.add(item.id);},
+  query:async()=>({matches:[]}),deleteByIds:async(ids:string[])=>{
   vectorDeleteCalls++;vectorIds+=ids.length;if(failVectorOnce){failVectorOnce=false;throw new Error('synthetic lost vector response');}
+  for(const id of ids)storedVectors.delete(id);
 }};
 async function mutate(db:any,action:typeof beforeRevoke){
   if(action==='session')await db.prepare("UPDATE users SET session_version=session_version+1 WHERE tenant_id='delete-a' AND id='delete-admin'").run();
@@ -35,15 +42,31 @@ function instrumentDb(db:any){if(wrapped)return wrapped;const statements=new Wea
     return results;};const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});return wrapped;}
 function instrumentBucket(bucket:any){return new Proxy(bucket,{get(target,key){if(key==='delete')return async(...args:any[])=>{
   r2Deletes++;if(failR2Once){failR2Once=false;throw new Error('synthetic lost R2 response');}return target.delete(...args);};
+  if(key==='put')return async(...args:any[])=>{if(putGate.armed){putGate.started=true;await putGate.wait;}return target.put(...args);};
   const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}});}
 
 export default {async fetch(request:Request,env:any,ctx:ExecutionContext){const url=new URL(request.url),db=instrumentDb(env.DB),bucket=instrumentBucket(env.ATTACHMENTS_BUCKET);
   if(url.pathname==='/__knowledge-delete-control'){
     if(request.method==='POST'){const body=await request.json() as {beforeRevoke?:typeof beforeRevoke;beforeEffect?:typeof beforeEffect;
-      failR2Once?:boolean;failVectorOnce?:boolean;reset?:boolean};
+      failR2Once?:boolean;failVectorOnce?:boolean;reset?:boolean;armPut?:boolean;releasePut?:boolean;armUpsert?:boolean;releaseUpsert?:boolean};
       if(body.reset)r2Deletes=vectorDeleteCalls=vectorIds=d1Reads=d1Writes=0;
+      if(body.armPut)arm(putGate);if(body.releasePut)release(putGate);if(body.armUpsert)arm(upsertGate);if(body.releaseUpsert)release(upsertGate);
       beforeRevoke=body.beforeRevoke;beforeEffect=body.beforeEffect;failR2Once=body.failR2Once??false;failVectorOnce=body.failVectorOnce??false;}
-    return Response.json({r2Deletes,vectorDeleteCalls,vectorIds,d1Reads,d1Writes});
+    return Response.json({r2Deletes,vectorDeleteCalls,vectorIds,d1Reads,d1Writes,putStarted:putGate.started,
+      upsertStarted:upsertGate.started,storedVectors:storedVectors.size});
+  }
+  if(url.pathname==='/__knowledge-delete-stage-source'){
+    const body=await request.json() as {documentId:string};const scope=createSystemTenantScope({tenantId:'delete-a',actor:'vectorize-workflow'});
+    const deps=createTenantRequestDeps(scope,{...env,DB:db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:vector});
+    try{await new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array(1024).fill(0)} as any)
+      .updateArticle(body.documentId,'Late source','late source bytes',null,'answer',{status:'disabled'});return Response.json({outcome:'complete'});}
+    catch{return Response.json({outcome:'superseded'},{status:409});}
+  }
+  if(url.pathname==='/__knowledge-delete-index-chunk'){
+    const body=await request.json() as {documentId:string;version:number;chunkIndex:number};const scope=createSystemTenantScope({tenantId:'delete-a',actor:'vectorize-workflow'});
+    const deps=createTenantRequestDeps(scope,{...env,DB:db,ATTACHMENTS_BUCKET:bucket,VECTOR_INDEX:vector});
+    const outcome=await new TenantKnowledgeService(deps,{generateEmbeddings:async()=>Array(1024).fill(0)} as any)
+      .indexManifestChunk(body.documentId,body.version,body.chunkIndex);return Response.json({outcome});
   }
   if(url.pathname==='/__knowledge-delete-step'){
     const body=await request.json() as {tenantId:string;documentId:string;deleteToken:string;purpose:'new-work'|'recovery'};

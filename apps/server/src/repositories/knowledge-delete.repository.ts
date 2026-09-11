@@ -83,7 +83,7 @@ export class KnowledgeDeleteRepository{
       legacy_source_done AS legacySourceDone,source_cursor AS sourceCursor,sources_done AS sourcesDone,
       vector_version_cursor AS vectorVersion,vector_chunk_cursor AS vectorChunk,legacy_vector_cursor AS legacyVector,
       vectors_done AS vectorsDone,state FROM knowledge_delete_jobs WHERE tenant_id=? AND document_id=? AND source_kind='document'
-      AND delete_token=? AND state IN ('active','legacy_manifest_required','finalizing') AND ${guard.sql} LIMIT 1`)
+      AND delete_token=? AND state IN ('active','producer_unresolved','legacy_manifest_required','finalizing') AND ${guard.sql} LIMIT 1`)
       .bind(this.scope.tenantId,documentId,token,...guard.values).first<{legacyPath:string|null;legacyCount:number|null;maxVersion:number;
         legacySourceDone:number;sourceCursor:number;sourcesDone:number;vectorVersion:number;vectorChunk:number;legacyVector:number;
         vectorsDone:number;state:string}>();
@@ -94,12 +94,18 @@ export class KnowledgeDeleteRepository{
     const guard=this.admitted(authority),a=`${guard.sql}`;
     if(j.state==='legacy_manifest_required')return 'blocked';
     if(!j.sourcesDone){
-      const active=await this.db.prepare(`SELECT 1 FROM knowledge_index_jobs x JOIN knowledge_index_versions v
+      const active=await this.db.prepare(`SELECT CASE WHEN x.provider_lease_expires_at IS NULL OR
+          x.provider_lease_expires_at<=CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS expired FROM knowledge_index_jobs x JOIN knowledge_index_versions v
         ON v.tenant_id=x.tenant_id AND v.document_id=x.document_id AND v.version=x.version
         WHERE x.tenant_id=? AND x.document_id=? AND v.source_kind='document' AND v.version<=?
-          AND x.state='source_pending' AND x.provider_lease_expires_at>CURRENT_TIMESTAMP AND ${a} LIMIT 1`)
-        .bind(this.scope.tenantId,documentId,j.maxVersion,...guard.values).first();
-      if(active)return 'blocked';
+          AND x.state='source_pending' AND ${a} LIMIT 1`)
+        .bind(this.scope.tenantId,documentId,j.maxVersion,...guard.values).first<{expired:number}>();
+      if(active){if(active.expired)await this.db.prepare(`UPDATE knowledge_delete_jobs SET state='producer_unresolved',updated_at=CURRENT_TIMESTAMP
+          WHERE tenant_id=? AND document_id=? AND source_kind='document' AND delete_token=? AND state='active' AND ${a}`)
+          .bind(this.scope.tenantId,documentId,token,...guard.values).run();return 'blocked';}
+      if(j.state==='producer_unresolved')await this.db.prepare(`UPDATE knowledge_delete_jobs SET state='active',updated_at=CURRENT_TIMESTAMP
+        WHERE tenant_id=? AND document_id=? AND source_kind='document' AND delete_token=? AND state='producer_unresolved' AND ${a}`)
+        .bind(this.scope.tenantId,documentId,token,...guard.values).run();
       if(!j.legacySourceDone){
         const statements:D1PreparedStatement[]=[];
         if(j.legacyPath)statements.push(this.db.prepare(`INSERT OR IGNORE INTO knowledge_delete_work
@@ -128,12 +134,18 @@ export class KnowledgeDeleteRepository{
         .bind(this.scope.tenantId,documentId,token,...guard.values).run();return 'advanced';
     }
     if(!j.vectorsDone){
-      const live=await this.db.prepare(`SELECT 1 FROM knowledge_index_chunks c JOIN knowledge_index_versions v
+      const live=await this.db.prepare(`SELECT CASE WHEN c.provider_lease_expires_at IS NULL OR
+          c.provider_lease_expires_at<=CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS expired FROM knowledge_index_chunks c JOIN knowledge_index_versions v
         ON v.tenant_id=c.tenant_id AND v.document_id=c.document_id AND v.version=c.version
         WHERE c.tenant_id=? AND c.document_id=? AND v.source_kind='document' AND v.version<=?
-          AND c.state='claimed' AND c.provider_lease_expires_at>CURRENT_TIMESTAMP AND ${a} LIMIT 1`)
-        .bind(this.scope.tenantId,documentId,j.maxVersion,...guard.values).first();
-      if(live)return 'blocked';
+          AND c.state='claimed' AND ${a} LIMIT 1`)
+        .bind(this.scope.tenantId,documentId,j.maxVersion,...guard.values).first<{expired:number}>();
+      if(live){if(live.expired)await this.db.prepare(`UPDATE knowledge_delete_jobs SET state='producer_unresolved',updated_at=CURRENT_TIMESTAMP
+          WHERE tenant_id=? AND document_id=? AND source_kind='document' AND delete_token=? AND state='active' AND ${a}`)
+          .bind(this.scope.tenantId,documentId,token,...guard.values).run();return 'blocked';}
+      if(j.state==='producer_unresolved')await this.db.prepare(`UPDATE knowledge_delete_jobs SET state='active',updated_at=CURRENT_TIMESTAMP
+        WHERE tenant_id=? AND document_id=? AND source_kind='document' AND delete_token=? AND state='producer_unresolved' AND ${a}`)
+        .bind(this.scope.tenantId,documentId,token,...guard.values).run();
       const chunks=(await this.db.prepare(`SELECT c.version,c.chunk_index AS chunkIndex,c.vector_id AS vectorId
         FROM knowledge_index_chunks c JOIN knowledge_index_versions v ON v.tenant_id=c.tenant_id AND v.document_id=c.document_id AND v.version=c.version
         WHERE c.tenant_id=? AND c.document_id=? AND v.source_kind='document' AND v.version<=?
@@ -275,7 +287,7 @@ export class KnowledgeDeleteRepository{
   async nextContinuation(documentId:string,token:string):Promise<'new-work'|'recovery'|null>{
     const row=await this.db.prepare(`SELECT CASE WHEN EXISTS (SELECT 1 FROM knowledge_delete_work w WHERE w.tenant_id=j.tenant_id
       AND w.document_id=j.document_id AND w.source_kind='document' AND w.delete_token=j.delete_token AND w.state='uncertain')
-      THEN 'recovery' ELSE 'new-work' END AS purpose FROM knowledge_delete_jobs j
+      OR j.state='producer_unresolved' THEN 'recovery' ELSE 'new-work' END AS purpose FROM knowledge_delete_jobs j
       WHERE j.tenant_id=? AND j.document_id=? AND j.source_kind='document' AND j.delete_token=? LIMIT 1`)
       .bind(this.scope.tenantId,documentId,token).first<{purpose:'new-work'|'recovery'}>();return row?.purpose??null;
   }
@@ -284,7 +296,7 @@ export class KnowledgeDeleteRepository{
     return (await env.DB.prepare(`SELECT j.tenant_id AS tenantId,j.document_id AS documentId,j.delete_token AS token,
       CASE WHEN EXISTS (SELECT 1 FROM knowledge_delete_work w WHERE w.tenant_id=j.tenant_id AND w.document_id=j.document_id
         AND w.source_kind='document' AND w.delete_token=j.delete_token AND w.state IN ('uncertain','claimed') AND (w.lease_expires_at IS NULL OR w.lease_expires_at<=CURRENT_TIMESTAMP))
-        THEN 'recovery' ELSE 'new-work' END AS purpose FROM knowledge_delete_jobs j
+        OR j.state='producer_unresolved' THEN 'recovery' ELSE 'new-work' END AS purpose FROM knowledge_delete_jobs j
       WHERE j.state IN ('active','finalizing') ORDER BY j.updated_at,j.tenant_id,j.document_id LIMIT ?`).bind(limit)
       .all<{tenantId:string;documentId:string;token:string;purpose:'new-work'|'recovery'}>()).results;
   }

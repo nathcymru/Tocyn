@@ -197,7 +197,10 @@ export class TenantKnowledgeService {
       }
       await this.deps.vectorStorage.upsert(chunk.vectorId, embedding, { source_id: documentId, type: 'document', text: chunk.text,
         category_id: source.category_id, tier: source.tier, status: doc.status, source_version: version, chunk_index: chunkIndex });
-      if(!await index.indexed(documentId, version, chunkIndex))return 'stale';
+      if(!await index.indexed(documentId, version, chunkIndex)){
+        await index.uncertain(documentId,version,chunkIndex);
+        return 'stale';
+      }
       if (chunkIndex + 1 < source.chunk_count) return 'next';
       const complete = await index.completeIfFinished(documentId, version);
       if (complete) {
@@ -263,7 +266,10 @@ export class TenantKnowledgeService {
       }
       await this.deps.vectorStorage.upsert(chunk.vectorId, embedding, {
         source_id: articleId, type: 'qa', text: chunk.text, tier: source.tier, status: 'published', source_version: version, chunk_index: chunkIndex });
-      if(!await index.indexed(articleId, version, chunkIndex))return 'stale';
+      if(!await index.indexed(articleId, version, chunkIndex)){
+        await index.uncertain(articleId,version,chunkIndex);
+        return 'stale';
+      }
       if (chunkIndex + 1 < source.chunk_count) return 'next';
       return await index.completeIfFinished(articleId, version) ? 'complete' : 'next';
     } catch (error) { await index.uncertain(articleId, version, chunkIndex); throw error; }

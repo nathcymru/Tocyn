@@ -15,7 +15,7 @@ CREATE TABLE knowledge_delete_jobs (
   vector_chunk_cursor INTEGER NOT NULL DEFAULT -1 CHECK (vector_chunk_cursor>=-1),
   legacy_vector_cursor INTEGER NOT NULL DEFAULT 0 CHECK (legacy_vector_cursor>=0),
   vectors_done INTEGER NOT NULL DEFAULT 0 CHECK (vectors_done IN (0,1)),
-  state TEXT NOT NULL CHECK (state IN ('active','legacy_manifest_required','finalizing')) DEFAULT 'active',
+  state TEXT NOT NULL CHECK (state IN ('active','producer_unresolved','legacy_manifest_required','finalizing')) DEFAULT 'active',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (tenant_id,document_id,source_kind),

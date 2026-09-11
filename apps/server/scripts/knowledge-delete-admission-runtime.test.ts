@@ -7,6 +7,7 @@ import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import {SignJWT} from 'jose';
 import {splitSql} from './split-sql';
 import {KNOWLEDGE_DELETE_HTTP_ENVELOPE,KNOWLEDGE_DELETE_STEP_ENVELOPE} from '../src/budgets/knowledge-delete-admission.service';
+import {KnowledgeDeleteRepository} from '../src/repositories/knowledge-delete.repository';
 
 const root=resolve(import.meta.dirname,'..'),now=Math.floor(Date.now()/1000)*1000,secret='synthetic-knowledge-delete-secret-32-chars';
 const dimensions=['workerRequests','d1RowsRead','d1RowsWritten','r2StorageBytes','r2ClassAOperations','r2ClassBOperations','workflowExecutions',
@@ -37,16 +38,22 @@ async function fixture(){const bundled=await build({entryPoints:[resolve(import.
   }catch(error){await mf.dispose();throw error;}}
 async function remove(f:Awaited<ReturnType<typeof fixture>>,tenantId:string,id:string){return f.mf.dispatchFetch(`http://runtime.test/api/knowledge/articles/${id}`,
   {method:'DELETE',headers:{Authorization:`Bearer ${await f.token(tenantId)}`}});}
-type Control=Readonly<{beforeRevoke?:'session'|'policy';beforeEffect?:'closure';failR2Once?:boolean;failVectorOnce?:boolean;reset?:boolean}>;
+type Control=Readonly<{beforeRevoke?:'session'|'policy';beforeEffect?:'closure';failR2Once?:boolean;failVectorOnce?:boolean;reset?:boolean;
+  armPut?:boolean;releasePut?:boolean;armUpsert?:boolean;releaseUpsert?:boolean}>;
 async function control(f:Awaited<ReturnType<typeof fixture>>,change?:Control|'session'|'policy'){
   const body=typeof change==='string'?{beforeRevoke:change}:change;
   return f.mf.dispatchFetch('http://runtime.test/__knowledge-delete-control',body?{method:'POST',body:JSON.stringify(body)}:undefined)
-    .then(r=>r.json() as Promise<{r2Deletes:number;vectorDeleteCalls:number;vectorIds:number;d1Reads:number;d1Writes:number}>);}
+    .then(r=>r.json() as Promise<{r2Deletes:number;vectorDeleteCalls:number;vectorIds:number;d1Reads:number;d1Writes:number;
+      putStarted:boolean;upsertStarted:boolean;storedVectors:number}>);}
 async function step(f:Awaited<ReturnType<typeof fixture>>,documentId:string,token:string,purpose:'new-work'|'recovery'='new-work'){
   return f.mf.dispatchFetch('http://runtime.test/__knowledge-delete-step',{method:'POST',body:JSON.stringify({tenantId:'delete-a',documentId,deleteToken:token,purpose})})
     .then(r=>r.json() as Promise<{outcome:'next'|'complete'|'blocked'}>);}
 async function doc(db:any,tenant:string,id:string,path:string,status='published',chunks=0){await db.prepare(`INSERT INTO knowledge_docs
   (tenant_id,id,title,file_path,status,chunk_count,tier) VALUES (?,?,?, ?,?,?,'answer')`).bind(tenant,id,`${tenant} title`,path,status,chunks).run();}
+async function waitFor(f:Awaited<ReturnType<typeof fixture>>,field:'putStarted'|'upsertStarted'){
+  const deadline=Date.now()+5_000;do{if((await control(f))[field])return;await new Promise(resolve=>setTimeout(resolve,20));}while(Date.now()<deadline);
+  throw new Error(`Timed out waiting for ${field}`);
+}
 
 test('admitted DELETE preserves success/missing/isolation and current authority fencing',async t=>{const f=await fixture();try{
   await doc(f.db,'delete-a','shared','knowledge/shared/a');await doc(f.db,'delete-b','shared','knowledge/shared/b');
@@ -135,23 +142,43 @@ test('a lost provider response retains uncertain ownership and a newly charged r
   assert.equal(outcome,'complete');assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_delete_tombstones WHERE tenant_id='delete-a' AND document_id='lost'").first(),null);
 }finally{await f.mf.dispose();}});
 
-test('deletion waits for an admitted source lease, then invalidates the stalled producer before cleanup',async()=>{const f=await fixture();try{
-  await doc(f.db,'delete-a','stalled','knowledge/stalled/body/versions/1','pending',0);
-  await f.db.batch([
-    f.db.prepare(`INSERT INTO knowledge_index_versions
-      (tenant_id,document_id,source_kind,version,file_path,tier,state,chunk_count,source_bytes)
-      VALUES ('delete-a','stalled','document',1,'knowledge/stalled/body/versions/1','answer','source_pending',0,12)`),
-    f.db.prepare(`INSERT INTO knowledge_index_jobs
-      (tenant_id,document_id,version,next_chunk_index,state,provider_lease_expires_at)
-      VALUES ('delete-a','stalled',1,0,'source_pending',datetime('now','+5 minutes'))`),
-  ]);
-  assert.equal((await remove(f,'delete-a','stalled')).status,200);const job=await f.db.prepare("SELECT delete_token FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id='stalled'")
-    .first<{delete_token:string}>();assert.ok(job);
-  assert.equal((await step(f,'stalled',job!.delete_token)).outcome,'blocked');assert.equal((await control(f)).r2Deletes,0);
-  assert.deepEqual(await f.db.prepare("SELECT v.state,j.state AS job_state FROM knowledge_index_versions v JOIN knowledge_index_jobs j USING (tenant_id,document_id,version) WHERE v.tenant_id='delete-a' AND v.document_id='stalled'").first(),
-    {state:'withdrawn',job_state:'source_pending'});
-  await f.db.prepare("UPDATE knowledge_index_jobs SET provider_lease_expires_at=datetime('now','-1 second') WHERE tenant_id='delete-a' AND document_id='stalled'").run();
-  let outcome:'next'|'complete'|'blocked'='next';for(let turn=0;turn<15&&outcome!=='complete';turn++)outcome=(await step(f,'stalled',job!.delete_token,'recovery')).outcome;
-  assert.equal(outcome,'complete');assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_index_versions WHERE tenant_id='delete-a' AND document_id='stalled'").first(),null);
-  assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_docs WHERE tenant_id='delete-a' AND id='stalled'").first(),null);
+test('expired source lease retains cleanup ownership until an already-started R2 put settles',async()=>{const f=await fixture();try{
+  const id='stalled-source';await doc(f.db,'delete-a',id,'knowledge/stalled-source/original','pending',0);await control(f,{armPut:true});
+  const producer=f.mf.dispatchFetch('http://runtime.test/__knowledge-delete-stage-source',{method:'POST',body:JSON.stringify({documentId:id})});
+  await waitFor(f,'putStarted');const version=await f.db.prepare("SELECT version,file_path AS path FROM knowledge_index_versions WHERE tenant_id='delete-a' AND document_id=?")
+    .bind(id).first<{version:number;path:string}>();assert.ok(version);
+  assert.equal((await remove(f,'delete-a',id)).status,200);const job=await f.db.prepare("SELECT delete_token FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?")
+    .bind(id).first<{delete_token:string}>();assert.ok(job);
+  await f.db.prepare("UPDATE knowledge_index_jobs SET provider_lease_expires_at=datetime('now','-1 second') WHERE tenant_id='delete-a' AND document_id=?").bind(id).run();
+  assert.equal((await step(f,id,job!.delete_token,'recovery')).outcome,'blocked');assert.ok(await f.db.prepare("SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first());
+  assert.equal((await f.db.prepare("SELECT state FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first<{state:string}>())?.state,'producer_unresolved');
+  assert.equal((await KnowledgeDeleteRepository.pending({DB:f.db} as any)).some(item=>item.documentId===id),false);
+  await control(f,{releasePut:true});assert.equal((await producer).status,409);assert.ok(await f.bucket.get(`delete-a/${version!.path}`));
+  assert.deepEqual(await f.db.prepare("SELECT v.state,j.state AS job_state FROM knowledge_index_versions v JOIN knowledge_index_jobs j USING (tenant_id,document_id,version) WHERE v.tenant_id='delete-a' AND v.document_id=?").bind(id).first(),
+    {state:'failed',job_state:'failed_cleanup'});
+  assert.equal((await f.db.prepare("SELECT state FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first<{state:string}>())?.state,'active');
+  assert.equal((await KnowledgeDeleteRepository.pending({DB:f.db} as any)).some(item=>item.documentId===id),true);
+  let outcome:'next'|'complete'|'blocked'='next';for(let turn=0;turn<16&&outcome!=='complete';turn++)outcome=(await step(f,id,job!.delete_token,'recovery')).outcome;
+  assert.equal(outcome,'complete');assert.equal(await f.bucket.get(`delete-a/${version!.path}`),null);assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first(),null);
+}finally{await f.mf.dispose();}});
+
+test('expired index lease retains cleanup ownership until an already-started vector upsert settles',async()=>{const f=await fixture();try{
+  const id='stalled-index',path='knowledge/stalled-index/body/versions/1';await doc(f.db,'delete-a',id,path,'pending',1);await f.db.batch([
+    f.db.prepare(`INSERT INTO knowledge_index_versions (tenant_id,document_id,source_kind,version,file_path,tier,state,chunk_count,source_bytes)
+      VALUES ('delete-a',?,'document',1,?,'answer','pending',1,12)`).bind(id,path),
+    f.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,next_chunk_index,state) VALUES ('delete-a',?,1,0,'pending')`).bind(id),
+    f.db.prepare(`INSERT INTO knowledge_index_chunks (tenant_id,document_id,version,chunk_index,chunk_text,state,vector_id)
+      VALUES ('delete-a',?,1,0,'late vector','pending',?)`).bind(id,`doc_${id}_v1_0`),
+  ]);await control(f,{armUpsert:true});
+  const producer=f.mf.dispatchFetch('http://runtime.test/__knowledge-delete-index-chunk',{method:'POST',body:JSON.stringify({documentId:id,version:1,chunkIndex:0})});
+  await waitFor(f,'upsertStarted');assert.equal((await remove(f,'delete-a',id)).status,200);const job=await f.db.prepare("SELECT delete_token FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?")
+    .bind(id).first<{delete_token:string}>();assert.ok(job);await f.db.prepare("UPDATE knowledge_index_chunks SET provider_lease_expires_at=datetime('now','-1 second') WHERE tenant_id='delete-a' AND document_id=?").bind(id).run();
+  let outcome:'next'|'complete'|'blocked'='next';for(let turn=0;turn<8&&outcome!=='blocked';turn++)outcome=(await step(f,id,job!.delete_token,'recovery')).outcome;
+  assert.equal(outcome,'blocked');assert.equal((await control(f)).storedVectors,0);assert.ok(await f.db.prepare("SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first());
+  assert.equal((await f.db.prepare("SELECT state FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first<{state:string}>())?.state,'producer_unresolved');
+  await control(f,{releaseUpsert:true});assert.deepEqual(await (await producer).json(),{outcome:'stale'});assert.equal((await control(f)).storedVectors,1);
+  assert.equal((await f.db.prepare("SELECT state FROM knowledge_index_chunks WHERE tenant_id='delete-a' AND document_id=?").bind(id).first<{state:string}>())?.state,'uncertain');
+  assert.equal((await f.db.prepare("SELECT state FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first<{state:string}>())?.state,'active');
+  outcome='next';for(let turn=0;turn<16&&outcome!=='complete';turn++)outcome=(await step(f,id,job!.delete_token,'recovery')).outcome;
+  assert.equal(outcome,'complete');assert.equal((await control(f)).storedVectors,0);assert.equal(await f.db.prepare("SELECT 1 FROM knowledge_delete_jobs WHERE tenant_id='delete-a' AND document_id=?").bind(id).first(),null);
 }finally{await f.mf.dispose();}});

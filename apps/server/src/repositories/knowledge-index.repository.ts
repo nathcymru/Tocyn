@@ -219,11 +219,19 @@ export class KnowledgeIndexRepository {
     await this.db.batch([
       ...(fence ? knowledgeSourceFenceStatements(this.db,this.scope,fence,true) : []),
       this.db.prepare(`UPDATE knowledge_index_versions SET state='failed'
-        WHERE tenant_id=? AND document_id=? AND version=? AND state IN ('source_pending','preparing')`).bind(this.scope.tenantId, documentId, version),
+        WHERE tenant_id=? AND document_id=? AND version=? AND (state IN ('source_pending','preparing') OR
+          (state='withdrawn' AND source_kind='document' AND EXISTS (SELECT 1 FROM knowledge_delete_jobs
+            WHERE tenant_id=? AND document_id=? AND source_kind='document')))`)
+        .bind(this.scope.tenantId, documentId, version,this.scope.tenantId,documentId),
       this.db.prepare(`INSERT INTO knowledge_index_jobs (tenant_id,document_id,version,state)
         SELECT ?,?,?,'failed_cleanup' WHERE changes()=1
         ON CONFLICT(tenant_id,document_id,version) DO UPDATE SET state='failed_cleanup',dispatch_attempts=0,provider_lease_expires_at=NULL
           WHERE knowledge_index_jobs.state IN ('source_pending','preparing')`).bind(this.scope.tenantId, documentId, version),
+      this.db.prepare(`UPDATE knowledge_delete_jobs SET state='active',updated_at=CURRENT_TIMESTAMP
+        WHERE tenant_id=? AND document_id=? AND source_kind='document' AND state='producer_unresolved'
+          AND EXISTS (SELECT 1 FROM knowledge_index_versions WHERE tenant_id=? AND document_id=? AND version=?
+            AND source_kind='document' AND state='failed')`)
+        .bind(this.scope.tenantId,documentId,this.scope.tenantId,documentId,version),
     ]);
   }
 
@@ -360,6 +368,10 @@ export class KnowledgeIndexRepository {
         .bind(this.scope.tenantId, documentId, version),
       this.db.prepare(`UPDATE knowledge_index_versions SET state='failed' WHERE tenant_id=? AND document_id=? AND version=?`)
         .bind(this.scope.tenantId, documentId, version),
+      this.db.prepare(`UPDATE knowledge_delete_jobs SET state='active',updated_at=CURRENT_TIMESTAMP
+        WHERE tenant_id=? AND document_id=? AND source_kind='document' AND state='producer_unresolved'
+          AND EXISTS (SELECT 1 FROM knowledge_index_versions WHERE tenant_id=? AND document_id=? AND version=? AND source_kind='document')`)
+        .bind(this.scope.tenantId,documentId,this.scope.tenantId,documentId,version),
     ]);
   }
 
