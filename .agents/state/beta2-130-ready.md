@@ -1,0 +1,21 @@
+# #130 queue/snooze preparation — read-only
+
+Reviewed current GitHub130 and210integration application cfa931b (on20554f0332). No130implementation or dependency waiver. Owning prerequisites129/136/73/64: earlier acceptance evidence covers129/136/73; full64 remains outstanding. Native GitHub edges must be reverified at actual start. Baseline24h/allowance72h and current26Sep–9Octforecast remain unchanged.
+
+## Evidence and preserved scope
+
+Issue130 owns authoritative Mine/Unassigned/Mentions/Drafts/Snoozed/NeedsAction/All predicates, audited snooze/next-action timestamps, customer-activity/due resurface policy, measured bounded aggregate counts, saved custom views and inclusion reasons. Team-capacity routing remains137. ADR18 keeps attention additive to canonical lifecycle; no shadow ticket system or permission from presentation state.
+
+Traceability UX-F05-L299–311 explicitly requires server authority, who/when/why audit, presets plus explicitdate/time, deterministic timezones, exclusion from normal actionable view, Snoozed inclusion, customer-activity policy, due-time recovery without human memory, concurrency/retry and no silent loss if background processing delays.
+
+Current server types/operator-workspace.ts and dashboard hooks/useOperatorWorkspaceState.ts enumerate all viewnames. A focused search of production server/dashboard code found snoozed/needs_action only in these enums, not operative predicates. This is evidence of persistent presentation contracts, not implemented queues. OperatorWorkspaceRepository already has tenant/user-qualified metadata-only draft listing, current-group filtering and48h retention; reuse, do not recreate129. Dashboard handler ticketlist accepts assigned_to and current bounded ticket-list machinery; reuse current authority, saved-filter and scan accounting rather than arbitrary row caps. Canonical SLA/waiting accepted73/136 must stay authoritative.
+
+## Implementation sequence after64clears
+
+1. One130owner defines exact predicates and deterministic transitions from current assignment, durable mention/activity, draft metadata, support-state/waiting semantics, timestamp and custom filter contracts. Settle NeedsAction and new-customer activity behavior explicitly in the issue contract; do not treat enum labels as specification. Preserve all source requirements.
+2. Add tenant-qualified attention state with CAS/revision, attributable audit and immutable retry receipt. Authoritative UTC plus explicit display timezone; snooze never changes SLA clocks implicitly. Current actor permission and exact budget checks at write; no stale tenant restoration.
+3. Add common predicate layer for lists/counts/reasons so counts cannot disagree with visible authorized rows. Full historical list semantics, measured native D1 costs, maintained metadata before admission. Scheduled resurface and read-time due recognition must converge idempotently; delayed scheduler cannot hide overdue work.
+4. Integrate TicketListPage/useOperatorWorkspaceState and existing shared primitives after APIcontract; preserve savedcustom filters and selection/focus. UI/list view ownership separate from server repository/migration ownership if parallel workers become useful; oneintegrationowner.
+5. Native synthetic two-tenant/two-operator fixture: every queue/count and inclusion reason; snooze→due/customerreply, waiting/SLA interaction, midnight/DST/UTC, revoked access, stale CAS, concurrentretries, schedulerinterruption, complete largehistories/customfilters and exhaustedresources. Browser: keyboard/screenreader focusafteraction, truthfulqueueclear, AIoff and reloadcontinuity. Do not mark130complete from APItests alone.
+
+Exact likely files: apps/server/src/types/operator-workspace.ts; handlers/operator-workspace.handler.ts; repositories/operator-workspace.repository.ts plus new attention repository; services/operator-workspace.service.ts; repositories/ticket-list-scan.repository.ts; canonical support/SLA/activity interfaces; apps/dashboard/src/pages/TicketListPage.tsx; hooks/useOperatorWorkspaceState.ts. Determine importimpact/current contracts withtocyn-context atstart, not wholesale reread. No migrations or interface edits were made for this handoff.
