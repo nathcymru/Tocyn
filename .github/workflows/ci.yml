@@ -91,6 +91,11 @@ jobs:
         run: |
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.operational-metrics.json
           npm run test:operational-metrics --workspace=apps/server
+      - name: Verify bounded budget admission and durable recovery
+        if: matrix.check == 'test'
+        run: |
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.budget-runtime.json
+          node --import tsx --test --test-concurrency=1 apps/server/scripts/budget-coordinator-do-runtime.test.ts apps/server/scripts/budget-authority-runtime.test.ts apps/server/scripts/budget-grant-holder-runtime.test.ts apps/server/scripts/budget-admission-runtime.test.ts
       - name: Verify operator theme preference isolation and recovery
         if: matrix.check == 'test'
         run: |

@@ -5,6 +5,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import type { CostPolicy, EffectiveTenantCostPolicy, ResourceAmounts } from '@luminatick/shared';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 import type { TrustedBudgetCoordinatorAuthority } from '../src/budgets/owner-aggregate';
+import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 
 const NOW = Date.UTC(2026, 8, 11, 9, 0, 0);
 
@@ -41,7 +42,7 @@ test('real Miniflare coordinator atomically caps two tenant allocations at their
       name: 'budget-coordinator-proof', modules: true, script: bundled.outputFiles[0].text,
       durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO' }, unsafeEphemeralDurableObjects: true,
     }] }));
-    const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO');
+    const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
     const coordinator = namespace.get(namespace.idFromName('server-derived-owner-aggregate')) as unknown as BudgetCoordinatorDO;
     await coordinator.initializeFromTrustedAuthority(authority());
 
@@ -81,7 +82,7 @@ test('real Miniflare coordinator rejects uninitialized or replacement authority 
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-coordinator-bootstrap-proof', modules: true, script: bundled.outputFiles[0].text,
       durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO' }, unsafeEphemeralDurableObjects: true }] }));
-    const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO');
+    const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
     const coordinator = namespace.get(namespace.idFromName('server-derived-owner-aggregate')) as unknown as BudgetCoordinatorDO;
     await assert.rejects(() => coordinator.reserveFromTrustedAuthority(reserve('tenant-a', 'holder-a', 'before-bootstrap', 1)));
     await coordinator.initializeFromTrustedAuthority(authority());

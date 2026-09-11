@@ -3,6 +3,7 @@ import test from 'node:test';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import type { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
+import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 
 const NOW = Date.UTC(2026, 8, 11, 11, 0, 0);
 
@@ -12,7 +13,7 @@ test('real Miniflare warm holder persists a decrement before reply and rejects r
   try {
     mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'budget-holder-proof', modules: true, script: bundled.outputFiles[0].text,
       durableObjects: { BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' }, unsafeEphemeralDurableObjects: true }] }));
-    const namespace = await mf.getDurableObjectNamespace('BUDGET_GRANT_HOLDER_DO');
+    const namespace = await mf.getDurableObjectNamespace('BUDGET_GRANT_HOLDER_DO') as unknown as DurableObjectNamespace<BudgetGrantHolderDO>;
     const holder = namespace.get(namespace.idFromName(JSON.stringify(['budget-grant-holder-v1', 'tenant-a', 'holder-a']))) as unknown as BudgetGrantHolderDO;
     const grant = {
       reservationId: 'server-issued-reservation-a:1', holderId: 'holder-a', idempotencyKey: 'grant-a', purpose: 'new-work' as const,

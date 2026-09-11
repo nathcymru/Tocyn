@@ -9,6 +9,8 @@ import { splitSql } from './split-sql';
 import { BudgetAuthorityRepository } from '../src/budgets/authority-repository';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
+import type { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
+import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 
 const serverRoot = resolve(import.meta.dirname, '..');
 const now = Date.now();
@@ -84,7 +86,7 @@ test('real local API-key create reserves configured aggregate capacity before it
     assert.equal(snapshot.kind, 'active');
     if (snapshot.kind !== 'active') throw new Error('expected active synthetic authority');
     assert.equal(snapshot.authority.tenantAllocations.length, 32);
-    const coordinatorNamespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO');
+    const coordinatorNamespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
     const coordinator = coordinatorNamespace.get(coordinatorNamespace.idFromName(snapshot.authority.aggregateId)) as unknown as BudgetCoordinatorDO;
     await coordinator.refreshFromTrustedAuthority(snapshot.authority);
     const request = () => mf!.dispatchFetch('http://runtime.test/api/v1/tickets', {
@@ -154,12 +156,12 @@ test('real local admission gives distinct server-issued holder balances to separ
     );
     assert.equal(snapshot.kind, 'active');
     if (snapshot.kind !== 'active') throw new Error('expected active synthetic authority');
-    const coordinators = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO');
+    const coordinators = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
     const coordinator = coordinators.get(coordinators.idFromName(snapshot.authority.aggregateId)) as unknown as BudgetCoordinatorDO;
     const grants = (await coordinator.inspectForTrustedRuntime()).tenantStates.find(state => state.tenantId === 'runtime-tenant')?.grants ?? [];
     assert.equal(grants.length, 4, 'two creates and two replies reserve four distinct canonical admissions');
     assert.equal(new Set(grants.map(grant => grant.reservationId)).size, 4);
-    const holders = await mf.getDurableObjectNamespace('BUDGET_GRANT_HOLDER_DO');
+    const holders = await mf.getDurableObjectNamespace('BUDGET_GRANT_HOLDER_DO') as unknown as DurableObjectNamespace<BudgetGrantHolderDO>;
     for (const grant of grants) {
       const holder = holders.get(holders.idFromName(JSON.stringify([
         'budget-grant-holder-v2', 'runtime-tenant', 'api-key:runtime-key', grant.reservationId,

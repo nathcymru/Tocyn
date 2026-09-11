@@ -8,7 +8,9 @@ import { createVerifiedTenantScope } from '../src/auth/scope';
 import { BUDGET_AUTHORITY_MAX_TENANT_ALLOCATIONS, BudgetAuthorityRepository } from '../src/budgets/authority-repository';
 import { BudgetCoordinatorService } from '../src/budgets/budget-coordinator.service';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
+import type { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
 import { splitSql } from './split-sql';
+import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 
 const NOW = Date.UTC(2026, 8, 11, 10, 0, 0);
 const serverRoot = resolve(import.meta.dirname, '..');
@@ -44,7 +46,7 @@ function snapshotRestriction(tenantId: string) {
   return { ...restriction(tenantId), limits: { workerRequests: 80 } };
 }
 
-async function seedAuthority(db: D1Database, policy = ownerPolicy(), tenantRestriction = restriction): Promise<void> {
+async function seedAuthority(db: D1Database, policy = ownerPolicy(), tenantRestriction: (tenantId: string) => ReturnType<typeof restriction> | ReturnType<typeof snapshotRestriction> = restriction): Promise<void> {
   await db.batch([
     db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version) VALUES ('tenant-a','actor-a','actor-a@example.test','admin',1)"),
     db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version) VALUES ('tenant-b','actor-b','actor-b@example.test','admin',1)"),
@@ -74,8 +76,8 @@ test('real local D1 authority derives a shared coordinator, expires stale policy
     await seedAuthority(db);
     let clock = NOW;
     const repository = new BudgetAuthorityRepository(db);
-    const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO');
-    const holders = await mf.getDurableObjectNamespace('BUDGET_GRANT_HOLDER_DO');
+    const namespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace;
+    const holders = await mf.getDurableObjectNamespace('BUDGET_GRANT_HOLDER_DO') as unknown as DurableObjectNamespace;
     const service = new BudgetCoordinatorService(repository, namespace, holders, { authorize: async scope => ({ kind: 'session' as const, sessionVersion: scope.authVersion }) }, () => clock);
     const tenantA = createVerifiedTenantScope('tenant-a', 'actor-a', ['admin'], 1);
     const tenantB = createVerifiedTenantScope('tenant-b', 'actor-b', ['admin'], 1);
@@ -260,7 +262,7 @@ test('real local D1 snapshot stops at the configured allocation sentinel and use
       WHERE a.deployment_id=? AND a.policy_id=? AND a.policy_revision=? AND a.authority_revision=? AND a.state='active'
         AND p.coordinator_id=? AND d.state='active' AND d.authority_revision=a.authority_revision LIMIT 129`)
       .bind('deployment-verified', 'owner-policy', 7, 1, 'server-derived-owner-aggregate').all<{ detail: string }>();
-    const details = plan.results.map(row => row.detail).join(' | ');
+    const details = plan.results.map((row: { detail: string }) => row.detail).join(' | ');
     assert.match(details, /idx_budget_tenant_authority/, `snapshot plan must use the bounded allocation index: ${details}`);
     const countPlan = await db.prepare(`EXPLAIN QUERY PLAN SELECT count(*) AS count FROM (
       SELECT 1 FROM budget_tenant_allocations a
@@ -271,7 +273,7 @@ test('real local D1 snapshot stops at the configured allocation sentinel and use
         AND p.coordinator_id=? AND d.state='active' AND d.authority_revision=? AND p.max_reservations=? AND p.authority_max_age_ms=?
       LIMIT 129)`)
       .bind('deployment-verified', 'owner-policy', 7, 1, 'server-derived-owner-aggregate', 1, 64, 30000).all<{ detail: string }>();
-    assert.match(countPlan.results.map(row => row.detail).join(' | '), /idx_budget_tenant_authority/, 'sentinel count must use the same bounded allocation index');
+    assert.match(countPlan.results.map((row: { detail: string }) => row.detail).join(' | '), /idx_budget_tenant_authority/, 'sentinel count must use the same bounded allocation index');
     const repository = new BudgetAuthorityRepository(db);
     const scope = createVerifiedTenantScope('tenant-a', 'actor-a', ['admin'], 1);
     const active = await repository.resolveForVerifiedScope(scope, NOW);
