@@ -86,12 +86,16 @@ export class OwnerIngressAdmissionCache{
   async admit(input:{repository:BudgetAuthorityRepository;namespace:DurableObjectNamespace;purpose:BudgetPurpose;now?:()=>number}):Promise<OwnerIngressAdmissionResult>{
     const clock=input.now??Date.now;let entry=this.entries.find(e=>e.bindingIdentity===input.repository.bindingIdentity&&e.namespace===input.namespace&&e.purpose===input.purpose);
     if(!entry){if(this.entries.length>=MAX_OWNER_INGRESS_BINDINGS)return{status:'rejected',reason:'unavailable'};entry={bindingIdentity:input.repository.bindingIdentity,namespace:input.namespace,purpose:input.purpose,failures:0};this.entries.push(entry)}
-    const now=clock();if(entry.terminalFailure==='exhausted'&&entry.retryAt!==undefined&&now>=entry.retryAt){entry.failures=0;entry.terminalFailure=undefined;entry.retryAt=undefined}
-    if(entry.terminalFailure)return{status:'rejected',reason:entry.terminalFailure,...(entry.retryAt?{retryAt:entry.retryAt}:{})};
-    if(entry.block?.available(now))return{status:'admitted',admission:entry.block.issue(input.repository,input.namespace)};
-    if(entry.block){await entry.block.retire(now,input.repository,input.namespace);entry.block=undefined}
-    if(!entry.pending)entry.pending=this.allocate(entry,input,clock);const pending=entry.pending,block=await pending;if(entry.pending===pending)entry.pending=undefined;
-    if(!block)return{status:'rejected',reason:entry.terminalFailure??entry.lastFailure??'unavailable',...(entry.retryAt?{retryAt:entry.retryAt}:{})};entry.block=block;return{status:'admitted',admission:block.issue(input.repository,input.namespace)};
+    for(;;){
+      const now=clock();if(entry.terminalFailure==='exhausted'&&entry.retryAt!==undefined&&now>=entry.retryAt){entry.failures=0;entry.terminalFailure=undefined;entry.retryAt=undefined}
+      if(entry.terminalFailure)return{status:'rejected',reason:entry.terminalFailure,...(entry.retryAt?{retryAt:entry.retryAt}:{})};
+      const current=entry.block;
+      if(current?.available(now))return{status:'admitted',admission:current.issue(input.repository,input.namespace)};
+      if(current){await current.retire(now,input.repository,input.namespace);if(entry.block===current)entry.block=undefined;continue}
+      if(!entry.pending)entry.pending=this.allocate(entry,input,clock);const pending=entry.pending,block=await pending;if(entry.pending===pending)entry.pending=undefined;
+      if(!block)return{status:'rejected',reason:entry.terminalFailure??entry.lastFailure??'unavailable',...(entry.retryAt?{retryAt:entry.retryAt}:{})};
+      if(!entry.block)entry.block=block;
+    }
   }
   private async allocate(entry:Entry,input:{repository:BudgetAuthorityRepository;namespace:DurableObjectNamespace;purpose:BudgetPurpose},clock:()=>number):Promise<IngressBlock|null>{
     const now=clock(),prior=entry.failures,authority=await input.repository.resolveForDeploymentIngress(now);if(!authority){this.failed(entry,'unavailable');return null}
