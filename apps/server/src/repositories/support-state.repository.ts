@@ -84,9 +84,52 @@ function boundedText(value: string | null | undefined, maximum: number, required
   return trimmed;
 }
 
+/** Snooze deadlines are canonical UTC instants so the due worker can compare
+ * them lexically in D1 without inheriting a browser timezone. */
+function snoozeDeadline(value: string | null | undefined): string | null | undefined {
+  if (value === undefined || value === null) return value;
+  if (value.length !== 24 || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
+    || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value || Date.parse(value) <= Date.now()) {
+    throw new SupportStateError('invalid', 'A snooze deadline must be a future UTC instant');
+  }
+  return value;
+}
+
 function actorValues(actor: ConversationActor) {
   if (actor.kind !== 'staff') throw new SupportStateError('invalid', 'Support-state administration requires a staff actor');
   return [actor.kind, actor.id] as const;
+}
+
+/**
+ * A public canonical customer reply is the only conversation mutation allowed
+ * to wake a shared snooze. The caller places these statements after the reply
+ * audit event and before its receipt, so duplicate/retried replies cannot
+ * create a partial resurface.
+ */
+export function customerReplyResurfaceStatements(db: D1Database, scope: VerifiedTenantScope, input: {
+  ticketId: string; articleId: string; conversationEventId: string;
+}): D1PreparedStatement[] {
+  return [
+    db.prepare(`INSERT INTO support_state_events
+      (tenant_id,id,ticket_id,definition_id,kind,actor_kind,actor_id,facts)
+      SELECT s.tenant_id,${uuidSql},s.ticket_id,s.definition_id,'ticket.transition','system',NULL,
+        json_object('before',json_object('snoozedUntil',s.snoozed_until),'after',json_object('snoozedUntil',NULL,'resurfaceReason','customer_reply'),
+          'trigger',json_object('articleId',?,'conversationEventId',?))
+      FROM ticket_support_state s WHERE s.tenant_id=? AND s.ticket_id=? AND s.snoozed_until IS NOT NULL
+        AND EXISTS (SELECT 1 FROM articles a WHERE a.tenant_id=s.tenant_id AND a.id=? AND a.ticket_id=s.ticket_id
+          AND a.sender_type='customer' AND a.is_internal=0)
+        AND EXISTS (SELECT 1 FROM conversation_events e WHERE e.tenant_id=s.tenant_id AND e.id=? AND e.ticket_id=s.ticket_id
+          AND e.article_id=? AND e.kind='message.reply' AND e.visibility='public')`)
+      .bind(input.articleId, input.conversationEventId, scope.tenantId, input.ticketId, input.articleId, input.conversationEventId, input.articleId),
+    db.prepare(`UPDATE ticket_support_state AS s SET snoozed_until=NULL,resurface_reason='customer_reply',
+      changed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),revision=revision+1
+      WHERE s.tenant_id=? AND s.ticket_id=? AND s.snoozed_until IS NOT NULL
+        AND EXISTS (SELECT 1 FROM articles a WHERE a.tenant_id=s.tenant_id AND a.id=? AND a.ticket_id=s.ticket_id
+          AND a.sender_type='customer' AND a.is_internal=0)
+        AND EXISTS (SELECT 1 FROM conversation_events e WHERE e.tenant_id=s.tenant_id AND e.id=? AND e.ticket_id=s.ticket_id
+          AND e.article_id=? AND e.kind='message.reply' AND e.visibility='public')`)
+      .bind(scope.tenantId, input.ticketId, input.articleId, input.conversationEventId, input.articleId),
+  ];
 }
 
 /**
@@ -138,7 +181,7 @@ export class SupportStateRepository {
 
   async getTicketState(ticketId: string): Promise<TicketSupportState | null> {
     return this.db.prepare(`SELECT s.ticket_id,s.definition_id,d.legacy_status AS lifecycle,
-      d.internal_label,d.public_label,s.waiting_reason,s.next_action,s.changed_at,s.revision
+      d.internal_label,d.public_label,s.waiting_reason,s.next_action,s.snoozed_until,s.resurface_reason,s.changed_at,s.revision
       FROM ticket_support_state s JOIN support_state_definitions d
         ON d.tenant_id=s.tenant_id AND d.id=s.definition_id
       WHERE s.tenant_id=? AND s.ticket_id=?`).bind(this.scope.tenantId, ticketId).first<TicketSupportState>();
@@ -223,20 +266,29 @@ export class SupportStateRepository {
     const [actorKind, actorId] = actorValues(actor);
     const waitingReason = boundedText(input.waitingReason, 512);
     const nextAction = boundedText(input.nextAction, 512);
+    const snoozedUntil = snoozeDeadline(input.snoozedUntil);
+    const snoozeSupplied = snoozedUntil === undefined ? 0 : 1;
+    // D1 does not bind undefined. The supplied flag preserves the distinction
+    // between omitted (retain) and explicit NULL (manually wake).
+    const snoozeValue = snoozedUntil ?? null;
     if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1 || !input.definitionId) throw new SupportStateError('invalid', 'A support-state compare-and-swap value is required');
     const token = crypto.randomUUID();
     const live = ticketWriteConstraint(fence, 't');
     const liveTicket = ticketWriteConstraint(fence, 'tickets');
     const validTarget = `EXISTS (SELECT 1 FROM support_state_definitions d WHERE d.tenant_id=s.tenant_id AND d.id=?
       AND d.is_active=1 AND (d.waiting_reason_required=0 OR ? IS NOT NULL) AND (d.next_action_required=0 OR ? IS NOT NULL))`;
-    const sameChange = '(s.definition_id IS NOT ? OR s.waiting_reason IS NOT ? OR s.next_action IS NOT ?)';
-    const beforeAfter = `json_object('before',json_object('definitionId',s.definition_id,'waitingReason',s.waiting_reason,'nextAction',s.next_action),
-      'after',json_object('definitionId',d.id,'lifecycle',d.legacy_status,'waitingReason',?,'nextAction',?))`;
+    const sameChange = '(s.definition_id IS NOT ? OR s.waiting_reason IS NOT ? OR s.next_action IS NOT ? OR (?=1 AND s.snoozed_until IS NOT ?))';
+    const beforeAfter = `json_object('before',json_object('definitionId',s.definition_id,'waitingReason',s.waiting_reason,'nextAction',s.next_action,
+        'snoozedUntil',s.snoozed_until,'resurfaceReason',s.resurface_reason),
+      'after',json_object('definitionId',d.id,'lifecycle',d.legacy_status,'waitingReason',?,'nextAction',?,
+        'snoozedUntil',CASE WHEN ?=1 THEN ? ELSE s.snoozed_until END,
+        'resurfaceReason',CASE WHEN ?=1 THEN CASE WHEN ? IS NULL THEN 'manual' ELSE NULL END ELSE s.resurface_reason END))`;
     const eventWhere = `t.tenant_id=? AND t.id=? AND s.revision=? AND ${sameChange} AND ${validTarget} AND ${live.sql}`;
     const admission = this.admission?.conditionalConversationStatements({
       sql: `EXISTS (SELECT 1 FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
         WHERE ${eventWhere})`,
-      values: [this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,input.definitionId,waitingReason,nextAction,...live.values],
+      values: [this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,snoozeSupplied,snoozeValue,
+        input.definitionId,waitingReason,nextAction,...live.values],
     }) ?? [];
     const results = await this.db.batch<TicketSupportState>([
       ...admission,
@@ -245,19 +297,24 @@ export class SupportStateRepository {
         SELECT t.tenant_id,${uuidSql},t.id,d.id,'ticket.transition',?,?,${beforeAfter}
         FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
         JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=? WHERE ${eventWhere}`)
-        .bind(actorKind,actorId,waitingReason,nextAction,input.definitionId,this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,input.definitionId,waitingReason,nextAction,...live.values),
+        .bind(actorKind,actorId,waitingReason,nextAction,snoozeSupplied,snoozeValue,snoozeSupplied,snoozeValue,input.definitionId,
+          this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,snoozeSupplied,snoozeValue,input.definitionId,waitingReason,nextAction,...live.values),
       this.db.prepare(`INSERT INTO conversation_events
         (tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
         SELECT t.tenant_id,${uuidSql},t.id,NULL,(SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=t.tenant_id AND e.ticket_id=t.id),
           'ticket.state_changed',?,?, 'mfa-staff','dashboard','internal',${beforeAfter}
         FROM tickets t JOIN ticket_support_state s ON s.tenant_id=t.tenant_id AND s.ticket_id=t.id
         JOIN support_state_definitions d ON d.tenant_id=s.tenant_id AND d.id=? WHERE ${eventWhere}`)
-        .bind(actorKind,actorId,waitingReason,nextAction,input.definitionId,this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,input.definitionId,waitingReason,nextAction,...live.values),
+        .bind(actorKind,actorId,waitingReason,nextAction,snoozeSupplied,snoozeValue,snoozeSupplied,snoozeValue,input.definitionId,
+          this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,snoozeSupplied,snoozeValue,input.definitionId,waitingReason,nextAction,...live.values),
       this.db.prepare(`UPDATE ticket_support_state AS s SET definition_id=?,waiting_reason=?,next_action=?,
+        snoozed_until=CASE WHEN ?=1 THEN ? ELSE snoozed_until END,
+        resurface_reason=CASE WHEN ?=1 THEN CASE WHEN ? IS NULL THEN 'manual' ELSE NULL END ELSE resurface_reason END,
         changed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),revision=revision+1,transition_token=?
         WHERE s.tenant_id=? AND s.ticket_id=? AND s.revision=? AND ${sameChange} AND ${validTarget}
           AND EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=s.tenant_id AND t.id=s.ticket_id AND ${live.sql}) RETURNING ticket_id`)
-        .bind(input.definitionId,waitingReason,nextAction,token,this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,input.definitionId,waitingReason,nextAction,...live.values),
+        .bind(input.definitionId,waitingReason,nextAction,snoozeSupplied,snoozeValue,snoozeSupplied,snoozeValue,token,
+          this.scope.tenantId,ticketId,input.expectedRevision,input.definitionId,waitingReason,nextAction,snoozeSupplied,snoozeValue,input.definitionId,waitingReason,nextAction,...live.values),
       this.db.prepare(`UPDATE tickets SET status=(SELECT legacy_status FROM support_state_definitions WHERE tenant_id=? AND id=?)
         WHERE tenant_id=? AND id=? AND ${liveTicket.sql} AND EXISTS (SELECT 1 FROM ticket_support_state s WHERE s.tenant_id=tickets.tenant_id AND s.ticket_id=tickets.id AND s.transition_token=?)`)
         .bind(this.scope.tenantId,input.definitionId,this.scope.tenantId,ticketId,...liveTicket.values,token),
@@ -265,7 +322,7 @@ export class SupportStateRepository {
         AND EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=ticket_support_state.tenant_id AND t.id=ticket_support_state.ticket_id AND ${live.sql})`)
         .bind(this.scope.tenantId,ticketId,token,...live.values),
       this.db.prepare(`SELECT s.ticket_id,s.definition_id,d.legacy_status AS lifecycle,d.internal_label,d.public_label,
-        s.waiting_reason,s.next_action,s.changed_at,s.revision FROM ticket_support_state s JOIN support_state_definitions d
+        s.waiting_reason,s.next_action,s.snoozed_until,s.resurface_reason,s.changed_at,s.revision FROM ticket_support_state s JOIN support_state_definitions d
         ON d.tenant_id=s.tenant_id AND d.id=s.definition_id WHERE s.tenant_id=? AND s.ticket_id=?`).bind(this.scope.tenantId,ticketId),
       // Every SLA write is fenced by the just-advanced support-state revision.
       // A stale compare-and-swap therefore cannot create a policy, clock, or
@@ -347,6 +404,34 @@ export class SupportStateRepository {
     const state = results[offset + 5]?.results?.[0];
     if (!state) throw new SupportStateError('conflict', 'Support-state transition result unavailable');
     return state;
+  }
+
+  /** Controlled scheduler entrypoint. It only wakes deadlines at or before the
+   * supplied canonical tick and records a system audit row in the same batch. */
+  async resurfaceDue(dueThrough: string, limit = 100): Promise<string[]> {
+    if (dueThrough.length !== 24 || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(dueThrough)
+      || !Number.isFinite(Date.parse(dueThrough)) || new Date(dueThrough).toISOString() !== dueThrough) {
+      throw new SupportStateError('invalid', 'A canonical due time is required');
+    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new SupportStateError('invalid', 'Due resurface limit must be between 1 and 100');
+    const result = await this.db.batch<{ ticket_id: string }>([
+      this.db.prepare(`INSERT INTO support_state_events
+        (tenant_id,id,ticket_id,definition_id,kind,actor_kind,actor_id,facts)
+        SELECT s.tenant_id,${uuidSql},s.ticket_id,s.definition_id,'ticket.transition','system',NULL,
+          json_object('before',json_object('snoozedUntil',s.snoozed_until),'after',json_object('snoozedUntil',NULL,'resurfaceReason','due'),
+            'trigger',json_object('dueThrough',?))
+        FROM ticket_support_state s WHERE s.tenant_id=? AND s.ticket_id IN (SELECT candidate.ticket_id FROM ticket_support_state candidate
+          WHERE candidate.tenant_id=? AND candidate.snoozed_until IS NOT NULL AND candidate.snoozed_until<=?
+          ORDER BY candidate.snoozed_until,candidate.ticket_id LIMIT ?)`)
+        .bind(dueThrough,this.scope.tenantId,this.scope.tenantId,dueThrough,limit),
+      this.db.prepare(`UPDATE ticket_support_state AS s SET snoozed_until=NULL,resurface_reason='due',
+        changed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),revision=revision+1
+        WHERE s.tenant_id=? AND s.ticket_id IN (SELECT candidate.ticket_id FROM ticket_support_state candidate
+          WHERE candidate.tenant_id=? AND candidate.snoozed_until IS NOT NULL AND candidate.snoozed_until<=?
+          ORDER BY candidate.snoozed_until,candidate.ticket_id LIMIT ?) RETURNING ticket_id`)
+        .bind(this.scope.tenantId,this.scope.tenantId,dueThrough,limit),
+    ]);
+    return (result[1]?.results ?? []).map(row => row.ticket_id);
   }
 
   async deactivate(id: string, input: SupportStateDeactivation, actor: ConversationActor, fence?: CapabilityWriteFence): Promise<void> {

@@ -314,6 +314,7 @@ const supportStateTransitionSchema = z.object({
   definitionId: z.string().min(1).max(120),
   waitingReason: z.string().trim().min(1).max(512).nullable().optional(),
   nextAction: z.string().trim().min(1).max(512).nullable().optional(),
+  snoozedUntil: z.string().datetime({ offset: false, precision: 3 }).nullable().optional(),
   expectedRevision: z.number().int().positive(),
 }).strict();
 const supportStateDeactivateSchema = z.object({
