@@ -1,5 +1,5 @@
 import type { DurableObjectNamespace } from '@cloudflare/workers-types';
-import { RESOURCE_DIMENSIONS, type EffectiveTenantCostPolicy, type ResourceAmounts } from '@luminatick/shared';
+import { RESOURCE_DIMENSIONS, type BudgetPurpose, type EffectiveTenantCostPolicy, type ResourceAmounts } from '@luminatick/shared';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO';
 import { BudgetAuthorityRepository, type BudgetCommitSnapshot } from '../repositories/budget-authority.repository';
@@ -20,7 +20,7 @@ export type CanonicalBudgetIntent = Readonly<{ operationId: string; operationFin
 export type BudgetGrantOperationLink = Readonly<{ tenantId: string; aggregateId: string; reservationId: string; holderId: string;
   operationId: string; operationFingerprint: string; operationEnvelope: ResourceAmounts }>;
 export type BudgetCommitAuthority = Readonly<{ snapshot: BudgetCommitSnapshot; expiresAt: number;
-  purpose: 'new-work'; operationId: string; operationFingerprint: string; grant?: BudgetGrantOperationLink }>;
+  purpose: BudgetPurpose; operationId: string; operationFingerprint: string; grant?: BudgetGrantOperationLink }>;
 export type IsolateAdmissionResult = IsolateGrantSpendResult & Readonly<{ commitAuthority?: BudgetCommitAuthority }>;
 type ActiveAuthority = { commitSnapshot: BudgetCommitSnapshot; trusted: TrustedBudgetCoordinatorAuthority; policy: EffectiveTenantCostPolicy; local: CurrentIsolateGrantAuthority };
 type HeldOperation = { activeAttempts: number; fingerprint: string; envelope: ResourceAmounts; state: 'in-flight' | 'committed' | 'unknown'; settledAt?: number };
@@ -190,9 +190,11 @@ export class IsolateBudgetAdmissionCache {
   async admit(input: {
     repository: BudgetAuthorityRepository; namespace: DurableObjectNamespace; authorization: CurrentBudgetAuthorityGate; scope: VerifiedTenantScope;
     credentialKey: string; intent: CanonicalBudgetIntent; business: ResourceAmounts; now: () => number;
+    /** Recovery is a separately charged, bounded reservation purpose. */
+    purpose?: BudgetPurpose;
   }): Promise<IsolateAdmissionResult> {
     const holderScope: IsolateGrantScope = { tenantId: input.scope.tenantId, credentialKey: input.credentialKey,
-      workScopeKey: input.intent.workScopeKey, purpose: 'new-work' };
+      workScopeKey: input.intent.workScopeKey, purpose: input.purpose ?? 'new-work' };
     const key = JSON.stringify(holderScope);
     const checkedAt = input.now();
     this.entries = this.entries.filter(entry => { if (checkedAt < entry.expiresAt) return true; this.retire(entry); return !!entry.pending; });
@@ -250,7 +252,7 @@ export class IsolateBudgetAdmissionCache {
         if (operation.state !== 'unknown') operation.state = 'in-flight';
       }
       return { ...result, commitAuthority: Object.freeze({ snapshot: authority!.commitSnapshot,
-        expiresAt: Math.min(held.expiresAt, authority!.trusted.authorityExpiresAt), purpose: 'new-work',
+        expiresAt: Math.min(held.expiresAt, authority!.trusted.authorityExpiresAt), purpose: holderScope.purpose,
         operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint,
         grant: Object.freeze({ tenantId: input.scope.tenantId, aggregateId: held.aggregateId, reservationId: held.reservationId,
           holderId: held.holder.holderId, operationId: input.intent.operationId, operationFingerprint: input.intent.operationFingerprint,
