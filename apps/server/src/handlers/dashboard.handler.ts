@@ -35,6 +35,7 @@ import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminat
 import { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
 import type { PreparedStaffMutation, StaffMutationOutcome } from '../types/staff-ticket-mutation';
 import { OperatorActivityService } from '../services/operator-activity.service';
+import type { ActivityPresentationCredential } from '../types/operator-activity';
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
 import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, apiTicketBudgetCache, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, SUPPORT_SLA_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { SupportSlaMutationService } from '../services/support-sla-mutation.service';
@@ -382,6 +383,59 @@ const dashboard = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 // Apply auth, MFA, role-based access control, and tenant scoping to all dashboard routes
 dashboard.use("*", authMiddleware, mfaGuard, roleGuard(["agent", "admin"]), tenantMiddleware);
 dashboard.route("/workspace", workspace);
+
+/** Build the presentation credential only from the authenticated, live request. */
+function activityCredential(c: any): ActivityPresentationCredential | null {
+  const payload = c.get('jwtPayload') as JWTPayload;
+  const sessionVersion = payload.session_version;
+  const expiresAt = payload.exp;
+  if ((payload.role !== 'agent' && payload.role !== 'admin') || payload.mfa_verified !== true
+    || !Number.isSafeInteger(sessionVersion) || !Number.isSafeInteger(expiresAt)) return null;
+  return { role: payload.role, mfaVerified: true, sessionVersion: sessionVersion as number, expiresAt: expiresAt as number };
+}
+
+const activityTransitionSchema = z.object({ expectedRevision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER) }).strict();
+
+/**
+ * Durable operator attention is re-read from its tenant/recipient projection.
+ * WebSocket frames remain invalidation signals and never carry the activity body.
+ */
+dashboard.get('/activities', async c => {
+  const rawLimit = c.req.query('limit');
+  const limit = rawLimit == null ? 20 : Number(rawLimit);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) return c.json({ error: 'Invalid activity page size' }, 400);
+  const credential = activityCredential(c);
+  if (!credential) return c.json({ error: 'Forbidden' }, 403);
+  try {
+    const service = new OperatorActivityService(c.get('tenantDeps') as TenantRequestDeps);
+    const page = await service.list({ limit, cursor: c.req.query('cursor') }, credential);
+    const unread = await service.unreadCount(credential);
+    if (!page || !unread) return c.json({ error: 'Activity is unavailable' }, 403);
+    return c.json({ page, unread });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Invalid or expired activity cursor')) {
+      return c.json({ error: 'Invalid or expired activity cursor; restart activity recovery' }, 400);
+    }
+    throw error;
+  }
+});
+
+async function transitionActivity(c: any, action: 'read' | 'dismiss') {
+  const body = await readMutationJson(c);
+  const parsed = activityTransitionSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'Invalid activity transition' }, 400);
+  const credential = activityCredential(c);
+  if (!credential) return c.json({ error: 'Forbidden' }, 403);
+  const service = new OperatorActivityService(c.get('tenantDeps') as TenantRequestDeps);
+  const activity = action === 'read'
+    ? await service.markRead(c.req.param('id'), parsed.data.expectedRevision, credential)
+    : await service.dismiss(c.req.param('id'), parsed.data.expectedRevision, credential);
+  // A revoked group/session or a stale revision all remain non-disclosing to the caller.
+  return activity ? c.json(activity) : c.json({ error: 'Activity not found or changed' }, 404);
+}
+
+dashboard.patch('/activities/:id/read', requestBounds(1024), c => transitionActivity(c, 'read'));
+dashboard.patch('/activities/:id/dismiss', requestBounds(1024), c => transitionActivity(c, 'dismiss'));
 
 /**
  * GET /api/ticket-fields
