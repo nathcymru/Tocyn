@@ -31,8 +31,9 @@ describe('reply capability boundary', () => {
 
 it('accepts internal mentions only as the bounded advertised capability', () => {
   const value = capability();
-  Object.assign(value, { internalMentions: { version: 1, protocol: 'internal-activity-v1', maxRecipients: 16 } });
-  expect(parseReplyCapability(value, 'ticket').internalMentions).toEqual(value.internalMentions);
+  const mentionCapability = { version: 1, protocol: 'internal-activity-v1', maxRecipients: 16 };
+  Object.assign(value, { internalMentions: mentionCapability });
+  expect(parseReplyCapability(value, 'ticket').internalMentions).toEqual(mentionCapability);
   Object.assign(value, { internalMentions: { version: 1, protocol: 'internal-activity-v1', maxRecipients: 17 } });
   expect(() => parseReplyCapability(value, 'ticket')).toThrow('Reply options are unavailable');
 });
