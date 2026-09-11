@@ -41,3 +41,11 @@ The reference beta.2 forecast remains 9 December 2026, using the approved two-la
 - Recovery must not claim reservation-slot reclamation merely from reconciliation: current `maxReservations` counts retained reconciled entries too. Lifecycle/retention remains an explicit requirement; never delete uncertain accounting to make room.
 - Account controls observed at 09:27 BST show **60% main Codex allowance remaining**, same reset 17 September 23:59:48 BST. Task-specific use is unavailable. No purchase/reset/overage or Copilot request occurred; separately displayed buckets do not establish a separate Work entitlement.
 - GitHub coordinating receipt: https://github.com/nathcymru/Tocyn/issues/140#issuecomment-5631652837. No owner approval is pending.
+
+## Staff admission accepted, 09:37 BST
+
+PR #190 merged at 08:36:58 UTC as `a4cddf2737ceb5f9f6e8d940e4b3c3153f4fbaf5`. CI `34578786772` and CodeQL `34578783748` passed on reviewed head `88bbf7d`; tested merge `a903491` and accepted signed merge share tree `0a1782f3e8833623b31ca06cd19d551d58d59a4e`. No review threads existed. Owner-authorized approving-review-only bypass used; no independent approval or full #64 acceptance claimed. Receipt: https://github.com/nathcymru/Tocyn/issues/64#issuecomment-5631745357. Watch handle 99622 completed successfully and was reaped.
+
+Activity branch refreshed accepted main as `9e24c5218bd2e9223882a703d701683d362d33a0`; application contents did not change from its already validated pending-head integration. Current Wiki Home source records accepted #190; live Wiki remains pending this PR's integration.
+
+#70 worker completed local `3efe33e`: stale recovery now renders the refreshed conversation before a separate rebase action, then requires manual send. Guarded two-tenant/two-operator native and headless loopback browser proof covers stale retention, explicit rebase, lost-response stable-key retry/single article and truthful off/API-only capability. Focused fixture 3/3 and workflow 41 tests, relevant types and build pass; total gzip JS 566,573 / initial 100,990 bytes remain under unchanged limits. Root must inspect the recovery correction and integrate exact-revision CI. Actual new-flow AT and full #133/#132 dependencies remain outstanding.
