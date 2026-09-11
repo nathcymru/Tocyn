@@ -12,15 +12,17 @@ export type TicketEmailDeliveryCommit = Readonly<{
   authority: BudgetCommitAuthority;
 }>;
 
+export const TICKET_EMAIL_ATTACHMENT_MANIFEST_SQL = `SELECT json_group_array(json_array(id,file_name,file_size,content_type,r2_key)) FROM
+      (SELECT id,file_name,file_size,content_type,r2_key FROM attachments INDEXED BY idx_attachments_retention_cursor WHERE tenant_id=? AND article_id=? ORDER BY id COLLATE BINARY LIMIT 11)`;
+
 function exactCanonicalMessage(scope: VerifiedTenantScope, grant: TicketEmailCanonicalGrant): { sql: string; values: unknown[] } {
   const ticket = grant.ticket, article = grant.article;
-  const manifest = JSON.stringify([...grant.attachments].sort((left,right)=>left.id.localeCompare(right.id))
+  const manifest = JSON.stringify([...grant.attachments].sort((left,right)=>left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
     .map(item=>[item.id,item.fileName,item.fileSize,item.contentType,item.r2Key]));
   const sql = `EXISTS (SELECT 1 FROM tickets t JOIN articles a ON a.tenant_id=t.tenant_id AND a.ticket_id=t.id
     WHERE t.tenant_id=? AND t.id=? AND t.ticket_no IS ? AND t.subject=? AND t.customer_email=? AND t.group_id IS ? AND t.source_email IS ?
       AND a.id=? AND a.body=? AND a.body_format=? AND a.is_internal=0)
-    AND (SELECT json_group_array(json_array(id,file_name,file_size,content_type,r2_key)) FROM
-      (SELECT id,file_name,file_size,content_type,r2_key FROM attachments WHERE tenant_id=? AND article_id=? ORDER BY id COLLATE BINARY))=?`;
+    AND (${TICKET_EMAIL_ATTACHMENT_MANIFEST_SQL})=?`;
   const values: unknown[] = [scope.tenantId,ticket.id,ticket.ticketNo,ticket.subject,ticket.customerEmail,ticket.groupId,ticket.sourceEmail,
     article.id,article.body,article.bodyFormat,scope.tenantId,article.id,manifest];
   return { sql: `(${sql})`, values };

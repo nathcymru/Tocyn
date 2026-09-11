@@ -99,7 +99,7 @@ export class TicketEmailDeliveryAdmissionService {
       this.budget.settle(authority,'unknown',this.budget.now());
       return false;
     }
-    try { await send(); return true; }
-    finally { this.budget.settle(authority,'committed',this.budget.now()); }
+    try { await send(); this.budget.settle(authority,'committed',this.budget.now()); return true; }
+    catch (error) { this.budget.settle(authority,'unknown',this.budget.now()); throw error; }
   }
 }

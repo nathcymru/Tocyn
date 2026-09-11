@@ -10,6 +10,8 @@ import { isolateWarmReservedEnvelope } from '../src/budgets/isolate-grant-holder
 import { STAFF_TICKET_ENVELOPES } from '../src/middleware/budget-admission.middleware';
 import { TICKET_EMAIL_DELIVERY_ENVELOPE, ticketEmailDeliveryEnvelope } from '../src/services/email/ticket-email-admission.service';
 
+import { TICKET_EMAIL_ATTACHMENT_MANIFEST_SQL } from '../src/repositories/ticket-email-admission.repository';
+
 const root=resolve(import.meta.dirname,'..');
 const jwtSecret='synthetic-ticket-email-runtime-secret-32-chars';
 const tenant='runtime-tenant',staff='runtime-staff',ticket='ticket';
@@ -56,7 +58,7 @@ async function runtime(history=3_000){const bundled=await build({entryPoints:[re
   const db=await mf.getD1Database('DB');await applyMigrations(db);await seed(db,history);const bucket=await mf.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
   const token=await new SignJWT({sub:staff,role:'agent',tenant_id:tenant,session_version:1,mfa_verified:true}).setProtectedHeader({alg:'HS256'}).setAudience('app').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(jwtSecret));
   const otherToken=await new SignJWT({sub:staff,role:'agent',tenant_id:otherTenant,session_version:1,mfa_verified:true}).setProtectedHeader({alg:'HS256'}).setAudience('app').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(jwtSecret));
-  const control=async(input?:object)=>(await (await mf.dispatchFetch('http://runtime.test/__ticket-email-control',input?{method:'POST',body:JSON.stringify(input)}:undefined)).json()) as {attempts:Metric[];messages:{to:string;subject:string}[];cache:unknown};
+  const control=async(input?:object)=>(await (await mf.dispatchFetch('http://runtime.test/__ticket-email-control',input?{method:'POST',body:JSON.stringify(input)}:undefined)).json()) as {attempts:Metric[];messages:{to:string;subject:string}[];cache:unknown;deliverySettlements:string[]};
   const requestReply=(bearer:string,key:string,body:string,isInternal=false,attachments:unknown[]=[])=>(mf.dispatchFetch(`http://runtime.test/api/tickets/${ticket}/articles`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${bearer}`,'idempotency-key':key},
     body:JSON.stringify({body,body_format:'plain',is_internal:isInternal,attachments})}));
   const reply=(key:string,body:string,isInternal=false,attachments:unknown[]=[])=>requestReply(token,key,body,isInternal,attachments);
@@ -86,6 +88,7 @@ test('real handler claims one bounded ticket email and preserves canonical succe
   assert.equal((await h.control()).messages.length,1,'a delivery failure does not retract the canonical response or retry');
   const claimsAfterFailure=(await h.db.prepare("SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id=? AND operation_id LIKE 'ticket-email:%'").bind(tenant).first<{n:number}>())!.n;
   assert.equal(claimsAfterFailure,2,'the failed one-shot invocation remains durably charged');
+  assert.equal((await h.control()).deliverySettlements.at(-1),'unknown','an exception does not prove provider completion');
   await h.control({beforeDelivery:'ticket'});const changed=await h.reply('post-admission-ticket','post admission ticket',false,[]);
   assert.equal(changed.status,201,'canonical reply remains committed when its delivery snapshot changes');await changed.body?.cancel();
   assert.equal((await h.control()).messages.length,1,'a post-reservation canonical target change fails the atomic delivery claim');
@@ -104,4 +107,12 @@ for(const action of ['session','mfa','role','policy','restriction','closure'] as
   assert.equal(response.status,201);await response.body?.cancel();assert.equal((await h.control()).messages.length,0);
   assert.equal((await h.db.prepare("SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id=? AND operation_id LIKE 'ticket-email:%'").bind(tenant).first<{n:number}>())!.n,0,
     'a failed current-authority claim cannot create delivery authority');
+}finally{await h.mf.dispose();}});
+
+
+test('delivery manifest work stays bounded after same-article attachment growth',async()=>{const h=await runtime(6000);try{
+  const result=await h.db.prepare(TICKET_EMAIL_ATTACHMENT_MANIFEST_SQL).bind(tenant,'historical-article').all();
+  assert.ok(result.meta.rows_read<=32,`manifest read ${result.meta.rows_read} rows after growth`);
+  const manifest=JSON.parse(Object.values(result.results[0])[0] as string);
+  assert.equal(manifest.length,11,'one sentinel beyond the ten permitted attachments rejects growth');
 }finally{await h.mf.dispose();}});

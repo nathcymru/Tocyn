@@ -8,6 +8,12 @@ import { LocalAuthCaptureTransport } from '../src/services/email/transport';
 type Attempt = { path:string; method:string; d1RowsRead:number; d1RowsWritten:number; d1Calls:number; r2Gets:number };
 const attempts:Attempt[]=[];
 const capture=new LocalAuthCaptureTransport();
+const deliverySettlements:string[]=[];
+const settleOperation=apiTicketBudgetCache.settleOperation.bind(apiTicketBudgetCache);
+apiTicketBudgetCache.settleOperation=(authority,outcome,now)=>{
+  if(authority.operationId.startsWith('ticket-email:'))deliverySettlements.push(outcome);
+  return settleOperation(authority,outcome,now);
+};
 let beforeDelivery:''|'session'|'mfa'|'role'|'policy'|'restriction'|'closure'|'ticket'='';
 
 function instrumentDatabase(db:any,metric:Attempt):any {
@@ -54,7 +60,7 @@ export default {async fetch(request:Request,env:any,ctx:ExecutionContext):Promis
       if(input.beforeDelivery)beforeDelivery=input.beforeDelivery;if(input.failNext!==undefined)capture.failNext(input.failNext);
       if(input.discard)apiTicketBudgetCache.discardForTrustedRuntime();if(input.reset)capture.reset();}
     return Response.json({attempts,messages:capture.list().map(message=>({to:message.to,subject:message.subject})),beforeDelivery,
-      cache:apiTicketBudgetCache.inspectForTrustedRuntime()});
+      deliverySettlements,cache:apiTicketBudgetCache.inspectForTrustedRuntime()});
   }
   const metric:Attempt={path:url.pathname,method:request.method,d1RowsRead:0,d1RowsWritten:0,d1Calls:0,r2Gets:0};
   try{return await app.fetch(request,{...env,DB:instrumentDatabase(env.DB,metric),ATTACHMENTS_BUCKET:instrumentBucket(env.ATTACHMENTS_BUCKET,metric),
