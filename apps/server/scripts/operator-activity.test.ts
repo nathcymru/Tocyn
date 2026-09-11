@@ -72,14 +72,14 @@ test('durable activity is tenant/recipient-scoped, bounded, source-idempotent, a
     assert.equal(await activitiesB.markRead(created.activity.id, 1, credential()), null);
 
     const secondRecipient = await fixture.createAgentSession(fixture.principals.operatorA.tenantId);
-    const secondScope = createVerifiedTenantScope(fixture.principals.operatorA.tenantId, secondRecipient.id, ['agent'], 0);
+    const secondScope = createVerifiedTenantScope(fixture.principals.operatorA.tenantId, secondRecipient.id, ['agent'], 1);
     const secondActivities = new OperatorActivityRepository(secondScope, fixture.db, cursorSecret);
     const secondService = new OperatorActivityService({ scope: secondScope, operatorActivity: secondActivities } as TenantRequestDeps);
     const secondProjection = await secondService.appendTrusted(append({
       id: 'activity-second-recipient', recipientUserId: secondRecipient.id,
     }));
     assert.equal(secondProjection?.idempotent, false, 'one canonical source can project to another authorized actor');
-    assert.equal((await secondService.list({ limit: 10 }, credential(0, 'agent')))?.items.length, 1);
+    assert.equal((await secondService.list({ limit: 10 }, credential(1, 'agent')))?.items.length, 1);
     await assert.rejects(secondService.appendTrusted(append({
       id: 'activity-second-recipient-conflict', recipientUserId: secondRecipient.id, facts: { reason: 'changed' },
     })), OperatorActivityConflictError, 'a conflicting replay is rejected per recipient');
@@ -154,14 +154,14 @@ test('activity checks current staff session and ticket group access, and follows
     await fixture.db.prepare('INSERT INTO groups (tenant_id,id,name) VALUES (?,?,?)').bind(tenantId, 'activity-group', 'Activity group').run();
     await fixture.db.prepare('UPDATE tickets SET group_id=? WHERE tenant_id=? AND id=?').bind('activity-group', tenantId, 'fixture-ticket').run();
     await fixture.db.prepare('INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES (?,?,?)').bind(tenantId, agent.id, 'activity-group').run();
-    const agentScope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 0);
+    const agentScope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 1);
     const agentActivities = new OperatorActivityRepository(agentScope, fixture.db, cursorSecret);
     const agentService = new OperatorActivityService({ scope: agentScope, operatorActivity: agentActivities } as TenantRequestDeps);
     const agentCreated = await agentService.appendTrusted(append({
       id: 'activity-agent', sourceId: 'source-agent', recipientUserId: agent.id, producer: { kind: 'system' },
     }));
     assert.ok(agentCreated);
-    assert.equal((await agentService.list({ limit: 10 }, credential(0, 'agent')))?.items.length, 1);
+    assert.equal((await agentService.list({ limit: 10 }, credential(1, 'agent')))?.items.length, 1);
     const stalePrepared = await agentService.prepareTrustedAppend(append({ id: 'activity-stale-prepare', sourceId: 'source-stale-prepare',
       recipientUserId: agent.id, producer: { kind: 'system' } }));
     await fixture.db.prepare('DELETE FROM user_groups WHERE tenant_id=? AND user_id=? AND group_id=?').bind(tenantId, agent.id, 'activity-group').run();
@@ -174,10 +174,10 @@ test('activity checks current staff session and ticket group access, and follows
       'recipient revocation between preparation and canonical commit rolls back the whole batch');
     assert.equal(await agentService.list({ limit: 10 }, credential(1, 'agent')), null,
       'a scope carrying the pre-revocation session version is fail-closed');
-    const refreshedAgentScope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 1);
+    const refreshedAgentScope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 2);
     const refreshedAgentService = new OperatorActivityService({ scope: refreshedAgentScope,
       operatorActivity: new OperatorActivityRepository(refreshedAgentScope, fixture.db, cursorSecret) } as TenantRequestDeps);
-    assert.equal((await refreshedAgentService.list({ limit: 10 }, credential(1, 'agent')))?.items.length, 0,
+    assert.equal((await refreshedAgentService.list({ limit: 10 }, credential(2, 'agent')))?.items.length, 0,
       'a current but no-longer-member agent cannot retain activity through the old group');
 
     await fixture.db.prepare("UPDATE users SET role='customer' WHERE tenant_id=? AND id=?").bind(tenantId, fixture.principals.operatorA.localId).run();
@@ -248,17 +248,17 @@ test('bounded pages traverse large authorized and inaccessible history using act
     // Equal timestamps exercise the composite cursor's ID tie-break, including late index seeks.
     await fixture.db.prepare('UPDATE operator_activities SET created_at=? WHERE tenant_id=?').bind('2026-09-11T00:00:00.000Z', tenantId).run();
     await fixture.db.prepare('DELETE FROM user_groups WHERE tenant_id=? AND user_id=? AND group_id=?').bind(tenantId, agent.id, 'activity-backlog-group').run();
-    const scope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 1);
+    const scope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 2);
     const observations: QueryObservation[] = [];
     const service = new OperatorActivityService({ scope,
       operatorActivity: new OperatorActivityRepository(scope, observeDatabase(fixture.db, observations), cursorSecret) } as TenantRequestDeps);
-    const first = await service.list({ limit: 50 }, credential(1, 'agent'));
+    const first = await service.list({ limit: 50 }, credential(2, 'agent'));
     assert.ok(first?.next);
     assert.deepEqual(first.items, [], 'inaccessible candidate windows expose no activity content');
     assert.equal(first.next.includes('backlog'), false);
     assert.equal(first.next.split('.').length, 5, 'continuation is an authenticated encrypted token');
     const resumed = await new OperatorActivityRepository(scope, fixture.db, cursorSecret)
-      .listForRecipient({ limit: 50, cursor: first.next }, credential(1, 'agent'));
+      .listForRecipient({ limit: 50, cursor: first.next }, credential(2, 'agent'));
     assert.ok(resumed?.next, 'a new repository resumes with the same server key without process-local cursor state');
     assert.deepEqual(resumed.items, []);
     const seen: string[] = [];
@@ -267,7 +267,7 @@ test('bounded pages traverse large authorized and inaccessible history using act
     let pageCount = 1;
     while (next) {
       assert.ok(++pageCount <= 30, 'candidate continuation must make progress');
-      const page = await service.list({ limit: 50, cursor: next }, credential(1, 'agent'));
+      const page = await service.list({ limit: 50, cursor: next }, credential(2, 'agent'));
       assert.ok(page);
       assert.ok(page.items.length <= 50);
       seen.push(...page.items.map(item => item.id));
@@ -277,7 +277,7 @@ test('bounded pages traverse large authorized and inaccessible history using act
     assert.ok(emptyPages >= 3, 'paging progresses across leading and middle inaccessible windows');
     assert.deepEqual(seen, expectedIds.reverse(), 'every trailing authorized row is returned exactly once');
     const pageObservations = [...observations];
-    assert.deepEqual(await service.unreadCount(credential(1, 'agent')),
+    assert.deepEqual(await service.unreadCount(credential(2, 'agent')),
       { status: 'unavailable', reason: 'recipient_activity_candidate_cap_exceeded', count: null });
     // Inspect precisely the SQL and bound values executed by the repository, not simplified facsimiles.
     const firstQuery = observations[0];
@@ -303,32 +303,32 @@ test('bounded pages traverse large authorized and inaccessible history using act
     // Cursors are authenticated, purpose-separated and bound to the current tenant, actor and auth version.
     const other = await fixture.createAgentSession(tenantId);
     const cases = [
-      new OperatorActivityRepository(createVerifiedTenantScope(tenantId, other.id, ['agent'], 0), fixture.db, cursorSecret),
+      new OperatorActivityRepository(createVerifiedTenantScope(tenantId, other.id, ['agent'], 1), fixture.db, cursorSecret),
       new OperatorActivityRepository(createVerifiedTenantScope(fixture.principals.operatorB.tenantId, fixture.principals.operatorB.localId, ['admin'], 0), fixture.db, cursorSecret),
       new OperatorActivityRepository(scope, fixture.db, 'rotated-synthetic-secret'),
     ];
     for (const [index, repository] of cases.entries()) {
-      await assert.rejects(repository.listForRecipient({ limit: 50, cursor: first.next }, index === 0 ? credential(0, 'agent') : index === 1 ? credential() : credential(1, 'agent')),
+      await assert.rejects(repository.listForRecipient({ limit: 50, cursor: first.next }, index === 0 ? credential(1, 'agent') : index === 1 ? credential() : credential(2, 'agent')),
         /restart pagination/);
     }
     const parts = first.next.split('.');
     parts[3] = `${parts[3][0] === 'A' ? 'B' : 'A'}${parts[3].slice(1)}`;
-    await assert.rejects(service.list({ limit: 50, cursor: parts.join('.') }, credential(1, 'agent')), /restart pagination/);
-    await assert.rejects(service.list({ limit: 50, cursor: 'x'.repeat(2049) }, credential(1, 'agent')), /restart pagination/);
-    await assert.rejects(new OperatorActivityRepository(scope, fixture.db).listForRecipient({ limit: 50 }, credential(1, 'agent')), /key unavailable/);
+    await assert.rejects(service.list({ limit: 50, cursor: parts.join('.') }, credential(2, 'agent')), /restart pagination/);
+    await assert.rejects(service.list({ limit: 50, cursor: 'x'.repeat(2049) }, credential(2, 'agent')), /restart pagination/);
+    await assert.rejects(new OperatorActivityRepository(scope, fixture.db).listForRecipient({ limit: 50 }, credential(2, 'agent')), /key unavailable/);
     const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(cursorSecret), 'HKDF', false, ['deriveBits']);
     const key = new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32),
       info: new TextEncoder().encode('tocyn-operator-activity-cursor-v1') }, keyMaterial, 256));
     const now = Math.floor(Date.now() / 1000);
     for (const type of ['expired', 'wrong-purpose']) {
-      const invalid = await new EncryptJWT({ tenantId, actorId: agent.id, authVersion: 1, createdAt: '2026-09-11T00:00:00.000Z', id: 'backlog-activity-1099' })
+      const invalid = await new EncryptJWT({ tenantId, actorId: agent.id, authVersion: 2, createdAt: '2026-09-11T00:00:00.000Z', id: 'backlog-activity-1099' })
         .setProtectedHeader({ alg: 'dir', enc: 'A256GCM', typ: type === 'expired' ? 'tocyn-operator-activity-cursor-v1' : 'wrong-purpose-v2' })
         .setIssuedAt(type === 'expired' ? now - 901 : now).setExpirationTime(type === 'expired' ? now - 1 : now + 900).encrypt(key);
-      await assert.rejects(service.list({ limit: 50, cursor: invalid }, credential(1, 'agent')), /restart pagination/);
+      await assert.rejects(service.list({ limit: 50, cursor: invalid }, credential(2, 'agent')), /restart pagination/);
     }
     await fixture.db.prepare('UPDATE users SET session_version=session_version+1 WHERE tenant_id=? AND id=?').bind(tenantId, agent.id).run();
-    await assert.rejects(new OperatorActivityRepository(createVerifiedTenantScope(tenantId, agent.id, ['agent'], 2), fixture.db, cursorSecret)
-      .listForRecipient({ limit: 50, cursor: first.next }, credential(2, 'agent')), /restart pagination/);
+    await assert.rejects(new OperatorActivityRepository(createVerifiedTenantScope(tenantId, agent.id, ['agent'], 3), fixture.db, cursorSecret)
+      .listForRecipient({ limit: 50, cursor: first.next }, credential(3, 'agent')), /restart pagination/);
   });
 });
 

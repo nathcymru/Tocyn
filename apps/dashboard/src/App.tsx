@@ -1,3 +1,4 @@
+import { AuthLayout } from '@luminatick/ui/auth-layout';
 import React, { lazy } from 'react';
 import { RouteContent } from './components/RouteContent';
 import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate, useLocation } from 'react-router-dom';
@@ -52,12 +53,12 @@ function ProtectedRoute({ children, requireMfa = true }: { children: React.React
 export default function App() {
   const [router] = React.useState(() => createBrowserRouter(createRoutesFromElements(
       <>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<AuthLayout><LoginPage /></AuthLayout>} />
         <Route
           path="/mfa"
           element={
             <ProtectedRoute requireMfa={false}>
-              <MfaPage />
+              <AuthLayout><MfaPage /></AuthLayout>
             </ProtectedRoute>
           }
         />

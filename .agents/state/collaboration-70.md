@@ -73,3 +73,9 @@ Focused Node 22.19 evidence: `typecheck:local-tenants`, `typecheck:combined-coll
 PR189 lint at883a6e9 found raw D1 access in NotificationDO. Correction3f30f10 preserves the current tenant/ticket/group query and independent resource emitter inside a repository. Scoped lint, full server types and13native storage/background tests passed. Integration231a153 preserves the optional staff precondition alongside accepted API grant operation links. The combined collision native proof passes; the full integrated budget suite passed 82/82 under completed local handle 85987. Exact PRCI must pass after this batch.
 
 Recovery194 is accepted at signedab8759d, matching tree9d5a7112dd326530c0c8db70be8421d172a979ac and reviewed6e0440a/testedc894679. CI34584188793 andCodeQL34584186132 passed; no unresolved threads; standing approving-review-only bypass recorded in issue64 receipt5632583296. Watch85459 completed and was reaped. Customer195 is now based onmain atc03a2da with CI active. WikiHome source update here is pending publication after integration. Next full human update11:09BST, following10:39 status.
+
+## PR #189 operator-activity fixture compatibility correction
+
+At PR #189 revision `d33ba28`, the activity fixture helper creates synthetic agents at session version 1. Updated only `scripts/operator-activity.test.ts` to use that current version for the baseline recipient and cursor cases; membership removal advances it to version 2, and the final explicit revocation advances it to version 3. The tests retain stale-session denials and use current credentials for the distinct actor/tenant/key cursor-negative cases.
+
+Validation on Node 22.19.0: `npm run test:operator-activity` passed 5/5 (the native 1,200-row cursor proof reported 19 pages, 800 authorized items, 304–606 D1 rows read per page); `npm run typecheck` passed. This local correction has no remote action; root owns integration.
