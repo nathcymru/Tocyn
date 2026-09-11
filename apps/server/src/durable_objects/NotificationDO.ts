@@ -1,7 +1,7 @@
 import { Env } from '../bindings';
 import { UserAuthResolver, type UserAuthResolution } from '../auth/user-auth-resolver';
 import { createResourceOperationEmitter } from '../observability/resource-operation';
-import { observeD1 } from '../repositories/observed-d1';
+import { authorizeNotificationTicket } from '../repositories/notification-ticket-access.repository';
 import { MAX_NOTIFICATION_CONNECTIONS } from './notification-limits';
 import {
   COLLABORATION_MAX_ACTOR_ID_LENGTH,
@@ -87,14 +87,7 @@ export class NotificationDO {
   private async authorizedForTicket(session: SessionAttachment | null, user: UserAuthResolution, ticketId: string): Promise<boolean> {
     if (!this.belongsToThisObject(session) || ticketId.length === 0 || ticketId.length > COLLABORATION_MAX_TICKET_ID_LENGTH) return false;
     try {
-      const db = observeD1(this.env.DB, createResourceOperationEmitter(this.env));
-      const ticket = await db.prepare('SELECT group_id FROM tickets WHERE tenant_id = ? AND id = ? LIMIT 1')
-        .bind(session.tenantId, ticketId).first<{ group_id: string | null }>();
-      if (!ticket) return false;
-      if (user.role === 'admin' || ticket.group_id === null) return true;
-      const membership = await db.prepare('SELECT 1 FROM user_groups WHERE tenant_id = ? AND user_id = ? AND group_id = ? LIMIT 1')
-        .bind(session.tenantId, user.userId, ticket.group_id).first();
-      return !!membership;
+      return await authorizeNotificationTicket(this.env, session.tenantId, user, ticketId);
     } catch { /* A failed current authorization check must never disclose a typing event. */ }
     return false;
   }
