@@ -1097,6 +1097,22 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
       </div>
 
       <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="space-y-6">
+        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
+            <span className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" />Customer</span>
+          </summary>
+          <div className="mt-4 space-y-3 text-sm">
+            <div>
+              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Verified identity</p>
+              <p className="mt-1 font-medium text-slate-900">{ticket.customer_email}</p>
+              <p className="mt-1 text-xs text-slate-600">Loaded from this tenant-scoped conversation.</p>
+            </div>
+            <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              Customer history is unavailable for this conversation. No cross-channel identity match was made.
+            </p>
+          </div>
+        </details>
+
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <h3 ref={contextHeadingRef} tabIndex={-1} className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
             <Info className="w-4 h-4 text-slate-400" />
@@ -1231,13 +1247,29 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
           </div>
         </div>
 
-        {viewers.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 animate-in slide-in-from-right-4">
-            <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Eye className="w-4 h-4 text-brand-500" />
-              Active Now
-            </h3>
-            <div className="space-y-3">
+        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
+            <span className="flex items-center gap-2"><Activity className="w-4 h-4 text-slate-400" />Operational context</span>
+          </summary>
+          <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            No operational source is connected for this ticket. Live SLA and routing details remain unavailable.
+          </p>
+        </details>
+
+        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
+            <span className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-slate-400" />Knowledge</span>
+          </summary>
+          <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            Knowledge search and insertion are unavailable until the knowledge integration is connected.
+          </p>
+        </details>
+
+        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 animate-in slide-in-from-right-4">
+            <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
+              <span className="flex items-center gap-2"><Eye className="w-4 h-4 text-brand-500" />Collaboration</span>
+            </summary>
+            {viewers.length > 0 ? <div className="space-y-3">
               {viewers.map((viewer, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-700 text-xs font-bold border border-brand-100">
@@ -1252,9 +1284,8 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
+            </div> : <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">No collaborators are viewing this ticket.</p>}
+        </details>
       </aside>
       </div>
     </>
