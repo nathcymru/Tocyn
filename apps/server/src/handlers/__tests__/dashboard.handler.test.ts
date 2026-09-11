@@ -76,6 +76,13 @@ describe("Dashboard Handler Integration Tests", () => {
   });
 
   describe("GET /tickets", () => {
+    it("rejects unbounded or control-character search before ticket queries", async () => {
+      const tooLong = await request(`/tickets?search=${'x'.repeat(257)}`, { headers: { Authorization: `Bearer ${validToken}` } });
+      expect(tooLong.status).toBe(400);
+      const control = await request(`/tickets?search=${encodeURIComponent('open\u0000')}`, { headers: { Authorization: `Bearer ${validToken}` } });
+      expect(control.status).toBe(400);
+    });
+
     it("should list tickets with default pagination", async () => {
       mockDB.all.mockResolvedValueOnce({ results: [{ id: "t-1", subject: "Ticket 1" }] });
       firstQueue.push({ total: 1 });
