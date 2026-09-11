@@ -6,8 +6,10 @@ export interface Env {
   DB: D1Database;
   ATTACHMENTS_BUCKET: R2Bucket;
   NOTIFICATION_DO: DurableObjectNamespace;
-  /** Internal budget authority only; no client-facing path is wired in this slice. */
+  /** Internal budget authority; only the explicitly configured API mutation boundary may call it. */
   BUDGET_COORDINATOR_DO: DurableObjectNamespace;
+  /** Server deployment policy: `api-ticket-mutations-v1` enables the bounded API-key admission boundary. */
+  BUDGET_ADMISSION_POLICY?: string;
   /** Server-derived durable warm-grant holder; never directly addressed by a client. */
   BUDGET_GRANT_HOLDER_DO: DurableObjectNamespace;
   VECTOR_INDEX: VectorizeIndex;

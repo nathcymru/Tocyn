@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import * as OTPAuth from 'otpauth';
 import * as jose from 'jose';
 import { Headers as MiniflareHeaders, Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { createLocalRuntime } from '../src/local-index';
+import { createLocalRuntime } from '../src/local-app';
 import type { Env } from '../src/bindings';
 import { createSystemTenantScope } from '../src/auth/scope';
 import { createRepositories } from '../src/repositories';
@@ -174,6 +174,8 @@ function localEnv(db: D1Database, bucket: R2Bucket): Env {
     MFA_ENCRYPTION_KEY: randomLocalSecret(32),
     APP_MASTER_KEY: randomLocalSecret(32),
     ENVIRONMENT: 'local',
+    // Explicit server-side policy for this fixture; no route may infer a budget mode.
+    BUDGET_ADMISSION_POLICY: 'off',
     PORTAL_URL: 'http://localhost:5174',
     DASHBOARD_URL: 'http://localhost:5173',
     CORS_ORIGINS: 'http://localhost:5174,http://localhost:5173',

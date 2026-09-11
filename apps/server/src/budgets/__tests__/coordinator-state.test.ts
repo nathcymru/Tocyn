@@ -47,11 +47,15 @@ describe('budget coordinator pure state', () => {
     expect(reserve(state, 'holder-a', 'outside-window', 'new-work', { queueOperations: 1 }, 5).outcome).toMatchObject({ reason: 'exhausted' });
   });
 
-  it('is all-or-nothing, idempotent only for an identical envelope, and never borrows recovery credits', () => {
+  it('is all-or-nothing, permits one durable holder recovery, and never borrows recovery credits', () => {
     const granted = reserve();
     const replay = reserve(granted.state);
     expect(replay.outcome.status).toBe('idempotent');
     expect(replay.state.grants).toHaveLength(1);
+    expect(replay.outcome.reservation?.holderSeedAttempts).toBe(2);
+    const exhaustedDelivery = reserve(replay.state);
+    expect(exhaustedDelivery.outcome).toMatchObject({ status: 'rejected', reason: 'delivery-exhausted' });
+    expect(exhaustedDelivery.state.grants[0].holderSeedAttempts).toBe(2);
     expect(() => reserve(granted.state, 'holder-a', 'key-a', 'new-work', { queueOperations: 41 })).toThrow(/different envelope/);
     expect(reserve(initial(), 'holder-a', 'new-work-too-large', 'new-work', { queueOperations: 81 }).outcome).toMatchObject({ status: 'rejected', reason: 'exhausted' });
     expect(reserve(initial(), 'holder-a', 'recovery', 'recovery', { queueOperations: 20 }).outcome.status).toBe('granted');

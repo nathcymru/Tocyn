@@ -15,6 +15,8 @@ import { RESOURCE_DIMENSIONS, type BudgetPurpose, type EffectiveTenantCostPolicy
 
 const STATE_VERSION = 1 as const;
 const MAX_RESERVATIONS = 4_096;
+/** Initial holder delivery plus exactly one crash-recovery delivery. */
+export const MAX_HOLDER_SEED_ATTEMPTS = 2;
 
 export class BudgetCoordinatorStateError extends Error {
   constructor(message: string) {
@@ -42,6 +44,12 @@ export type CoordinatorGrant = Readonly<{
   createdAt: number;
   expiresAt: number;
   status: CoordinatorGrantStatus;
+  /**
+   * Delivery is deliberately finite. The coordinator commits this before each
+   * holder RPC, so a lost seed acknowledgement cannot turn one reservation
+   * into unbounded fresh-authority and holder work.
+   */
+  holderSeedAttempts: number;
   envelope: ResourceAmounts;
   remaining: ResourceAmounts;
   /** Charged amounts remain held until trusted terminal evidence changes them. */
@@ -106,7 +114,7 @@ export type ReserveBudgetGrantResult = Readonly<{
   state: BudgetCoordinatorState;
   outcome: Readonly<{
     status: 'granted' | 'idempotent' | 'rejected';
-    reason?: 'exhausted' | 'stale-policy' | 'capacity-exhausted' | 'capacity-defect';
+    reason?: 'exhausted' | 'stale-policy' | 'capacity-exhausted' | 'capacity-defect' | 'delivery-exhausted';
     reservation?: CoordinatorGrant;
   }>;
 }>;
@@ -349,7 +357,19 @@ export function reserveBudgetGrant(state: BudgetCoordinatorState, input: Reserve
   const prior = expired.grants.find(grant => idempotencyScope(expired, grant.holderId, grant.purpose, grant.idempotencyKey) === scope);
   if (prior) {
     if (fingerprint(prior.envelope) !== fingerprint(envelope)) throw new BudgetCoordinatorStateError('idempotency key was already used with a different envelope');
-    return { state: expired, outcome: { status: 'idempotent', reservation: prior } };
+    // A state written by an older implementation has no bounded delivery
+    // record. Treat it as exhausted instead of reopening an unbounded retry.
+    const deliveryAttempts = Number.isSafeInteger(prior.holderSeedAttempts) && prior.holderSeedAttempts >= 1
+      ? prior.holderSeedAttempts : MAX_HOLDER_SEED_ATTEMPTS;
+    if (deliveryAttempts >= MAX_HOLDER_SEED_ATTEMPTS) {
+      // The charged grant remains held. A caller that never received a holder
+      // acknowledgement must be reconciled rather than retrying forever.
+      return { state: expired, outcome: { status: 'rejected', reason: 'delivery-exhausted' } };
+    }
+    const grants = [...expired.grants];
+    const recovered = { ...prior, holderSeedAttempts: deliveryAttempts + 1 };
+    grants[grants.indexOf(prior)] = recovered;
+    return { state: cloneState(expired, { grants }), outcome: { status: 'idempotent', reservation: recovered } };
   }
   if (expired.capacityDefects.length > 0) return { state: expired, outcome: { status: 'rejected', reason: 'capacity-defect' } };
   if (expired.grants.length >= expired.maxReservations) return { state: expired, outcome: { status: 'rejected', reason: 'capacity-exhausted' } };
@@ -378,7 +398,7 @@ export function reserveBudgetGrant(state: BudgetCoordinatorState, input: Reserve
   const grant: CoordinatorGrant = {
     reservationId, holderId: input.holderId, idempotencyKey: input.idempotencyKey, purpose: input.purpose,
     policyRevision: expired.policyRevision, restrictionRevision: expired.restrictionRevision,
-    createdAt: input.now, expiresAt, status: 'reserved', envelope, remaining: { ...envelope }, accounted: { ...envelope },
+    createdAt: input.now, expiresAt, status: 'reserved', holderSeedAttempts: 1, envelope, remaining: { ...envelope }, accounted: { ...envelope },
     allocations: allocations.map(allocation => ({ dimension: allocation.dimension, allocationId: allocation.allocationId, windowId: allocation.window.id })),
   };
   const next = cloneState(expired, { grants: [...expired.grants, grant], nextReservationSequence: expired.nextReservationSequence + 1 });

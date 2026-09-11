@@ -46,7 +46,8 @@
     "test:local-observability-collector": "tsx --test scripts/local-observability-collector.test.ts",
     "typecheck:local-observability-collector": "tsc -p scripts/tsconfig.local-observability-collector.json",
     "typecheck:operational-performance": "tsc -p scripts/tsconfig.operational-performance.json",
-    "evidence:operational-performance": "tsx scripts/run-operational-performance.ts"
+    "evidence:operational-performance": "tsx scripts/run-operational-performance.ts",
+    "test:budget-admission-runtime": "tsx --test scripts/budget-admission-runtime.test.ts"
   },
   "dependencies": {
     "@luminatick/shared": "*",
