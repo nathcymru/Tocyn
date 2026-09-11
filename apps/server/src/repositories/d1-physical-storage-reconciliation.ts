@@ -22,7 +22,7 @@ export type D1PhysicalStorageOperation = Readonly<{
 type D1ResultMeta = Readonly<{ success?: unknown; meta?: Readonly<{ size_after?: unknown }> }>;
 
 function evidenceFromResult(result: unknown): D1PhysicalStorageEvidence | null {
-  if (!result || typeof result !== 'object' || (result as D1ResultMeta).success === false) return null;
+  if (!result || typeof result !== 'object' || (result as D1ResultMeta).success !== true) return null;
   const sizeAfter = (result as D1ResultMeta).meta?.size_after;
   return typeof sizeAfter === 'number' && Number.isSafeInteger(sizeAfter) && sizeAfter >= 0
     ? { databaseSizeAfter: sizeAfter } : null;
@@ -35,7 +35,7 @@ function evidenceFromResult(result: unknown): D1PhysicalStorageEvidence | null {
  */
 export function postCommitD1PhysicalStorageEvidence(result: unknown): D1PhysicalStorageEvidence | null {
   if (!Array.isArray(result)) return evidenceFromResult(result);
-  if (!result.length || result.some(item => (item as D1ResultMeta | null)?.success === false)) return null;
+  if (!result.length || result.some(item => (item as D1ResultMeta | null)?.success !== true)) return null;
   for (let index = result.length - 1; index >= 0; index--) {
     const evidence = evidenceFromResult(result[index]);
     if (evidence) return evidence;

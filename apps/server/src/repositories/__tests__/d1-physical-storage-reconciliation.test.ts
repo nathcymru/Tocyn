@@ -23,9 +23,11 @@ describe('D1 physical-storage reconciliation evidence', () => {
 
   it('does not treat failed, absent, fractional, or negative metadata as evidence', () => {
     expect(postCommitD1PhysicalStorageEvidence({ success: false, meta: { size_after: 4_096 } })).toBeNull();
+    expect(postCommitD1PhysicalStorageEvidence({ meta: { size_after: 4_096 } })).toBeNull();
     expect(postCommitD1PhysicalStorageEvidence({ success: true, meta: {} })).toBeNull();
     expect(postCommitD1PhysicalStorageEvidence({ success: true, meta: { size_after: 1.5 } })).toBeNull();
     expect(postCommitD1PhysicalStorageEvidence([{ success: true, meta: { size_after: 4_096 } }, { success: false }])).toBeNull();
+    expect(postCommitD1PhysicalStorageEvidence([{ success: true, meta: { size_after: 4_096 } }, {}])).toBeNull();
   });
 
   it('links the observation to the admitted operation once, and never makes capture failure a write failure', async () => {
