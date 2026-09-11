@@ -315,3 +315,70 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
     }
   });
 });
+
+test('proves operator theme first paint, persistence, recovery and tenant separation in the production dashboard', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const sessionA = await operatorSession(fixture, 'operatorA');
+    const sessionB = await operatorSession(fixture, 'operatorB');
+    await fixture.db.prepare('INSERT OR REPLACE INTO tenant_config (tenant_id,key,value) VALUES (?,?,?)')
+      .bind(fixture.principals.operatorA.tenantId, 'ui.theme.v1', JSON.stringify({ version: '1', light: {}, dark: { colorSurface: '#111827' } })).run();
+    assert.equal((await fixture.request('/api/workspace/theme-preference', { method: 'PUT', token: sessionA.token, body: { expectedRevision: 0, mode: 'dark' } })).status, 200);
+    await initializeBrowserLocalBeta(fixture);
+    const server = await startServer(fixture);
+    const browser = await chromium.launch({ headless: true });
+    const external: string[] = [];
+    try {
+      const context = await browser.newContext({ colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block' });
+      await context.route('**/*', route => {
+        if (new URL(route.request().url()).origin !== server.origin) { external.push(route.request().resourceType()); return route.abort(); }
+        return route.continue();
+      });
+      await context.addInitScript(({ token, user }) => {
+        localStorage.setItem('lumina-auth', JSON.stringify({ state: { token, user, mfaRequired: false }, version: 0 }));
+      }, sessionA);
+      // A literal browser script avoids transpiler helper dependencies in the injected callback.
+      await context.addInitScript(`requestAnimationFrame(function observePaint() {
+        if (document.querySelector('#reply-message')) {
+          window.__firstWorkspacePaint = { mode: document.documentElement.getAttribute('data-tocyn-theme-mode'), background: getComputedStyle(document.body).backgroundColor };
+        } else requestAnimationFrame(observePaint);
+      });`);
+      const page = await context.newPage();
+      await page.goto(`${server.origin}/tickets/fixture-ticket`);
+      const composer = page.getByLabel('Reply message', { exact: true });
+      await composer.waitFor();
+      await page.waitForFunction(() => !!(globalThis as any).__firstWorkspacePaint);
+      assert.deepEqual(await page.evaluate(() => (globalThis as any).__firstWorkspacePaint), { mode: 'dark', background: 'rgb(17, 24, 39)' }, 'First workspace paint must use the stored actor mode and validated tenant branding');
+      await page.locator('#reply-message:not([readonly])').waitFor();
+      await composer.fill('Synthetic theme continuity draft');
+      await page.getByText('Draft saved.', { exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Account options', exact: true }).click();
+      await page.getByRole('radio', { name: 'Light', exact: true }).check();
+      const save = page.waitForResponse(r => new URL(r.url()).pathname === '/api/workspace/theme-preference' && r.request().method() === 'PUT');
+      await page.getByRole('button', { name: 'Save appearance', exact: true }).click();
+      assert.equal((await save).status(), 200);
+      await page.getByText('Appearance saved.', { exact: true }).waitFor();
+      await page.keyboard.press('Escape');
+      assert.equal(await composer.inputValue(), 'Synthetic theme continuity draft');
+      assert.equal(await page.evaluate(() => (globalThis as any).document.documentElement.getAttribute('data-tocyn-theme-mode')), 'light');
+      await page.reload();
+      await composer.waitFor();
+      assert.equal(await page.evaluate(() => (globalThis as any).document.documentElement.getAttribute('data-tocyn-theme-mode')), 'light');
+      assert.equal(await composer.inputValue(), 'Synthetic theme continuity draft');
+      const preferenceB = await (await fixture.request('/api/workspace/theme-preference', { token: sessionB.token })).json<{mode: string; revision: number}>();
+      assert.equal(preferenceB.mode, 'system'); assert.equal(preferenceB.revision, 0);
+      let failRead = true;
+      await page.route('**/api/workspace/theme-preference', route => {
+        if (failRead && route.request().method() === 'GET') { failRead = false; return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Synthetic appearance read failure"}' }); }
+        return route.continue();
+      });
+      await page.reload();
+      await composer.waitFor();
+      await page.getByRole('button', { name: 'Retry appearance', exact: true }).click();
+      await page.waitForFunction(() => (globalThis as any).document.documentElement.getAttribute('data-tocyn-theme-mode') === 'light');
+      assert.equal(await composer.inputValue(), 'Synthetic theme continuity draft');
+      assert.deepEqual(external, []);
+      process.stdout.write(`# theme-browser-evidence ${JSON.stringify({ sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repositoryRoot, encoding: 'utf8' }).trim(), sourceDirty: execFileSync('git', ['status', '--porcelain'], { cwd: repositoryRoot, encoding: 'utf8' }).trim().length > 0, dashboardSha256: await digestDirectory(resolve(repositoryRoot, 'apps/dashboard/dist')), firstPaint: 'persisted dark tenant palette', persistedMode: 'light', tenantBUnchanged: true, draftContinuity: true, failedReadRecovery: true, externalRequests: external.length, limitations: ['Synthetic local application harness and real D1; one explicitly injected read failure.', 'Browser evidence does not replace VoiceOver acceptance or deployment CSP validation.'] })}\n`);
+      await context.close();
+    } finally { await browser.close(); await server.close(); }
+  });
+});

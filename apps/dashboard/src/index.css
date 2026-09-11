@@ -3,8 +3,53 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --tocyn-app-surface: var(--tocyn-color-surface, #ffffff);
+    --tocyn-app-surface-panel: var(--tocyn-color-surface-panel, #f8fafc);
+    --tocyn-app-surface-muted: var(--tocyn-color-surface-muted, #f1f5f9);
+    --tocyn-app-text: var(--tocyn-color-text, #0f172a);
+    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #475569);
+    --tocyn-app-border: var(--tocyn-color-divider, #cbd5e1);
+    color-scheme: light;
+  }
+  [data-tocyn-theme-mode="dark"] {
+    --tocyn-app-surface: var(--tocyn-color-surface, #0f172a);
+    --tocyn-app-surface-panel: var(--tocyn-color-surface-panel, #1e293b);
+    --tocyn-app-surface-muted: var(--tocyn-color-surface-muted, #334155);
+    --tocyn-app-text: var(--tocyn-color-text, #f8fafc);
+    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #cbd5e1);
+    --tocyn-app-border: var(--tocyn-color-divider, #475569);
+    color-scheme: dark;
+  }
+  [data-tocyn-inverse] {
+    --tocyn-app-surface: var(--tocyn-color-surface, #0f172a);
+    --tocyn-app-surface-panel: var(--tocyn-color-surface-panel, #1e293b);
+    --tocyn-app-surface-muted: var(--tocyn-color-surface-muted, #334155);
+    --tocyn-app-text: var(--tocyn-color-text, #f8fafc);
+    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #cbd5e1);
+    --tocyn-app-border: var(--tocyn-color-divider, #475569);
+  }
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply antialiased;
+    background: var(--tocyn-app-surface);
+    color: var(--tocyn-app-text);
+  }
+}
+
+[data-tocyn-appearance] {
+  font-size: var(--tocyn-type-scale-body, 1rem);
+}
+[data-tocyn-appearance] button {
+  min-height: var(--tocyn-target-min, 44px);
+  transition-duration: var(--tocyn-motion-duration-normal, 180ms);
+}
+[data-tocyn-appearance] label {
+  min-height: var(--tocyn-target-min, 44px);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-tocyn-appearance], [data-tocyn-appearance] *, [data-tocyn-appearance] *::before, [data-tocyn-appearance] *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
   }
 }
 
@@ -21,4 +66,19 @@
   .input {
     @apply flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50;
   }
+}
+
+/* The dashboard still has a small set of legacy neutral utility classes.
+   Map them through the validated aliases in every resolved appearance mode. */
+[data-tocyn-theme-mode] :where(.bg-white, .bg-slate-50) {
+  background-color: var(--tocyn-app-surface);
+}
+[data-tocyn-theme-mode] :where(.text-slate-900, .text-slate-700, .text-slate-600) {
+  color: var(--tocyn-app-text);
+}
+[data-tocyn-theme-mode] :where(.text-slate-500, .text-slate-400) {
+  color: var(--tocyn-app-text-muted);
+}
+[data-tocyn-theme-mode] :where(.border-slate-200, .border-slate-100) {
+  border-color: var(--tocyn-app-border);
 }

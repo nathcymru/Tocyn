@@ -69,3 +69,29 @@ test('local-beta theme writes share bounded mutation accounting and stop policy'
     assert.deepEqual(stored, { revision: 2, mode: 'dark' });
   });
 });
+
+test('tenant branding API validates both palettes, isolates tenants and falls back safely from corrupt storage', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const token = await login(fixture, 'operatorA'); const other = await login(fixture, 'operatorB');
+    const path = '/api/settings/theme';
+    assert.equal((await fixture.request(path)).status, 401);
+    const branding = { version: '1', light: { colorSurface: '#ffffff' }, dark: { colorSurface: '#111827' } };
+    assert.equal((await fixture.request(path, { token, method: 'PUT', body: branding })).status, 200);
+    const response = await fixture.request(path, { token });
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.deepEqual(await response.json(), { ...branding, fallback: false });
+    assert.deepEqual(await (await fixture.request(path, { token: other })).json(), { version: '1', light: {}, dark: {}, fallback: false });
+    for (const body of [
+      { version: '2', light: {}, dark: {} },
+      { version: '1', light: {}, dark: { colorSurface: 'url(https://example.invalid/x)' } },
+      { version: '1', light: { colorText: '#ffffff' }, dark: {} },
+      { version: '1', light: null, dark: {} },
+    ]) assert.equal((await fixture.request(path, { token, method: 'PUT', body })).status, 400);
+    assert.deepEqual(await (await fixture.request(path, { token })).json(), { ...branding, fallback: false }, 'Invalid writes preserve the previous complete palette');
+    assert.equal((await fixture.request(path, { token, method: 'PUT', body: { version: '1', extra: 'x'.repeat(9000) } })).status, 413);
+    await fixture.db.prepare('UPDATE tenant_config SET value=? WHERE tenant_id=? AND key=?').bind('{invalid', fixture.principals.operatorA.tenantId, 'ui.theme.v1').run();
+    assert.deepEqual(await (await fixture.request(path, { token })).json(), { version: '1', light: {}, dark: {}, fallback: true });
+    await fixture.revokePrincipalSessions('operatorA');
+    assert.equal((await fixture.request(path, { token, method: 'PUT', body: branding })).status, 401);
+  });
+});
