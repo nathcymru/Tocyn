@@ -7,12 +7,13 @@ import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
 export const API_TICKET_HISTORY_OPERATION = 'api.ticket.history' as const;
 
 /**
- * The business read is bounded by one tenant ticket lookup, one optional
- * cursor lookup and at most 51 public events.  The conservative D1 allowance
- * also covers the live API-key recheck and two bounded authority snapshots
- * (including the post-cold-grant recheck); cold coordinator work is prepaid
- * separately by the isolate cache.  The measured native proof asserts the
- * route stays below this ceiling for full pages and cursors.
+ * The business read uses the tenant/ticket/sequence current-public projection
+ * from migration 0043, joins at most 51 projected events and checks one
+ * optional projected cursor, plus the tenant ticket lookup. The conservative
+ * D1 allowance also covers the live API-key recheck and two bounded authority
+ * snapshots (including the post-cold-grant recheck); cold coordinator work is
+ * prepaid separately by the isolate cache. Native proofs exercise both full
+ * public pages and a 3,000-event filtered prefix under this ceiling.
  */
 export const API_TICKET_HISTORY_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({
   workerRequests: 1,

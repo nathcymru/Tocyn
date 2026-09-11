@@ -17,7 +17,7 @@ async function sha256(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function fixture(limit = 1_000_000, admissionPolicy: string | undefined = 'api-ticket-mutations-v1') {
+async function fixture(limit = 1_000_000, admissionPolicy: string | undefined = 'api-ticket-mutations-v1', applyProjection = true) {
   const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true,
     format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'api-history-admission-proof', modules: true,
@@ -29,7 +29,7 @@ async function fixture(limit = 1_000_000, admissionPolicy: string | undefined = 
   }] }));
   try {
     const db = await mf.getD1Database('DB');
-    for (const migration of readdirSync(join(root, 'migrations')).filter(file => file.endsWith('.sql')).sort()) {
+    for (const migration of readdirSync(join(root, 'migrations')).filter(file => file.endsWith('.sql') && (applyProjection || file < '0043_')).sort()) {
       await db.batch(splitSql(readFileSync(join(root, 'migrations', migration), 'utf8')).map(sql => db.prepare(sql)));
     }
     const limits = Object.fromEntries(dimensions.map(dimension => [dimension, limit]));
@@ -68,6 +68,10 @@ async function fixture(limit = 1_000_000, admissionPolicy: string | undefined = 
       });
       await db.batch(events.flat());
     }
+    if (!applyProjection) {
+      const migration = readFileSync(join(root, 'migrations/0043_conversation_public_history.sql'), 'utf8');
+      await db.batch(splitSql(migration).map(sql => db.prepare(sql)));
+    }
     return { mf, db, keys };
   } catch (error) { await mf.dispose(); throw error; }
 }
@@ -82,19 +86,19 @@ test('API history admits bounded public pages with a fresh execution id and a wa
     const first = await history(f.mf, f.keys['history-a'].value);
     assert.equal(first.status, 200, await first.clone().text()); const firstPage = await first.json() as { events: unknown[]; nextCursor: string | null };
     assert.equal(firstPage.events.length, 50); assert.ok(firstPage.nextCursor);
-    const cold = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { calls: { refresh: number; reserve: number }; historyEventQueries: number; historyEventRowsRead: number };
+    const cold = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { calls: { refresh: number; reserve: number }; historyEventQueries: number; historyEventRowsRead: number; historyRowsRead: number };
     assert.equal(cold.calls.refresh, 1); assert.equal(cold.calls.reserve, 1, 'cold authority refresh and reservation are paid once');
-    // The 51 returned events can each issue one tenant-qualified article
-    // visibility probe, so the native full page is bounded at 102 D1 rows.
+    // The indexed projection and event join inspect at most 51 rows each.
     assert.equal(cold.historyEventQueries, 1); assert.ok(cold.historyEventRowsRead <= 102, String(cold.historyEventRowsRead));
-    assert.ok((API_TICKET_HISTORY_ENVELOPE.d1RowsRead ?? 0) >= cold.historyEventRowsRead,
-      'the measured event work fits the conservative admission envelope');
-    const plan = await f.db.prepare(`EXPLAIN QUERY PLAN SELECT e.* FROM conversation_events e
-      WHERE e.tenant_id=? AND e.ticket_id=? AND e.sequence>? AND e.visibility='public'
-        AND e.kind IN ('ticket.intake','message.reply')
-      ORDER BY e.sequence LIMIT ?`).bind('history-a', 'shared-ticket', 0, 51).all<{ detail: string }>();
-    assert.ok(plan.results.some(row => /SEARCH e USING INDEX .*tenant_id=\? AND ticket_id=\? AND sequence>\?/.test(row.detail)),
-      'the full-page event scan uses the tenant/ticket/sequence index rather than an unbounded sort');
+    assert.ok(cold.historyRowsRead <= 102, String(cold.historyRowsRead));
+    assert.ok((API_TICKET_HISTORY_ENVELOPE.d1RowsRead ?? 0) >= cold.historyRowsRead,
+      'the measured event and visibility work fits the conservative admission envelope');
+    const plan = await f.db.prepare(`EXPLAIN QUERY PLAN SELECT e.* FROM conversation_public_history p
+      JOIN conversation_events e ON e.tenant_id=p.tenant_id AND e.id=p.event_id
+      WHERE p.tenant_id=? AND p.ticket_id=? AND p.sequence>? ORDER BY p.sequence LIMIT ?`)
+      .bind('history-a', 'shared-ticket', 0, 51).all<{ detail: string }>();
+    assert.ok(plan.results.some(row => /SEARCH p USING INDEX .*tenant_id=\? AND ticket_id=\? AND sequence>\?/.test(row.detail)),
+      'the full-page public projection uses the tenant/ticket/sequence index rather than scanning hidden events');
     const retry = await history(f.mf, f.keys['history-a'].value, `/api/v1/tickets/shared-ticket/history?limit=1&cursor=${firstPage.nextCursor}`);
     assert.equal(retry.status, 200); await retry.body?.cancel();
     const warm = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { calls: { refresh: number; reserve: number }; cache: { operations: number } };
@@ -128,5 +132,64 @@ test('API history preserves the pre-admission route when the optional policy bin
     const response = await history(f.mf, f.keys['history-a'].value, '/api/v1/tickets/shared-ticket/history?limit=1');
     assert.equal(response.status, 200); const page = await response.json() as { events: unknown[] };
     assert.equal(page.events.length, 1);
+  } finally { await f.mf.dispose(); }
+});
+
+test('API history pages through large hidden gaps and tracks article visibility/deletion without leakage', async () => {
+  const f = await fixture();
+  try {
+    await f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('history-a','filtered-ticket','Filtered history','history-a@example.test','api')").run();
+    const hidden = Array.from({ length: 3_000 }, (_, index) => f.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES ('history-a',?,'filtered-ticket',NULL,?,'ticket.state_changed','api-key','shared-api-key','api-key','api','internal','{}')`)
+      .bind(`10000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`, index * 2 + 1));
+    const inaccessible = Array.from({ length: 51 }, (_, index) => {
+      const articleId = `20000000-0000-4000-9000-${String(index + 1).padStart(12, '0')}`;
+      return [f.db.prepare(`INSERT INTO articles
+        (tenant_id,id,ticket_id,sender_id,sender_type,body,is_internal,intake_source)
+        VALUES ('history-a',?,'filtered-ticket','shared-customer','customer','Internal',1,'api')`).bind(articleId),
+      f.db.prepare(`INSERT INTO conversation_events
+        (tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+        VALUES ('history-a',?,'filtered-ticket',?,?,'message.reply','api-key','shared-api-key','api-key','api','public','{}')`)
+        .bind(`30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`, articleId, index * 2 + 2)];
+    });
+    const eligible = Array.from({ length: 51 }, (_, index) => {
+      const articleId = `40000000-0000-4000-9000-${String(index + 1).padStart(12, '0')}`;
+      return { articleId, eventId: `50000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        statements: [f.db.prepare(`INSERT INTO articles
+          (tenant_id,id,ticket_id,sender_id,sender_type,body,is_internal,intake_source)
+          VALUES ('history-a',?,'filtered-ticket','shared-customer','customer','Public',0,'api')`).bind(articleId),
+        f.db.prepare(`INSERT INTO conversation_events
+          (tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+          VALUES ('history-a',?,'filtered-ticket',?,?,'message.reply','api-key','shared-api-key','api-key','api','public','{}')`)
+          .bind(`50000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`, articleId, 6_001 + index)] };
+    });
+    await f.db.batch([...hidden, ...inaccessible.flat(), ...eligible.flatMap(row => row.statements)]);
+    const response = await history(f.mf, f.keys['history-a'].value, '/api/v1/tickets/filtered-ticket/history?limit=50');
+    assert.equal(response.status, 200); const page = await response.json() as { events: { id: string }[]; nextCursor: string | null };
+    assert.equal(page.events.length, 50); assert.ok(page.nextCursor);
+    assert.ok(page.events.every(event => event.id.startsWith('50000000-')), 'hidden and inaccessible article events never enter the public projection');
+    const tail = await history(f.mf, f.keys['history-a'].value, `/api/v1/tickets/filtered-ticket/history?limit=50&cursor=${page.nextCursor}`);
+    assert.equal(tail.status, 200); assert.equal((await tail.json() as { events: unknown[] }).events.length, 1);
+    await f.db.prepare('UPDATE articles SET is_internal=1 WHERE tenant_id=? AND id=?').bind('history-a', eligible[0].articleId).run();
+    await f.db.prepare('DELETE FROM articles WHERE tenant_id=? AND id=?').bind('history-a', eligible[1].articleId).run();
+    const changed = await history(f.mf, f.keys['history-a'].value, '/api/v1/tickets/filtered-ticket/history?limit=50');
+    assert.equal(changed.status, 200); const changedPage = await changed.json() as { events: { id: string }[]; nextCursor: string | null };
+    assert.equal(changedPage.events.length, 49); assert.equal(changedPage.nextCursor, null);
+    assert.ok(changedPage.events.every(event => event.id !== eligible[0].eventId && event.id !== eligible[1].eventId));
+    const control = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { historyEventQueries: number; historyEventRowsRead: number; historyRowsRead: number };
+    assert.ok(control.historyEventQueries >= 3); assert.ok(control.historyEventRowsRead <= 102 * control.historyEventQueries, String(control.historyEventRowsRead));
+    assert.ok((API_TICKET_HISTORY_ENVELOPE.d1RowsRead ?? 0) >= control.historyRowsRead,
+      'the indexed public projection remains inside the existing D1 envelope despite a 3,000-event hidden gap');
+  } finally { await f.mf.dispose(); }
+});
+
+test('0043 backfill certifies existing current-public history before API admission reads it', async () => {
+  const f = await fixture(1_000_000, 'api-ticket-mutations-v1', false);
+  try {
+    const count = await f.db.prepare("SELECT count(*) AS count FROM conversation_public_history WHERE tenant_id='history-a'").first<{ count: number }>();
+    assert.equal(count?.count, 51);
+    const response = await history(f.mf, f.keys['history-a'].value);
+    assert.equal(response.status, 200); assert.equal((await response.json() as { events: unknown[] }).events.length, 50);
   } finally { await f.mf.dispose(); }
 });

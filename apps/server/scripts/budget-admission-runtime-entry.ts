@@ -23,6 +23,7 @@ let loseR2PutAcknowledgement = false;
 let notificationBroadcasts = 0;
 let historyEventQueries = 0;
 let historyEventRowsRead = 0;
+let historyRowsRead = 0;
 let revokeApiKeyAfterAuth: { tenantId: string; apiKeyId: string } | undefined;
 const localCapture = new LocalAuthCaptureTransport();
 const broadcast = BroadcastService.prototype.broadcast;
@@ -75,9 +76,12 @@ function instrumentDatabase(db: any): any {
       };
       if (property==='all') return async (...args:any[]) => {
         const result = await target.all(...args);
-        if (sql.includes('SELECT e.* FROM conversation_events e')) {
+        if (sql.includes('SELECT e.* FROM conversation_events e') || sql.includes('SELECT e.* FROM conversation_public_history p')) {
           historyEventQueries++;
           historyEventRowsRead += result.meta?.rows_read ?? 0;
+        }
+        if (sql.includes('SELECT e.* FROM conversation_events e') || sql.includes('SELECT e.* FROM conversation_public_history p') || sql.includes('SELECT id FROM articles')) {
+          historyRowsRead += result.meta?.rows_read ?? 0;
         }
         return result;
       };
@@ -199,7 +203,7 @@ export default {
         if (control.loseReconcileAcks && control.loseReconcileAcks <= 5) lostReconcileAcksRemaining = control.loseReconcileAcks;
       }
       return Response.json({ calls, canonicalBatches, canonicalAttempts, r2Gets, r2Puts, notificationBroadcasts,
-        historyEventQueries, historyEventRowsRead, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical,
+        historyEventQueries, historyEventRowsRead, historyRowsRead, reservePaused:!!releaseReserve, canonicalPaused:!!releaseCanonical,
         cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     return await app.fetch(request, { ...env, DB: instrumentDatabase(env.DB), ATTACHMENTS_BUCKET: instrumentBucket(env.ATTACHMENTS_BUCKET), emailTransport: localCapture,

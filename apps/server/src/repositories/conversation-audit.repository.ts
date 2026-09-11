@@ -9,7 +9,6 @@ import type { RequestCanonicalMutationSli } from '../observability/request-canon
 const provenance = (actor: ConversationActor) => actor.kind === 'staff' ? 'mfa-staff' : actor.kind === 'customer' ? 'authenticated-customer' : 'api-key';
 const sequence = '(SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=t.tenant_id AND e.ticket_id=t.id)';
 const columns = 'tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts';
-
 /** Fixed intake/reply statement, used only within the owning mutation's D1 batch. */
 export function conversationMutationEvent(db: D1Database, scope: VerifiedTenantScope, input: {
   id: string; ticketId: string; articleId?: string; actor: ConversationActor; intake: boolean; internal: boolean;
@@ -30,20 +29,24 @@ export class ConversationAuditRepository {
   constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {}
 
   async history(ticketId: string, publicOnly: boolean, limit: number, cursor?: string) {
-    const visible = publicOnly ? `AND e.visibility='public' AND e.kind IN ('ticket.intake','message.reply')
-      AND ((e.kind='ticket.intake' AND e.article_id IS NULL) OR EXISTS
-        (SELECT 1 FROM articles a WHERE a.tenant_id=e.tenant_id AND a.id=e.article_id AND a.ticket_id=e.ticket_id AND a.is_internal=0))` : '';
     let after = 0;
     if (cursor) {
-      const row = await this.db.prepare(`SELECT e.sequence FROM conversation_events e
-        WHERE e.tenant_id=? AND e.ticket_id=? AND e.id=? ${visible}`)
-        .bind(this.scope.tenantId,ticketId,cursor).first<{ sequence: number }>();
+      const row = publicOnly
+        ? await this.db.prepare(`SELECT sequence FROM conversation_public_history
+          WHERE tenant_id=? AND ticket_id=? AND event_id=?`).bind(this.scope.tenantId,ticketId,cursor).first<{ sequence: number }>()
+        : await this.db.prepare(`SELECT sequence FROM conversation_events
+          WHERE tenant_id=? AND ticket_id=? AND id=?`).bind(this.scope.tenantId,ticketId,cursor).first<{ sequence: number }>();
       if (!row) return null;
       after = row.sequence;
     }
-    const result = await this.db.prepare(`SELECT e.* FROM conversation_events e
-      WHERE e.tenant_id=? AND e.ticket_id=? AND e.sequence>? ${visible} ORDER BY e.sequence LIMIT ?`)
-      .bind(this.scope.tenantId,ticketId,after,limit+1).all<ConversationEvent>();
+    const result = publicOnly
+      ? await this.db.prepare(`SELECT e.* FROM conversation_public_history p
+          JOIN conversation_events e ON e.tenant_id=p.tenant_id AND e.id=p.event_id
+          WHERE p.tenant_id=? AND p.ticket_id=? AND p.sequence>? ORDER BY p.sequence LIMIT ?`)
+        .bind(this.scope.tenantId,ticketId,after,limit+1).all<ConversationEvent>()
+      : await this.db.prepare(`SELECT e.* FROM conversation_events e
+          WHERE e.tenant_id=? AND e.ticket_id=? AND e.sequence>? ORDER BY e.sequence LIMIT ?`)
+        .bind(this.scope.tenantId,ticketId,after,limit+1).all<ConversationEvent>();
     const more = result.results.length > limit;
     const rows = result.results.slice(0,limit);
     return { rows, nextCursor: more ? rows[rows.length-1].id : null };
