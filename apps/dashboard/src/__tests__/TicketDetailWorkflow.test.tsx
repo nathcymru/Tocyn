@@ -375,6 +375,43 @@ it('does not restore an attachment removed while its upload is pending', async (
   expect(screen.queryByText('removed.txt')).not.toBeInTheDocument();
 });
 
+it('uploads dropped and pasted images through the existing authenticated attachment path', async () => {
+  const uploaded: File[] = [];
+  transport((path, options) => {
+    if (path === '/api/attachments/upload') {
+      uploaded.push((options.body as FormData).get('file') as File);
+      return json({ key: `synthetic/${uploaded.at(-1)?.name}` });
+    }
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  const composer = screen.getByLabelText('Rich message composer');
+  const dropped = new File(['png'], 'dropped.png', { type: 'image/png' });
+  const pasted = new File(['webp'], 'pasted.webp', { type: 'image/webp' });
+  fireEvent.drop(composer, { dataTransfer: { files: [dropped] } });
+  fireEvent.paste(composer, { clipboardData: { files: [pasted] } });
+  await waitFor(() => expect(uploaded).toEqual([dropped, pasted]));
+  expect(screen.getByRole('button', { name: 'Remove dropped.png' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove pasted.webp' })).toBeInTheDocument();
+});
+
+it('retains a failed dropped image and retries it without changing the draft attachment path', async () => {
+  let attempts = 0;
+  transport((path) => {
+    if (path === '/api/attachments/upload') {
+      attempts++;
+      return attempts === 1 ? json({ error: 'Image upload unavailable' }, 503) : json({ key: 'synthetic/retried-image' });
+    }
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  fireEvent.drop(screen.getByLabelText('Rich message composer'), { dataTransfer: { files: [new File(['png'], 'retry.png', { type: 'image/png' })] } });
+  expect(await screen.findByText('Upload failed.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry upload' }));
+  await waitFor(() => expect(attempts).toBe(2));
+  expect(screen.getByRole('button', { name: 'Remove retry.png' })).toBeInTheDocument();
+});
+
 it('preserves both attachments when two uploads complete in the same turn', async () => {
   const first = deferred<Response>(); const second = deferred<Response>(); let count = 0;
   transport(path => path === '/api/attachments/upload' ? (++count === 1 ? first.promise : second.promise) : json(ticket));

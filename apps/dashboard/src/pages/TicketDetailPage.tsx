@@ -12,6 +12,7 @@ import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue
 import { useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
+import { RichComposer, SafeMarkdown } from '../components/RichComposer';
 import { ApiError, dashboardApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -521,9 +522,7 @@ function TicketDetail({ id }: { id: string }) {
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                    {article.body}
-                  </div>
+                  <SafeMarkdown className="break-words text-sm leading-relaxed [&_p]:mb-3 [&_pre]:my-3 [&_ul]:ml-5 [&_ul]:list-disc [&_ol]:ml-5 [&_ol]:list-decimal" children={article.body ?? ''} />
 
                   {/* Attachments */}
                   {article.attachments && article.attachments.length > 0 && (
@@ -693,20 +692,15 @@ function TicketDetail({ id }: { id: string }) {
                 </div>
               )}
 
-              <div className="relative">
-                <label htmlFor="reply-message" className="sr-only">Reply message</label>
-                <TocynTextarea id="reply-message" readOnly={isSubmitting || draft.status === 'loading'} aria-busy={isSubmitting || draft.status === 'loading'}
-                  className={clsx(
-                    "w-full rounded-xl border p-4 text-sm focus:ring-4 outline-none min-h-[140px] transition-all resize-none shadow-inner",
-                    isInternal
-                      ? "bg-amber-50/50 border-amber-200 focus:ring-amber-500/10"
-                      : "bg-slate-50/50 border-slate-200 focus:ring-brand-500/10"
-                  )}
-                  placeholder={isInternal ? "Type an internal note only visible to agents..." : "Type your reply to the customer..."}
-                  value={reply}
-                  onChange={(e) => { if (!submission.current) updateDraft({ body: e.target.value }); }}
-                />
-              </div>
+              <RichComposer
+                id="reply-message"
+                value={reply}
+                readOnly={isSubmitting || draft.status === 'loading'}
+                mode={isInternal ? 'internal' : 'public'}
+                onChange={body => { if (!submission.current) updateDraft({ body }); }}
+                onImageFiles={files => addAttachments(files)}
+                onRejectedImageFiles={count => setNotice(`${count} image${count === 1 ? '' : 's'} was not attached. Use JPEG, PNG, GIF, or WebP images up to 10 MB.`)}
+              />
 
               {(draft.attachments.length > 0 || visiblePendingAttachments.length > 0) && (
                 <div className="flex flex-wrap gap-2 mt-2">
