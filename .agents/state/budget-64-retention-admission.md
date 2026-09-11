@@ -36,3 +36,12 @@ No owner response or permission is missing. Accepted main remains PR203. Exact-h
 Root review returned saved-filter pre-admission projection handling to its existing worker for correction and regression evidence. Knowledge-read PR207 (005cd55) is returned to its existing worker to verify combined source-write accounting with migration0057, fresh empty-tenant behavior, and runtime-specific typing on current202. Group/directory worker continues native verification using Node22; a Node26 missing SQLite binding is a failed environment launch, not a passing check. No new agent or review cycle was created. Root retains integration ownership; workers retain only their separate filter, knowledge-read and groups trees.
 
 Next: receive corrected bounded slices; finish exact-head CI acceptance for202/204/205; refresh stacked206/207 after parent acceptance; integrate required native test registrations. Full64 and140 remain open. No forecast/baseline changes or arbitrary progress percentages. The 30-minute owner update was delivered at15:40BST; next due16:10BST.
+
+
+## Saved-filter delivery and subsequent review queue
+
+Saved-filter draftPR209 now preserves corrected source atcfcf80273d555b62df50c7a031bb724a501f55ef. Root registered required native CI/typecheck at31c7490; shared runtime types and native2/2 passed again atcorrectedhead. Full exact-head CI remains pending. Its worker now implements remaining ticket-field/automation configuration in a separate tree (0059 reserved), following [ready contract](budget-64-admin-next.md).
+
+Group/directory draftPR208 at1e9d880 has697/697 server tests and4/4native, but root acceptance review returned its exact-reservation fencing for correction. Worker remains owner208 until correction and new native evidence return; API-key successor (0060 reserved) is paused behind that correction. Do not accept208 merely from current green tests. Knowledge-read207 remains with its worker for combined accounting/fresh-tenant/exact-operation evidence. Root owns202/204/205/206/209 integration.
+
+At14:44UTC the three specific CI runs20234610532368,20434610939026,20534610754458 remain in_progress; no restart warranted. Reviewed heads20282237a9,2042b4554c,205e976c87 have no review threads (all pagination complete). Required tests still prevent acceptance. No owner action or missing approval; fullgoal remains active.
