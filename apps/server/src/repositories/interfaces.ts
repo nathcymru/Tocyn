@@ -1,3 +1,4 @@
+import type { BudgetAuthorityRepository } from './budget-authority.repository';
 import type { ConversationActor } from '../types/conversation-audit';
 import { SqlKnowledgeRepository } from './knowledge.repository';
 import { User, Ticket, Article, Attachment } from '../types';
@@ -130,6 +131,7 @@ export interface FilterRepository {
 }
 
 export interface Repositories {
+  budgetAuthority: BudgetAuthorityRepository;
   requestLimits: { consume(bucket: string, limit: number, windowMs: number, now?: number): Promise<boolean> };
   knowledge: SqlKnowledgeRepository;
   users: UserRepository;

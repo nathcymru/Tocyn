@@ -2,13 +2,15 @@
 
 Active goal: complete #140, including full SLA, ownership/routing, durable workspace, accessibility and tenant isolation. This section supersedes historical checkpoints below. [Approved master package](../../docs/planning/post-beta-2026-09-10/README.md). Coordinator owns integration and acceptance.
 
-## Current state — 11 September 2026, 05:25 BST
+## Current state — 11 September 2026, 05:46 BST
 
 Accepted main is `5c5c31a75d99934021f489e55578be6791c0bfe2` (PR #184, 04:11:49 UTC). Reviewed head `3cf1c813`, tested merge `0b46ca00` and signed accepted commit share tree `a75328ef075acfb35a78eef3f9dd7ea381d83650`. All required CI/security passed; no unresolved review threads. Standing owner review-only bypass recorded honestly; zero Copilot requests.
 
 Publication is complete: issue #49 receipt `5629399426`, 72 changed issue forecast paragraphs, 242 changed Project fields, 525 expected fields read back, 37 milestone forecasts, Wiki `be7e38e` (two changed pages, three authoritative pages verified). Baseline/actual/status/progress fields stayed intact. Published forecast: beta.2 **22 December 2026**, expanded scope **18 December 2027**. No readiness claim.
 
 #66 and #136 are complete via signed PRs #175/#177, with acceptance receipts `5628989546`/`5629118301`; both Project Done/100, actual completion 11 September. Keyboard and actual Safari/VoiceOver waiting-state acceptance passed. VoiceOver remains enabled; no owner approval is outstanding. Full #73/#64/#68 and downstream #130/#137/#140 remain incomplete.
+
+Latest checkpoint: keyboard text entry/read-back succeeded in Safari and was cleared. Actual SLA VoiceOver uses a fresh ephemeral fixture. SLA browser1/1 passed but CI draft-browser gate exposes404 resources; root/Terra are diagnosing with zero-error assertions preserved. Composer patch initially landed in owner checkout by worker mistake; exact backup/relocation completed and owner checkout verified clean. Repeated correct-worktree contract validation passed; candidate2f863ec preserves preview and channel changes. Budget active isolate warm integration now passed12real admission tests,2authority and83unit tests; all-path acceptance remains. CI repository-boundary and D1 bootstrap failures fixed locally; exact-revision checks pending.
 
 Active ownership and evidence:
 - Root: integration, GitHub/Wiki, final acceptance, budget recovery correction and shared client performance. Existing draft PRs #180/#182/#183 preserve work; no feature agents declare completion.
@@ -20,7 +22,7 @@ Native agent/model controls are used explicitly. A specialist start once hit the
 
 Failure lessons: update traceability structurally, never with a regex spanning records (exactly 45 sole-owner #66/#136 requirements changed). Preserve both TypeScript and JavaScript Vite configs. Rejected minifier/chunk probes must not be reported as accepted performance evidence. Runtime script typechecks are separate from application typechecks. Preserve owner checkout, historical worktrees and servers on 8787/8899/5190.
 
-Next: preserve CI wiring in draft PRs; finish SLA browser/VoiceOver/resource evidence; integrate prepaid grants and remaining #64 paths; complete composer channel contracts and combined performance; then dependency-cleared #130/#137 work. Routing/mention sequencing is in [routing-137-preparation.md](routing-137-preparation.md). Last human operational update 05:10 BST; next due 05:40 BST.
+Next: preserve CI wiring in draft PRs; finish SLA browser/VoiceOver/resource evidence; integrate prepaid grants and remaining #64 paths; complete composer channel contracts and combined performance; then dependency-cleared #130/#137 work. Routing/mention sequencing is in [routing-137-preparation.md](routing-137-preparation.md). Last human operational update 05:40 BST; next due 06:10 BST.
 
 ## Historical state — 11 September 2026, 03:38 BST
 

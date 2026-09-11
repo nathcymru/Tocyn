@@ -1,59 +1,33 @@
 import type { Context } from 'hono';
-import type { D1Database } from '@cloudflare/workers-types';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { Env } from '../bindings';
 import type { AppVariables } from '../types';
-import type { VerifiedTenantScope } from '../types/tenant';
-import { BUDGET_AUTHORITY_SNAPSHOT_D1_READ_BOUND, BudgetAuthorityRepository, type BudgetAuthorityPrincipal } from '../budgets/authority-repository';
-import { BudgetCoordinatorService, type CurrentBudgetAuthorityGate } from '../budgets/budget-coordinator.service';
-import type { ApiKeyResolution } from '../auth/api-key-resolver';
+import { IsolateBudgetAdmissionCache, type CanonicalBudgetIntent } from '../budgets/isolate-admission.service';
+import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
 
 export const API_TICKET_BUDGET_POLICY = 'api-ticket-mutations-v1' as const;
 export type ApiTicketBudgetOperation = 'api.ticket.create' | 'api.ticket.reply';
 
 /**
- * This is the conservative, bounded envelope for the first active path.
- * It reserves the canonical mutation, audit receipt, current-credential check,
- * authority read, coordinator commit, and holder seed before acknowledgement.
- * It intentionally excludes attachments, providers, notifications, AI, PATCH,
- * and every non-API-key path until each has its own approved envelope.
+ * Conservative estimated business/retry envelope, excluding the separately
+ * prepaid warm credential controls and cold allocation overhead. The extra
+ * 1,536 reads cover a current-authority recheck after awaiting a shared cold
+ * grant; 1,024 cover canonical authorization, receipt and mutation reads.
+ * Diagnostic events include two request compositions plus invocation margin.
+ * Provider metering is unmeasured; no billing guarantee is claimed.
  */
-/**
- * Query-plan bound: two indexed, 129-row authority snapshots cover an initial
- * reserve and one idempotent retry after a lost holder-seed acknowledgement.
- * The remaining margin covers API-key/current-receipt reads and the bounded
- * canonical D1 mutation/replay path. This is a reservation envelope, not a
- * claim that provider D1 metering is identical to local SQLite diagnostics.
- */
-const API_ADMISSION_D1_READ_BOUND = BUDGET_AUTHORITY_SNAPSHOT_D1_READ_BOUND * 2 + 512;
-const API_IDEMPOTENT_RETRY_D1_READ_BOUND = 512;
 export const API_TICKET_ENVELOPES: Readonly<Record<ApiTicketBudgetOperation, ResourceAmounts>> = Object.freeze({
-  'api.ticket.create': Object.freeze({ workerRequests: 2, d1RowsRead: API_ADMISSION_D1_READ_BOUND + API_IDEMPOTENT_RETRY_D1_READ_BOUND,
-    d1RowsWritten: 64, doRequests: 6, doRowsWritten: 6 }),
-  'api.ticket.reply': Object.freeze({ workerRequests: 2, d1RowsRead: API_ADMISSION_D1_READ_BOUND + API_IDEMPOTENT_RETRY_D1_READ_BOUND,
-    d1RowsWritten: 64, doRequests: 6, doRowsWritten: 6 }),
+  'api.ticket.create': Object.freeze({ d1RowsRead: 2_560, d1RowsWritten: 64,
+    ...estimateDiagnosticEnvelope({ httpRequests: 2 }), logEvents: (estimateDiagnosticEnvelope({ httpRequests: 2 }).logEvents ?? 0) + 2 }),
+  'api.ticket.reply': Object.freeze({ d1RowsRead: 2_560, d1RowsWritten: 64,
+    ...estimateDiagnosticEnvelope({ httpRequests: 2 }), logEvents: (estimateDiagnosticEnvelope({ httpRequests: 2 }).logEvents ?? 0) + 2 }),
 });
-
-class ApiKeyTicketBudgetGate implements CurrentBudgetAuthorityGate {
-  constructor(private readonly db: D1Database, private readonly resolution: ApiKeyResolution) {}
-
-  async authorize(scope: VerifiedTenantScope): Promise<BudgetAuthorityPrincipal | null> {
-    if (scope.tenantId !== this.resolution.tenantId || scope.actorId !== this.resolution.apiKeyId || !scope.roles.includes('integration')) return null;
-    const row = await this.db.prepare(`SELECT permissions FROM api_keys WHERE tenant_id=? AND id=? AND is_active=1 LIMIT 1`)
-      .bind(scope.tenantId, this.resolution.apiKeyId).first<{ permissions: string }>();
-    if (!row || typeof row.permissions !== 'string' || !row.permissions.split(',').map(value => value.trim()).includes('tickets:write')) return null;
-    return { kind: 'api-key', apiKeyId: this.resolution.apiKeyId, requiredPermission: 'tickets:write' };
-  }
-}
+/** One bounded registry across binding contexts in this isolate; no request creates a new cache. */
+export const apiTicketBudgetCache = new IsolateBudgetAdmissionCache();
 
 function mode(env: Env): 'disabled' | 'enabled' | 'invalid' {
   if (env.BUDGET_ADMISSION_POLICY === 'off') return 'disabled';
   return env.BUDGET_ADMISSION_POLICY === API_TICKET_BUDGET_POLICY ? 'enabled' : 'invalid';
-}
-
-function budgetKey(operation: ApiTicketBudgetOperation, raw: string | undefined): string {
-  // Header validation happens in the mutation service before this boundary.
-  return raw === undefined ? `${operation}:server:${crypto.randomUUID()}` : `${operation}:client:${raw}`;
 }
 
 /**
@@ -64,27 +38,29 @@ function budgetKey(operation: ApiTicketBudgetOperation, raw: string | undefined)
 export async function admitConfiguredApiTicketMutation(
   c: Context<{ Bindings: Env; Variables: AppVariables }>,
   operation: ApiTicketBudgetOperation,
-  idempotencyKey: string | undefined,
+  canonicalIntent: () => Promise<CanonicalBudgetIntent>,
 ): Promise<Response | null> {
   const configured = mode(c.env);
   if (configured === 'disabled') return null;
-  if (configured === 'invalid' || !c.env.DB || !c.env.BUDGET_COORDINATOR_DO || !c.env.BUDGET_GRANT_HOLDER_DO) {
+  if (configured === 'invalid' || !c.env.BUDGET_COORDINATOR_DO) {
     return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   }
   const scope = c.get('tenantScope');
   const resolution = c.get('apiKeyResolution');
-  if (!scope || !resolution) return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+  const repository = c.get('tenantDeps')?.repositories.budgetAuthority;
+  if (!scope || !resolution || !repository) return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
   try {
-    const service = new BudgetCoordinatorService(
-      new BudgetAuthorityRepository(c.env.DB), c.env.BUDGET_COORDINATOR_DO, c.env.BUDGET_GRANT_HOLDER_DO,
-      new ApiKeyTicketBudgetGate(c.env.DB, resolution), () => c.env.localNow?.() ?? Date.now(),
-    );
-    const outcome = await service.reserveForVerifiedScope(scope, {
-      holderId: `api-key:${resolution.apiKeyId}`,
-      idempotencyKey: budgetKey(operation, idempotencyKey),
-      purpose: 'new-work', envelope: API_TICKET_ENVELOPES[operation],
+    const intent = await canonicalIntent();
+    const outcome = await apiTicketBudgetCache.admit({
+      repository, namespace: c.env.BUDGET_COORDINATOR_DO,
+      authorization: { authorize: current => repository.authorizeApiKeyTicket(current, resolution.tenantId, resolution.apiKeyId) }, scope,
+      credentialKey: `api-key:${resolution.apiKeyId}:tickets:write`, intent,
+      business: API_TICKET_ENVELOPES[operation], now: () => c.env.localNow?.() ?? Date.now(),
     });
-    if (outcome.status === 'granted' || outcome.status === 'idempotent') return null;
+    if (outcome.status === 'spent') return null;
+    // An in-flight or failed canonical mutation must not execute again merely
+    // because a local budget receipt exists. A durable completed replay is
+    // handled by the mutation service before this admission boundary.
     if (outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted') {
       return c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429);
     }

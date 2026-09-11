@@ -35,7 +35,8 @@ async function digest(value: string): Promise<string> {
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace };
+type MutationAdmissionIntent = Readonly<{ operationId: string; operationFingerprint: string; workScopeKey: string }>;
+type Attempt = { input: TicketMutationInput; namespace?: MutationNamespace; budgetIntent?: Promise<MutationAdmissionIntent> };
 
 /**
  * Version 1 renders the fixed original-row snapshot for both first success and
@@ -233,6 +234,19 @@ export class TicketMutationReplayService {
       if (error instanceof TicketMutationError || error instanceof BetaAdmissionError) throw error;
       throw unavailable();
     }
+  }
+
+  /** Read-only budget binding from this service's owned, normalized attempt. */
+  async admissionIntent(prepared: PreparedTicketMutation): Promise<MutationAdmissionIntent> {
+    const attempt = this.attempts.get(prepared);
+    if (!attempt || prepared.replay) throw unavailable();
+    attempt.budgetIntent ??= (async () => Object.freeze({
+      operationId: attempt.namespace?.keyHash ?? `server:${crypto.randomUUID()}`,
+      operationFingerprint: attempt.namespace?.payloadHash ?? await digest(`ticket-mutation-v1\n${canonicalMutationJson(attempt.input)}`),
+      // Creates share a capability scope. Replies retain their already authorized exact target.
+      workScopeKey: `${attempt.input.operation}:${'ticketId' in attempt.input ? await digest(attempt.input.ticketId) : 'new'}`,
+    }))();
+    return attempt.budgetIntent;
   }
 
   async commit(prepared: PreparedTicketMutation, verifiedAttachments: VerifiedMutationAttachment[] = []): Promise<MutationOutcome> {

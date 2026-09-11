@@ -2,7 +2,7 @@ import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { BudgetPurpose, ResourceAmounts } from '@luminatick/shared';
 import { sumResourceEnvelopes } from '../utils/cost-policy';
-import { BudgetAuthorityRepository, type BudgetAuthorityPrincipal } from './authority-repository';
+import { BudgetAuthorityRepository, type BudgetAuthorityPrincipal } from '../repositories/budget-authority.repository';
 import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO';
 import type { BudgetGrantHolderDO } from '../durable_objects/BudgetGrantHolderDO';
 
@@ -49,9 +49,11 @@ export const WARM_SPEND_CONTROL_PLANE_ENVELOPE: Readonly<ResourceAmounts> = Obje
 export const MAX_WARM_SPEND_ATTEMPTS = 2;
 
 /**
- * Server-only coordinator adapter. Its caller must select a credential-specific
- * current-authority gate; a scope or matching policy revision alone is never
- * enough to admit new work.
+ * Optional server-only durable-holder adapter retained for foundation/runtime
+ * validation. The active API routes use IsolateBudgetAdmissionCache instead:
+ * this adapter's per-operation DO RPCs are not the #64 warm-path acceptance.
+ * Its caller must select a credential-specific current-authority gate; a scope
+ * or matching policy revision alone is never enough to admit new work.
  */
 export class BudgetCoordinatorService {
   constructor(

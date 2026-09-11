@@ -5,7 +5,7 @@ import {
   type TrustedBudgetCoordinatorAuthority,
   type TrustedBudgetCoordinatorRevocation,
   type TrustedTenantAllocation,
-} from './owner-aggregate';
+} from '../budgets/owner-aggregate';
 
 type AuthorityRow = Readonly<{
   deployment_id: string;
@@ -58,7 +58,16 @@ function parseJson(value: string, name: string): unknown {
  * database records, never request authority.
  */
 export class BudgetAuthorityRepository {
-  constructor(private readonly db: D1Database) {}
+  constructor(private readonly db: D1Database, private readonly boundScope?: VerifiedTenantScope,
+    /** Opaque stable cache context from trusted composition, never a storage API for callers. */
+    readonly bindingIdentity: object = db) {}
+
+  async authorizeApiKeyTicket(scope: VerifiedTenantScope, tenantId: string, apiKeyId: string): Promise<BudgetAuthorityPrincipal | null> {
+    if (scope.tenantId !== tenantId || scope.actorId !== apiKeyId || !scope.roles.includes('integration')
+      || (this.boundScope && (this.boundScope.tenantId !== scope.tenantId || this.boundScope.actorId !== scope.actorId))) return null;
+    const principal = { kind: 'api-key' as const, apiKeyId, requiredPermission: 'tickets:write' };
+    return await this.livePrincipal(scope, principal) ? principal : null;
+  }
 
   private async livePrincipal(scope: VerifiedTenantScope, principal: BudgetAuthorityPrincipal): Promise<boolean> {
     if (principal.kind === 'session') {
@@ -124,6 +133,7 @@ export class BudgetAuthorityRepository {
    */
   async resolveForVerifiedPrincipal(scope: VerifiedTenantScope, principal: BudgetAuthorityPrincipal, now: number): Promise<BudgetAuthorityResolution> {
     currentTime(now);
+    if (this.boundScope && (this.boundScope.tenantId !== scope.tenantId || this.boundScope.actorId !== scope.actorId)) return { kind: 'unavailable' };
     try {
       if (!await this.livePrincipal(scope, principal)) return { kind: 'unavailable' };
       const row = await this.requestedAllocation(scope.tenantId);

@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { createVerifiedTenantScope } from '../src/auth/scope';
-import { BUDGET_AUTHORITY_MAX_TENANT_ALLOCATIONS, BudgetAuthorityRepository } from '../src/budgets/authority-repository';
+import { BUDGET_AUTHORITY_MAX_TENANT_ALLOCATIONS, BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
 import { BudgetCoordinatorService } from '../src/budgets/budget-coordinator.service';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 import type { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';

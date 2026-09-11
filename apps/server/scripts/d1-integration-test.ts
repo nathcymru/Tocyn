@@ -537,7 +537,14 @@ async function run() {
   const { Module } = await import('node:module');
   const originalRequire = Module.prototype.require;
   Module.prototype.require = function (id) {
-    if (id === 'cloudflare:workers') return { WorkflowEntrypoint: class {} };
+    if (id === 'cloudflare:workers') return {
+      WorkflowEntrypoint: class {},
+      // This Node suite exercises fetch/scheduled with real SQLite. Durable
+      // Object behavior is covered by the separate actual Miniflare suites.
+      DurableObject: class {
+        constructor() { throw new Error('Durable Objects require the runtime integration fixture'); }
+      },
+    };
     return originalRequire.apply(this, arguments);
   };
   const { default: worker } = await import('../src/index');
@@ -564,7 +571,9 @@ async function run() {
   const tokenWidgetA2 = await createToken('tenant-A', 'customer', userIdA2, 'c2@a.com', 'widget');
 
   const testEmailTransport = new InMemoryEmailTransport();
-  const envMock = { APP_MASTER_KEY: 'test-master-key-that-is-long-enough-for-aes', DB: db, JWT_SECRET: 'secret', ATTACHMENTS_BUCKET: bucket, emailTransport: testEmailTransport, AI: { run: async (model, options) => {
+  // Legacy authorization/storage suite: budget-enabled behavior has its own
+  // actual Miniflare tests; missing configuration must still fail closed there.
+  const envMock = { BUDGET_ADMISSION_POLICY: 'off', APP_MASTER_KEY: 'test-master-key-that-is-long-enough-for-aes', DB: db, JWT_SECRET: 'secret', ATTACHMENTS_BUCKET: bucket, emailTransport: testEmailTransport, AI: { run: async (model, options) => {
   if (model === '@cf/meta/llama-3-8b-instruct') {
     return { response: JSON.stringify(options.messages) };
   }
