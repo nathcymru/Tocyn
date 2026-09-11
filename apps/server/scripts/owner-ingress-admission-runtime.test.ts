@@ -335,3 +335,20 @@ test('concurrent failed discovery is serialized and trips the bounded latch by w
   assert.equal(discoveries,3,'terminal failure blocks later discovery without additional I/O');
   assert.deepEqual(cache.inspectForTrustedRuntime(),{bindings:1,failedAdmissions:3,terminalFailures:1});
 });
+
+test('concurrent callers recheck shared warm-block capacity after allocation',async()=>{
+  const cache=new OwnerIngressAdmissionCache(),identity={};let release:()=>void=()=>{};
+  const discovered=new Promise<void>(resolve=>{release=resolve});let reservations=0;
+  const authority={aggregateId:'concurrent-owner-ingress',ownerPolicy:{policyId:'concurrent-policy',revision:1,budgets:[]},tenantAllocations:[],
+    authorityCheckedAt:NOW,authorityRevision:1,authorityExpiresAt:NOW+60_000,maxReservations:64};
+  const coordinator={refreshFromTrustedAuthority:async()=>{},reserveIngressFromTrustedAuthority:async()=>({status:'granted' as const,
+    reservation:{reservationId:`reservation-${++reservations}`,holderId:'holder',expiresAt:NOW+60_000}}),
+    handoffIngressBatchFromTrustedAuthority:async()=>({status:'handed-off' as const})};
+  const repository={bindingIdentity:identity,resolveForDeploymentIngress:async()=>{await discovered;return authority;},hasDurableGrantOperation:async()=>false} as unknown as BudgetAuthorityRepository;
+  const namespace={idFromName:(name:string)=>name,get:()=>coordinator} as unknown as DurableObjectNamespace;
+  const admissions=Array.from({length:9},()=>cache.admit({repository,namespace,purpose:'new-work',now:()=>NOW}));
+  await Promise.resolve();release();
+  const results=await Promise.all(admissions);
+  assert.equal(results.every(result=>result.status==='admitted'),true);
+  assert.equal(reservations,2,'the ninth caller rolls over after the eight shared warm slots are issued');
+});
