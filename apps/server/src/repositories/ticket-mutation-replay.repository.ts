@@ -2,6 +2,8 @@ import { apiBudgetMutationStatements, type ApiMutationCommit } from './budget-co
 import { customerMutationStatement, type CustomerMutationCommit } from './customer-ticket-mutation.repository';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
 import { staffMutationStatements, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
+import { StaffReplyPreconditionConflictError, staffReplyPreconditionConstraint, staffReplyPreconditionMatches, type StaffReplyPrecondition } from './staff-reply-precondition.repository';
+export { StaffReplyPreconditionConflictError, type StaffReplyPrecondition } from './staff-reply-precondition.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { conversationMutationEvent } from './conversation-audit.repository';
@@ -34,6 +36,10 @@ export type MutationCandidate = {
   ticket?: InitialTicketArticleData['ticket'];
   article?: InitialTicketArticleData['article'];
   attachments: (VerifiedMutationAttachment & { id: string })[];
+  /** Prepared #133 projections that must commit with this canonical mutation. */
+  activityStatements?: readonly D1PreparedStatement[];
+  /** Normalized internal mention IDs bound to the acknowledged draft precondition. */
+  mentionedUserIds?: readonly string[];
 };
 
 /** Only fixed ticket mutations; all SQL authority comes from the verified scope. */
@@ -100,25 +106,28 @@ export class TicketMutationReplayRepository {
     return this.commitCanonical(candidate, ns, undefined, undefined, customer);
   }
 
-  async commitStaff(candidate: MutationCandidate, staff: StaffMutationCommit): Promise<string> {
+  async commitStaff(candidate: MutationCandidate, staff: StaffMutationCommit, precondition?: StaffReplyPrecondition): Promise<string> {
     if (candidate.audit?.kind !== 'staff' || candidate.audit.id !== staff.credential.actorId
       || candidate.audit.source !== 'dashboard' || !candidate.articleId || !candidate.article
       || (staff.requirements.ticket?.id !== (candidate.ticket ? undefined : candidate.ticketId))
       || (staff.namespace && (staff.authority.operationId !== staff.namespace.keyHash || staff.authority.operationFingerprint !== staff.namespace.payloadHash))
-      || (staff.namespace && staff.namespace.operation !== (candidate.ticket ? 'dashboard.ticket.create' : 'dashboard.ticket.reply'))) {
+      || (staff.namespace && staff.namespace.operation !== (candidate.ticket ? 'dashboard.ticket.create' : 'dashboard.ticket.reply'))
+      || (candidate.activityStatements && (!candidate.article.is_internal || candidate.activityStatements.length > 16))
+      || (candidate.mentionedUserIds?.length && (!candidate.article.is_internal || candidate.mentionedUserIds.length > 16))) {
       throw new Error('Invalid staff mutation');
     }
-    return this.commitCanonical(candidate, undefined, staff);
+    return this.commitCanonical(candidate, undefined, staff, undefined, undefined, precondition);
   }
 
   private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit,
-    api?: ApiMutationCommit, customer?: CustomerMutationCommit): Promise<string> {
+    api?: ApiMutationCommit, customer?: CustomerMutationCommit, precondition?: StaffReplyPrecondition): Promise<string> {
     // This is after caller authorization/admission preparation and before
     // constructing the authoritative D1 batch. No HTTP response establishes this.
     this.canonicalMutationSli?.recordAttempt();
     const operation=candidate.ticket?'create':'conversation';
+    const staffPrecondition = staff && precondition ? staffReplyPreconditionConstraint(this.scope, candidate, precondition) : undefined;
     const statements: D1PreparedStatement[] = [...(api ? apiBudgetMutationStatements(this.db,this.scope,api) : []),
-      ...(staff ? staffMutationStatements(this.db,this.scope,staff) : []),
+      ...(staff ? staffMutationStatements(this.db,this.scope,staff,staffPrecondition) : []),
       ...(customer ? [customerMutationStatement(this.db,this.scope,customer)] : []), ...(this.admission?.statements(operation)??[])];
     if (ns) {
       // Exact expired-key reuse and at most 99 other expired rows: bounded 100.
@@ -194,6 +203,10 @@ export class TicketMutationReplayRepository {
       id:eventId,ticketId:candidate.ticketId,articleId:candidate.articleId,actor:candidate.audit,
       intake:Boolean(candidate.ticket),internal:Boolean(candidate.article?.is_internal),
     }));
+    // Activity statements are prepared only by #133's repository. Keeping them
+    // before the mutation receipt makes a losing idempotency race roll back both
+    // the note and every durable mention projection.
+    if (candidate.activityStatements?.length) statements.push(...candidate.activityStatements);
     const version = candidate.audit ? 2 : 1;
     const attachmentSnapshots = candidate.attachments.map(() => `json((SELECT ${attachmentJson} FROM attachments x WHERE x.tenant_id = ? AND x.id = ?))`);
     // Staff receipts record the format selected from the canonical article row,
@@ -224,6 +237,13 @@ export class TicketMutationReplayRepository {
     let results;
     try { results = await this.db.batch<{ response_snapshot: string }>(statements); }
     catch(error) {
+      if (staff && precondition) {
+        try {
+          if (!await staffReplyPreconditionMatches(this.db, this.scope, candidate, precondition)) throw new StaffReplyPreconditionConflictError();
+        } catch (classification) {
+          if (classification instanceof StaffReplyPreconditionConflictError) throw classification;
+        }
+      }
       if (!ns && this.admission) { await this.admission.authorize(operation); throw new BetaAdmissionError('beta_admission_unavailable',503); }
       throw error;
     }

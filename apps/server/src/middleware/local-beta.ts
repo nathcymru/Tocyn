@@ -40,6 +40,7 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
     (method === 'POST' && /^\/api\/v1\/customer\/tickets\/[^/]+\/messages$/.test(path)) ||
     (method === 'PATCH' && /^\/api(?:\/v1)?\/tickets\/[^/]+(?:\/support-state)?$/.test(path)) ||
     (method === 'PUT' && (path === '/api/workspace/state' || /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) ||
+    (method === 'POST' && /^\/api\/workspace\/drafts\/[^/]+\/rebase$/.test(path)) ||
     (method === 'DELETE' && /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) return 'conversation-write';
   return 'disabled';
 }

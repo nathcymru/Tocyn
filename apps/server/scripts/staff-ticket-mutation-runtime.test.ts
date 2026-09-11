@@ -9,18 +9,23 @@ import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { splitSql } from './split-sql';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
-import { TicketMutationReplayRepository, type MutationCandidate } from '../src/repositories/ticket-mutation-replay.repository';
+import { TicketMutationReplayRepository, type MutationCandidate, type StaffReplyPrecondition } from '../src/repositories/ticket-mutation-replay.repository';
+import { staffReplyPreconditionConstraint, staffReplyPreconditionMatches } from '../src/repositories/staff-reply-precondition.repository';
 import { CapabilityPolicyService } from '../src/repositories/capability-policy.repository';
 import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-admission.repository';
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { StaffTicketMutationService } from '../src/services/staff-ticket-mutation.service';
+import { OperatorActivityRepository } from '../src/repositories/operator-activity.repository';
+import { OperatorActivityService } from '../src/services/operator-activity.service';
+import type { TenantRequestDeps } from '../src/middleware/tenant.middleware';
 import { createRequestCanonicalMutationSli } from '../src/observability/request-canonical-mutation-sli';
 import type { StaffMutationCommit,StaffMutationInput } from '../src/types/staff-ticket-mutation';
 import type { CapabilityWriteFence } from '../src/auth/capability-policy';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 
 const root = resolve(import.meta.dirname,'..');
+const mentionRecipientIds = Array.from({ length: 16 }, (_, index) => `2${index.toString(16).padStart(7, '0')}-0000-4000-8000-${index.toString(16).padStart(12, '0')}`);
 async function fixture() {
   const bundle = await build({ absWorkingDir:root,entryPoints:['scripts/budget-coordinator-do-runtime-entry.ts'],bundle:true,write:false,
     format:'esm',platform:'neutral',external:['cloudflare:workers'] });
@@ -44,6 +49,10 @@ async function fixture() {
       db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'customer',?,'customer',1,0)").bind(tenant,`customer-${tenant}@example.test`),
       db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES (?,'group','Synthetic group')").bind(tenant),
       db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES (?,'staff','group')").bind(tenant),
+      ...mentionRecipientIds.flatMap((recipient, index) => [
+        db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,?,?,'agent',1,1)").bind(tenant,recipient,`mentionee-${index}-${tenant}@example.test`),
+        db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES (?,?,'group')").bind(tenant,recipient),
+      ]),
       db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,group_id,source) VALUES (?,'ticket','Synthetic',?,'group','dashboard')").bind(tenant,`customer-${tenant}@example.test`),
       db.prepare("INSERT INTO budget_tenant_allocations VALUES ('staff-deployment',?,'staff-policy',1,1,?,?,'active')").bind(tenant,`staff-${tenant}`,JSON.stringify({schemaVersion:1,tenantId:tenant,ownerPolicyId:'staff-policy',ownerPolicyRevision:1,revision:1,mode:'conservative',limits,disabledFeatures:[]})),
       db.prepare("INSERT INTO tenant_role_capability_policies (tenant_id,role,capability,enabled,revision) VALUES (?,'agent','ticket-fields.manage',1,1)").bind(tenant),
@@ -56,7 +65,10 @@ async function fixture() {
       db.prepare("INSERT INTO local_beta_invitations(run_id,tenant_id,principal_kind,principal_id) VALUES ('staff-beta','b','staff','staff')"),
       db.prepare("INSERT INTO local_beta_policy(singleton,run_id,revision,state) VALUES (1,'staff-beta',1,'running')"),
     ]);
-    await db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('b','foreign','Foreign','customer-b@example.test','dashboard')").run();
+    await db.batch([
+      db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_email,source) VALUES ('b','foreign','Foreign','customer-b@example.test','dashboard')"),
+      db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('b','33333333-3333-4333-8333-333333333333','foreign-mentionee@example.test','agent',1,1)"),
+    ]);
     const rawNamespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
     const coordinator = rawNamespace.get(rawNamespace.idFromName('staff-aggregate')) as unknown as BudgetCoordinatorDO;
     const calls = {refresh:0,reserve:0};
@@ -86,29 +98,41 @@ async function fixture() {
       const value=Reflect.get(target,property);return typeof value==='function'?value.bind(target):value;
     }});
     class Canonical extends TicketMutationReplayRepository {
-      override async commitStaff(candidate:MutationCandidate,commit:StaffMutationCommit) {
+      override async commitStaff(candidate:MutationCandidate,commit:StaffMutationCommit,precondition?: StaffReplyPrecondition) {
         canonicalAttempts++;
         const action = beforeCommit;beforeCommit=undefined;if (action) await action();
-        const result = await super.commitStaff(candidate,commit);
+        const result = await super.commitStaff(candidate,commit,precondition);
         if (loseResponse) {loseResponse=false;throw new Error('Synthetic lost committed response');}
         return result;
       }
     }
     const scope = (tenant='a',actor='staff') => createVerifiedTenantScope(tenant,actor,['agent'],1);
     const credential = (tenant='a',actor='staff') => ({tenantId:tenant,actorId:actor,role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600,mfaVerified:true});
-    const service = (tenant='a',actor='staff',capability?:CapabilityWriteFence) => new StaffTicketMutationService(db,scope(tenant,actor),credential(tenant,actor),new Canonical(canonicalDb,scope(tenant,actor)),
-      {service:admission,repository:new Authority(db,scope(tenant,actor)),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},capability);
+    const service = (tenant='a',actor='staff',capability?:CapabilityWriteFence) => {
+      const activeScope=scope(tenant,actor);
+      const activity = new OperatorActivityService({ scope: activeScope,
+        operatorActivity: new OperatorActivityRepository(activeScope, canonicalDb) } as TenantRequestDeps);
+      return new StaffTicketMutationService(db,activeScope,credential(tenant,actor),new Canonical(canonicalDb,activeScope),
+        {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},capability,activity);
+    };
     const betaService = (tenant='a',actor='staff') => {
       const activeScope=scope(tenant,actor),activeCredential=credential(tenant,actor);
       const canonicalSli=createRequestCanonicalMutationSli();
-      const canonical=new TicketMutationReplayRepository(canonicalDb,activeScope,
+      class BetaCanonical extends TicketMutationReplayRepository {
+        override async commitStaff(candidate: MutationCandidate, commit: StaffMutationCommit, precondition?: StaffReplyPrecondition) {
+          canonicalAttempts++; return super.commitStaff(candidate, commit, precondition);
+        }
+      }
+      const canonical=new BetaCanonical(canonicalDb,activeScope,
         new LocalBetaAdmissionRepository(canonicalDb,activeScope,{kind:'staff',id:actor},{sessionVersion:activeCredential.sessionVersion,expiresAt:activeCredential.expiresAt}),canonicalSli);
+      const activity = new OperatorActivityService({ scope: activeScope,
+        operatorActivity: new OperatorActivityRepository(activeScope, canonicalDb) } as TenantRequestDeps);
       return {service:new StaffTicketMutationService(db,activeScope,activeCredential,canonical,
-        {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()}),canonicalSli};
+        {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},undefined,activity),canonicalSli};
     };
     const counts = async () => {
       const result:Record<string,number> = {};
-      for (const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','staff_ticket_mutation_receipts']) {
+      for (const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','staff_ticket_mutation_receipts','operator_activities']) {
         result[table] = (await db.prepare(`SELECT count(*) AS n FROM ${table}`).first<{n:number}>())!.n;
       }
       return result;
@@ -402,13 +426,215 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
     assert.equal((await s.admit(p)).status,'spent');const result=await s.commit(p,attachments);assert.equal(result.attachments.length,10);
     const measured=f.batches.at(-1)!;console.log(JSON.stringify({fixture:'native-d1-canonical-metadata',operation:'staff-reply-ten-attachments',...measured}));
     assert.ok(measured.rowsWritten>100);assert.ok(measured.rowsRead>0);assert.ok(measured.rowsWritten<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
-    const inventory:Record<string,number>={};
+    const inventory:Record<string,number>={}; const conversationEventIndexes = [
+      'idx_conversation_events_article', 'idx_conversation_events_operational_metric_projection',
+      'idx_conversation_events_staff_reply_precondition', 'sqlite_autoindex_conversation_events_1',
+      'sqlite_autoindex_conversation_events_2',
+    ].sort();
     for(const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','support_state_definitions','ticket_support_state','budget_mutation_assertion','local_beta_assertion','local_beta_runs','ticket_mutation_receipts','staff_ticket_mutation_receipts']) {
       const indexes=await f.db.prepare(`PRAGMA index_list(${table})`).all();inventory[table]=indexes.results.length;
-      assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
+      if (table === 'conversation_events') assert.deepEqual(indexes.results.map((index: { name: string }) => index.name).sort(), conversationEventIndexes,
+        'The material-event reread index is deliberate; any further event index needs an envelope review');
+      else assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
+    assert.equal(inventory.conversation_events,5, 'The two unique keys and three deliberate query indexes are accounted for');
     assert.ok(100*5+32*5<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
+});
+
+
+test('native stale-reply precondition is tenant-and-actor scoped, ignores metadata, and expires after 48 hours', async () => {
+  const f = await fixture(); try {
+    const generation = '11111111-1111-4111-8111-111111111111';
+    const mentionedUserId = mentionRecipientIds[0];
+    const candidate = {
+      ticketId: 'ticket', articleId: '11111111-1111-4111-8111-111111111112', attachments: [], mentionedUserIds: [mentionedUserId],
+      article: { sender_type: 'agent', body: 'Draft reply', body_format: 'markdown-v1', is_internal: true, intake_source: 'dashboard', received_at: '2030-01-01T00:00:00.000Z', processed_at: '2030-01-01T00:00:00.000Z' },
+    } as MutationCandidate;
+    const precondition = { ticketId: 'ticket', generation, revision: 1, baseConversationRevision: 0 } as const;
+    await f.db.prepare(`INSERT INTO operator_drafts
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'internal','Draft reply','markdown-v1','[]',?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`).bind(generation, JSON.stringify([mentionedUserId])).run();
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), true);
+    const condition = staffReplyPreconditionConstraint(f.scope(), candidate, precondition);
+    const plan = await f.db.prepare(`EXPLAIN QUERY PLAN SELECT CASE WHEN ${condition.sql} THEN 1 ELSE 0 END`).bind(...condition.values).all<{ detail: string }>();
+    const details = plan.results.map((row: { detail: string }) => row.detail).join(' ');
+    assert.match(details, /idx_conversation_events_staff_reply_precondition/);
+    assert.doesNotMatch(details, /SCAN conversation_events|TEMP B-TREE/);
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), { ...candidate, mentionedUserIds: [mentionRecipientIds[1]] }, precondition), false,
+      'A different recipient selection cannot satisfy an acknowledged draft precondition');
+    await f.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES ('a',?,'ticket',1,'ticket.state_changed','staff','staff','mfa-staff','dashboard','internal','{}')`).bind(crypto.randomUUID()).run();
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), true,
+      'Metadata does not force a fresh content review');
+    await f.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES ('a',?,'ticket',2,'message.reply','customer','customer','authenticated-customer','portal','public','{}')`).bind(crypto.randomUUID()).run();
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), false,
+      'New material customer content blocks the stale reply before any mutation writes');
+    await f.db.prepare("DELETE FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'").run();
+    await f.db.prepare("UPDATE operator_drafts SET expires_at='2020-01-01T00:00:00.000Z' WHERE tenant_id='a' AND user_id='staff'").run();
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope(), candidate, precondition), false);
+    assert.equal(await staffReplyPreconditionMatches(f.db, f.scope('b'), candidate, precondition), false,
+      'A colliding ticket and generation in another tenant cannot satisfy the precondition');
+  } finally { await f.mf.dispose(); }
+});
+
+
+test('internal mentions are bounded, authorized in the winning batch, and idempotent with their canonical note', async () => {
+  const recipient = mentionRecipientIds[0];
+  const foreignRecipient = '33333333-3333-4333-8333-333333333333';
+  const mentioned = (body = 'Private note', recipients: readonly string[] = [recipient]): StaffMutationInput => ({
+    operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: { body, is_internal: true, mentionedUserIds: recipients },
+  });
+
+  const f = await fixture(); try {
+    const s = f.service();
+    const first = await accept(s, mentioned(), 'mention-winner');
+    assert.equal(first.outcome.article.is_internal, true);
+    const activity = await f.db.prepare(`SELECT recipient_user_id,kind,source_id,facts FROM operator_activities
+      WHERE tenant_id='a'`).first<{recipient_user_id:string;kind:string;source_id:string;facts:string}>();
+    assert.deepEqual(activity && { recipient: activity.recipient_user_id, kind: activity.kind, facts: JSON.parse(activity.facts) },
+      { recipient, kind: 'mention', facts: { articleId: first.outcome.article.id } });
+    assert.equal(activity?.source_id, `article:${first.outcome.article.id}:mention:${recipient}`);
+
+    const replay = await s.prepareStaffMutation(mentioned(), 'mention-winner');
+    assert.equal(replay.replay?.replayed, true, 'a lost response retries the winning canonical receipt before composing activity');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a'").first<{n:number}>())!.n, 1);
+    await assert.rejects(s.prepareStaffMutation(mentioned('Private note', []), 'mention-winner'),
+      (error: any) => error.status === 409 && error.code === 'idempotency_conflict',
+      'selected normalized recipients are part of the canonical idempotency fingerprint');
+    await assert.rejects(s.prepareStaffMutation({ operation: 'dashboard.ticket.reply', ticketId: 'ticket',
+      data: { body: 'Public note', mentionedUserIds: [recipient] } }, 'public-mention'),
+    (error: any) => error.status === 400 && error.code === 'invalid_mutation', 'public mention payloads are explicitly rejected');
+    const foreign = await s.prepareStaffMutation(mentioned('Foreign recipient', [foreignRecipient]), 'foreign-mention');
+    assert.equal((await s.admit(foreign)).status, 'spent'); const beforeForeign = await f.counts();
+    await assert.rejects(s.commit(foreign), (error: any) => error.status === 409 && error.code === 'mention_recipient_unavailable',
+      'a recipient in another tenant is denied by the final D1 batch');
+    assert.deepEqual(await f.counts(), beforeForeign, 'a denied cross-tenant mention leaves no partial note or activity');
+  } finally { await f.mf.dispose(); }
+
+  const revoked = await fixture(); try {
+    const s = revoked.service(); const prepared = await s.prepareStaffMutation(mentioned('Revoked before commit'), 'revoked-mention');
+    assert.equal((await s.admit(prepared)).status, 'spent'); const before = await revoked.counts();
+    revoked.before(async () => { await revoked.db.prepare(`DELETE FROM user_groups
+      WHERE tenant_id='a' AND user_id=? AND group_id='group'`).bind(recipient).run(); });
+    await assert.rejects(s.commit(prepared), (error: any) => error.status === 409 && error.code === 'mention_recipient_unavailable');
+    assert.deepEqual(await revoked.counts(), before,
+      'recipient revocation rejects the entire final D1 batch: no note, receipt, audit, SLA, or activity remains');
+  } finally { await revoked.mf.dispose(); }
+});
+
+test('a full bounded mention list remains within the existing staff reservation with observed projection cost', async () => {
+  const internal = (recipients: readonly string[]): StaffMutationInput => ({
+    operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: { body: 'Projection envelope', is_internal: true, mentionedUserIds: recipients },
+  });
+  const baseline = await fixture(); const projected = await fixture(); try {
+    await accept(baseline.service(), internal([]), 'mention-envelope-base');
+    await accept(projected.service(), internal(mentionRecipientIds), 'mention-envelope-max');
+    const baseBatch = baseline.batches.at(-1)!; const mentionBatch = projected.batches.at(-1)!;
+    assert.equal((await projected.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a'").first<{n:number}>())!.n, 16);
+    console.log(JSON.stringify({ fixture: 'native-d1-internal-mention-envelope', baseBatch, mentionBatch,
+      projectionStatements: mentionBatch.statements - baseBatch.statements, projectionRowsWritten: mentionBatch.rowsWritten - baseBatch.rowsWritten }));
+    assert.equal(mentionBatch.statements - baseBatch.statements, 16,
+      'the canonical batch contains one prepared activity statement per bounded recipient');
+    assert.ok(mentionBatch.rowsWritten <= CANONICAL_MUTATION_ATTEMPT_D1_WRITES,
+      'the observed final batch remains inside the existing 128-row staff reservation');
+    assert.ok(mentionBatch.rowsRead <= 2_570,
+      'the observed recipient authorization reads remain inside the existing staff envelope');
+  } finally { await baseline.mf.dispose(); await projected.mf.dispose(); }
+});
+
+test('combined worst-case reply keeps durable mentions, attachments, precondition, and receipt inside the operation envelope', async () => {
+  const f = await fixture(); try {
+    const generation = '44444444-4444-4444-8444-444444444444';
+    const attachments = Array.from({ length: 10 }, (_, index) => ({
+      storageKey: `agent-attachments/staff/combined-${index}`, filename: `combined-${index}.txt`, size: 10 * 1024 * 1024, contentType: 'text/plain',
+    }));
+    await f.db.prepare(`INSERT INTO operator_drafts
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'internal','Combined worst-case','plain',?,?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
+      .bind(generation, JSON.stringify(attachments), JSON.stringify(mentionRecipientIds)).run();
+    const { service } = f.betaService();
+    const input: StaffMutationInput = { operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: {
+      body: 'Combined worst-case', is_internal: true, attachments, mentionedUserIds: mentionRecipientIds,
+      draft: { generation, revision: 1, baseConversationRevision: 0 },
+    } };
+    const prepared = await service.prepareStaffMutation(input, 'combined-mention-envelope');
+    assert.equal((await service.admit(prepared)).status, 'spent');
+    const result = await service.commit(prepared, attachments);
+    const measured = f.batches.at(-1)!;
+    assert.equal(result.attachments.length, 10);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a'").first<{n:number}>())!.n, 16);
+    console.log(JSON.stringify({ fixture: 'native-d1-combined-mention-attachment-precondition-envelope', measured }));
+    assert.ok(measured.rowsWritten > 128,
+      'the accepted worst case proves a 128-row estimate is insufficient for this composition');
+    assert.ok(measured.rowsWritten <= CANONICAL_MUTATION_ATTEMPT_D1_WRITES,
+      'the complete accepted canonical attempt remains within the existing 1,024-row per-attempt reservation');
+    assert.ok(measured.rowsRead <= 2_570,
+      'the complete accepted canonical attempt remains within the configured staff read envelope');
+  } finally { await f.mf.dispose(); }
+});
+
+test('concurrent worst-case combined attempts produce one receipt winner and bounded durable projections', async () => {
+  const f = await fixture(); try {
+    const generation = '55555555-5555-4555-8555-555555555555';
+    const attachments = Array.from({ length: 10 }, (_, index) => ({
+      storageKey: `agent-attachments/staff/race-${index}`, filename: `race-${index}.txt`, size: 10 * 1024 * 1024, contentType: 'text/plain',
+    }));
+    await f.db.prepare(`INSERT INTO operator_drafts
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'internal','Concurrent worst-case','plain',?,?,0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
+      .bind(generation, JSON.stringify(attachments), JSON.stringify(mentionRecipientIds)).run();
+    const { service } = f.betaService();
+    const input: StaffMutationInput = { operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: {
+      body: 'Concurrent worst-case', is_internal: true, attachments, mentionedUserIds: mentionRecipientIds,
+      draft: { generation, revision: 1, baseConversationRevision: 0 },
+    } };
+    const [left, right] = await Promise.all([
+      service.prepareStaffMutation(input, 'combined-mention-race'), service.prepareStaffMutation(input, 'combined-mention-race'),
+    ]);
+    assert.deepEqual((await Promise.all([service.admit(left), service.admit(right)])).map(outcome => outcome.status).sort(), ['idempotent', 'spent']);
+    const outcomes = await Promise.all([service.commit(left, attachments), service.commit(right, attachments)]);
+    assert.equal(outcomes[0].article.id, outcomes[1].article.id);
+    assert.equal(f.canonicalAttempts(), 2, 'only the admitted contender and its receipt loser reach a bounded canonical attempt');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM articles WHERE tenant_id='a'").first<{n:number}>())!.n, 1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM attachments WHERE tenant_id='a'").first<{n:number}>())!.n, 10);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a'").first<{n:number}>())!.n, 16);
+    const retry = await service.prepareStaffMutation(input, 'combined-mention-race');
+    assert.equal(retry.replay?.replayed, true, 'a later lost-response retry returns the existing receipt without new fanout');
+  } finally { await f.mf.dispose(); }
+});
+
+test('staff reply precondition stays in the fingerprint and atomically retains a stale acknowledged draft', async () => {
+  const f = await fixture(); try {
+    const generation = '22222222-2222-4222-8222-222222222222';
+    const input: StaffMutationInput = { operation: 'dashboard.ticket.reply', ticketId: 'ticket', data: {
+      body: 'Acknowledged draft', bodyFormat: 'plain', draft: { generation, revision: 1, baseConversationRevision: 0 },
+    } };
+    await f.db.prepare(`INSERT INTO operator_drafts
+      (tenant_id,user_id,ticket_id,generation,revision,mode,body,body_format,attachments,base_conversation_revision,updated_at)
+      VALUES ('a','staff','ticket',?,1,'public','Acknowledged draft','plain','[]',0,strftime('%Y-%m-%dT%H:%M:%fZ','now'))`).bind(generation).run();
+    const service = f.service(); const prepared = await service.prepareStaffMutation(input, 'stale-draft');
+    assert.equal((await service.admit(prepared)).status, 'spent');
+    const before = await f.counts();
+    f.before(async () => { await f.db.prepare(`INSERT INTO conversation_events
+      (tenant_id,id,ticket_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+      VALUES ('a',?,'ticket',1,'message.reply','customer','customer','authenticated-customer','portal','public','{}')`).bind(crypto.randomUUID()).run(); });
+    await assert.rejects(service.commit(prepared), (error: any) => error.status === 409 && error.code === 'staff_reply_stale');
+    const after = await f.counts();
+    assert.deepEqual({ tickets: after.tickets, articles: after.articles, attachments: after.attachments,
+      receipts: after.staff_ticket_mutation_receipts }, { tickets: before.tickets, articles: before.articles,
+      attachments: before.attachments, receipts: before.staff_ticket_mutation_receipts }, 'Stale replies create no ticket, article, attachment, or receipt side effect');
+    await f.db.prepare("UPDATE operator_drafts SET revision=2,base_conversation_revision=1 WHERE tenant_id='a' AND user_id='staff' AND ticket_id='ticket'").run();
+    const rebased: StaffMutationInput = { ...input, data: { ...input.data, draft: { generation, revision: 2, baseConversationRevision: 1 } } };
+    const winner = await service.prepareStaffMutation(rebased, 'fingerprint');
+    assert.equal((await service.admit(winner)).status, 'spent');
+    await service.commit(winner);
+    await assert.rejects(service.prepareStaffMutation({ ...rebased, data: { ...rebased.data, draft: { generation, revision: 1, baseConversationRevision: 0 } } }, 'fingerprint'),
+      (error: any) => error.status === 409, 'The acknowledged draft reference is part of the idempotency fingerprint');
+  } finally { await f.mf.dispose(); }
 });

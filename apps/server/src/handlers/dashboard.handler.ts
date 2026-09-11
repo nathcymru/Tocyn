@@ -28,6 +28,7 @@ import workspace from "./operator-workspace.handler";
 import { replyCapability } from '../services/reply-capability';
 import { REPLY_ATTACHMENT_CONTENT_TYPES, REPLY_ATTACHMENT_RULES } from '@luminatick/shared';
 import { StaffTicketMutationService } from '../services/staff-ticket-mutation.service';
+import { OperatorActivityService } from '../services/operator-activity.service';
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
 import { admitConfiguredStaffTicketMutation, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 
@@ -62,6 +63,9 @@ const staffReplySchema = z.object({
   body_format: z.enum(ARTICLE_BODY_FORMATS).default(DEFAULT_ARTICLE_BODY_FORMAT),
   is_internal: z.boolean().optional(),
   attachments: z.array(z.unknown()).max(10).optional(),
+  mentioned_user_ids: z.array(z.string().uuid()).max(16).optional(),
+  draft: z.object({ generation: z.string().uuid(), revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+    baseConversationRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) }).strict().optional(),
 }).strict();
 
 function staffMutationService(c: any, d: TenantRequestDeps, operation: 'dashboard.ticket.create' | 'dashboard.ticket.reply') {
@@ -77,7 +81,7 @@ function staffMutationService(c: any, d: TenantRequestDeps, operation: 'dashboar
     service: sessionTicketBudgetAdmission, repository: d.repositories.budgetAuthority,
     namespace: c.env.BUDGET_COORDINATOR_DO, business: STAFF_TICKET_ENVELOPES[operation],
     now: () => c.env.localNow?.() ?? Date.now(),
-  });
+  }, undefined, new OperatorActivityService(d));
 }
 
 function staffMutationFailure(c: any, error: unknown): Response | null {
@@ -632,7 +636,15 @@ dashboard.get('/tickets/:id/reply-capability', async (c) => {
     return c.json({ error: 'Forbidden', message: 'You do not have access to this ticket\'s group' }, 403);
   }
 
-  return c.json(replyCapability(ticket.id));
+  const admissionMode = staffTicketAdmissionMode(c.env);
+  const collision = admissionMode === 'enabled'
+    ? { version: 1 as const, protocol: 'draft-precondition-v1' as const,
+      conversationRevision: await d.conversationAudit.currentRevision(ticket.id) }
+    : undefined;
+  const internalMentions = admissionMode === 'enabled'
+    ? { version: 1 as const, protocol: 'internal-activity-v1' as const, maxRecipients: 16 as const }
+    : undefined;
+  return c.json(replyCapability(ticket.id, collision, internalMentions));
 });
 
 /**
@@ -657,8 +669,8 @@ dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10
       });
       const mutation = staffMutationService(c,d,'dashboard.ticket.reply');
       const prepared = await mutation.prepareStaffMutation({ operation: 'dashboard.ticket.reply', ticketId, data: {
-        body: parsed.data.body, bodyFormat: parsed.data.body_format, is_internal: parsed.data.is_internal,
-        attachments: requested as any,
+        body: parsed.data.body, bodyFormat: parsed.data.body_format, is_internal: parsed.data.is_internal, draft: parsed.data.draft,
+        mentionedUserIds: parsed.data.mentioned_user_ids, attachments: requested as any,
       } }, readIdempotencyKey(c));
       if (prepared.replay) {
         c.header('Idempotency-Replayed', 'true');

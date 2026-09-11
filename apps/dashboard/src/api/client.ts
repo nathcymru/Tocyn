@@ -7,7 +7,7 @@ if (import.meta.env.VITE_API_URL) {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(message: string, public status: number, public code?: string) {
     super(message);
     this.name = 'ApiError';
   }
@@ -53,14 +53,16 @@ async function sessionRequest<T>(path: string, options: RequestInit, read: (resp
     }
     if (!response.ok) {
       let message = `Request failed with status ${response.status}`;
+      let code: string | undefined;
       try {
         const error = await response.json();
         message = error.error || error.message || message;
+        code = typeof error.code === 'string' ? error.code : undefined;
       } catch {
         if (response.status === 404) message = 'Resource not found (404)';
       }
       assertCurrent();
-      throw new ApiError(message,response.status);
+      throw new ApiError(message,response.status,code);
     }
     const value = await read(response);
     assertCurrent();

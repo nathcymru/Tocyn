@@ -26,6 +26,7 @@ const UsagePage = lazy(() => import('./pages/UsagePage').then(module => ({ defau
 const SupportStatesPage = lazy(() => import('./pages/SupportStatesPage').then(module => ({ default: module.SupportStatesPage })));
 const SlaSettingsPage = lazy(() => import('./pages/SlaSettingsPage').then(module => ({ default: module.SlaSettingsPage })));
 import { useAuthStore } from './store/authStore';
+import { CollaborationProvider } from './components/CollaborationContext';
 
 function ProtectedRoute({ children, requireMfa = true }: { children: React.ReactNode, requireMfa?: boolean }) {
   const { token, mfaRequired, user } = useAuthStore();
@@ -97,5 +98,5 @@ export default function App() {
         </Route>
       </>
   )));
-  return <RouterProvider router={router} />;
+  return <CollaborationProvider><RouterProvider router={router} /></CollaborationProvider>;
 }

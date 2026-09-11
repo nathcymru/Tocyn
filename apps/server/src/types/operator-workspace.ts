@@ -17,6 +17,8 @@ export type OperatorDraft = Readonly<{
   body: string;
   bodyFormat: ArticleBodyFormat;
   attachments: readonly OperatorDraftAttachment[];
+  /** Ordered only for presentation; canonical mention semantics are normalized IDs. */
+  mentionedUserIds: readonly string[];
   /** Server-derived canonical event sequence; zero means no canonical event exists yet. */
   baseConversationRevision: number;
   expiresAt: string | null;

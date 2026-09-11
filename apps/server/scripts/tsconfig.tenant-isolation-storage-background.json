@@ -9,6 +9,10 @@
     "durable-object-resource-runtime.test.ts",
     "notification-capacity-runtime.test.ts",
     "notification-capacity-runtime-entry.ts",
+    "notification-collaboration-runtime.test.ts",
+    "notification-collaboration-runtime-entry.ts",
+    "notification-typing-resource-runtime.test.ts",
+    "notification-typing-resource-runtime-entry.ts",
     "vectorize-workflow-runtime.test.ts"
   ]
 }
