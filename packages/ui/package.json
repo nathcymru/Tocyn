@@ -11,7 +11,8 @@
     "./primitives": "./src/primitives.tsx",
     "./ark": "./src/ark.ts",
     "./dialog": "./src/dialog.tsx",
-    "./brand": "./src/brand.tsx"
+    "./brand": "./src/brand.tsx",
+    "./auth-layout": "./src/auth-layout.tsx"
   },
   "sideEffects": [
     "./src/styles/tocyn.css"

@@ -71,3 +71,25 @@
 .tocyn-product-lockup-dark { display: none; }
 [data-tocyn-theme-mode="dark"] .tocyn-product-lockup-light { display: none; }
 [data-tocyn-theme-mode="dark"] .tocyn-product-lockup-dark { display: block; }
+
+/* Public authentication shell; no runtime CSS or tenant-controlled asset URLs. */
+.tocyn-auth { min-height: 100dvh; display: flex; background: #fff; color: #18181b; color-scheme: light; }
+.tocyn-auth[data-auth-mode="dark"] { background: #09090b; color: #fafafa; color-scheme: dark; }
+.tocyn-auth-splash { position: relative; flex: 0 0 33%; max-width: 33vw; overflow: hidden; }
+.tocyn-auth-splash img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; }
+.tocyn-auth-main { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 3rem 1.5rem; }
+.tocyn-auth-form { width: 100%; max-width: 28rem; }
+.tocyn-auth-logo { display: block; width: 14rem; max-width: 100%; margin-bottom: 2rem; }
+.tocyn-auth h1, .tocyn-auth h2 { color: inherit; }
+.tocyn-auth[data-auth-mode="dark"] .tocyn-product-lockup-light { display: none; }
+.tocyn-auth[data-auth-mode="dark"] .tocyn-product-lockup-dark { display: block; }
+.tocyn-auth[data-auth-mode="light"] .tocyn-product-lockup-light { display: block; }
+.tocyn-auth[data-auth-mode="light"] .tocyn-product-lockup-dark { display: none; }
+.tocyn-auth[data-auth-mode="dark"] :is(.text-slate-500,.text-slate-600,.text-slate-700,.text-gray-500,.text-gray-600,.text-gray-700) { color: #d4d4d8; }
+.tocyn-auth[data-auth-mode="dark"] input { background: #18181b; color: #fafafa; border-color: #71717a; }
+.tocyn-auth[data-auth-mode="dark"] input::placeholder { color: #a1a1aa; }
+.tocyn-auth[data-auth-mode="dark"] :is(input,button,a):focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
+@media (max-width: 767px) { .tocyn-auth-splash { display: none; } .tocyn-auth-main { padding: 2rem 1.25rem; } }
+@media (prefers-reduced-motion: reduce) { .tocyn-auth .animate-spin { animation: none; } }
+
+.tocyn-auth[data-auth-mode="dark"] .bg-white { background: #18181b; }

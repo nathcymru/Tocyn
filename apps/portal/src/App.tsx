@@ -1,3 +1,4 @@
+import { AuthLayout } from '@luminatick/ui/auth-layout';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
@@ -53,8 +54,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {LocalAuthCapturePage && <Route path="/__local/auth-capture" element={<Suspense fallback={<p>Loading local capture…</p>}><LocalAuthCapturePage /></Suspense>} />}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/login" element={<AuthLayout><LoginPage /></AuthLayout>} />
+        <Route path="/verify" element={<AuthLayout><VerifyPage /></AuthLayout>} />
         
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Navigate to="/tickets" replace />} />

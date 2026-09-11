@@ -56,3 +56,21 @@ describe('LoginPage', () => {
     expect(screen.getByText('Check your email')).toBeInTheDocument();
   });
 });
+
+it('keeps OTP verification in the login page, retains the challenge and permits retry', async () => {
+  vi.mocked(portalApi.get).mockResolvedValue({});
+  vi.mocked(portalApi.post).mockResolvedValueOnce({ challengeId: 'synthetic-challenge' })
+    .mockRejectedValueOnce(new Error('Wrong code'));
+  render(<MemoryRouter initialEntries={['/login']}><LoginPage /></MemoryRouter>);
+  fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'test@example.invalid' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Code (OTP)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send Code' }));
+  const input = await screen.findByLabelText('Authentication Code');
+  expect(input).toHaveFocus();
+  fireEvent.change(input, { target: { value: '123456' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Wrong code');
+  expect(portalApi.post).toHaveBeenLastCalledWith('/auth/verify', { token: '123456', challengeId: 'synthetic-challenge' });
+  fireEvent.click(screen.getByRole('button', { name: 'Request a new code' }));
+  expect(await screen.findByLabelText('Email address')).toHaveValue('test@example.invalid');
+});

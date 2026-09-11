@@ -4,20 +4,22 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { User } from '../types';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { Loader2, Ticket, CheckCircle } from 'lucide-react';
+import { Loader2, CheckCircle } from 'lucide-react';
 
-export function VerifyPage() {
+export function VerifyPage({ challenge, onBack }: { challenge?: { email: string; challengeId?: string }; onBack?: () => void } = {}) {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { login } = useAuthStore();
 
   const [code, setCode] = useState('');
+  const codeInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (challenge) codeInput.current?.focus(); }, [challenge]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const tokenParam = searchParams.get('token');
-  const initialEmail = location.state?.email || '';
+  const initialEmail = challenge?.email ?? location.state?.email ?? '';
 
   const verification = useRef<{
     token: string;
@@ -52,7 +54,7 @@ export function VerifyPage() {
     setError(null);
 
     try {
-      const response = await portalApi.post<{ user: User, token: string }>('/auth/verify', { token: tokenToVerify, challengeId: location.state?.challengeId });
+      const response = await portalApi.post<{ user: User, token: string }>('/auth/verify', { token: tokenToVerify, challengeId: challenge?.challengeId ?? location.state?.challengeId });
       if (response.token) {
         try { localStorage.setItem('lumina_customer_token', response.token); } catch { /* HttpOnly cookie remains available. */ }
       }
@@ -73,7 +75,7 @@ export function VerifyPage() {
   // If we're verifying a magic link from URL, show a loading state
   if (tokenParam && !error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="w-full">
         <div role="status" aria-live="polite" className="sm:mx-auto sm:w-full sm:max-w-md text-center">
           <Loader2 className="mx-auto w-12 h-12 text-brand-600 animate-spin mb-4" />
           <h2 className="text-2xl font-extrabold text-gray-900">Verifying your login...</h2>
@@ -83,13 +85,8 @@ export function VerifyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="w-full">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-12 h-12 bg-brand-600 rounded-xl flex items-center justify-center">
-            <Ticket className="w-8 h-8 text-white" />
-          </div>
-        </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           Enter Verification Code
         </h2>
@@ -103,7 +100,7 @@ export function VerifyPage() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
+        <div className="py-8">
           {error && (
             <div id="portal-verify-error" role="alert" aria-atomic="true" className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md">
               {error}
@@ -118,6 +115,7 @@ export function VerifyPage() {
               <div className="mt-1">
                 <TocynInput
                   id="code"
+                  ref={codeInput}
                   name="code"
                   inputMode="numeric"
                   aria-describedby={error ? "portal-verify-error" : undefined}
@@ -149,7 +147,8 @@ export function VerifyPage() {
 
           <div className="mt-6 text-center">
             <TocynButton
-              onClick={() => navigate('/login')}
+              onClick={() => { if (!loading) { if (onBack) onBack(); else navigate('/login'); } }}
+              disabled={loading}
               className="text-sm text-brand-600 hover:text-brand-500 font-medium"
             >
               Request a new code
