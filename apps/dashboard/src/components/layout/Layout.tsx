@@ -21,9 +21,6 @@ import {
   Bell,
   ChevronDown,
   RefreshCw,
-  Activity,
-  MousePointer2,
-  FileText
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
@@ -34,13 +31,10 @@ function cn(...inputs: any[]) {
   return clsx(inputs);
 }
 
-interface Toast {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  ticketId?: string;
-}
+type ActivityItem = Readonly<{ id: string; ticketId: string; kind: string; facts: Record<string, unknown>; revision: number; createdAt: string; readAt: string | null; dismissedAt: string | null }>;
+type ActivityResponse = Readonly<{ page: Readonly<{ items: readonly ActivityItem[]; next: string | null }>; unread: Readonly<{ status: 'available'; count: number } | { status: 'unavailable'; count: null; reason: string }> }>;
+const ACTIVITY_PAGE_SIZE = 20;
+const MAX_RENDERED_ACTIVITY_ITEMS = 100;
 
 interface SidebarProps { onNavigate?: () => void; navigationFocus: () => HTMLElement | null; }
 
@@ -171,9 +165,18 @@ function LayoutContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
-  const { isConnected, lastMessage, connectionDetails, manualReconnect } = useCollaboration();
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const { isConnected, lastMessage, manualReconnect } = useCollaboration();
+  const wasConnected = useRef(isConnected);
+  const [connectionRecoveryMessage, setConnectionRecoveryMessage] = useState<string | null>(null);
   const [showConnDetails, setShowConnDetails] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activity, setActivity] = useState<ActivityResponse | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityRetry, setActivityRetry] = useState<'refresh' | 'more' | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const activityRequestGeneration = useRef(0);
+  const activityTrigger = useRef<HTMLButtonElement>(null);
+  const activityId = React.useId();
   const connectionTrigger = useRef<HTMLButtonElement>(null);
   const connectionId = React.useId();
   const navigationClose = useRef<HTMLButtonElement>(null);
@@ -196,6 +199,47 @@ function LayoutContent() {
     }
   }, [location.pathname, location.search]);
 
+  const loadActivity = React.useCallback(async () => {
+    const generation = ++activityRequestGeneration.current;
+    setActivityLoading(true); setActivityError(null); setActivityRetry(null);
+    try {
+      const response = await dashboardApi.get<ActivityResponse>(`/activities?limit=${ACTIVITY_PAGE_SIZE}`);
+      if (generation === activityRequestGeneration.current) setActivity(response);
+    } catch {
+      if (generation === activityRequestGeneration.current) {
+        setActivityError('Activity could not be refreshed. Try again when the connection is available.');
+        setActivityRetry('refresh');
+      }
+    } finally {
+      if (generation === activityRequestGeneration.current) setActivityLoading(false);
+    }
+  }, []);
+
+  const loadMoreActivity = React.useCallback(async () => {
+    const next = activity?.page.next;
+    if (!next || activityLoading || (activity?.page.items.length ?? 0) >= MAX_RENDERED_ACTIVITY_ITEMS) return;
+    const generation = activityRequestGeneration.current;
+    setActivityLoading(true); setActivityError(null); setActivityRetry(null);
+    try {
+      const response = await dashboardApi.get<ActivityResponse>(`/activities?limit=${ACTIVITY_PAGE_SIZE}&cursor=${encodeURIComponent(next)}`);
+      if (generation !== activityRequestGeneration.current) return;
+      setActivity(current => {
+        if (!current) return response;
+        const capacity = MAX_RENDERED_ACTIVITY_ITEMS - current.page.items.length;
+        const seen = new Set(current.page.items.map(item => item.id));
+        const items = [...current.page.items, ...response.page.items.filter(item => !seen.has(item.id)).slice(0, capacity)];
+        return { ...response, page: { items, next: response.page.next } };
+      });
+    } catch {
+      if (generation === activityRequestGeneration.current) {
+        setActivityError('More activity could not be loaded. Try again to continue.');
+        setActivityRetry('more');
+      }
+    } finally {
+      if (generation === activityRequestGeneration.current) setActivityLoading(false);
+    }
+  }, [activity, activityLoading]);
+
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -207,71 +251,35 @@ function LayoutContent() {
       if (typeof ticketId === 'string') void queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
     }
 
-    if (lastMessage.type === 'ticket.created' || lastMessage.type === 'ticket.updated') {
-      const isCreated = lastMessage.type === 'ticket.created';
-      const toast: Toast = {
-        id: Math.random().toString(36).substring(2),
-        type: lastMessage.type,
-        title: isCreated ? 'New Ticket' : 'Ticket Updated',
-        message: lastMessage.payload.subject,
-        ticketId: lastMessage.payload.id,
-      };
+    // Signals never carry activity content. A visible panel recovers from D1.
+    if (activityOpen) void loadActivity();
+  }, [activityOpen, lastMessage, loadActivity, queryClient]);
 
-      // Avoid duplicate toasts for the same event if multiple updates happen fast
-      setToasts(prev => [toast, ...prev].slice(0, 5));
+  // Realtime is only an invalidation channel. Once a dropped connection is
+  // restored, re-read the bounded durable projection so unread activity and
+  // recovery state do not depend on a transient frame or toast.
+  useEffect(() => {
+    const restored = !wasConnected.current && isConnected;
+    wasConnected.current = isConnected;
+    if (!restored) return;
+    setConnectionRecoveryMessage('Connection restored. Durable activity refreshed.');
+    void loadActivity();
+  }, [isConnected, loadActivity]);
 
-      setTimeout(() => {
-        // Do not remove a notification while its keyboard action has focus.
-        const focused = document.activeElement?.closest('[data-ticket-notification]');
-        if (focused?.getAttribute('data-ticket-notification') !== toast.id) {
-          setToasts(prev => prev.filter(t => t.id !== toast.id));
-        }
-      }, 8000);
-    }
-  }, [lastMessage, queryClient]);
+  const openActivity = (open: boolean) => {
+    setActivityOpen(open);
+    if (open) void loadActivity();
+  };
+
+  const transitionActivity = async (item: ActivityItem, action: 'read' | 'dismiss') => {
+    try {
+      await dashboardApi.patch(`/activities/${encodeURIComponent(item.id)}/${action}`, { expectedRevision: item.revision });
+      await loadActivity();
+    } catch { setActivityError('Activity changed before it could be updated. The list was refreshed.'); void loadActivity(); }
+  };
 
   return (
     <div className={cn('flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
-      {/* Toast Container */}
-      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            data-ticket-notification={toast.id}
-            className="bg-white border border-slate-200 shadow-xl rounded-lg p-4 w-80 pointer-events-auto transform transition-all animate-in slide-in-from-right hover:scale-[1.02] cursor-pointer"
-          >
-            <div className="flex items-start gap-3">
-              <div className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                toast.type === 'ticket.created' ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"
-              )}>
-                <Bell className="w-4 h-4" />
-              </div>
-              <TocynButton type="button" aria-label={`Open ticket notification: ${toast.title}`}
-                onClick={() => {
-                  if (toast.ticketId) navigate(`/inbox/all/${toast.ticketId}`);
-                  setToasts(prev => prev.filter(t => t.id !== toast.id));
-                }} className="flex-1 min-w-0 text-left rounded focus-visible:outline focus-visible:outline-2">
-                <p role="status" className="text-sm font-semibold text-slate-900">{toast.title}</p>
-                <p className="text-xs text-slate-500 truncate">{toast.message}</p>
-              </TocynButton>
-              <TocynButton
-                type="button"
-                aria-label="Dismiss ticket notification"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  main.current?.focus();
-                  setToasts(prev => prev.filter(t => t.id !== toast.id));
-                }}
-                className="text-slate-600 hover:text-slate-900 p-1 rounded focus-visible:outline focus-visible:outline-2"
-              >
-                <X className="w-4 h-4" />
-              </TocynButton>
-            </div>
-          </div>
-        ))}
-      </div>
-
       <aside data-tocyn-inverse="" className="hidden lg:block w-16 shrink-0 bg-slate-900 border-r border-slate-800">
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
@@ -324,6 +332,36 @@ function LayoutContent() {
             />
           </div>
 
+          <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
+            <Popover.Trigger asChild>
+              <TocynButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className="relative rounded p-2 text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2">
+                <Bell className="w-5 h-5" />
+                {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className="absolute right-0 top-0 min-w-4 rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white">{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
+              </TocynButton>
+            </Popover.Trigger>
+            <Popover.Positioner>
+              <Popover.Content aria-label="Activity" className="w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-bold text-slate-900">Activity</h2><TocynButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2">Refresh</TocynButton></div>
+                {activityError && <div role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900"><p>{activityError}</p><TocynButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="mt-2 rounded px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2">Retry loading activity</TocynButton></div>}
+                {activityLoading && !activity && <p role="status" className="p-2 text-sm text-slate-600">Loading durable activity…</p>}
+                {activity?.unread.status === 'unavailable' && <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">Unread count is temporarily unavailable. Your activity remains available below.</p>}
+                {activity && activity.page.items.length === 0 && <p className="p-2 text-sm text-slate-600">No current activity.</p>}
+                <ul aria-label="Durable activity" className="max-h-96 divide-y overflow-y-auto">
+                  {activity?.page.items.filter(item => !item.dismissedAt).map(item => <li key={item.id} className="flex gap-2 py-2">
+                    <TocynButton type="button" onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="min-w-0 flex-1 rounded p-1 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2">
+                      <p className="text-sm font-semibold text-slate-900">{item.kind.replace(/_/g, ' ')}</p>
+                      <p className="text-xs text-slate-600">Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
+                    </TocynButton>
+                    <TocynButton type="button" aria-label="Dismiss activity" onClick={() => void transitionActivity(item, 'dismiss')} className="rounded p-1 text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2"><X className="h-4 w-4" /></TocynButton>
+                  </li>)}
+                </ul>
+                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="mt-2 text-sm text-slate-600">Showing the most recent {MAX_RENDERED_ACTIVITY_ITEMS} activity items. Refresh to restart activity recovery.</p>}
+                {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className="mt-2"><TocynButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className="w-full rounded px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2">{activityLoading ? 'Loading more activity…' : 'Load more activity'}</TocynButton></div>}
+                {activity && !activityLoading && activity.page.items.length > 0 && <p role="status" className="sr-only">Showing {activity.page.items.length} activity item{activity.page.items.length === 1 ? '' : 's'}.</p>}
+              </Popover.Content>
+            </Popover.Positioner>
+          </Popover.Root>
+
           {!isConnected && <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
           <div className="flex items-center gap-4 relative">
             <Popover.Trigger asChild>
@@ -354,20 +392,7 @@ function LayoutContent() {
                   )} />
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <Activity className="w-3 h-3" /> Latency
-                    </span>
-                    <span className="font-mono text-slate-900">{connectionDetails.latency}ms</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <RefreshCw className="w-3 h-3" /> Reconnects
-                    </span>
-                    <span className="font-mono text-slate-900">{connectionDetails.reconnectCount}</span>
-                  </div>
-                </div>
+                <p role="status" className="text-sm text-slate-600">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
 
                 <div className="mt-4 pt-4 border-t border-slate-100">
                   <TocynButton
@@ -386,6 +411,7 @@ function LayoutContent() {
             </Popover.Positioner>
           </div>
           </Popover.Root>}
+          {connectionRecoveryMessage && <p role="status" aria-live="polite" className="sr-only">{connectionRecoveryMessage}</p>}
         </header>
 
         <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('flex-1 min-h-0', isInboxRoute ? 'overflow-hidden' : 'overflow-auto', !location.pathname.startsWith('/settings') && !isInboxRoute && 'p-4 lg:p-8')}>

@@ -158,6 +158,39 @@ async function accept(service:StaffTicketMutationService,input:StaffMutationInpu
   assert.equal((await service.admit(prepared)).status,'spent');return {prepared,outcome:await service.commit(prepared)};
 }
 
+test('direct assignment creates activity only from its authenticated tenant-qualified canonical event', async () => {
+  const f = await fixture(); try {
+    const recipient = mentionRecipientIds[0];
+    const first = await accept(f.service(),update({ assigned_to: recipient }),'assignment-activity');
+    assert.equal(first.outcome.ticket.assigned_to,recipient);
+    const activity = await f.db.prepare(`SELECT id,source_id,facts,producer_id FROM operator_activities
+      WHERE tenant_id='a' AND recipient_user_id=? AND kind='assignment'`).bind(recipient).first<{
+        id:string;source_id:string;facts:string;producer_id:string;
+      }>();
+    assert.ok(activity); assert.equal(activity.producer_id,'staff');
+    const eventId = JSON.parse(activity.facts).eventId;
+    assert.equal(activity.source_id,`conversation:${eventId}`);
+    assert.deepEqual(await f.db.prepare(`SELECT tenant_id,ticket_id,kind,actor_id,actor_provenance,source,visibility FROM conversation_events
+      WHERE id=?`).bind(eventId).first(),{
+      tenant_id:'a',ticket_id:'ticket',kind:'ticket.assignment_changed',actor_id:'staff',actor_provenance:'mfa-staff',source:'dashboard',visibility:'internal',
+    });
+
+    const replay = await f.service().prepareStaffMutation(update({ assigned_to: recipient }),'assignment-activity');
+    assert.equal(replay.replay?.replayed,true);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a' AND kind='assignment'").first<{n:number}>())?.n,1,
+      'the canonical receipt replay cannot create a second activity');
+
+    await accept(f.service(),update({ assigned_to: recipient }),'assignment-noop');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a' AND kind='assignment'").first<{n:number}>())?.n,1,
+      'a request without a changed canonical assignment event creates no activity');
+
+    const rejected = f.service(); const prepared = await rejected.prepareStaffMutation(update({ assigned_to:'33333333-3333-4333-8333-333333333333' }),'assignment-foreign');
+    assert.equal((await rejected.admit(prepared)).status,'spent'); const before = await f.counts();
+    await assert.rejects(rejected.commit(prepared),(error:any) => error.status === 503);
+    assert.deepEqual(await f.counts(),before,'a same-looking recipient from another tenant cannot create activity or update the ticket');
+  } finally { await f.mf.dispose(); }
+});
+
 test('staff identity, response contracts, atomic receipts, warm zero-DO admission, current authorized replay and tenant isolation', async () => {
   const f=await fixture();try {
     const s=f.service();const initial=await accept(s,create(),'create');

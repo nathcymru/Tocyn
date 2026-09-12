@@ -14,6 +14,7 @@ import type { VerifiedTenantScope } from '../types/tenant';
 import type { InitialTicketArticleData } from './interfaces';
 import type { MutationNamespace, MutationReceipt, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
+import type { OperatorActivityRepository } from './operator-activity.repository';
 
 // Fixed raw-row projections are response-version 1, not a second canonical mapper.
 const ticketJson = `json_object('tenant_id',t.tenant_id,'id',t.id,'subject',t.subject,'status',t.status,
@@ -45,7 +46,8 @@ export type MutationCandidate = {
 
 /** Only fixed ticket mutations; all SQL authority comes from the verified scope. */
 export class TicketMutationReplayRepository {
-  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {}
+  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli,
+    private operatorActivity?: OperatorActivityRepository) {}
 
   private namespaceValues(ns: MutationNamespace) {
     return [this.scope.tenantId, ns.principalKind, ns.principalId, ns.operation, ns.keyHash];
@@ -128,16 +130,21 @@ export class TicketMutationReplayRepository {
   /** Dashboard PATCH uses the staff current-session fence and its own receipt
    * namespace, while sharing the one audited field-update projection. */
   async commitStaffUpdate(ticketId: string, data: AuditedTicketUpdate, actor: ConversationActor,
-    staff: StaffMutationCommit): Promise<string> {
+    staff: StaffMutationCommit, assignmentActivity?: Readonly<{ eventId: string; statement: D1PreparedStatement }>): Promise<string> {
     if (actor.kind !== 'staff' || actor.source !== 'dashboard' || actor.id !== staff.credential.actorId
       || !staff.namespace || staff.namespace.operation !== 'dashboard.ticket.update'
       || staff.requirements.ticket?.id !== ticketId
       || staff.authority.operationId !== staff.namespace.keyHash
-      || staff.authority.operationFingerprint !== staff.namespace.payloadHash) throw new Error('Invalid staff update mutation');
+      || staff.authority.operationFingerprint !== staff.namespace.payloadHash
+      || (assignmentActivity && (data.assigned_to === undefined || data.assigned_to === null))) throw new Error('Invalid staff update mutation');
     const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff)];
-    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true);
+    const audit = auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,
+      assignmentActivity ? { 'ticket.assignment_changed': assignmentActivity.eventId } : undefined);
     const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
     statements.push(...audit.statements);
+    // The activity statement itself SELECTs the preceding canonical audit row,
+    // including tenant, actor provenance, visibility, ticket and assignment.
+    if (assignmentActivity) statements.push(assignmentActivity.statement);
     const snapshot = `json_object('staffVersion',2,'ticket',json((SELECT ${ticketJson} FROM tickets t WHERE t.tenant_id=? AND t.id=?)))`;
     statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
       VALUES (?,CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END)
@@ -276,14 +283,18 @@ export class TicketMutationReplayRepository {
       id:eventId,ticketId:candidate.ticketId,articleId:candidate.articleId,actor:candidate.audit,
       intake:Boolean(candidate.ticket),internal:Boolean(candidate.article?.is_internal),
     }));
-    // Only the canonical public customer-reply event may wake shared snooze
-    // state. These statements sit before the durable mutation receipt, so an
-    // idempotency collision rolls both the reply and resurface back together.
-    if (candidate.audit?.kind === 'customer' && !candidate.ticket && candidate.article?.sender_type === 'customer'
-      && !candidate.article.is_internal && candidate.articleId && eventId) {
+    // Public canonical customer replies should both resurface shared snooze state
+    // and feed durable operator activity projections. Both are prepared before the
+    // durable receipt so idempotent replay rollbacks keep side-effects atomic.
+    if ((customer || candidate.audit?.kind === 'customer') && candidate.article?.sender_type === 'customer'
+      && !candidate.article.is_internal && eventId && candidate.articleId) {
       statements.push(...customerReplyResurfaceStatements(this.db,this.scope,{
         ticketId:candidate.ticketId,articleId:candidate.articleId,conversationEventId:eventId,
       }));
+      const activity = await this.operatorActivity?.prepareCustomerReplyFromCanonicalEvent({
+        id: crypto.randomUUID(), ticketId: candidate.ticketId, articleId: candidate.articleId, eventId,
+      });
+      if (activity) statements.push(activity.statement);
     }
     // Activity statements are prepared only by #133's repository. Keeping them
     // before the mutation receipt makes a losing idempotency race roll back both

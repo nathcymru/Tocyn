@@ -14,6 +14,8 @@ vi.mock('../api/client', () => ({ dashboardApi: {
   post: vi.fn(),
   get: vi.fn(async (path: string) => path === '/workspace/theme-preference'
     ? { revision: 0, mode: 'system', updatedAt: null }
+    : path === '/activities?limit=20'
+    ? { page: { items: [], next: null }, unread: { status: 'available', count: 0 } }
     : { version: '1', light: {}, dark: {} }),
   put: vi.fn(),
 } }));
@@ -101,33 +103,92 @@ it('closes mobile navigation after a selected destination and focuses the worksp
   expect(screen.getByRole('heading')).toHaveTextContent('Route /');
 });
 
-it('exposes native notification open and dismiss actions without changing realtime invalidation', async () => {
+it('uses realtime only to refresh an already-open durable activity panel', async () => {
   const result = await renderReady();
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.created', payload: { id: 'synthetic-ticket', subject: 'Synthetic arrival' } } } as ReturnType<typeof useRealtime>);
   act(() => result.rerender(tree()));
-  const open = screen.getByRole('button', { name: 'Open ticket notification: New Ticket' });
-  expect(open.tagName).toBe('BUTTON');
-  expect(screen.getByRole('status')).toHaveTextContent('New Ticket');
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ticket', 'synthetic-ticket'] });
-  fireEvent.click(open);
-  expect(screen.getByRole('heading')).toHaveTextContent('/inbox/all/synthetic-ticket');
-  expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
+  expect(screen.queryByText('New Ticket')).not.toBeInTheDocument();
+  const trigger = screen.getByRole('button', { name: 'Activity' });
+  await userEvent.click(trigger);
+  expect(await screen.findByText('No current activity.')).toBeInTheDocument();
+  expect(dashboardApi.get).toHaveBeenCalledWith('/activities?limit=20');
 });
 
-it('keeps a focused notification available and returns focus when it is dismissed', async () => {
-  vi.useFakeTimers();
-  try {
-    vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.created', payload: { id: 'synthetic-ticket', subject: 'Synthetic arrival' } } } as ReturnType<typeof useRealtime>);
-    render(tree());
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
-    const dismiss = screen.getByRole('button', { name: 'Dismiss ticket notification' });
-    dismiss.focus(); act(() => vi.advanceTimersByTime(8_000));
-    expect(dismiss).toHaveFocus();
-    fireEvent.click(dismiss);
-    expect(screen.queryByRole('button', { name: 'Dismiss ticket notification' })).not.toBeInTheDocument();
-    expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
-  } finally { vi.useRealTimers(); }
+it('continues durable activity with the opaque authenticated cursor through a keyboard control', async () => {
+  const first = { page: { items: [{ id: 'activity-one', ticketId: 'ticket-one', kind: 'customer_reply', facts: {}, revision: 1, createdAt: '2026-09-12T09:00:00.000Z', readAt: null, dismissedAt: null }], next: 'opaque cursor+/=' }, unread: { status: 'available' as const, count: 2 } };
+  const second = { page: { items: [{ id: 'activity-two', ticketId: 'ticket-two', kind: 'assignment', facts: {}, revision: 1, createdAt: '2026-09-12T08:00:00.000Z', readAt: null, dismissedAt: null }], next: null }, unread: { status: 'available' as const, count: 2 } };
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
+    if (path === '/activities?limit=20') return first;
+    if (path === '/activities?limit=20&cursor=opaque%20cursor%2B%2F%3D') return second;
+    return { revision: 0, mode: 'system', updatedAt: null };
+  });
+
+  await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
+  const loadMore = await screen.findByRole('button', { name: 'Load more activity' });
+  loadMore.focus();
+  await userEvent.keyboard('{Enter}');
+
+  expect(await screen.findByText('assignment')).toBeInTheDocument();
+  expect(dashboardApi.get).toHaveBeenCalledWith('/activities?limit=20&cursor=opaque%20cursor%2B%2F%3D');
+  expect(screen.getByRole('status')).toHaveTextContent('Showing 2 activity items.');
+  expect(screen.queryByRole('button', { name: 'Load more activity' })).not.toBeInTheDocument();
+});
+
+it('announces a failed activity continuation and retries it without discarding loaded activity', async () => {
+  const first = { page: { items: [{ id: 'activity-one', ticketId: 'ticket-one', kind: 'customer_reply', facts: {}, revision: 1, createdAt: '2026-09-12T09:00:00.000Z', readAt: null, dismissedAt: null }], next: 'retry-cursor' }, unread: { status: 'available' as const, count: 1 } };
+  const second = { page: { items: [{ id: 'activity-two', ticketId: 'ticket-two', kind: 'assignment', facts: {}, revision: 1, createdAt: '2026-09-12T08:00:00.000Z', readAt: null, dismissedAt: null }], next: null }, unread: { status: 'available' as const, count: 1 } };
+  let continuationAttempts = 0;
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
+    if (path === '/activities?limit=20') return first;
+    if (path === '/activities?limit=20&cursor=retry-cursor') {
+      continuationAttempts += 1;
+      if (continuationAttempts === 1) throw new Error('Synthetic continuation failure');
+      return second;
+    }
+    return { revision: 0, mode: 'system', updatedAt: null };
+  });
+
+  await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Load more activity' }));
+
+  const error = await screen.findByRole('alert');
+  expect(error).toHaveTextContent('More activity could not be loaded. Try again to continue.');
+  expect(screen.getByText('customer reply')).toBeInTheDocument();
+  const retry = screen.getByRole('button', { name: 'Retry loading activity' });
+  retry.focus();
+  await userEvent.keyboard('{Enter}');
+
+  expect(await screen.findByText('assignment')).toBeInTheDocument();
+  expect(continuationAttempts).toBe(2);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('keeps connection recovery visible without healthy latency diagnostics', async () => {
+  const result = await renderReady();
+  vi.mocked(useRealtime).mockReturnValue({...realtime,isConnected:false} as ReturnType<typeof useRealtime>);
+  act(()=>result.rerender(tree()));
+  await userEvent.click(screen.getByRole('button', { name: 'Disconnected' }));
+  expect(await screen.findByText('Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.')).toBeInTheDocument();
+  expect(screen.queryByText(/Latency/)).not.toBeInTheDocument();
+});
+
+it('re-reads bounded durable activity when realtime is restored', async () => {
+  const result = await renderReady();
+  const activityReads = () => vi.mocked(dashboardApi.get).mock.calls.filter(([path]) => path === '/activities?limit=20').length;
+  const initialReads = activityReads();
+
+  vi.mocked(useRealtime).mockReturnValue({ ...realtime, isConnected: false } as ReturnType<typeof useRealtime>);
+  act(() => result.rerender(tree()));
+  vi.mocked(useRealtime).mockReturnValue({ ...realtime, isConnected: true } as ReturnType<typeof useRealtime>);
+  act(() => result.rerender(tree()));
+
+  await waitFor(() => expect(activityReads()).toBe(initialReads + 1));
+  expect(dashboardApi.get).toHaveBeenLastCalledWith('/activities?limit=20');
+  expect(await screen.findByText('Connection restored. Durable activity refreshed.')).toHaveAttribute('role', 'status');
 });
 
 it('navigates from the account popover without stealing destination focus', async () => {
