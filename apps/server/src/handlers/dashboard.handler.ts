@@ -54,6 +54,7 @@ import { ApiKeyAdminFenceError, ApiKeyAdminRepository, type ApiKeyAdminCommit,
   type ApiKeyCreationReceipt } from '../repositories/api-key-admin.repository';
 import { admitDashboardSummaryRead, settleDashboardSummaryRead, type DashboardSummaryReadAdmission } from '../budgets/dashboard-summary-read-admission.service';
 import { DashboardSummaryReadFenceError, DashboardSummaryReadRepository, projectDashboardSlaRows, type DashboardSummaryReadCommit } from '../repositories/dashboard-summary-read.repository';
+import { TICKET_QUEUE_KEYS, type TicketQueueKey } from '../types/ticket-queue';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -314,6 +315,7 @@ const supportStateTransitionSchema = z.object({
   definitionId: z.string().min(1).max(120),
   waitingReason: z.string().trim().min(1).max(512).nullable().optional(),
   nextAction: z.string().trim().min(1).max(512).nullable().optional(),
+  snoozedUntil: z.string().datetime({ offset: false, precision: 3 }).nullable().optional(),
   expectedRevision: z.number().int().positive(),
 }).strict();
 const supportStateDeactivateSchema = z.object({
@@ -965,24 +967,38 @@ dashboard.get("/tickets", async (c) => {
   const payload = c.get('jwtPayload') as JWTPayload;
   const sort = z.enum(OPERATOR_WORKSPACE_SORTS).optional().safeParse(c.req.query('sort'));
   if (!sort.success) return c.json({ error: 'Invalid ticket sort' }, 400);
+  const queue = z.enum(TICKET_QUEUE_KEYS).optional().safeParse(c.req.query('queue'));
+  if (!queue.success) return c.json({ error: 'Invalid ticket queue' }, 400);
   const admission = await admitHttpTicketList({ env: c.env, deps: d, payload, operation: 'dashboard.ticket.list',
     filterId: c.req.query('filter_id'), search: c.req.query('search'), now: () => c.env.localNow?.() ?? Date.now() });
   if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
     ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
     : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
   try {
-    const result = await d.repositories.tickets.list({
+    const viewer: { role: 'agent' | 'admin'; actorId: string } = {
+      role: payload.role === 'agent' ? 'agent' : 'admin', actorId: d.scope.actorId,
+    };
+    const currentCredential: { role: 'agent' | 'admin'; sessionVersion: number; expiresAt: number } = {
+      role: payload.role === 'agent' ? 'agent' : 'admin',
+      sessionVersion: payload.session_version ?? -1, expiresAt: payload.exp,
+    };
+    const listOptions = {
       sort: sort.data,
       customerEmail:c.req.query('customer_email'), filterId:c.req.query('filter_id'),
       status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),
       groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:c.req.query('search'),
       page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50),
-      viewer: { role: payload.role === 'agent' ? 'agent' : 'admin', actorId: d.scope.actorId },
+      viewer,
       ...(admission.snapshot ? { scanFence: admission.snapshot } : {}),
-      ...(admission.snapshot ? { currentCredential: { role: payload.role === 'agent' ? 'agent' : 'admin',
-        sessionVersion: payload.session_version ?? -1, expiresAt: payload.exp } } : {}),
-    });
-    return c.json(result);
+      ...(admission.snapshot ? { currentCredential } : {}),
+      ...(queue.data ? { queue: queue.data as TicketQueueKey } : {}),
+    };
+    if (queue.data) {
+      const result = await d.repositories.queues.list({ ...listOptions, queue: queue.data });
+      return c.json({ data: result.items.map(item => ({ ...item.ticket, inclusion_reason: item.inclusionReason })),
+        meta: { total: result.total, page: result.page, limit: result.limit, total_pages: result.totalPages } });
+    }
+    return c.json(await d.repositories.tickets.list(listOptions));
   } catch (error) {
     if (error instanceof TicketListScanError) return c.json({ code: 'budget_admission_unavailable', error: 'Ticket list capacity changed; retry the request' }, 503);
     throw error;

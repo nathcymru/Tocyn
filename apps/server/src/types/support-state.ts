@@ -25,6 +25,10 @@ export type TicketSupportState = Readonly<{
   public_label: string;
   waiting_reason: string | null;
   next_action: string | null;
+  /** Shared ticket-level snooze deadline; NULL means not snoozed. */
+  snoozed_until: string | null;
+  /** Why this state is currently included in a queue projection. */
+  resurface_reason: 'manual' | 'due' | 'customer_reply' | null;
   changed_at: string;
   revision: number;
 }>;
@@ -50,6 +54,7 @@ export type SupportStateTransition = Readonly<{
   nextAction?: string | null;
   /** Required monotonic optimistic-concurrency value from TicketSupportState.revision. */
   expectedRevision: number;
+  snoozedUntil?: string | null;
 }>;
 
 export type SupportStateDefinitionInput = Readonly<{

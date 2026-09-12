@@ -93,6 +93,21 @@ it('keeps the 20-result list node, scroll position and roving focus while conver
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
 });
 
+it('uses the authoritative actionable and snoozed queue views without losing the inbox surface',async()=>{
+  showInbox();
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+
+  fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=snoozed'))).toBe(true));
+  expect(screen.getByRole('button',{name:'Snoozed'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed');
+
+  fireEvent.click(screen.getByRole('button',{name:'Actionable'}));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
+  expect(screen.getByRole('button',{name:'Actionable'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('listbox',{name:'Conversation list'})).toBeInTheDocument();
+});
+
 it('does not persist a view switch before an unsaved conversation draft permits navigation',async()=>{
   savedSelection='ticket-1';
   detailNavigation.pending=true;

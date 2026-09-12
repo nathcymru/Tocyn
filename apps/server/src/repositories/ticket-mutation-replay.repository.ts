@@ -7,6 +7,7 @@ export { StaffReplyPreconditionConflictError, type StaffReplyPrecondition } from
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import { auditedTicketUpdateStatements, conversationMutationEvent } from './conversation-audit.repository';
+import { customerReplyResurfaceStatements } from './support-state.repository';
 import type { AuditedTicketUpdate, ConversationActor } from '../types/conversation-audit';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
@@ -275,6 +276,15 @@ export class TicketMutationReplayRepository {
       id:eventId,ticketId:candidate.ticketId,articleId:candidate.articleId,actor:candidate.audit,
       intake:Boolean(candidate.ticket),internal:Boolean(candidate.article?.is_internal),
     }));
+    // Only the canonical public customer-reply event may wake shared snooze
+    // state. These statements sit before the durable mutation receipt, so an
+    // idempotency collision rolls both the reply and resurface back together.
+    if (candidate.audit?.kind === 'customer' && !candidate.ticket && candidate.article?.sender_type === 'customer'
+      && !candidate.article.is_internal && candidate.articleId && eventId) {
+      statements.push(...customerReplyResurfaceStatements(this.db,this.scope,{
+        ticketId:candidate.ticketId,articleId:candidate.articleId,conversationEventId:eventId,
+      }));
+    }
     // Activity statements are prepared only by #133's repository. Keeping them
     // before the mutation receipt makes a losing idempotency race roll back both
     // the note and every durable mention projection.

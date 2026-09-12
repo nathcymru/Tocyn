@@ -22,6 +22,8 @@ export type TicketSupportState = Readonly<{
   public_label: string;
   waiting_reason: string | null;
   next_action: string | null;
+  snoozed_until: string | null;
+  resurface_reason: 'manual' | 'due' | 'customer_reply' | null;
   changed_at: string;
   revision: number;
 }>;
@@ -76,6 +78,7 @@ export function useTransitionSupportState() {
       definitionId: string;
       waitingReason?: string | null;
       nextAction?: string | null;
+      snoozedUntil?: string | null;
       expectedRevision: number;
     }) => dashboardApi.patch<TicketSupportState>(`/tickets/${ticketId}/support-state`, body),
     onSuccess: (state, { ticketId }) => Promise.all([
