@@ -4,7 +4,11 @@ export function localBetaEnabled(env: { LOCAL_BETA_ENABLED?: string }): boolean 
 
 export type BetaPrincipal = Readonly<{ kind: 'customer' | 'staff' | 'api-key'; id: string; }>;
 export type BetaCredential = Readonly<{ sessionVersion: number; expiresAt: number; }>;
-export type BetaOperation = 'create' | 'conversation' | 'upload';
+/**
+ * `configuration` has a separate intake ceiling so operational recovery
+ * conversations retain their reserved capacity.
+ */
+export type BetaOperation = 'create' | 'configuration' | 'conversation' | 'upload';
 export type BetaState = 'running' | 'intake_stopped' | 'writes_stopped';
 export type BetaPolicy = Readonly<{
   run_id: string; revision: number; state: BetaState;

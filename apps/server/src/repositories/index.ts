@@ -1272,7 +1272,7 @@ export function createRepositories(
     ticketFilters: new SqlFilterRepository(scope, db),
     supportStates: new SupportStateRepository(db, scope, betaAdmission),
     queues: new TicketQueueRepository(tickets),
-    slaClocks: new SlaClockRepository(db, scope),
+    slaClocks: new SlaClockRepository(db, scope, betaAdmission),
     operatorWorkspace: new OperatorWorkspaceRepository(scope, db, betaAdmission)
   };
 }
