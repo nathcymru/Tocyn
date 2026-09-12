@@ -59,7 +59,9 @@ test('proves production composer versioned markdown, literal plain text, safe pr
       await page.addInitScript(({token,user}) => localStorage.setItem('lumina-auth', JSON.stringify({state:{token,user,mfaRequired:false},version:0})), auth);
       const navigation = await page.goto(`${server.origin}/tickets/fixture-ticket`); assert.equal(navigation?.headers()['content-security-policy'],csp);
       const format = page.getByLabel('Message format'); await format.waitFor();
-      server.failUploadOnce(); await page.getByLabel('Reply attachments',{exact:true}).setInputFiles({ name:'synthetic-image.png', mimeType:'image/png', buffer:png });
+      await page.locator('button[aria-label="Attach files"][aria-disabled="false"]').waitFor();
+      const uploadFailure = page.waitForResponse(response => new URL(response.url()).pathname === '/api/attachments/upload' && response.status() === 503);
+      server.failUploadOnce(); await page.getByLabel('Reply attachments',{exact:true}).setInputFiles({ name:'synthetic-image.png', mimeType:'image/png', buffer:png }); await uploadFailure;
       await page.getByText('Upload failed.',{exact:true}).waitFor(); const feedback = page.getByText('Upload failed.',{exact:true}); const lightContrast = [await contrast(page.getByLabel('Reply message'), 'light editor'), await contrast(page.getByText('Safe preview',{exact:true}), 'light preview'), await contrast(feedback, 'light upload feedback')];
       await page.getByRole('button',{name:'Retry upload',exact:true}).click(); await page.getByText('synthetic-image.png',{exact:true}).waitFor();
       await page.getByRole('button',{name:'Internal Note',exact:true}).click(); assert.equal(await page.getByRole('button',{name:'Internal Note',exact:true}).getAttribute('aria-pressed'),'true');
