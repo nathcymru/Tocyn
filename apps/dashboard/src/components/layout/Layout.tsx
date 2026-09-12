@@ -335,7 +335,7 @@ function LayoutContent() {
               ref={globalSearchInput}
               type="text"
               placeholder="Search all authorised tickets..."
-              aria-label="Search all authorised tickets"
+              aria-label="Search all tickets (global shell)"
               aria-keyshortcuts="Control+K Meta+K"
               aria-describedby="global-ticket-search-scope"
               value={searchInput}

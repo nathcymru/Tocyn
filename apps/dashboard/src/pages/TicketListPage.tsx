@@ -272,7 +272,7 @@ export function TicketListPage() {
               <TocynInput
                 type="text"
                 placeholder="Search all authorised tickets..."
-                aria-label="Search all authorised tickets"
+                aria-label="Search all tickets in this list view"
                 aria-describedby="global-ticket-results-scope"
                 className="w-full pl-9 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                 value={searchInput}
@@ -290,7 +290,7 @@ export function TicketListPage() {
                     }
                 }}
               />
-              <TocynButton type="button" aria-label="Clear global ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
+              <TocynButton type="button" aria-label="Clear list ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
               <p id="global-ticket-results-scope" className="sr-only">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
             </div>
