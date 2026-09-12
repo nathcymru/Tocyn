@@ -56,8 +56,6 @@
 [data-tocyn-font-scale="larger"] { --tocyn-preference-font-scale: 1.25; }
 [data-tocyn-font-scale] body { font-size: calc(1rem * var(--tocyn-preference-font-scale)); }
 [data-tocyn-density="compact"] main[aria-label="Workspace"] { padding: 1rem; }
-[data-tocyn-focus-mode="true"] aside[data-tocyn-inverse] nav[aria-label="Workspace navigation"] { visibility: hidden; pointer-events: none; }
-[data-tocyn-focus-mode="true"] header > div.max-w-md { visibility: hidden; }
 [data-tocyn-motion="reduced"] :where(*, *::before, *::after) { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   [data-tocyn-motion="system"] :where(*, *::before, *::after) { animation: none !important; transition: none !important; }
