@@ -187,3 +187,61 @@ test('direct local-beta clock initialization rejects a general capability revoke
     assert.deepEqual(await betaCounters(fixture), { tickets: 0, mutations: 0, upload_attempts: 0 });
   });
 });
+
+test('guarded local beta denies unqualified SLA callers and leaves SLA and capacity unchanged', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const agent = await fixture.createAgentSession('fixture-tenant-a');
+    const operatorA = await operatorToken(fixture, 'operatorA');
+    const customer = await fixture.login('customerA');
+    assert.equal(customer.status, 200);
+    const customerToken = (await customer.json<{ token: string }>()).token;
+    const apiKey = await fixture.createScopedApiKey('operatorA', ['tickets:read']);
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'sla-local-beta-denials',
+      tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
+      invitations: [
+        ...Object.values(fixture.principals).map(principal => ({
+          tenantId: principal.tenantId, id: principal.localId, kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+        })),
+        { tenantId: 'fixture-tenant-a', id: agent.id, kind: 'staff' as const },
+      ],
+      limits: { ticketLimit: 2, mutationLimit: 3, recoveryReserve: 1, uploadLimit: 1 },
+    });
+    const policyInput = { expectedRevision: 0, calendar, responseTargetMs: 60_000, resolutionTargetMs: null };
+    const unchanged = async () => {
+      assert.equal((await fixture.db.prepare("SELECT count(*) AS n FROM sla_policies WHERE tenant_id='fixture-tenant-a'").first<{ n: number }>())?.n, 0);
+      assert.equal((await fixture.db.prepare("SELECT count(*) AS n FROM ticket_sla_clocks WHERE tenant_id='fixture-tenant-a'").first<{ n: number }>())?.n, 0);
+      assert.deepEqual(await betaCounters(fixture), { tickets: 0, mutations: 0, upload_attempts: 0 });
+    };
+
+    for (const [path, options] of [
+      ['/api/sla-policy', { token: customerToken }],
+      ['/api/sla-policy', { apiKey: apiKey.apiKey }],
+      ['/api/sla-policy', { method: 'PUT', token: customerToken, body: policyInput }],
+      ['/api/sla-policy', { method: 'PUT', apiKey: apiKey.apiKey, body: policyInput }],
+      ['/api/tickets/fixture-ticket/sla/initialize', { method: 'POST', token: customerToken, body: {} }],
+      ['/api/tickets/fixture-ticket/sla/initialize', { method: 'POST', apiKey: apiKey.apiKey, body: {} }],
+      ['/api/sla-policy', { method: 'PUT', token: agent.token, body: policyInput }],
+      ['/api/tickets/fixture-ticket/sla/initialize', { method: 'POST', token: agent.token, body: {} }],
+    ] as const) {
+      const response = await fixture.request(path, options);
+      assert.ok(response.status === 401 || response.status === 403, `${options.method ?? 'GET'} ${path} is denied`);
+      await unchanged();
+    }
+
+    await fixture.db.prepare("UPDATE deployment_capability_ceiling SET enabled=0,revision=revision+1 WHERE capability='settings.general.manage'").run();
+    for (const [path, options] of [
+      ['/api/sla-policy', { method: 'PUT', token: operatorA, body: policyInput }],
+      ['/api/tickets/fixture-ticket/sla/initialize', { method: 'POST', token: operatorA, body: {} }],
+    ] as const) {
+      const response = await fixture.request(path, options);
+      assert.equal(response.status, 403, `${options.method} ${path} denies the removed general capability`);
+      await unchanged();
+    }
+
+    await fixture.db.prepare("UPDATE deployment_capability_ceiling SET enabled=1,revision=revision+1 WHERE capability='settings.general.manage'").run();
+    const missing = await fixture.request('/api/tickets/missing-ticket/sla/initialize', { method: 'POST', token: operatorA, body: {} });
+    assert.equal(missing.status, 404);
+    await unchanged();
+  });
+});
