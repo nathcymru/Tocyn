@@ -437,6 +437,70 @@ test('proves production dashboard draft restore, guarded navigation, and tenant 
   });
 });
 
+test('proves a narrow workspace back navigation restores a tenant-scoped draft through the real Worker', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const sessionA = await operatorSession(fixture, 'operatorA');
+    const sessionB = await operatorSession(fixture, 'operatorB');
+    await initializeFixtureTicketSla(fixture, sessionA.token);
+    await initializeBrowserLocalBeta(fixture);
+    const server = await startServer(fixture);
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+      const externalRequests: string[] = [];
+      await context.route('**/*', route => {
+        if (new URL(route.request().url()).origin !== server.origin) { externalRequests.push(route.request().resourceType()); return route.abort(); }
+        return route.continue();
+      });
+      const page = await context.newPage();
+      await page.addInitScript(({ token, user }) => {
+        localStorage.setItem('lumina-auth', JSON.stringify({ state: { token, user, mfaRequired: false }, version: 0 }));
+      }, sessionA);
+
+      await page.goto(`${server.origin}/inbox/all`);
+      const list = page.getByRole('region', { name: 'Conversations', exact: true });
+      const fixtureTicket = page.getByRole('option', { name: /Fixture ticket A/ });
+      await fixtureTicket.waitFor();
+
+      await fixtureTicket.click();
+      await page.waitForURL(/\/inbox\/all\/fixture-ticket$/);
+      const body = page.getByLabel('Reply message', { exact: true });
+      await body.waitFor();
+      const draftSave = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.origin === server.origin
+          && url.pathname === '/api/workspace/drafts/fixture-ticket'
+          && response.request().method() === 'PUT'
+          && response.status() === 200;
+      });
+      await body.fill('Synthetic mobile return draft');
+      await draftSave;
+      await page.getByText('Draft saved.', { exact: true }).waitFor();
+
+      const back = page.getByRole('link', { name: 'Back to conversations', exact: true });
+      await back.waitFor({ state: 'visible' });
+      await back.click();
+      await page.waitForURL(/\/inbox\/all$/);
+      await list.waitFor({ state: 'visible' });
+      await fixtureTicket.waitFor({ state: 'visible' });
+
+      await fixtureTicket.click();
+      await page.waitForURL(/\/inbox\/all\/fixture-ticket$/);
+      await body.waitFor();
+      await page.getByText('Draft saved.', { exact: true }).waitFor();
+      assert.equal(await body.inputValue(), 'Synthetic mobile return draft',
+        'Reopening after the mobile return restores the draft from the real scoped Worker route');
+      const foreignDraft = await fixture.request('/api/workspace/drafts/fixture-ticket', { token: sessionB.token });
+      assert.equal(foreignDraft.status, 204, 'Tenant B cannot observe the draft restored for tenant A');
+      assert.equal(externalRequests.length, 0, 'The mobile workspace acceptance uses only the loopback Worker and static dashboard');
+      await context.close();
+    } finally {
+      await browser.close();
+      await server.close();
+    }
+  });
+});
+
 test('proves operator theme first paint, persistence, recovery and tenant separation in the production dashboard', async () => {
   await withTwoTenantFixture(async fixture => {
     const sessionA = await operatorSession(fixture, 'operatorA');
