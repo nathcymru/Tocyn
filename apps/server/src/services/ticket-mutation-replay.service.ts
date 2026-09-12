@@ -17,6 +17,7 @@ import { TicketMutationReplayRepository, type MutationCandidate } from '../repos
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import { projectCanonicalConversation } from './canonical-conversation.service';
 import { canonicalBroadcastGrantAfterCommit, type CanonicalBroadcastGrant } from '../budgets/realtime-admission.service';
+import type { OperatorActivityRepository } from '../repositories/operator-activity.repository';
 
 export type { MutationOperation, MutationOutcome, MutationPrincipal, PreparedTicketMutation, TicketMutationInput,
   RequestedMutationAttachment, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
@@ -125,8 +126,9 @@ export class TicketMutationReplayService {
   private readonly repository: TicketMutationReplayRepository;
   private readonly attempts = new WeakMap<PreparedTicketMutation, Attempt>();
 
-  constructor(private db: D1Database, private scope: VerifiedTenantScope, private principal: MutationPrincipal, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {
-    this.repository = new TicketMutationReplayRepository(db, scope, admission, canonicalMutationSli);
+  constructor(private db: D1Database, private scope: VerifiedTenantScope, private principal: MutationPrincipal, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli,
+    operatorActivity?: OperatorActivityRepository) {
+    this.repository = new TicketMutationReplayRepository(db, scope, admission, canonicalMutationSli, operatorActivity);
   }
 
   private recordDenied(error: unknown): void {
