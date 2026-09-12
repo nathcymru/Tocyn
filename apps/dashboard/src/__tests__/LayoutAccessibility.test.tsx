@@ -70,6 +70,18 @@ it('names global search, makes its authorised scope available to assistive techn
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });
 
+it('provides discoverable command navigation to global search and restores its current value', async () => {
+  await renderReady();
+  const search = screen.getByRole('textbox', { name: 'Search all authorised tickets' });
+  fireEvent.change(search, { target: { value: 'ticket subject' } });
+  fireEvent.keyDown(window, { key: 'k', metaKey: true });
+  expect(search).toHaveFocus();
+  expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
+  expect(screen.getByText(/Press Command or Control K to focus this search/)).toHaveClass('sr-only');
+  fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+  expect(search).toHaveFocus();
+});
+
 it('constrains the inbox shell to the viewport while keeping the shared header visible', async () => {
   render(tree('/inbox/all/synthetic-ticket'));
   const main = await screen.findByRole('main', { name: 'Workspace' });
