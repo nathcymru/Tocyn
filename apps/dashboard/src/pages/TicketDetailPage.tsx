@@ -37,6 +37,7 @@ import {
   Paperclip } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
+import { browserDateTimeLocalToInstant, browserInstantToDateTimeLocal } from '../utils/localDateTime';
 
 type PendingAttachment = Readonly<{
   id: string;
@@ -47,12 +48,6 @@ type PendingAttachment = Readonly<{
 
 /** A server-derived review revision; retry means that the bracketing reads disagreed. */
 type StaleReplyReview = number | 'refreshing' | 'retry';
-
-function localDateTimeValue(instant: string): string {
-  const date = new Date(instant);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 export function TicketDetailPage({id:providedId,workspaceBackHref}:{id?:string;workspaceBackHref?:string}={}) {
   const { id:routeId } = useParams<{ id: string }>();
@@ -158,7 +153,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const restoreSupportStateDraft = (current = supportState.data) => {
     if (!current) return;
     supportStateDraftDirty.current = false;
-    setSupportStateDraft({ definitionId: current.definition_id, waitingReason: current.waiting_reason ?? '', nextAction: current.next_action ?? '', snoozedUntil: current.snoozed_until ? localDateTimeValue(current.snoozed_until) : '' });
+    setSupportStateDraft({ definitionId: current.definition_id, waitingReason: current.waiting_reason ?? '', nextAction: current.next_action ?? '', snoozedUntil: current.snoozed_until ? browserInstantToDateTimeLocal(current.snoozed_until) : '' });
   };
 
   const updateSupportStateDraft = (change: Partial<{ definitionId: string; waitingReason: string; nextAction: string; snoozedUntil: string }>) => {
@@ -320,7 +315,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     setIsSupportStateSubmitting(true);
     try {
       const snoozedUntil = snoozedUntilOverride === undefined
-        ? (supportStateDraft.snoozedUntil ? new Date(supportStateDraft.snoozedUntil).toISOString() : null)
+        ? (supportStateDraft.snoozedUntil ? browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil) : null)
         : snoozedUntilOverride;
       const saved = await transitionSupportState.mutateAsync({ ticketId: id, definitionId: definition.id, waitingReason: waitingReason || null, nextAction: nextAction || null, snoozedUntil, expectedRevision: current.revision });
       restoreSupportStateDraft(saved);
@@ -672,7 +667,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
             </label>
             <p className="mt-1 text-xs text-slate-600">The shared queue will resurface this ticket at the selected local time.</p>
             <div className="mt-2 flex flex-wrap gap-3">
-              <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, new Date(supportStateDraft.snoozedUntil).toISOString())} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
+              <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
               {supportState.data.snoozed_until && <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="rounded border border-slate-400 px-3 py-2 text-sm font-semibold text-slate-700">Unsnooze ticket</TocynButton>}
             </div>
             {supportState.data.snoozed_until && <p role="status" className="mt-2 text-sm text-slate-700">Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
