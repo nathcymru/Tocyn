@@ -3,6 +3,11 @@ name: tocyn-context
 description: Locate Tocyn implementation and tests with bounded context, inspect import impact, and choose focused checks when investigating or changing this repository.
 ---
 
+For delegation, use [worker routing](../tocyn-worker-routing/SKILL.md): the coordinator
+retrieves and verifies a compact packet once, reuses it across non-overlapping
+assignments, and brokers only needed follow-up lookups. Ollama workers cannot crawl
+the checkout; proposed patches still need source verification and actual tests.
+
 1. Inspect the task, `git status --short` and relevant diff. Reuse findings already established.
 2. For unfamiliar areas, use [tocyn-graphify](../tocyn-graphify/SKILL.md) when available.
    Verify graph findings against this checkout; skip graph discovery for a known small edit.

@@ -9,6 +9,12 @@ Follow `AGENTS.md` and the owning issue. This is development tooling, not an app
 integration. The full catalogue is enabled; use the relevant tools rather than every tool.
 Read [the detailed workflow](references/hosted-workflow.md) for setup, examples and limits.
 
+For development-worker delegation, follow [worker routing](../tocyn-worker-routing/SKILL.md).
+Prefer one compact coordinator-prepared packet over repeated per-worker discovery.
+Ollama workers request additional context through the coordinator; their setup does
+not include direct Graphify access. Keep credentials, raw transcripts and private
+findings out of packets, and validate returned code against the checkout.
+
 1. Inspect the current branch, revision, changed files and task. Reuse established findings.
    For a known one-file edit, read that file rather than performing broad discovery.
 2. Discover available tools and call `list_repositories` once per connection/context as needed.

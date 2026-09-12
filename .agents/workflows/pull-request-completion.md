@@ -24,4 +24,4 @@ After a PR is accepted/merged:
 
 A merge is not automatically issue completion.
 
-Owner policy: use the standing PR-only approval bypass after exact-revision mandatory checks; record its use without calling it independent review. Copilot defaults to zero requests. Initial plan approval, where requested, remains separate. See AGENTS.md.
+Owner policy: use the standing PR-only approval bypass after exact-revision mandatory checks; record its use without calling it independent review. Copilot follows the AGENTS.md final-ready exception gate: zero default, no implementation/draft/per-push use, one consolidated essential code/security review only after checks and coordinator review. Record justification and exact SHA; repeat only with explicit maintainer authority for a new unresolved risk. Preserve CodeQL and all mandatory gates. Initial plan approval, where requested, remains separate. See AGENTS.md.
