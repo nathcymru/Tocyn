@@ -337,7 +337,6 @@ function LayoutContent() {
               aria-label="Search all authorised tickets"
               aria-keyshortcuts="Control+K Meta+K"
               aria-describedby="global-ticket-search-scope"
-              aria-keyshortcuts="Control+K Meta+K"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
