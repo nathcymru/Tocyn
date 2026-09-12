@@ -197,3 +197,38 @@ path	branch	head	dirty	preservation
 /Users/ty/Documents/Tocyn-worktrees/152-answer-sop	codex/152-answer-sop-alignment	128cd67a9934045fdcd322a6422ddec9ec8a5e1f	yes	KEEP — recovery preservation; no deletion approved by inventory
 /Users/ty/Documents/Tocyn-worktrees/152-answer-sop-preserve	codex/152-answer-sop-preserve	72cca77c5c8deb3cc45287e32f5168e6e5403e2e	no	KEEP — recovery preservation; no deletion approved by inventory
 /Users/ty/Documents/Tocyn-worktrees/recovered-ticket-detail	codex/recovered-ticket-detail	0ed0ea0cacdfe4eebfdeabe98fe01e8addea8c63	no	KEEP — recovery preservation; no deletion approved by inventory
+
+# Final cleanup audit — 2026-09-12
+# Recovery action removed 192 clean worktrees only after checking clean status and reachability. Branch-backed unique commits remain on their branches; detached unique commits were preserved as named remote recovery-archive tags. The remaining dirty worktrees were intentionally not reset, removed, or integrated.
+remaining_path	branch	head	dirty	status
+/Users/ty/Documents/Tocyn	codex/recovery-final-worktree-cleanup	02b2f3d1e7276c7eb878899e2d58db12672a7103	no	PRIMARY CHECKOUT — clean after this documentation commit
+/private/tmp/tocyn-131-search-filter	codex/131-command-navigation	e6d57356b4d24a3f89da89b2b3e5e26f2caea0cc	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-134-ci	DETACHED	86e332d7966c1d7560c472b2a1909cad0981f39a	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-21-mfa-correction	DETACHED	73d64165c570b00b6217ba8a6b0581b78f3c2ea3	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-223-ci-test-observability	codex/223-ci-test-observability	605f3df60abd5e6d358b8c49ba9916392eac93a7	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-61-guarded-integration	codex/61-guarded-integration	d8f9cd002ce287a25548b7261313e74d80265ada	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-62-operator-workflows	codex/62-operator-workflows	6a0b3f2cc51c9125d01089044e3d9c53f3b88cf3	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-beta2-133	codex/133-durable-activity-foundation	c7fed6e99242472517e001a65f71364f1da10749	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-spark-auth-race-tests	codex/spark-auth-race-tests	bee27488a12094fa43d5bafc2ce8aef36cb65111	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-spark-delivery-routing	codex/spark-delivery-routing	d9a14ea7c2da4f826537b83e7f097719af6b4e4a	yes	KEEP — uncommitted preservation
+/private/tmp/tocyn-spark-inbox-recovery	codex/spark-inbox-recovery	388988b6ab205ce98ef858c8065bcfb09da6b1a2	yes	KEEP — uncommitted preservation
+/Users/ty/Documents/Tocyn-worktrees/152-answer-sop	codex/152-answer-sop-alignment	128cd67a9934045fdcd322a6422ddec9ec8a5e1f	yes	KEEP — uncommitted preservation
+
+# Detached-head archival tags pushed before cleanup
+recovery-archive-2026-09-12-tocyn-130-integrate	282c89b6b1a686f7fb97d025919cc2aa53beea5d
+recovery-archive-2026-09-12-tocyn-130-ui-iiyrbq	46e3ba0cf987515e1a55e5d3d507a25026c68d27
+recovery-archive-2026-09-12-tocyn-133-activity-continuation	a5cc8011fe629347eeab0c1f47f5b1e1024f0beb
+recovery-archive-2026-09-12-tocyn-133-node22-validation	58604ac3f93f793853a52f4d57c92b6e7449734d
+recovery-archive-2026-09-12-tocyn-134-context-panel-fresh	efff6ee44dc19851ad8a92f46db77906f1822240
+recovery-archive-2026-09-12-tocyn-135-rebase-kaz6mr	c1f33c0c357de55d2e0ff4d231d880cdb14c4b9e
+recovery-archive-2026-09-12-tocyn-137-handler-tests	5b4c5a9a947014c74d35d098ef2ae081d0d77fe0
+recovery-archive-2026-09-12-tocyn-216	21a11131479a2919a15823d7cd09d3ebef5045b1
+recovery-archive-2026-09-12-tocyn-225-focus	3818bc32735482de15aef59c96c2a5674df3e81e
+recovery-archive-2026-09-12-tocyn-225-rebase	d85d31ed138368604992d8fb699748ac8eee44af
+recovery-archive-2026-09-12-tocyn-229-rebase	58604ac3f93f793853a52f4d57c92b6e7449734d
+recovery-archive-2026-09-12-tocyn-230-review	5b4c5a9a947014c74d35d098ef2ae081d0d77fe0
+recovery-archive-2026-09-12-tocyn-57-repro-second	523add383d89861b89f5e550f7df439170454bd2
+recovery-archive-2026-09-12-tocyn-budget64-rebase-n8djpr	8bf68ec37617bea9fc770dd58d19bd3e0ac13594
+recovery-archive-2026-09-12-tocyn-owner-ingress-rebase-xorhsi	f28cf7e3c8a1eb582dd8876120af6f2e128a302d
+recovery-archive-2026-09-12-tocyn-routing-acceptance	108979211fc838d685b1e748ced3757d84bc87cb
+recovery-archive-2026-09-12-tocyn-snooze130-review	4ed7362a9f649346ea825e8ec3984c2d6c173b45
