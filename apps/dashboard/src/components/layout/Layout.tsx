@@ -33,6 +33,8 @@ function cn(...inputs: any[]) {
 
 type ActivityItem = Readonly<{ id: string; ticketId: string; kind: string; facts: Record<string, unknown>; revision: number; createdAt: string; readAt: string | null; dismissedAt: string | null }>;
 type ActivityResponse = Readonly<{ page: Readonly<{ items: readonly ActivityItem[]; next: string | null }>; unread: Readonly<{ status: 'available'; count: number } | { status: 'unavailable'; count: null; reason: string }> }>;
+const ACTIVITY_PAGE_SIZE = 20;
+const MAX_RENDERED_ACTIVITY_ITEMS = 100;
 
 interface SidebarProps { onNavigate?: () => void; navigationFocus: () => HTMLElement | null; }
 
@@ -170,7 +172,9 @@ function LayoutContent() {
   const [activityOpen, setActivityOpen] = useState(false);
   const [activity, setActivity] = useState<ActivityResponse | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityRetry, setActivityRetry] = useState<'refresh' | 'more' | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
+  const activityRequestGeneration = useRef(0);
   const activityTrigger = useRef<HTMLButtonElement>(null);
   const activityId = React.useId();
   const connectionTrigger = useRef<HTMLButtonElement>(null);
@@ -196,11 +200,45 @@ function LayoutContent() {
   }, [location.pathname, location.search]);
 
   const loadActivity = React.useCallback(async () => {
-    setActivityLoading(true); setActivityError(null);
-    try { setActivity(await dashboardApi.get<ActivityResponse>('/activities?limit=20')); }
-    catch { setActivityError('Activity could not be refreshed. Try again when the connection is available.'); }
-    finally { setActivityLoading(false); }
+    const generation = ++activityRequestGeneration.current;
+    setActivityLoading(true); setActivityError(null); setActivityRetry(null);
+    try {
+      const response = await dashboardApi.get<ActivityResponse>(`/activities?limit=${ACTIVITY_PAGE_SIZE}`);
+      if (generation === activityRequestGeneration.current) setActivity(response);
+    } catch {
+      if (generation === activityRequestGeneration.current) {
+        setActivityError('Activity could not be refreshed. Try again when the connection is available.');
+        setActivityRetry('refresh');
+      }
+    } finally {
+      if (generation === activityRequestGeneration.current) setActivityLoading(false);
+    }
   }, []);
+
+  const loadMoreActivity = React.useCallback(async () => {
+    const next = activity?.page.next;
+    if (!next || activityLoading || (activity?.page.items.length ?? 0) >= MAX_RENDERED_ACTIVITY_ITEMS) return;
+    const generation = activityRequestGeneration.current;
+    setActivityLoading(true); setActivityError(null); setActivityRetry(null);
+    try {
+      const response = await dashboardApi.get<ActivityResponse>(`/activities?limit=${ACTIVITY_PAGE_SIZE}&cursor=${encodeURIComponent(next)}`);
+      if (generation !== activityRequestGeneration.current) return;
+      setActivity(current => {
+        if (!current) return response;
+        const capacity = MAX_RENDERED_ACTIVITY_ITEMS - current.page.items.length;
+        const seen = new Set(current.page.items.map(item => item.id));
+        const items = [...current.page.items, ...response.page.items.filter(item => !seen.has(item.id)).slice(0, capacity)];
+        return { ...response, page: { items, next: response.page.next } };
+      });
+    } catch {
+      if (generation === activityRequestGeneration.current) {
+        setActivityError('More activity could not be loaded. Try again to continue.');
+        setActivityRetry('more');
+      }
+    } finally {
+      if (generation === activityRequestGeneration.current) setActivityLoading(false);
+    }
+  }, [activity, activityLoading]);
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -304,7 +342,7 @@ function LayoutContent() {
             <Popover.Positioner>
               <Popover.Content aria-label="Activity" className="w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
                 <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-bold text-slate-900">Activity</h2><TocynButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2">Refresh</TocynButton></div>
-                {activityError && <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">{activityError}</p>}
+                {activityError && <div role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900"><p>{activityError}</p><TocynButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="mt-2 rounded px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2">Retry loading activity</TocynButton></div>}
                 {activityLoading && !activity && <p role="status" className="p-2 text-sm text-slate-600">Loading durable activity…</p>}
                 {activity?.unread.status === 'unavailable' && <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">Unread count is temporarily unavailable. Your activity remains available below.</p>}
                 {activity && activity.page.items.length === 0 && <p className="p-2 text-sm text-slate-600">No current activity.</p>}
@@ -317,6 +355,9 @@ function LayoutContent() {
                     <TocynButton type="button" aria-label="Dismiss activity" onClick={() => void transitionActivity(item, 'dismiss')} className="rounded p-1 text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2"><X className="h-4 w-4" /></TocynButton>
                   </li>)}
                 </ul>
+                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="mt-2 text-sm text-slate-600">Showing the most recent {MAX_RENDERED_ACTIVITY_ITEMS} activity items. Refresh to restart activity recovery.</p>}
+                {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className="mt-2"><TocynButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className="w-full rounded px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2">{activityLoading ? 'Loading more activity…' : 'Load more activity'}</TocynButton></div>}
+                {activity && !activityLoading && activity.page.items.length > 0 && <p role="status" className="sr-only">Showing {activity.page.items.length} activity item{activity.page.items.length === 1 ? '' : 's'}.</p>}
               </Popover.Content>
             </Popover.Positioner>
           </Popover.Root>
