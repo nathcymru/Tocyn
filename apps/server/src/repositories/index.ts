@@ -13,19 +13,30 @@ import { conversationMutationEvent } from './conversation-audit.repository';
 import { normalizeSupportEmail } from '../utils/email-normalize';
 import { CapabilityFenceError, capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
 import { VerifiedTenantScope } from '../types/tenant';
-import { AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_MESSAGES, AI_SUGGESTION_MAX_R2_KEY_BYTES, UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories } from './interfaces';
+import { AI_SUGGESTION_MAX_INLINE_BODY_BYTES, AI_SUGGESTION_MAX_MESSAGES, AI_SUGGESTION_MAX_R2_KEY_BYTES, UserRepository, TicketRepository, InitialTicketArticleData, ArticleRepository, AttachmentRepository, ChannelsRepository, ConfigRepository, ApiKeyRepository, AutomationRepository, TicketFieldRepository, GroupRepository, FilterRepository, Repositories, type CustomerAuthCredentialIssue } from './interfaces';
 import { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { User, Ticket, Article, Attachment } from '../types';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
+import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
 import { articleBodyFormat } from '@luminatick/shared';
 import { TicketListScanError, ticketListCurrentCredentialSql, ticketListScanAssertionSql, ticketListScanFenceSql, type TicketListCurrentCredential, type TicketListScanSnapshot } from './ticket-list-scan.repository';
+import { CustomerAuthBudgetFenceError, customerAuthAcceptanceStatement, customerAuthAcceptedSql, customerAuthCredentialIssueAssertionStatement, customerAuthFenceStatements, type CustomerAuthBudgetFence } from './customer-auth-budget-fence';
 
 const defaultSlaCalendarJson = JSON.stringify({ timeZone: 'UTC', weekly: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day,[{ startMinute: 0, endMinute: 1440 }]])), exceptions: [], dst: { ambiguousLocalTime: 'earlier', nonexistentLocalTime: 'next-valid' } });
+const customerAuthAccepted = (result: unknown): boolean => (result as { results?: readonly { accepted?: unknown }[] } | undefined)?.results?.[0]?.accepted === 1;
 
 export class SqlUserRepository implements UserRepository {
-  async revokeSessions(id: string): Promise<void> {
-    await this.db.prepare('UPDATE users SET session_version = session_version + 1 WHERE tenant_id = ? AND id = ?')
-      .bind(this.scope.tenantId, id).run();
+  async revokeSessions(id: string, fence?: CustomerAuthBudgetFence): Promise<void> {
+    const query = this.db.prepare(`UPDATE users SET session_version = session_version + 1 WHERE tenant_id = ? AND id = ?${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
+      .bind(this.scope.tenantId, id, ...(fence ? [this.scope.tenantId] : []));
+    if (fence) {
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), query]);
+      if (!customerAuthAccepted(results[statements.length])) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      const result = results.at(-1);
+      if (!result?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
+    else await query.run();
   }
 
   /** A late setup request cannot replace an authenticator enabled in the meantime. */
@@ -65,20 +76,35 @@ export class SqlUserRepository implements UserRepository {
     return result || null;
   }
 
-  async get(id: string): Promise<User | null> {
-    const result = await this.db.prepare("SELECT * FROM users WHERE tenant_id = ? AND id = ?")
-      .bind(this.scope.tenantId, id)
-      .first<User>();
+  async get(id: string, fence?: CustomerAuthBudgetFence): Promise<User | null> {
+    const query = this.db.prepare(`SELECT * FROM users WHERE tenant_id = ? AND id = ?${fence ? ` AND ${customerAuthAcceptedSql()}` : ''}`)
+      .bind(this.scope.tenantId, id, ...(fence ? [this.scope.tenantId] : []));
+    let result: User | undefined | null;
+    if (fence) {
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), query]);
+      if (!customerAuthAccepted(results[statements.length])) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      result = results.at(-1)?.results[0] as User | undefined;
+    } else result = await query.first<User>();
     return result || null;
   }
 
-  async create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>): Promise<User> {
+  async create(data: Omit<User, 'id' | 'created_at' | 'last_login_at'>, fence?: CustomerAuthBudgetFence): Promise<User> {
     const id = crypto.randomUUID();
-    const result = await this.db.prepare(
-      "INSERT INTO users (tenant_id, id, email, full_name, role, mfa_enabled, mfa_secret) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *"
+    const query = this.db.prepare(
+      `INSERT INTO users (tenant_id, id, email, full_name, role, mfa_enabled, mfa_secret)
+       SELECT ?, ?, ?, ?, ?, ?, ?${fence ? ` WHERE ${customerAuthAcceptedSql()}` : ''} RETURNING *`
     ).bind(
-      this.scope.tenantId, id, data.email, data.full_name, data.role, data.mfa_enabled ? 1 : 0, data.mfa_secret || null
-    ).first<User>();
+      this.scope.tenantId, id, data.email, data.full_name, data.role, data.mfa_enabled ? 1 : 0, data.mfa_secret || null,
+      ...(fence ? [this.scope.tenantId] : [])
+    );
+    let result: User | undefined | null;
+    if (fence) {
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), query]);
+      if (!customerAuthAccepted(results[statements.length])) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      result = results.at(-1)?.results[0] as User | undefined;
+    } else result = await query.first<User>();
     if (!result) throw new Error("Failed to create user");
     return result;
   }
@@ -102,17 +128,75 @@ export class SqlUserRepository implements UserRepository {
       .run();
   }
 
-  async storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string): Promise<void> {
+  async getCurrentCustomerOtpChallenge(userId: string): Promise<{ tokenId: string; tokenHash: string } | null> {
+    const result = await this.db.prepare(`SELECT current.token_id AS tokenId, token.token_hash AS tokenHash
+      FROM customer_current_otp_challenges current
+      JOIN customer_auth_tokens token ON token.tenant_id=current.tenant_id AND token.id=current.token_id AND token.user_id=current.user_id
+      WHERE current.tenant_id=? AND current.user_id=?`).bind(this.scope.tenantId, userId)
+      .first<{ tokenId: string; tokenHash: string }>();
+    return result ?? null;
+  }
+
+  /**
+   * One batch commits the exact customer identity snapshot, optional shadow
+   * user, credential, and current OTP pointer.  The guard runs before every
+   * write, so an identity/pointer race cannot leave a shadow user behind.
+   */
+  async issueCustomerAuthCredential(input: CustomerAuthCredentialIssue, fence?: CustomerAuthBudgetFence): Promise<void> {
+    if (input.expectedUserId !== null && input.expectedUserId !== input.userId) {
+      throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
+    const prefix = fence ? customerAuthFenceStatements(this.db, this.scope, fence) : [];
+    const issueAssertion = customerAuthCredentialIssueAssertionStatement(this.db, this.scope, input, !!fence);
+    const create = input.expectedUserId === null
+      ? this.db.prepare(`INSERT INTO users (tenant_id,id,email,full_name,role,mfa_enabled,mfa_secret)
+          SELECT ?,?,?,?,?,0,NULL WHERE ${customerAuthAcceptedSql()}`)
+        .bind(this.scope.tenantId, input.userId, input.email, input.fullName, 'customer', this.scope.tenantId)
+      : undefined;
+    const credential = this.db.prepare(`INSERT INTO customer_auth_tokens (tenant_id,id,user_id,token_hash,type,expires_at)
+      SELECT ?,?,?,?,?,? WHERE ${customerAuthAcceptedSql()} AND EXISTS (
+        SELECT 1 FROM users WHERE tenant_id=? AND id=? AND lower(trim(email))=? AND role='customer'
+      )`).bind(this.scope.tenantId, input.tokenId, input.userId, input.tokenHash, input.type, input.expiresAt,
+      this.scope.tenantId, this.scope.tenantId, input.userId, input.email);
+    const pointer = input.type === 'otp'
+      ? this.db.prepare(`INSERT INTO customer_current_otp_challenges(tenant_id,user_id,token_id)
+          SELECT ?,?,? WHERE ${customerAuthAcceptedSql()} AND EXISTS (
+            SELECT 1 FROM customer_auth_tokens WHERE tenant_id=? AND id=? AND user_id=?
+          ) ON CONFLICT(tenant_id,user_id) DO UPDATE SET token_id=excluded.token_id`)
+        .bind(this.scope.tenantId, input.userId, input.tokenId, this.scope.tenantId, this.scope.tenantId, input.tokenId, input.userId)
+      : undefined;
+    const statements = [...prefix, issueAssertion, customerAuthAcceptanceStatement(this.db, this.scope),
+      ...(create ? [create] : []), credential, ...(pointer ? [pointer] : [])];
+    const results = await this.db.batch(statements);
+    const acceptedIndex = prefix.length + 1;
+    const writeResults = results.slice(acceptedIndex + 1);
+    const expectedWrites = (create ? 1 : 0) + 1 + (pointer ? 1 : 0);
+    if (!customerAuthAccepted(results[acceptedIndex]) || writeResults.length !== expectedWrites
+      || writeResults.some(result => !result?.meta.changes)) {
+      throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
+  }
+
+  async storeCustomerAuthToken(userId: string, tokenId: string, tokenHash: string, type: string, expiresAt: string, fence?: CustomerAuthBudgetFence): Promise<void> {
     const insert = this.db.prepare(
-      'INSERT INTO customer_auth_tokens (tenant_id, id, user_id, token_hash, type, expires_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(this.scope.tenantId, tokenId, userId, tokenHash, type, expiresAt);
+      `INSERT INTO customer_auth_tokens (tenant_id, id, user_id, token_hash, type, expires_at)
+       SELECT ?, ?, ?, ?, ?, ?${fence ? ` WHERE ${customerAuthAcceptedSql()}` : ''}`
+    ).bind(this.scope.tenantId, tokenId, userId, tokenHash, type, expiresAt, ...(fence ? [this.scope.tenantId] : []));
     if (type === 'otp') {
-      await this.db.batch([
-        this.db.prepare("UPDATE customer_auth_tokens SET used_at = ? WHERE tenant_id = ? AND user_id = ? AND type = 'otp' AND used_at IS NULL")
-          .bind(new Date().toISOString(), this.scope.tenantId, userId),
-        insert,
-      ]);
-    } else await insert.run();
+      const current = this.db.prepare(`INSERT INTO customer_current_otp_challenges(tenant_id,user_id,token_id)
+        SELECT ?,?,?${fence ? ` WHERE ${customerAuthAcceptedSql()}` : ''}
+        ON CONFLICT(tenant_id,user_id) DO UPDATE SET token_id=excluded.token_id`)
+        .bind(this.scope.tenantId, userId, tokenId, ...(fence ? [this.scope.tenantId] : []));
+      if (!fence) { await this.db.batch([insert, current]); return; }
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), insert, current]);
+      if (!customerAuthAccepted(results[statements.length]) || !results.at(-1)?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    } else if (fence) {
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), insert]);
+      if (!customerAuthAccepted(results[statements.length]) || !results.at(-1)?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
+    else await insert.run();
   }
 
   async findCustomerAuthTokenUser(tokenHash: string, challengeId?: string): Promise<string | null> {
@@ -125,35 +209,61 @@ export class SqlUserRepository implements UserRepository {
     return candidate?.user_id ?? null;
   }
 
-  async verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string): Promise<User | null> {
+  async verifyAndConsumeCustomerAuthToken(tokenHash: string, now: string, challengeId?: string, fence?: CustomerAuthBudgetFence): Promise<User | null> {
+    const accepted = fence ? ` AND ${customerAuthAcceptedSql()}` : '';
+    const acceptedValues = fence ? [this.scope.tenantId] : [];
+    const prefix = fence ? customerAuthFenceStatements(this.db, this.scope, fence) : [];
+    let attemptStatement: D1PreparedStatement | undefined;
     if (challengeId) {
       // Claim one of five attempts atomically before comparing the code.
-      const attempt = await this.db.prepare(`UPDATE customer_auth_tokens SET attempts = attempts + 1
+      attemptStatement = this.db.prepare(`UPDATE customer_auth_tokens SET attempts = attempts + 1
         WHERE tenant_id = ? AND id = ? AND type = 'otp' AND used_at IS NULL
-          AND expires_at > ? AND attempts < 5 RETURNING id`)
-        .bind(this.scope.tenantId, challengeId, now).first();
-      if (!attempt) return null;
+          AND expires_at > ? AND attempts < 5
+          AND EXISTS (SELECT 1 FROM customer_current_otp_challenges current
+            WHERE current.tenant_id=customer_auth_tokens.tenant_id AND current.user_id=customer_auth_tokens.user_id AND current.token_id=customer_auth_tokens.id)${accepted} RETURNING id`)
+        .bind(this.scope.tenantId, challengeId, now, ...acceptedValues);
     }
     // A single conditional write claims the token. Concurrent redemption can return
     // a row to only one caller; the current customer role is checked in that write.
-    const claimed = await this.db.prepare(`
+    const claimStatement = this.db.prepare(`
       UPDATE customer_auth_tokens SET used_at = ?
       WHERE tenant_id = ? AND id = (
         SELECT t.id FROM customer_auth_tokens t
         JOIN users u ON u.tenant_id = t.tenant_id AND u.id = t.user_id
         WHERE t.tenant_id = ? AND t.token_hash = ? AND t.used_at IS NULL
           AND t.expires_at > ? AND u.role = 'customer'
-          AND ((? IS NULL AND t.type = 'magic_link') OR (t.type = 'otp' AND t.id = ?))
+          AND ((? IS NULL AND t.type = 'magic_link') OR (t.type = 'otp' AND t.id = ?
+            AND EXISTS (SELECT 1 FROM customer_current_otp_challenges current
+              WHERE current.tenant_id=t.tenant_id AND current.user_id=t.user_id AND current.token_id=t.id)))
         ORDER BY t.id LIMIT 1
-      ) AND used_at IS NULL AND expires_at > ?
+      ) AND used_at IS NULL AND expires_at > ?${accepted}
       RETURNING user_id
-    `).bind(now, this.scope.tenantId, this.scope.tenantId, tokenHash, now, challengeId || null, challengeId || null, now)
-      .first<{ user_id: string }>();
+    `).bind(now, this.scope.tenantId, this.scope.tenantId, tokenHash, now, challengeId || null, challengeId || null, now, ...acceptedValues);
+    let claimed: { user_id: string } | undefined;
+    if (!fence) {
+      if (attemptStatement && !await attemptStatement.first()) return null;
+      claimed = await claimStatement.first<{ user_id: string }>() ?? undefined;
+    } else {
+      if (attemptStatement) {
+        const attemptResults = await this.db.batch([...prefix, customerAuthAcceptanceStatement(this.db, this.scope), attemptStatement]);
+        if (!customerAuthAccepted(attemptResults[prefix.length])) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+        if (!attemptResults.at(-1)?.results[0]) return null;
+      }
+      const claimResults = await this.db.batch([...customerAuthFenceStatements(this.db, this.scope, fence), customerAuthAcceptanceStatement(this.db, this.scope), claimStatement]);
+      if (!customerAuthAccepted(claimResults.at(-2))) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+      claimed = claimResults.at(-1)?.results[0] as { user_id: string } | undefined;
+    }
     if (!claimed) return null;
-    const user = await this.get(claimed.user_id);
+    const user = await this.get(claimed.user_id, fence);
     if (!user || user.role !== 'customer') return null;
-    await this.db.prepare('UPDATE users SET last_login_at = ? WHERE tenant_id = ? AND id = ?')
-      .bind(now, this.scope.tenantId, user.id).run();
+    const update = this.db.prepare(`UPDATE users SET last_login_at = ? WHERE tenant_id = ? AND id = ?${accepted}`)
+      .bind(now, this.scope.tenantId, user.id, ...acceptedValues);
+    if (fence) {
+      const statements = customerAuthFenceStatements(this.db, this.scope, fence);
+      const results = await this.db.batch([...statements, customerAuthAcceptanceStatement(this.db, this.scope), update]);
+      if (!customerAuthAccepted(results[statements.length]) || !results.at(-1)?.meta.changes) throw new CustomerAuthBudgetFenceError('Customer authentication admission is unavailable');
+    }
+    else await update.run();
     user.last_login_at = now;
     return user;
   }
@@ -1135,10 +1245,17 @@ export class SqlRequestLimitRepository {
   }
 }
 
-export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli, budgetBindingIdentity: object = db): Repositories {
+export function createRepositories(
+  scope: VerifiedTenantScope,
+  db: D1Database,
+  betaAdmission?: LocalBetaAdmissionRepository,
+  canonicalMutationSli?: RequestCanonicalMutationSli,
+  budgetBindingIdentity: object = db,
+  ownerIngressAdmission?: OwnerIngressRequestAdmission,
+): Repositories {
   const tickets = new SqlTicketRepository(scope, db, betaAdmission, canonicalMutationSli);
   return {
-    budgetAuthority: new BudgetAuthorityRepository(db, scope, budgetBindingIdentity),
+    budgetAuthority: new BudgetAuthorityRepository(db, scope, budgetBindingIdentity, ownerIngressAdmission),
     sessionBudgetAuthority: new SessionBudgetAuthorityRepository(db, scope),
     requestLimits: new SqlRequestLimitRepository(scope, db),
     knowledge: new SqlKnowledgeRepository(scope, db),

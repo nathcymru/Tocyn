@@ -110,7 +110,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: AppV
     await authorizeLocalBeta(c.env, scope, undefined, c.get('resourceOperationEmitter'));
     c.set("tenantScope", scope as any);
 
-    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
     c.set("tenantDeps", deps as any);
 
     await next();
@@ -185,7 +185,7 @@ export const mfaChallengeMiddleware = async (
     await authorizeLocalBeta(c.env, scope, undefined, c.get('resourceOperationEmitter'));
     c.set("tenantScope", scope as any);
 
-    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+    const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'), c.get('ownerIngressAdmission'));
     c.set("tenantDeps", deps as any);
 
     await next();

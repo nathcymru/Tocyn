@@ -17,6 +17,14 @@ export default {
 
   async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
     if (env.LOCAL_BETA_ENABLED !== undefined && env.LOCAL_BETA_ENABLED !== 'false') { message.setReject('Inbound email is disabled in the local beta'); return; }
+    // Combined admission promises whole-entrypoint accounting. Email MIME and
+    // provider work do not yet have the #51/#91 business envelope, so fail
+    // before reading the message or resolving a tenant. Off-policy behavior is
+    // preserved, and the guard can be removed when that acceptance is present.
+    if (env.BUDGET_ADMISSION_POLICY === 'ticket-mutations-v1') {
+      message.setReject('Inbound email admission is not available');
+      return;
+    }
     const handler = new EmailHandler(env);
     await handler.handleEmail(message, ctx);
   },

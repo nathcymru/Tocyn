@@ -1,5 +1,5 @@
 {
-  "anchor": "2026-09-11",
+  "anchor": "2026-09-12",
   "nodes": [
     {
       "number": 108,
@@ -472,10 +472,11 @@
       "alias": "#70",
       "title": "Add typing awareness and private colleague collaboration",
       "done": false,
-      "effort": 24.0,
+      "effort": 6,
       "dependencies": [
         63,
-        68
+        68,
+        132
       ],
       "baselineStart": "2027-02-11",
       "baselineTarget": "2027-02-23",
@@ -574,7 +575,7 @@
       "alias": "#64",
       "title": "Enforce resource budgets across active application paths",
       "done": false,
-      "effort": 16.0,
+      "effort": 60,
       "dependencies": [
         50,
         60,
@@ -1102,7 +1103,8 @@
       "actualCompletion": null,
       "progress": 0,
       "milestone": 13,
-      "new": true
+      "new": true,
+      "actualStart": "2026-09-11"
     },
     {
       "number": 129,
@@ -1185,7 +1187,7 @@
       "alias": "NEW-UX-07",
       "title": "Replace transient ticket toasts with durable operator activity",
       "done": false,
-      "effort": 16,
+      "effort": 13,
       "dependencies": [
         128,
         63,

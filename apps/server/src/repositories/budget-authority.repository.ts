@@ -6,8 +6,10 @@ import {
   type TrustedBudgetCoordinatorRevocation,
   type TrustedTenantAllocation,
 } from '../budgets/owner-aggregate';
+import type { OwnerIngressRequestAdmission } from '../budgets/owner-ingress-admission.service';
+import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 
-type AuthorityRow = Readonly<{
+type OwnerAuthorityRow = Readonly<{
   deployment_id: string;
   authority_revision: number;
   authority_state: 'active' | 'revoked';
@@ -17,6 +19,9 @@ type AuthorityRow = Readonly<{
   policy_id: string;
   policy_revision: number;
   policy_json: string;
+}>;
+
+type AuthorityRow = OwnerAuthorityRow & Readonly<{
   tenant_id: string;
   reservation_namespace: string;
   restriction_json: string;
@@ -26,6 +31,7 @@ type AuthorityRow = Readonly<{
 export type BudgetAuthorityPrincipal =
   | Readonly<{ kind: 'session'; sessionVersion: number }>
   | Readonly<{ kind: 'api-key'; apiKeyId: string; requiredPermission: string }>
+  | Readonly<{ kind: 'widget'; widgetKey: string }>
   /** Trusted workflow composition only; never constructed from a request. */
   | Readonly<{ kind: 'system'; actor: 'vectorize-workflow' | 'scheduled-retention' | 'knowledge-delete' }>;
 
@@ -34,6 +40,8 @@ export const BUDGET_AUTHORITY_MAX_TENANT_ALLOCATIONS = 128 as const;
 export const BUDGET_AUTHORITY_SNAPSHOT_SENTINEL = BUDGET_AUTHORITY_MAX_TENANT_ALLOCATIONS + 1;
 /** Two indexed snapshot statements can each visit at most 129 allocation rows and their joined policy rows. */
 export const BUDGET_AUTHORITY_SNAPSHOT_D1_READ_BOUND = 1_024 as const;
+/** Deployment/policy candidates plus the same bounded full allocation snapshot. */
+export const OWNER_INGRESS_AUTHORITY_D1_READ_BOUND = 1_536 as const;
 /** Bound D1 policy parsing and DO RPC payloads before a large configured snapshot can consume an unbounded request. */
 export const BUDGET_AUTHORITY_MAX_JSON_BYTES = 64 * 1024;
 export const BUDGET_AUTHORITY_MAX_SERIALIZED_BYTES = 96 * 1024;
@@ -67,7 +75,9 @@ function parseJson(value: string, name: string): unknown {
 export class BudgetAuthorityRepository {
   constructor(private readonly db: D1Database, private readonly boundScope?: VerifiedTenantScope,
     /** Opaque stable cache context from trusted composition, never a storage API for callers. */
-    readonly bindingIdentity: object = db) {}
+    readonly bindingIdentity: object = db,
+    /** Request-local server capability used only for exact owner-to-tenant handoff. */
+    readonly ownerIngressAdmission?: OwnerIngressRequestAdmission) {}
 
   async authorizeApiKeyTicket(scope: VerifiedTenantScope, tenantId: string, apiKeyId: string): Promise<BudgetAuthorityPrincipal | null> {
     return this.authorizeApiKeyTicketPermission(scope, tenantId, apiKeyId, 'tickets:write');
@@ -91,6 +101,12 @@ export class BudgetAuthorityRepository {
   }
 
   private async livePrincipal(scope: VerifiedTenantScope, principal: BudgetAuthorityPrincipal): Promise<boolean> {
+    if (principal.kind === 'widget') {
+      if (scope.actorId !== 'widget-anonymous' || !scope.roles.includes('customer') || principal.widgetKey.length < 1 || principal.widgetKey.length > 256) return false;
+      const current = await this.db.prepare("SELECT 1 AS active FROM tenant_config WHERE tenant_id=? AND key='widget.public_key' AND value=? LIMIT 1")
+        .bind(scope.tenantId, principal.widgetKey).first<{ active: number }>();
+      return current?.active === 1;
+    }
     if (principal.kind === 'session') {
       const membership = await this.db.prepare(`SELECT role,session_version FROM users
         WHERE tenant_id=? AND id=? LIMIT 1`).bind(scope.tenantId, scope.actorId).first();
@@ -117,7 +133,7 @@ export class BudgetAuthorityRepository {
       WHERE a.tenant_id=?`).bind(tenantId).first<AuthorityRow>();
   }
 
-  private async activeTenants(row: AuthorityRow): Promise<readonly TrustedTenantAllocation[]> {
+  private async activeTenants(row: OwnerAuthorityRow): Promise<readonly TrustedTenantAllocation[]> {
     const statements = [this.db.prepare(`SELECT a.tenant_id,a.reservation_namespace,a.restriction_json,p.policy_json
       FROM budget_tenant_allocations a
       JOIN budget_owner_policies p ON p.deployment_id=a.deployment_id AND p.policy_id=a.policy_id
@@ -149,6 +165,59 @@ export class BudgetAuthorityRepository {
     }));
   }
 
+  private trustedAuthority(row: OwnerAuthorityRow, tenantAllocations: readonly TrustedTenantAllocation[], now: number): TrustedBudgetCoordinatorAuthority | null {
+    const ownerPolicy = costPolicySchema.parse(parseJson(row.policy_json, 'owner policy'));
+    if (ownerPolicy.deploymentId !== row.deployment_id || ownerPolicy.policyId !== row.policy_id || ownerPolicy.revision !== row.policy_revision
+      || !Number.isSafeInteger(row.authority_max_age_ms) || row.authority_max_age_ms < 1
+      || row.authority_max_age_ms > ownerPolicy.maxGrantLifetimeMs
+      || now > Number.MAX_SAFE_INTEGER - row.authority_max_age_ms) return null;
+    const authority: TrustedBudgetCoordinatorAuthority = {
+      aggregateId: row.coordinator_id,
+      ownerPolicy,
+      tenantAllocations,
+      authorityCheckedAt: now,
+      authorityRevision: row.authority_revision,
+      authorityExpiresAt: now + row.authority_max_age_ms,
+      maxReservations: row.max_reservations,
+    };
+    return new TextEncoder().encode(JSON.stringify(authority)).byteLength <= BUDGET_AUTHORITY_MAX_SERIALIZED_BYTES ? authority : null;
+  }
+
+  /**
+   * Server-only deployment ingress has no client-selected tenant. Exactly one
+   * current deployment/policy is accepted, then its complete bounded tenant
+   * allocation snapshot is loaded so owner accounting cannot fork.
+   */
+  async resolveForDeploymentIngress(now: number): Promise<TrustedBudgetCoordinatorAuthority | null> {
+    currentTime(now);
+    try {
+      const candidates = await this.db.prepare(`SELECT d.deployment_id,d.authority_revision,d.state AS authority_state,
+        p.coordinator_id,p.max_reservations,p.authority_max_age_ms,p.policy_id,p.policy_revision,p.policy_json
+        FROM budget_deployment_authority d
+        JOIN budget_owner_policies p ON p.deployment_id=d.deployment_id AND p.authority_revision=d.authority_revision
+        WHERE d.state='active'
+        ORDER BY d.deployment_id,p.policy_id,p.policy_revision LIMIT 2`).all<OwnerAuthorityRow>();
+      if (candidates.results.length !== 1) return null;
+      const row = candidates.results[0];
+      const tenantAllocations = await this.activeTenants(row);
+      return this.trustedAuthority(row, tenantAllocations, now);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Exact, bounded retirement proof for an already admitted tenant operation. */
+  async hasDurableGrantOperation(link: NonNullable<BudgetCommitAuthority['grant']>): Promise<boolean> {
+    try {
+      const row = await this.db.prepare(`SELECT 1 AS present FROM budget_grant_operations
+        WHERE tenant_id=? AND reservation_id=? AND holder_id=? AND operation_id=? AND aggregate_id=?
+          AND operation_fingerprint=? AND operation_envelope_json=? LIMIT 1`)
+        .bind(link.tenantId,link.reservationId,link.holderId,link.operationId,link.aggregateId,
+          link.operationFingerprint,JSON.stringify(link.operationEnvelope)).first<{present:number}>();
+      return row?.present === 1;
+    } catch { return false; }
+  }
+
   /**
    * A revoked allocation returns only a server-derived coordinator revocation.
    * Missing/malformed authority fails closed and never authorizes a reservation.
@@ -163,23 +232,11 @@ export class BudgetAuthorityRepository {
       if (row.authority_state !== 'active' || row.allocation_state !== 'active') {
         return { kind: 'revoked', revocation: { aggregateId: row.coordinator_id, authorityRevision: row.authority_revision, authorityCheckedAt: now } };
       }
-      const ownerPolicy = costPolicySchema.parse(parseJson(row.policy_json, 'owner policy'));
-      if (!Number.isSafeInteger(row.authority_max_age_ms) || row.authority_max_age_ms < 1
-        || row.authority_max_age_ms > ownerPolicy.maxGrantLifetimeMs
-        || now > Number.MAX_SAFE_INTEGER - row.authority_max_age_ms) return { kind: 'unavailable' };
       const tenantAllocations = await this.activeTenants(row);
       const own = tenantAllocations.find(tenant => tenant.effectivePolicy.tenantId === scope.tenantId);
       if (!own) return { kind: 'unavailable' };
-      const authority: TrustedBudgetCoordinatorAuthority = {
-        aggregateId: row.coordinator_id,
-        ownerPolicy,
-        tenantAllocations,
-        authorityCheckedAt: now,
-        authorityRevision: row.authority_revision,
-        authorityExpiresAt: now + row.authority_max_age_ms,
-        maxReservations: row.max_reservations,
-      };
-      if (new TextEncoder().encode(JSON.stringify(authority)).byteLength > BUDGET_AUTHORITY_MAX_SERIALIZED_BYTES) return { kind: 'unavailable' };
+      const authority = this.trustedAuthority(row, tenantAllocations, now);
+      if (!authority) return { kind: 'unavailable' };
       return { kind: 'active', authority, commitSnapshot: Object.freeze({ ...row }) };
     } catch {
       return { kind: 'unavailable' };

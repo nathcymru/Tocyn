@@ -8,6 +8,7 @@
     "budget-authority-runtime.test.ts",
     "budget-grant-holder-runtime.test.ts",
     "budget-admission-runtime.test.ts",
+    "customer-budget-admission-runtime.test.ts",
     "session-budget-admission-runtime.test.ts",
     "http-ticket-read-admission-runtime.test.ts",
     "budget-admission-runtime-entry.ts",
@@ -30,6 +31,8 @@
     "knowledge-delete-admission-runtime-entry.ts",
     "knowledge-delete-admission-runtime.test.ts",
     "knowledge-category-admission-runtime-entry.ts",
-    "knowledge-category-admission-runtime.test.ts"
+    "knowledge-category-admission-runtime.test.ts",
+    "staff-auth-admission-runtime-entry.ts",
+    "staff-auth-admission-runtime.test.ts"
   ]
 }

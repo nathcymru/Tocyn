@@ -64,6 +64,8 @@ sys.argv = ['schedule.py', '--check']
 computed = runpy.run_path(str(ROOT / 'schedule.py'))
 sys.argv = ['sync_forecast_text.py', '--check']
 runpy.run_path(str(ROOT / 'sync_forecast_text.py'))
+sys.argv = ['reforecast_scenarios.py', '--check']
+runpy.run_path(str(ROOT / 'reforecast_scenarios.py'))
 sys.argv = saved
 assert all(0 <= h <= 4 for h in computed['review'])
 assert sum(computed['review']) == sum(n['effort'] * .5 for n in nodes.values() if not n['done'])

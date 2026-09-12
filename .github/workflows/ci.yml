@@ -118,6 +118,7 @@ jobs:
           diagnostics="$RUNNER_TEMP/tocyn-budget-admission"
           mkdir -p "$diagnostics"
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.budget-runtime.json
+          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.owner-ingress-admission.json
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.customer-budget-admission.json
           npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.staff-ticket-mutation.json
           node --import tsx --test apps/server/scripts/staff-ticket-mutation-runtime.test.ts
@@ -131,6 +132,7 @@ jobs:
             apps/server/scripts/budget-authority-runtime.test.ts \
             apps/server/scripts/budget-grant-holder-runtime.test.ts \
             apps/server/scripts/budget-admission-runtime.test.ts \
+            apps/server/scripts/owner-ingress-admission-runtime.test.ts \
             apps/server/scripts/customer-budget-admission-runtime.test.ts \
             apps/server/scripts/storage-admission-runtime.test.ts \
             apps/server/scripts/api-ticket-history-admission-runtime.test.ts \
@@ -145,6 +147,7 @@ jobs:
             apps/server/scripts/group-directory-admission-runtime.test.ts \
             apps/server/scripts/operator-workspace-admission-runtime.test.ts \
             apps/server/scripts/knowledge-read-admission-runtime.test.ts \
+            apps/server/scripts/owner-ingress-admission-runtime.test.ts \
             apps/server/scripts/knowledge-delete-admission-runtime.test.ts \
             apps/server/scripts/knowledge-category-admission-runtime.test.ts \
             apps/server/scripts/ticket-email-admission-runtime.test.ts
