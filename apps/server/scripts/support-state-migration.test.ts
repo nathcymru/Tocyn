@@ -286,6 +286,18 @@ test('shared snooze is CAS-audited, tenant-qualified, and resurfaces only from c
     const resnoozed = await serviceA.transition('shared-id', {
       definitionId: afterDue.definition_id, expectedRevision: afterDue.revision, snoozedUntil: '2101-01-01T00:00:00.000Z',
     });
+    await db.prepare(`INSERT INTO api_keys (tenant_id,id,name,key_hash,prefix,permissions,is_active)
+      VALUES ('snooze-a','integration-key','Integration key','hash-integration-key','lt_test','tickets:write',1)`).run();
+    const apiScope = createVerifiedTenantScope('snooze-a', 'integration-key', ['integration'], 1);
+    const apiMutation = new TicketMutationReplayService(db, apiScope, { kind: 'api-key', id: 'integration-key' });
+    const apiPrepared = await apiMutation.prepareMutation({
+      operation: 'api.ticket.update', ticketId: 'shared-id', data: { priority: 'high' },
+    }, 'shared-snooze-api-key');
+    await apiMutation.commit(apiPrepared);
+    // Dashboard staff replies use the separate budgeted mutation harness; this
+    // fixture keeps the API-key negative case alongside the customer wake path.
+    assert.equal((await reposA.supportStates.getTicketState('shared-id'))?.snoozed_until, '2101-01-01T00:00:00.000Z',
+      'an API-key mutation cannot resurface a snoozed ticket');
     const customerScope = createVerifiedTenantScope('snooze-a', 'customer', ['customer'], 0);
     const customerMutation = new TicketMutationReplayService(db, customerScope,
       { kind: 'customer', id: 'customer', sessionVersion: 0, expiresAt: 2_000_000_000 });
