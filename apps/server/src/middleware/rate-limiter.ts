@@ -15,10 +15,8 @@ export const rateLimiter = (limit: number, windowMs: number) => {
       return await next();
     }
 
-    // This bucket is deliberately isolate-wide. A client-provided source or
-    // route key would let an attacker fan out invalid requests and keep
-    // consuming the shared owner reservation behind this guard.
-    const key = 'owner-ingress-unverified';
+    const ip = c.req.header("cf-connecting-ip") || "unknown";
+    const key = `${ip}:${c.req.path}`;
     const now = Date.now();
 
     const record = rateLimitMap.get(key);
