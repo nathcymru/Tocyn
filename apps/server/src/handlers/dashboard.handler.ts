@@ -1339,9 +1339,10 @@ dashboard.put('/operators/:id/routing-profile', roleGuard(['admin']), permission
     const permissionFailure = await revalidatePermission(c,'general'); if (permissionFailure) return permissionFailure;
     const d = c.get('tenantDeps') as TenantRequestDeps;
     const actor = c.get('jwtPayload') as JWTPayload;
-    if (!Number.isSafeInteger(actor.session_version)) return c.json({ error:'Unauthorized' },401);
+    const sessionVersion = actor.session_version;
+    if (typeof sessionVersion !== 'number' || !Number.isSafeInteger(sessionVersion)) return c.json({ error:'Unauthorized' },401);
     const profile = await new StaffTicketMutationRepository(d.database,d.scope)
-      .updateRoutingProfile(actor.sub,actor.session_version,c.req.param('id'),parsed.data.available,parsed.data.assignmentCapacity);
+      .updateRoutingProfile(actor.sub,sessionVersion,c.req.param('id'),parsed.data.available,parsed.data.assignmentCapacity);
     if (!profile) return c.json({ error:'Routing profile update is not authorized' },403);
     return c.json({ available:profile.is_available === 1, assignmentCapacity:profile.assignment_capacity, updatedAt:profile.updated_at });
   } catch (error) {
