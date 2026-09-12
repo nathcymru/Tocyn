@@ -48,6 +48,12 @@ type PendingAttachment = Readonly<{
 /** A server-derived review revision; retry means that the bracketing reads disagreed. */
 type StaleReplyReview = number | 'refreshing' | 'retry';
 
+function localDateTimeValue(instant: string): string {
+  const date = new Date(instant);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function TicketDetailPage({id:providedId,workspaceBackHref}:{id?:string;workspaceBackHref?:string}={}) {
   const { id:routeId } = useParams<{ id: string }>();
   const id=providedId??routeId;
@@ -152,7 +158,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const restoreSupportStateDraft = (current = supportState.data) => {
     if (!current) return;
     supportStateDraftDirty.current = false;
-    setSupportStateDraft({ definitionId: current.definition_id, waitingReason: current.waiting_reason ?? '', nextAction: current.next_action ?? '', snoozedUntil: current.snoozed_until ? current.snoozed_until.slice(0, 16) : '' });
+    setSupportStateDraft({ definitionId: current.definition_id, waitingReason: current.waiting_reason ?? '', nextAction: current.next_action ?? '', snoozedUntil: current.snoozed_until ? localDateTimeValue(current.snoozed_until) : '' });
   };
 
   const updateSupportStateDraft = (change: Partial<{ definitionId: string; waitingReason: string; nextAction: string; snoozedUntil: string }>) => {
@@ -661,10 +667,10 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
             <label className="text-sm font-medium text-slate-700">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <label className="block text-sm font-medium text-slate-700">Snooze until (UTC)
-              <TocynInput type="datetime-local" aria-label="Snooze until (UTC)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2" />
+            <label className="block text-sm font-medium text-slate-700">Snooze until (your local time)
+              <TocynInput type="datetime-local" aria-label="Snooze until (your local time)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2" />
             </label>
-            <p className="mt-1 text-xs text-slate-600">The shared queue will resurface this ticket at the selected UTC time.</p>
+            <p className="mt-1 text-xs text-slate-600">The shared queue will resurface this ticket at the selected local time.</p>
             <div className="mt-2 flex flex-wrap gap-3">
               <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, new Date(supportStateDraft.snoozedUntil).toISOString())} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
               {supportState.data.snoozed_until && <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="rounded border border-slate-400 px-3 py-2 text-sm font-semibold text-slate-700">Unsnooze ticket</TocynButton>}

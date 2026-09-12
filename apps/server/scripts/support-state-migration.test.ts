@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { build } from 'esbuild';
 import { splitSql } from './split-sql';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { createRepositories } from '../src/repositories';
@@ -322,5 +323,48 @@ test('shared snooze is CAS-audited, tenant-qualified, and resurfaces only from c
     assert.equal((await reposA.supportStates.getTicketState('shared-id'))?.revision, revisionAfterReply,
       'a retry cannot resurface an already-awake ticket twice');
     assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, []);
+  } finally { await mf.dispose(); }
+});
+
+test('the deployed scheduled Worker trigger resurfaces bounded due snoozes per tenant and retries idempotently', async () => {
+  const bundle = await build({ entryPoints: [join(import.meta.dirname, 'scheduled-snooze-runtime-entry.ts')], bundle: true, format: 'esm', platform: 'neutral',
+    external: ['cloudflare:workers', 'node:crypto'], write: false });
+  const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{
+    name: 'scheduled-snooze', modules: true,
+    compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'], script: bundle.outputFiles[0].text,
+    d1Databases: { DB: '30da5f5a-3ee5-4d39-8c3f-8823edb2e08a' },
+    r2Buckets: ['ATTACHMENTS_BUCKET'],
+    bindings: { ENVIRONMENT: 'production' },
+  }] }));
+  try {
+    const db = await mf.getD1Database('DB');
+    const dir = join(import.meta.dirname, '..', 'migrations');
+    for (const file of readdirSync(dir).filter(file => file.endsWith('.sql')).sort()) {
+      await db.batch(splitSql(readFileSync(join(dir, file), 'utf8')).map(sql => db.prepare(sql)));
+    }
+    await db.batch([
+      db.prepare("INSERT INTO users (tenant_id,id,email,role) VALUES ('scheduled-a','operator','a@example.invalid','admin')"),
+      db.prepare("INSERT INTO users (tenant_id,id,email,role) VALUES ('scheduled-b','operator','b@example.invalid','admin')"),
+      db.prepare("INSERT INTO tickets (tenant_id,id,subject,status,customer_email,source) VALUES ('scheduled-a','same-id','A','open','a-customer@example.invalid','fixture')"),
+      db.prepare("INSERT INTO tickets (tenant_id,id,subject,status,customer_email,source) VALUES ('scheduled-b','same-id','B','open','b-customer@example.invalid','fixture')"),
+    ]);
+    const due = new Date(Date.now() - 60_000).toISOString();
+    await db.batch([
+      db.prepare("UPDATE ticket_support_state SET snoozed_until=? WHERE tenant_id='scheduled-a' AND ticket_id='same-id'").bind(due),
+      db.prepare("UPDATE ticket_support_state SET snoozed_until=? WHERE tenant_id='scheduled-b' AND ticket_id='same-id'").bind(due),
+    ]);
+    const dispatchScheduled = () => mf.dispatchFetch('http://scheduled-snooze.test/__scheduled-snooze-trigger');
+    const first = await dispatchScheduled();
+    assert.equal(first.status, 204, await first.text());
+    assert.deepEqual((await db.prepare("SELECT tenant_id,snoozed_until,resurface_reason FROM ticket_support_state WHERE ticket_id='same-id' ORDER BY tenant_id").all()).results, [
+      { tenant_id: 'scheduled-a', snoozed_until: null, resurface_reason: 'due' },
+      { tenant_id: 'scheduled-b', snoozed_until: null, resurface_reason: 'due' },
+    ], 'the production scheduled entrypoint scopes and wakes each selected tenant independently');
+    const retry = await dispatchScheduled();
+    assert.equal(retry.status, 204, await retry.text());
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM support_state_events WHERE actor_kind='system' AND json_extract(facts,'$.trigger.dueThrough') IS NOT NULL").first<{ n: number }>())?.n, 2,
+      'a retry after completion emits no duplicate resurface event');
+    const wrangler = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'wrangler.json'), 'utf8'));
+    assert.deepEqual(wrangler.triggers?.crons, ['* * * * *'], 'the production Worker configuration registers the due-resurface trigger');
   } finally { await mf.dispose(); }
 });

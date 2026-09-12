@@ -3,6 +3,7 @@
         "main": "src/index.ts",
         "compatibility_date": "2024-04-01",
         "compatibility_flags": ["nodejs_compat"],
+        "triggers": { "crons": ["* * * * *"] },
         "vars": { "BUDGET_ADMISSION_POLICY": "off" },
         "d1_databases": [
                 {
