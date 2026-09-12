@@ -95,6 +95,15 @@ it('names account/connection disclosures and restores focus when their child act
   expect(realtime.manualReconnect).toHaveBeenCalledTimes(1); await waitFor(() => expect(connection).toHaveFocus());
 });
 
+it('keeps the account escape hatch available when focus mode is enabled', async () => {
+  await renderReady();
+  document.documentElement.dataset.tocynFocusMode = 'true';
+  const sidebar = document.querySelector('aside[data-tocyn-inverse]');
+  expect(sidebar).toBeInTheDocument();
+  expect(within(sidebar as HTMLElement).getByRole('button', { name: 'Account options' })).toBeInTheDocument();
+  expect(within(sidebar as HTMLElement).getByRole('navigation', { name: 'Workspace navigation' })).toBeInTheDocument();
+});
+
 it('closes mobile navigation after a selected destination and focuses the workspace', async () => {
   await renderReady(); fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
   fireEvent.click(within(await screen.findByRole('dialog', { name: 'Navigation' })).getByRole('link', { name: 'Dashboard home' }));
