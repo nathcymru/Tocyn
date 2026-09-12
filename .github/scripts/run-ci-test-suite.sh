@@ -2,22 +2,13 @@
 set -euo pipefail
 
 diagnostics_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/tocyn-test-diagnostics"
-mkdir -p "$diagnostics_root"
+runner="$(dirname "$0")/run-bounded-command.sh"
 
 run_check() {
   local name="$1"
   local limit="$2"
   shift 2
-
-  printf 'Running bounded CI test: %s (limit %ss)\n' "$name" "$limit"
-  set +e
-  timeout --signal=TERM --kill-after=30s "${limit}s" "$@" 2>&1 | tee "$diagnostics_root/$name.log"
-  local status="${PIPESTATUS[0]}"
-  set -e
-  if [ "$status" -ne 0 ]; then
-    printf 'CI test failed or timed out: %s (exit %s)\n' "$name" "$status" >&2
-    exit "$status"
-  fi
+  bash "$runner" "$name" "$limit" "$diagnostics_root/$name.log" -- "$@"
 }
 
 # Keep the existing test suite intact while making the command currently in
