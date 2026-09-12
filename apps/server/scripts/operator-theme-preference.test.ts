@@ -5,6 +5,7 @@ import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fi
 import { guardedFixture, betaCounters } from './local-beta-fixture';
 import { createVerifiedTenantScope } from '../src/auth/scope';
 import { OperatorWorkspaceRepository } from '../src/repositories/operator-workspace.repository';
+import type { OperatorPresentationPreference } from '../src/types/operator-workspace';
 
 async function login(fixture: LocalTenantFixture, name: 'operatorA' | 'operatorB') {
   const response = await fixture.login(name);
@@ -52,7 +53,7 @@ test('presentation preferences are tenant/actor-scoped, version-safe, CAS-safe a
   await withTwoTenantFixture(async fixture => {
     const token = await login(fixture, 'operatorA'); const other = await login(fixture, 'operatorB');
     const path = '/api/workspace/presentation-preference';
-    const defaults = { version: 1, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
+    const defaults: OperatorPresentationPreference = { version: 1, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
     assert.equal((await fixture.request(path)).status, 401);
     assert.deepEqual(await (await fixture.request(path, { token })).json(), defaults);
     const save = (revision: number, body: Record<string, unknown>, session = token) => fixture.request(path, { method: 'PUT', token: session, body: { version: 1, expectedRevision: revision, density: 'compact', fontScale: 'large', focusMode: true, motion: 'reduced', ...body } });
