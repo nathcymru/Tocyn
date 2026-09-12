@@ -38,10 +38,10 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
   if (method === 'GET' && /^\/api(?:\/v1\/customer)?\/attachments\/[^/]+\/download$/.test(path)) return 'attachment';
   if (method === 'POST' && /^\/api(?:\/v1\/customer)?\/attachments\/upload$/.test(path)) return 'upload';
   if ((method === 'POST' && /^\/api(?:\/v1(?:\/customer)?)?\/tickets$/.test(path)) ||
-    (method === 'POST' && /^\/api\/tickets\/[^/]+\/sla\/initialize$/.test(path)) ||
+    (method === 'POST' && /^\/api\/tickets\/[^/]+\/(?:sla\/initialize|route)$/.test(path)) ||
     (method === 'POST' && /^\/api(?:\/v1)?\/tickets\/[^/]+\/articles$/.test(path)) ||
     (method === 'POST' && /^\/api\/v1\/customer\/tickets\/[^/]+\/messages$/.test(path)) ||
-    (method === 'PATCH' && /^\/api(?:\/v1)?\/tickets\/[^/]+(?:\/support-state)?$/.test(path)) ||
+    (method === 'PATCH' && /^\/api(?:\/v1)?\/tickets\/[^/]+(?:\/(?:support-state|responsible-owner))?$/.test(path)) ||
     (method === 'PUT' && (path === '/api/workspace/state' || /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) ||
     (method === 'POST' && /^\/api\/workspace\/drafts\/[^/]+\/rebase$/.test(path)) ||
     (method === 'DELETE' && /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) return 'conversation-write';

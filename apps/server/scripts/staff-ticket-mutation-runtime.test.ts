@@ -153,6 +153,9 @@ async function fixture() {
 const reply = (body='Synthetic reply'):StaffMutationInput => ({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body}});
 const create = ():StaffMutationInput => ({operation:'dashboard.ticket.create',data:{subject:'Staff intake',customer_email:'CUSTOMER-A@EXAMPLE.TEST',body:'Synthetic intake',group_id:'group'}});
 const update = (data: AuditedTicketUpdate = { status:'pending' }): StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data });
+const responsibleOwner = (ownerId:string|null,expectedOwnerId:string|null):StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data:{
+  assigned_to:ownerId,responsibleOwnerAssignment:true,expectedAssignedTo:expectedOwnerId,
+} });
 async function accept(service:StaffTicketMutationService,input:StaffMutationInput,key:string) {
   const prepared = await service.prepareStaffMutation(input,key);assert.equal(prepared.replay,null);
   assert.equal((await service.admit(prepared)).status,'spent');return {prepared,outcome:await service.commit(prepared)};
@@ -188,6 +191,47 @@ test('direct assignment creates activity only from its authenticated tenant-qual
     assert.equal((await rejected.admit(prepared)).status,'spent'); const before = await f.counts();
     await assert.rejects(rejected.commit(prepared),(error:any) => error.status === 503);
     assert.deepEqual(await f.counts(),before,'a same-looking recipient from another tenant cannot create activity or update the ticket');
+  } finally {
+    await f.mf.dispose();
+  }
+});
+
+test('responsible-owner assignment is tenant-qualified, audited, receipted, and protected against stale or revoked routing', async () => {
+  const f=await fixture();try {
+    await f.db.batch([
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('a','owner','owner-a@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('a','owner','group')"),
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('a','owner-2','owner-2@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('a','owner-2','group')"),
+      // The same local identifier in another tenant must never become eligible.
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('b','foreign-owner','owner-b@example.test','agent',1,1)"),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES ('b','foreign-owner','group')"),
+    ]);
+    const first=await accept(f.service(),responsibleOwner('owner',null),'responsible-owner');
+    assert.equal(first.outcome.ticket.assigned_to,'owner');
+    const audit=await f.db.prepare(`SELECT kind,visibility,facts FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'
+      AND kind='ticket.assignment_changed' ORDER BY sequence`).first<{kind:string;visibility:string;facts:string}>();
+    assert.equal(audit?.kind,'ticket.assignment_changed');assert.equal(audit?.visibility,'internal');
+    assert.deepEqual(JSON.parse(audit!.facts),{before:{assignedTo:null,groupId:'group'},after:{assignedTo:'owner',groupId:'group'}});
+    const replay=await f.service().prepareStaffMutation(responsibleOwner('owner',null),'responsible-owner');
+    assert.equal(replay.replay?.replayed,true);assert.equal(replay.replay?.ticket.assigned_to,'owner');
+    await assert.rejects(f.service().prepareStaffMutation(responsibleOwner(null,'owner'),'responsible-owner'),(error:any)=>error.status===409);
+
+    const staleService=f.service();
+    const stale=await staleService.prepareStaffMutation(responsibleOwner(null,null),'stale-owner');
+    assert.equal((await staleService.admit(stale)).status,'spent');
+    const beforeStale=await f.counts();
+    await assert.rejects(staleService.commit(stale),(error:any)=>error.status===409 && error.code==='responsible_owner_conflict');
+    assert.deepEqual(await f.counts(),beforeStale,'a stale transition leaves no audit, receipt, or ticket side effect');
+
+    await assert.rejects(f.service().prepareStaffMutation(responsibleOwner('foreign-owner','owner'),'foreign-owner'),(error:any)=>error.status===403);
+    const revokedService=f.service();
+    const revoked=await revokedService.prepareStaffMutation(responsibleOwner('owner-2','owner'),'revoked-owner');
+    assert.equal((await revokedService.admit(revoked)).status,'spent');
+    const beforeRevocation=await f.counts();
+    await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='a' AND user_id='owner-2' AND group_id='group'").run();
+    await assert.rejects(revokedService.commit(revoked),(error:any)=>error.status===503);
+    assert.deepEqual(await f.counts(),beforeRevocation,'a revoked target cannot acquire responsibility or emit an audit event');
   } finally { await f.mf.dispose(); }
 });
 

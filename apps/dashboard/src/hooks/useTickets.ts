@@ -45,6 +45,21 @@ export function useUpdateTicket() {
   });
 }
 
+/** The #137 owner transition is distinct from ordinary ticket field edits. */
+export function useAssignResponsibleOwner() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ownerId, expectedOwnerId, idempotencyKey }: {
+      id: string; ownerId: string | null; expectedOwnerId: string | null; idempotencyKey: string;
+    }) => dashboardApi.patch<{ success: true; responsibleOwnerId: string | null }>(`/tickets/${id}/responsible-owner`,
+      { ownerId, expectedOwnerId }, { headers: { 'Idempotency-Key': idempotencyKey } }),
+    onSuccess: (_, variables) => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['tickets'] }),
+      queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] }),
+    ]),
+  });
+}
+
 export function useCreateTicket() {
   const queryClient = useQueryClient();
   return useMutation({

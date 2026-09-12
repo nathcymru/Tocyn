@@ -46,7 +46,13 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
       {id:'open-governed-action-guidance',label:'Open action safety guidance',description:'Opens the documented action security boundary in a new tab.',slot:'more',capability:'tools.reference.read',kind:'external-link',href:'https://github.com/nathcymru/Tocyn/blob/main/docs/security/capability-permissions.md',enabled:true},
     ]});
     if(path===`/api/tickets/${ticket.id}/sla`) return sla(path,options);
-    if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/'))return handle(path,options,url);
+    if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/')) {
+      if (path.endsWith('/responsible-owner') && options.method === 'PATCH') {
+        const { ownerId } = JSON.parse(String(options.body));
+        return handle(path,{...options,body:JSON.stringify({assigned_to:ownerId})},url);
+      }
+      return handle(path,options,url);
+    }
     if(path==='/api/groups')return json([{id:'assigned-group',name:'Assigned group'}]);
     if(path==='/api/users/agents')return json([{id:'22222222-2222-4222-8222-222222222222',full_name:'Assigned agent'}]);
     if(path==='/api/settings')return json({});
@@ -147,9 +153,10 @@ it('shows a mounted service-level failure and retries its shared detail query wi
 });
 
 it('persists explicit assignment clearing and exposes pending/rejected state changes without displaying false success',async()=>{
-  const patches:Record<string,unknown>[]=[];const pending=deferred<Response>();let hold=false;
-  transport((_path,options)=>{
+  const patches:Record<string,unknown>[]=[];const paths:string[]=[];const pending=deferred<Response>();let hold=false;
+  transport((path,options)=>{
     if(options.method==='PATCH'){
+      paths.push(path);
       const data=JSON.parse(String(options.body));patches.push(data);
       if(hold)return pending.promise;
       Object.assign(ticket,data);return json({success:true});
@@ -159,6 +166,9 @@ it('persists explicit assignment clearing and exposes pending/rejected state cha
   showDetail();await screen.findByRole('heading',{name:ticket.subject});
   fireEvent.change(screen.getByRole('combobox',{name:'Assigned To'}),{target:{value:''}});
   await waitFor(()=>expect(patches).toContainEqual({assigned_to:null}));
+  expect(paths).toContain('/api/tickets/workflow-ticket/responsible-owner');
+  const assignmentRequest=vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/responsible-owner'));
+  expect(new Headers(assignmentRequest?.[1]?.headers).get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/);
   await waitFor(()=>expect(screen.getByRole('combobox',{name:'Assigned To'})).toHaveValue(''));
   fireEvent.change(screen.getByRole('combobox',{name:'Group'}),{target:{value:''}});
   await waitFor(()=>expect(patches).toContainEqual({group_id:null}));

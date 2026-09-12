@@ -300,6 +300,10 @@ const updateTicketSchema = z.object({
   group_id: z.string().uuid().nullable().optional(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
 });
+const responsibleOwnerSchema = z.object({
+  ownerId: z.string().uuid().nullable(),
+  expectedOwnerId: z.string().uuid().nullable(),
+}).strict();
 
 const supportStateDefinitionSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,119}$/i).refine(value => !value.startsWith('legacy-')),
@@ -1308,6 +1312,65 @@ dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10
   }
   await new BroadcastService(c.env,d.scope,d.emitResourceOperation).broadcast('article.created',{ticket_id:ticketId,article_id:article.id});
   return c.json({ ...article, attachments }, 201);
+});
+
+/**
+ * PATCH /api/tickets/:id/responsible-owner
+ *
+ * Narrow #137 transition over the existing canonical `assigned_to` field.
+ * It does not derive availability, ceilings, queue ordering, or SLA state.
+ */
+async function assignResponsibleOwner(c: any): Promise<Response> {
+  const d = c.get('tenantDeps') as TenantRequestDeps;
+  if (staffTicketAdmissionMode(c.env) !== 'enabled') {
+    return c.json({ code: 'routing_admission_unavailable', error: 'Responsible-owner assignment requires configured mutation admission' }, 503);
+  }
+  const payload = await readMutationJson(c);
+  const parsed = responsibleOwnerSchema.safeParse(payload);
+  if (!parsed.success) return c.json({ error: 'Invalid responsible-owner assignment', details: parsed.error.flatten().fieldErrors }, 400);
+  const key = readIdempotencyKey(c);
+  if (!key) return c.json({ code: 'idempotency_key_required', error: 'Idempotency-Key is required for responsible-owner assignment' }, 400);
+  const ticketId = c.req.param('id');
+  const mutation = staffMutationService(c,d,'dashboard.ticket.update');
+  const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId,data:{
+    assigned_to:parsed.data.ownerId, responsibleOwnerAssignment:true, expectedAssignedTo:parsed.data.expectedOwnerId,
+  } },key);
+  if (prepared.replay) {
+    c.header('Idempotency-Replayed', 'true');
+    return c.json({ success:true, responsibleOwnerId:prepared.replay.ticket.assigned_to ?? null }, prepared.replay.status);
+  }
+  const rejection = await admitConfiguredStaffTicketMutation(c,'dashboard.ticket.update',mutation,prepared);
+  if (rejection) return rejection;
+  const outcome = await mutation.commit(prepared);
+  await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket,mutation.broadcastGrant(prepared,outcome));
+  c.header('Idempotency-Replayed', 'false');
+  return c.json({ success:true, responsibleOwnerId:outcome.ticket.assigned_to ?? null }, outcome.status);
+}
+
+dashboard.patch('/tickets/:id/responsible-owner', requestBounds(1024), async (c) => {
+  try {
+    return await assignResponsibleOwner(c);
+  } catch (error) {
+    const failure = staffMutationFailure(c,error); if (failure) return failure;
+    if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard responsible-owner assignment failed');
+    return c.json({ error:'Responsible-owner assignment failed' },500);
+  }
+});
+
+/**
+ * POST /api/tickets/:id/route
+ *
+ * Local-beta route-alignment entrypoint for the same responsibility ownership
+ * transition as PATCH /api/tickets/:id/responsible-owner.
+ */
+dashboard.post('/tickets/:id/route', requestBounds(1024), async (c) => {
+  try {
+    return await assignResponsibleOwner(c);
+  } catch (error) {
+    const failure = staffMutationFailure(c,error); if (failure) return failure;
+    if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard responsible-owner route assignment failed');
+    return c.json({ error:'Responsible-owner route assignment failed' },500);
+  }
 });
 
 /**
