@@ -7,7 +7,6 @@ import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
-<<<<<<< HEAD
 import { useTicket, useAssignResponsibleOwner, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
