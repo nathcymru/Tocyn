@@ -18,6 +18,7 @@ import customerHandler from './handlers/customer.handler';
 import { environmentGuard } from './middleware/environment-guard';
 import { operationalObservability } from './middleware/operational-observability';
 import { ownerIngressAdmission } from './middleware/owner-ingress-admission';
+import { preAdmissionRateLimiter } from './middleware/rate-limiter';
 import { measureResourceOperation } from './observability/resource-operation';
 import { AppVariables } from './types';
 import { admitRealtimeConnection } from './budgets/realtime-admission.service';
@@ -33,6 +34,9 @@ app.onError((error,c) => {
 });
 app.use('*', environmentGuard);
 app.use('*', operationalObservability);
+// This is deliberately before owner ingress: an invalid credential must not
+// allocate another shared owner warm block before route authentication rejects it.
+app.use('/api/*', preAdmissionRateLimiter(5, 60_000));
 app.use('*', ownerIngressAdmission);
 app.use('*', localBetaGuard);
 
