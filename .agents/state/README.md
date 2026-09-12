@@ -15,3 +15,5 @@ Before ending substantive work, ensure the next agent can recover state from the
 Never store credentials, customer/tenant data, private security findings or private reasoning in public issue/Project fields. Security findings follow `SECURITY.md`.
 
 Current delivery entry point: [beta.2 coordination](beta2-delivery.md). Approved baseline and alignment history: [post-beta alignment](post-beta-alignment.md). The master package owns consolidated direction; issues/PRs own delivery evidence, Project fields own the calculated current forecast. Historical beta state files are receipts, not an active ready queue.
+
+Current development-resource policy: [GPT-6/Ollama routing and Copilot conservation](development-routing-258.md).

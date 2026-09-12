@@ -1,7 +1,14 @@
 # Agent development tools
 
-Tocyn uses a small, deterministic TypeScript navigation index for development inside
-GitHub's Copilot environment and ordinary checkouts. It makes **no model/API calls**,
+Tocyn's development policy uses GPT-6 coordination, bounded local/free cloud workers,
+and Graphify-first discovery. Read the [worker decision model](../.agents/skills/tocyn-worker-routing/SKILL.md)
+and [resource snapshot](../.agents/resources/development-workers.md) for capabilities,
+memory/quota limits and failure recovery. Workers return proposals; the coordinator
+verifies and integrates changes. GitHub Copilot is reserved for essential final-ready
+code/security review under [AGENTS.md](../AGENTS.md), with zero requests by default.
+
+Tocyn also provides a small, deterministic TypeScript navigation index for ordinary
+checkouts and the exceptional authorised GitHub Copilot environment. It makes **no model/API calls**,
 requires no credentials, and adds no npm dependencies. TypeScript is already a root
 development dependency. Application scripts, dependencies and Cloudflare bindings are unchanged.
 
@@ -71,7 +78,9 @@ security context to meet a token target.
 
 ## Deployment separation
 
-All executable tooling lives under `tools/agent-context`, outside application workspaces.
+The checked-in navigation executable lives under `tools/agent-context`, outside application workspaces.
+The optional Ollama bridge, models and credentials remain in the maintainer's host
+environment; repository instructions do not install or deploy them.
 It is invoked only by development commands and the GitHub setup workflow, with a read-only
 token and no deployment environment, secrets, upload step or Cloudflare command. Neither
 application package scripts nor entrypoints import it. `.agent-context/` and `graphify-out/`
