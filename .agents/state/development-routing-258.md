@@ -11,8 +11,9 @@ is retained as historical evidence. No application or release scope changes.
 ## Delivery checkpoint
 
 - Issue: [#258](https://github.com/nathcymru/Tocyn/issues/258).
-- Branch: `codex/258-worker-routing-policy`.
-- Policy and cross-file alignment drafted; final acceptance requires PR checks and integration.
+- Branch: `codex/258-worker-routing-policy`; ready PR [#259](https://github.com/nathcymru/Tocyn/pull/259).
+- Policy and cross-file alignment complete; 33 relative Markdown links, new skill
+  validation and whitespace checks pass. Final acceptance requires PR checks and integration.
 - Resource setup was verified in the preceding owner-authorised workstation session;
   this PR documents it and does not install the bridge or distribute credentials.
 - One native read-only audit identified instruction conflicts; a follow-up validated

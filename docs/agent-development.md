@@ -81,8 +81,9 @@ security context to meet a token target.
 The checked-in navigation executable lives under `tools/agent-context`, outside application workspaces.
 The optional Ollama bridge, models and credentials remain in the maintainer's host
 environment; repository instructions do not install or deploy them.
-It is invoked only by development commands and the GitHub setup workflow, with a read-only
-token and no deployment environment, secrets, upload step or Cloudflare command. Neither
+The navigation index is invoked only by development commands and the manual GitHub
+setup workflow. That workflow uses a read-only token and no deployment environment,
+secrets, upload step or Cloudflare command. Neither
 application package scripts nor entrypoints import it. `.agent-context/` and `graphify-out/`
 are ignored. Cloudflare deploys the existing Worker entrypoint and app `dist` outputs;
 do not add these development paths to public asset directories or deployment scripts.
