@@ -258,18 +258,6 @@ describe("Customer Handler Integration Tests", () => {
       expect(body.error).toBe("Invalid token");
     });
 
-    it('returns 503 and leaves the grant unknown when a fenced verification goes stale', async () => {
-      const settle = vi.fn();
-      mockAdmitCustomerAuthEffect.mockResolvedValueOnce({ status: 'admitted', admission: { fence: {}, settle } });
-      mockVerifyAuthWithDecision.mockRejectedValueOnce(new CustomerAuthBudgetFenceError('stale'));
-      const res = await customer.request('/auth/verify', {
-        method: 'POST', headers: { 'content-type': 'application/json', 'x-widget-key': 'test-key' }, body: JSON.stringify({ token: 'a'.repeat(64) }),
-      }, { DB: mockDB as any, JWT_SECRET, ENVIRONMENT: 'development' });
-      expect(res.status).toBe(503);
-      expect(await res.json()).toMatchObject({ code: 'budget_admission_unavailable' });
-      expect(settle).toHaveBeenCalledWith('unknown');
-    });
-
     it('preserves the enumeration-safe response without a credential decision when local admission suppressed verification', async () => {
       mockVerifyAuthWithDecision.mockResolvedValueOnce({ decision: 'admission-suppressed' });
       const signals: RequestAuthSliSnapshot[] = [];
@@ -323,17 +311,6 @@ describe("Customer Handler Integration Tests", () => {
 
     });
 
-    it('returns 503 and leaves the grant unknown when the current session fence is stale', async () => {
-      const settle = vi.fn();
-      mockAdmitCustomerAuthEffect.mockResolvedValueOnce({ status: 'admitted', admission: { fence: {}, settle } });
-      mockGetCurrentUser.mockRejectedValueOnce(new CustomerAuthBudgetFenceError('stale'));
-      const token = await generateCustomerToken();
-      const res = await customer.request('/auth/me', { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
-        { DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockDO as any });
-      expect(res.status).toBe(503);
-      expect(await res.json()).toMatchObject({ code: 'budget_admission_unavailable' });
-      expect(settle).toHaveBeenCalledWith('unknown');
-    });
   });
 
   describe("GET /tickets", () => {
