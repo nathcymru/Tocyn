@@ -118,7 +118,7 @@ it('keeps search and workspace navigation visible and keyboard reachable when fo
   const sidebar = document.querySelector('aside[data-tocyn-inverse]');
   expect(sidebar).toBeInTheDocument();
   expect(within(sidebar as HTMLElement).getByRole('button', { name: 'Account options' })).toBeInTheDocument();
-  const search = screen.getByRole('textbox', { name: 'Search all tickets' });
+  const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   const inbox = within(sidebar as HTMLElement).getByRole('link', { name: 'Inbox' });
   expect(search).toBeVisible();
   expect(inbox).toBeVisible();
