@@ -26,7 +26,7 @@ jobs:
       matrix:
         include:
           - check: lint
-            command: python3 docs/planning/post-beta-2026-09-10/test_schedule.py && python3 docs/planning/post-beta-2026-09-10/validate.py && bash scripts/validate-workflows.sh && bash -n .github/scripts/run-ci-test-suite.sh && npm run lint --workspace=apps/portal && cd apps/server && npx eslint .
+            command: python3 docs/planning/post-beta-2026-09-10/test_schedule.py && python3 docs/planning/post-beta-2026-09-10/validate.py && bash scripts/validate-workflows.sh && bash -n .github/scripts/run-ci-test-suite.sh && bash -n .github/scripts/run-bounded-command.sh && npm run lint --workspace=apps/portal && cd apps/server && npx eslint .
           - check: typecheck
             command: npm run typecheck --workspace=apps/widget && npm run typecheck --workspace=packages/ui && npm run typecheck:rehearsal-runtime && npm run typecheck --workspace=apps/server && npm run typecheck:local-tenants --workspace=apps/server && npm run typecheck:tenant-isolation-core --workspace=apps/server && npm run typecheck:tenant-isolation-storage-background --workspace=apps/server && npm run typecheck:canonical-conversation --workspace=apps/server && npm run typecheck:canonical-conversation-atomic --workspace=apps/server && npm run typecheck:ticket-mutation-replay --workspace=apps/server && npm run typecheck:conversation-audit --workspace=apps/server && npm run typecheck:local-beta --workspace=apps/server && npm run typecheck:operator-workflow --workspace=apps/server && npm run typecheck:operator-activity --workspace=apps/server && npm run typecheck:local-portal-workflow --workspace=apps/server && npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.budget-runtime.json && npm run typecheck:channel-configuration-admission-runtime --workspace=apps/server && npm run typecheck:operational-performance --workspace=apps/server && npm run typecheck:local-observability-collector --workspace=apps/server && npm run typecheck:ticket-email-admission-runtime --workspace=apps/server
           - check: build
@@ -154,7 +154,7 @@ jobs:
             # The largest serialized local runtime takes about 150 seconds; CI has
             # additional Worker startup overhead. Keep a finite, diagnostic-friendly
             # allowance without misclassifying that known workload as a hang.
-            timeout --signal=TERM --kill-after=30s 240s node --import tsx --test --test-concurrency=1 "$test_file" 2>&1 | tee "$diagnostics/$name.log"
+            bash .github/scripts/run-bounded-command.sh "$name" 360 "$diagnostics/$name.log" -- node --import tsx --test --test-concurrency=1 "$test_file"
           done
       - name: Verify operator theme preference isolation and recovery
         if: matrix.check == 'test'
