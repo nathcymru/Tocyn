@@ -459,6 +459,48 @@ describe("Dashboard Handler Integration Tests", () => {
     });
   });
 
+  describe('GET /tickets/:id/utility-actions', () => {
+    it('derives the finite enabled manifest from the server-owned capability policy', async () => {
+      const defaultFirst = mockDB.first.getMockImplementation()!;
+      mockDB.first.mockImplementation(async () => {
+        const query = vi.mocked(mockDB.prepare).mock.calls.at(-1)?.[0];
+        if (typeof query === 'string' && query.includes('tenant_role_capability_policies')) return { enabled: 1, revision: 1 };
+        return defaultFirst();
+      });
+      firstQueue.push({ id: 't-1', group_id: null, customer_email: 'private@example.test' });
+
+      const res = await request('/tickets/t-1/utility-actions', { headers: { Authorization: `Bearer ${validToken}` } });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ version: 1, ticketId: 't-1', actions: [
+        { id: 'copy-ticket-reference', enabled: true, kind: 'application-command' },
+        { id: 'view-ticket-reference', enabled: true, kind: 'internal-dialog' },
+        { id: 'open-governed-action-guidance', enabled: true, kind: 'external-link' },
+      ] });
+    });
+
+    it('keeps the manifest disabled when the live server policy denies the agent capability', async () => {
+      firstQueue.push({ id: 't-1', group_id: null });
+
+      const res = await request('/tickets/t-1/utility-actions', { headers: { Authorization: `Bearer ${validToken}` } });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.actions).toHaveLength(3);
+      expect(body.actions.every((action: { enabled: boolean; reason?: string }) => !action.enabled && action.reason?.includes('server policy'))).toBe(true);
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining('deployment_capability_ceiling'));
+    });
+
+    it('does not expose the manifest to an agent outside the ticket group', async () => {
+      firstQueue.push({ id: 't-1', group_id: 'group-1' }, null);
+
+      const res = await request('/tickets/t-1/utility-actions', { headers: { Authorization: `Bearer ${validToken}` } });
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: 'Forbidden', message: "You do not have access to this ticket's group" });
+    });
+  });
+
   describe("POST /tickets/:id/articles", () => {
     it('rejects unknown article body formats before any ticket or email side effect', async () => {
       const res = await request('/tickets/t-1/articles', {

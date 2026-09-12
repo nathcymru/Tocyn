@@ -1,5 +1,6 @@
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
+import { TicketActionBar } from '../components/TicketActionBar';
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
@@ -18,6 +19,7 @@ import { useAuthStore } from '../store/authStore';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { AuthenticatedAttachmentImage } from '../components/AuthenticatedAttachmentImage';
 import { useReplyCapability } from '../hooks/useReplyCapability';
+import { useTicketUtilityActions } from '../hooks/useTicketUtilityActions';
 import { RichComposer, SafeMarkdown } from '../components/RichComposer';
 import { ApiError, dashboardApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,9 +34,7 @@ import {
   Info,
   Activity,
   X,
-  Copy,
-  Check
-, Paperclip } from 'lucide-react';
+  Paperclip } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
 
@@ -80,6 +80,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const { updateLocation, lastMessage, viewersForTicket, typingForTicket, announceTyping, stopTyping } = useCollaboration();
   const draft = useOperatorDraft(id);
   const replyCapabilities = useReplyCapability(id);
+  const utilityActions = useTicketUtilityActions(id);
   const replyCapability = replyCapabilities.data?.modes.find(mode => mode.visibility === draft.mode);
   const workspace = useOperatorWorkspaceState();
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
@@ -107,7 +108,6 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const mentionCandidates = (agents ?? []).filter(agent => agent.id !== currentUserId);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
   const [staleReplyReview, setStaleReplyReview] = useState<StaleReplyReview | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
@@ -638,6 +638,8 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
           </div>
         </div>
 
+        <TicketActionBar reference={reference} actions={utilityActions.data?.actions ?? []} loading={utilityActions.isLoading}
+          error={utilityActions.isError} retry={() => void utilityActions.refetch()} />
         <TicketSlaActionBar ticketId={ticket.id} />
         <TicketSlaPanel ticketId={ticket.id} />
         {!showSupportState && <TocynButton type="button" onClick={() => setShowSupportState(true)} className="rounded border border-slate-300 px-3 py-2 text-sm">Manage support state</TocynButton>}
@@ -666,18 +668,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <TocynButton type="button" aria-label="Copy ticket reference"
-                    onClick={() => {
-                      navigator.clipboard.writeText(reference);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                    className="group/copy flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white rounded-lg text-sm font-mono font-bold shadow-sm cursor-pointer hover:bg-slate-800 transition-colors"
-                    title={reference}
-                  >
-                    {reference}
-                    {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400 group-hover/copy:text-white transition-colors" />}
-                  </TocynButton>
+                  <span className="flex items-center px-3 py-1 bg-slate-900 text-white rounded-lg text-sm font-mono font-bold shadow-sm" title={reference}>{reference}</span>
                   <h1 ref={conversationHeadingRef} tabIndex={-1} className="text-2xl font-bold text-slate-900 leading-tight focus:outline-none">{ticket.subject}</h1>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-slate-500">

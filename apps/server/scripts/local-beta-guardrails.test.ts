@@ -33,6 +33,11 @@ test('guarded local profile: explicit policy, real invited credentials, exact ca
     assert.equal((await f.request('/health')).status,503,'Missing policy fails closed');
     await initialize(f,[{tenantId:f.principals.operatorA.tenantId,id:key.id}]);
     assert.equal((await f.request('/health')).status,200);
+    const governedActions=await f.request('/api/tickets/fixture-ticket/utility-actions',{token:staff.token});
+    assert.equal(governedActions.status,200,'The guarded local profile admits the authenticated server-owned action manifest');
+    const governedBody=await governedActions.json<{ticketId:string;actions:Array<{enabled:boolean;kind:string;href?:string}>}>();
+    assert.equal(governedBody.ticketId,'fixture-ticket');assert.deepEqual(governedBody.actions.map(action=>action.kind),['application-command','internal-dialog','external-link']);
+    assert.ok(governedBody.actions.every(action=>action.enabled));assert.equal(governedBody.actions.find(action=>action.kind==='external-link')?.href?.startsWith('https://github.com/'),true);
     for (const p of ['customerA','customerB','operatorA','operatorB'] as const) assert.equal((await f.login(p)).status,200,`Invited ${p} authenticates`);
     assert.equal((await f.request('/api/auth/me',{token:staff.token})).status,200);
     const mutations = async () => (await f.db.prepare("SELECT mutations FROM local_beta_runs WHERE run_id='guarded-fixture'").first<{mutations:number}>())!.mutations;

@@ -45,6 +45,14 @@ The permission tests demonstrate owner/role/tenant intersection, group denial, t
 
 Current route coverage is the pre-existing settings, channels, groups, ticket fields, automations, API-key, filter, and usage surfaces. Resource scopes such as existing group membership and ungrouped-ticket behavior retain their current route-specific semantics. #80/#81 remain responsible for tool schema validation, approvals, dispatch/retry reconciliation, and external-effect verification.
 
+## Ticket utility-action registry
+
+#138 adds a narrow read-only reference registry for an already visible dashboard ticket. The server resolves the ticket through the current tenant scope, applies the same live group-membership boundary as staff replies, and evaluates `tools.reference.read` for every manifest request. The dashboard only renders the server-issued enablement state; changing browser state cannot grant an action, and any future action with a server effect must perform its own authorization and dispatch-time revalidation.
+
+The current registry is core-owned and finite: copying a ticket reference, showing that reference in an internal dialog, and opening this repository's capability guidance. It accepts no tenant-authored JavaScript, command names, templates, action metadata, or URLs. Its sole external URL is a fixed HTTPS allowlist entry; non-HTTPS schemes, credentials, query/fragment variants, and other origins fail validation and are omitted. The external URL contains no ticket, tenant, actor, or customer data.
+
+This does not introduce a voice, remote-support, RMM, CRM, status, or other vendor integration, and it has no backend mutation or dispatch authority. Those integrations remain subject to the typed executor and approval boundaries owned by #80 and #81.
+
 ## Repository and interaction integration
 
 Policy SQL, policy reads and version-fenced transactions live in the tenant-scoped capability repository, composed only at the trusted tenant boundary. Principal tenant, actor and role must match that scope. A different capability fence cannot administer policy. No lint restriction was relaxed.

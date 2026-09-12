@@ -19,6 +19,11 @@ function show(initial=preference(3), writeStatus=200) {
     if(path==='/api/workspace/state') { if(options.method==='PUT'){const body=JSON.parse(String(options.body));writes.push(body);return writeStatus===200 ? json({...body,revision:4,updatedAt:'2026-09-11T00:00:01Z'}) : json({error:'Conflict'},writeStatus);} return json(initial); }
     if(path.startsWith('/api/workspace/drafts')) return new Response(null,{status:204});
     if(path===`/api/tickets/${ticket.id}/sla`) return json(unavailableSla);
+    if(path===`/api/tickets/${ticket.id}/utility-actions`) return json({version:1,ticketId:ticket.id,actions:[
+      {id:'copy-ticket-reference',label:'Copy ticket reference',description:'Copies the current ticket reference.',slot:'action-bar',capability:'tools.reference.read',kind:'application-command',command:'copy-ticket-reference',enabled:true},
+      {id:'view-ticket-reference',label:'View ticket reference',description:'Shows the current ticket reference in this workspace.',slot:'more',capability:'tools.reference.read',kind:'internal-dialog',dialog:'ticket-reference',enabled:true},
+      {id:'open-governed-action-guidance',label:'Open action safety guidance',description:'Opens the documented action security boundary in a new tab.',slot:'more',capability:'tools.reference.read',kind:'external-link',href:'https://github.com/nathcymru/Tocyn/blob/main/docs/security/capability-permissions.md',enabled:true},
+    ]});
     if(path.startsWith('/api/tickets/')) return json(ticket);
     if(path==='/api/groups'||path==='/api/users/agents'||path==='/api/ticket-fields') return json([]);
     if(path==='/api/settings') return json({});
