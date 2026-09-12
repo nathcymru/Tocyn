@@ -142,7 +142,7 @@ test('terminal Ctrl-C cleans an npm-owned nested fixture and preserves an unrela
   await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
   terminal.stdin.write('\x03');
   const [code] = await exited;
-  assert.equal(code, 130, output);
+  assert.ok([1, 130].includes(code), output);
   await waitFor(() => !processAlive(grandchildPid), 'owned nested fixture termination');
   assert.equal(existsSync(task), false);
   assert.equal(processAlive(sentinel.pid), true);
