@@ -49,12 +49,16 @@ afterEach(() => {
   vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
 
-it('names global search and shared navigation, focuses its close control and returns focus on Escape', async () => {
+it('names global search, makes its authorised scope available to assistive technology, clears it predictably, and keeps shared navigation reachable', async () => {
   await renderReady();
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
-  const search = screen.getByRole('textbox', { name: 'Search all tickets' });
+  const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
+  expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveClass('sr-only');
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
   expect(screen.getByRole('heading')).toHaveTextContent('/tickets?search=Follow%20up');
+  const clear = screen.getByRole('button', { name: 'Clear global ticket search' });
+  fireEvent.click(clear);
+  expect(screen.getByRole('heading')).toHaveTextContent('Route /tickets');
   const trigger = screen.getByRole('button', { name: 'Open navigation' });
   trigger.focus(); fireEvent.click(trigger);
   const dialog = await screen.findByRole('dialog', { name: 'Navigation' });
@@ -65,6 +69,18 @@ it('names global search and shared navigation, focuses its close control and ret
   fireEvent.keyDown(document.activeElement!, {key:'Escape'});
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument()); await waitFor(()=>expect(trigger).toHaveFocus());
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('provides discoverable command navigation to global search and restores its current value', async () => {
+  await renderReady();
+  const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
+  fireEvent.change(search, { target: { value: 'ticket subject' } });
+  fireEvent.keyDown(window, { key: 'k', metaKey: true });
+  expect(search).toHaveFocus();
+  expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
+  expect(screen.getByText(/Press Command or Control K to focus this search/)).toHaveClass('sr-only');
+  fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+  expect(search).toHaveFocus();
 });
 
 it('constrains the inbox shell to the viewport while keeping the shared header visible', async () => {
@@ -102,7 +118,7 @@ it('keeps search and workspace navigation visible and keyboard reachable when fo
   const sidebar = document.querySelector('aside[data-tocyn-inverse]');
   expect(sidebar).toBeInTheDocument();
   expect(within(sidebar as HTMLElement).getByRole('button', { name: 'Account options' })).toBeInTheDocument();
-  const search = screen.getByRole('textbox', { name: 'Search all tickets' });
+  const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   const inbox = within(sidebar as HTMLElement).getByRole('link', { name: 'Inbox' });
   expect(search).toBeVisible();
   expect(inbox).toBeVisible();

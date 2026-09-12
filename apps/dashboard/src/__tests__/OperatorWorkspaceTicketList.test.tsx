@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); client.clear(); useAuthStore.getState().logout(); localStorage.clear(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-it('restores the scoped list query/filter/page, marks body-free draft results, and does not add search text to the URL', async () => {
+it('keeps the inbox current-view query out of global results, marks body-free draft results, and uses a shareable global query URL', async () => {
   const ticketQueries: URLSearchParams[] = [];
   const workspaceWrites: unknown[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
@@ -39,24 +39,31 @@ it('restores the scoped list query/filter/page, marks body-free draft results, a
     if (url === '/api/settings') return json({ TICKET_PREFIX: '#' });
     return json([]);
   }));
-  showFeed();
+  showFeed('/tickets?search=global%20query');
   await screen.findByRole('link', { name: ticket.subject });
   await waitFor(() => expect(screen.getAllByText('Not configured').length).toBe(2));
   await waitFor(() => expect(ticketQueries.at(-1)?.get('page')).toBe('2'));
-  expect(ticketQueries.at(-1)?.get('filter_id')).toBe('open-filter');
-  expect(ticketQueries.at(-1)?.get('search')).toBe('server query');
+  expect(ticketQueries.at(-1)?.get('filter_id')).toBeNull();
+  expect(ticketQueries.at(-1)?.get('search')).toBe('global query');
   expect(ticketQueries.at(-1)?.get('sort')).toBe('updated_desc');
-  expect(screen.getByRole('textbox', { name: 'Search tickets' })).toHaveValue('server query');
-  expect(screen.getByRole('button', { name: 'Awaiting response' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('heading', { name: 'Global ticket results' })).toBeInTheDocument();
+  expect(screen.getByText('All authorised tickets')).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Search all tickets in this list view' })).toHaveValue('global query');
+  expect(screen.getByRole('button', { name: 'Awaiting response' })).toHaveAttribute('aria-pressed', 'false');
   expect(screen.getByLabelText('Draft available')).toBeInTheDocument();
-  const search = screen.getByRole('textbox', { name: 'Search tickets' });
+  const search = screen.getByRole('textbox', { name: 'Search all tickets in this list view' });
   fireEvent.change(search, { target: { value: 'private search text' } });
   fireEvent.keyDown(search, { key: 'Enter' });
   await waitFor(() => expect(ticketQueries.at(-1)?.get('search')).toBe('private search text'));
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/tickets?search=private%20search%20text'));
+  fireEvent.click(screen.getByRole('button', { name: 'Clear list ticket search' }));
+  await waitFor(() => expect(ticketQueries.at(-1)?.get('search')).toBeNull());
+  expect(ticketQueries.at(-1)?.get('filter_id')).toBe('open-filter');
+  expect(screen.getByRole('textbox', { name: 'Search all tickets in this list view' })).toHaveValue('');
+  expect(workspaceWrites).toHaveLength(1);
+  expect(workspaceWrites[0]).toMatchObject({ expectedRevision: 4, listAnchor: 'page:1' });
   fireEvent.click(screen.getByRole('link', { name: ticket.subject }));
   await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/tickets/${ticket.id}`));
-  expect(workspaceWrites).toHaveLength(1);
-  expect(workspaceWrites[0]).toMatchObject({ expectedRevision: 4, listQuery: 'private search text', listAnchor: 'page:1' });
 });
 
 it('restores sort, sends it with the server-paginated query, and saves custom and all filter views', async () => {
@@ -111,7 +118,7 @@ it('applies a legacy search URL once without restoring it over a later operator 
     return json([]);
   }));
   showFeed('/tickets?search=legacy%20query');
-  const search = await screen.findByRole('textbox', { name: 'Search tickets' });
+  const search = await screen.findByRole('textbox', { name: 'Search all tickets in this list view' });
   await waitFor(() => expect(search).toHaveValue('legacy query'));
   fireEvent.change(search, { target: { value: 'later query' } });
   fireEvent.keyDown(search, { key: 'Enter' });
@@ -131,7 +138,7 @@ it('keeps navigation on the list after an autosave has already failed', async ()
   }));
   showFeed();
   await screen.findByRole('link', { name: ticket.subject });
-  const search = screen.getByRole('textbox', { name: 'Search tickets' });
+  const search = screen.getByRole('textbox', { name: 'Search all tickets in this list view' });
   fireEvent.change(search, { target: { value: 'retained query' } });
   fireEvent.keyDown(search, { key: 'Enter' });
   await screen.findByText('Workspace preferences were not saved. Retry to keep this version.');

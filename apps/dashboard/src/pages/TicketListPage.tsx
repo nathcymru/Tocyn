@@ -6,13 +6,12 @@ import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
 import { ticketReference } from '../utils/ticket-reference';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTickets, useCreateTicket } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useFilters } from '../hooks/useFilters';
 import { useSettings } from '../hooks/useSettings';
 import { useOperatorDraftIndicators, useOperatorWorkspaceState, type WorkspacePreference } from '../hooks/useOperatorWorkspaceState';
-import { useAuthStore } from '../store/authStore';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import {
   Plus,
@@ -57,29 +56,17 @@ function pageAnchor(page: number) { return `page:${Math.max(1, Math.floor(page))
 
 export function TicketListPage() {
   const [searchParams] = useSearchParams();
-  const sessionGeneration = useAuthStore(state => state.sessionGeneration);
-  const initialSearch = searchParams.get('search') || '';
-  const [searchInput, setSearchInput] = useState(initialSearch);
-  const appliedLegacySearch = React.useRef<string | null>(null);
+  const navigate = useNavigate();
   const workspace = useOperatorWorkspaceState();
   const draftIndicators = useOperatorDraftIndicators();
-  const activeFilterId = workspace.filters.filterId || '';
+  const globalSearch = searchParams.get('search')?.trim() || '';
+  const [searchInput, setSearchInput] = useState(globalSearch);
+  const activeFilterId = globalSearch ? '' : workspace.filters.filterId || '';
   const page = pageFromAnchor(workspace.listAnchor);
-  const searchQuery = workspace.listQuery;
 
   React.useEffect(() => {
-    setSearchInput(searchQuery);
-  }, [searchQuery]);
-  React.useEffect(() => {
-    const urlSearch = searchParams.get('search') || '';
-    // Read legacy URLs for compatibility, but keep new free-text state out of URLs.
-    const legacyKey = `${sessionGeneration}:${searchParams.toString()}`;
-    if (workspace.status === 'loading' || appliedLegacySearch.current === legacyKey) return;
-    appliedLegacySearch.current = legacyKey;
-    if (urlSearch && urlSearch !== workspace.listQuery) {
-      workspace.update({ listQuery: urlSearch, listAnchor: pageAnchor(1) });
-    }
-  }, [searchParams, sessionGeneration, workspace.listQuery, workspace.status, workspace.update]);
+    setSearchInput(globalSearch);
+  }, [globalSearch]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const createSubject = React.useRef<HTMLInputElement>(null);
@@ -111,7 +98,7 @@ export function TicketListPage() {
     page: page.toString(),
     sort: workspace.sort,
     ...(activeFilterId ? { filter_id: activeFilterId } : {}),
-    ...(searchQuery ? { search: searchQuery } : {})
+    ...(globalSearch ? { search: globalSearch } : {})
   });
 
   const tickets = paginatedData?.data || [];
@@ -172,6 +159,7 @@ export function TicketListPage() {
   };
 
   const handleFilterClick = (filterId: string) => {
+    if (globalSearch) navigate('/tickets');
     workspace.update({
       view: filterId ? 'custom' : 'all',
       filters: { ...workspace.filters, filterId: filterId || null },
@@ -229,9 +217,9 @@ export function TicketListPage() {
       <div className="flex-1 flex flex-col min-w-0 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Tickets</h1>
+            <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">{globalSearch ? 'Global ticket results' : 'Tickets'}</h1>
             <p className="text-slate-500 text-sm">
-              {activeFilterId
+              {globalSearch ? 'All authorised tickets' : activeFilterId
                 ? filters?.find(f => f.id === activeFilterId)?.name
                 : 'All Tickets'}
             </p>
@@ -283,18 +271,28 @@ export function TicketListPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <TocynInput
                 type="text"
-                placeholder="Search tickets..."
-                aria-label="Search tickets"
-                className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                placeholder="Search all authorised tickets..."
+                aria-label="Search all tickets in this list view"
+                aria-describedby="global-ticket-results-scope"
+                className="w-full pl-9 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                    workspace.update({ listQuery: searchInput.trim(), listAnchor: pageAnchor(1) });
+                      const next = searchInput.trim();
+                      navigate(next ? `/tickets?search=${encodeURIComponent(next)}` : '/tickets');
+                      workspace.update({ listAnchor: pageAnchor(1) });
+                    } else if (e.key === 'Escape' && searchInput) {
+                      e.preventDefault();
+                      navigate('/tickets');
+                      workspace.update({ listAnchor: pageAnchor(1) });
                     }
                 }}
               />
+              <TocynButton type="button" aria-label="Clear list ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
+              <p id="global-ticket-results-scope" className="sr-only">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-700">
