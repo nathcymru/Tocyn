@@ -364,8 +364,8 @@ it('snoozes and unsnoozes through the shared revision-fenced transition', async 
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => new URL(url, 'http://localhost').pathname === '/api/support-states' ? json(definitions) : original(url, options)));
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
-  await screen.findByRole('textbox', { name: 'Snooze until (UTC)' });
-  const snooze = screen.getByRole('textbox', { name: 'Snooze until (UTC)' });
+  await screen.findByLabelText('Snooze until (UTC)');
+  const snooze = screen.getByLabelText('Snooze until (UTC)');
   fireEvent.change(snooze, { target: { value: '2026-09-13T14:30' } });
   fireEvent.click(screen.getByRole('button', { name: 'Snooze ticket' }));
   await screen.findByText(/Snoozed until/);
