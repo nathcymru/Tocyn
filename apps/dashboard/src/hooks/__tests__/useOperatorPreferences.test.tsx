@@ -16,7 +16,7 @@ const user = { id: 'operator', tenant_id: 'tenant-a', email: 'operator@example.i
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const preference = (revision = 0) => ({ version: 1, revision, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null });
 let value!: ReturnType<typeof useOperatorPreferences>;
-function Harness() { value = useOperatorPreferences(); return <output data-testid="preferences">{JSON.stringify({ status: value.status, revision: value.revision, density: value.density, error: value.error })}</output>; }
+function Harness() { value = useOperatorPreferences(); return <output data-testid="preferences">{JSON.stringify({ status: value.status, revision: value.revision, density: value.density, fontScale: value.fontScale, focusMode: value.focusMode, motion: value.motion, error: value.error })}</output>; }
 function current() { return JSON.parse(screen.getByTestId('preferences').textContent || '{}'); }
 beforeEach(() => { useAuthStore.setState({ token: null, user: null, sessionGeneration: 0 }); useAuthStore.getState().setAuth('session-a', user); });
 afterEach(() => { cleanup(); useAuthStore.getState().logout(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -27,6 +27,24 @@ it('restores only the validated server record and persists an edited choice with
   act(() => value.update({ density: 'compact' })); await act(async () => { await value.save(); });
   expect(current()).toMatchObject({ status: 'saved', revision: 1, density: 'compact' });
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ version: 1, expectedRevision: 0, density: 'compact', fontScale: 'normal', focusMode: false, motion: 'system' });
+});
+
+it('persists the explicit reduced-motion choice and exposes it to the workspace without remounting', async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(json(preference())).mockResolvedValueOnce(json({ ...preference(1), motion: 'reduced', updatedAt: 'saved' })); vi.stubGlobal('fetch', fetch);
+  render(<Harness />); await waitFor(() => expect(current()).toMatchObject({ status: 'restored', motion: 'system' }));
+  act(() => value.update({ motion: 'reduced' }));
+  expect(current()).toMatchObject({ status: 'unsaved', motion: 'reduced' });
+  expect(document.documentElement.dataset.tocynMotion).toBe('reduced');
+  await act(async () => { await value.save(); });
+  expect(current()).toMatchObject({ status: 'saved', revision: 1, motion: 'reduced' });
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ version: 1, expectedRevision: 0, motion: 'reduced' });
+});
+
+it('retains the user choice when the system preference is reduced but the saved mode is explicit', async () => {
+  vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...preference(), motion: 'full' })));
+  render(<Harness />); await waitFor(() => expect(current()).toMatchObject({ status: 'restored', motion: 'full' }));
+  expect(document.documentElement.dataset.tocynMotion).toBe('full');
 });
 
 it('rejects an old or corrupt server schema and requires recovery before a save', async () => {
