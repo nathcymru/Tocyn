@@ -51,7 +51,7 @@ afterEach(() => {
 it('names global search, makes its authorised scope available to assistive technology, clears it predictably, and keeps shared navigation reachable', async () => {
   await renderReady();
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
-  const search = screen.getByRole('textbox', { name: 'Search all authorised tickets' });
+  const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveClass('sr-only');
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
   expect(screen.getByRole('heading')).toHaveTextContent('/tickets?search=Follow%20up');
@@ -72,7 +72,7 @@ it('names global search, makes its authorised scope available to assistive techn
 
 it('provides discoverable command navigation to global search and restores its current value', async () => {
   await renderReady();
-  const search = screen.getByRole('textbox', { name: 'Search all authorised tickets' });
+  const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   fireEvent.change(search, { target: { value: 'ticket subject' } });
   fireEvent.keyDown(window, { key: 'k', metaKey: true });
   expect(search).toHaveFocus();
