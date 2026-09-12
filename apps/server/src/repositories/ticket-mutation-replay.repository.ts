@@ -13,6 +13,7 @@ import type { VerifiedTenantScope } from '../types/tenant';
 import type { InitialTicketArticleData } from './interfaces';
 import type { MutationNamespace, MutationReceipt, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
+import type { OperatorActivityRepository } from './operator-activity.repository';
 
 // Fixed raw-row projections are response-version 1, not a second canonical mapper.
 const ticketJson = `json_object('tenant_id',t.tenant_id,'id',t.id,'subject',t.subject,'status',t.status,
@@ -44,7 +45,8 @@ export type MutationCandidate = {
 
 /** Only fixed ticket mutations; all SQL authority comes from the verified scope. */
 export class TicketMutationReplayRepository {
-  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli) {}
+  constructor(private db: D1Database, private scope: VerifiedTenantScope, private admission?: LocalBetaAdmissionRepository, private canonicalMutationSli?: RequestCanonicalMutationSli,
+    private operatorActivity?: OperatorActivityRepository) {}
 
   private namespaceValues(ns: MutationNamespace) {
     return [this.scope.tenantId, ns.principalKind, ns.principalId, ns.operation, ns.keyHash];
@@ -280,6 +282,13 @@ export class TicketMutationReplayRepository {
       id:eventId,ticketId:candidate.ticketId,articleId:candidate.articleId,actor:candidate.audit,
       intake:Boolean(candidate.ticket),internal:Boolean(candidate.article?.is_internal),
     }));
+    if ((customer || candidate.audit?.kind === 'customer') && candidate.article?.sender_type === 'customer'
+      && !candidate.article.is_internal && eventId && candidate.articleId) {
+      const activity = await this.operatorActivity?.prepareCustomerReplyFromCanonicalEvent({
+        id: crypto.randomUUID(), ticketId: candidate.ticketId, articleId: candidate.articleId, eventId,
+      });
+      if (activity) statements.push(activity.statement);
+    }
     // Activity statements are prepared only by #133's repository. Keeping them
     // before the mutation receipt makes a losing idempotency race roll back both
     // the note and every durable mention projection.

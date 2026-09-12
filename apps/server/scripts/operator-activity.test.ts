@@ -36,6 +36,24 @@ async function operatorToken(fixture: LocalTenantFixture, principal: 'operatorA'
   return body.token;
 }
 
+async function customerToken(fixture: LocalTenantFixture, principal: 'customerA' | 'customerB', suffix: string): Promise<string> {
+  const customer = fixture.principals[principal];
+  const requested = await fixture.request('/api/v1/customer/auth/request', { method: 'POST',
+    ip: `${fixture.rateLimitIdentity}-${suffix}-request`, body: { email: customer.email, type: 'magic_link', widgetKey: customer.widgetKey } });
+  assert.equal(requested.status, 200);
+  const messages = await (await fixture.request('/__local/auth-capture/messages')).json<Array<{ to: string; loginLink?: string }>>();
+  const link = messages.filter(message => message.to === customer.email).at(-1)?.loginLink;
+  assert.ok(link);
+  const token = new URL(link).searchParams.get('token');
+  assert.ok(token);
+  const verified = await fixture.request('/api/v1/customer/auth/verify', { method: 'POST',
+    ip: `${fixture.rateLimitIdentity}-${suffix}-verify`, body: { token, widgetKey: customer.widgetKey } });
+  assert.equal(verified.status, 200);
+  const body = await verified.json<{ token?: string }>();
+  assert.ok(body.token);
+  return body.token;
+}
+
 type QueryObservation = { sql: string; values: unknown[]; rowsRead: number };
 
 /** Observe the actual native D1 statement and metadata without substituting its result or authority. */
@@ -225,6 +243,49 @@ test('activity checks current staff session and ticket group access, and follows
       'ticket deletion cascades its activity projection without inventing an independent retention period');
     await assert.rejects(adminActivities.appendTrusted(append({ id: 'activity-deleted', sourceId: 'source-deleted' })),
       /operator_activity_recipient_unavailable/, 'a trusted producer cannot append against a deleted ticket or inactive recipient');
+  });
+});
+
+test('an authenticated customer reply projects one bounded activity for the current assignee', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId = fixture.principals.operatorA.tenantId;
+    const operatorId = fixture.principals.operatorA.localId;
+    await fixture.db.prepare('UPDATE tickets SET assigned_to=? WHERE tenant_id=? AND id=?')
+      .bind(operatorId, tenantId, 'fixture-ticket').run();
+    const token = await customerToken(fixture, 'customerA', 'activity-customer-reply');
+    const body = 'synthetic customer reply body must never enter activity facts';
+    const response = await fixture.request('/api/v1/customer/tickets/fixture-ticket/messages', {
+      method: 'POST', token, body: { message: body }, ip: `${fixture.rateLimitIdentity}-activity-customer-reply`,
+    });
+    assert.equal(response.status, 201, 'Customer reply canonical mutation');
+    const activity = new OperatorActivityRepository(
+      createVerifiedTenantScope(tenantId, operatorId, ['admin'], 0), fixture.db, cursorSecret,
+    );
+    const page = await activity.listForRecipient({ limit: 10 }, credential());
+    assert.equal(page?.items.length, 1, 'assigned operator receives one durable customer-reply activity');
+    const item = page?.items[0];
+    assert.equal(item?.kind, 'customer_reply');
+    assert.deepEqual(item?.producer, { kind: 'system' });
+    assert.equal(JSON.stringify(item?.facts).includes(body), false, 'activity facts are body-free');
+    assert.equal(typeof item?.facts.articleId, 'string');
+    assert.equal(typeof item?.facts.eventId, 'string');
+    const event = await fixture.db.prepare(`SELECT actor_kind,actor_provenance,source,visibility,article_id
+      FROM conversation_events WHERE tenant_id=? AND ticket_id=? AND kind='message.reply'`)
+      .bind(tenantId, 'fixture-ticket').first<{ actor_kind: string; actor_provenance: string; source: string; visibility: string; article_id: string }>();
+    assert.deepEqual(event && { actor_kind: event.actor_kind, actor_provenance: event.actor_provenance, source: event.source, visibility: event.visibility },
+      { actor_kind: 'customer', actor_provenance: 'authenticated-customer', source: 'portal', visibility: 'public' });
+    assert.equal(item?.facts.articleId, event?.article_id);
+    assert.equal((await fixture.db.prepare(`SELECT count(*) AS count FROM operator_activities
+      WHERE tenant_id=? AND kind='customer_reply' AND source_id=?`).bind(tenantId, `conversation:${item?.facts.eventId}`).first<{ count: number }>())?.count, 1);
+
+    await fixture.db.prepare('UPDATE tickets SET assigned_to=NULL WHERE tenant_id=? AND id=?').bind(tenantId, 'fixture-ticket').run();
+    const secondToken = await customerToken(fixture, 'customerA', 'activity-customer-reply-unassigned');
+    const second = await fixture.request('/api/v1/customer/tickets/fixture-ticket/messages', {
+      method: 'POST', token: secondToken, body: { message: 'unassigned reply has no recipient' }, ip: `${fixture.rateLimitIdentity}-activity-customer-reply-unassigned`,
+    });
+    assert.equal(second.status, 201, 'Unassigned customer reply canonical mutation');
+    assert.equal((await fixture.db.prepare(`SELECT count(*) AS count FROM operator_activities WHERE tenant_id=? AND kind='customer_reply'`)
+      .bind(tenantId).first<{ count: number }>())?.count, 1, 'unassigned replies do not create orphan activity');
   });
 });
 

@@ -75,6 +75,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation);
   const legacyArticleStorage = scope.tenantId === 'default-tenant' ? new LegacyArticleBodyStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation) : undefined;
   const vectorStorage = new TenantVectorStorage(scope, env.VECTOR_INDEX);
+  const operatorActivity = new OperatorActivityRepository(scope, db, env.JWT_SECRET);
 
   return {
     database: db,
@@ -88,7 +89,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     canonicalMutationSli,
     ticketMutations: new TicketMutationReplayRepository(db, scope, betaAdmission, canonicalMutationSli),
     operationalMetrics: new OperationalMetricsRepository(db, scope),
-    operatorActivity: new OperatorActivityRepository(scope, db, env.JWT_SECRET),
+    operatorActivity,
     repositories,
     attachmentStorage,
     legacyArticleStorage,
@@ -98,7 +99,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
         ? { sessionVersion: principal.sessionVersion, expiresAt: principal.expiresAt } : undefined;
       const admission = guarded
         ? new LocalBetaAdmissionRepository(db, scope, principal, replayCredential) : undefined;
-      return new TicketMutationReplayService(db, scope, principal, admission, canonicalMutationSli);
+      return new TicketMutationReplayService(db, scope, principal, admission, canonicalMutationSli, operatorActivity);
     },
   };
 }
