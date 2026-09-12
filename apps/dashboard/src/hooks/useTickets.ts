@@ -36,11 +36,8 @@ export function useUpdateTicket() {
   return useMutation({
     mutationFn: ({ id, ...data }: TicketChanges & { id: string }) =>
       dashboardApi.patch<{ success: true }>(`/tickets/${id}`, data),
-    onSuccess: (_, variables) => {
-      return Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['tickets'] }),
-        queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] }),
-      ]);
+    onSuccess: () => {
+      return queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },
   });
 }
@@ -53,10 +50,7 @@ export function useAssignResponsibleOwner() {
       id: string; ownerId: string | null; expectedOwnerId: string | null; idempotencyKey: string;
     }) => dashboardApi.patch<{ success: true; responsibleOwnerId: string | null }>(`/tickets/${id}/responsible-owner`,
       { ownerId, expectedOwnerId }, { headers: { 'Idempotency-Key': idempotencyKey } }),
-    onSuccess: (_, variables) => Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['tickets'] }),
-      queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] }),
-    ]),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tickets'] }),
   });
 }
 

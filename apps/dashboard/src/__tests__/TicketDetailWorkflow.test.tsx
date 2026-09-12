@@ -463,6 +463,7 @@ it('keeps explicit confirmation recovery available after a successful background
   fireEvent.click(retry);
   await waitFor(() => {
     const refreshed = screen.getByRole('combobox', { name: 'Priority' });
+    expect(refreshed).not.toBe(priority);
     expect(refreshed).toHaveAttribute('aria-disabled', 'false');
     expect(refreshed).toHaveValue('high');
     expect(refreshed).toHaveFocus();
@@ -499,8 +500,8 @@ it('advertises and guards the separate confirmation read after mutation pending 
   await act(async () => { confirmation.resolve(json(ticket)); });
   await waitFor(() => {
     const refreshed = screen.getByRole('combobox', { name: 'Priority' });
-    expect(refreshed).toBeTruthy();
-    expect(refreshed).toHaveAttribute('aria-disabled', 'true');
+    expect(refreshed).not.toBe(priority);
+    expect(refreshed).toHaveAttribute('aria-disabled', 'false');
     expect(refreshed).toHaveValue('high');
     expect(refreshed).toHaveFocus();
   });
@@ -872,7 +873,7 @@ it('replaces a pre-commit read when event and mutation invalidations overlap',as
   await act(async()=>{stale.resolve(json(old));await oldRequest!;});
   expect(screen.getByRole('combobox',{name:'Status'})).toHaveValue('resolved');
   expect(screen.getByText('Post-event authoritative message')).toBeInTheDocument();
-  expect(reads).toBeGreaterThan(2);
+  expect(reads).toBe(2);
 });
 
 
