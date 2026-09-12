@@ -45,6 +45,20 @@ export class StaffTicketMutationRepository {
       .first<{ result: 'eligible' | 'unavailable' | 'at_capacity' | 'denied' }>();
     return row?.result ?? 'denied';
   }
+  async updateRoutingProfile(actorId: string, sessionVersion: number, targetId: string, available: boolean,
+    assignmentCapacity: number | null): Promise<{ is_available: number; assignment_capacity: number | null; updated_at: string } | null> {
+    return this.db.prepare(`INSERT INTO operator_routing_profiles
+      (tenant_id,user_id,is_available,assignment_capacity,updated_at)
+      SELECT ?,?,?,?,CURRENT_TIMESTAMP WHERE EXISTS (SELECT 1 FROM users actor
+        WHERE actor.tenant_id=? AND actor.id=? AND actor.role='admin' AND actor.session_version=? AND actor.mfa_enabled=1)
+        AND EXISTS (SELECT 1 FROM users target WHERE target.tenant_id=? AND target.id=? AND target.role IN ('admin','agent'))
+      ON CONFLICT(tenant_id,user_id) DO UPDATE SET is_available=excluded.is_available,
+        assignment_capacity=excluded.assignment_capacity,updated_at=CURRENT_TIMESTAMP
+      RETURNING is_available,assignment_capacity,updated_at`)
+      .bind(this.scope.tenantId,targetId,available ? 1 : 0,assignmentCapacity,
+        this.scope.tenantId,actorId,sessionVersion,this.scope.tenantId,targetId)
+      .first<{ is_available: number; assignment_capacity: number | null; updated_at: string }>();
+  }
 }
 
 /** Fixed guard only: no request-provided SQL or assertion callbacks. */

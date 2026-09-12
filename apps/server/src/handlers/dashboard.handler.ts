@@ -56,6 +56,7 @@ import { ApiKeyAdminFenceError, ApiKeyAdminRepository, type ApiKeyAdminCommit,
 import { admitDashboardSummaryRead, settleDashboardSummaryRead, type DashboardSummaryReadAdmission } from '../budgets/dashboard-summary-read-admission.service';
 import { DashboardSummaryReadFenceError, DashboardSummaryReadRepository, projectDashboardSlaRows, type DashboardSummaryReadCommit } from '../repositories/dashboard-summary-read.repository';
 import { TICKET_QUEUE_KEYS, type TicketQueueKey } from '../types/ticket-queue';
+import { StaffTicketMutationRepository } from '../repositories/staff-ticket-mutation.repository';
 
 const createGroupSchema = z.object({
   name: z.string().min(1, "Group name is required"),
@@ -1394,17 +1395,8 @@ dashboard.put('/operators/:id/routing-profile', roleGuard(['admin']), permission
     const d = c.get('tenantDeps') as TenantRequestDeps;
     const actor = c.get('jwtPayload') as JWTPayload;
     if (!Number.isSafeInteger(actor.session_version)) return c.json({ error:'Unauthorized' },401);
-    const profile = await d.database.prepare(`INSERT INTO operator_routing_profiles
-      (tenant_id,user_id,is_available,assignment_capacity,updated_at)
-      SELECT ?,?,?,?,CURRENT_TIMESTAMP WHERE EXISTS (SELECT 1 FROM users actor
-        WHERE actor.tenant_id=? AND actor.id=? AND actor.role='admin' AND actor.session_version=? AND actor.mfa_enabled=1)
-        AND EXISTS (SELECT 1 FROM users target WHERE target.tenant_id=? AND target.id=? AND target.role IN ('admin','agent'))
-      ON CONFLICT(tenant_id,user_id) DO UPDATE SET is_available=excluded.is_available,
-        assignment_capacity=excluded.assignment_capacity,updated_at=CURRENT_TIMESTAMP
-      RETURNING is_available,assignment_capacity,updated_at`)
-      .bind(d.scope.tenantId,c.req.param('id'),parsed.data.available ? 1 : 0,parsed.data.assignmentCapacity,
-        d.scope.tenantId,actor.sub,actor.session_version,d.scope.tenantId,c.req.param('id'))
-      .first<{is_available:number;assignment_capacity:number|null;updated_at:string}>();
+    const profile = await new StaffTicketMutationRepository(d.database,d.scope)
+      .updateRoutingProfile(actor.sub,actor.session_version,c.req.param('id'),parsed.data.available,parsed.data.assignmentCapacity);
     if (!profile) return c.json({ error:'Routing profile update is not authorized' },403);
     return c.json({ available:profile.is_available === 1, assignmentCapacity:profile.assignment_capacity, updatedAt:profile.updated_at });
   } catch (error) {
