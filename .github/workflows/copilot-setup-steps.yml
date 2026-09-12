@@ -1,19 +1,6 @@
 name: Copilot development setup
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - '.github/workflows/copilot-setup-steps.yml'
-      - 'tools/agent-context/**'
-      - '.agents/skills/**'
-      - 'AGENTS.md'
-      - '.github/copilot-instructions.md'
-      - '**/package.json'
-      - 'package-lock.json'
-      - '**/tsconfig*.json'
-  # Validate the current index inputs after every merged change.
-  push:
-    branches: [main]
 permissions:
   contents: read
 jobs:

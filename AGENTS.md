@@ -151,3 +151,9 @@ At meaningful task boundaries choose the lowest sufficient model and reasoning e
 Use native workers for useful separable tasks when their benefit exceeds context/coordination cost. One coordinator owns integration and acceptance; give workers bounded sources, non-overlapping ownership, deliverables and stopping conditions. No recursive or duplicate speculative review teams. Preserve capacity for validation/remediation/handover. Forecast capacity does not cap safe actual concurrency. If a cross-environment route is unavailable, report it once and provide a compact unexecuted handoff only where useful.
 
 Persist decisions, evidence, ownership, branches, checks and exact next actions in `.agents/state/`, synchronized with GitHub; never store secrets, customer data or private reasoning. Before leaving work, preserve uncommitted historical material, avoid redundant dependency installations and reclaim completed-worktree generated dependencies only when safe. Provide concise significant-progress updates, including a status every 30 minutes during active coordinated delivery.
+
+## Routine CI scope
+
+Keep the normal pull-request CI workflow small and predictable. Its job is limited to the required merge gates: lint, typecheck, build, ordinary workspace unit tests, and the separately configured CodeQL analyses.
+
+Do not add browser automation, local Worker/runtime exercises, migration rehearsals, release/deployment verification, performance budgets, admission/capacity suites, accessibility evidence capture, or other specialist acceptance checks to the routine CI workflow. When such validation is needed, create or use a separate explicitly scoped workflow that runs only when deliberately invoked or under the relevant issue/release gate. A specialised check must not make every pull request wait for unrelated integration evidence.
