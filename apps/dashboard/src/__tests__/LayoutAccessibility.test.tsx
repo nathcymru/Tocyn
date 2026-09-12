@@ -1,4 +1,5 @@
 import userEvent from '@testing-library/user-event';
+import '../index.css';
 import { dashboardApi } from '../api/client';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -95,13 +96,20 @@ it('names account/connection disclosures and restores focus when their child act
   expect(realtime.manualReconnect).toHaveBeenCalledTimes(1); await waitFor(() => expect(connection).toHaveFocus());
 });
 
-it('keeps the account escape hatch available when focus mode is enabled', async () => {
+it('keeps search and workspace navigation visible and keyboard reachable when focus mode is enabled', async () => {
   await renderReady();
   document.documentElement.dataset.tocynFocusMode = 'true';
   const sidebar = document.querySelector('aside[data-tocyn-inverse]');
   expect(sidebar).toBeInTheDocument();
   expect(within(sidebar as HTMLElement).getByRole('button', { name: 'Account options' })).toBeInTheDocument();
-  expect(within(sidebar as HTMLElement).getByRole('navigation', { name: 'Workspace navigation' })).toBeInTheDocument();
+  const search = screen.getByRole('textbox', { name: 'Search all tickets' });
+  const inbox = within(sidebar as HTMLElement).getByRole('link', { name: 'Inbox' });
+  expect(search).toBeVisible();
+  expect(inbox).toBeVisible();
+  search.focus();
+  expect(search).toHaveFocus();
+  inbox.focus();
+  expect(inbox).toHaveFocus();
 });
 
 it('closes mobile navigation after a selected destination and focuses the workspace', async () => {
