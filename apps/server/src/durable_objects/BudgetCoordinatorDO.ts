@@ -142,21 +142,47 @@ export class BudgetCoordinatorDO extends DurableObject<Env> {
   }
 
   /**
-   * Serializes anonymous ingress before it can reserve an owner envelope.
-   * This lives with the deployment coordinator rather than a Worker-isolate
-   * cache, so changing source addresses or isolates cannot obtain another
-   * local bucket. The caller supplies fixed server policy constants only.
+   * Atomically consumes an anonymous-admission slot and reserves its one
+   * owner envelope. This cannot be split between an isolate-local token
+   * cache and an isolate-local warm block: a lost response reuses the exact
+   * reservation identity, while a new anonymous request cannot create any
+   * reservation after the shared window is full.
    */
-  async admitUnverifiedIngressFromTrustedAuthority(input: Readonly<{ now: number; limit: number; windowMs: number }>): Promise<boolean> {
-    if (!Number.isSafeInteger(input.now) || input.now < 0 || !Number.isSafeInteger(input.limit) || input.limit < 1
-      || !Number.isSafeInteger(input.windowMs) || input.windowMs < 1) return false;
-    await this.read();
-    const window = Math.floor(input.now / input.windowMs) * input.windowMs;
+  async reserveUnverifiedIngressFromTrustedAuthority(input: Readonly<{
+    authority: TrustedBudgetCoordinatorAuthority;
+    reservation: ReserveOwnerIngressInput;
+    limit: number;
+    windowMs: number;
+  }>): Promise<Readonly<{
+    status: 'granted' | 'idempotent' | 'rejected';
+    reason?: 'unverified-limit' | 'exhausted' | 'stale-policy' | 'capacity-exhausted' | 'capacity-defect' | 'delivery-exhausted';
+    reservation?: ReturnType<typeof reserveOwnerIngress>['outcome']['reservation'];
+  }>> {
+    const { now } = input.reservation;
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(input.limit) || input.limit < 1
+      || !Number.isSafeInteger(input.windowMs) || input.windowMs < 1) return { status: 'rejected', reason: 'stale-policy' };
+    const stored = await this.ctx.storage.get<BudgetOwnerAggregateState | string | Uint8Array>(STATE_KEY);
+    const current = stored ? decodeCoordinatorState(stored) : createBudgetOwnerAggregateState(input.authority);
+    const refreshed = stored ? refreshBudgetOwnerAggregateAuthority(current, input.authority) : current;
+    const window = Math.floor(now / input.windowMs) * input.windowMs;
     const prior = await this.ctx.storage.get<Readonly<{ window: number; count: number }>>(UNVERIFIED_INGRESS_KEY);
-    const count = prior?.window === window ? prior.count + 1 : 1;
-    if (count > input.limit) return false;
-    await this.ctx.storage.put(UNVERIFIED_INGRESS_KEY, { window, count });
-    return true;
+    const count = prior?.window === window ? prior.count : 0;
+    // A retry of an acknowledged-but-lost reservation must not spend another
+    // anonymous slot or be rejected after the window fills.
+    const isReplay = refreshed.ownerIngress.grants.some(grant => grant.holderId === input.reservation.holderId
+      && grant.idempotencyKey === input.reservation.idempotencyKey && grant.purpose === input.reservation.purpose);
+    if (!isReplay && count >= input.limit) return { status: 'rejected', reason: 'unverified-limit' };
+    const result = reserveOwnerIngress(refreshed, input.reservation);
+    if (result.outcome.status === 'rejected') return result.outcome;
+    if (result.outcome.status === 'granted') {
+      try { assertGrowthCapacity(result.state); }
+      catch { return { status: 'rejected', reason: 'capacity-exhausted' }; }
+    }
+    // One storage put commits the state and admission count as a unit before
+    // the DO returns the reservation to a Worker isolate.
+    await this.ctx.storage.put({ [STATE_KEY]: new TextEncoder().encode(encodeCoordinatorState(result.state)),
+      [UNVERIFIED_INGRESS_KEY]: { window, count: isReplay ? count : count + 1 } });
+    return result.outcome;
   }
 
   /** Caller binds tenant and holder to authenticated terminal evidence before this RPC. */

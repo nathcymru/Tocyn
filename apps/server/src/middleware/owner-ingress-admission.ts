@@ -45,25 +45,15 @@ export async function ownerIngressAdmission(
   let repository: BudgetAuthorityRepository;
   try { repository = createOwnerIngressBudgetAuthority(c.env, c.get('resourceOperationEmitter')); }
   catch { return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503); }
-  if (!await hasSignedBearerCredential(c)) {
-    try {
-      const authority = await repository.resolveForDeploymentIngress(c.env.localNow?.() ?? Date.now());
-      if (!authority) return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
-      const coordinator = c.env.BUDGET_COORDINATOR_DO.get(c.env.BUDGET_COORDINATOR_DO.idFromName(authority.aggregateId)) as unknown as BudgetCoordinatorDO;
-      await coordinator.refreshFromTrustedAuthority(authority);
-      const admitted = await coordinator.admitUnverifiedIngressFromTrustedAuthority({
-        now: c.env.localNow?.() ?? Date.now(), limit: UNVERIFIED_INGRESS_LIMIT, windowMs: UNVERIFIED_INGRESS_WINDOW_MS,
-      });
-      if (!admitted) return c.json({ error: 'Too many requests, please try again later.' }, 429);
-    } catch { return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503); }
-  }
-  const result = await ownerIngressAdmissionCache.admit({
-    repository,
-    namespace: c.env.BUDGET_COORDINATOR_DO,
-    purpose: ownerIngressPurpose(c.req.method, c.req.path),
-    now: c.env.localNow,
+  const signed=await hasSignedBearerCredential(c);
+  const result = signed ? await ownerIngressAdmissionCache.admit({
+    repository, namespace: c.env.BUDGET_COORDINATOR_DO, purpose: ownerIngressPurpose(c.req.method, c.req.path), now: c.env.localNow,
+  }) : await ownerIngressAdmissionCache.admitUnverified({
+    repository, namespace: c.env.BUDGET_COORDINATOR_DO, purpose: ownerIngressPurpose(c.req.method, c.req.path), now: c.env.localNow,
+    limit: UNVERIFIED_INGRESS_LIMIT, windowMs: UNVERIFIED_INGRESS_WINDOW_MS,
   });
   if (result.status !== 'admitted') {
+    if (result.status === 'rejected' && result.reason === 'unverified-limit') return c.json({ error: 'Too many requests, please try again later.' }, 429);
     const exhausted = result.status === 'rejected' && result.reason === 'exhausted';
     if (exhausted && result.retryAt !== undefined) {
       c.header('Retry-After', String(Math.max(1, Math.ceil((result.retryAt - (c.env.localNow?.() ?? Date.now())) / 1_000))));

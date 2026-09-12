@@ -11,7 +11,7 @@ export const OWNER_INGRESS_EXECUTION_ENVELOPE:Readonly<ResourceAmounts>=Object.f
 });
 export const MAX_OWNER_INGRESS_BLOCK_OPERATIONS=8,MAX_OWNER_INGRESS_DELIVERY_ATTEMPTS=2;
 export const MAX_OWNER_INGRESS_FAILED_ADMISSIONS=3,MAX_OWNER_INGRESS_BINDINGS=64;
-export type OwnerIngressAdmissionResult=Readonly<{status:'disabled'}>|Readonly<{status:'rejected';reason:'exhausted'|'unavailable';retryAt?:number}>|Readonly<{status:'admitted';admission:OwnerIngressRequestAdmission}>;
+export type OwnerIngressAdmissionResult=Readonly<{status:'disabled'}>|Readonly<{status:'rejected';reason:'exhausted'|'unavailable'|'unverified-limit';retryAt?:number}>|Readonly<{status:'admitted';admission:OwnerIngressRequestAdmission}>;
 export interface OwnerIngressRequestAdmission{
   tenantHandoff(tenantId:string,now:number):Readonly<{envelope:Readonly<ResourceAmounts>;closure:ReconcileOwnerIngressInput}>|undefined;
   handoffToTenant(tenantId:string,authority?:BudgetCommitAuthority):void;
@@ -29,8 +29,9 @@ class IngressBlock{
   private slots:(NonNullable<BudgetCommitAuthority['grant']>|undefined)[]=[];
   constructor(readonly authority:TrustedBudgetCoordinatorAuthority,
     readonly reservation:NonNullable<Awaited<ReturnType<BudgetCoordinatorDO['reserveIngressFromTrustedAuthority']>>['reservation']>,
-    readonly envelope:Readonly<ResourceAmounts>,readonly clock:()=>number){}
-  available(now:number){return !this.sealed&&this.issued<MAX_OWNER_INGRESS_BLOCK_OPERATIONS&&now<this.reservation.expiresAt}
+    readonly envelope:Readonly<ResourceAmounts>,readonly clock:()=>number,
+    private readonly maxOperations=MAX_OWNER_INGRESS_BLOCK_OPERATIONS){}
+  available(now:number){return !this.sealed&&this.issued<this.maxOperations&&now<this.reservation.expiresAt}
   issue(repository:BudgetAuthorityRepository,namespace:DurableObjectNamespace){
     if(!this.available(this.clock()))throw new Error('ingress block unavailable');
     const slot=this.issued++;this.slots.push(undefined);return new RequestAdmission(this,slot,repository,namespace)
@@ -38,7 +39,7 @@ class IngressBlock{
   offer(now:number){return !this.sealed&&Number.isSafeInteger(now)&&now>=0&&now<this.reservation.expiresAt}
   proof(slot:number,link:NonNullable<BudgetCommitAuthority['grant']>){if(!this.sealed&&slot<this.issued&&!this.slots[slot])this.slots[slot]=link}
   complete(now:number,repository:BudgetAuthorityRepository,namespace:DurableObjectNamespace){
-    this.finished++;if(this.issued<MAX_OWNER_INGRESS_BLOCK_OPERATIONS||this.finished<this.issued)return Promise.resolve('retained' as const);
+    this.finished++;if(this.issued<this.maxOperations||this.finished<this.issued)return Promise.resolve('retained' as const);
     return this.retire(now,repository,namespace)
   }
   retire(now:number,repository:BudgetAuthorityRepository,namespace:DurableObjectNamespace){
@@ -96,6 +97,28 @@ export class OwnerIngressAdmissionCache{
       if(!block)return{status:'rejected',reason:entry.terminalFailure??entry.lastFailure??'unavailable',...(entry.retryAt?{retryAt:entry.retryAt}:{})};
       if(!entry.block)entry.block=block;
     }
+  }
+  /** Anonymous ingress never takes an isolate-local warm block. Each accepted
+   * request obtains one reservation from the coordinator's atomic limiter. */
+  async admitUnverified(input:{repository:BudgetAuthorityRepository;namespace:DurableObjectNamespace;purpose:BudgetPurpose;now?:()=>number;limit:number;windowMs:number}):Promise<OwnerIngressAdmissionResult>{
+    const clock=input.now??Date.now,now=clock();
+    try{
+      const authority=await input.repository.resolveForDeploymentIngress(now);
+      if(!authority)return{status:'rejected',reason:'unavailable'};
+      const id=crypto.randomUUID(),coordinator=input.namespace.get(input.namespace.idFromName(authority.aggregateId))as unknown as BudgetCoordinatorDO;
+      const request={authority,limit:input.limit,windowMs:input.windowMs,
+        reservation:{holderId:`owner-ingress:${id}`,idempotencyKey:id,expectedPolicyId:authority.ownerPolicy.policyId,
+          expectedPolicyRevision:authority.ownerPolicy.revision,purpose:input.purpose,envelope:OWNER_INGRESS_EXECUTION_ENVELOPE,now}};
+      let outcome:Awaited<ReturnType<BudgetCoordinatorDO['reserveUnverifiedIngressFromTrustedAuthority']>>|undefined;
+      for(let attempt=0;attempt<MAX_OWNER_INGRESS_DELIVERY_ATTEMPTS;attempt++)try{outcome=await coordinator.reserveUnverifiedIngressFromTrustedAuthority(request);break}catch{}
+      if(!outcome)return{status:'rejected',reason:'unavailable'};
+      if((outcome.status==='granted'||outcome.status==='idempotent')&&outcome.reservation){
+        const block=new IngressBlock(authority,outcome.reservation,OWNER_INGRESS_EXECUTION_ENVELOPE,clock,1);
+        return{status:'admitted',admission:block.issue(input.repository,input.namespace)};
+      }
+      const retryAt=outcome.reason==='exhausted'?Math.max(...authority.ownerPolicy.budgets.filter(b=>OWNER_INGRESS_EXECUTION_ENVELOPE[b.dimension]!==undefined&&b.window.kind==='interval').map(b=>b.window.kind==='interval'?b.window.endsAt:now)):undefined;
+      return{status:'rejected',reason:outcome.reason==='unverified-limit'?'unverified-limit':outcome.reason==='exhausted'?'exhausted':'unavailable',...(retryAt?{retryAt}:{})};
+    }catch{return{status:'rejected',reason:'unavailable'}}
   }
   private async allocate(entry:Entry,input:{repository:BudgetAuthorityRepository;namespace:DurableObjectNamespace;purpose:BudgetPurpose},clock:()=>number):Promise<IngressBlock|null>{
     const now=clock(),prior=entry.failures,authority=await input.repository.resolveForDeploymentIngress(now);if(!authority){this.failed(entry,'unavailable');return null}

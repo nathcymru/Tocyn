@@ -99,7 +99,8 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
     assert.equal(ownerOnly.status, 401);
     const afterOwner = await coordinator.inspectForTrustedRuntime();
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
-      assert.equal(afterOwner.ownerIngress.grants[0].accounted[dimension as keyof typeof OWNER_INGRESS_EXECUTION_ENVELOPE], units * 8);
+      assert.equal(afterOwner.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units, units * 2,
+        `${dimension} records the two anonymous executions without an isolate-local warm block`);
     }
 
     const token = await new SignJWT({ tenant_id: 'tenant-a', role: 'admin', session_version: 1, mfa_verified: true })
@@ -140,14 +141,14 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
     const afterRevocation = await coordinator.inspectForTrustedRuntime();
     assert.equal(afterRevocation.tenantStates[0].grants.length, tenantGrantCount);
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
-      assert.equal(afterRevocation.ownerIngress.grants.filter(grant => !grant.compacted).at(-1)?.accounted[dimension as keyof typeof OWNER_INGRESS_EXECUTION_ENVELOPE],
-        units * 8, `${dimension} conservatively retains the denied execution's warm block`);
+      assert.equal(afterRevocation.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units,
+        units * 3, `${dimension} retains the denied signed execution after transferring only the seven durably proven predecessors`);
     }
 
     const recovery = await f.mf.dispatchFetch('http://example.test/api/auth/logout', { method: 'POST' });
     assert.equal(recovery.status, 401);
     const afterRecovery = await coordinator.inspectForTrustedRuntime();
-    assert.equal(afterRecovery.ownerIngress.grants.find(grant => !grant.compacted && grant.purpose === 'recovery')?.accounted.workerRequests, 8);
+    assert.equal(afterRecovery.ownerIngress.closedCharges.find(charge => charge.dimension === 'workerRequests' && charge.purpose === 'recovery')?.units, 1);
   } finally { await f.mf.dispose(); }
 });
 
@@ -168,8 +169,8 @@ test('distributed coordinator limits unauthenticated non-API ingress before owne
 
     const afterFlood = await coordinator.inspectForTrustedRuntime();
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
-      assert.equal(afterFlood.ownerIngress.grants[0].accounted[dimension as keyof typeof OWNER_INGRESS_EXECUTION_ENVELOPE], units * 8,
-        `${dimension} has only one bounded owner block after the invalid non-API flood`);
+      assert.equal(afterFlood.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units, units * 5,
+        `${dimension} has exactly five one-request owner reservations after the invalid non-API flood`);
     }
 
     const health = await f.mf.dispatchFetch('http://example.test/health');
@@ -186,6 +187,45 @@ test('distributed coordinator limits unauthenticated non-API ingress before owne
       method: 'POST', headers: { Authorization: `Bearer ${token}`, 'cf-connecting-ip': '198.51.100.10' },
     });
     assert.equal(legitimate.status, 200, 'a signed client bypasses the unverified bucket and uses the unspent owner block');
+  } finally { await f.mf.dispose(); }
+});
+
+test('separate Worker-isolate caches share an atomic anonymous reservation ceiling', async () => {
+  const f = await fixture('owner-ingress-isolate-atomic');
+  try {
+    await seed(f.db);
+    const namespace = await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    const coordinator = namespace.get(namespace.idFromName('owner-ingress-aggregate')) as unknown as BudgetCoordinatorDO;
+    const caches = [new OwnerIngressAdmissionCache(), new OwnerIngressAdmissionCache()];
+    const repository = new BudgetAuthorityRepository(f.db);
+    let deliveries = 0;
+    const lossy = { idFromName: namespace.idFromName.bind(namespace), get: () => ({
+      reserveUnverifiedIngressFromTrustedAuthority: async (input: Parameters<BudgetCoordinatorDO['reserveUnverifiedIngressFromTrustedAuthority']>[0]) => {
+        deliveries++;
+        const result = await coordinator.reserveUnverifiedIngressFromTrustedAuthority(input);
+        if (deliveries === 1) throw new Error('synthetic lost anonymous reservation acknowledgement');
+        return result;
+      },
+      handoffIngressBatchFromTrustedAuthority: coordinator.handoffIngressBatchFromTrustedAuthority.bind(coordinator),
+    }) } as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    const first = await caches[0].admitUnverified({
+      repository, namespace: lossy, purpose: 'new-work', now: () => NOW, limit: 5, windowMs: 60_000,
+    });
+    assert.equal(first.status, 'admitted');
+    assert.equal(deliveries, 2, 'the lost acknowledgement retries with its original reservation identity');
+    const outcomes = [first, ...await Promise.all(Array.from({ length: 5 }, (_, index) => caches[index % caches.length].admitUnverified({
+      repository, namespace, purpose: 'new-work', now: () => NOW, limit: 5, windowMs: 60_000,
+    })) )];
+    assert.equal(outcomes.filter(outcome => outcome.status === 'admitted').length, 5);
+    assert.equal(outcomes.filter(outcome => outcome.status === 'rejected' && outcome.reason === 'unverified-limit').length, 1);
+    await Promise.all(outcomes.flatMap(outcome => outcome.status === 'admitted' ? [outcome.admission.finish(NOW + 1)] : []));
+    const state = await coordinator.inspectForTrustedRuntime();
+    for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
+      assert.equal(state.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units, units * 5,
+        `${dimension} has one owner envelope per accepted anonymous request across isolate caches`);
+    }
+    assert.equal(state.ownerIngress.grants.filter(grant => !grant.compacted).length, 0,
+      'every accepted anonymous reservation closes independently; no isolate retains a warm owner block');
   } finally { await f.mf.dispose(); }
 });
 
