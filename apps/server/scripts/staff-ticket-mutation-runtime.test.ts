@@ -191,6 +191,9 @@ test('direct assignment creates activity only from its authenticated tenant-qual
     assert.equal((await rejected.admit(prepared)).status,'spent'); const before = await f.counts();
     await assert.rejects(rejected.commit(prepared),(error:any) => error.status === 503);
     assert.deepEqual(await f.counts(),before,'a same-looking recipient from another tenant cannot create activity or update the ticket');
+  } finally {
+    await f.mf.dispose();
+  }
 });
 
 test('responsible-owner assignment is tenant-qualified, audited, receipted, and protected against stale or revoked routing', async () => {

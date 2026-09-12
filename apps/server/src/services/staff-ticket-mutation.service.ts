@@ -247,7 +247,7 @@ export class StaffTicketMutationService {
         if (assignmentEventId && !assignmentActivity) throw unavailable();
         const raw = await this.canonical.commitStaffUpdate(input.ticketId,input.data,{kind:'staff',id:this.credential.actorId,source:'dashboard'},
           { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace },
-          { eventId: assignmentEventId!, statement: assignmentActivity.statement }, undefined);
+          assignmentActivity ? { eventId: assignmentEventId!, statement: assignmentActivity.statement } : undefined, undefined);
         return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
       } catch (error) {
         await this.authorize(attempt.requirements);
