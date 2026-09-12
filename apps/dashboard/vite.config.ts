@@ -23,6 +23,8 @@ export default defineConfig({
             { name: 'lucide-icons', test: /lucide-react/, priority: 10 },
             { name: 'workspace-hooks', test: /apps\/dashboard\/src\/hooks\//, priority: 10 },
             { name: 'administration-routes', test: /\/apps\/dashboard\/src\/pages\/(?:ApiKey|AgentPermissions|EmailChannel|WidgetChannel|FiltersSettings|Groups|Settings|SlaSettings|SupportStates|TicketFields|Users)Page\.tsx$/, priority: 0 },
+            // Remain lazy, while sharing their small route wrappers in the total bundle.
+            { name: 'secondary-workspace-routes', test: /\/apps\/dashboard\/src\/pages\/(?:Automation|Knowledge|Usage)Page\.tsx$/, priority: 0 },
           ],
         },
       },
