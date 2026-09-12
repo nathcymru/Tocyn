@@ -462,4 +462,3 @@ const navigation = [
   { name: 'Inbox', href: '/inbox', icon: TicketIcon },
   { name: 'Knowledge Base', href: '/knowledge', icon: Book },
 ];
-
