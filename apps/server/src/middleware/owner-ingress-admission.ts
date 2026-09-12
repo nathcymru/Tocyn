@@ -6,6 +6,7 @@ import { ownerIngressAdmissionCache } from '../budgets/owner-ingress-admission.s
 import { createOwnerIngressBudgetAuthority } from './tenant.middleware';
 import type { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
 import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO';
+import { getCookie } from 'hono/cookie';
 import * as jose from 'jose';
 
 const OWNER_INGRESS_POLICY = 'owner-ingress-v1';
@@ -45,7 +46,7 @@ export async function ownerIngressAdmission(
   let repository: BudgetAuthorityRepository;
   try { repository = createOwnerIngressBudgetAuthority(c.env, c.get('resourceOperationEmitter')); }
   catch { return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503); }
-  const signed=await hasSignedBearerCredential(c);
+  const signed=await hasSignedCredential(c);
   const result = signed ? await ownerIngressAdmissionCache.admit({
     repository, namespace: c.env.BUDGET_COORDINATOR_DO, purpose: ownerIngressPurpose(c.req.method, c.req.path), now: c.env.localNow,
   }) : await ownerIngressAdmissionCache.admitUnverified({
@@ -71,11 +72,25 @@ export async function ownerIngressAdmission(
   }
 }
 
-async function hasSignedBearerCredential(c: Context<{ Bindings: Env; Variables: AppVariables }>): Promise<boolean> {
+/**
+ * Owner admission runs before route authentication, so it must recognize the
+ * signed transports accepted by those routes without treating credential
+ * presence as proof. Query credentials are restricted to the WebSocket
+ * handshake route, where browser clients cannot send an Authorization header.
+ */
+function requestCredential(c: Context<{ Bindings: Env; Variables: AppVariables }>): string | undefined {
   const header = c.req.header('Authorization');
-  if (!header?.startsWith('Bearer ') || !c.env.JWT_SECRET) return false;
+  if (header?.startsWith('Bearer ')) return header.substring(7);
+  const cookie = getCookie(c, 'lumina_customer_token');
+  if (cookie) return cookie;
+  return c.req.path === '/api/realtime' ? c.req.query('token') : undefined;
+}
+
+async function hasSignedCredential(c: Context<{ Bindings: Env; Variables: AppVariables }>): Promise<boolean> {
+  const token = requestCredential(c);
+  if (!token || !c.env.JWT_SECRET) return false;
   try {
-    await jose.jwtVerify(header.substring(7), new TextEncoder().encode(c.env.JWT_SECRET), {
+    await jose.jwtVerify(token, new TextEncoder().encode(c.env.JWT_SECRET), {
       algorithms: ['HS256'], requiredClaims: ['exp', 'iat', 'sub'], audience: ['app', 'widget', 'mfa-challenge'],
     });
     return true;

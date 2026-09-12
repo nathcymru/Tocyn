@@ -80,7 +80,8 @@ async function fixture(name: string, policy = 'owner-ingress-v1') {
   const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'owner-ingress-admission-runtime-entry.ts')],
     bundle: true, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name, modules: true, compatibilityDate: '2024-04-03', script: bundled.outputFiles[0].text,
-    compatibilityFlags: ['nodejs_compat'], bindings: { BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', OWNER_INGRESS_ADMISSION_POLICY: policy, JWT_SECRET },
+    compatibilityFlags: ['nodejs_compat'], bindings: { BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', OWNER_INGRESS_ADMISSION_POLICY: policy, JWT_SECRET,
+      PORTAL_URL: 'https://portal.example.test' },
     d1Databases: { DB: `${name}-d1` }, durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO' },
     unsafeEphemeralDurableObjects: true }] }));
   const db = await mf.getD1Database('DB'); await applyMigrations(db);
@@ -158,11 +159,13 @@ test('distributed coordinator limits unauthenticated non-API ingress before owne
     await seed(f.db);
     const namespace = await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
     const coordinator = namespace.get(namespace.idFromName('owner-ingress-aggregate')) as unknown as BudgetCoordinatorDO;
-    const attackerHeaders = { Authorization: 'Bearer malformed', 'cf-connecting-ip': '198.51.100.10' };
-
     const statuses: number[] = [];
-    for (let index = 0; index < 9; index++) {
-      statuses.push((await f.mf.dispatchFetch('http://example.test/unverified-owner-only', { headers: attackerHeaders })).status);
+    const invalid = (url: string, headers: Record<string, string>) => f.mf.dispatchFetch(url, { headers });
+    statuses.push((await invalid('http://example.test/unverified-owner-only', { Authorization: 'Bearer malformed', 'cf-connecting-ip': '198.51.100.10' })).status);
+    statuses.push((await invalid('http://example.test/unverified-owner-only', { Cookie: 'lumina_customer_token=malformed', 'cf-connecting-ip': '198.51.100.10' })).status);
+    statuses.push((await invalid('http://example.test/api/realtime?token=malformed', { 'cf-connecting-ip': '198.51.100.10' })).status);
+    for (let index = 0; index < 6; index++) {
+      statuses.push((await invalid('http://example.test/unverified-owner-only', { Authorization: 'Bearer malformed', 'cf-connecting-ip': '198.51.100.10' })).status);
     }
     assert.deepEqual(statuses.slice(0, 5), Array(5).fill(401));
     assert.deepEqual(statuses.slice(5), Array(4).fill(429));
@@ -183,10 +186,19 @@ test('distributed coordinator limits unauthenticated non-API ingress before owne
     const token = await new SignJWT({ tenant_id: 'tenant-a', role: 'admin', session_version: 1, mfa_verified: true })
       .setProtectedHeader({ alg: 'HS256' }).setSubject('actor-a').setAudience('app').setIssuedAt().setExpirationTime('5m')
       .sign(new TextEncoder().encode(JWT_SECRET));
-    const legitimate = await f.mf.dispatchFetch('http://example.test/api/handoff', {
-      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'cf-connecting-ip': '198.51.100.10' },
+    const cookieSession = await f.mf.dispatchFetch('http://example.test/api/handoff', {
+      method: 'POST', headers: { Cookie: `lumina_customer_token=${token}`, Origin: 'https://portal.example.test', 'cf-connecting-ip': '198.51.100.10' },
     });
-    assert.equal(legitimate.status, 200, 'a signed client bypasses the unverified bucket and uses the unspent owner block');
+    assert.equal(cookieSession.status, 200, 'a signed portal cookie bypasses the saturated unverified bucket');
+    const realtimeSession = await f.mf.dispatchFetch(`http://example.test/api/realtime?token=${token}`, {
+      headers: { 'cf-connecting-ip': '198.51.100.10' },
+    });
+    assert.equal(realtimeSession.status, 426, 'a signed realtime query credential bypasses the saturated unverified bucket');
+    const preflight = await f.mf.dispatchFetch('http://example.test/api/handoff', {
+      method: 'OPTIONS', headers: { Origin: 'https://portal.example.test', 'Access-Control-Request-Method': 'POST' },
+    });
+    assert.equal(preflight.status, 204, 'CORS preflight remains available after anonymous admission is saturated');
+    assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), 'https://portal.example.test');
   } finally { await f.mf.dispose(); }
 });
 
@@ -194,7 +206,9 @@ test('separate Worker-isolate caches share an atomic anonymous reservation ceili
   const f = await fixture('owner-ingress-isolate-atomic');
   try {
     await seed(f.db);
-    const namespace = await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    // Env exposes the Cloudflare binding as an unparameterized namespace; the
+    // runtime proxy below is deliberately typed only at its RPC call boundary.
+    const namespace = await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace;
     const coordinator = namespace.get(namespace.idFromName('owner-ingress-aggregate')) as unknown as BudgetCoordinatorDO;
     const caches = [new OwnerIngressAdmissionCache(), new OwnerIngressAdmissionCache()];
     const repository = new BudgetAuthorityRepository(f.db);
@@ -207,7 +221,7 @@ test('separate Worker-isolate caches share an atomic anonymous reservation ceili
         return result;
       },
       handoffIngressBatchFromTrustedAuthority: coordinator.handoffIngressBatchFromTrustedAuthority.bind(coordinator),
-    }) } as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    }) } as unknown as DurableObjectNamespace;
     const first = await caches[0].admitUnverified({
       repository, namespace: lossy, purpose: 'new-work', now: () => NOW, limit: 5, windowMs: 60_000,
     });

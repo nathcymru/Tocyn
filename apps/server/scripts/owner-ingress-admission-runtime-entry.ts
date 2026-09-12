@@ -5,12 +5,14 @@ import { Hono } from 'hono';
 import type { Env } from '../src/bindings';
 import type { AppVariables } from '../src/types';
 import { ownerIngressAdmission } from '../src/middleware/owner-ingress-admission';
+import { apiCors } from '../src/middleware/cors-policy';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import productionWorker from '../src/index';
-import { authMiddleware } from '../src/middleware/auth.middleware';
+import { authenticateRealtimeToken, authMiddleware } from '../src/middleware/auth.middleware';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 const tenantCache = new IsolateBudgetAdmissionCache();
+app.use('/api/*', apiCors);
 app.use('*', ownerIngressAdmission);
 
 app.get('/api/owner-only', c => c.json({ error: 'Unauthorized' }, 401));
@@ -36,6 +38,11 @@ app.post('/api/handoff', authMiddleware, async c => {
     VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`).bind(link.tenantId,link.reservationId,link.holderId,link.operationId,link.aggregateId,
       link.operationFingerprint,JSON.stringify(link.operationEnvelope)).run();
   return c.json(result, result.status === 'spent' || result.status === 'idempotent' ? 200 : 503);
+});
+app.get('/api/realtime', async c => {
+  const token = c.req.query('token');
+  if (!token || !await authenticateRealtimeToken(c.env, token)) return c.json({ error: 'Unauthorized' }, 401);
+  return c.json({ error: 'Expected Upgrade: websocket' }, 426);
 });
 app.get('/email-readiness-guard', async c => {
   let rejection: string | undefined;
