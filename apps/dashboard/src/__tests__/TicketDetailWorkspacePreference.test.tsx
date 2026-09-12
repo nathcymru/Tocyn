@@ -10,6 +10,7 @@ class Socket { static OPEN=1; readyState=1; onopen:null|(()=>void)=null; onclose
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 const preference=(revision:number,panel:'conversation'|'details'='conversation',selectedTicketId:string|null=null)=>({revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId,panel,updatedAt:'2026-09-11T00:00:00Z'});
 const ticket={id:'workspace-ticket',subject:'Workspace ticket',customer_email:'customer@example.invalid',ticket_no:1,status:'open',priority:'normal',assigned_to:null,group_id:null,created_at:'2026-09-11T00:00:00Z',articles:[],pagination:{limit:20,next_cursor:null,has_more:false}};
+const history={events:[{id:'event-1',kind:'ticket.intake',recordedAt:'2026-09-11T00:00:00Z',source:'dashboard',visibility:'public' as const,actor:{kind:'staff',id:'agent-a',provenance:'mfa-staff' as const},facts:{},articleId:null}],nextCursor:null};
 const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
 
 function show(initial=preference(3), writeStatus=200) {
@@ -17,6 +18,7 @@ function show(initial=preference(3), writeStatus=200) {
   vi.stubGlobal('WebSocket',Socket);vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
     if(path==='/api/workspace/state') { if(options.method==='PUT'){const body=JSON.parse(String(options.body));writes.push(body);return writeStatus===200 ? json({...body,revision:4,updatedAt:'2026-09-11T00:00:01Z'}) : json({error:'Conflict'},writeStatus);} return json(initial); }
+    if(path==='/api/tickets/workspace-ticket/history' || path==='/api/tickets/workspace-ticket/history?limit=5') return json(history);
     if(path.startsWith('/api/workspace/drafts')) return new Response(null,{status:204});
     if(path===`/api/tickets/${ticket.id}/sla`) return json(unavailableSla);
     if(path===`/api/tickets/${ticket.id}/utility-actions`) return json({version:1,ticketId:ticket.id,actions:[
@@ -44,6 +46,22 @@ it('records an authorized selected ticket and persists context-panel preference 
   fireEvent.click(trigger);
   const heading=await screen.findByRole('heading',{name:'Ticket Details'});
   expect(heading).toHaveFocus();
+  expect(screen.getByText('Customer')).toBeInTheDocument();
+  await waitFor(()=> {
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('/api/tickets/workspace-ticket/history'))).toBe(true);
+  });
+  const historyLoading = await screen.findByText('Loading customer history...').catch(() => null);
+  if (historyLoading) {
+    await waitFor(() => expect(screen.queryByText('Loading customer history...')).not.toBeInTheDocument());
+  }
+  expect(screen.queryByText(/Customer history is unavailable/)).not.toBeInTheDocument();
+  await screen.findByText(/Ticket intake/);
+  expect(screen.getByText(/Support staff/)).toBeInTheDocument();
+  expect(screen.getByText('Operational context')).toBeInTheDocument();
+  expect(screen.getByText(/No operational source is connected/)).toBeInTheDocument();
+  expect(screen.getByText('Knowledge')).toBeInTheDocument();
+  expect(screen.getByText('Collaboration')).toBeInTheDocument();
+  expect(screen.getByText(/No collaborators are viewing/)).toBeInTheDocument();
   await waitFor(()=>expect(writes.some((value:any)=>value.panel==='details')).toBe(true));
   fireEvent.click(screen.getByRole('button',{name:'Hide ticket context'}));
   expect(trigger).toHaveFocus();

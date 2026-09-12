@@ -13,6 +13,7 @@ import { useSettings } from '../hooks/useSettings';
 import { useCollaboration } from '../components/CollaborationContext';
 import { useTicketFields } from '../hooks/useTicketFields';
 import { useSupportStates, useTicketSupportState, useTransitionSupportState } from '../hooks/useSupportStates';
+import { useTicketHistory, type TicketHistoryEvent } from '../hooks/useTicketHistory';
 import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue, type OperatorDraftVersion } from '../hooks/useOperatorDraft';
 import { useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
@@ -38,6 +39,7 @@ import {
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
 import { browserDateTimeLocalToInstant, browserInstantToDateTimeLocal } from '../utils/localDateTime';
+import type { KnowledgeDoc } from '../types';
 
 type PendingAttachment = Readonly<{
   id: string;
@@ -86,6 +88,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const utilityActions = useTicketUtilityActions(id);
   const replyCapability = replyCapabilities.data?.modes.find(mode => mode.visibility === draft.mode);
   const workspace = useOperatorWorkspaceState();
+  const customerHistory = useTicketHistory(id, workspace.panel === 'details');
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
   const currentUserId = useAuthStore(state => state.user?.id);
   const sessionGenerationRef = useRef(sessionGeneration);
@@ -115,6 +118,11 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const [staleReplyReview, setStaleReplyReview] = useState<StaleReplyReview | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeDoc[]>([]);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [knowledgeError, setKnowledgeError] = useState(false);
+  const [knowledgeLoaded, setKnowledgeLoaded] = useState(false);
+  const [knowledgeInserting, setKnowledgeInserting] = useState<string | null>(null);
   const qaChanging = useRef(false);
   const [qaPending, setQaPending] = useState(false);
   const submission = useRef(false);
@@ -150,6 +158,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const supportStateFlight = useRef(false);
   const [isSupportStateSubmitting, setIsSupportStateSubmitting] = useState(false);
   const selectedSupportStateDefinition = supportStates.find(candidate => candidate.id === supportStateDraft.definitionId);
+  const customerHistoryEvents = customerHistory.data?.events ?? [];
   const selectedSupportStateNeedsDetails = Boolean(supportState.data?.definition_id) && !selectedSupportStateDefinition;
 
   const restoreSupportStateDraft = (current = supportState.data) => {
@@ -236,6 +245,20 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     setFocusContext(false);
   }, [focusContext, workspace.panel]);
 
+  const customerHistoryLabel = (event: TicketHistoryEvent): string => {
+    if (event.kind === 'ticket.intake') return 'Ticket intake';
+    if (event.kind === 'ticket.assignment_changed') return 'Ticket assignment changed';
+    if (event.kind === 'ticket.state_changed') return 'Ticket state changed';
+    if (event.kind === 'message.reply') return 'Message reply';
+    return `Conversation event: ${event.kind}`;
+  };
+
+  const customerHistoryActor = (event: TicketHistoryEvent): string => {
+    if (event.actor.kind === 'customer') return 'Customer';
+    if (event.actor.kind === 'api-key') return 'System';
+    return 'Support staff';
+  };
+
   useEffect(() => {
     updateLocation(`ticket:${id}`);
     return () => { updateLocation(null); stopTyping(id); };
@@ -306,6 +329,40 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     }
   };
 
+  useEffect(() => {
+    if (workspace.panel !== 'details' || knowledgeLoaded || knowledgeLoading || knowledgeError) return;
+    let active = true;
+    setKnowledgeLoading(true);
+    void dashboardApi.get<KnowledgeDoc[]>('/knowledge/articles').then(articles => {
+      if (active) { setKnowledgeArticles(articles.filter(article => article.status === 'active' && (article.tier === 'answer' || article.tier === 'sop'))); setKnowledgeLoaded(true); }
+    }).catch(() => { if (active) setKnowledgeError(true); }).finally(() => { if (active) setKnowledgeLoading(false); });
+    return () => { active = false; };
+  }, [workspace.panel, knowledgeLoaded, knowledgeLoading, knowledgeError]);
+
+  const insertKnowledgeArticle = async (article: KnowledgeDoc) => {
+    if (knowledgeInserting || submission.current || isSubmitting || draft.status === 'loading') return;
+    setKnowledgeInserting(article.id);
+    setChangeError(null);
+    try {
+      const source = await dashboardApi.get<{ content: string }>(`/knowledge/articles/${encodeURIComponent(article.id)}/content`);
+      const content = source.content.trim();
+      if (!content) { setChangeError('This knowledge article has no insertable content.'); return; }
+      const nextBody = reply.trim() ? `${reply.replace(/\s+$/, '')}\n\n${content}` : content;
+      updateDraft({ body: nextBody });
+      setNotice(`Inserted knowledge: ${article.title}`);
+      requestAnimationFrame(() => {
+        const editor = document.getElementById('reply-message') as HTMLTextAreaElement | null;
+        editor?.focus();
+        editor?.setSelectionRange(nextBody.length, nextBody.length);
+      });
+    } catch (error) {
+      setChangeError(error instanceof ApiError && [401, 403, 404].includes(error.status)
+        ? 'Knowledge content is unavailable for this tenant or session.'
+        : 'Knowledge content could not be loaded. Try again.');
+      } finally { setKnowledgeInserting(null); }
+    };
+
+  
   const submitSupportState = async (event?: React.FormEvent, snoozedUntilOverride?: string | null) => {
     event?.preventDefault();
     if (supportStateFlight.current) return;
@@ -1097,6 +1154,43 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
       </div>
 
       <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="space-y-6">
+        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
+            <span className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" />Customer</span>
+          </summary>
+          <div className="mt-4 space-y-3 text-sm">
+            <div>
+              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Verified identity</p>
+              <p className="mt-1 font-medium text-slate-900">{ticket.customer_email}</p>
+              <p className="mt-1 text-xs text-slate-600">Loaded from this tenant-scoped conversation.</p>
+            </div>
+            {customerHistory.isLoading ? (
+              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                Loading customer history...
+              </p>
+            ) : customerHistory.isError ? (
+              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                Customer history is unavailable for this conversation. {customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'}
+              </p>
+            ) : customerHistoryEvents.length === 0 ? (
+              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                Customer history is unavailable for this conversation. No cross-channel identity match was made.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {customerHistoryEvents.map((historyEvent) => (
+                  <li key={historyEvent.id} className="rounded border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-bold text-slate-900">{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
+                    <p className="mt-1 text-[10px] text-slate-500 uppercase tracking-wider">
+                      {historyEvent.visibility} {historyEvent.source}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </details>
+
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <h3 ref={contextHeadingRef} tabIndex={-1} className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
             <Info className="w-4 h-4 text-slate-400" />
@@ -1231,13 +1325,40 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
           </div>
         </div>
 
-        {viewers.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 animate-in slide-in-from-right-4">
-            <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Eye className="w-4 h-4 text-brand-500" />
-              Active Now
-            </h3>
-            <div className="space-y-3">
+        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
+            <span className="flex items-center gap-2"><Activity className="w-4 h-4 text-slate-400" />Operational context</span>
+          </summary>
+          <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            No operational source is connected for this ticket. Live SLA and routing details remain unavailable.
+          </p>
+        </details>
+
+        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
+            <span className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-slate-400" />Knowledge</span>
+          </summary>
+          <div className="mt-4 space-y-3">
+            <p id="knowledge-insert-help" role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              {knowledgeLoading ? 'Loading tenant knowledge…' : knowledgeError ? 'Knowledge is temporarily unavailable. No content was inserted.' : knowledgeArticles.length ? 'Select an article to append its verified content to the reply.' : 'No eligible internal knowledge articles are available.'}
+            </p>
+            {knowledgeError && <TocynButton type="button" onClick={() => { setKnowledgeError(false); setKnowledgeLoaded(false); }} className="text-sm underline">Retry knowledge</TocynButton>}
+            {knowledgeArticles.length > 0 && <ul aria-describedby="knowledge-insert-help" className="space-y-2">
+              {knowledgeArticles.map(article => <li key={article.id}>
+                <TocynButton type="button" aria-disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} aria-label={`Insert ${article.title} into reply`}
+                  onClick={() => void insertKnowledgeArticle(article)} className="w-full justify-start rounded border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-50">
+                  {knowledgeInserting === article.id ? `Loading ${article.title}…` : `Insert ${article.title}`}
+                </TocynButton>
+              </li>)}
+            </ul>}
+          </div>
+        </details>
+
+        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 animate-in slide-in-from-right-4">
+            <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
+              <span className="flex items-center gap-2"><Eye className="w-4 h-4 text-brand-500" />Collaboration</span>
+            </summary>
+            {viewers.length > 0 ? <div className="space-y-3">
               {viewers.map((viewer, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-700 text-xs font-bold border border-brand-100">
@@ -1252,9 +1373,8 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
+            </div> : <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">No collaborators are viewing this ticket.</p>}
+        </details>
       </aside>
       </div>
     </>
