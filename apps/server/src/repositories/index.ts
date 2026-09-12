@@ -1245,7 +1245,14 @@ export class SqlRequestLimitRepository {
   }
 }
 
-export function createRepositories(scope: VerifiedTenantScope, db: D1Database, betaAdmission?: LocalBetaAdmissionRepository, canonicalMutationSli?: RequestCanonicalMutationSli, budgetBindingIdentity: object = db): Repositories, ownerIngressAdmission?: OwnerIngressRequestAdmission): Repositories {
+export function createRepositories(
+  scope: VerifiedTenantScope,
+  db: D1Database,
+  betaAdmission?: LocalBetaAdmissionRepository,
+  canonicalMutationSli?: RequestCanonicalMutationSli,
+  budgetBindingIdentity: object = db,
+  ownerIngressAdmission?: OwnerIngressRequestAdmission,
+): Repositories {
   const tickets = new SqlTicketRepository(scope, db, betaAdmission, canonicalMutationSli);
   return {
     budgetAuthority: new BudgetAuthorityRepository(db, scope, budgetBindingIdentity, ownerIngressAdmission),
