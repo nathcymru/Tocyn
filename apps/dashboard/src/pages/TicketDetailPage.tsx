@@ -158,6 +158,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const supportStateFlight = useRef(false);
   const [isSupportStateSubmitting, setIsSupportStateSubmitting] = useState(false);
   const selectedSupportStateDefinition = supportStates.find(candidate => candidate.id === supportStateDraft.definitionId);
+  const customerHistoryEvents = customerHistory.data?.events ?? [];
   const selectedSupportStateNeedsDetails = Boolean(supportState.data?.definition_id) && !selectedSupportStateDefinition;
 
   const restoreSupportStateDraft = (current = supportState.data) => {
@@ -1171,13 +1172,13 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
               <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                 Customer history is unavailable for this conversation. {customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'}
               </p>
-            ) : customerHistory.data?.events.length === 0 ? (
+            ) : customerHistoryEvents.length === 0 ? (
               <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                 Customer history is unavailable for this conversation. No cross-channel identity match was made.
               </p>
             ) : (
               <ul className="space-y-3">
-                {customerHistory.data?.events.map((historyEvent) => (
+                {customerHistoryEvents.map((historyEvent) => (
                   <li key={historyEvent.id} className="rounded border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs font-bold text-slate-900">{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
                     <p className="mt-1 text-[10px] text-slate-500 uppercase tracking-wider">
