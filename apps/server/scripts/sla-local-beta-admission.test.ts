@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createVerifiedTenantScope } from '../src/auth/scope';
+import { CapabilityPolicyService } from '../src/repositories/capability-policy.repository';
+import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-admission.repository';
+import { SlaClockRepository } from '../src/repositories/sla-clock.repository';
+import { SupportStateRepository } from '../src/repositories/support-state.repository';
 import { betaCounters, initializeLocalBetaFixture } from './local-beta-fixture';
 import { withTwoTenantFixture, type LocalTenantFixture } from './local-tenant-fixture';
 
@@ -110,5 +115,75 @@ test('guarded local beta admits SLA policy and one-ticket recovery atomically', 
     const revoked = await fixture.request('/api/sla-policy', { token: operatorA });
     assert.equal(revoked.status, 401);
     assert.deepEqual(await betaCounters(fixture), { tickets: 0, mutations: 3, upload_attempts: 0 });
+  });
+});
+
+test('guarded local beta returns direct SLA policy and clock business outcomes without combined admission', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const operatorA = await operatorToken(fixture, 'operatorA');
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'sla-local-beta-direct',
+      tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
+      invitations: Object.values(fixture.principals).map(principal => ({
+        tenantId: principal.tenantId, id: principal.localId, kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+      })),
+      limits: { ticketLimit: 2, mutationLimit: 3, recoveryReserve: 1, uploadLimit: 1 },
+    });
+
+    const policy = await fixture.request('/api/sla-policy', { method: 'PUT', token: operatorA, idempotencyKey: 'direct-policy',
+      body: { expectedRevision: 0, calendar, responseTargetMs: 60_000, resolutionTargetMs: null } });
+    assert.equal(policy.status, 200);
+    assert.equal((await policy.json<{ responseTargetMs: number }>()).responseTargetMs, 60_000,
+      'the direct route reads the policy write result after local-beta statements');
+
+    const initialized = await fixture.request('/api/tickets/fixture-ticket/sla/initialize', { method: 'POST', token: operatorA,
+      body: {}, idempotencyKey: 'direct-initialize' });
+    assert.equal(initialized.status, 201);
+    assert.deepEqual(await initialized.json(), { initialized: true },
+      'the direct route reads the clock insert result after local-beta statements');
+    assert.deepEqual(await betaCounters(fixture), { tickets: 0, mutations: 2, upload_attempts: 0 });
+  });
+});
+
+test('direct local-beta clock initialization rejects a general capability revoked at commit without charging capacity', async () => {
+  await withTwoTenantFixture(async fixture => {
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'sla-local-beta-direct-revoked',
+      tenants: [fixture.principals.customerA.tenantId, fixture.principals.customerB.tenantId],
+      invitations: Object.values(fixture.principals).map(principal => ({
+        tenantId: principal.tenantId, id: principal.localId, kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+      })),
+      limits: { ticketLimit: 2, mutationLimit: 3, recoveryReserve: 1, uploadLimit: 1 },
+    });
+    const tenantId = fixture.principals.operatorA.tenantId;
+    const actorId = fixture.principals.operatorA.localId;
+    const user = await fixture.db.prepare('SELECT session_version FROM users WHERE tenant_id=? AND id=?').bind(tenantId, actorId).first<{ session_version: number }>();
+    assert.ok(user);
+    const scope = createVerifiedTenantScope(tenantId, actorId, ['admin'], user.session_version);
+    const decision = await new CapabilityPolicyService(fixture.db, scope).authorize({ tenantId, actorId, role: 'admin', sessionVersion: user.session_version }, 'general');
+    assert.equal(decision.allowed, true);
+    const capability = { tenantId, actorId, role: 'admin' as const, sessionVersion: user.session_version,
+      capability: decision.capability, policyFingerprint: decision.policyFingerprint };
+    const ticketFence = await new SupportStateRepository(fixture.db, scope).captureTicketWriteFence(user.session_version);
+    let revoked = false;
+    const commitDatabase = new Proxy(fixture.db, { get(target, property, receiver) {
+      if (property === 'batch') return async (statements: Parameters<D1Database['batch']>[0]) => {
+        if (!revoked) {
+          revoked = true;
+          await target.prepare("UPDATE deployment_capability_ceiling SET enabled=0,revision=revision+1 WHERE capability='settings.general.manage'").run();
+        }
+        return target.batch(statements);
+      };
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    } }) as D1Database;
+    const admission = new LocalBetaAdmissionRepository(commitDatabase, scope, { kind: 'staff', id: actorId },
+      { sessionVersion: user.session_version, expiresAt: Math.floor(Date.now() / 1_000) + 60 });
+    const clocks = new SlaClockRepository(commitDatabase, scope, admission);
+
+    await assert.rejects(() => clocks.initializeExistingTicket('fixture-ticket', ticketFence, capability), { name: 'CapabilityFenceError' });
+    assert.equal(revoked, true);
+    assert.equal((await fixture.db.prepare('SELECT count(*) AS n FROM ticket_sla_clocks WHERE tenant_id=? AND ticket_id=?').bind(tenantId, 'fixture-ticket').first<{ n: number }>())?.n, 0);
+    assert.deepEqual(await betaCounters(fixture), { tickets: 0, mutations: 0, upload_attempts: 0 });
   });
 });
