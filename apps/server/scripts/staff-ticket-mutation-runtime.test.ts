@@ -538,6 +538,16 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
       } else if(table==='articles') {
         assert.deepEqual(indexes.results.map((index:{name:string})=>index.name).sort(),
           ['idx_articles_retention_cursor','idx_articles_tenant_ticket_recent','idx_articles_tenant_ticket_visibility_created_id','idx_articles_ticket','sqlite_autoindex_articles_1']);
+      } else if (table === 'ticket_support_state') {
+        // Shared snooze adds one tenant-qualified lookup index. Keep the
+        // allowance explicit so future index growth still fails closed.
+        assert.deepEqual(indexes.results.map((index: {name:string}) => index.name).sort(), [
+          'idx_ticket_support_state_definition',
+          'idx_ticket_support_state_definition_ticket',
+          'idx_ticket_support_state_snooze',
+          'idx_ticket_support_state_transition_ticket',
+          'sqlite_autoindex_ticket_support_state_1',
+        ]);
       } else assert.ok(indexes.results.length<=4,`${table} index growth requires envelope review`);
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
