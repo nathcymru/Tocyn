@@ -30,6 +30,12 @@ export function browserInstantToDateTimeLocal(instant: string): string {
   return instantToDateTimeLocal(instant, browserUtcOffsetMinutes(new Date(instant)));
 }
 
+/**
+ * Uses the browser's datetime-local parsing policy. In particular, a wall time
+ * in a spring-forward gap is normalized to the browser-resolved next valid
+ * instant, and an ambiguous fall-back wall time resolves to the earlier
+ * occurrence (the ECMAScript-compatible "earlier" policy).
+ */
 export function browserDateTimeLocalToInstant(value: string): string {
-  return dateTimeLocalToInstant(value, browserUtcOffsetMinutes(new Date(value)));
+  return new Date(value).toISOString();
 }

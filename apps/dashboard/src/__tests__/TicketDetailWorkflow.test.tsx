@@ -344,8 +344,12 @@ it('discovers a later current support state, recovers its page load, and enforce
   expect(saved).toMatchObject({ definitionId: 'late-waiting', expectedRevision: 4, waitingReason: 'Need account number', nextAction: 'Follow up tomorrow' });
 });
 
-it('snoozes and unsnoozes through the shared revision-fenced transition using local datetime input', async () => {
-  const transition = { ticket_id: 'workflow-ticket', definition_id: 'legacy-open', lifecycle: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason: null, next_action: null, snoozed_until: '2026-09-13T13:30:00.000Z', resurface_reason: null, changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+it('displays and submits browser-local snooze datetimes across London DST boundaries', async () => {
+  const runtimeProcess = (globalThis as typeof globalThis & { process: { env: Record<string, string | undefined> } }).process;
+  const originalTimeZone = runtimeProcess.env.TZ;
+  runtimeProcess.env.TZ = 'Europe/London';
+  try {
+  const transition = { ticket_id: 'workflow-ticket', definition_id: 'legacy-open', lifecycle: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason: null, next_action: null, snoozed_until: '2026-03-29T01:30:00.000Z', resurface_reason: null, changed_at: '2026-09-11T00:00:00Z', revision: 4 };
   const definitions = [{ id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 }];
   let current = transition as { ticket_id: string; definition_id: string; lifecycle: 'open'; internal_label: string; public_label: string; waiting_reason: null; next_action: null; snoozed_until: string | null; resurface_reason: 'manual' | 'due' | 'customer_reply' | null; changed_at: string; revision: number };
   const writes: Record<string, unknown>[] = [];
@@ -366,17 +370,28 @@ it('snoozes and unsnoozes through the shared revision-fenced transition using lo
   fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
   await screen.findByLabelText('Snooze until (your local time)');
   const snooze = screen.getByLabelText('Snooze until (your local time)');
-  const expectedLocalDeadline = new Date('2026-09-13T13:30:00.000Z');
-  const pad = (value: number) => String(value).padStart(2, '0');
-  expect(snooze).toHaveValue(`${expectedLocalDeadline.getFullYear()}-${pad(expectedLocalDeadline.getMonth() + 1)}-${pad(expectedLocalDeadline.getDate())}T${pad(expectedLocalDeadline.getHours())}:${pad(expectedLocalDeadline.getMinutes())}`);
-  fireEvent.change(snooze, { target: { value: '2026-09-13T14:30' } });
+  // 01:30Z is 02:30 BST, so the form must display the local wall time.
+  expect(snooze).toHaveValue('2026-03-29T02:30');
+  // 01:30 does not exist in London on this day. The browser normalizes it to
+  // the next valid local time (02:30 BST), preserving the 01:30Z instant.
+  fireEvent.change(snooze, { target: { value: '2026-03-29T01:30' } });
   fireEvent.click(screen.getByRole('button', { name: 'Snooze ticket' }));
   await screen.findByText(/Snoozed until/);
-  expect(writes[0]).toMatchObject({ definitionId: 'legacy-open', expectedRevision: 4, snoozedUntil: new Date('2026-09-13T14:30').toISOString() });
+  expect(writes[0]).toMatchObject({ definitionId: 'legacy-open', expectedRevision: 4, snoozedUntil: '2026-03-29T01:30:00.000Z' });
   expect(screen.getByRole('button', { name: 'Unsnooze ticket' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Unsnooze ticket' }));
+  // The autumn transition repeats 01:30. Browser datetime-local parsing uses
+  // its earlier (BST) occurrence, which is 00:30Z.
+  fireEvent.change(snooze, { target: { value: '2026-10-25T01:30' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Snooze ticket' }));
   await waitFor(() => expect(writes).toHaveLength(2));
-  expect(writes[1]).toMatchObject({ expectedRevision: 5, snoozedUntil: null });
+  expect(writes[1]).toMatchObject({ expectedRevision: 5, snoozedUntil: '2026-10-25T00:30:00.000Z' });
+  fireEvent.click(screen.getByRole('button', { name: 'Unsnooze ticket' }));
+  await waitFor(() => expect(writes).toHaveLength(3));
+  expect(writes[2]).toMatchObject({ expectedRevision: 6, snoozedUntil: null });
+  } finally {
+    if (originalTimeZone === undefined) delete runtimeProcess.env.TZ;
+    else runtimeProcess.env.TZ = originalTimeZone;
+  }
 });
 
 it('uses a synchronous support-state flight guard to prevent duplicate delayed saves and locks fields while pending', async () => {

@@ -16,4 +16,10 @@ describe('datetime-local conversion', () => {
     expect(instantToDateTimeLocal('2026-03-29T01:30:00.000Z', 60)).toBe('2026-03-29T02:30');
     expect(dateTimeLocalToInstant('2026-03-29T02:30', 60)).toBe('2026-03-29T01:30:00.000Z');
   });
+
+  it('documents the explicit offset needed for the earlier fall-back occurrence', () => {
+    // Europe/London repeats 01:30 on 2026-10-25. Browser parsing uses the
+    // earlier occurrence; its explicit DST offset is UTC+01:00.
+    expect(dateTimeLocalToInstant('2026-10-25T01:30', 60)).toBe('2026-10-25T00:30:00.000Z');
+  });
 });
