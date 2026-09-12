@@ -7,7 +7,7 @@ import type { PreparedStaffMutation, StaffMutationInput, StaffMutationNamespace,
 import type { VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import type { CapabilityWriteFence } from '../auth/capability-policy';
 import type { BudgetCommitAuthority, CanonicalBudgetIntent } from '../budgets/isolate-admission.service';
-import { articleBodyFormat, type ArticleBodyFormat } from '@luminatick/shared';
+import { articleBodyFormat, normalizeCollaborationMentionIds, type ArticleBodyFormat } from '@luminatick/shared';
 import { SessionBudgetAdmissionService } from '../budgets/session-admission.service';
 import { SessionBudgetAuthorityRepository, type SessionBudgetCredential, type SessionBudgetRequirements } from '../repositories/session-budget-authority.repository';
 import { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
@@ -90,9 +90,9 @@ export class StaffTicketMutationService {
     const rawMentions = input.data.mentionedUserIds ?? [];
     if (!Array.isArray(attachments) || attachments.length > 10 || !Array.isArray(rawMentions) || rawMentions.length > 16
       || (input.data.is_internal !== undefined && typeof input.data.is_internal !== 'boolean')) throw invalid();
-    const mentionedUserIds = [...new Set(rawMentions)].sort();
-    if (mentionedUserIds.some(id => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))
-      || mentionedUserIds.some(id => id === this.credential.actorId) || (mentionedUserIds.length && input.data.is_internal !== true)) throw invalid();
+    if (rawMentions.some(id => typeof id !== 'string')) throw invalid();
+    const mentionedUserIds = normalizeCollaborationMentionIds(rawMentions, input.data.is_internal === true ? 'internal' : 'public', this.credential.actorId);
+    if (!mentionedUserIds) throw invalid();
     const seen = new Set<string>();
     const draft = input.data.draft;
     if (draft && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(draft.generation)
