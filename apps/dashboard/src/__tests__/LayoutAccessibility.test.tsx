@@ -53,7 +53,7 @@ it('names global search, makes its authorised scope available to assistive techn
   await renderReady();
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   const search = screen.getByRole('textbox', { name: 'Search all authorised tickets' });
-  expect(screen.getByText('Searches all tickets you are authorised to access. Filter this view is available in the Inbox.')).toHaveClass('sr-only');
+  expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveClass('sr-only');
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
   expect(screen.getByRole('heading')).toHaveTextContent('/tickets?search=Follow%20up');
   const clear = screen.getByRole('button', { name: 'Clear global ticket search' });

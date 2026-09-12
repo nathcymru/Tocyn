@@ -106,6 +106,8 @@ it('uses the authoritative actionable and snoozed queue views without losing the
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
   expect(screen.getByRole('button',{name:'Actionable'})).toHaveAttribute('aria-pressed','true');
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBeInTheDocument();
+});
+
 it('labels filtering as current-view, clears it with a button or Escape, and resets to page one',async()=>{
   showInbox();
   const input=await screen.findByRole('textbox',{name:'Filter this view'});
