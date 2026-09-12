@@ -46,9 +46,18 @@
 }
 
 [data-tocyn-appearance] {
-  font-size: var(--tocyn-type-scale-body, 1rem);
+  font-size: var(--tocyn-type-scale-body);
   border-top: 1px solid var(--tocyn-app-border);
   padding: 0.75rem 1rem;
+}
+[data-tocyn-preferences] select { background: var(--tocyn-app-surface-panel); border: 1px solid var(--tocyn-app-border); color: var(--tocyn-app-text); }
+[data-tocyn-font-scale="large"] { --tocyn-preference-font-scale: 1.125; }
+[data-tocyn-font-scale="larger"] { --tocyn-preference-font-scale: 1.25; }
+[data-tocyn-font-scale] body { font-size: calc(1rem * var(--tocyn-preference-font-scale)); }
+[data-tocyn-density="compact"] main[aria-label="Workspace"] { padding: 1rem; }
+[data-tocyn-motion="reduced"] :where(*, *::before, *::after) { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  [data-tocyn-motion="system"] :where(*, *::before, *::after) { animation: none !important; transition: none !important; }
 }
 [data-tocyn-appearance] button {
   min-height: var(--tocyn-target-min, 44px);
