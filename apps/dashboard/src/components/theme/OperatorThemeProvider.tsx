@@ -51,7 +51,7 @@ export function OperatorThemeControl() {
 export function OperatorPreferencesControl() {
   const preferences = useOperatorPreferencesContext();
   const busy = preferences.status === 'loading' || preferences.status === 'saving';
-  return <section aria-labelledby="workspace-preferences-title" data-tocyn-preferences>
+  return <section aria-labelledby="workspace-preferences-title" data-tocyn-appearance data-tocyn-preferences>
     <h3 id="workspace-preferences-title">Workspace preferences</h3>
     <fieldset disabled={busy}><label>Density<select aria-label="Workspace density" value={preferences.density} onChange={event => preferences.update({ density: event.target.value as OperatorDensity })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
     <label>Text size<select aria-label="Workspace text size" value={preferences.fontScale} onChange={event => preferences.update({ fontScale: event.target.value as OperatorFontScale })}><option value="normal">Standard</option><option value="large">Large</option><option value="larger">Largest</option></select></label>

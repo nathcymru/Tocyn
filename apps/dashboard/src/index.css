@@ -46,11 +46,10 @@
 }
 
 [data-tocyn-appearance] {
-  font-size: var(--tocyn-type-scale-body, 1rem);
+  font-size: var(--tocyn-type-scale-body);
   border-top: 1px solid var(--tocyn-app-border);
   padding: 0.75rem 1rem;
 }
-[data-tocyn-preferences] { border-top: 1px solid var(--tocyn-app-border); margin-top: .75rem; padding-top: .75rem; }
 [data-tocyn-preferences] select { background: var(--tocyn-app-surface-panel); border: 1px solid var(--tocyn-app-border); color: var(--tocyn-app-text); }
 [data-tocyn-font-scale="large"] { --tocyn-preference-font-scale: 1.125; }
 [data-tocyn-font-scale="larger"] { --tocyn-preference-font-scale: 1.25; }
@@ -64,10 +63,10 @@
   min-height: var(--tocyn-target-min, 44px);
   transition-duration: var(--tocyn-motion-duration-normal, 180ms);
 }
-:is([data-tocyn-appearance], [data-tocyn-preferences]) label {
+[data-tocyn-appearance] label {
   min-height: var(--tocyn-target-min, 44px);
 }
-:is([data-tocyn-appearance], [data-tocyn-preferences]) h3 {
+[data-tocyn-appearance] h3 {
   color: var(--tocyn-app-text);
   font-size: 0.875rem;
   font-weight: 600;
@@ -75,7 +74,7 @@
 }
 [data-tocyn-appearance] label + label { margin-top: 0.25rem; }
 [data-tocyn-appearance] fieldset { margin-top: 0.5rem; }
-:is([data-tocyn-appearance], [data-tocyn-preferences]) label {
+[data-tocyn-appearance] label {
   align-items: center;
   color: var(--tocyn-app-text-muted);
   display: flex;
@@ -97,7 +96,7 @@
   line-height: 1.25rem;
   padding: 0.25rem 0.75rem;
 }
-:is([data-tocyn-appearance], [data-tocyn-preferences]) > p[role="status"] {
+[data-tocyn-appearance] > p[role="status"] {
   color: var(--tocyn-app-text-muted);
   font-size: 0.75rem;
   line-height: 1rem;
