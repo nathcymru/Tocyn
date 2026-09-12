@@ -33,6 +33,8 @@ export type TrustedActivityAppend = Readonly<{
 export type OperatorActivity = Readonly<{
   id: string;
   ticketId: string;
+  /** Present on authorized activity-list rows; mutations return no ticket content. */
+  ticketSubject?: string | null;
   recipientUserId: string;
   kind: OperatorActivityKind;
   sourceId: string;
