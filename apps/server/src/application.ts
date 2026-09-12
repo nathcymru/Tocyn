@@ -33,6 +33,9 @@ app.onError((error,c) => {
 });
 app.use('*', environmentGuard);
 app.use('*', operationalObservability);
+// Preflights must receive the configured CORS response before owner admission.
+// This also carries CORS headers through an admission rejection for API callers.
+app.use('/api/*', apiCors);
 app.use('*', ownerIngressAdmission);
 app.use('*', localBetaGuard);
 
@@ -77,7 +80,6 @@ app.get('/api/realtime', async (c) => {
   });
 });
 
-app.use('/api/*', apiCors);
 app.get('/health', c => c.text('OK'));
 app.route('/api/auth', auth);
 app.route('/api/permissions', permissions);
