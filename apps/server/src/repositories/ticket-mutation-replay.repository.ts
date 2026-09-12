@@ -279,7 +279,8 @@ export class TicketMutationReplayRepository {
     // Only the canonical public customer-reply event may wake shared snooze
     // state. These statements sit before the durable mutation receipt, so an
     // idempotency collision rolls both the reply and resurface back together.
-    if (candidate.article?.sender_type === 'customer' && !candidate.article.is_internal && candidate.articleId && eventId) {
+    if (candidate.audit?.kind === 'customer' && !candidate.ticket && candidate.article?.sender_type === 'customer'
+      && !candidate.article.is_internal && candidate.articleId && eventId) {
       statements.push(...customerReplyResurfaceStatements(this.db,this.scope,{
         ticketId:candidate.ticketId,articleId:candidate.articleId,conversationEventId:eventId,
       }));
