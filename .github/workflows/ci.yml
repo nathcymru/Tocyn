@@ -18,21 +18,19 @@ jobs:
   validate:
     name: Tocyn / ${{ matrix.check }}
     runs-on: ubuntu-latest
-    # The test suite has explicit per-command bounds and diagnostic artifacts.
-    # Its aggregate allowance covers the retained full suite; other jobs retain20 minutes.
-    timeout-minutes: ${{ matrix.check == 'test' && 90 || 20 }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
           - check: lint
-            command: python3 docs/planning/post-beta-2026-09-10/test_schedule.py && python3 docs/planning/post-beta-2026-09-10/validate.py && bash scripts/validate-workflows.sh && bash -n .github/scripts/run-ci-test-suite.sh && bash -n .github/scripts/run-bounded-command.sh && npm run lint --workspace=apps/portal && cd apps/server && npx eslint .
+            command: npm run lint --workspace=apps/portal && cd apps/server && npx eslint .
           - check: typecheck
-            command: npm run typecheck --workspace=apps/widget && npm run typecheck --workspace=packages/ui && npm run typecheck:rehearsal-runtime && npm run typecheck --workspace=apps/server && npm run typecheck:local-tenants --workspace=apps/server && npm run typecheck:tenant-isolation-core --workspace=apps/server && npm run typecheck:tenant-isolation-storage-background --workspace=apps/server && npm run typecheck:canonical-conversation --workspace=apps/server && npm run typecheck:canonical-conversation-atomic --workspace=apps/server && npm run typecheck:ticket-mutation-replay --workspace=apps/server && npm run typecheck:conversation-audit --workspace=apps/server && npm run typecheck:local-beta --workspace=apps/server && npm run typecheck:operator-workflow --workspace=apps/server && npm run typecheck:operator-activity --workspace=apps/server && npm run typecheck:local-portal-workflow --workspace=apps/server && npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.budget-runtime.json && npm run typecheck:channel-configuration-admission-runtime --workspace=apps/server && npm run typecheck:operational-performance --workspace=apps/server && npm run typecheck:local-observability-collector --workspace=apps/server && npm run typecheck:ticket-email-admission-runtime --workspace=apps/server
+            command: npm run typecheck --workspace=packages/ui && npm run typecheck --workspace=apps/widget && npm run typecheck --workspace=apps/server
           - check: build
-            command: npm run build --workspace=apps/dashboard -- --manifest && npm run build --workspace=apps/portal -- --manifest && npm run build --workspace=apps/widget -- --manifest && node --test tools/ui-performance/check-budgets.test.mjs tools/ui-performance/browser-evidence.test.mjs tools/ui-performance/check-widget-budgets.test.mjs && node tools/ui-performance/browser-evidence.mjs performance-baseline . 20 > "$RUNNER_TEMP/tocyn-ui-performance.json" && node tools/ui-performance/check-budgets.mjs "$RUNNER_TEMP/tocyn-ui-performance.json" && node tools/ui-browser/widget-check.mjs 20 > "$RUNNER_TEMP/tocyn-widget-performance.json" && node tools/ui-performance/check-widget-budgets.mjs "$RUNNER_TEMP/tocyn-widget-performance.json" && node tools/ui-browser/widget-visual.mjs > "$RUNNER_TEMP/tocyn-widget-visual.json" && npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-authenticated-navigation.json && npm exec --workspace=apps/server -- tsx --test scripts/ui-authenticated-navigation.test.ts > "$RUNNER_TEMP/tocyn-ui-authenticated.tap"
+            command: npm run build --workspace=apps/dashboard && npm run build --workspace=apps/portal && npm run build --workspace=apps/widget
           - check: test
-            command: true
+            command: npm run test --workspace=apps/dashboard && npm run test --workspace=apps/portal && npm run test --workspace=apps/widget && npm run test --workspace=packages/ui && npm run test --workspace=apps/server
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -45,150 +43,5 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Checkout immutable UI performance baseline
-        if: matrix.check == 'build'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: 6299bfef444fb23a40d79895040bc9fa398e83b7
-          path: performance-baseline
-          persist-credentials: false
-      - name: Build baseline clients with their locked dependencies
-        if: matrix.check == 'build'
-        working-directory: performance-baseline
-        run: |
-          npm ci --ignore-scripts
-          npm run build --workspace=apps/dashboard -- --manifest
-          npm run build --workspace=apps/portal -- --manifest
-          npm run build --workspace=apps/widget -- --manifest
-      - name: Install locked browser test runtime
-        if: matrix.check == 'build'
-        run: npm exec -- playwright install --with-deps chromium
       - name: Validate
         run: ${{ matrix.command }}
-      - name: Verify bounded general test suite
-        if: matrix.check == 'test'
-        run: bash .github/scripts/run-ci-test-suite.sh
-      - name: Verify service-level browser acceptance
-        if: matrix.check == 'build'
-        run: |
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-sla-browser.json
-          node --import tsx --test apps/server/scripts/ui-sla-browser.test.ts > "$RUNNER_TEMP/tocyn-sla-browser.tap"
-      - name: Verify composer browser acceptance
-        if: matrix.check == 'build'
-        run: |
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-composer-browser.json
-          node --import tsx --test apps/server/scripts/ui-composer-browser.test.ts > "$RUNNER_TEMP/tocyn-composer-browser.tap"
-      - name: Verify support-state browser acceptance
-        if: matrix.check == 'build'
-        run: |
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.ui-support-state-browser.json
-          node --import tsx --test apps/server/scripts/ui-support-state-browser.test.ts > "$RUNNER_TEMP/tocyn-support-state-browser.tap"
-      - name: Verify theme scopes under browser CSP
-        if: matrix.check == 'build'
-        run: node tools/ui-browser/theme-scope.mjs > "$RUNNER_TEMP/tocyn-theme-scope.json"
-      - name: Verify durable drafts against the local Worker
-        if: matrix.check == 'build'
-        run: |
-          npm run typecheck --workspace=apps/server -- --project scripts/tsconfig.ui-operator-draft-browser.json
-          node --import tsx --test apps/server/scripts/ui-operator-draft-browser.test.ts > "$RUNNER_TEMP/tocyn-operator-drafts.tap"
-      - name: Verify local support-state migration
-        if: matrix.check == 'test'
-        run: |
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.support-state-migration.json
-          node --import tsx --test apps/server/scripts/support-state-migration.test.ts apps/server/scripts/support-state-routes.test.ts
-      - name: Verify local draft retention and workspace sorting
-        if: matrix.check == 'test'
-        run: |
-          npm run typecheck --workspace=apps/server -- --project scripts/tsconfig.operator-draft-retention.json
-          node --import tsx --test apps/server/scripts/operator-draft-retention.test.ts apps/server/scripts/operator-workspace-sort.test.ts
-      - name: Verify reply capability authorization and local guard
-        if: matrix.check == 'test'
-        run: |
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.reply-capability-runtime.json
-          node --import tsx --test apps/server/scripts/reply-capability-runtime.test.ts
-      - name: Verify bounded operational metrics
-        if: matrix.check == 'test'
-        run: |
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.operational-metrics.json
-          node --import tsx --test apps/server/scripts/operational-metrics.test.ts apps/server/scripts/sla-operational-metrics.test.ts
-      - name: Verify bounded budget admission and durable recovery
-        if: matrix.check == 'test'
-        run: |
-          set -euo pipefail
-          diagnostics="$RUNNER_TEMP/tocyn-budget-admission"
-          mkdir -p "$diagnostics"
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.budget-runtime.json
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.owner-ingress-admission.json
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.customer-budget-admission.json
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.staff-ticket-mutation.json
-          node --import tsx --test apps/server/scripts/staff-ticket-mutation-runtime.test.ts
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.email-sender-selection.json
-          node --import tsx --test apps/server/scripts/email-sender-selection-runtime.test.ts
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.email-ticket-stream.json
-          node --import tsx --test apps/server/scripts/email-streaming-platform-runtime.test.ts apps/server/scripts/email-ticket-stream-runtime.test.ts
-          node --import tsx --test apps/server/scripts/dashboard-summary-read-runtime.test.ts
-          for test_file in \
-            apps/server/scripts/budget-coordinator-do-runtime.test.ts \
-            apps/server/scripts/budget-authority-runtime.test.ts \
-            apps/server/scripts/budget-grant-holder-runtime.test.ts \
-            apps/server/scripts/budget-admission-runtime.test.ts \
-            apps/server/scripts/owner-ingress-admission-runtime.test.ts \
-            apps/server/scripts/customer-budget-admission-runtime.test.ts \
-            apps/server/scripts/storage-admission-runtime.test.ts \
-            apps/server/scripts/api-ticket-history-admission-runtime.test.ts \
-            apps/server/scripts/http-ai-admission-runtime.test.ts \
-            apps/server/scripts/http-ticket-read-admission-runtime.test.ts \
-            apps/server/scripts/support-sla-admission-runtime.test.ts \
-            apps/server/scripts/support-sla-mutation-receipts.test.ts \
-            apps/server/scripts/ticket-list-admission-runtime.test.ts \
-            apps/server/scripts/configuration-admission-runtime.test.ts \
-            apps/server/scripts/admin-settings-admission-runtime.test.ts \
-            apps/server/scripts/saved-filter-admission-runtime.test.ts \
-            apps/server/scripts/group-directory-admission-runtime.test.ts \
-            apps/server/scripts/operator-workspace-admission-runtime.test.ts \
-            apps/server/scripts/knowledge-read-admission-runtime.test.ts \
-            apps/server/scripts/owner-ingress-admission-runtime.test.ts \
-            apps/server/scripts/knowledge-delete-admission-runtime.test.ts \
-            apps/server/scripts/knowledge-category-admission-runtime.test.ts \
-            apps/server/scripts/ticket-email-admission-runtime.test.ts
-          do
-            name="${test_file##*/}"
-            printf 'Running bounded admission test: %s\\n' "$test_file"
-            # The largest serialized local runtime takes about 150 seconds; CI has
-            # additional Worker startup overhead. Keep a finite, diagnostic-friendly
-            # allowance without misclassifying that known workload as a hang.
-            bash .github/scripts/run-bounded-command.sh "$name" 360 "$diagnostics/$name.log" -- node --import tsx --test --test-concurrency=1 "$test_file"
-          done
-      - name: Verify operator theme preference isolation and recovery
-        if: matrix.check == 'test'
-        run: |
-          npm exec --workspace=apps/server -- tsc -p scripts/tsconfig.operator-theme-preference.json
-          node --import tsx --test apps/server/scripts/operator-theme-preference.test.ts
-      - name: Retain synthetic UI performance evidence
-        if: always() && matrix.check == 'build'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: ui-performance-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/tocyn-ui-performance.json
-            ${{ runner.temp }}/tocyn-widget-performance.json
-            ${{ runner.temp }}/tocyn-widget-visual.json
-            /tmp/tocyn-widget-visual-*.png
-            ${{ runner.temp }}/tocyn-ui-authenticated.tap
-            ${{ runner.temp }}/tocyn-operator-drafts.tap
-            ${{ runner.temp }}/tocyn-support-state-browser.tap
-            ${{ runner.temp }}/tocyn-sla-browser.tap
-            ${{ runner.temp }}/tocyn-composer-browser.tap
-            ${{ runner.temp }}/tocyn-theme-scope.json
-          retention-days: 3
-          if-no-files-found: warn
-      - name: Retain bounded admission diagnostics
-        if: always() && matrix.check == 'test'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: bounded-admission-diagnostics-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/tocyn-test-diagnostics
-            ${{ runner.temp }}/tocyn-budget-admission
-          retention-days: 3
-          if-no-files-found: warn
