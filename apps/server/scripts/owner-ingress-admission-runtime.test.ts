@@ -114,8 +114,8 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
     assert.equal(handoffStatuses.every(status => status === 200), true, JSON.stringify(handoffStatuses));
     const afterHandoff = await coordinator.inspectForTrustedRuntime();
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
-      assert.equal(afterHandoff.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units, units,
-        `${dimension} keeps only the owner-only execution after exact warm-block handoff`);
+      assert.equal(afterHandoff.ownerIngress.closedCharges.find(charge => charge.dimension === dimension && charge.purpose === 'new-work')?.units, units * 2,
+        `${dimension} keeps the email guard and owner-only execution after exact warm-block handoff`);
     }
     const tenantA = afterHandoff.tenantStates.find(tenant => tenant.tenantId === 'tenant-a');
     const tenantB = afterHandoff.tenantStates.find(tenant => tenant.tenantId === 'tenant-b');
@@ -151,7 +151,7 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
   } finally { await f.mf.dispose(); }
 });
 
-test('invalid anonymous ingress is limited before it can reserve another owner block', async () => {
+test('distributed coordinator limits unauthenticated non-API ingress before owner reservation while preserving health and signed flow', async () => {
   const f = await fixture('owner-ingress-pre-admission');
   try {
     await seed(f.db);
@@ -161,7 +161,7 @@ test('invalid anonymous ingress is limited before it can reserve another owner b
 
     const statuses: number[] = [];
     for (let index = 0; index < 9; index++) {
-      statuses.push((await f.mf.dispatchFetch('http://example.test/api/handoff', { method: 'POST', headers: attackerHeaders })).status);
+      statuses.push((await f.mf.dispatchFetch('http://example.test/unverified-owner-only', { headers: attackerHeaders })).status);
     }
     assert.deepEqual(statuses.slice(0, 5), Array(5).fill(401));
     assert.deepEqual(statuses.slice(5), Array(4).fill(429));
@@ -169,8 +169,15 @@ test('invalid anonymous ingress is limited before it can reserve another owner b
     const afterFlood = await coordinator.inspectForTrustedRuntime();
     for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
       assert.equal(afterFlood.ownerIngress.grants[0].accounted[dimension as keyof typeof OWNER_INGRESS_EXECUTION_ENVELOPE], units * 8,
-        `${dimension} has only one bounded owner block after the invalid flood`);
+        `${dimension} has only one bounded owner block after the invalid non-API flood`);
     }
+
+    const health = await f.mf.dispatchFetch('http://example.test/health');
+    assert.equal(health.status, 200, 'health remains available after anonymous admission is saturated');
+    assert.equal(await health.text(), 'OK');
+    const afterHealth = await coordinator.inspectForTrustedRuntime();
+    assert.deepEqual(afterHealth.ownerIngress.grants, afterFlood.ownerIngress.grants,
+      'health does not reserve owner capacity');
 
     const token = await new SignJWT({ tenant_id: 'tenant-a', role: 'admin', session_version: 1, mfa_verified: true })
       .setProtectedHeader({ alg: 'HS256' }).setSubject('actor-a').setAudience('app').setIssuedAt().setExpirationTime('5m')

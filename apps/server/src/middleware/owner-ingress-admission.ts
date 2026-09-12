@@ -5,8 +5,12 @@ import type { AppVariables } from '../types';
 import { ownerIngressAdmissionCache } from '../budgets/owner-ingress-admission.service';
 import { createOwnerIngressBudgetAuthority } from './tenant.middleware';
 import type { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
+import type { BudgetCoordinatorDO } from '../durable_objects/BudgetCoordinatorDO';
+import * as jose from 'jose';
 
 const OWNER_INGRESS_POLICY = 'owner-ingress-v1';
+const UNVERIFIED_INGRESS_LIMIT = 5;
+const UNVERIFIED_INGRESS_WINDOW_MS = 60_000;
 const RECOVERY_ROUTES = new Set([
   'POST /api/auth/mfa/verify',
   'POST /api/auth/mfa/setup',
@@ -30,6 +34,9 @@ export async function ownerIngressAdmission(
   c: Context<{ Bindings: Env; Variables: AppVariables }>,
   next: Next,
 ): Promise<Response | void> {
+  // Health probes are operational liveness checks, not application work. They
+  // must stay available without reserving a shared owner envelope.
+  if (c.req.method === 'GET' && c.req.path === '/health') { await next(); return; }
   const configured = c.env.OWNER_INGRESS_ADMISSION_POLICY;
   if (configured === undefined || configured === 'off') { await next(); return; }
   if (configured !== OWNER_INGRESS_POLICY || !c.env.BUDGET_COORDINATOR_DO) {
@@ -38,6 +45,18 @@ export async function ownerIngressAdmission(
   let repository: BudgetAuthorityRepository;
   try { repository = createOwnerIngressBudgetAuthority(c.env, c.get('resourceOperationEmitter')); }
   catch { return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503); }
+  if (!await hasSignedBearerCredential(c)) {
+    try {
+      const authority = await repository.resolveForDeploymentIngress(c.env.localNow?.() ?? Date.now());
+      if (!authority) return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
+      const coordinator = c.env.BUDGET_COORDINATOR_DO.get(c.env.BUDGET_COORDINATOR_DO.idFromName(authority.aggregateId)) as unknown as BudgetCoordinatorDO;
+      await coordinator.refreshFromTrustedAuthority(authority);
+      const admitted = await coordinator.admitUnverifiedIngressFromTrustedAuthority({
+        now: c.env.localNow?.() ?? Date.now(), limit: UNVERIFIED_INGRESS_LIMIT, windowMs: UNVERIFIED_INGRESS_WINDOW_MS,
+      });
+      if (!admitted) return c.json({ error: 'Too many requests, please try again later.' }, 429);
+    } catch { return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503); }
+  }
   const result = await ownerIngressAdmissionCache.admit({
     repository,
     namespace: c.env.BUDGET_COORDINATOR_DO,
@@ -60,4 +79,15 @@ export async function ownerIngressAdmission(
     // full owner charge. The request never receives a false refund.
     await result.admission.finish().catch(() => 'retained');
   }
+}
+
+async function hasSignedBearerCredential(c: Context<{ Bindings: Env; Variables: AppVariables }>): Promise<boolean> {
+  const header = c.req.header('Authorization');
+  if (!header?.startsWith('Bearer ') || !c.env.JWT_SECRET) return false;
+  try {
+    await jose.jwtVerify(header.substring(7), new TextEncoder().encode(c.env.JWT_SECRET), {
+      algorithms: ['HS256'], requiredClaims: ['exp', 'iat', 'sub'], audience: ['app', 'widget', 'mfa-challenge'],
+    });
+    return true;
+  } catch { return false; }
 }

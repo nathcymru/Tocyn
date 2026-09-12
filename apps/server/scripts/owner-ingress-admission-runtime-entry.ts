@@ -5,17 +5,17 @@ import { Hono } from 'hono';
 import type { Env } from '../src/bindings';
 import type { AppVariables } from '../src/types';
 import { ownerIngressAdmission } from '../src/middleware/owner-ingress-admission';
-import { preAdmissionRateLimiter } from '../src/middleware/rate-limiter';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import productionWorker from '../src/index';
 import { authMiddleware } from '../src/middleware/auth.middleware';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 const tenantCache = new IsolateBudgetAdmissionCache();
-app.use('/api/*', preAdmissionRateLimiter(5, 60_000));
-app.use('/api/*', ownerIngressAdmission);
+app.use('*', ownerIngressAdmission);
 
 app.get('/api/owner-only', c => c.json({ error: 'Unauthorized' }, 401));
+app.get('/unverified-owner-only', c => c.json({ error: 'Unauthorized' }, 401));
+app.get('/health', c => c.text('OK'));
 app.post('/api/auth/logout', c => c.json({ error: 'Unauthorized' }, 401));
 app.post('/api/handoff', authMiddleware, async c => {
   // The request query is deliberately ignored: the signed current principal

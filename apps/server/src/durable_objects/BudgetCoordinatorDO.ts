@@ -25,6 +25,7 @@ import {
 } from '../budgets/owner-aggregate';
 
 const STATE_KEY = 'budget-owner-aggregate-v1';
+const UNVERIFIED_INGRESS_KEY = 'budget-owner-unverified-ingress-v1';
 // A Durable Object KV value is limited to 128 KiB. Persisting bounded UTF-8
 // bytes makes the native value size explicit, with 8 KiB left for storage serialization.
 const MAX_STATE_BYTES = 120 * 1_024;
@@ -138,6 +139,24 @@ export class BudgetCoordinatorDO extends DurableObject<Env> {
     }
     await this.write(result.state);
     return result.outcome;
+  }
+
+  /**
+   * Serializes anonymous ingress before it can reserve an owner envelope.
+   * This lives with the deployment coordinator rather than a Worker-isolate
+   * cache, so changing source addresses or isolates cannot obtain another
+   * local bucket. The caller supplies fixed server policy constants only.
+   */
+  async admitUnverifiedIngressFromTrustedAuthority(input: Readonly<{ now: number; limit: number; windowMs: number }>): Promise<boolean> {
+    if (!Number.isSafeInteger(input.now) || input.now < 0 || !Number.isSafeInteger(input.limit) || input.limit < 1
+      || !Number.isSafeInteger(input.windowMs) || input.windowMs < 1) return false;
+    await this.read();
+    const window = Math.floor(input.now / input.windowMs) * input.windowMs;
+    const prior = await this.ctx.storage.get<Readonly<{ window: number; count: number }>>(UNVERIFIED_INGRESS_KEY);
+    const count = prior?.window === window ? prior.count + 1 : 1;
+    if (count > input.limit) return false;
+    await this.ctx.storage.put(UNVERIFIED_INGRESS_KEY, { window, count });
+    return true;
   }
 
   /** Caller binds tenant and holder to authenticated terminal evidence before this RPC. */
