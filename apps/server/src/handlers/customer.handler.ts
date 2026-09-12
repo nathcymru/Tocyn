@@ -32,6 +32,8 @@ import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.servi
 import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
 import { admitHttpTicketList } from '../budgets/http-ticket-list-admission.service';
 import { TicketListScanError } from '../repositories/ticket-list-scan.repository';
+import { admitCustomerAuthEffect } from '../budgets/customer-auth-admission.service';
+import { CustomerAuthBudgetFenceError } from '../repositories/customer-auth-budget-fence';
 
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -60,6 +62,11 @@ function attachmentBudgetFailure(c: any, reason: string): Response {
 
 function recordCredentialDecision(c: { get: (key: 'requestAuthSli') => AppVariables['requestAuthSli'] }, decision: RequestCredentialAuthDecision): void {
   try { c.get('requestAuthSli')?.record(decision); } catch { /* Evidence cannot affect authentication. */ }
+}
+function authAdmissionFailure(c: any, admission: { reason?: string }): Response {
+  return admission.reason === 'exhausted'
+    ? c.json({ code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }, 429)
+    : c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
 }
 
 app.use('*', async (c, next) => requestBounds(c.req.path.endsWith('/attachments/upload') ? 10 * 1024 * 1024 + 50000 : 64 * 1024)(c, next));
@@ -104,9 +111,18 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
 
   const scope = createVerifiedTenantScope(tenantId, 'widget-anonymous', ['customer'], 1);
   const deps = createTenantRequestDeps(scope, c.env, undefined, c.get('requestCanonicalMutationSli'), c.get('resourceOperationEmitter'));
+  const admission = await admitCustomerAuthEffect({
+    env: c.env,
+    deps,
+    operation: 'request',
+    principal: { kind: 'widget', widgetKey: widgetKey.trim() },
+    credentialKey: `widget:${widgetKey.trim()}`,
+    now: c.env.localNow,
+  });
+  if (admission.status === 'rejected') return authAdmissionFailure(c, admission);
 
   if (localBetaEnabled(c.env)) {
-    const generic=()=>c.json({success:true,...(parsedAuth.data.type==='otp'?{challengeId:crypto.randomUUID()}: {})});
+    const generic=()=>{ admission.admission?.settle('committed'); return c.json({success:true,...(parsedAuth.data.type==='otp'?{challengeId:crypto.randomUUID()}: {})}); };
     const user=await resolvers.identity.resolveCredentialsByEmail(parsedAuth.data.email.toLowerCase());
     if(!user || user.tenantId!==tenantId || user.role!=='customer' || !LOCAL_AUTH_CAPTURE_RECIPIENTS.includes(parsedAuth.data.email.toLowerCase()))return generic();
     try {await authorizeLocalBeta(c.env,scope,{kind:'customer',id:user.userId},c.get('resourceOperationEmitter'));}
@@ -117,21 +133,27 @@ app.post('/auth/request', rateLimiter(5, 60000), async (c) => {
   try {
     const isValid = await verifyTurnstileToken(c.env, deps, body.turnstileToken, c.req.header('CF-Connecting-IP'));
     if (!isValid) {
+      admission.admission?.settle('committed');
       return c.json({ error: 'Turnstile validation failed or token missing' }, 400);
     }
   } catch (error: any) {
     if (error.message?.includes('APP_MASTER_KEY')) {
+      admission.admission?.settle('unknown');
       return c.json({ error: "Server misconfiguration: APP_MASTER_KEY is missing." }, 500);
     }
+    admission.admission?.settle('unknown');
     return c.json({ error: 'Internal server error during Turnstile validation' }, 500);
   }
 
-  const authService = new CustomerAuthService(c.env, deps, c.env.emailTransport, resolvers.identity, c.env.localNow);
+  const authService = new CustomerAuthService(c.env, deps, c.env.emailTransport, resolvers.identity, c.env.localNow, admission.admission?.fence);
 
   try {
     const result = await authService.requestAuth(parsedAuth.data.email, parsedAuth.data.type);
+    admission.admission?.settle('committed');
     return c.json({ success: true, ...result });
   } catch (err: any) {
+    admission.admission?.settle('unknown');
+    if (err instanceof CustomerAuthBudgetFenceError) return authAdmissionFailure(c, { reason: 'unavailable' });
     if (err.message === 'Invalid tenant context') {
       return c.json({ error: 'Invalid tenant context' }, 400);
     }
