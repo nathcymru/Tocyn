@@ -148,6 +148,9 @@ export class TicketMutationReplayRepository {
       : auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo);
     const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
     statements.push(...audit.statements);
+    // The prepared activity reads the preceding tenant-qualified canonical event
+    // inside the same atomic D1 batch.
+    if (assignmentActivity) statements.push(assignmentActivity.statement);
     if (expectedAssignedTo !== undefined) {
       // The expected owner check prevents stale dashboard observations from
       // writing audit rows for already-advanced ownership. A request already at
