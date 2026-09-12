@@ -1,9 +1,10 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import { capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
+import { CapabilityFenceError, capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
 import { DEFAULT_SLA_CALENDAR, SlaClockError as DomainSlaClockError, evaluateResolutionSla, evaluateResponseSla, parseSlaCalendar, type SlaCalendar, type SlaPauseInterval, type SlaReopenPolicy } from '../domain/sla-clock';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { SlaPolicy, SlaPolicyInput, SlaTargetProjection, TicketSlaClock, TicketSlaProjection } from '../types/sla';
 import type { TicketStateWriteFence } from './support-state.repository';
+import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 
 const maximumTargetMs = 7_776_000_000;
 
@@ -15,6 +16,19 @@ function ticketWriteConstraint(fence: TicketStateWriteFence, ticketAlias: string
         SELECT 1 FROM user_groups membership WHERE membership.tenant_id=${ticketAlias}.tenant_id
           AND membership.user_id=actor.id AND membership.group_id=${ticketAlias}.group_id)))`,
     values: [fence.actorId, fence.role, fence.sessionVersion],
+  };
+}
+
+/** The route's verified-MFA claim authorizes entry; this fence also makes a
+ * later MFA disable, session revocation, or capability change reject the D1
+ * commit that would create a clock. */
+function capabilityMfaWriteConstraint(fence: CapabilityWriteFence): { sql: string; values: unknown[] } {
+  const capability = capabilityWriteConstraint(fence);
+  return {
+    sql: `(${capability.sql}) AND EXISTS (SELECT 1 FROM users mfa_actor
+      WHERE mfa_actor.tenant_id=? AND mfa_actor.id=? AND mfa_actor.role=?
+        AND mfa_actor.session_version=? AND mfa_actor.mfa_enabled=1)`,
+    values: [...capability.values, fence.tenantId, fence.actorId, fence.role, fence.sessionVersion],
   };
 }
 
@@ -75,7 +89,19 @@ function policy(row: any | null): SlaPolicy {
 
 /** Tenant-qualified policy and persisted projection access. Clock arithmetic stays pure in domain/sla-clock. */
 export class SlaClockRepository {
-  constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope) {}
+  constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope,
+    private readonly localBetaAdmission?: LocalBetaAdmissionRepository) {}
+
+  private async guardedBatch<T>(operation: 'configuration' | 'conversation', statements: Parameters<D1Database['batch']>[0]) {
+    try { return await this.db.batch<T>(statements); }
+    catch (error) {
+      // A failed in-batch assertion deliberately rolls back the counter, SLA
+      // write, audit and any enclosing receipt. Re-read only to map that
+      // assertion to the stable public denial; do not use it as write authority.
+      if (this.localBetaAdmission) await this.localBetaAdmission.authorize(operation);
+      throw error;
+    }
+  }
 
   async getPolicy(): Promise<SlaPolicy> {
     const row = await this.db.prepare('SELECT * FROM sla_policies WHERE tenant_id=?').bind(this.scope.tenantId).first();
@@ -93,7 +119,17 @@ export class SlaClockRepository {
       throw new SlaClockError('invalid', 'Invalid reopen policy');
     }
     const guard = capabilityWriteConstraint(fence);
-    const results = await this.db.batch<{ revision: number }>([
+    // The policy write itself increments its revision for a successful CAS, so
+    // a matching revision is the material local-beta mutation predicate. It
+    // is evaluated again inside this D1 batch rather than trusted from the
+    // request preflight.
+    const localBeta = this.localBetaAdmission?.conditionalConfigurationStatements({
+      sql: `(EXISTS (SELECT 1 FROM sla_policies p WHERE p.tenant_id=? AND p.revision=?)
+        OR (?=0 AND NOT EXISTS (SELECT 1 FROM sla_policies p WHERE p.tenant_id=?))) AND (${guard.sql})`,
+      values: [this.scope.tenantId, input.expectedRevision, input.expectedRevision, this.scope.tenantId, ...guard.values],
+    }) ?? [];
+    const results = await this.guardedBatch<{ revision: number }>('configuration', [
+      ...localBeta,
       this.db.prepare(`INSERT INTO sla_policies
       (tenant_id,calendar_json,response_target_ms,resolution_target_ms,response_reopen_policy,resolution_reopen_policy)
       SELECT ?,?,?,?,?,? WHERE ${guard.sql} AND (?=0 OR EXISTS (SELECT 1 FROM sla_policies WHERE tenant_id=?))
@@ -110,8 +146,9 @@ export class SlaClockRepository {
           AND response_reopen_policy=? AND resolution_reopen_policy=?`)
       .bind(this.scope.tenantId,this.scope.actorId,this.scope.tenantId,input.expectedRevision + 1,serializedCalendar,responseTargetMs,resolutionTargetMs,reopen.response,reopen.resolution),
     ]);
-    if (!results[0]?.results?.[0]) throw new SlaClockError('conflict', 'SLA policy changed before it could be saved');
-    requireCapabilityWrite(results[0], fence);
+    const policyWrite = results[localBeta.length];
+    if (!policyWrite?.results?.[0]) throw new SlaClockError('conflict', 'SLA policy changed before it could be saved');
+    requireCapabilityWrite(policyWrite, fence);
     return this.getPolicy();
   }
 
@@ -134,10 +171,22 @@ export class SlaClockRepository {
    * deliberately not a tenant-wide backfill and never assumes that a policy
    * configured today applied at the ticket's historical creation time.
    */
-  async initializeExistingTicket(ticketId: string, fence: TicketStateWriteFence): Promise<boolean> {
-    const live = ticketWriteConstraint(fence, 't');
+  async initializeExistingTicket(ticketId: string, fence: TicketStateWriteFence, capability: CapabilityWriteFence): Promise<boolean> {
+    const ticketLive = ticketWriteConstraint(fence, 't');
+    const capabilityLive = capabilityMfaWriteConstraint(capability);
+    const live = { sql: `(${ticketLive.sql}) AND (${capabilityLive.sql})`, values: [...ticketLive.values, ...capabilityLive.values] };
     const now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
-    const results = await this.db.batch([
+    // The clock insert is the sole billable repair. The same tenant, live
+    // session and group predicate used by the write makes missing, foreign,
+    // revoked and already-initialized requests no-charge outcomes.
+    const localBeta = this.localBetaAdmission?.conditionalRecoveryStatements({
+      sql: `EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=? AND ${live.sql}
+        AND NOT EXISTS (SELECT 1 FROM ticket_sla_clocks c WHERE c.tenant_id=t.tenant_id AND c.ticket_id=t.id))`,
+      values: [this.scope.tenantId, ticketId, ...live.values],
+    }) ?? [];
+    const results = await this.guardedBatch('conversation', [
+      ...localBeta,
+      this.db.prepare(`SELECT 1 AS accepted WHERE ${capabilityLive.sql}`).bind(...capabilityLive.values),
       this.db.prepare(`SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=? AND ${live.sql}`)
         .bind(this.scope.tenantId, ticketId, ...live.values),
       this.db.prepare(`INSERT OR IGNORE INTO sla_policies
@@ -168,8 +217,10 @@ export class SlaClockRepository {
         WHERE c.tenant_id=? AND c.ticket_id=? AND ${live.sql}`)
         .bind(this.scope.actorId, this.scope.tenantId, ticketId, ...live.values),
     ]);
-    if (!results[0]?.results?.[0]) throw new SlaClockError('not_found', 'Ticket not found');
-    return (results[2]?.meta?.changes ?? 0) === 1;
+    const businessStart = localBeta.length;
+    if (!results[businessStart]?.results?.[0]) throw new CapabilityFenceError();
+    if (!results[businessStart + 1]?.results?.[0]) throw new SlaClockError('not_found', 'Ticket not found');
+    return (results[businessStart + 3]?.meta?.changes ?? 0) === 1;
   }
 
   async recordFirstResponse(ticketId: string, articleId: string): Promise<void> {

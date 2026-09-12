@@ -68,8 +68,8 @@ export class LocalBetaAdmissionRepository {
     if (operation === 'upload') {
       if (row.upload_attempts >= row.upload_limit) throw new BetaAdmissionError('beta_upload_limit', 429);
     } else {
-      const intakeFull = operation === 'create'
-        && (row.tickets >= row.ticket_limit || row.mutations >= row.mutation_limit - row.recovery_reserve);
+      const intakeFull = (operation === 'create' && row.tickets >= row.ticket_limit)
+        || ((operation === 'create' || operation === 'configuration') && row.mutations >= row.mutation_limit - row.recovery_reserve);
       if (row.mutations >= row.mutation_limit || intakeFull) {
         throw new BetaAdmissionError('beta_mutation_limit', 429);
       }
@@ -107,16 +107,30 @@ export class LocalBetaAdmissionRepository {
     return this.buildStatements('conversation', { sql: change.sql, values: [...change.values] });
   }
 
-  private buildStatements(operation: BetaOperation, change?: ChangePredicate): readonly D1PreparedStatement[] {
+  /** A configuration request must still stop with intake, while only a material
+   * policy CAS spends the non-recovery portion of the mutation allowance. */
+  conditionalConfigurationStatements(change: Readonly<ChangePredicate>): readonly D1PreparedStatement[] {
+    return this.buildStatements('configuration', { sql: change.sql, values: [...change.values] }, 'running');
+  }
+
+  /** Explicit clock repair uses the established conversation reserve, but a
+   * stopped-writes run must reject even an otherwise idempotent repair request. */
+  conditionalRecoveryStatements(change: Readonly<ChangePredicate>): readonly D1PreparedStatement[] {
+    return this.buildStatements('conversation', { sql: change.sql, values: [...change.values] }, 'conversation');
+  }
+
+  private buildStatements(operation: BetaOperation, change?: ChangePredicate,
+    requireState: false | 'running' | 'conversation' = false): readonly D1PreparedStatement[] {
     if (this.scope.actorId !== this.principal.id) throw new BetaAdmissionError('beta_not_invited', 403);
     const live = this.livePrincipal(true);
     const capacity = operation === 'upload' ? 'r.upload_attempts < r.upload_limit'
       : operation === 'create' ? 'r.tickets < r.ticket_limit AND r.mutations < r.mutation_limit-r.recovery_reserve'
+      : operation === 'configuration' ? 'r.mutations < r.mutation_limit-r.recovery_reserve'
       : 'r.mutations < r.mutation_limit';
-    const state = operation === 'conversation' ? "p.state IN ('running','intake_stopped')" : "p.state='running'";
+    const state = requireState === 'running' || operation !== 'conversation' ? "p.state='running'" : "p.state IN ('running','intake_stopped')";
     // No-op changes still require current invitation/credentials, but consume no capacity.
     const chargeAllowed = change
-      ? `(NOT (${change.sql}) OR (${state} AND ${capacity}))`
+      ? requireState ? `(${state} AND (NOT (${change.sql}) OR (${capacity})))` : `(NOT (${change.sql}) OR (${state} AND ${capacity}))`
       : `(${state} AND ${capacity})`;
     const assertion = this.db.prepare(`INSERT INTO local_beta_assertion(singleton,accepted)
       VALUES (1,COALESCE((SELECT CASE

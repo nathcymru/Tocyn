@@ -10,6 +10,7 @@
     "run-local-beta-operator.ts",
     "local-beta-runtime.test.ts",
     "local-beta-launch.test.ts",
-    "local-beta-atomic.test.ts"
+    "local-beta-atomic.test.ts",
+    "sla-local-beta-admission.test.ts"
   ]
 }

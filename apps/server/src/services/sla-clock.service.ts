@@ -40,13 +40,13 @@ export class SlaClockService {
     return result;
   }
 
-  async initializeExistingTicket(ticketId: string) {
+  async initializeExistingTicket(ticketId: string, capability: CapabilityWriteFence) {
     const fence = await this.assertLiveStaff();
     const ticket = await this.deps.repositories.tickets.get(ticketId);
     if (!ticket || (this.deps.scope.roles.includes('agent') && ticket.group_id
       && !await this.deps.repositories.groups.isMember(ticket.group_id, this.deps.scope.actorId))) {
       throw new SlaClockError('not_found', 'Ticket not found');
     }
-    return this.deps.repositories.slaClocks.initializeExistingTicket(ticketId, fence);
+    return this.deps.repositories.slaClocks.initializeExistingTicket(ticketId, fence, capability);
   }
 }
