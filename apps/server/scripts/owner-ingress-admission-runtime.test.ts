@@ -151,6 +151,37 @@ test('native ingress charges owner-only attempts and hands admitted tenant work 
   } finally { await f.mf.dispose(); }
 });
 
+test('invalid anonymous ingress is limited before it can reserve another owner block', async () => {
+  const f = await fixture('owner-ingress-pre-admission');
+  try {
+    await seed(f.db);
+    const namespace = await f.mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
+    const coordinator = namespace.get(namespace.idFromName('owner-ingress-aggregate')) as unknown as BudgetCoordinatorDO;
+    const attackerHeaders = { Authorization: 'Bearer malformed', 'cf-connecting-ip': '198.51.100.10' };
+
+    const statuses: number[] = [];
+    for (let index = 0; index < 9; index++) {
+      statuses.push((await f.mf.dispatchFetch('http://example.test/api/handoff', { method: 'POST', headers: attackerHeaders })).status);
+    }
+    assert.deepEqual(statuses.slice(0, 5), Array(5).fill(401));
+    assert.deepEqual(statuses.slice(5), Array(4).fill(429));
+
+    const afterFlood = await coordinator.inspectForTrustedRuntime();
+    for (const [dimension, units] of Object.entries(OWNER_INGRESS_EXECUTION_ENVELOPE)) {
+      assert.equal(afterFlood.ownerIngress.grants[0].accounted[dimension as keyof typeof OWNER_INGRESS_EXECUTION_ENVELOPE], units * 8,
+        `${dimension} has only one bounded owner block after the invalid flood`);
+    }
+
+    const token = await new SignJWT({ tenant_id: 'tenant-a', role: 'admin', session_version: 1, mfa_verified: true })
+      .setProtectedHeader({ alg: 'HS256' }).setSubject('actor-a').setAudience('app').setIssuedAt().setExpirationTime('5m')
+      .sign(new TextEncoder().encode(JWT_SECRET));
+    const legitimate = await f.mf.dispatchFetch('http://example.test/api/handoff', {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'cf-connecting-ip': '198.51.100.10' },
+    });
+    assert.equal(legitimate.status, 200, 'a signed client bypasses the unverified bucket and uses the unspent owner block');
+  } finally { await f.mf.dispose(); }
+});
+
 test('native ingress fails closed for missing authority, malformed policy, and ambiguous active deployments', async () => {
   const off = await fixture('owner-ingress-off', 'off');
   try {
