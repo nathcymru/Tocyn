@@ -7,12 +7,14 @@ import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
+<<<<<<< HEAD
 import { useTicket, useAssignResponsibleOwner, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
 import { useCollaboration } from '../components/CollaborationContext';
 import { useTicketFields } from '../hooks/useTicketFields';
 import { useSupportStates, useTicketSupportState, useTransitionSupportState } from '../hooks/useSupportStates';
+import { useTicketHistory, type TicketHistoryEvent } from '../hooks/useTicketHistory';
 import { useOperatorDraft, type OperatorDraftAttachment, type OperatorDraftValue, type OperatorDraftVersion } from '../hooks/useOperatorDraft';
 import { useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
 import { useAuthStore } from '../store/authStore';
@@ -87,6 +89,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const utilityActions = useTicketUtilityActions(id);
   const replyCapability = replyCapabilities.data?.modes.find(mode => mode.visibility === draft.mode);
   const workspace = useOperatorWorkspaceState();
+  const customerHistory = useTicketHistory(id, workspace.panel === 'details');
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
   const currentUserId = useAuthStore(state => state.user?.id);
   const sessionGenerationRef = useRef(sessionGeneration);
@@ -242,6 +245,20 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     setFocusContext(false);
   }, [focusContext, workspace.panel]);
 
+  const customerHistoryLabel = (event: TicketHistoryEvent): string => {
+    if (event.kind === 'ticket.intake') return 'Ticket intake';
+    if (event.kind === 'ticket.assignment_changed') return 'Ticket assignment changed';
+    if (event.kind === 'ticket.state_changed') return 'Ticket state changed';
+    if (event.kind === 'message.reply') return 'Message reply';
+    return `Conversation event: ${event.kind}`;
+  };
+
+  const customerHistoryActor = (event: TicketHistoryEvent): string => {
+    if (event.actor.kind === 'customer') return 'Customer';
+    if (event.actor.kind === 'api-key') return 'System';
+    return 'Support staff';
+  };
+
   useEffect(() => {
     updateLocation(`ticket:${id}`);
     return () => { updateLocation(null); stopTyping(id); };
@@ -346,8 +363,6 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     };
 
   
-  const submitSupportState = async (event: React.FormEvent) => {
-    event.preventDefault();
   const submitSupportState = async (event?: React.FormEvent, snoozedUntilOverride?: string | null) => {
     event?.preventDefault();
     if (supportStateFlight.current) return;
@@ -1149,9 +1164,30 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
               <p className="mt-1 font-medium text-slate-900">{ticket.customer_email}</p>
               <p className="mt-1 text-xs text-slate-600">Loaded from this tenant-scoped conversation.</p>
             </div>
-            <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-              Customer history is unavailable for this conversation. No cross-channel identity match was made.
-            </p>
+            {customerHistory.isLoading ? (
+              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                Loading customer history...
+              </p>
+            ) : customerHistory.isError ? (
+              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                Customer history is unavailable for this conversation. {customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'}
+              </p>
+            ) : customerHistory.data?.events.length === 0 ? (
+              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                Customer history is unavailable for this conversation. No cross-channel identity match was made.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {customerHistory.data?.events.map((historyEvent) => (
+                  <li key={historyEvent.id} className="rounded border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-bold text-slate-900">{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
+                    <p className="mt-1 text-[10px] text-slate-500 uppercase tracking-wider">
+                      {historyEvent.visibility} {historyEvent.source}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </details>
 
