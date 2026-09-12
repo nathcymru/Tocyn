@@ -18,6 +18,7 @@ vi.mock('../api/client', () => ({ dashboardApi: {
     : path === '/activities?limit=20'
     ? { page: { items: [], next: null }, unread: { status: 'available', count: 0 } }
     : { version: '1', light: {}, dark: {} }),
+  patch: vi.fn(),
   put: vi.fn(),
 } }));
 let client: QueryClient;
@@ -147,6 +148,21 @@ it('uses realtime only to refresh an already-open durable activity panel', async
   await userEvent.click(trigger);
   expect(await screen.findByText('No current activity.')).toBeInTheDocument();
   expect(dashboardApi.get).toHaveBeenCalledWith('/activities?limit=20');
+});
+
+it('identifies the authorized ticket and marks durable activity read before opening it', async () => {
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => path === '/activities?limit=20'
+    ? { page: { items: [{ id: 'activity-one', ticketId: 'ticket-one', ticketSubject: 'Account access follow-up', kind: 'customer_reply', facts: {}, revision: 1, createdAt: '2026-09-12T09:00:00.000Z', readAt: null, dismissedAt: null }], next: null }, unread: { status: 'available' as const, count: 1 } }
+    : { revision: 0, mode: 'system', updatedAt: null });
+
+  await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
+  const open = await screen.findByRole('button', { name: 'Open customer reply activity for Account access follow-up' });
+  expect(screen.getByText('Account access follow-up')).toBeInTheDocument();
+  await userEvent.click(open);
+
+  await waitFor(() => expect(dashboardApi.patch).toHaveBeenCalledWith('/activities/activity-one/read', { expectedRevision: 1 }));
+  await waitFor(() => expect(screen.getByRole('heading')).toHaveTextContent('/inbox/all/ticket-one'));
 });
 
 it('continues durable activity with the opaque authenticated cursor through a keyboard control', async () => {
