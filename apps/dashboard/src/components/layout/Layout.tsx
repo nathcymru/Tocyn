@@ -31,7 +31,7 @@ function cn(...inputs: any[]) {
   return clsx(inputs);
 }
 
-type ActivityItem = Readonly<{ id: string; ticketId: string; kind: string; facts: Record<string, unknown>; revision: number; createdAt: string; readAt: string | null; dismissedAt: string | null }>;
+type ActivityItem = Readonly<{ id: string; ticketId: string; ticketSubject: string | null; kind: string; facts: Record<string, unknown>; revision: number; createdAt: string; readAt: string | null; dismissedAt: string | null }>;
 type ActivityResponse = Readonly<{ page: Readonly<{ items: readonly ActivityItem[]; next: string | null }>; unread: Readonly<{ status: 'available'; count: number } | { status: 'unavailable'; count: null; reason: string }> }>;
 const ACTIVITY_PAGE_SIZE = 20;
 const MAX_RENDERED_ACTIVITY_ITEMS = 100;
@@ -348,11 +348,12 @@ function LayoutContent() {
                 {activity && activity.page.items.length === 0 && <p className="p-2 text-sm text-slate-600">No current activity.</p>}
                 <ul aria-label="Durable activity" className="max-h-96 divide-y overflow-y-auto">
                   {activity?.page.items.filter(item => !item.dismissedAt).map(item => <li key={item.id} className="flex gap-2 py-2">
-                    <TocynButton type="button" onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="min-w-0 flex-1 rounded p-1 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2">
+                    <TocynButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="min-w-0 flex-1 rounded p-1 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2">
                       <p className="text-sm font-semibold text-slate-900">{item.kind.replace(/_/g, ' ')}</p>
+                      <p className="truncate text-xs font-medium text-slate-700">{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
                       <p className="text-xs text-slate-600">Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
                     </TocynButton>
-                    <TocynButton type="button" aria-label="Dismiss activity" onClick={() => void transitionActivity(item, 'dismiss')} className="rounded p-1 text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2"><X className="h-4 w-4" /></TocynButton>
+                    <TocynButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className="rounded p-1 text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2"><X className="h-4 w-4" /></TocynButton>
                   </li>)}
                 </ul>
                 {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="mt-2 text-sm text-slate-600">Showing the most recent {MAX_RENDERED_ACTIVITY_ITEMS} activity items. Refresh to restart activity recovery.</p>}

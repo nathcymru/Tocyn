@@ -176,9 +176,10 @@ test('dashboard recovery reads the durable projection and exposes only recipient
     const token = await operatorToken(fixture);
     const listed = await fixture.request('/api/activities?limit=20', { token });
     assert.equal(listed.status, 200);
-    const body = await listed.json<{ page: { items: Array<{ id: string; revision: number }> }; unread: { status: string; count: number | null } }>();
+    const body = await listed.json<{ page: { items: Array<{ id: string; revision: number; ticketSubject: string | null }> }; unread: { status: string; count: number | null } }>();
     const activity = body.page.items.find(item => item.id === 'activity-route-a');
     assert.ok(activity);
+    assert.equal(activity.ticketSubject, 'Fixture ticket A', 'The recipient receives the current subject only through the authorized activity read');
     assert.deepEqual(body.unread, { status: 'available', count: 1 });
     const read = await fixture.request(`/api/activities/${activity.id}/read`, { method: 'PATCH', token, body: { expectedRevision: activity.revision } });
     assert.equal(read.status, 200);

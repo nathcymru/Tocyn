@@ -23,7 +23,7 @@ const selectColumns = columns.split(',').map(column => `a.${column.trim()} AS ${
 type Row = {
   id: string; ticket_id: string; recipient_user_id: string; kind: OperatorActivityKind; source_id: string;
   producer_kind: 'staff' | 'system'; producer_id: string | null; facts: string; receipt_fingerprint: string; revision: number;
-  created_at: string; resurfaced_at: string | null; read_at: string | null; dismissed_at: string | null;
+  created_at: string; resurfaced_at: string | null; read_at: string | null; dismissed_at: string | null; ticket_subject?: string | null;
 };
 type SqlCondition = Readonly<{ sql: string; values: readonly (string | number)[] }>;
 export type PreparedActivityAppend = Readonly<{ statement: D1PreparedStatement }>;
@@ -41,7 +41,8 @@ function activityFromRow(row: Row): OperatorActivity {
     ? { kind: 'staff' as const, id: row.producer_id }
     : { kind: 'system' as const };
   return {
-    id: row.id, ticketId: row.ticket_id, recipientUserId: row.recipient_user_id, kind: row.kind,
+    id: row.id, ticketId: row.ticket_id, ticketSubject: row.ticket_subject ?? null,
+    recipientUserId: row.recipient_user_id, kind: row.kind,
     sourceId: row.source_id, producer, facts: JSON.parse(row.facts) as OperatorActivityFacts,
     revision: row.revision, createdAt: row.created_at, resurfacedAt: row.resurfaced_at,
     readAt: row.read_at, dismissedAt: row.dismissed_at,
@@ -280,7 +281,7 @@ export class OperatorActivityRepository {
       ), window AS MATERIALIZED (
         SELECT * FROM candidates ORDER BY created_at DESC,id DESC LIMIT ?
       ), visible AS (
-        SELECT a.* FROM window a JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id
+        SELECT a.*,t.subject AS ticket_subject FROM window a JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id
         WHERE ${access.sql}
       )
       SELECT 'summary' AS row_kind,(SELECT count(*) FROM candidates) AS candidate_count,
@@ -288,9 +289,9 @@ export class OperatorActivityRepository {
         NULL AS ticket_id,NULL AS recipient_user_id,NULL AS kind,NULL AS source_id,NULL AS producer_kind,
         NULL AS producer_id,NULL AS facts,NULL AS receipt_fingerprint,NULL AS revision,
         (SELECT created_at FROM window ORDER BY created_at,id LIMIT 1) AS created_at,
-        NULL AS resurfaced_at,NULL AS read_at,NULL AS dismissed_at
+        NULL AS resurfaced_at,NULL AS read_at,NULL AS dismissed_at,NULL AS ticket_subject
       UNION ALL
-      SELECT 'item',NULL,${selectColumns} FROM visible a
+      SELECT 'item',NULL,${selectColumns},a.ticket_subject FROM visible a
       ORDER BY row_kind DESC,created_at DESC,id DESC`)
       .bind(this.scope.tenantId, this.scope.actorId, ...(cursor ? [cursor.createdAt, cursor.id] : []),
         OPERATOR_ACTIVITY_CANDIDATE_LIMIT + 1, OPERATOR_ACTIVITY_CANDIDATE_LIMIT, ...access.values)
