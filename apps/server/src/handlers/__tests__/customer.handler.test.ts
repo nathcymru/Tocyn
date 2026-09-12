@@ -56,6 +56,14 @@ vi.mock('../../budgets/customer-auth-admission.service', () => ({
   admitCustomerAuthEffect: mockAdmitCustomerAuthEffect,
 }));
 
+// These tests cover customer-route orchestration after ingress has admitted a
+// request. The bounded anonymous ingress path has its own Worker-runtime
+// coverage, including saturation and the 429 response, in
+// scripts/owner-ingress-admission-runtime.test.ts.
+vi.mock('../../middleware/rate-limiter', () => ({
+  rateLimiter: () => async (_c: unknown, next: () => Promise<void>) => next(),
+}));
+
 vi.mock("../../services/tenant-ticket.service", () => {
   return {
     TenantTicketService: vi.fn().mockImplementation(function() {
@@ -85,6 +93,15 @@ vi.mock("../../middleware/tenant.middleware", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../middleware/tenant.middleware")>();
   return {
     ...actual,
+    createTenantRequestDeps: (scope: any) => ({
+      scope,
+      repositories: {
+        users: {
+          get: mockGetCurrentUser,
+          revokeSessions: vi.fn().mockResolvedValue(undefined),
+        },
+      },
+    }),
     tenantMiddleware: async (c: any, next: any) => {
       c.set('tenantDeps', {
         scope: { tenantId: 'default-tenant' },
@@ -94,7 +111,8 @@ vi.mock("../../middleware/tenant.middleware", async (importOriginal) => {
             getAttachmentWithMeta: async () => ({ r2_key: "test-key", customer_email: "test@example.com", file_name: "test.png" })
           },
           users: {
-            get: mockGetCurrentUser
+            get: mockGetCurrentUser,
+            revokeSessions: vi.fn().mockResolvedValue(undefined),
           }
         },
         attachmentStorage: {
