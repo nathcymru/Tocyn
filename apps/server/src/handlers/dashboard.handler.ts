@@ -1,3 +1,4 @@
+import { balancedAssignmentHandler } from './balanced-assignment.handler';
 import { admitCapacity,settleCapacity } from '../budgets/operator-capacity-admission.service';
 import { OperatorCapacityRepository,OperatorCapacityError,type CapacityCommit } from '../repositories/operator-capacity.repository';
 import { settleTicketQueueCounts } from '../budgets/http-ticket-list-admission.service';
@@ -1474,6 +1475,8 @@ async function assignResponsibleOwner(c: any): Promise<Response> {
 
 dashboard.get('/operators/:userId/capacity',c=>operatorCapacity(c,false));
 dashboard.put('/operators/:userId/capacity',requestBounds(1024),c=>operatorCapacity(c,true));
+
+dashboard.post('/tickets/:id/balanced-assignment', requestBounds(1024), balancedAssignmentHandler);
 
 dashboard.patch('/tickets/:id/responsible-owner', requestBounds(1024), async (c) => {
   try {

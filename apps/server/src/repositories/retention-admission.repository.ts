@@ -307,6 +307,8 @@ export class RetentionAdmissionRepository {
     if (receipt !== null) return receipt ? 'more' : 'stale';
 
     const redactions: readonly { table: string; where: string; set: string; values: readonly string[] }[] = [
+      { table:'balanced_assignment_receipts', where:`tenant_id=? AND ticket_id=? AND lifecycle='completed'`,
+        set:`lifecycle='gone',ticket_id=NULL,owner_id=NULL,sequence=0,outcome=NULL`, values:[this.scope.tenantId,ticketId] },
       { table:'ticket_mutation_receipts', where:`tenant_id=? AND lifecycle='completed' AND (result_ticket_id=? OR result_article_id IN
           (SELECT id FROM articles WHERE tenant_id=? AND ticket_id=?))`, set:`lifecycle='gone',response_snapshot=NULL,result_ticket_id=NULL,result_article_id=NULL`,
         values:[this.scope.tenantId,ticketId,this.scope.tenantId,ticketId] },
