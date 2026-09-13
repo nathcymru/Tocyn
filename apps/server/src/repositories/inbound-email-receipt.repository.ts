@@ -8,7 +8,7 @@ export const MAX_INBOUND_ATTEMPTS = 3;
 export type InboundReceiptState = 'processing' | 'committed' | 'rejected' | 'uncertain';
 export type InboundReceipt = Readonly<{
   source_hash: string; envelope_hash: string; raw_hash: string | null; recipient: string;
-  current_attempt: number; state: InboundReceiptState;
+  current_attempt: number; state: InboundReceiptState; created_at:number; expires_at:number;
 }>;
 export type InboundArtifact = Readonly<{ ordinal: number; objectId: string; contentHash: string; byteSize: number }>;
 export type InboundClaim = Readonly<{
@@ -40,9 +40,12 @@ export class InboundEmailReceiptRepository {
   }
 
   async find(sourceHash: string): Promise<InboundReceipt | null> {
-    if (!/^[a-f0-9]{64}$/.test(sourceHash)) throw new Error('Invalid inbound source');
-    return this.db.prepare(`SELECT source_hash,envelope_hash,raw_hash,recipient,current_attempt,state
-      FROM inbound_email_receipts WHERE tenant_id=? AND source_hash=?`)
+    if (!this.scope.roles.includes('system') || this.scope.actorId!=='inbound-email'
+      || !/^[a-f0-9]{64}$/.test(sourceHash)) throw new Error('Invalid inbound source');
+    return this.db.prepare(`SELECT r.source_hash,r.envelope_hash,r.raw_hash,r.recipient,r.current_attempt,r.state,r.created_at,a.expires_at
+      FROM inbound_email_receipts r JOIN inbound_email_attempts a
+        ON a.tenant_id=r.tenant_id AND a.source_hash=r.source_hash AND a.attempt=r.current_attempt
+      WHERE r.tenant_id=? AND r.source_hash=?`)
       .bind(this.scope.tenantId,sourceHash).first<InboundReceipt>();
   }
 

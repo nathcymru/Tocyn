@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest';
-import { createSystemTenantScope } from '../../../auth/scope';
-import { inboundIdentity } from '../inbound-identity';
+import { createSystemTenantScope } from '../../auth/scope';
+import { inboundIdentity } from '../email/inbound-identity';
 const scope=(tenantId='one',actor='inbound-email')=>createSystemTenantScope({tenantId,actor});
 const envelope={from:'sender@example.invalid',to:'support@example.invalid',subject:'Synthetic message',messageId:'<Message-1@example.invalid>',rawSize:100};
 describe('bounded inbound source identity',()=>{

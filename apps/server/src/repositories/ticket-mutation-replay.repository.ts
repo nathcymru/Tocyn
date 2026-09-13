@@ -382,6 +382,10 @@ export class TicketMutationReplayRepository {
     // before the mutation receipt makes a losing idempotency race roll back both
     // the note and every durable mention projection.
     if (candidate.activityStatements?.length) statements.push(...candidate.activityStatements);
+    // Inbound completion has its own receipt and no HTTP response snapshot. Do
+    // not read unrelated, potentially large existing custom fields into a value
+    // that this caller discards.
+    if(inbound)return {statements,responseIndex:-1};
     const version = candidate.audit ? 2 : 1;
     const attachmentSnapshots = candidate.attachments.map(() => `json((SELECT ${attachmentJson} FROM attachments x WHERE x.tenant_id = ? AND x.id = ?))`);
     // Staff receipts record the format selected from the canonical article row,

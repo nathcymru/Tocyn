@@ -540,8 +540,8 @@ describe("Dashboard Handler Integration Tests", () => {
       const mockAttachment = { id: "att-1", file_name: "invoice.pdf", file_size: 1024, content_type: "application/pdf", r2_key: "agent-attachments/agent-1/uuid.pdf" };
 
       firstQueue.push(mockTicket, { 1: 1 });
-      mockDB.batch.mockResolvedValue([{results:[{response_snapshot:JSON.stringify({version:2,ticket:mockTicket,
-        article:{...mockArticle,is_internal:true},attachments:[mockAttachment],audit:[{eventId:'event-1',articleId:mockArticle.id}]})}]}]);
+      mockDB.batch.mockImplementation(async (statements: unknown[]) => statements.map((_, index) => ({results:index === statements.length - 1 ? [{response_snapshot:JSON.stringify({version:2,ticket:mockTicket,
+        article:{...mockArticle,is_internal:true},attachments:[mockAttachment],audit:[{eventId:'event-1',articleId:mockArticle.id}]})}] : [] })));
 
       const res = await dashboard.request(
         "/tickets/t-1/articles",

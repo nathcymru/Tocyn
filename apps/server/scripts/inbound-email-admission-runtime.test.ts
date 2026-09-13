@@ -62,7 +62,7 @@ test('inbound adapter uses real DO reservations and durable receipt grant links'
       return {sourceHash:source,envelopeHash:'a'.repeat(64),recipient:identity(tenant,source).to,attempt,token:crypto.randomUUID(),authority:admission.authority} satisfies InboundClaim;
     };
     const coordinator=(receipt:InboundClaim)=>namespace.get(namespace.idFromName(receipt.authority.grant!.aggregateId)) as unknown as BudgetCoordinatorDO;
-    const grants=async(receipt:InboundClaim)=>(await coordinator(receipt).inspectForTrustedRuntime()).tenantStates.flatMap(tenant=>tenant.grants);
+    const grants=async(receipt:InboundClaim)=>(await coordinator(receipt).inspectForTrustedRuntime()).tenantStates.flatMap(tenant=>tenant.grants).map(({holderSeedAttempts,...grant})=>{void holderSeedAttempts;return grant;});
     const ready=async(tenant:string,receipt:InboundClaim)=>{await repo(tenant).begin(receipt);await repo(tenant).prepare(receipt,'b'.repeat(64));await repo(tenant).planArtifacts(receipt,[]);};
     const effectCount=async()=>(await db.prepare('SELECT count(*) AS n FROM synthetic_inbound_admission_effects').first<{n:number}>())!.n;
     const original=await requireAdmission('a','1'.repeat(64));
@@ -71,10 +71,11 @@ test('inbound adapter uses real DO reservations and durable receipt grant links'
       await ready('a',original);
       const link=await db.prepare('SELECT reservation_id,holder_id,operation_id FROM inbound_email_attempts WHERE tenant_id=? AND source_hash=?').bind('a',original.sourceHash).first();
       assert.deepEqual(link,{reservation_id:original.authority.grant!.reservationId,holder_id:original.authority.grant!.holderId,operation_id:original.authority.operationId});
+      await repo('a').finish(original,'committed',[db.prepare("INSERT INTO synthetic_inbound_admission_effects VALUES ('a','once')")]);
+      apiTicketBudgetCache.discardForTrustedRuntime();
       const replay=await requireAdmission('a',original.sourceHash);
       assert.equal(replay.authority.grant!.reservationId,original.authority.grant!.reservationId);
       assert.equal(replay.authority.operationId,original.authority.operationId);assert.deepEqual(await grants(original),before);
-      await repo('a').finish(original,'committed',[db.prepare("INSERT INTO synthetic_inbound_admission_effects VALUES ('a','once')")]);
       await assert.rejects(repo('a').begin(replay));assert.equal(await effectCount(),1);
       settleInboundAttempt(original.authority,'committed',Date.now());settleInboundAttempt(replay.authority,'committed',Date.now());
       assert.deepEqual(await grants(original),before,'local settlement is not central release evidence');
@@ -104,6 +105,35 @@ test('inbound adapter uses real DO reservations and durable receipt grant links'
       const final=await grants(uncertain);assert.deepEqual(await admit('a',uncertain.sourceHash,4),{status:'rejected',reason:'unavailable'});
       assert.deepEqual(await grants(uncertain),final);
       assert.equal((await db.prepare('SELECT count(*) AS n FROM inbound_email_attempts WHERE tenant_id=? AND source_hash=?').bind('a',uncertain.sourceHash).first<{n:number}>())!.n,3);
+    });
+    await t.test('concurrent repeats share one reservation and only one durable claim wins',async()=>{
+      const [one,two]=await Promise.all([requireAdmission('a','6'.repeat(64)),requireAdmission('a','6'.repeat(64))]);
+      assert.equal(one.authority.grant!.reservationId,two.authority.grant!.reservationId);
+      const claims=await Promise.allSettled([repo('a').begin(one),repo('a').begin(two)]);
+      assert.equal(claims.filter(result=>result.status==='fulfilled').length,1);
+      assert.equal(claims.filter(result=>result.status==='rejected').length,1);
+    });
+    await t.test('lost reservation response reuses its charged grant before any receipt exists',async()=>{
+      const source='7'.repeat(64);const before=await grants(original);
+      const lossyNamespace={idFromName:(name:string)=>namespace.idFromName(name),get:(id:ReturnType<typeof namespace.idFromName>)=>{
+        const actual=namespace.get(id) as unknown as BudgetCoordinatorDO;
+        return {refreshFromTrustedAuthority:actual.refreshFromTrustedAuthority.bind(actual),
+          reserveFromTrustedAuthority:async(request:Parameters<BudgetCoordinatorDO['reserveFromTrustedAuthority']>[0])=>{
+            await actual.reserveFromTrustedAuthority(request);throw new Error('Synthetic lost reservation response');
+          }};
+      }};
+      const lost=await admitInboundAttempt({env:{...env,BUDGET_COORDINATOR_DO:lossyNamespace} as unknown as Env,
+        deps:deps('a'),identity:identity('a',source),attempt:1,business,now:Date.now});
+      assert.deepEqual(lost,{status:'rejected',reason:'unavailable'});assert.equal(await repo('a').find(source),null);
+      const charged=await grants(original);assert.equal(charged.length,before.length+1);
+      const retry=await requireAdmission('a',source);assert.deepEqual(await grants(original),charged);
+      assert.equal(retry.authority.grant!.reservationId,charged.find(grant=>!before.some(old=>old.reservationId===grant.reservationId))!.reservationId);
+      await ready('a',retry);
+    });
+    await t.test('a third reservation delivery fails closed without adding business liability',async()=>{
+      const before=await grants(original);apiTicketBudgetCache.discardForTrustedRuntime();
+      assert.deepEqual(await admit('a',original.sourceHash),{status:'rejected',reason:'unavailable'});
+      assert.deepEqual(await grants(original),before);assert.equal(await effectCount(),2);
     });
     await t.test('exhausted allocation and a revoked warm tenant deny before receipt or canonical effects',async()=>{
       const before=await effectCount();

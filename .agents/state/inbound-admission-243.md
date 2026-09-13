@@ -141,3 +141,44 @@ Project #243 is confirmed In progress with Actual start 2026-09-13. Progress and
 forecast fields are blank; no weighted percentage or reliable completion date is
 invented. Baselines are preserved. This partial is packaged on the existing draft
 PR #261; original-root duplicate edits are preserved untouched.
+
+## 13 September 2026 — direct reservation and bounded parsing checkpoint
+
+This checkpoint supersedes the earlier cache-based inbound adapter description.
+The unwired adapter now reserves one source/attempt operation directly through the
+BudgetCoordinator, using deterministic tenant/source/attempt holder identity and a
+stable operation key. It captures identity before awaiting, resolves current system
+authority twice, and validates exact policy snapshot, grant allocations/windows,
+amounts and expiry. A changed source fingerprint cannot change the reservation key.
+Two delivery acknowledgments are supported by the existing primitive; a third
+fails closed. Settlement retains reserved liability and does not reconcile slots.
+
+The explicit two-delivery control envelope includes four bounded authority reads
+and up to six DO RPCs, allowing full bounded state IO. This is partial accounting:
+pre-reservation ingress, rejected deliveries, orphan reservations before receipt
+creation, and the final complete business/MIME/attachment envelope remain open.
+No broader handler or release clearance follows from this adapter.
+
+Additional bounded parsing/MIME helpers and indexed inbound lookups are present,
+with participant-only projections, ambiguity limits, tenant-scoped references and
+indexed customer burst limits. The lookup migration uses the epoch expression
+matching the established timestamp semantics. The handler remains unwired.
+
+Executed checkpoint checks: all 872 server unit tests across 88 files, full server
+lint and TypeScript pass. Direct reservation native suite passes 8 nodes, including
+committed replay after cache discard, concurrent claims and a lost reservation
+response followed by reuse of the charged grant. Lookup native suite passes 5 nodes
+against 4,000 irrelevant tickets and 6,000 historical articles; coordinator verified
+the final epoch-index revision. Canonical native 5 nodes passed after omitting its
+unused inbound response snapshot. Earlier migration 6, receipt/R2 11, attachment
+21 and raw-reader 14 results remain evidence for their unchanged contracts.
+
+Original-root duplicate edits remain untouched. This is another signed checkpoint
+on existing draft #261, retaining its tested base; refresh to latest main and
+exact-revision CI remain required before readiness. Current issue status/start are
+preserved; blank progress and forecast fields remain blank rather than inferred.
+Remaining gates include final ingress/composition accounting, handler integration,
+MIME end-to-end behavior, orphan-before-claim expiry recovery, terminal reservation
+slot reconciliation, full native end-to-end acceptance and migration/release gates.
+Receipt/R2 native 11 nodes were also rerun successfully after the receipt lookup
+projection and system-scope changes; its focused TypeScript configuration passes.
