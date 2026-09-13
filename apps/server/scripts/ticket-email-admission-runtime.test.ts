@@ -16,7 +16,7 @@ const root=resolve(import.meta.dirname,'..');
 const jwtSecret='synthetic-ticket-email-runtime-secret-32-chars';
 const tenant='runtime-tenant',staff='runtime-staff',ticket='ticket';
 const otherTenant='runtime-tenant-b';
-type Metric={path:string;method:string;d1RowsRead:number;d1RowsWritten:number;d1Calls:number;r2Gets:number};
+type Metric={recoveries:{d1RowsRead:number;d1RowsWritten:number;d1Calls:number}[];path:string;method:string;d1RowsRead:number;d1RowsWritten:number;d1Calls:number;r2Gets:number};
 
 async function applyMigrations(db:D1Database){for(const file of readdirSync(join(root,'migrations')).filter(file=>file.endsWith('.sql')).sort())
   await db.batch(splitSql(readFileSync(join(root,'migrations',file),'utf8')).map(sql=>db.prepare(sql)));}
@@ -65,7 +65,8 @@ async function runtime(history=3_000){const bundled=await build({entryPoints:[re
   const replyOther=(key:string,body:string)=>requestReply(otherToken,key,body,false,[]);
   const replyTarget=(id:string,key:string,attachments:unknown[]=[])=>mf.dispatchFetch(`http://runtime.test/api/tickets/${id}/articles`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`,'idempotency-key':key},body:JSON.stringify({body:'Synthetic distinct delivery',body_format:'plain',is_internal:false,attachments})});
   const createTarget=(index:number)=>mf.dispatchFetch('http://runtime.test/api/tickets',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`,'idempotency-key':`email-create-${index}`},body:JSON.stringify({subject:`Synthetic delivery ${index}`,customer_email:'tocyn-auth-test-a@example.invalid',body:'Synthetic delivery',status:'open',priority:'normal'})});
-  return{mf,db,bucket,control,reply,replyOther,replyTarget,createTarget};}
+  const detailTarget=(id:string)=>mf.dispatchFetch(`http://runtime.test/api/tickets/${id}`,{headers:{authorization:`Bearer ${token}`}});
+  return{mf,db,bucket,control,reply,replyOther,replyTarget,createTarget,detailTarget};}
 async function expectCommitted(response:{status:number;json():Promise<unknown>}){assert.equal(response.status,201);return response.json() as Promise<{id:string}>;}
 
 test('real handler claims one bounded ticket email and preserves canonical success across replay, failure and revocation',async t=>{const h=await runtime();try{
@@ -167,7 +168,33 @@ test('twenty distinct reply targets retain separate single-operation write grant
   }
   assert.equal(rejected,0);assert.equal(completed,20,'single-operation target write grants fit the unchanged 200M policy');
   const state=await h.control();
+  const recoveries=state.attempts.flatMap(row=>row.recoveries);
+  assert.ok(recoveries.length>=19,'different target writes close their prior quiescent grants through current request recovery');
+  for(const recovery of recoveries){assert.ok(recovery.d1RowsRead<=4096,JSON.stringify(recovery));assert.ok(recovery.d1RowsWritten<=64,JSON.stringify(recovery));}
+  const closures=await h.db.prepare('SELECT count(*) AS n FROM budget_grant_closures WHERE tenant_id=? AND reconciled_at IS NOT NULL').bind(tenant).first<{n:number}>();
+  assert.ok(closures!.n>=19);
+  t.diagnostic(JSON.stringify({recoveryCount:recoveries.length,maxRecoveryD1Reads:Math.max(...recoveries.map(row=>row.d1RowsRead)),maxRecoveryD1Writes:Math.max(...recoveries.map(row=>row.d1RowsWritten))}));
   t.diagnostic(JSON.stringify({policyLogLimit:200_000_000,newWorkLogLimit:160_000_000,completed,rejected,cache:state.cache,
     observedD1Reads:state.attempts.reduce((sum,row)=>sum+row.d1RowsRead,0),observedD1Writes:state.attempts.reduce((sum,row)=>sum+row.d1RowsWritten,0),observedR2Gets:state.attempts.reduce((sum,row)=>sum+row.r2Gets,0),measuredLogs:false}));
+ }finally{await h.mf.dispose();}
+});
+
+
+test('cross-scope recovery rejects an original target moved to an inaccessible group while an independent ticket still loads',async()=>{
+ const h=await runtime(0);try{
+  await h.db.batch([
+   h.db.prepare("INSERT INTO groups(tenant_id,id,name) VALUES(?,'original-group','Synthetic original group')").bind(tenant),
+   h.db.prepare("INSERT INTO groups(tenant_id,id,name) VALUES(?,'changed-group','Synthetic inaccessible group')").bind(tenant),
+   h.db.prepare("INSERT INTO user_groups(tenant_id,user_id,group_id) VALUES(?,?,'original-group')").bind(tenant,staff),
+   h.db.prepare("UPDATE tickets SET group_id='original-group' WHERE tenant_id=? AND id=?").bind(tenant,ticket),
+   h.db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_id,customer_email,source,group_id) VALUES(?,'new-read-target','Synthetic independent read','customer','tocyn-auth-test-a@example.invalid','dashboard',NULL)").bind(tenant),
+  ]);
+  await expectCommitted(await h.reply('original-group-reply','Synthetic group reply'));
+  const operation=await h.db.prepare("SELECT reservation_id FROM budget_grant_operations WHERE tenant_id=? AND operation_id NOT LIKE 'ticket-email:%' LIMIT 1").bind(tenant).first<{reservation_id:string}>();assert.ok(operation);
+  await h.db.prepare("UPDATE tickets SET group_id='changed-group' WHERE tenant_id=? AND id=?").bind(tenant,ticket).run();
+  const response=await h.detailTarget('new-read-target');const responseText=await response.text();assert.equal(response.status,200,responseText);
+  assert.equal(await h.db.prepare('SELECT 1 FROM budget_grant_closures WHERE tenant_id=? AND reservation_id=?').bind(tenant,operation.reservation_id).first(),null,'original inaccessible group prevents closure despite independent ticket access');
+  const state=await h.control();const read=state.attempts.find(row=>row.path.endsWith('/new-read-target'))!;
+  assert.equal(read.recoveries.length,1);assert.ok(read.recoveries[0].d1RowsRead>0);assert.equal(read.recoveries[0].d1RowsWritten,0);
  }finally{await h.mf.dispose();}
 });

@@ -106,3 +106,34 @@ describe('explicit single-operation target write grants', () => {
     expect(f.captured).toHaveLength(0); expect(f.authorize).not.toHaveBeenCalled();
   });
 });
+
+describe('target-write recovery descriptors use current request composition', () => {
+  function target() {
+    const f=fixture(); f.input.database={}; f.input.singleOperationGrant='target-write-v1';
+    f.input.intent.workScopeKey=`dashboard.ticket.reply:${'a'.repeat(64)}`; f.input.requirements={ticket:{id:'a',groupId:null}}; return f;
+  }
+  it('shares only the full-session recovery group, retaining original target descriptor and exact write key',async()=>{
+    const f=target();await f.service.admit(f.input);
+    f.input.requirements={ticket:{id:'b',groupId:'g'}};await f.service.admit(f.input);
+    const [a,b]=f.captured;
+    expect(a.sessionRecovery.groupKey).toBe(b.sessionRecovery.groupKey);
+    expect(a.credentialKey).not.toBe(b.credentialKey);
+    expect(a.sessionRecovery.descriptor.requirements).toEqual({ticket:{id:'a',groupId:null}});
+    delete f.input.singleOperationGrant;f.input.intent.workScopeKey='workspace.state.read';f.input.requirements={};await f.service.admit(f.input);
+    expect(f.captured[2].sessionRecovery.groupKey).toBe(a.sessionRecovery.groupKey);
+    expect(f.captured[2].sessionRecovery.descriptor).toBeUndefined();
+  });
+  it.each(['tenantId','actorId','role','sessionVersion','expiresAt','mfaVerified'])('isolates recovery group when %s changes',async field=>{
+    const f=target();await f.service.admit(f.input);
+    f.input.credential={...f.input.credential,[field]:typeof f.input.credential[field]==='number'?f.input.credential[field]+1:typeof f.input.credential[field]==='boolean'?false:`${f.input.credential[field]}-changed`};
+    await f.service.admit(f.input);expect(f.captured[0].sessionRecovery.groupKey).not.toBe(f.captured[1].sessionRecovery.groupKey);
+  });
+  it('reauthorizes the original target through the current request session repository and clock',async()=>{
+    const original=target();await original.service.admit(original.input);const descriptor=original.captured[0].sessionRecovery.descriptor;
+    const current=target();current.input.now=()=>42;current.input.requirements={ticket:{id:'current',groupId:null}};
+    await current.service.admit(current.input);current.authorize.mockClear();current.authorize.mockResolvedValue(null);
+    const result=await current.captured[0].sessionRecovery.recover({tenantId:'tenant-a',credentialKey:descriptor.credentialKey,expiresAt:100},descriptor,42);
+    expect(result).toBe('rejected');expect(current.authorize).toHaveBeenCalledExactlyOnceWith(descriptor.credential,descriptor.requirements,42);
+    expect(original.authorize).toHaveBeenCalledTimes(1);
+  });
+});

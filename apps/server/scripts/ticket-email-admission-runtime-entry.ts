@@ -4,11 +4,19 @@ export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO'
 export { NotificationDO } from '../src/durable_objects/NotificationDO';
 import { app } from '../src/application';
 import { apiTicketBudgetCache } from '../src/middleware/budget-admission.middleware';
+import { BudgetGrantRecoveryService } from '../src/budgets/budget-grant-recovery.service';
 import { LocalAuthCaptureTransport } from '../src/services/email/transport';
 
-type Attempt = { path:string; method:string; d1RowsRead:number; d1RowsWritten:number; d1Calls:number; r2Gets:number };
+type RecoveryMetric = { d1RowsRead:number; d1RowsWritten:number; d1Calls:number };
+type Attempt = { recoveries:RecoveryMetric[]; path:string; method:string; d1RowsRead:number; d1RowsWritten:number; d1Calls:number; r2Gets:number };
 const attempts:Attempt[]=[];
 const metricContext=new AsyncLocalStorage<Attempt>();
+const recoveryContext=new AsyncLocalStorage<RecoveryMetric>();
+const recover=BudgetGrantRecoveryService.prototype.recover;
+BudgetGrantRecoveryService.prototype.recover=function(sealed,now){
+  const measurement={d1RowsRead:0,d1RowsWritten:0,d1Calls:0};metricContext.getStore()?.recoveries.push(measurement);
+  return recoveryContext.run(measurement,()=>recover.call(this,sealed,now));
+};
 const databaseWrappers=new WeakMap<object,any>();
 const capture=new LocalAuthCaptureTransport();
 const deliverySettlements:string[]=[];
@@ -22,7 +30,7 @@ let beforeDelivery:''|'session'|'mfa'|'role'|'policy'|'restriction'|'closure'|'t
 function instrumentDatabase(db:any):any {
   const existing=databaseWrappers.get(db);if(existing)return existing;
   const statements=new WeakMap<object,{raw:any;sql:string;values:any[]}>();
-  const add=(meta:any)=>{const metric=metricContext.getStore();if(!metric)throw new Error('Synthetic metric context unavailable');metric.d1Calls++;metric.d1RowsRead+=meta?.rows_read??0;metric.d1RowsWritten+=meta?.rows_written??0;};
+  const add=(meta:any)=>{const metric=metricContext.getStore();if(!metric)throw new Error('Synthetic metric context unavailable');metric.d1Calls++;metric.d1RowsRead+=meta?.rows_read??0;metric.d1RowsWritten+=meta?.rows_written??0;const recovery=recoveryContext.getStore();if(recovery){recovery.d1Calls++;recovery.d1RowsRead+=meta?.rows_read??0;recovery.d1RowsWritten+=meta?.rows_written??0;}};
   const wrap=(raw:any,sql:string,values:any[]=[]):any=>{const proxy=new Proxy(raw,{get(target,property){
     if(property==='bind')return(...bound:any[])=>wrap(target.bind(...bound),sql,bound);
     if(property==='first')return async(column?:string)=>{const result=await target.all();add(result.meta);const row=result.results?.[0]??null;return column&&row?row[column]:row;};
@@ -67,7 +75,7 @@ export default {async fetch(request:Request,env:any,ctx:ExecutionContext):Promis
     return Response.json({attempts,messages:capture.list().map(message=>({to:message.to,subject:message.subject})),beforeDelivery,
       deliverySettlements,cache:apiTicketBudgetCache.inspectForTrustedRuntime()});
   }
-  const metric:Attempt={path:url.pathname,method:request.method,d1RowsRead:0,d1RowsWritten:0,d1Calls:0,r2Gets:0};
+  const metric:Attempt={recoveries:[],path:url.pathname,method:request.method,d1RowsRead:0,d1RowsWritten:0,d1Calls:0,r2Gets:0};
   try{return await metricContext.run(metric,()=>app.fetch(request,{...env,DB:instrumentDatabase(env.DB),ATTACHMENTS_BUCKET:instrumentBucket(env.ATTACHMENTS_BUCKET,metric),
     emailTransport:capture},ctx));}finally{attempts.push(metric);}
 }};

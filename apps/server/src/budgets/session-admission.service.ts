@@ -4,7 +4,7 @@ import type { VerifiedTenantScope } from '../types/tenant';
 import type { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
 import type { SessionBudgetAuthorityRepository, SessionBudgetCredential, SessionBudgetRequirements } from '../repositories/session-budget-authority.repository';
 import { BudgetGrantRecoveryService } from './budget-grant-recovery.service';
-import { IsolateBudgetAdmissionCache, type CanonicalBudgetIntent } from './isolate-admission.service';
+import { IsolateBudgetAdmissionCache, type CanonicalBudgetIntent, type TargetWriteRecoveryDescriptor } from './isolate-admission.service';
 
 /**
  * Session credential adapter only; it does not introduce a route permission,
@@ -71,9 +71,23 @@ export class SessionBudgetAdmissionService {
       ? input.sessions.authorize(credential, requirements, input.now()) : Promise.resolve(null) };
     const recovery = input.database ? new BudgetGrantRecoveryService(input.database, input.repository, input.namespace, input.scope,
       { credentialKey, authorization }) : undefined;
+    const groupHash = recovery ? await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['session-recovery-group-v1', credential]))) : undefined;
+    const groupKey = groupHash ? `session-recovery:${Array.from(new Uint8Array(groupHash), byte => byte.toString(16).padStart(2, '0')).join('')}` : undefined;
     return this.cache.admit({ repository: input.repository, namespace: input.namespace, scope: input.scope,
       credentialKey, intent, business, now: input.now, authorization,
       ...(singleOperation ? { maxBlockOperations: 1 as const } : {}),
+      ...(recovery && groupKey ? { sessionRecovery: {
+        groupKey,
+        ...(singleOperation ? { descriptor: { credential, requirements, credentialKey, recoveryGroupKey: groupKey } } : {}),
+        recover: (sealed: Parameters<BudgetGrantRecoveryService['recover']>[0], original: TargetWriteRecoveryDescriptor, now: number) => {
+          // Use this request's repositories, clock and observation context. The
+          // retained data supplies only the ORIGINAL target authorization facts.
+          const originalAuthorization = { authorize: (scope: VerifiedTenantScope) => scope.tenantId === original.credential.tenantId && scope.actorId === original.credential.actorId
+            ? input.sessions.authorize(original.credential, original.requirements, input.now()) : Promise.resolve(null) };
+          return new BudgetGrantRecoveryService(input.database!, input.repository, input.namespace, input.scope,
+            { credentialKey: original.credentialKey, authorization: originalAuthorization }).recover(sealed, now);
+        },
+      } } : {}),
       ...(recovery ? { recoverGrant: (sealed: Parameters<BudgetGrantRecoveryService['recover']>[0], now: number) => recovery.recover(sealed, now) } : {}),
     });
   }

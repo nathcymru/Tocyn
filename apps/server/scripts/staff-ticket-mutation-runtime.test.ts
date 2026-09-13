@@ -593,14 +593,18 @@ test('actor-qualified keys do not replay another staff member and the optional c
     ]);
     const first=await accept(f.service(),reply(),'same-key');
     const other=await accept(f.service('a','other'),reply(),'same-key');assert.notEqual(first.outcome.article.id,other.outcome.article.id);
+    for(let i=0;i<63;i++) await f.db.batch([
+      f.db.prepare('INSERT INTO groups (tenant_id,id,name) VALUES (?,?,?)').bind('a',`valid-${i}`,`Valid synthetic ${i}`),
+      f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES (?,'staff',?)").bind('a',`valid-${i}`),
+    ]);
     const principal={tenantId:'a',actorId:'staff',role:'agent' as const,sessionVersion:1};
     const decision=await new CapabilityPolicyService(f.db,f.scope()).authorize(principal,'ticket-fields.manage');
     const s=f.service('a','staff',{...principal,capability:decision.capability,policyFingerprint:decision.policyFingerprint});
     const p=await s.prepareStaffMutation(reply('Membership sentinel'),'sentinel');assert.equal((await s.admit(p)).status,'spent');
     const before=await f.counts();
     f.before(async()=>{
-      for(let i=0;i<64;i++) await f.db.batch([
-        f.db.prepare('INSERT INTO groups (tenant_id,id,name) VALUES (?,?,?)').bind('a',`extra-${i}`,'Synthetic'),
+      for(let i=0;i<1;i++) await f.db.batch([
+        f.db.prepare('INSERT INTO groups (tenant_id,id,name) VALUES (?,?,?)').bind('a',`extra-${i}`,`Overflow synthetic ${i}`),
         f.db.prepare("INSERT INTO user_groups (tenant_id,user_id,group_id) VALUES (?,'staff',?)").bind('a',`extra-${i}`),
       ]);
     });
