@@ -102,6 +102,7 @@ export async function admitHttpTicketRead(input: AdmissionInput): Promise<HttpTi
       return prepared(await sessionTicketBudgetAdmission.admit({ database: input.deps.database, repository: input.deps.repositories.budgetAuthority,
         sessions: new SessionBudgetAuthorityRepository(input.deps.database, input.deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
         scope: input.deps.scope, credential, requirements: { readTicketId: input.ticketId },
+        readScopePartition: 'ticket-read-v1',
         intent: { operationId: crypto.randomUUID(), operationFingerprint: fingerprint, workScopeKey: input.operation },
         business: HTTP_TICKET_READ_ENVELOPE, now: input.now }), input, credential);
     }

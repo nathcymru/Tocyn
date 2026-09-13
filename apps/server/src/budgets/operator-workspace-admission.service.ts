@@ -55,7 +55,8 @@ export async function admitOperatorWorkspace(input: { env: Env; deps: TenantRequ
     const operationId = crypto.randomUUID();
     const operationFingerprint = await hash(['workspace-v3',input.operation,input.deps.scope.tenantId,input.deps.scope.actorId,input.ticketId ?? null,draftPopulation ?? null]);
     const outcome = await sessionTicketBudgetAdmission.admit({ database: input.deps.database, repository: input.deps.repositories.budgetAuthority, sessions, namespace: input.env.BUDGET_COORDINATOR_DO, scope: input.deps.scope, credential,
-      requirements, intent: { operationId, operationFingerprint, workScopeKey: input.operation },
+      requirements, ...(input.operation === 'workspace.draft.read' ? { readScopePartition: 'ticket-read-v1' as const } : {}),
+      intent: { operationId, operationFingerprint, workScopeKey: input.operation },
       business: operatorWorkspaceEnvelope(input.operation, draftPopulation), now: input.now });
     if ((outcome.status === 'spent' || outcome.status === 'idempotent') && outcome.commitAuthority
       && outcome.commitAuthority.operationId === operationId && outcome.commitAuthority.operationFingerprint === operationFingerprint) {

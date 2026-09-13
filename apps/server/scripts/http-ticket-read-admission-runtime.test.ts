@@ -252,9 +252,10 @@ test('four grants with unknown read completions cannot reclaim slots from durabl
   const f=await fixture();
   try{
     const token=await staffToken();
+    await f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_id,customer_email,group_id,source) VALUES ('read-tenant','second-ticket','Second proof','reader-customer','reader@example.test','reader-group','dashboard')").run();
     for(let i=0;i<32;i++){
       if(i%8===0)await f.mf.dispatchFetch('http://runtime.test/__budget-control',{method:'POST',body:JSON.stringify({loseCanonicalAck:true})});
-      const response=await request(f.mf,'/api/tickets/read-ticket',token);
+      const response=await request(f.mf,i%2===0?'/api/tickets/read-ticket':'/api/tickets/second-ticket',token);
       assert.equal(response.status,i%8===0?500:200,await response.text());
     }
     const response=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(response.status,429,await response.text());
@@ -312,5 +313,77 @@ for (const change of ['policy', 'credential'] as const) test(`cold recovery rech
     assert.notEqual(response.status, 200, await response.text());
     const count = await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>();
     assert.equal(count?.n, 0, 'expired prior links were retired; revoked request creates no new completion receipt');
+  } finally { await f.mf.dispose(); }
+});
+
+
+test('transient post-recovery D1 failure clears only the rejected pending allocation and permits retry', async () => {
+  const f = await fixture(1_000_000, 1_000);
+  try {
+    const token = await staffToken();
+    const first = await request(f.mf, '/api/tickets/read-ticket', token);
+    assert.equal(first.status, 200); await first.body?.cancel();
+    await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ now: Date.now() + 2_000, failReadAfterRecovery: true }) });
+    const failed = await request(f.mf, '/api/tickets/read-ticket', token);
+    assert.equal(failed.status, 503); await failed.body?.cancel();
+    const before = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
+      calls: { reserve: number; reconcile: number }; cache: { holders: number; refills: number }
+    };
+    assert.equal(before.calls.reserve, 2, 'one business and one separately charged recovery reservation');
+    assert.equal(before.calls.reconcile, 1);
+    assert.equal(before.cache.refills, 0, 'only confirmed recovery returned the original slot');
+    const retry = await request(f.mf, '/api/tickets/read-ticket', token);
+    assert.equal(retry.status, 200, await retry.text());
+    const after = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
+      calls: { reserve: number; reconcile: number }; cache: { holders: number; refills: number }
+    };
+    assert.equal(after.calls.reserve, 3, 'retry allocates a newly charged business grant');
+    assert.equal(after.calls.reconcile, 1, 'retry does not repeat the completed recovery');
+    assert.equal(after.cache.holders, 1); assert.equal(after.cache.refills, 1);
+  } finally { await f.mf.dispose(); }
+});
+
+test('twenty distinct authorized tickets share three read scopes without reusing target permission', async () => {
+  const f = await fixture();
+  try {
+    const token = await staffToken();
+    for (let index = 0; index < 20; index++) await f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_id,customer_email,group_id,source) VALUES ('read-tenant',?,'Distinct proof','reader-customer','reader@example.test','reader-group','dashboard')").bind(`distinct-${index}`).run();
+    for (let index = 0; index < 20; index++) for (const path of [`/api/tickets/distinct-${index}`, `/api/tickets/distinct-${index}/history`, `/api/workspace/drafts/distinct-${index}`]) {
+      const response = await request(f.mf, path, token);
+      assert.equal(response.status, path.includes('/drafts/') ? 204 : 200, await response.text());
+    }
+    const state = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { calls: { reserve: number; reconcile: number }; cache: { scopes: number; holders: number } };
+    assert.equal(state.cache.scopes, 3); assert.equal(state.cache.holders, 3);
+    assert.equal(state.calls.reserve, 15); assert.equal(state.calls.reconcile, 6);
+    assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n, 60);
+    await f.db.prepare("UPDATE tickets SET group_id=NULL WHERE tenant_id='read-tenant' AND id='distinct-19'").run();
+    // Membership removal must affect the next read even though accounting is warm.
+    await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='read-tenant' AND user_id='reader-agent'").run();
+    const denied = await request(f.mf, '/api/tickets/distinct-0', token); assert.notEqual(denied.status, 200); await denied.body?.cancel();
+    assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n, 60);
+  } finally { await f.mf.dispose(); }
+});
+
+
+for (const operation of ['detail', 'history', 'draft']) test(`shared warm ${operation} block retains exact terminal target permission`, async () => {
+  const f = await fixture();
+  try {
+    const token = await staffToken();
+    await f.db.prepare("INSERT INTO tickets (tenant_id,id,subject,customer_id,customer_email,group_id,source) VALUES ('read-tenant','warm-ticket','Warm proof','reader-customer','reader@example.test','reader-group','dashboard')").run();
+    const path = (id:string) => operation === 'draft' ? `/api/workspace/drafts/${id}` : `/api/tickets/${id}${operation === 'history' ? '/history' : ''}`;
+    const warm = await request(f.mf, path('warm-ticket'), token); assert.equal(warm.status, operation === 'draft' ? 204 : 200); await warm.body?.cancel();
+    await (await control(f.mf, { pauseNextCanonical: true })).body?.cancel();
+    const pending = request(f.mf, path('read-ticket'), token);
+    let paused = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const state = await (await control(f.mf)).json() as { canonicalPaused: boolean };
+      if (state.canonicalPaused) { paused = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.equal(paused, true);
+    await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='read-tenant' AND user_id='reader-agent'").run();
+    await (await control(f.mf, { releaseCanonical: true })).body?.cancel();
+    const denied = await pending; assert.ok(denied.status >= 400); await denied.body?.cancel();
+    assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n, 1, 'target revocation cannot mint another completion');
   } finally { await f.mf.dispose(); }
 });
