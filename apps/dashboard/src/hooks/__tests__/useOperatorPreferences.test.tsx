@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useSyncExternalStore } from 'react';
+import { StrictMode, useSyncExternalStore } from 'react';
 
 vi.mock('../../store/authStore', () => {
   let state: any = { token: null, user: null, sessionGeneration: 0 }; const listeners = new Set<() => void>();
@@ -51,7 +51,37 @@ it('rejects an old or corrupt server schema and requires recovery before a save'
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ version: 99, revision: 3, density: 'compact', fontScale: 'large', focusMode: true, motion: 'reduced', updatedAt: 'old' })));
   render(<Harness />); await waitFor(() => expect(current()).toMatchObject({ status: 'error', revision: 0 }));
   act(() => value.update({ density: 'compact' })); await act(async () => { await value.save(); });
-  expect(current().status).toBe('unsaved');
+  expect(current().status).toBe('error');
+  expect(current().error).toContain('Restore before saving');
+});
+
+it('restores after StrictMode effect replay without accepting the obsolete request', async () => {
+  let finishFirst!: (response: Response) => void;
+  const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finishFirst = resolve; }))
+    .mockResolvedValueOnce(json({ ...preference(3), density: 'compact' }));
+  vi.stubGlobal('fetch', fetch);
+  render(<StrictMode><Harness /></StrictMode>);
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 3, density: 'compact' }));
+  await act(async () => finishFirst(json(preference(1))));
+  expect(current()).toMatchObject({ status: 'restored', revision: 3, density: 'compact' });
+});
+
+it('keeps recovery available after editing a malformed restore, then saves against the recovered revision', async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(json({ ...preference(), version: 99 }))
+    .mockResolvedValueOnce(json(preference(4)))
+    .mockResolvedValueOnce(json({ ...preference(5), density: 'compact' }));
+  vi.stubGlobal('fetch', fetch);
+  render(<Harness />);
+  await waitFor(() => expect(current().status).toBe('error'));
+  act(() => value.update({ density: 'compact' }));
+  expect(current()).toMatchObject({ status: 'error', density: 'compact' });
+  await act(async () => { await value.save(); });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  act(() => value.retry());
+  await waitFor(() => expect(current()).toMatchObject({ status: 'unsaved', revision: 4, density: 'compact' }));
+  await act(async () => { await value.save(); });
+  expect(current()).toMatchObject({ status: 'saved', revision: 5, density: 'compact' });
+  expect(JSON.parse(fetch.mock.calls[2][1].body)).toMatchObject({ expectedRevision: 4, density: 'compact' });
 });
 
 it('surfaces a CAS conflict until the operator restores the current server record', async () => {
@@ -59,4 +89,37 @@ it('surfaces a CAS conflict until the operator restores the current server recor
   render(<Harness />); await waitFor(() => expect(current().status).toBe('restored'));
   act(() => value.update({ density: 'compact' })); await act(async () => { await value.save(); }); expect(current().status).toBe('conflict');
   act(() => value.restore()); await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 4, density: 'comfortable' }));
+});
+
+it('restores a saved preference after remounting instead of relying on in-memory state', async () => {
+  let stored = preference();
+  vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
+    if (options.method === 'PUT') {
+      const { expectedRevision, ...changes } = JSON.parse(options.body);
+      stored = { ...stored, ...changes, revision: expectedRevision + 1 };
+    }
+    return json(stored);
+  }));
+  const view = render(<Harness />);
+  await waitFor(() => expect(current().status).toBe('restored'));
+  act(() => value.update({ motion: 'reduced', fontScale: 'larger', focusMode: true }));
+  await act(async () => { await value.save(); });
+  view.unmount();
+  expect(document.documentElement.dataset.tocynMotion).toBeUndefined();
+  render(<Harness />);
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 1, motion: 'reduced', fontScale: 'larger', focusMode: true }));
+});
+
+it.each([
+  { id: 'second-operator', tenant_id: 'tenant-a' },
+  { id: 'operator', tenant_id: 'tenant-b' },
+])('discards the old restore when identity changes to $tenant_id/$id', async nextUser => {
+  let finishOld!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finishOld = resolve; }))
+    .mockResolvedValueOnce(json({ ...preference(2), motion: 'reduced' })));
+  render(<Harness />);
+  act(() => useAuthStore.getState().setAuth('session-b', { ...user, ...nextUser }));
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 2, motion: 'reduced' }));
+  await act(async () => finishOld(json({ ...preference(7), density: 'compact', motion: 'full' })));
+  expect(current()).toMatchObject({ status: 'restored', revision: 2, density: 'comfortable', motion: 'reduced' });
 });

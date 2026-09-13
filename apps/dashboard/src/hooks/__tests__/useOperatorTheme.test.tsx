@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useSyncExternalStore } from 'react';
+import { StrictMode, useSyncExternalStore } from 'react';
 
 vi.mock('../../store/authStore', () => {
   let state: any = { token: null, user: null, mfaRequired: false, sessionGeneration: 0 }; const listeners = new Set<() => void>();
@@ -27,6 +27,17 @@ it('restores system mode and resolves validated light palette', async () => {
   vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json({ revision: 0, mode: 'system', updatedAt: null })).mockResolvedValueOnce(json(tenant)));
   render(<Harness />); await waitFor(() => expect(current()).toMatchObject({ status: 'restored', mode: 'system', resolved: 'light', revision: 0 }));
+});
+
+it('restores appearance after StrictMode replay and ignores the previous effect response', async () => {
+  const first = deferred<Response>();
+  vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(first.promise).mockResolvedValueOnce(json(tenant))
+    .mockResolvedValueOnce(json({ revision: 3, mode: 'dark', updatedAt: null })).mockResolvedValueOnce(json(tenant)));
+  render(<StrictMode><Harness /></StrictMode>);
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', mode: 'dark', revision: 3 }));
+  await act(async () => first.resolve(json({ revision: 1, mode: 'light', updatedAt: null })));
+  expect(current()).toMatchObject({ status: 'restored', mode: 'dark', revision: 3 });
 });
 
 it('keeps an explicit mode and palette safe when the stored tenant response is corrupt', async () => {
