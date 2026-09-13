@@ -13,23 +13,26 @@ export type TicketQueuePredicate = Readonly<{
  * canonical deadline, so list and count cannot disagree around a browser's
  * notion of "now".
  */
-export function ticketQueuePredicate(queue: TicketQueueKey, ticketAlias = 'tickets', draft?: Readonly<{ actorId: string; notExpiredAt?: string }>): TicketQueuePredicate {
+export function ticketQueuePredicate(queue: TicketQueueKey, ticketAlias = 'tickets', operator?: Readonly<{ actorId: string; notExpiredAt?: string }>): TicketQueuePredicate {
   if (queue === 'drafts') {
-    if (!draft?.actorId) throw new Error('Draft queue requires an operator');
+    if (!operator?.actorId) throw new Error('Draft queue requires an operator');
     const expiry = DRAFT_EXPIRY_SQL.replaceAll('expires_at', 'queue_draft.expires_at').replaceAll('updated_at', 'queue_draft.updated_at');
-    return { inclusionReason: 'drafts', values: [draft.actorId, ...(draft.notExpiredAt ? [draft.notExpiredAt] : [])],
+    return { inclusionReason: 'drafts', values: [operator.actorId, ...(operator.notExpiredAt ? [operator.notExpiredAt] : [])],
       sql: `EXISTS (SELECT 1 FROM operator_drafts queue_draft
         WHERE queue_draft.tenant_id=${ticketAlias}.tenant_id AND queue_draft.ticket_id=${ticketAlias}.id
-          AND queue_draft.user_id=?${draft.notExpiredAt ? ` AND ${expiry}>?` : ''})` };
+          AND queue_draft.user_id=?${operator.notExpiredAt ? ` AND ${expiry}>?` : ''})` };
   }
   const state = `ticket_support_state queue_state JOIN support_state_definitions queue_definition
     ON queue_definition.tenant_id=queue_state.tenant_id AND queue_definition.id=queue_state.definition_id
     WHERE queue_state.tenant_id=${ticketAlias}.tenant_id AND queue_state.ticket_id=${ticketAlias}.id`;
-  if (queue === 'actionable') {
+  if (queue === 'actionable' || queue === 'mine' || queue === 'unassigned') {
+    if (queue === 'mine' && !operator?.actorId) throw new Error('Mine queue requires an operator');
+    const ownership = queue === 'mine' ? ` AND ${ticketAlias}.assigned_to=?`
+      : queue === 'unassigned' ? ` AND ${ticketAlias}.assigned_to IS NULL` : '';
     return {
-      inclusionReason: 'actionable', values: [],
+      inclusionReason: queue, values: queue === 'mine' ? [operator!.actorId] : [],
       sql: `EXISTS (SELECT 1 FROM ${state}
-        AND queue_definition.legacy_status IN ('open','pending') AND queue_state.snoozed_until IS NULL)`,
+        AND queue_definition.legacy_status IN ('open','pending') AND queue_state.snoozed_until IS NULL)${ownership}`,
     };
   }
   if (queue !== 'snoozed') throw new Error('Unknown ticket queue');

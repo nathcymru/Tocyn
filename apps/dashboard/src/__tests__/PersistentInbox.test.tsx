@@ -347,3 +347,32 @@ it('uses server Drafts queue results and reports an empty saved-draft view witho
   releaseSnoozed();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
 });
+
+it('opens authoritative Mine and Unassigned views without claiming refreshed ownership prematurely',async()=>{
+  const fallback=fetch;
+  let release!:()=>void;
+  const pending=new Promise<void>(done=>{release=done;});
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url.startsWith('/api/tickets?')){
+      const queue=new URL(url,'http://localhost').searchParams.get('queue');
+      if(queue==='mine')return json({data:[{...tickets[0],inclusion_reason:'mine'}],meta:{page:1,limit:20,total:1,total_pages:1}});
+      if(queue==='unassigned'){await pending;return json({data:[],meta:{page:1,limit:20,total:0,total_pages:0}});}
+    }
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/mine');
+  await screen.findByLabelText('Inclusion reason: mine');
+  expect(screen.getByRole('button',{name:'Mine'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByText(/Current view:/)).toHaveTextContent('Current view: Mine');
+  fireEvent.click(screen.getByRole('button',{name:'Unassigned'}));
+  await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
+  expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toBeInTheDocument();
+  expect(screen.queryByLabelText('Inclusion reason: unassigned')).not.toBeInTheDocument();
+  expect(screen.queryByText('No unassigned conversations')).not.toBeInTheDocument();
+  release();
+  await screen.findByText('No unassigned conversations');
+  expect(screen.getByRole('button',{name:'Unassigned'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByText('Open and pending conversations without an assignee and ready for work.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Table view'}));
+  expect(within(screen.getByRole('table')).getByText('No unassigned conversations')).toBeInTheDocument();
+});

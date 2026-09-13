@@ -52,20 +52,25 @@ function byteReadUnits(value: number): number | null {
 /**
  * Count and page retain their historical full candidate semantics.  The
  * maintained counters turn that variable work into an explicit reservation:
- * two ticket passes, two article passes for substring search, an optional
- * group-membership pass, and a conservative byte-equivalent D1-read margin.
+ * two ticket passes, two article passes for substring search, optional
+ * group-membership lookups in both passes, and a conservative byte-equivalent D1-read margin.
  */
 export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { search?: string; groupRestricted: boolean; queue?: TicketQueueKey }): ResourceAmounts | null {
   const articlePasses = input.search ? scaled(snapshot.articleRows, 2) : 0;
   const articleBytes = input.search ? scaled(snapshot.articleSearchBytes, 2) : 0;
-  const ticketPasses = scaled(snapshot.ticketRows, input.groupRestricted ? 3 : 2);
+  // Each statement may also probe the covering (tenant,user,group) membership PK.
+  const ticketPasses = scaled(snapshot.ticketRows, input.groupRestricted ? 4 : 2);
   const ticketBytes = scaled(snapshot.ticketSearchBytes, 2);
   const byteUnits = safeAdd(byteReadUnits(ticketBytes ?? -1) ?? -1, byteReadUnits(articleBytes ?? -1) ?? -1,
     byteReadUnits(snapshot.filter?.conditionBytes ?? 0) ?? -1);
   // Count and page each perform at most one indexed draft lookup per ticket.
   // Reserve index plus row access for both passes; draft population cannot multiply it.
   const draftReads = input.queue === 'drafts' ? scaled(snapshot.ticketRows, 4) : 0;
-  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1);
+  // Canonical queues perform one state and one definition PK lookup per candidate.
+  // Reserve index plus row for each lookup in both count and page statements.
+  const supportStateReads = input.queue && ['actionable', 'snoozed', 'mine', 'unassigned'].includes(input.queue)
+    ? scaled(snapshot.ticketRows, 8) : 0;
+  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1, supportStateReads ?? -1);
   if (reads === null) return null;
   return Object.freeze({ workerRequests: 1, d1RowsRead: reads,
     ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
