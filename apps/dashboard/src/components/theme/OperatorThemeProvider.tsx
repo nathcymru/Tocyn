@@ -34,6 +34,7 @@ export function OperatorThemeProvider({ children }: { children: React.ReactNode 
 
 type PreferencesContextValue = ReturnType<typeof useOperatorPreferences>;
 const PreferencesContext = React.createContext<PreferencesContextValue | null>(null);
+export function useOptionalOperatorPreferencesContext() { return React.useContext(PreferencesContext); }
 export function useOperatorPreferencesContext() { const value = React.useContext(PreferencesContext); if (!value) throw new Error('Operator preferences context is unavailable'); return value; }
 
 export function OperatorThemeControl() {
@@ -50,13 +51,19 @@ export function OperatorThemeControl() {
 
 export function OperatorPreferencesControl() {
   const preferences = useOperatorPreferencesContext();
-  const busy = preferences.status === 'loading' || preferences.status === 'saving';
+  const busy = preferences.status === 'loading' || preferences.status === 'saving' || preferences.schemaUnavailable || preferences.status === 'conflict';
   return <section aria-labelledby="workspace-preferences-title" data-tocyn-appearance data-tocyn-preferences>
     <h3 id="workspace-preferences-title">Workspace preferences</h3>
     <fieldset disabled={busy}><label>Density<select aria-label="Workspace density" value={preferences.density} onChange={event => preferences.update({ density: event.target.value as OperatorDensity })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
     <label>Text size<select aria-label="Workspace text size" value={preferences.fontScale} onChange={event => preferences.update({ fontScale: event.target.value as OperatorFontScale })}><option value="normal">Standard</option><option value="large">Large</option><option value="larger">Largest</option></select></label>
     <label><input type="checkbox" checked={preferences.focusMode} onChange={event => preferences.update({ focusMode: event.target.checked })} /> Focus mode</label>
-    <label>Motion<select aria-label="Workspace motion" value={preferences.motion} onChange={event => preferences.update({ motion: event.target.value as OperatorMotion })}><option value="system">Use system setting</option><option value="reduced">Reduce motion</option><option value="full">Allow motion</option></select></label></fieldset>
+    <label>Motion<select aria-label="Workspace motion" value={preferences.motion} onChange={event => preferences.update({ motion: event.target.value as OperatorMotion })}><option value="system">Use system setting</option><option value="reduced">Reduce motion</option><option value="full">Allow motion</option></select></label>
+    <label>Navigation<select aria-label="Navigation labels" value={preferences.navigation} onChange={event => preferences.update({ navigation: event.target.value as 'compact'|'labelled' })}><option value="compact">Compact</option><option value="labelled">Labelled</option></select></label>
+    <label>Context panel on opening<select aria-label="Context panel default" value={preferences.contextDefault} onChange={event => preferences.update({ contextDefault: event.target.value as 'remember'|'conversation'|'details' })}><option value="remember">Remember previous panel</option><option value="conversation">Conversation</option><option value="details">Details</option></select></label>
+    <label><input type="checkbox" checked={preferences.shortcutsEnabled} onChange={event => preferences.update({ shortcutsEnabled: event.target.checked })} /> Enable search shortcut</label>
+    <label>Activity updates<select aria-label="Activity interruption level" value={preferences.interruptionLevel} onChange={event => preferences.update({ interruptionLevel: event.target.value as 'standard'|'quiet' })}><option value="standard">Standard</option><option value="quiet">Quiet — refresh activity manually</option></select></label>
+    <label><input type="checkbox" checked={preferences.advanceAfterResolve} onChange={event => preferences.update({ advanceAfterResolve: event.target.checked })} /> Advance after resolving a conversation</label>
+    </fieldset>
     <div><TocynButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</TocynButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <TocynButton type="button" onClick={preferences.retry}>Retry workspace preferences</TocynButton>}{preferences.status === 'conflict' && <TocynButton type="button" onClick={preferences.restore}>Restore server preferences</TocynButton>}</div>
     <p role="status" aria-live="polite">{preferences.error || (preferences.status === 'saved' ? 'Workspace preferences saved.' : preferences.status === 'saving' ? 'Saving workspace preferences…' : preferences.status === 'unsaved' ? 'Unsaved workspace preferences.' : preferences.status === 'loading' ? 'Restoring workspace preferences…' : '')}</p>
   </section>;

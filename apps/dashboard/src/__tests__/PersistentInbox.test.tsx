@@ -1,4 +1,4 @@
-import { cleanup,fireEvent,render,screen,waitFor,within } from '@testing-library/react';
+import { act,cleanup,fireEvent,render,screen,waitFor,within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter,Link,RouterProvider,useLocation } from 'react-router-dom';
@@ -7,13 +7,20 @@ import { InboxWorkspacePage } from '../pages/InboxWorkspacePage';
 import { useAuthStore } from '../store/authStore';
 
 
+const presentation=vi.hoisted(()=>({enabled:true,listeners:new Set<()=>void>()}));
+vi.mock('../components/theme/OperatorThemeProvider',async()=>{
+  const {useSyncExternalStore}=await import('react');
+  return {useOptionalOperatorPreferencesContext:()=>({advanceAfterResolve:useSyncExternalStore(listener=>{presentation.listeners.add(listener);return()=>presentation.listeners.delete(listener);},()=>presentation.enabled)})};
+});
 const detailNavigation=vi.hoisted(()=>({pending:false,flush:vi.fn<()=>Promise<boolean>>() }));
 vi.mock('../pages/TicketDetailPage',async()=>{
   const {DraftNavigationGuard}=await vi.importActual<typeof import('../components/DraftNavigationGuard')>('../components/DraftNavigationGuard');
-  return {TicketDetailPage:({id,workspaceBackHref}:{id:string;workspaceBackHref:string})=><article>
+  const {useOperatorWorkspaceState}=await vi.importActual<typeof import('../hooks/useOperatorWorkspaceState')>('../hooks/useOperatorWorkspaceState');
+  return {TicketDetailPage:({id,workspaceBackHref,onResolved}:{id:string;workspaceBackHref:string;onResolved?:(id:string)=>void})=>{const state=useOperatorWorkspaceState();return <article>
     <DraftNavigationGuard pending={detailNavigation.pending} flush={detailNavigation.flush}/>
-    <h1>{`Conversation ${id}`}</h1><Link to={workspaceBackHref}>Back to conversations</Link>
-  </article>};
+    <button tabIndex={-1} onClick={()=>state.update({filters:{...state.filters,status:'pending'}})}>Synthetic change filter</button>
+    <button tabIndex={-1} onClick={()=>onResolved?.(id)}>Synthetic confirmed resolve</button><h1>{`Conversation ${id}`}</h1><Link to={workspaceBackHref}>Back to conversations</Link>
+  </article>;}};
 });
 
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -39,7 +46,7 @@ beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false,refetchInterval:false},mutations:{retry:false}}});
   useAuthStore.setState({token:null,user:null,mfaRequired:false,sessionGeneration:0});
   useAuthStore.getState().setAuth('tenant-session',operator);
-  savedSelection=null;
+  savedSelection=null;presentation.enabled=true;
   detailNavigation.pending=false;
   detailNavigation.flush.mockReset().mockResolvedValue(true);
   vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
@@ -483,4 +490,43 @@ it('uses whole-view SLA ordering and same-snapshot projections, then restarts an
   await within(list).findByRole('option',{name:/Fixture conversation 20/});
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
   expect(slaRequests).toHaveLength(3);
+});
+
+
+it('advances only from a freshly read first page and keeps the navigation draft guard', async()=>{
+  detailNavigation.pending=true;
+  detailNavigation.flush.mockResolvedValue(false);
+  showInbox('/inbox/all/ticket-01');
+  await screen.findByRole('heading',{name:'Conversation ticket-01'});
+  await waitFor(()=>expect(screen.getAllByRole('option').length).toBeGreaterThan(0));
+  const before=vi.mocked(fetch).mock.calls.filter(([url])=>String(url).startsWith('/api/tickets?')).length;
+  fireEvent.click(screen.getByRole('button',{name:'Synthetic confirmed resolve'}));
+  await waitFor(()=>expect(detailNavigation.flush).toHaveBeenCalled());
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-01');
+  expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url).startsWith('/api/tickets?')).length).toBeGreaterThan(before);
+  expect(screen.getByRole('alert')).toHaveTextContent('not saved');
+});
+
+
+it.each(['filter','preference','pagination'] as const)('discards delayed advance after explicit %s change',async(change)=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let delay=false;let finish!: (response:Response)=>void;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?')){
+      if(delay){delay=false;return new Promise<Response>(resolve=>{finish=resolve;});}
+      return Promise.resolve(json({data:tickets,meta:{page:1,limit:20,total:40,total_pages:2}}));
+    }
+    return original(url,options);
+  });
+  showInbox('/inbox/all/ticket-01');
+  await screen.findByRole('button',{name:'Next conversation page'});
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Next conversation page'})).toHaveAttribute('aria-disabled','false'));
+  delay=true;
+  fireEvent.click(screen.getByRole('button',{name:'Synthetic confirmed resolve'}));
+  await waitFor(()=>expect(finish).toBeDefined());
+  if(change==='filter')fireEvent.click(screen.getByRole('button',{name:'Synthetic change filter'}));
+  else if(change==='preference')act(()=>{presentation.enabled=false;presentation.listeners.forEach(listener=>listener());});
+  else fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
+  await act(async()=>finish(json({data:tickets.slice(1),meta:{page:1,limit:20,total:19,total_pages:1}})));
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-01');
 });

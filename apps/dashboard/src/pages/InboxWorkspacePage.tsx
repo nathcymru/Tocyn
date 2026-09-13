@@ -1,6 +1,8 @@
+import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
+import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { TocynButton,TocynInput,TocynSelect } from '@luminatick/ui/primitives';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,LayoutList,Search,Table2 } from 'lucide-react';
-import React,{useEffect,useMemo,useRef,useState} from 'react';
+import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { SlaQueueNotice } from '../components/SlaQueueNotice';
@@ -33,7 +35,17 @@ function InboxWorkspace(){
   const [viewId,conversationId]=inboxPath?.split('/')??[];
   const navigate=useNavigate();
   const workspace=useOperatorWorkspaceState();
+  const advance = useRef<((id:string)=>void)|null>(null);
+  const [advanceNotice,setAdvanceNotice] = useState('');
   const {data:filters,isLoading:isLoadingFilters}=useFilters();
+  const resolveScope = JSON.stringify([assignmentIdentity(), viewId, conversationId, workspace.listQuery, workspace.sort, workspace.filters, filters]);
+  const committedResolveScope = useRef(resolveScope);
+  useLayoutEffect(() => { committedResolveScope.current = resolveScope; return () => { committedResolveScope.current = ''; }; }, [resolveScope]);
+  useEffect(() => { setAdvanceNotice(''); }, [resolveScope]);
+  const onResolved = useCallback((id:string) => {
+    if (committedResolveScope.current === resolveScope) advance.current?.(id);
+  }, [resolveScope]);
+
   const lastRouteView=useRef<string|null>(null);
   const routeFilter=useMemo(()=>viewId&&viewId!=='all'&&!isQueueView(viewId)?filters?.find(filter=>filter.id===viewId):undefined,[filters,viewId]);
   const routeReady=!isLoadingFilters&&(viewId==='all'||isQueueView(viewId)||Boolean(routeFilter));
@@ -65,10 +77,11 @@ function InboxWorkspace(){
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
     <section aria-label="Conversations" className={clsx('h-full min-h-0 overflow-y-auto border-r border-slate-200 bg-white',conversationId&&'hidden lg:block')}>
-      <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} />
+      <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
     </section>
     <section aria-label="Active conversation" className={clsx('h-full min-h-0 overflow-y-auto bg-slate-50 p-4 lg:col-span-2 lg:p-8',!conversationId&&'hidden lg:block')}>
-      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} />:<EmptyConversation />}
+      {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
+      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} onResolved={onResolved} />:<EmptyConversation />}
     </section>
   </div>;
 }
@@ -79,7 +92,7 @@ function EmptyConversation(){return <div className="flex min-h-full items-center
   <p className="mt-2 text-sm leading-6 text-slate-600">The selected view and your place in the list stay here while you read and reply.</p>
   </div></div>;}
 
-function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:string;selectedTicketId:string|null;routeReady:boolean}){
+function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onAdvanceNotice}:{activeView:string;selectedTicketId:string|null;routeReady:boolean;advanceRef:React.MutableRefObject<((id:string)=>void)|null>;onAdvanceNotice:(message:string)=>void}){
   const navigate=useNavigate();
   const workspace=useOperatorWorkspaceState();
   const {data:filters,isLoading:isLoadingFilters}=useFilters();
@@ -109,6 +122,47 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   const batchSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),!slaSort&&routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
   const ticketSla=slaSort?{...query,data:Object.fromEntries(Object.entries(query.data?.sla??{}).filter(([,value])=>value!==null))}:batchSla;
   const restartSla=()=>{query.restartSla();workspace.update({listAnchor:'page:1'});setStatus('SLA ordering restarted. The selected conversation stays open.');};
+  const advanceEnabled = useOptionalOperatorPreferencesContext()?.advanceAfterResolve ?? false;
+  const identity = assignmentIdentity();
+  const advanceScope = JSON.stringify([identity, activeView, filterId, workspace.listQuery, workspace.sort, workspace.filters, filters, selectedTicketId, advanceEnabled]);
+  const committedAdvanceScope = useRef(advanceScope);
+  const manualPageGeneration = useRef(0);
+  useLayoutEffect(() => {
+    committedAdvanceScope.current = advanceScope;
+    return () => { committedAdvanceScope.current = ''; };
+  }, [advanceScope]);
+  const [advanceRequest, setAdvanceRequest] = useState<{id:string;scope:string;pageGeneration:number}|null>(null);
+  useLayoutEffect(() => {
+    const begin = (id:string) => {
+      if (!advanceEnabled || !routeReady || selectedTicketId !== id || assignmentIdentity() !== identity) return;
+      workspace.update({listAnchor:'page:1'});
+      if (slaSort) query.restartSla();
+      onAdvanceNotice('Conversation resolved. Refreshing this view for the next available work…');
+      setAdvanceRequest({id,scope:advanceScope,pageGeneration:manualPageGeneration.current});
+    };
+    advanceRef.current = begin;
+    return () => { if (advanceRef.current === begin) advanceRef.current = null; };
+  }, [advanceEnabled, advanceRef, advanceScope, onAdvanceNotice, identity, query.restartSla, routeReady, selectedTicketId, slaSort, workspace]);
+  useEffect(() => {
+    if (!advanceRequest || page !== 1) return;
+    if (advanceRequest.scope !== advanceScope) { setAdvanceRequest(null); onAdvanceNotice('Automatic advance stopped. The current conversation stays open.'); return; }
+    let active = true;
+    void query.refetch({throwOnError:true}).then(result => {
+      if (!active || assignmentIdentity() !== identity || committedAdvanceScope.current !== advanceRequest.scope || manualPageGeneration.current !== advanceRequest.pageGeneration) return;
+      const next = result.data?.meta.page === 1 ? result.data.data.find(row => row.id !== advanceRequest.id && (row.status === 'open' || row.status === 'pending')) : undefined;
+      setAdvanceRequest(null);
+      if (!next) { onAdvanceNotice('Conversation resolved. No next open or pending conversation was found on the refreshed first page. The current conversation stays open.'); return; }
+      onAdvanceNotice('Conversation resolved. Opening the next available conversation.');
+      navigate(`/inbox/${activeView}/${next.id}`);
+    }).catch(() => {
+      if (active && assignmentIdentity() === identity && committedAdvanceScope.current === advanceRequest.scope && manualPageGeneration.current === advanceRequest.pageGeneration) {
+        setAdvanceRequest(null);
+        onAdvanceNotice('Conversation resolved. The next conversation could not be loaded. The current conversation stays open; refresh the view to continue.');
+      }
+    });
+    return () => { active = false; };
+  }, [advanceRequest, advanceScope, activeView, identity, navigate, onAdvanceNotice, page, query.refetch]);
+
 
   const outOfRange=Boolean(query.data&&!query.isFetching&&!query.isPlaceholderData&&!query.error
     &&meta.page===page&&page>1&&tickets.length===0&&meta.total>0);
@@ -229,7 +283,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
       </tbody></table>
     </div>}
     {meta.total_pages>1&&<footer className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3"><span role="status" className="text-xs font-semibold text-slate-600">Page {meta.page} of {meta.total_pages}</span><div className="flex gap-2">
-      <TocynButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||page<=1} onClick={()=>{if(!query.isFetching&&page>1){paging.current=true;workspace.update({listAnchor:pageAnchor(page-1)});}}} className="rounded-lg border border-slate-300 p-2"><ChevronLeft className="h-4 w-4" /></TocynButton>
-      <TocynButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||page>=meta.total_pages} onClick={()=>{if(!query.isFetching&&page<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(page+1)});}}} className="rounded-lg border border-slate-300 p-2"><ChevronRight className="h-4 w-4" /></TocynButton></div></footer>}
+      <TocynButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||page<=1} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page>1){paging.current=true;workspace.update({listAnchor:pageAnchor(page-1)});}}} className="rounded-lg border border-slate-300 p-2"><ChevronLeft className="h-4 w-4" /></TocynButton>
+      <TocynButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||page>=meta.total_pages} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(page+1)});}}} className="rounded-lg border border-slate-300 p-2"><ChevronRight className="h-4 w-4" /></TocynButton></div></footer>}
   </div>;
 }

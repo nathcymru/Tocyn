@@ -10,7 +10,7 @@ import { OPERATOR_WORKSPACE_SORTS, OPERATOR_WORKSPACE_VIEWS } from '../types/ope
 import { OperatorWorkspaceError, OperatorWorkspaceService } from '../services/operator-workspace.service';
 import { AttachmentReferenceError } from '../services/attachment-references';
 import { LOCAL_DRAFT_RETENTION } from '../types/operator-draft-retention';
-import { OperatorWorkspaceFenceError, type OperatorPresentationCredential, type OperatorWorkspaceCommit } from '../repositories/operator-workspace.repository';
+import { OperatorPresentationSchemaError, OperatorWorkspaceFenceError, type OperatorPresentationCredential, type OperatorWorkspaceCommit } from '../repositories/operator-workspace.repository';
 import { admitOperatorWorkspace, settleOperatorWorkspace, type WorkspaceAdmission, type WorkspaceAdmissionOperation } from '../budgets/operator-workspace-admission.service';
 
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -43,8 +43,10 @@ const stateInput = z.object({
 
 const workspace = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 const themePreferenceInput = z.object({ expectedRevision: revision, mode: z.enum(['light', 'dark', 'system']) }).strict();
-const presentationPreferenceInput = z.object({ version: z.literal(1), expectedRevision: revision,
-  density: z.enum(['comfortable', 'compact']), fontScale: z.enum(['normal', 'large', 'larger']), focusMode: z.boolean(), motion: z.enum(['system', 'reduced', 'full']) }).strict();
+const presentationPreferenceInput = z.object({ version: z.literal(2), expectedRevision: revision.max(Number.MAX_SAFE_INTEGER - 1),
+  density: z.enum(['comfortable', 'compact']), fontScale: z.enum(['normal', 'large', 'larger']), focusMode: z.boolean(), motion: z.enum(['system', 'reduced', 'full']),
+  navigation: z.enum(['compact', 'labelled']), contextDefault: z.enum(['remember', 'conversation', 'details']),
+  shortcutsEnabled: z.boolean(), interruptionLevel: z.enum(['standard', 'quiet']), advanceAfterResolve: z.boolean() }).strict();
 function themeCredential(c: any): OperatorPresentationCredential {
   const payload = c.get('jwtPayload');
   if (!payload || !['admin', 'agent'].includes(payload.role) || !Number.isSafeInteger(payload.session_version ?? 0)
@@ -71,6 +73,7 @@ function service(c: any, admission?: OperatorWorkspaceCommit) {
     { ...(localRetention ? { retention: LOCAL_DRAFT_RETENTION } : {}), ...(admission ? { admission } : {}) });
 }
 function failure(c: any, error: unknown) {
+  if (error instanceof OperatorPresentationSchemaError) return c.json({ error: error.message, code: 'presentation_schema_unavailable' }, 503);
   if (error instanceof MutationInputError) return c.json({ error: error.message, code: error.code }, error.status);
   if (error instanceof OperatorWorkspaceError) return c.json({ error: error.message }, error.status);
   if (error instanceof OperatorWorkspaceFenceError) return c.json({ code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, 503);
@@ -140,7 +143,7 @@ workspace.put('/presentation-preference', async c => {
     const gate = await admission(c, 'workspace.presentation.write'); const denied = admissionFailure(c, gate); if (denied) return denied;
     const repository = (c.get('tenantDeps') as TenantRequestDeps).repositories.operatorWorkspace;
     const result = await repository.savePresentationPreference({ version: parsed.data.version, revision: parsed.data.expectedRevision,
-      density: parsed.data.density, fontScale: parsed.data.fontScale, focusMode: parsed.data.focusMode, motion: parsed.data.motion }, themeCredential(c), admittedCommit(gate));
+      density: parsed.data.density, fontScale: parsed.data.fontScale, focusMode: parsed.data.focusMode, motion: parsed.data.motion, navigation: parsed.data.navigation, contextDefault: parsed.data.contextDefault, shortcutsEnabled: parsed.data.shortcutsEnabled, interruptionLevel: parsed.data.interruptionLevel, advanceAfterResolve: parsed.data.advanceAfterResolve }, themeCredential(c), admittedCommit(gate));
     if (!result) throw new OperatorWorkspaceError(409, 'Workspace preferences changed before they could be saved');
     return c.json(result);
   } catch (error) { return failure(c, error); }
