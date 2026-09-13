@@ -341,6 +341,9 @@ it('uses server Drafts queue results and reports an empty saved-draft view witho
   fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
   await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
   expect(screen.queryByText('No snoozed conversations')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Table view'}));
+  expect(screen.queryByText('No snoozed conversations')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'List view'}));
   releaseSnoozed();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
 });
