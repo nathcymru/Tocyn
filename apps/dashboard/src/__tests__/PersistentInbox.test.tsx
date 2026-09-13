@@ -398,3 +398,58 @@ it('shows server standard totals separately from filtered results and retries un
   expect(screen.getByText('1 conversations')).toBeInTheDocument();
   expect(screen.getByRole('button',{name:'Mentions'})).toHaveAccessibleDescription('2 conversations in this standard queue');
 });
+
+it('starts a different queue on page one after leaving page three without changing the query or sort',async()=>{
+  const fallback=fetch;const requests:URLSearchParams[]=[];let deferOld=false;let releaseOld!:()=>void;
+  const oldResponse=new Promise<void>(done=>{releaseOld=done;});
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url==='/api/workspace/state'&&options.method!=='PUT')return json({...workspace(null),listAnchor:'page:3',listQuery:'follow up',sort:'created_asc'});
+    if(url.startsWith('/api/tickets?')){
+      const params=new URL(url,'http://localhost').searchParams;requests.push(params);const page=Number(params.get('page'));
+      const mine=params.get('queue')==='mine';
+      if(!mine&&deferOld){await oldResponse;return json({data:[],meta:{page,limit:20,total:1,total_pages:1}});}
+      return json({data:mine?(page===1?[tickets[0]]:[]):tickets,meta:{page,limit:20,total:mine?1:60,total_pages:mine?1:3}});
+    }
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/all');
+  await screen.findByText('Page 3 of 3');
+  deferOld=true;const oldRefresh=client.invalidateQueries({queryKey:['tickets']});
+  fireEvent.click(screen.getByRole('button',{name:'Mine'}));
+  await waitFor(()=>expect(requests.some(params=>params.get('queue')==='mine')).toBe(true));
+  expect(requests.filter(params=>params.get('queue')==='mine').every(params=>params.get('page')==='1')).toBe(true);
+  await waitFor(()=>expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1));
+  expect(screen.queryByText('No actionable conversations assigned to you')).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
+  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveValue('created_asc');
+  releaseOld();await oldRefresh;
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mine');
+  expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1);
+  expect(screen.getByRole('status',{name:'Inbox status'})).not.toHaveTextContent('Showing the first page');
+});
+
+it.each(['List view','Table view'] as const)('recovers a shrunken last page without a false queue-clear claim in %s',async presentation=>{
+  const fallback=fetch;let shrunk=false;let recoveryStarted=false;let release!:()=>void;
+  const pending=new Promise<void>(done=>{release=done;});
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url==='/api/workspace/state'&&options.method!=='PUT')return json({...workspace(null),listAnchor:'page:3'});
+    if(url.startsWith('/api/tickets?')){
+      const page=Number(new URL(url,'http://localhost').searchParams.get('page'));
+      if(shrunk&&page===1){recoveryStarted=true;await pending;}
+      return json({data:shrunk?(page===1?[tickets[0]]:[]):tickets,meta:{page,limit:20,total:shrunk?1:60,total_pages:shrunk?1:3}});
+    }
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/mine');
+  await screen.findByText('Page 3 of 3');
+  fireEvent.click(screen.getByRole('button',{name:presentation}));
+  shrunk=true;void client.invalidateQueries({queryKey:['tickets']});
+  await waitFor(()=>expect(recoveryStarted).toBe(true));
+  expect(screen.queryByText('No actionable conversations assigned to you')).not.toBeInTheDocument();
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Loading the first page');
+  release();
+  await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Showing the first page'));
+  expect(screen.queryByText('No actionable conversations assigned to you')).not.toBeInTheDocument();
+  expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1);
+  if(presentation==='Table view')expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(2);
+});

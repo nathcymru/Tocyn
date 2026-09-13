@@ -88,7 +88,12 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   const prefix=settings?.TICKET_PREFIX||'#';
   const queue=isQueueView(activeView)?activeView:undefined;
   const filterId=activeView==='all'||queue?'':activeView;
-  const page=pageFromAnchor(workspace.listAnchor);
+  const confirmedView=useRef<string|null>(null);
+  // A successful route change starts a different view at page one; blocked navigation
+  // leaves the current workspace untouched, and initial restoration keeps its page.
+  const viewChanged=confirmedView.current!==null&&confirmedView.current!==activeView;
+  const page=viewChanged?1:pageFromAnchor(workspace.listAnchor);
+  const [recoveringView,setRecoveringView]=useState<string|null>(null);
   const [filterInput,setFilterInput]=useState(workspace.listQuery);
   const [focusedIndex,setFocusedIndex]=useState(0);
   const [presentation,setPresentation]=useState<'list'|'table'>('list');
@@ -101,6 +106,29 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   const meta=query.data?.meta??{page:1,limit:20,total:0,total_pages:1};
   const ticketSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
 
+  const outOfRange=Boolean(query.data&&!query.isFetching&&!query.isPlaceholderData&&!query.error
+    &&meta.page===page&&page>1&&tickets.length===0&&meta.total>0);
+  const recoveringPage=recoveringView===activeView;
+  const emptyPage=tickets.length===0&&!query.error&&!query.isPlaceholderData&&!outOfRange&&!recoveringPage;
+  const emptyMessage=meta.total>0?'No conversations on this page':queue==='drafts'?'No saved drafts'
+    :queue==='mine'?'No actionable conversations assigned to you':queue?`No ${queueViews[queue].label.toLowerCase()} conversations`:'No conversations in this view';
+  useEffect(()=>{
+    if(!routeReady||workspace.status==='loading')return;
+    if(confirmedView.current===null){confirmedView.current=activeView;return;}
+    if(confirmedView.current!==activeView){confirmedView.current=activeView;workspace.update({listAnchor:'page:1'});}
+  },[activeView,routeReady,workspace]);
+  useEffect(()=>{
+    if(!routeReady||workspace.status==='loading'||!outOfRange)return;
+    setRecoveringView(activeView);workspace.update({listAnchor:'page:1'});
+  },[activeView,outOfRange,routeReady,workspace]);
+  useEffect(()=>{
+    if(recoveringView===null)return;
+    if(recoveringView!==activeView){setRecoveringView(null);return;}
+    if(!query.isFetching&&(query.error||!query.isPlaceholderData&&meta.page===1&&page===1)){
+      setRecoveringView(null);
+      if(!query.error)setStatus('Showing the first page after the conversation list changed.');
+    }
+  },[activeView,meta.page,page,query.error,query.isFetching,query.isPlaceholderData,recoveringView]);
   useEffect(()=>setFilterInput(workspace.listQuery),[workspace.listQuery]);
   useEffect(()=>{
     if(!query.isFetching&&paging.current){paging.current=false;if(!query.error)heading.current?.focus();}
@@ -152,7 +180,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
           <TocynButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('rounded-md p-1.5',presentation==='list'?'bg-brand-50 text-brand-800':'text-slate-600')}><LayoutList className="h-4 w-4" aria-hidden="true" /></TocynButton>
           <TocynButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('rounded-md p-1.5',presentation==='table'?'bg-brand-50 text-brand-800':'text-slate-600')}><Table2 className="h-4 w-4" aria-hidden="true" /></TocynButton>
         </div></div>
-        <p role="status" aria-label="Inbox status" className="text-xs text-slate-600">{query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p></div>
+        <p role="status" aria-label="Inbox status" className="text-xs text-slate-600">{recoveringPage?'Loading the first page after the conversation list changed…':query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p></div>
     </header>
     {query.error&&<div role="alert" className="m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900"><p>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</p>
       <TocynButton type="button" disabled={query.isFetching} onClick={()=>void query.refetch()} className="mt-2 font-semibold underline">Retry conversations</TocynButton></div>}
@@ -161,7 +189,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
     {drafts.status==='partial'&&<p role="status" className="mx-4 mt-3 text-xs text-amber-900">Some draft indicators are still loading.</p>}
     {presentation==='table'&&<p role="status" className="mx-4 mt-3 text-xs text-slate-600 sm:hidden">Table view uses the compact conversation list on small screens.</p>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx('flex-1 divide-y divide-slate-200',presentation==='table'&&'sm:hidden')}>
-      {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:tickets.length===0&&!query.error&&!query.isPlaceholderData?<div className="p-8 text-center"><p className="font-semibold text-slate-800">{queue==='drafts'?'No saved drafts':queue==='mine'?'No actionable conversations assigned to you':queue?`No ${queueViews[queue].label.toLowerCase()} conversations`:'No conversations in this view'}</p><p className="mt-1 text-sm text-slate-600">{queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'}</p></div>:tickets.map((ticket,index)=>{
+      {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:emptyPage?<div className="p-8 text-center"><p className="font-semibold text-slate-800">{emptyMessage}</p><p className="mt-1 text-sm text-slate-600">{queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'}</p></div>:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
           to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} onFocus={()=>setFocusedIndex(index)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();moveFocus(index+1);}if(event.key==='ArrowUp'){event.preventDefault();moveFocus(index-1);}}}
@@ -183,7 +211,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
         <table className="min-w-[40rem] w-full text-left text-sm"><caption className="sr-only">Tickets in the current view</caption><thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600"><tr>
           <th scope="col" className="px-4 py-3">Reference</th><th scope="col" className="px-4 py-3">Subject</th><th scope="col" className="px-4 py-3">Status</th><th scope="col" className="px-4 py-3">Priority</th><th scope="col" className="px-4 py-3">Customer</th><th scope="col" className="px-4 py-3">Updated</th>
         </tr></thead><tbody className="divide-y divide-slate-200">
-        {query.isLoading?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">Loading conversations…</td></tr>:tickets.length===0&&!query.error&&!query.isPlaceholderData?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">{queue==='drafts'?'No saved drafts':queue==='mine'?'No actionable conversations assigned to you':queue?`No ${queueViews[queue].label.toLowerCase()} conversations`:'No conversations in this view'}</td></tr>:tickets.map(ticket=>{
+        {query.isLoading?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">Loading conversations…</td></tr>:emptyPage?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">{emptyMessage}</td></tr>:tickets.map(ticket=>{
           const reference=ticketReference(ticket,prefix);const selected=ticket.id===selectedTicketId;
           return <tr key={ticket.id} aria-selected={selected} className={clsx('hover:bg-slate-50',selected&&'bg-brand-50')}>
             <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-slate-600">{reference}</td>
