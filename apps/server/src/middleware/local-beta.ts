@@ -24,6 +24,7 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
   if ((method === 'POST' && /^\/api\/auth\/(login|logout|mfa\/(verify|setup|confirm|disable))$/.test(path)) || (method === 'GET' && path === '/api/auth/me') ||
     (method === 'POST' && /^\/api\/v1\/customer\/auth\/(request|verify|logout)$/.test(path)) || (method === 'GET' && path === '/api/v1/customer/auth/me')) return 'auth';
   if (method === 'GET' && path === '/api/v1/customer/config') return 'configuration';
+  if (method === 'GET' && path === '/api/users') return 'conversation-read';
   if (method === 'GET' && /^\/api\/operators\/[^/]+\/capacity$/.test(path)) return 'conversation-read';
   if (method === 'PUT' && /^\/api\/operators\/[^/]+\/capacity$/.test(path)) return 'configuration';
   if (method === 'GET' && path === '/api/activities') return 'conversation-read';

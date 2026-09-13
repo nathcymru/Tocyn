@@ -70,3 +70,13 @@ it('admits exact balanced and activity mutation forms without API or extra-path 
     ['PATCH','/api/v1/customer/activities/activity-1/read'],
   ])expect(localBetaRoute(method,path)).toBe('disabled');
 });
+
+
+it('admits only the exact existing budgeted user directory read', () => {
+  expect(localBetaRoute('GET', '/api/users')).toBe('conversation-read');
+  for (const [method, path] of [
+    ['POST', '/api/users'], ['PUT', '/api/users'], ['PATCH', '/api/users'], ['DELETE', '/api/users'],
+    ['GET', '/api/users/'], ['GET', '/api/users/operator'], ['PATCH', '/api/users/operator'],
+    ['DELETE', '/api/users/operator'], ['GET', '/api/v1/users'], ['GET', '/api/v1/customer/users'],
+  ]) expect(localBetaRoute(method, path)).toBe('disabled');
+});
