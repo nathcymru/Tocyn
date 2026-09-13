@@ -41,7 +41,11 @@ function createController(identity: string | null) {
       if (!current(requestEpoch)) return;
       if (error instanceof ApiError && error.status === 403) { clearUnauthorized(); return; }
       replace({ ...state, status: 'error', error: 'Workspace preferences could not be restored. Retry.' });
-    }).finally(() => { if (restoreFlight === flight) restoreFlight = null; if (saveQueued && revisionKnown && current()) { saveQueued = false; void save(); } });
+    }).finally(() => {
+      if (restoreFlight !== flight) return;
+      restoreFlight = null;
+      if (saveQueued && revisionKnown && current()) { saveQueued = false; void save(); }
+    });
     restoreFlight = flight;
   };
   const save = async () => {
@@ -63,8 +67,20 @@ function createController(identity: string | null) {
     saving = flight; await flight;
   };
   return { subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); }, getSnapshot: () => state,
-    start: () => { active = true; epoch++; denied = !identity; if (identity) restore(); return () => { active = false; epoch++; }; },
-    update: (changes: Partial<Pick<OperatorPreferences, 'density'|'fontScale'|'focusMode'|'motion'>>) => { if (!current() || state.status === 'conflict') return; const next = { ...state, ...changes }; if (!valid(next)) return; dirty = true; replace({ ...next, status: 'unsaved', error: null }); },
+    start: () => { active = true; epoch++; denied = !identity; if (identity) restore(); return () => {
+      active = false; epoch++;
+      // StrictMode can replay this effect before its first restore settles.
+      // Detach obsolete flights so the next start can restore independently.
+      restoreFlight = null; saving = null; saveQueued = false;
+    }; },
+    update: (changes: Partial<Pick<OperatorPreferences, 'density'|'fontScale'|'focusMode'|'motion'>>) => {
+      if (!current() || state.status === 'conflict') return;
+      const next = { ...state, ...changes }; if (!valid(next)) return;
+      dirty = true;
+      // A preview cannot be saved until a validated server revision is known.
+      // Keep the error and Retry control available instead of promising a save.
+      replace({ ...next, status: revisionKnown ? 'unsaved' : state.status, error: revisionKnown ? null : state.error });
+    },
     save, retry: () => { if (!denied) { if (dirty && revisionKnown && state.status !== 'conflict') void save(); else restore(false); } }, restore: () => restore(true) };
 }
 

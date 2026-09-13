@@ -163,7 +163,8 @@ function createController(identity: string | null) {
         ? 'Theme preference changed elsewhere. Restore before replacing it.'
         : 'Theme preference was not saved. Retry.' });
     }).finally(() => {
-      if (saving === flight) saving = null;
+      if (saving !== flight) return;
+      saving = null;
       if (restoreQueued && active && !denied) {
         const discard = restoreQueuedDiscard;
         restoreQueued = false;
@@ -178,7 +179,13 @@ function createController(identity: string | null) {
   return {
     subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); },
     getSnapshot: () => state,
-    start: () => { active = true; epoch++; restore(); return () => { active = false; epoch++; }; },
+    start: () => { active = true; epoch++; restore(); return () => {
+      active = false; epoch++;
+      // Effect replay must start a fresh restore instead of waiting on a request
+      // whose result belongs to the previous effect lifetime.
+      restoreFlight = null; saving = null;
+      restoreQueued = false; restoreQueuedDiscard = false; saveQueued = false;
+    }; },
     update: (mode: OperatorThemeMode) => {
       if (!current() || denied || state.status === 'conflict' || !validMode(mode)) return;
       editVersion++;
