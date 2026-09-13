@@ -1,3 +1,5 @@
+import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
+import { useAuthStore } from '../store/authStore';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { TocynButton } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
@@ -7,8 +9,16 @@ import { User as UserIcon, Shield, Mail, Calendar, ShieldCheck, X, Settings } fr
 
 export const UsersPage: React.FC = () => {
   const { data: users = [], isLoading, error } = useUsers();
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [modalType, setModalType] = useState<'edit' | 'activity' | null>(null);
+  const [storedSelectedUser, setSelectedUser] = useState<User | null>(null);
+  const [storedModalType, setModalType] = useState<'edit' | 'activity' | 'capacity' | null>(null);
+  const administrator=useAuthStore(state=>state.user?.role==='admin');
+  const sessionGeneration=useAuthStore(state=>state.sessionGeneration);
+  const actor=useAuthStore(state=>state.user);
+  const selectionIdentity=JSON.stringify([sessionGeneration,actor?.tenant_id,actor?.id]);
+  const [capturedIdentity,setCapturedIdentity]=useState<string|null>(null);
+  const selectedUser=capturedIdentity===selectionIdentity?storedSelectedUser:null;
+  const modalType=capturedIdentity===selectionIdentity?storedModalType:null;
+  React.useEffect(()=>{setSelectedUser(null);setModalType(null);},[selectionIdentity]);
   const dialogTitleId = React.useId();
   const closeControl = React.useRef<HTMLButtonElement>(null);
   const opener = React.useRef<HTMLButtonElement | null>(null);
@@ -75,14 +85,17 @@ export const UsersPage: React.FC = () => {
             </div>
 
             <div className="mt-6 pt-6 border-t border-slate-100 flex items-center gap-3">
+              {administrator&&['admin','agent'].includes(user.role)&&<TocynButton type="button" aria-haspopup="dialog"
+                onClick={event=>{opener.current=event.currentTarget;setCapturedIdentity(selectionIdentity);setSelectedUser(user);setModalType('capacity');}}
+                className="rounded border px-3 py-2 text-xs font-bold">Capacity</TocynButton>}
               <TocynButton
-                aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setSelectedUser(user); setModalType('edit'); }}
+                aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('edit'); }}
                 className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
               >
                 Edit Profile
               </TocynButton>
               <TocynButton
-                aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setSelectedUser(user); setModalType('activity'); }}
+                aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('activity'); }}
                 className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
               >
                 View Activity
@@ -102,10 +115,10 @@ export const UsersPage: React.FC = () => {
       <TocynDialog open={Boolean(selectedUser && modalType)} onOpenChange={open => { if (!open) closeDialog(); }}
         labelledBy={dialogTitleId} initialFocusEl={() => closeControl.current} finalFocusEl={() => opener.current}>
         {selectedUser && (
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h2 id={dialogTitleId} className="text-xl font-bold text-slate-900">
-                {modalType === 'edit' ? 'Edit User Profile' : 'User Activity Log'}
+                {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'Edit User Profile' : 'User Activity Log'}
               </h2>
               <TocynButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="text-slate-400 hover:text-slate-600">
                 <X className="w-6 h-6" />
@@ -122,7 +135,9 @@ export const UsersPage: React.FC = () => {
                 </div>
               </div>
 
-              {modalType === 'edit' ? (
+              {modalType === 'capacity' ? (
+                <OperatorCapacityPanel userId={selectedUser.id} editable={administrator}/>
+              ) : modalType === 'edit' ? (
                 <div className="text-center py-6">
                   <Settings className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                   <p className="text-slate-600 font-medium">User profile editing is currently read-only.</p>
