@@ -322,6 +322,8 @@ function LayoutContent() {
     } catch { setActivityError('Activity changed before it could be updated. The list was refreshed.'); void loadActivity(); }
   };
 
+  const visibleActivityItems = activity?.page.items.filter(item => !item.dismissedAt) ?? [];
+
   return (
     <div className={cn('flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
       <aside data-tocyn-inverse="" className={cn('hidden lg:block shrink-0 bg-slate-900 border-r border-slate-800', preferences.navigation === 'labelled' ? 'w-52' : 'w-16')}>
@@ -400,9 +402,9 @@ function LayoutContent() {
                 {activityError && <div role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900"><p>{activityError}</p><TocynButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="mt-2 rounded px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2">Retry loading activity</TocynButton></div>}
                 {activityLoading && !activity && <p role="status" className="p-2 text-sm text-slate-600">Loading durable activity…</p>}
                 {activity?.unread.status === 'unavailable' && <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">Unread count is temporarily unavailable. Your activity remains available below.</p>}
-                {activity && activity.page.items.length === 0 && <p className="p-2 text-sm text-slate-600">No current activity.</p>}
+                {activity && visibleActivityItems.length === 0 && <p className="p-2 text-sm text-slate-600">{activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'}</p>}
                 <ul aria-label="Durable activity" className="max-h-96 divide-y overflow-y-auto">
-                  {activity?.page.items.filter(item => !item.dismissedAt).map(item => <li key={item.id} className="flex gap-2 py-2">
+                  {visibleActivityItems.map(item => <li key={item.id} className="flex gap-2 py-2">
                     <TocynButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="min-w-0 flex-1 rounded p-1 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2">
                       <p className="text-sm font-semibold text-slate-900">{item.kind.replace(/_/g, ' ')}</p>
                       <p className="truncate text-xs font-medium text-slate-700">{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
@@ -411,9 +413,9 @@ function LayoutContent() {
                     <TocynButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className="rounded p-1 text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2"><X className="h-4 w-4" /></TocynButton>
                   </li>)}
                 </ul>
-                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="mt-2 text-sm text-slate-600">Showing the most recent {MAX_RENDERED_ACTIVITY_ITEMS} activity items. Refresh to restart activity recovery.</p>}
+                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="mt-2 text-sm text-slate-600">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
                 {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className="mt-2"><TocynButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className="w-full rounded px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2">{activityLoading ? 'Loading more activity…' : 'Load more activity'}</TocynButton></div>}
-                {activity && !activityLoading && activity.page.items.length > 0 && <p role="status" className="sr-only">Showing {activity.page.items.length} activity item{activity.page.items.length === 1 ? '' : 's'}.</p>}
+                {activity && !activityLoading && visibleActivityItems.length > 0 && <p role="status" className="sr-only">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</p>}
               </Popover.Content>
             </Popover.Positioner>
           </Popover.Root>
