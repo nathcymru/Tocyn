@@ -51,6 +51,7 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
     (method === 'PUT' && (path === '/api/workspace/state' || /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) ||
     (method === 'POST' && /^\/api\/workspace\/drafts\/[^/]+\/rebase$/.test(path)) ||
     (method === 'DELETE' && /^\/api\/workspace\/drafts\/[^/]+$/.test(path))) return 'conversation-write';
+  if (method === 'GET' && (path === '/api/knowledge/articles' || /^\/api\/knowledge\/articles\/[^/]+\/content$/.test(path))) return 'conversation-read';
   return 'disabled';
 }
 
