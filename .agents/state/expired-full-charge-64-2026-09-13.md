@@ -39,7 +39,13 @@ uncertified late claims fail closed. Existing certified retry/expiry behavior re
   87/89: API create expects201 but receives429, and warm API reply expects three
   refresh/reserve calls but observes five. Both failures reproduce identically in a
   clean detached checkout of unchanged base75c5a1d3. These are disclosed baseline
-  failures, not a claim that the full specialist suite passes.
+  failures. Independent diagnosis traced both to stale synthetic read funding after
+  the earlier create envelope increase:8,000×0.8=6,400 cannot fund7,680;120,000×0.8
+  cannot fund the61,440 create block plus45,056 reply block. Two test-only values
+  now use9,600 and140,000 respectively, retaining the worker limit and every original
+  success/refusal/warm-zero-RPC assertion. Both affected cases pass on the corrected
+  fixture. Thus all89 distinct cases have passing evidence; the entire suite was not
+  redundantly rerun after this two-line fixture correction.
 
 A pure copy of the preserved synthetic candidate, never the live store, contained
 47 expired unfinished grants and occupied60,214 encoded bytes plus61,819 reserved
