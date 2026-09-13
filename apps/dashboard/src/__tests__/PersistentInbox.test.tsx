@@ -215,3 +215,89 @@ it('shows recovery and no historical rows when the current tenant list read is d
   expect(within(screen.getByRole('listbox',{name:'Conversation list'})).queryAllByRole('option')).toHaveLength(0);
   expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
 });
+
+function preserveCustomPage(selectedTicketId:string|null=null){
+  const fallback=fetch;
+  let confirmed={...workspace(selectedTicketId),view:'custom',filters:{filterId:'priority-follow-up'},sort:'created_asc',listQuery:'follow up',listAnchor:'page:3'};
+  const writes:typeof confirmed[]=[];
+  const queries:URLSearchParams[]=[];
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url==='/api/workspace/state'){
+      if(options.method==='PUT'){
+        confirmed={...confirmed,...JSON.parse(String(options.body)),revision:confirmed.revision+1};
+        writes.push(confirmed);
+      }
+      return json(confirmed);
+    }
+    if(url.startsWith('/api/tickets?')){
+      queries.push(new URL(url,'http://localhost').searchParams);
+      return json({data:tickets,meta:{page:3,limit:20,total:60,total_pages:3}});
+    }
+    return fallback(url,options);
+  }));
+  return {writes,queries};
+}
+
+it('switches all 20 fixture conversations and returns without losing the custom view, page, query or mounted list',async()=>{
+  const {writes,queries}=preserveCustomPage();
+  showInbox('/inbox/priority-follow-up');
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  const options=await within(list).findAllByRole('option');
+  await waitFor(()=>expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up'));
+  const pane=screen.getByRole('region',{name:'Conversations'});
+  pane.scrollTop=480;
+  const queryInput=screen.getByRole('textbox',{name:'Filter this view'});
+  const sortInput=screen.getByRole('combobox',{name:'Sort conversations'});
+  const location=screen.getByTestId('location');
+
+  for(const [index,ticket] of tickets.entries()){
+    fireEvent.click(options[index]);
+    await screen.findByRole('heading',{name:`Conversation ${ticket.id}`});
+    expect(location).toHaveTextContent(`/inbox/priority-follow-up/${ticket.id}`);
+    expect(list).toBeInTheDocument();
+    expect(pane).toBeInTheDocument();
+    expect(pane.scrollTop).toBe(480);
+    expect(queryInput).toHaveValue('follow up');
+    expect(sortInput).toHaveValue('created_asc');
+  }
+  fireEvent.click(screen.getByRole('link',{name:'Back to conversations'}));
+  await screen.findByRole('heading',{name:'Choose a conversation'});
+  expect(screen.getByTestId('location').textContent).toBe('/inbox/priority-follow-up');
+  expect(list).toBeInTheDocument();
+  expect(pane.scrollTop).toBe(480);
+  expect(queryInput).toHaveValue('follow up');
+  await waitFor(()=>expect(writes.length).toBeGreaterThan(0));
+  for(const write of writes){
+    expect(write).toMatchObject({view:'custom',filters:{filterId:'priority-follow-up'},sort:'created_asc',listQuery:'follow up',listAnchor:'page:3'});
+  }
+  expect(queries.some(query=>query.get('page')==='3'&&query.get('filter_id')==='priority-follow-up'&&query.get('sort')==='created_asc'&&query.get('search')==='follow up')).toBe(true);
+},15_000);
+
+it('keeps the custom list position and selected conversation when its draft refuses Back navigation, then returns after acknowledgement',async()=>{
+  const {writes}=preserveCustomPage('ticket-20');
+  detailNavigation.pending=true;
+  detailNavigation.flush.mockResolvedValue(false);
+  showInbox('/inbox/priority-follow-up/ticket-20');
+  await screen.findByRole('heading',{name:'Conversation ticket-20'});
+  const pane=screen.getByRole('region',{name:'Conversations'});
+  pane.scrollTop=640;
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  fireEvent.click(screen.getByRole('link',{name:'Back to conversations'}));
+  await screen.findByRole('alert');
+  expect(detailNavigation.flush).toHaveBeenCalledOnce();
+  expect(screen.getByTestId('location').textContent).toBe('/inbox/priority-follow-up/ticket-20');
+  expect(screen.getByRole('heading',{name:'Conversation ticket-20'})).toBeInTheDocument();
+  expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveAttribute('aria-selected','true');
+  expect(writes).toHaveLength(0);
+  expect(pane.scrollTop).toBe(640);
+
+  detailNavigation.flush.mockResolvedValue(true);
+  fireEvent.click(screen.getByRole('link',{name:'Back to conversations'}));
+  await screen.findByRole('heading',{name:'Choose a conversation'});
+  expect(detailNavigation.flush).toHaveBeenCalledTimes(2);
+  expect(screen.getByTestId('location').textContent).toBe('/inbox/priority-follow-up');
+  expect(screen.getByRole('listbox',{name:'Conversation list'})).toBe(list);
+  expect(pane.scrollTop).toBe(640);
+  expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
+  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveValue('created_asc');
+});
