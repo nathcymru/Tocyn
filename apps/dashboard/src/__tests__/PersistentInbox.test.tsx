@@ -1,3 +1,4 @@
+import { GlobalSearch } from '../components/layout/GlobalSearch';
 import { act,cleanup,fireEvent,render,screen,waitFor,within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
@@ -36,8 +37,8 @@ let client:QueryClient;
 let savedSelection:string|null=null;
 
 function Location(){const location=useLocation();return <output data-testid="location">{location.pathname}</output>;}
-function showInbox(entry='/inbox/all'){
-  const router=createMemoryRouter([{path:'/inbox/*',element:<><InboxWorkspacePage/><Location/></>}],{initialEntries:[entry]});
+function showInbox(entry='/inbox/all',globalSearch=false){
+  const router=createMemoryRouter([{path:'/inbox/*',element:<>{globalSearch&&<GlobalSearch shortcutsEnabled />}<InboxWorkspacePage/><Location/></>}],{initialEntries:[entry]});
   const result=render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
   return {...result,router};
 }
@@ -529,4 +530,21 @@ it.each(['filter','preference','pagination'] as const)('discards delayed advance
   else fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
   await act(async()=>finish(json({data:tickets.slice(1),meta:{page:1,limit:20,total:19,total_pages:1}})));
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-01');
+});
+
+
+it('global ticket search never enters the legacy redirect or rewrites the actual current-view filter',async()=>{
+ const mounted=showInbox('/inbox/all',true);
+ await screen.findAllByRole('option');
+ const filter=screen.getByRole('textbox',{name:'Filter this view'});
+ await userEvent.type(filter,'local-filter{Enter}');
+ await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT'&&JSON.parse(String(options.body)).listQuery==='local-filter')).toBe(true));
+ vi.mocked(fetch).mockClear();
+ const global=screen.getByRole('textbox',{name:'Search all tickets (global shell)'});
+ await userEvent.type(global,'Fixture{Enter}');
+ expect(await screen.findByText('20 matching authorised tickets. Showing 20.')).toBeVisible();
+ expect(mounted.router.state.location.pathname).toBe('/inbox/all');expect(filter).toHaveValue('local-filter');
+ await userEvent.click(screen.getByRole('button',{name:'Clear global ticket search'}));
+ expect(filter).toHaveValue('local-filter');expect(mounted.router.state.location.pathname).toBe('/inbox/all');
+ expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT')).toBe(false);
 });
