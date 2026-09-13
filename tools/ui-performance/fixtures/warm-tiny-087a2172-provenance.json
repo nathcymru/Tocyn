@@ -1,0 +1,16 @@
+{
+  "revision": "087a2172fd434a6cacc120e932a52a1d7e82644d",
+  "dirty": true,
+  "sourceHashes": {
+    "tools/ui-performance/authenticated-navigation.ts": "bd4a003179e85d6cca6670cc3c6411c8a2c8f048b7b53a226f7f055b00afc602",
+    "apps/server/scripts/ui-authenticated-navigation.test.ts": "a23e2a7c232558e7ce20ce7aabda131023d2945a8582b18a368b105c46ac9711",
+    "apps/dashboard/src/pages/InboxWorkspacePage.tsx": "8f3185eb84699da2dbb3af2b89e21480d7d14da5183a72dc4e0094bc72eb8753",
+    "apps/dashboard/src/pages/TicketDetailPage.tsx": "4e00946ff7c68ab27e383b3a633515447259af28aeabdc755a061966638aaf09",
+    "apps/portal/src/pages/TicketListPage.tsx": "3bdb7500465d80b4819dc5bd3d8684cc03a246c9f6d24aa40cc125c6b62404dc",
+    "apps/portal/src/pages/TicketDetailPage.tsx": "a830901a3afba61b0c73c702b5e4da2613807260c2eae89bcb1e5273f37e58f6"
+  },
+  "artifacts": {
+    "dashboard": "0f9abead4412d6a15785f7890393741082267e75556fb3bf351e8ccfe5ad5c8a",
+    "portal": "027d81e9d2e1470b2554fd040dd0d690cfe931736601cc255f77d13ba1d8dd48"
+  }
+}

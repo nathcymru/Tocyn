@@ -1,0 +1,610 @@
+{
+  "version": 1,
+  "kind": "tocyn-local-authenticated-ticket-navigation",
+  "revision": "087a2172fd434a6cacc120e932a52a1d7e82644d",
+  "dirty": true,
+  "environment": {
+    "node": "v22.19.0",
+    "platform": "darwin",
+    "browser": "151.0.7922.34",
+    "playwright": "1.62.1",
+    "headless": true,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "reducedMotion": "reduce",
+    "remoteBindings": 0,
+    "synthetic": true
+  },
+  "tenantIsolation": {
+    "dashboardForeignTicketDenied": true,
+    "portalForeignTicketDenied": true
+  },
+  "configuration": {
+    "samplesPerClient": 20,
+    "maximumSamples": 20,
+    "warmupsPerClient": 0
+  },
+  "artifacts": {
+    "dashboard": "0f9abead4412d6a15785f7890393741082267e75556fb3bf351e8ccfe5ad5c8a",
+    "portal": "027d81e9d2e1470b2554fd040dd0d690cfe931736601cc255f77d13ba1d8dd48"
+  },
+  "sourceHashes": {
+    "tools/ui-performance/authenticated-navigation.ts": "bd4a003179e85d6cca6670cc3c6411c8a2c8f048b7b53a226f7f055b00afc602",
+    "apps/server/scripts/ui-authenticated-navigation.test.ts": "a23e2a7c232558e7ce20ce7aabda131023d2945a8582b18a368b105c46ac9711",
+    "apps/dashboard/src/pages/InboxWorkspacePage.tsx": "8f3185eb84699da2dbb3af2b89e21480d7d14da5183a72dc4e0094bc72eb8753",
+    "apps/dashboard/src/pages/TicketDetailPage.tsx": "4e00946ff7c68ab27e383b3a633515447259af28aeabdc755a061966638aaf09",
+    "apps/portal/src/pages/TicketListPage.tsx": "3bdb7500465d80b4819dc5bd3d8684cc03a246c9f6d24aa40cc125c6b62404dc",
+    "apps/portal/src/pages/TicketDetailPage.tsx": "a830901a3afba61b0c73c702b5e4da2613807260c2eae89bcb1e5273f37e58f6"
+  },
+  "measurements": [
+    {
+      "client": "dashboard",
+      "sample": 0,
+      "timing": {
+        "listToDetailMs": 457.0999999977648
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 0,
+      "timing": {
+        "listToDetailMs": 54.399999998509884
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 1,
+      "timing": {
+        "listToDetailMs": 484.30000000074506
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 1,
+      "timing": {
+        "listToDetailMs": 55.899999998509884
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 2,
+      "timing": {
+        "listToDetailMs": 421.80000000074506
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 2,
+      "timing": {
+        "listToDetailMs": 52.20000000298023
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 3,
+      "timing": {
+        "listToDetailMs": 500.19999999925494
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 3,
+      "timing": {
+        "listToDetailMs": 215.69999999925494
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 4,
+      "timing": {
+        "listToDetailMs": 598
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 4,
+      "timing": {
+        "listToDetailMs": 50.600000001490116
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 5,
+      "timing": {
+        "listToDetailMs": 470
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 5,
+      "timing": {
+        "listToDetailMs": 139.10000000149012
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 6,
+      "timing": {
+        "listToDetailMs": 454.6000000014901
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 6,
+      "timing": {
+        "listToDetailMs": 58.099999997764826
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 7,
+      "timing": {
+        "listToDetailMs": 471.5999999977648
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 7,
+      "timing": {
+        "listToDetailMs": 49.69999999925494
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 8,
+      "timing": {
+        "listToDetailMs": 396.19999999925494
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 8,
+      "timing": {
+        "listToDetailMs": 50.5
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 9,
+      "timing": {
+        "listToDetailMs": 453.5
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 9,
+      "timing": {
+        "listToDetailMs": 53.80000000074506
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 10,
+      "timing": {
+        "listToDetailMs": 487.19999999925494
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 10,
+      "timing": {
+        "listToDetailMs": 53.399999998509884
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 11,
+      "timing": {
+        "listToDetailMs": 480.20000000298023
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 11,
+      "timing": {
+        "listToDetailMs": 52.899999998509884
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 12,
+      "timing": {
+        "listToDetailMs": 439.80000000074506
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 12,
+      "timing": {
+        "listToDetailMs": 61.19999999925494
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 13,
+      "timing": {
+        "listToDetailMs": 382
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 13,
+      "timing": {
+        "listToDetailMs": 54.099999997764826
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 14,
+      "timing": {
+        "listToDetailMs": 425.0999999977648
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 14,
+      "timing": {
+        "listToDetailMs": 60.80000000074506
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 15,
+      "timing": {
+        "listToDetailMs": 379.80000000074506
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 15,
+      "timing": {
+        "listToDetailMs": 49.399999998509884
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 16,
+      "timing": {
+        "listToDetailMs": 430.80000000074506
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 16,
+      "timing": {
+        "listToDetailMs": 52.599999997764826
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 17,
+      "timing": {
+        "listToDetailMs": 412.0999999977648
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 17,
+      "timing": {
+        "listToDetailMs": 54.099999997764826
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 18,
+      "timing": {
+        "listToDetailMs": 421.9000000022352
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 18,
+      "timing": {
+        "listToDetailMs": 51.599999997764826
+      }
+    },
+    {
+      "client": "dashboard",
+      "sample": 19,
+      "timing": {
+        "listToDetailMs": 369.5
+      }
+    },
+    {
+      "client": "portal",
+      "sample": 19,
+      "timing": {
+        "listToDetailMs": 52.80000000074506
+      }
+    }
+  ],
+  "warmSwitches": {
+    "condition": "same-context-previsited",
+    "warmupVisits": 3,
+    "cycles": 20,
+    "tickets": [
+      {
+        "id": "abfca3ee-2d97-4516-9430-b814a6e130f4",
+        "articles": 1,
+        "bodyBytes": 35
+      },
+      {
+        "id": "c1803045-1b3c-439a-b08b-5cdf0cf21709",
+        "articles": 1,
+        "bodyBytes": 35
+      }
+    ],
+    "samples": [
+      {
+        "cycle": 0,
+        "leg": "A-to-B",
+        "usefulRenderMs": 39.79999999701977,
+        "detailReads": []
+      },
+      {
+        "cycle": 0,
+        "leg": "B-to-A",
+        "usefulRenderMs": 28.800000000745058,
+        "detailReads": []
+      },
+      {
+        "cycle": 1,
+        "leg": "A-to-B",
+        "usefulRenderMs": 26.699999999254942,
+        "detailReads": []
+      },
+      {
+        "cycle": 1,
+        "leg": "B-to-A",
+        "usefulRenderMs": 32.30000000074506,
+        "detailReads": []
+      },
+      {
+        "cycle": 2,
+        "leg": "A-to-B",
+        "usefulRenderMs": 22.199999999254942,
+        "detailReads": []
+      },
+      {
+        "cycle": 2,
+        "leg": "B-to-A",
+        "usefulRenderMs": 39.70000000298023,
+        "detailReads": []
+      },
+      {
+        "cycle": 3,
+        "leg": "A-to-B",
+        "usefulRenderMs": 45.30000000074506,
+        "detailReads": []
+      },
+      {
+        "cycle": 3,
+        "leg": "B-to-A",
+        "usefulRenderMs": 27.899999998509884,
+        "detailReads": []
+      },
+      {
+        "cycle": 4,
+        "leg": "A-to-B",
+        "usefulRenderMs": 32.899999998509884,
+        "detailReads": []
+      },
+      {
+        "cycle": 4,
+        "leg": "B-to-A",
+        "usefulRenderMs": 31.100000001490116,
+        "detailReads": []
+      },
+      {
+        "cycle": 5,
+        "leg": "A-to-B",
+        "usefulRenderMs": 34,
+        "detailReads": []
+      },
+      {
+        "cycle": 5,
+        "leg": "B-to-A",
+        "usefulRenderMs": 44.100000001490116,
+        "detailReads": []
+      },
+      {
+        "cycle": 6,
+        "leg": "A-to-B",
+        "usefulRenderMs": 41,
+        "detailReads": []
+      },
+      {
+        "cycle": 6,
+        "leg": "B-to-A",
+        "usefulRenderMs": 41.099999997764826,
+        "detailReads": []
+      },
+      {
+        "cycle": 7,
+        "leg": "A-to-B",
+        "usefulRenderMs": 39.899999998509884,
+        "detailReads": []
+      },
+      {
+        "cycle": 7,
+        "leg": "B-to-A",
+        "usefulRenderMs": 20,
+        "detailReads": []
+      },
+      {
+        "cycle": 8,
+        "leg": "A-to-B",
+        "usefulRenderMs": 29.100000001490116,
+        "detailReads": []
+      },
+      {
+        "cycle": 8,
+        "leg": "B-to-A",
+        "usefulRenderMs": 39.80000000074506,
+        "detailReads": []
+      },
+      {
+        "cycle": 9,
+        "leg": "A-to-B",
+        "usefulRenderMs": 44.69999999925494,
+        "detailReads": []
+      },
+      {
+        "cycle": 9,
+        "leg": "B-to-A",
+        "usefulRenderMs": 39.80000000074506,
+        "detailReads": []
+      },
+      {
+        "cycle": 10,
+        "leg": "A-to-B",
+        "usefulRenderMs": 41.600000001490116,
+        "detailReads": []
+      },
+      {
+        "cycle": 10,
+        "leg": "B-to-A",
+        "usefulRenderMs": 17.399999998509884,
+        "detailReads": []
+      },
+      {
+        "cycle": 11,
+        "leg": "A-to-B",
+        "usefulRenderMs": 38.099999997764826,
+        "detailReads": []
+      },
+      {
+        "cycle": 11,
+        "leg": "B-to-A",
+        "usefulRenderMs": 41.69999999925494,
+        "detailReads": []
+      },
+      {
+        "cycle": 12,
+        "leg": "A-to-B",
+        "usefulRenderMs": 42.899999998509884,
+        "detailReads": []
+      },
+      {
+        "cycle": 12,
+        "leg": "B-to-A",
+        "usefulRenderMs": 26.300000000745058,
+        "detailReads": []
+      },
+      {
+        "cycle": 13,
+        "leg": "A-to-B",
+        "usefulRenderMs": 45.69999999925494,
+        "detailReads": []
+      },
+      {
+        "cycle": 13,
+        "leg": "B-to-A",
+        "usefulRenderMs": 35.20000000298023,
+        "detailReads": []
+      },
+      {
+        "cycle": 14,
+        "leg": "A-to-B",
+        "usefulRenderMs": 32.19999999925494,
+        "detailReads": []
+      },
+      {
+        "cycle": 14,
+        "leg": "B-to-A",
+        "usefulRenderMs": 44.30000000074506,
+        "detailReads": []
+      },
+      {
+        "cycle": 15,
+        "leg": "A-to-B",
+        "usefulRenderMs": 23.400000002235174,
+        "detailReads": []
+      },
+      {
+        "cycle": 15,
+        "leg": "B-to-A",
+        "usefulRenderMs": 48,
+        "detailReads": []
+      },
+      {
+        "cycle": 16,
+        "leg": "A-to-B",
+        "usefulRenderMs": 24.100000001490116,
+        "detailReads": []
+      },
+      {
+        "cycle": 16,
+        "leg": "B-to-A",
+        "usefulRenderMs": 36.30000000074506,
+        "detailReads": []
+      },
+      {
+        "cycle": 17,
+        "leg": "A-to-B",
+        "usefulRenderMs": 39.100000001490116,
+        "detailReads": []
+      },
+      {
+        "cycle": 17,
+        "leg": "B-to-A",
+        "usefulRenderMs": 28,
+        "detailReads": []
+      },
+      {
+        "cycle": 18,
+        "leg": "A-to-B",
+        "usefulRenderMs": 32.900000002235174,
+        "detailReads": []
+      },
+      {
+        "cycle": 18,
+        "leg": "B-to-A",
+        "usefulRenderMs": 35.29999999701977,
+        "detailReads": []
+      },
+      {
+        "cycle": 19,
+        "leg": "A-to-B",
+        "usefulRenderMs": 45.100000001490116,
+        "detailReads": []
+      },
+      {
+        "cycle": 19,
+        "leg": "B-to-A",
+        "usefulRenderMs": 31.800000000745058,
+        "detailReads": []
+      }
+    ],
+    "returnToA": {
+      "p50": 35.20000000298023,
+      "p95": 44.30000000074506
+    },
+    "hardware": "Apple M3; 16 GiB RAM",
+    "power": "AC attached; battery 76%; not charging at session preflight",
+    "thresholdEvaluated": false
+  },
+  "recovery": [
+    {
+      "client": "dashboard",
+      "timing": {
+        "failedDetailRetryMs": 145.10000000149012
+      }
+    },
+    {
+      "client": "portal",
+      "timing": {
+        "failedDetailRetryMs": 116.69999999925494
+      }
+    }
+  ],
+  "limitations": [
+    "Local disposable Miniflare fixture and loopback static servers only; not deployed-worker or provider timing.",
+    "Fixture-issued sessions prove only this synthetic tenant/auth flow; no production authentication or customer data.",
+    "Synthetic 503 detail faults are injected only by this loopback forwarding boundary; initial authentication and recovered reads use the real fixture.",
+    "No numeric threshold is evaluated.",
+    "Warm switches use one previsited context; request observations do not prove cache hits. Network observation ends at useful render and may omit later revalidation. The synthetic fixture does not establish sustained budgeted runtime performance."
+  ]
+}
