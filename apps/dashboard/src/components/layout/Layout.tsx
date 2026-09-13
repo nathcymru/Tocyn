@@ -1,3 +1,4 @@
+import { OperatorCapacityPanel } from '../capacity/OperatorCapacityPanel';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
@@ -47,6 +48,9 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
   const trigger = useRef<HTMLButtonElement>(null);
   const securityProfile = useRef<HTMLAnchorElement>(null);
   const disclosureId = React.useId();
+  const capacityTitleId=React.useId();
+  const [capacityOpen,setCapacityOpen]=useState(false);
+  const capacityClose=useRef<HTMLButtonElement>(null);
 
   const handleLogout = async () => {
     if (loggingOut.current) return;
@@ -60,6 +64,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
   };
 
   return (
+    <>
     <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} initialFocusEl={() => securityProfile.current} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
     <div className="relative mt-2">
       <Popover.Trigger asChild>
@@ -97,12 +102,25 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
             <LogOut className="w-4 h-4" />
             Sign out of all sessions
           </TocynButton>
+          <TocynButton type="button" aria-haspopup="dialog" onClick={()=>{restoreAccountFocus.current=false;setIsOpen(false);setCapacityOpen(true);}}
+            className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Current work</TocynButton>
           <OperatorThemeControl />
           <OperatorPreferencesControl />
         </Popover.Content>
       </Popover.Positioner>
     </div>
     </Popover.Root>
+    <TocynDialog open={capacityOpen} onOpenChange={setCapacityOpen} labelledBy={capacityTitleId}
+      initialFocusEl={()=>capacityClose.current} finalFocusEl={()=>trigger.current}>
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border bg-white p-6 text-slate-900 shadow-xl">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 id={capacityTitleId} className="text-xl font-bold">Current work</h2>
+          <TocynButton ref={capacityClose} type="button" onClick={()=>setCapacityOpen(false)} className="rounded border px-3 py-2">Close current work</TocynButton>
+        </div>
+        {capacityOpen&&user?.id&&<OperatorCapacityPanel userId={user.id}/>}
+      </div>
+    </TocynDialog>
+    </>
   );
 }
 

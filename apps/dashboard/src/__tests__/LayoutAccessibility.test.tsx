@@ -348,3 +348,29 @@ it('invalidates ticket queues after dismissing activity while reading retains me
   fireEvent.click(await screen.findByRole('button',{name:'Dismiss mention activity for Synthetic mention'}));
   await waitFor(()=>expect(invalidated).toHaveBeenCalledWith({queryKey:['tickets']}));
 });
+
+
+it('opens own current work on demand and contains keyboard focus before returning to account options', async () => {
+  const original=vi.mocked(dashboardApi.get).getMockImplementation()!;
+  vi.mocked(dashboardApi.get).mockImplementation(async(path:string)=>path==='/operators/operator/capacity'
+    ? {userId:'operator',revision:0,availability:null,assignmentCeiling:null,currentWork:2,status:'unconfigured',definitionVersion:'2026-09-11.3',asOf:'2026-09-13T13:00:00Z'}
+    : original(path));
+  await renderReady();
+  expect(vi.mocked(dashboardApi.get).mock.calls.some(([path])=>path.includes('/capacity'))).toBe(false);
+  const account=screen.getByRole('button',{name:'Account options'});
+  await userEvent.click(account);
+  await waitFor(()=>expect(screen.getByRole('link',{name:'Security Profile'})).toHaveFocus());
+  const open=screen.getByRole('button',{name:'Current work'});open.focus();await userEvent.keyboard('{Enter}');
+  const dialog=await screen.findByRole('dialog',{name:'Current work'});
+  const close=within(dialog).getByRole('button',{name:'Close current work'});
+  await waitFor(()=>expect(close).toHaveFocus());
+  await within(dialog).findByText(/No capacity policy is configured/);
+  expect(within(dialog).queryByRole('button',{name:'Save capacity'})).not.toBeInTheDocument();
+  const refresh=within(dialog).getByRole('button',{name:'Refresh current work'});
+  await userEvent.tab({shift:true});expect(refresh).toHaveFocus();
+  await userEvent.tab();expect(close).toHaveFocus();
+  await userEvent.tab();expect(refresh).toHaveFocus();
+  await userEvent.keyboard('{Escape}');
+  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Current work'})).not.toBeInTheDocument());
+  await waitFor(()=>expect(account).toHaveFocus());
+});
