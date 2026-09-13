@@ -53,3 +53,30 @@ it('renders denied server actions disabled with their reason and refuses broaden
   unsafe.actions[2].href = 'javascript:alert(1)';
   expect(() => parseTicketUtilityActions(unsafe, 'ticket-1')).toThrow('Ticket actions are unavailable.');
 });
+
+it('offers a selectable reference fallback when clipboard support is missing', async () => {
+  const user = userEvent.setup();
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+  render(<TicketActionBar reference="#42" actions={parseTicketUtilityActions(manifest(), 'ticket-1').actions} loading={false} error={false} retry={() => {}} />);
+  await user.click(screen.getByRole('button', { name: 'Copy ticket reference' }));
+  expect(screen.getByRole('status')).toHaveTextContent('could not be copied');
+  await user.click(screen.getByText('More ticket actions'));
+  await user.click(screen.getByRole('button', { name: 'View ticket reference' }));
+  expect(within(screen.getByRole('dialog')).getByText('#42')).toBeVisible();
+});
+
+it('clears the old ticket dialog and ignores a late clipboard result after switching tickets', async () => {
+  const user = userEvent.setup();
+  let finishCopy!: () => void;
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => new Promise<void>(resolve => { finishCopy = resolve; }) } });
+  const props = { actions: parseTicketUtilityActions(manifest(), 'ticket-1').actions, loading: false, error: false, retry: () => {} };
+  const view = render(<TicketActionBar {...props} reference="#42" />);
+  await user.click(screen.getByRole('button', { name: 'Copy ticket reference' }));
+  await user.click(screen.getByText('More ticket actions'));
+  await user.click(screen.getByRole('button', { name: 'View ticket reference' }));
+  expect(screen.getByRole('dialog')).toBeVisible();
+  view.rerender(<TicketActionBar {...props} reference="#43" />);
+  finishCopy();
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
