@@ -136,3 +136,26 @@ it.each([
   await act(async () => finishOld(json({ ...preference(7), density: 'compact', motion: 'full' })));
   expect(current()).toMatchObject({ status: 'restored', revision: 2, density: 'comfortable', motion: 'reduced' });
 });
+
+it.each([
+  { label: 'user', id: 'second-operator', tenant_id: 'tenant-a' },
+  { label: 'tenant', id: 'operator', tenant_id: 'tenant-b' },
+  { label: 'session', id: 'operator', tenant_id: 'tenant-a' },
+])('discards an obsolete saved response after $label replacement', async nextUser => {
+  let finishSave!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(preference(1)))
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finishSave = resolve; }))
+    .mockResolvedValueOnce(json({ ...preference(3), motion: 'reduced' })));
+  render(<Harness />);
+  await waitFor(() => expect(current().status).toBe('restored'));
+  act(() => value.update({ density: 'compact', fontScale: 'larger' }));
+  let pending!: Promise<void>;
+  act(() => { pending = value.save(); });
+  await waitFor(() => expect(current().status).toBe('saving'));
+  act(() => useAuthStore.getState().setAuth('session-b', { ...user, id: nextUser.id, tenant_id: nextUser.tenant_id }));
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 3, motion: 'reduced' }));
+  await act(async () => { finishSave(json({ ...preference(9), density: 'compact', fontScale: 'larger' })); await pending; });
+  expect(current()).toMatchObject({ status: 'restored', revision: 3, density: 'comfortable', fontScale: 'normal', motion: 'reduced', error: null });
+  expect(document.documentElement.dataset.tocynFontScale).toBe('normal');
+  expect(document.documentElement.dataset.tocynMotion).toBe('reduced');
+});

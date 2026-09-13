@@ -374,3 +374,33 @@ it('opens own current work on demand and contains keyboard focus before returnin
   await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Current work'})).not.toBeInTheDocument());
   await waitFor(()=>expect(account).toHaveFocus());
 });
+
+it('keeps initial preference restore recovery visible through a local edit and validates revision before saving', async () => {
+  const preference = { version: 1, revision: 4, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
+  let restores = 0;
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
+    if (path === '/workspace/presentation-preference') {
+      if (++restores === 1) throw new Error('Synthetic initial restore failure');
+      return preference;
+    }
+    if (path === '/workspace/theme-preference') return { revision: 0, mode: 'system', updatedAt: null };
+    if (path === '/activities?limit=20') return { page: { items: [], next: null }, unread: { status: 'available', count: 0 } };
+    return { version: '1', light: {}, dark: {}, fallback: false };
+  });
+  vi.mocked(dashboardApi.put).mockResolvedValue({ ...preference, revision: 5, density: 'compact' });
+  await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
+  const density = await screen.findByRole('combobox', { name: 'Workspace density' });
+  await screen.findByRole('button', { name: 'Retry workspace preferences' });
+  await userEvent.selectOptions(density, 'compact');
+  expect(screen.getByRole('button', { name: 'Retry workspace preferences' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Save workspace preferences' })).toBeDisabled();
+  expect(dashboardApi.put).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Retry workspace preferences' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save workspace preferences' })).toBeEnabled());
+  expect(density).toHaveValue('compact');
+  await userEvent.click(screen.getByRole('button', { name: 'Save workspace preferences' }));
+  await screen.findByText('Workspace preferences saved.');
+  expect(dashboardApi.put).toHaveBeenLastCalledWith('/workspace/presentation-preference', expect.objectContaining({ expectedRevision: 4, density: 'compact' }));
+  expect(restores).toBe(2);
+});
