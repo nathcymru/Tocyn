@@ -53,3 +53,9 @@ It records20samples per client with browser DOM-click timestamps, loaded detail 
 ## Built widget visual regression
 
 `node tools/ui-browser/widget-visual.mjs` serves the real built IIFE on a disposable loopback server. Six synthetic AI-on/off cases cover desktop,320px and320×480viewports. Required CI build now runs it and retains its JSON/screenshots for3days. It rejects missing/unsupported text contrast, missing visible keyboard outlines, poor focus contrast, undersized controls, panel overflow and inaccessible SendMessage in the short viewport. Placeholder/footer colors are measured too. All writes/outside origins are blocked; no customer credentials or provider calls. This covers the default retained widget, not arbitrary themes or #67 wrapper lifecycle. Widget CSS is compiled into the shadow tree rather than emitted as a required host stylesheet.
+
+## Operator preference text size (#132)
+
+Run `node tools/ui-browser/preference-font-scale.mjs` from the repository root with an existing Playwright Chromium installation. If needed, set `TOCYN_BROWSER_EXECUTABLE` to an already installed Chromium-compatible executable. This separate local check compiles the current dashboard CSS around representative preference controls, then measures actual computed sizes at 16px and 20px browser default font settings across Standard/Large/Largest and reset. It closes its own browser, uses no backend and makes no external requests. It does not replace full workspace 200% zoom/reflow or assistive-technology acceptance and is not added to routine CI.
+
+The same check reads the marked decorative shortcut span from Layout and verifies Focus mode hides/restores it while representative unmarked controls remain visible. Full search shortcut instructions remain in the real Layout component and are covered alongside failed-save/reconnect recovery by its component tests.

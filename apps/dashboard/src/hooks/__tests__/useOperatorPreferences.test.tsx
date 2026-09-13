@@ -106,8 +106,21 @@ it('restores a saved preference after remounting instead of relying on in-memory
   await act(async () => { await value.save(); });
   view.unmount();
   expect(document.documentElement.dataset.tocynMotion).toBeUndefined();
+  expect(document.documentElement.dataset.tocynFontScale).toBeUndefined();
   render(<Harness />);
   await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 1, motion: 'reduced', fontScale: 'larger', focusMode: true }));
+});
+
+it('resets the old user text scale while the next identity restores its preferences', async () => {
+  let finishRestore!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json({ ...preference(1), fontScale: 'larger' }))
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { finishRestore = resolve; })));
+  render(<Harness />);
+  await waitFor(() => expect(document.documentElement.dataset.tocynFontScale).toBe('larger'));
+  act(() => useAuthStore.getState().setAuth('session-b', { ...user, id: 'second-operator' }));
+  expect(document.documentElement.dataset.tocynFontScale).toBe('normal');
+  await act(async () => finishRestore(json({ ...preference(2), fontScale: 'large' })));
+  expect(document.documentElement.dataset.tocynFontScale).toBe('large');
 });
 
 it.each([

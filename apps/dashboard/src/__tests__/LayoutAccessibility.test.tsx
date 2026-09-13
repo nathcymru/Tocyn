@@ -11,7 +11,7 @@ import { useRealtime } from '../hooks/useRealtime';
 import { useAuthStore } from '../store/authStore';
 
 vi.mock('../hooks/useRealtime', () => ({ useRealtime: vi.fn() }));
-vi.mock('../api/client', () => ({ dashboardApi: {
+vi.mock('../api/client', async () => ({ ...(await vi.importActual<typeof import('../api/client')>('../api/client')), dashboardApi: {
   post: vi.fn(),
   get: vi.fn(async (path: string) => path === '/workspace/theme-preference'
     ? { revision: 0, mode: 'system', updatedAt: null }
@@ -129,6 +129,54 @@ it('keeps search and workspace navigation visible and keyboard reachable when fo
   expect(inbox).toHaveFocus();
 });
 
+it('keeps preference failure recovery and connection state reachable after using the Focus mode control', async () => {
+  const preference = { version: 1, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
+    if (path === '/workspace/presentation-preference') return preference;
+    if (path === '/workspace/theme-preference') return { revision: 0, mode: 'system', updatedAt: null };
+    if (path === '/activities?limit=20') return { page: { items: [], next: null }, unread: { status: 'available', count: 0 } };
+    return { version: '1', light: {}, dark: {}, fallback: false };
+  });
+  vi.mocked(dashboardApi.put).mockRejectedValueOnce(new Error('Synthetic save failure'))
+    .mockResolvedValueOnce({ ...preference, revision: 1, focusMode: true });
+  vi.mocked(useRealtime).mockReturnValue({ ...realtime, isConnected: false } as ReturnType<typeof useRealtime>);
+  await renderReady();
+  const workspace = screen.getByRole('main', { name: 'Workspace' });
+  await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
+  const focus = await screen.findByRole('checkbox', { name: 'Focus mode' });
+  await waitFor(() => expect(focus).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('link', { name: 'Security Profile' })).toHaveFocus());
+  const decoration = document.querySelector('[data-tocyn-focus-decoration]');
+  expect(decoration).toHaveAttribute('aria-hidden', 'true');
+  focus.focus();
+  await userEvent.keyboard(' ');
+  expect(focus).toBeChecked();
+  expect(document.documentElement.dataset.tocynFocusMode).toBe('true');
+  expect(screen.getByRole('textbox', { name: 'Search all tickets (global shell)' })).toBeVisible();
+  expect(document.getElementById('global-ticket-search-scope')).toHaveTextContent('Press Command or Control K');
+  expect(screen.getByRole('button', { name: 'Disconnected' })).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: 'Save workspace preferences' }));
+  const retry = await screen.findByRole('button', { name: 'Retry workspace preferences' });
+  expect(screen.getByText('Workspace preferences were not saved. Retry.')).toBeVisible();
+  expect(focus).toBeChecked();
+  expect(screen.getByRole('main', { name: 'Workspace' })).toBe(workspace);
+  retry.focus();
+  await userEvent.keyboard('{Enter}');
+  await screen.findByText('Workspace preferences saved.');
+  expect(dashboardApi.put).toHaveBeenLastCalledWith('/workspace/presentation-preference', expect.objectContaining({ expectedRevision: 0, focusMode: true }));
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Account options' })).toHaveFocus());
+  const disconnected = screen.getByRole('button', { name: 'Disconnected' });
+  disconnected.focus();
+  await userEvent.keyboard('{Enter}');
+  expect(await screen.findByText(/Live updates are paused/)).toBeVisible();
+  const reconnect = await screen.findByRole('button', { name: 'Force Reconnect' });
+  reconnect.focus();
+  await userEvent.keyboard('{Enter}');
+  expect(realtime.manualReconnect).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(disconnected).toHaveFocus());
+});
+
 it('closes mobile navigation after a selected destination and focuses the workspace', async () => {
   await renderReady(); fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
   fireEvent.click(within(await screen.findByRole('dialog', { name: 'Navigation' })).getByRole('link', { name: 'Dashboard home' }));
@@ -162,7 +210,7 @@ it('identifies the authorized ticket and marks durable activity read before open
   await userEvent.click(open);
 
   await waitFor(() => expect(dashboardApi.patch).toHaveBeenCalledWith('/activities/activity-one/read', { expectedRevision: 1 }));
-  await waitFor(() => expect(screen.getByRole('heading')).toHaveTextContent('/inbox/all/ticket-one'));
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('/inbox/all/ticket-one'));
 });
 
 it('continues durable activity with the opaque authenticated cursor through a keyboard control', async () => {
@@ -177,6 +225,8 @@ it('continues durable activity with the opaque authenticated cursor through a ke
   await renderReady();
   await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
   const loadMore = await screen.findByRole('button', { name: 'Load more activity' });
+  // Wait for the disclosure's scheduled initial focus before moving to pagination.
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toHaveFocus());
   loadMore.focus();
   await userEvent.keyboard('{Enter}');
 
