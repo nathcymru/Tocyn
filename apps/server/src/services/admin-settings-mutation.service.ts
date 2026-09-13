@@ -32,7 +32,7 @@ export class AdminSettingsMutationService {
   private async authorize(requirements: SessionBudgetRequirements) { if (!await this.sessions.authorize(this.credential, requirements, this.budget.now())) throw unavailable(); }
   private async admit(operation: AdminSettingsBudgetOperation, requirements: SessionBudgetRequirements, intent: Attempt['intent'], business: ResourceAmounts) {
     await this.authorize(requirements);
-    const result = await this.budget.service.admit({ repository: this.budget.repository, sessions: this.sessions, namespace: this.budget.namespace,
+    const result = await this.budget.service.admit({ repository: this.budget.repository, sessions: this.sessions, namespace: this.budget.namespace, database: this.db,
       scope: this.scope, credential: this.credential, requirements, intent, business, now: this.budget.now });
     if (result.status === 'rejected') throw (result.reason === 'exhausted' || result.reason === 'capacity-exhausted' ? exhausted() : unavailable());
     if (!result.commitAuthority || result.commitAuthority.operationId !== intent.operationId || result.commitAuthority.operationFingerprint !== intent.operationFingerprint) throw unavailable();

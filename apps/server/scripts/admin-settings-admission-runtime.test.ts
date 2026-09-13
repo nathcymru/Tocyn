@@ -145,3 +145,59 @@ test('native D1/DO admission fences bounded settings, themes and delegated-polic
     assert.equal((await db.prepare("SELECT count(*) AS n FROM tenant_config WHERE tenant_id=?").bind(otherTenant).first<{ n: number }>())?.n, 0);
   } finally { await mf.dispose(); }
 });
+
+test('theme restore reads recover beyond four refills without adding warm RPCs', async () => {
+  const bundle = await build({ absWorkingDir: root, entryPoints: ['scripts/budget-admission-runtime-entry.ts'], bundle: true,
+    write: false, format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'] });
+  const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'admin-settings-admission', modules: true,
+    compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'], script: bundle.outputFiles[0].text,
+    bindings: { BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', DISABLE_RATE_LIMIT: 'true', ENVIRONMENT: 'local', JWT_SECRET: secret,
+      APP_MASTER_KEY: 'admin-settings-runtime-master-key-at-least-32' }, d1Databases: { DB: 'admin-settings-d1' },
+    durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO', NOTIFICATION_DO: 'NotificationDO' },
+    unsafeEphemeralDurableObjects: true,
+  }] }));
+  try {
+    const db = await mf.getD1Database('DB'); await apply(db);
+    const owner = policy();
+    // 20% recovery capacity must cover the existing 768-unit session closure envelope.
+    for (const budget of owner.budgets) if (budget.dimension === 'doRowsRead' || budget.dimension === 'doRowsWritten') budget.limit = 10_000;
+    const limits = Object.fromEntries(owner.budgets.map(item => [item.dimension, item.limit]));
+    const allocation = (tenantId: string) => JSON.stringify({ schemaVersion: 1, tenantId, ownerPolicyId: owner.policyId, ownerPolicyRevision: 1,
+      revision: 1, mode: 'conservative', limits, disabledFeatures: [] });
+    await db.batch([
+      db.prepare("INSERT INTO budget_deployment_authority VALUES ('admin-settings-deployment',1,'active',?)").bind(now),
+      db.prepare(`INSERT INTO budget_owner_policies (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
+        VALUES ('admin-settings-deployment','admin-settings-policy',1,1,'admin-settings-coordinator',32,60000,?)`).bind(JSON.stringify(owner)),
+      ...[tenant, otherTenant].flatMap(tenantId => [
+        db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'admin',?,'admin',1,1)").bind(tenantId, `admin-${tenantId}@example.test`),
+        db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES (?,'agent',?,'agent',1,1)").bind(tenantId, `agent-${tenantId}@example.test`),
+        db.prepare(`INSERT INTO budget_tenant_allocations (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
+          VALUES ('admin-settings-deployment',?,'admin-settings-policy',1,1,?,?,'active')`).bind(tenantId, `admin-${tenantId}`, allocation(tenantId)),
+        db.prepare("INSERT INTO tenant_role_capability_policies (tenant_id,role,capability,enabled,revision) VALUES (?,'agent','settings.general.manage',1,1)").bind(tenantId),
+      ]),
+    ]);
+    let admin = await token('admin', 'admin'); const request = (path: string, method: string, bearer: string, body?: unknown, key?: string) => mf.dispatchFetch(`http://runtime.test${path}`, {
+      method, headers: { authorization: `Bearer ${bearer}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(key ? { 'idempotency-key': key } : {}) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+
+    const calls = async () => (await (await mf.dispatchFetch('http://runtime.test/__budget-control')).json()) as { calls: { refresh: number; reserve: number; reconcile: number } };
+    let firstCalls: Awaited<ReturnType<typeof calls>> | undefined;
+    for (let index = 0; index < 40; index++) {
+      const response = await request('/api/settings/theme', 'GET', admin);
+      assert.equal(response.status, 200, `Theme read ${index + 1}: ${await response.text()}`);
+      if (index === 0) firstCalls = await calls();
+      if (index === 1) assert.deepEqual((await calls()).calls, firstCalls!.calls, 'Second warm read makes no additional coordinator RPC');
+    }
+    const journals = await db.prepare('SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id=?').bind(tenant).first<{n:number}>();
+    assert.equal(journals?.n, 40, 'Every successful read has an exact durable operation journal');
+    const closures = await db.prepare('SELECT count(*) AS n FROM budget_grant_closures WHERE tenant_id=? AND reconciled_at IS NOT NULL').bind(tenant).first<{n:number}>();
+    assert.ok(closures && closures.n > 0, 'Crossing four refills requires confirmed whole-grant closure');
+    assert.ok((await calls()).calls.reconcile > 0);
+    console.log('theme-recovery-evidence', JSON.stringify({calls:(await calls()).calls,journals:journals?.n,confirmedClosures:closures?.n}));
+    await db.prepare("UPDATE users SET session_version=2 WHERE tenant_id=? AND id='admin'").bind(tenant).run();
+    const revoked = await request('/api/settings/theme', 'GET', admin);
+    assert.equal(revoked.status, 401); await revoked.body?.cancel();
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id=?').bind(tenant).first<{n:number}>())?.n, 40);
+  } finally { await mf.dispose(); }
+});
