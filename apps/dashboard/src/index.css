@@ -157,3 +157,7 @@
 .tocyn-markdown-code-block .token:is(.atrule, .attr-value, .keyword) { color: #c4b5fd; }
 .tocyn-markdown-code-block .token:is(.function, .class-name) { color: #fef08a; }
 .tocyn-markdown-code-block .token:is(.regex, .important, .variable) { color: #fca5a5; }
+
+/* Presence status keeps normal-text contrast in both selected theme modes. */
+.tocyn-presence-viewing { color: #15803d; }
+[data-tocyn-theme-mode="dark"] .tocyn-presence-viewing { color: #16a34a; }
