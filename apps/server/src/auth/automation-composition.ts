@@ -1,4 +1,6 @@
 import { Env } from '../bindings';
+import { admitSnoozeDue } from '../budgets/snooze-due-admission.service';
+import { SnoozeDueCheckpointRepository } from '../repositories/snooze-due-checkpoint.repository';
 import { AutomationTenantResolver, SnoozeTenantResolver } from './automation-resolver';
 import { createSystemTenantScope } from './scope';
 import { createTenantRequestDeps } from '../middleware/tenant.middleware';
@@ -44,4 +46,41 @@ export async function runScheduledSnoozeResurface(env: Env, now: () => number = 
     }
   }
   return { resurfaced, failedTenants };
+}
+
+/** Called only by the separately reviewed private local harness entry. The
+ * production scheduled export never dispatches this composition. */
+export async function runFundedLocalSnoozeStep(env: Env, tenantId: string,
+  purpose: 'new-work' | 'recovery', now: () => number = Date.now): Promise<
+  Readonly<{ status: 'complete'; generation: number; outcome: 'no-snoozes' | 'empty' | 'resurfaced' }>
+  | Readonly<{ status: 'recovery-needed' | 'paused'; reason: 'unknown' | 'admission-rejected' }>> {
+  if (env.ENVIRONMENT !== 'local' || env.LOCAL_BETA_ENABLED !== 'true'
+    || (purpose !== 'new-work' && purpose !== 'recovery')) return { status: 'paused', reason: 'admission-rejected' };
+  const deps = createTenantRequestDeps(createSystemTenantScope({ tenantId, actor: 'scheduled-snooze-resurface' }),env);
+  const repository = new SnoozeDueCheckpointRepository(deps.database,deps.scope);
+  const read = await admitSnoozeDue({ env,deps,now,intent:{family:'read',input:{readId:crypto.randomUUID(),purpose}} });
+  if (read.status !== 'admitted') return { status:'paused',reason:'admission-rejected' };
+  let snapshot;
+  try {
+    if(read.intent.family !== 'read') throw new Error('Invalid local due read');
+    snapshot = await repository.read(read.intent.input,read.authority);
+    read.finish('committed');
+  } catch {
+    read.finish('unknown');
+    return {status:purpose === 'recovery' ? 'paused' : 'recovery-needed',reason:'unknown'};
+  }
+  const generation = snapshot.checkpoint?.generation ?? 0;
+  if(snapshot.activeSnoozes === 0) return {status:'complete',generation,outcome:'no-snoozes'};
+  const advance = await admitSnoozeDue({env,deps,now,intent:{family:'advance',input:{expectedGeneration:generation,
+    stepId:crypto.randomUUID(),dueThrough:new Date(now()).toISOString(),activeSnoozeSnapshot:snapshot.activeSnoozes}}});
+  if(advance.status !== 'admitted') return {status:'paused',reason:'admission-rejected'};
+  try {
+    if(advance.intent.family !== 'advance') throw new Error('Invalid local due advance');
+    const result = await repository.advance(advance.intent.input,advance.authority);
+    advance.finish('committed');
+    return {status:'complete',generation:result.generation,outcome:result.outcome};
+  } catch {
+    advance.finish('unknown');
+    return {status:purpose === 'recovery' ? 'paused' : 'recovery-needed',reason:'unknown'};
+  }
 }
