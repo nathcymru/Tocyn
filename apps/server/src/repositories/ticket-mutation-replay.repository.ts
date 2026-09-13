@@ -219,6 +219,34 @@ export class TicketMutationReplayRepository {
     // constructing the authoritative D1 batch. No HTTP response establishes this.
     this.canonicalMutationSli?.recordAttempt();
     const operation=candidate.ticket?'create':'conversation';
+    const { statements, responseIndex } = await this.prepareCanonicalBatch(candidate,ns,staff,api,customer,precondition);
+    let results;
+    try { results = await this.db.batch<{ response_snapshot: string }>(statements); }
+    catch(error) {
+      if (staff && precondition) {
+        try {
+          if (!await staffReplyPreconditionMatches(this.db, this.scope, candidate, precondition)) throw new StaffReplyPreconditionConflictError();
+        } catch (classification) {
+          if (classification instanceof StaffReplyPreconditionConflictError) throw classification;
+        }
+      }
+      if (!ns && this.admission) { await this.admission.authorize(operation); throw new BetaAdmissionError('beta_admission_unavailable',503); }
+      throw error;
+    }
+    const value = results[responseIndex].results[0]?.response_snapshot;
+    if (!value) throw new Error('Mutation result unavailable');
+    // The full tenant-scoped batch committed and returned its durable receipt.
+    this.canonicalMutationSli?.recordDurablyCompleted();
+    return value;
+  }
+
+  /** Assemble the existing ordered transaction without executing it. Callers
+   * remain responsible for their principal validation and transaction boundary. */
+  private async prepareCanonicalBatch(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit,
+    api?: ApiMutationCommit, customer?: CustomerMutationCommit, precondition?: StaffReplyPrecondition): Promise<{
+      statements: D1PreparedStatement[]; responseIndex: number;
+    }> {
+    const operation=candidate.ticket?'create':'conversation';
     const staffPrecondition = staff && precondition ? staffReplyPreconditionConstraint(this.scope, candidate, precondition) : undefined;
     const statements: D1PreparedStatement[] = [...(api ? apiBudgetMutationStatements(this.db,this.scope,api) : []),
       ...(staff ? staffMutationStatements(this.db,this.scope,staff,staffPrecondition) : []),
@@ -341,23 +369,6 @@ export class TicketMutationReplayRepository {
       if (staff) statements.push(this.db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END WHERE tenant_id=?`).bind(...snapshotValues,this.scope.tenantId));
       statements.push(this.db.prepare(`SELECT ${snapshot} AS response_snapshot`).bind(...snapshotValues));
     }
-    let results;
-    try { results = await this.db.batch<{ response_snapshot: string }>(statements); }
-    catch(error) {
-      if (staff && precondition) {
-        try {
-          if (!await staffReplyPreconditionMatches(this.db, this.scope, candidate, precondition)) throw new StaffReplyPreconditionConflictError();
-        } catch (classification) {
-          if (classification instanceof StaffReplyPreconditionConflictError) throw classification;
-        }
-      }
-      if (!ns && this.admission) { await this.admission.authorize(operation); throw new BetaAdmissionError('beta_admission_unavailable',503); }
-      throw error;
-    }
-    const value = results[results.length - 1].results[0]?.response_snapshot;
-    if (!value) throw new Error('Mutation result unavailable');
-    // The full tenant-scoped batch committed and returned its durable receipt.
-    this.canonicalMutationSli?.recordDurablyCompleted();
-    return value;
+    return { statements, responseIndex: statements.length - 1 };
   }
 }
