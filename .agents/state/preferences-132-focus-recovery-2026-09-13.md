@@ -20,3 +20,5 @@ Delivery consolidates these changes into existing PR265, not a second PR. Latest
 Final integration at main b84453fe passed all 318 dashboard tests in 46 files. The independently reported pagination-keyboard timing failure was addressed by waiting for the disclosure's scheduled initial Refresh focus before moving to Load more; the level-one route heading selector avoids matching the open Activity heading. Both are test corrections, not application behavior changes. After the timing assertion change, all 16 Layout tests and dashboard TypeScript passed. Exact refreshed-head CI remains required.
 
 Signed freshness refresh onto8d287c4c includes only disjoint #128 tests/evidence from PR266. Existing product verification remains applicable; no repeated local test run, new exact-head CI required.
+
+CI on24e3d177 exposed a test focus-return race after closing the account disclosure. The test now waits for the documented account-trigger focus return before focusing/opening disconnected controls. All16Layout tests pass after this test-only correction; refreshed-head CI will validate the complete suite.

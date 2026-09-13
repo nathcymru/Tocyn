@@ -165,6 +165,7 @@ it('keeps preference failure recovery and connection state reachable after using
   await screen.findByText('Workspace preferences saved.');
   expect(dashboardApi.put).toHaveBeenLastCalledWith('/workspace/presentation-preference', expect.objectContaining({ expectedRevision: 0, focusMode: true }));
   await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Account options' })).toHaveFocus());
   const disconnected = screen.getByRole('button', { name: 'Disconnected' });
   disconnected.focus();
   await userEvent.keyboard('{Enter}');
