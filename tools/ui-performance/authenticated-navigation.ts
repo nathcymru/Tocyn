@@ -16,6 +16,8 @@ type Client = 'dashboard' | 'portal';
 type Timing = Readonly<{ listToDetailMs: number }>;
 type Sample = Readonly<{ client: Client; sample: number; timing: Timing }>;
 type RecoverySample = Readonly<{ client: Client; timing: Readonly<{ failedDetailRetryMs: number }> }>;
+type WarmSample = Readonly<{ cycle: number; leg: 'A-to-B' | 'B-to-A'; usefulRenderMs: number; detailReads: readonly { status: number; completionFromClickDriverMs: number }[] }>;
+type WarmReceipt = Readonly<{ condition: 'same-context-previsited'; warmupVisits: 3; cycles: number; tickets: readonly { id: string; articles: number; bodyBytes: number }[]; samples: readonly WarmSample[]; returnToA: { p50: number; p95: number }; hardware: string; power: string; thresholdEvaluated: false }>;
 type Sessions = Readonly<{ dashboard: Readonly<{ token: string; user: unknown }>; portal: Readonly<{ token: string }> }>;
 
 export type AuthenticatedNavigationReceipt = Readonly<{
@@ -30,6 +32,7 @@ export type AuthenticatedNavigationReceipt = Readonly<{
   sourceHashes: Readonly<Record<string, string>>;
   measurements: readonly Sample[];
   recovery: readonly RecoverySample[];
+  warmSwitches?: WarmReceipt;
   limitations: readonly string[];
 }>;
 
@@ -243,8 +246,104 @@ async function measure(client: Client, origin: string, browser: Browser, fixture
   } finally { await context.close(); }
 }
 
+/** Optional synthetic UI measurement; never a budgeted-runtime acceptance claim. */
+async function measureWarmSwitches(fixture: LocalTenantFixture, origin: string, browser: Browser, sessions: Sessions, cycles: number): Promise<WarmReceipt> {
+  const targets: Array<{id:string; subject:string; marker:string; articles:number; bodyBytes:number}> = [];
+  for (const suffix of ['A', 'B']) {
+    const subject = `Warm navigation synthetic ${suffix}`;
+    const marker = `Synthetic warm conversation body ${suffix}.`;
+    const created = await fixture.request('/api/tickets', {method:'POST', token:sessions.dashboard.token,
+      idempotencyKey:`performance139-warm-${suffix}`, body:{subject,body:marker,customer_email:fixture.principals.customerA.email}});
+    assert.equal(created.status, 201, 'Warm fixture must use the canonical same-tenant create route');
+    const {id} = await created.json<{id:string}>();
+    const response = await fixture.request(`/api/tickets/${id}`, {token:sessions.dashboard.token});
+    assert.equal(response.status, 200);
+    const detail = await response.json<{articles:Array<{body:string}>}>();
+    assert.equal(detail.articles.length, 1, 'Bounded one-article fixture');
+    targets.push({id,subject,marker,articles:detail.articles.length,bodyBytes:Buffer.byteLength(detail.articles[0].body)});
+  }
+  const context = await browser.newContext({viewport:{width:1280,height:800},reducedMotion:'reduce',serviceWorkers:'block'});
+  try {
+    let external = 0;
+    await context.route('**/*', route => {if(new URL(route.request().url()).origin!==origin){external++;return route.abort();}return route.continue();});
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    await page.addInitScript(({token,user})=>localStorage.setItem('lumina-auth',JSON.stringify({state:{token,user,mfaRequired:false},version:0})),sessions.dashboard);
+    await page.goto(`${origin}/inbox/all`);
+    for (const target of targets) {
+      await page.getByRole('option',{name:new RegExp(target.subject)}).click();
+      await page.getByRole('heading',{name:target.subject,exact:true}).waitFor();
+      await page.getByText(target.marker,{exact:true}).first().waitFor();
+    }
+    // End warmup on A; this return is unmeasured and is recorded separately.
+    await page.getByRole('option',{name:new RegExp(targets[0].subject)}).click();
+    await page.getByRole('heading',{name:targets[0].subject,exact:true}).waitFor();
+    const samples: WarmSample[] = [];
+    for(let cycle=0;cycle<cycles;cycle++) for(const index of [1,0]) {
+      const target=targets[index];
+      const detailReads: Array<{status:number;completionFromClickDriverMs:number}> = [];
+      let driverStart=0;
+      const networkCompletions: Promise<void>[] = [];
+      const onResponse=(response: import('playwright').Response)=>{
+        if(new URL(response.url()).pathname===`/api/tickets/${target.id}` && response.request().method()==='GET') {
+          assert.ok(networkCompletions.length<64,'Bounded per-switch network diagnostics');
+          networkCompletions.push(response.finished().then(error=>{
+            assert.equal(error,null,'Observed detail response must finish successfully');
+            assert.equal(response.status(),200,'Failed detail reads cannot count as healthy warm performance');
+            detailReads.push({status:response.status(),completionFromClickDriverMs:performance.now()-driverStart});
+          }));
+        }
+      };
+      // Browser-side observation avoids including the driver's heading-poll round trip.
+      await page.evaluate(`(() => {
+        const {subject,marker} = ${JSON.stringify({subject:target.subject,marker:target.marker})};
+        const state = window; state.__warmResult=null;
+        const start=(event)=>{
+          if(!(event.target instanceof Element) || !event.target.closest('a'))return;
+          document.removeEventListener('click',start,true);
+          const started=performance.now();
+          const observer=new MutationObserver(check);
+          function check(){
+            const visible = node => {
+              const rect=node.getBoundingClientRect(); const style=getComputedStyle(node);
+              return rect.width>0 && rect.height>0 && style.display!=='none' && style.visibility!=='hidden' && style.visibility!=='collapse';
+            };
+            const heading=Array.from(document.querySelectorAll('h1,h2')).find(node=>node.textContent===subject && visible(node));
+            if(!heading)return;
+            const scope=heading.closest('article') || heading.closest('main') || document.body;
+            const walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT); let found=false;
+            while(walker.nextNode()) {const node=walker.currentNode;if(node.textContent.trim()===marker && node.parentElement && visible(node.parentElement)){found=true;break;}}
+            if(!found)return;
+            observer.disconnect();requestAnimationFrame(()=>requestAnimationFrame(()=>{state.__warmResult=performance.now()-started;}));
+          }
+          observer.observe(document.body,{childList:true,subtree:true,characterData:true});check();
+        };
+        document.addEventListener('click',start,true);
+      })()`);
+      page.on('response',onResponse);driverStart=performance.now();
+      try {
+        await page.getByRole('option',{name:new RegExp(target.subject)}).click();
+        await page.waitForFunction('Number.isFinite(window.__warmResult)');
+        page.off('response',onResponse);
+        const usefulRenderMs=await page.evaluate<number>('window.__warmResult');
+        assert.ok(Number.isFinite(usefulRenderMs)&&usefulRenderMs>=0);
+        // Finish responses observed before useful render, outside its timing.
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        try { await Promise.race([Promise.all(networkCompletions),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Warm detail response timed out')),10_000);})]); }
+        finally {clearTimeout(timeout);}
+        samples.push({cycle,leg:index===1?'A-to-B':'B-to-A',usefulRenderMs,detailReads});
+      } finally {page.off('response',onResponse);}
+    }
+    assert.equal(external,0);
+    const returns=samples.filter(row=>row.leg==='B-to-A').map(row=>row.usefulRenderMs).sort((a,b)=>a-b);
+    const percentile=(p:number)=>returns[Math.max(0,Math.ceil(returns.length*p)-1)];
+    return {condition:'same-context-previsited',warmupVisits:3,cycles,tickets:targets.map(({id,articles,bodyBytes})=>({id,articles,bodyBytes})),samples,
+      returnToA:{p50:percentile(.5),p95:percentile(.95)},hardware:process.env.TOCYN_UI_HARDWARE_LABEL??'unspecified',power:process.env.TOCYN_UI_POWER_STATE??'unspecified',thresholdEvaluated:false};
+  } finally {await context.close();}
+}
+
 /** Real fixture authentication plus built-client ticket navigation; no mocks or remote resources. */
-export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, samples = 20): Promise<AuthenticatedNavigationReceipt> {
+export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, samples = 20, options: { warmSwitches?: boolean } = {}): Promise<AuthenticatedNavigationReceipt> {
   boundedSamples(samples);
   const browser = await chromium.launch({ headless: true });
   let dashboardServer: Awaited<ReturnType<typeof startServer>> | undefined;
@@ -273,6 +372,7 @@ export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, sa
     const recovery: RecoverySample[] = [];
     recovery.push(Object.freeze({ client: 'dashboard', timing: Object.freeze({ failedDetailRetryMs: await measure('dashboard', dashboard.origin, browser, fixture, sessions, samples, () => dashboard.failTicketDetailReads(2)) }) }));
     recovery.push(Object.freeze({ client: 'portal', timing: Object.freeze({ failedDetailRetryMs: await measure('portal', portal.origin, browser, fixture, sessions, samples, () => portal.failTicketDetailReads(1)) }) }));
+    const warmSwitches = options.warmSwitches ? await measureWarmSwitches(fixture,dashboard.origin,browser,sessions,samples) : undefined;
     const source = revision();
     return Object.freeze({
       version: 1, kind: 'tocyn-local-authenticated-ticket-navigation', revision: source.revision, dirty: source.dirty,
@@ -282,8 +382,9 @@ export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, sa
       artifacts: Object.freeze({ dashboard: await digestDirectory(resolve(repositoryRoot, 'apps/dashboard/dist')), portal: await digestDirectory(resolve(repositoryRoot, 'apps/portal/dist')) }),
       sourceHashes: Object.freeze(await sourceHashes()),
       measurements: Object.freeze(measurements),
+      ...(warmSwitches ? {warmSwitches} : {}),
       recovery: Object.freeze(recovery),
-      limitations: Object.freeze(['Local disposable Miniflare fixture and loopback static servers only; not deployed-worker or provider timing.', 'Fixture-issued sessions prove only this synthetic tenant/auth flow; no production authentication or customer data.', 'Synthetic 503 detail faults are injected only by this loopback forwarding boundary; initial authentication and recovered reads use the real fixture.', 'No numeric threshold is evaluated.']),
+      limitations: Object.freeze(['Local disposable Miniflare fixture and loopback static servers only; not deployed-worker or provider timing.', 'Fixture-issued sessions prove only this synthetic tenant/auth flow; no production authentication or customer data.', 'Synthetic 503 detail faults are injected only by this loopback forwarding boundary; initial authentication and recovered reads use the real fixture.', 'No numeric threshold is evaluated.', 'Warm switches use one previsited context; request observations do not prove cache hits. Network observation ends at useful render and may omit later revalidation. The synthetic fixture does not establish sustained budgeted runtime performance.']),
     });
   } finally { await portalServer?.close(); await dashboardServer?.close(); await browser.close(); }
 }
