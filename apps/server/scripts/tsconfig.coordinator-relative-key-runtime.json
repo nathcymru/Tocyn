@@ -1,0 +1,1 @@
+{"extends":"../tsconfig.json","compilerOptions":{"noEmit":true},"include":["coordinator-relative-key-runtime.test.ts"]}
