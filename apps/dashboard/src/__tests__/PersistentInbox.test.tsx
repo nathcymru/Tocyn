@@ -307,12 +307,16 @@ it('uses server Drafts queue results and reports an empty saved-draft view witho
   let empty=false;
   let release!:()=>void;
   let firstRead=true;
+  let pauseSnoozed=false;
+  let releaseSnoozed!:()=>void;
+  const pendingSnoozed=new Promise<void>(done=>{releaseSnoozed=done;});
   const pending=new Promise<void>(done=>{release=done;});
   vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
     if(url.startsWith('/api/tickets?')&&new URL(url,'http://localhost').searchParams.get('queue')==='drafts') {
       if(firstRead){firstRead=false;await pending;}
       return json({data:empty?[]:[{...tickets[19],inclusion_reason:'drafts'}],meta:{page:1,limit:20,total:empty?0:1,total_pages:empty?0:1}});
     }
+    if(pauseSnoozed&&url.startsWith('/api/tickets?')&&new URL(url,'http://localhost').searchParams.get('queue')==='snoozed') await pendingSnoozed;
     return fallback(url,options);
   }));
   showInbox('/inbox/actionable');
@@ -332,4 +336,11 @@ it('uses server Drafts queue results and reports an empty saved-draft view witho
   await screen.findByText('No saved drafts');
   expect(screen.getByText('Conversations with your saved drafts.')).toBeInTheDocument();
   expect(screen.queryByText(/all work complete|inbox zero/i)).not.toBeInTheDocument();
+  // An empty previous result cannot establish that the newly selected queue is empty.
+  pauseSnoozed=true;
+  fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
+  await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
+  expect(screen.queryByText('No snoozed conversations')).not.toBeInTheDocument();
+  releaseSnoozed();
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
 });
