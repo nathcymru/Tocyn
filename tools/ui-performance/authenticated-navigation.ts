@@ -1,3 +1,4 @@
+import { navigationArticle, navigationProfile, type NavigationProfile } from './navigation-profile';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -17,7 +18,7 @@ type Timing = Readonly<{ listToDetailMs: number }>;
 type Sample = Readonly<{ client: Client; sample: number; timing: Timing }>;
 type RecoverySample = Readonly<{ client: Client; timing: Readonly<{ failedDetailRetryMs: number }> }>;
 type WarmSample = Readonly<{ cycle: number; leg: 'A-to-B' | 'B-to-A'; usefulRenderMs: number; detailReads: readonly { status: number; completionFromClickDriverMs: number }[] }>;
-type WarmReceipt = Readonly<{ condition: 'same-context-previsited'; warmupVisits: 3; cycles: number; tickets: readonly { id: string; articles: number; bodyBytes: number }[]; samples: readonly WarmSample[]; returnToA: { p50: number; p95: number }; hardware: string; power: string; thresholdEvaluated: false }>;
+type WarmReceipt = Readonly<{ profile: NavigationProfile; setupReplyPacing: 'at-most-10-per-61-seconds'; condition: 'same-context-previsited'; warmupVisits: 3; cycles: number; tickets: readonly { id: string; articles: number; bodyBytes: number }[]; samples: readonly WarmSample[]; returnToA: { p50: number; p95: number }; hardware: string; power: string; thresholdEvaluated: false }>;
 type Sessions = Readonly<{ dashboard: Readonly<{ token: string; user: unknown }>; portal: Readonly<{ token: string }> }>;
 
 export type AuthenticatedNavigationReceipt = Readonly<{
@@ -60,7 +61,7 @@ async function digestDirectory(directory: string): Promise<string> {
 }
 
 async function sourceHashes(): Promise<Record<string, string>> {
-  const paths = ['tools/ui-performance/authenticated-navigation.ts', 'apps/server/scripts/ui-authenticated-navigation.test.ts', 'apps/dashboard/src/pages/InboxWorkspacePage.tsx', 'apps/dashboard/src/pages/TicketDetailPage.tsx', 'apps/portal/src/pages/TicketListPage.tsx', 'apps/portal/src/pages/TicketDetailPage.tsx'];
+  const paths = ['tools/ui-performance/authenticated-navigation.ts', 'tools/ui-performance/navigation-profile.ts', 'apps/server/scripts/ui-authenticated-navigation.test.ts', 'apps/dashboard/src/pages/InboxWorkspacePage.tsx', 'apps/dashboard/src/pages/TicketDetailPage.tsx', 'apps/portal/src/pages/TicketListPage.tsx', 'apps/portal/src/pages/TicketDetailPage.tsx'];
   return Object.fromEntries(await Promise.all(paths.map(async path => [path, createHash('sha256').update(await readFile(join(repositoryRoot, path))).digest('hex')])));
 }
 
@@ -247,19 +248,31 @@ async function measure(client: Client, origin: string, browser: Browser, fixture
 }
 
 /** Optional synthetic UI measurement; never a budgeted-runtime acceptance claim. */
-async function measureWarmSwitches(fixture: LocalTenantFixture, origin: string, browser: Browser, sessions: Sessions, cycles: number): Promise<WarmReceipt> {
+async function measureWarmSwitches(fixture: LocalTenantFixture, origin: string, browser: Browser, sessions: Sessions, cycles: number, profile: NavigationProfile): Promise<WarmReceipt> {
   const targets: Array<{id:string; subject:string; marker:string; articles:number; bodyBytes:number}> = [];
-  for (const suffix of ['A', 'B']) {
+  let repliesInWindow=0;
+  for (const suffix of ['A', 'B'] as const) {
     const subject = `Warm navigation synthetic ${suffix}`;
-    const marker = `Synthetic warm conversation body ${suffix}.`;
+    const bodies=Array.from({length:profile.articlesPerTicket},(_,index)=>navigationArticle(profile,suffix,index));
+    const marker=bodies[bodies.length-1];
     const created = await fixture.request('/api/tickets', {method:'POST', token:sessions.dashboard.token,
-      idempotencyKey:`performance139-warm-${suffix}`, body:{subject,body:marker,customer_email:fixture.principals.customerA.email}});
+      idempotencyKey:`performance139-warm-${suffix}`, body:{subject,body:bodies[0],customer_email:fixture.principals.customerA.email}});
     assert.equal(created.status, 201, 'Warm fixture must use the canonical same-tenant create route');
     const {id} = await created.json<{id:string}>();
+    for(let index=1;index<bodies.length;index++) {
+      // Real route permits ten replies/minute across tickets for this identity.
+      // Setup pacing is outside every measured interval; no guard/IP changes.
+      if(repliesInWindow===10){await new Promise(resolve=>setTimeout(resolve,61_000));repliesInWindow=0;}
+      const reply=await fixture.request(`/api/tickets/${id}/articles`,{method:'POST',token:sessions.dashboard.token,
+        idempotencyKey:`performance139-warm-${profile.name}-${suffix}-article-${index}`,body:{body:bodies[index],is_internal:false}});
+      assert.equal(reply.status,201,'Canonical synthetic article creation must succeed');await reply.body?.cancel();repliesInWindow++;
+    }
     const response = await fixture.request(`/api/tickets/${id}`, {token:sessions.dashboard.token});
     assert.equal(response.status, 200);
     const detail = await response.json<{articles:Array<{body:string}>}>();
-    assert.equal(detail.articles.length, 1, 'Bounded one-article fixture');
+    assert.equal(detail.articles.length, profile.articlesPerTicket, 'All declared articles must be returned in the bounded first page');
+    assert.deepEqual(detail.articles.map(article=>article.body).sort(),[...bodies].sort(),'Canonical bodies match declared UTF-8 fixture');
+    assert.ok(detail.articles.every(article=>Buffer.byteLength(article.body)===profile.bytesPerArticle));
     targets.push({id,subject,marker,articles:detail.articles.length,bodyBytes:Buffer.byteLength(detail.articles[0].body)});
   }
   const context = await browser.newContext({viewport:{width:1280,height:800},reducedMotion:'reduce',serviceWorkers:'block'});
@@ -337,14 +350,16 @@ async function measureWarmSwitches(fixture: LocalTenantFixture, origin: string, 
     assert.equal(external,0);
     const returns=samples.filter(row=>row.leg==='B-to-A').map(row=>row.usefulRenderMs).sort((a,b)=>a-b);
     const percentile=(p:number)=>returns[Math.max(0,Math.ceil(returns.length*p)-1)];
-    return {condition:'same-context-previsited',warmupVisits:3,cycles,tickets:targets.map(({id,articles,bodyBytes})=>({id,articles,bodyBytes})),samples,
+    return {profile,setupReplyPacing:'at-most-10-per-61-seconds',condition:'same-context-previsited',warmupVisits:3,cycles,tickets:targets.map(({id,articles,bodyBytes})=>({id,articles,bodyBytes})),samples,
       returnToA:{p50:percentile(.5),p95:percentile(.95)},hardware:process.env.TOCYN_UI_HARDWARE_LABEL??'unspecified',power:process.env.TOCYN_UI_POWER_STATE??'unspecified',thresholdEvaluated:false};
   } finally {await context.close();}
 }
 
 /** Real fixture authentication plus built-client ticket navigation; no mocks or remote resources. */
-export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, samples = 20, options: { warmSwitches?: boolean } = {}): Promise<AuthenticatedNavigationReceipt> {
+export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, samples = 20, options: { warmSwitches?: boolean; warmProfile?: string } = {}): Promise<AuthenticatedNavigationReceipt> {
   boundedSamples(samples);
+  const profile=navigationProfile(options.warmProfile);
+  if(options.warmProfile && !options.warmSwitches)throw new Error('Warm profile requires explicit warm-switch opt-in');
   const browser = await chromium.launch({ headless: true });
   let dashboardServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let portalServer: Awaited<ReturnType<typeof startServer>> | undefined;
@@ -372,7 +387,7 @@ export async function runAuthenticatedNavigation(fixture: LocalTenantFixture, sa
     const recovery: RecoverySample[] = [];
     recovery.push(Object.freeze({ client: 'dashboard', timing: Object.freeze({ failedDetailRetryMs: await measure('dashboard', dashboard.origin, browser, fixture, sessions, samples, () => dashboard.failTicketDetailReads(2)) }) }));
     recovery.push(Object.freeze({ client: 'portal', timing: Object.freeze({ failedDetailRetryMs: await measure('portal', portal.origin, browser, fixture, sessions, samples, () => portal.failTicketDetailReads(1)) }) }));
-    const warmSwitches = options.warmSwitches ? await measureWarmSwitches(fixture,dashboard.origin,browser,sessions,samples) : undefined;
+    const warmSwitches = options.warmSwitches ? await measureWarmSwitches(fixture,dashboard.origin,browser,sessions,samples,profile) : undefined;
     const source = revision();
     return Object.freeze({
       version: 1, kind: 'tocyn-local-authenticated-ticket-navigation', revision: source.revision, dirty: source.dirty,
