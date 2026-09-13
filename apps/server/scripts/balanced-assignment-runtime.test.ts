@@ -17,14 +17,17 @@ import {OperatorActivityRepository} from '../src/repositories/operator-activity.
 import type {BalancedAssignmentCommit,BalancedAssignmentDecision} from '../src/types/balanced-assignment';
 import {RetentionAdmissionRepository} from '../src/repositories/retention-admission.repository';
 import {auditedTicketUpdateStatements} from '../src/repositories/conversation-audit.repository';
+import { ACTIVITY_TRANSITION_ENVELOPE } from '../src/budgets/operator-activity-admission.service';
 import type {Ticket} from '../src/types';
 import type {BudgetCoordinatorDO} from '../src/durable_objects/BudgetCoordinatorDO';
 
-async function fixture(http=false){
+async function fixture(http=false, guarded=false, activityBudget?:'missing'|'off'|'no-do'){
  const root=resolve(import.meta.dirname,'..');
  const bundle=await build({absWorkingDir:root,entryPoints:[http?'scripts/budget-admission-runtime-entry.ts':'scripts/budget-coordinator-do-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto']});
- const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'routing-proof',modules:true,compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script:bundle.outputFiles[0].text,
-  bindings:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',DISABLE_RATE_LIMIT:'true',JWT_SECRET:'synthetic-balanced-secret-at-least-32-characters'},
+ const script=activityBudget==='no-do'?bundle.outputFiles[0].text.replace('BUDGET_COORDINATOR_DO: instrument(env.BUDGET_COORDINATOR_DO, env.DB)','BUDGET_COORDINATOR_DO: undefined'):bundle.outputFiles[0].text;
+ if(activityBudget==='no-do')assert.notEqual(script,bundle.outputFiles[0].text,'Synthetic Worker must omit the app coordinator binding');
+ const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'routing-proof',modules:true,compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script,
+  bindings:{...(activityBudget==='missing'?{}:{BUDGET_ADMISSION_POLICY:activityBudget==='off'?'off':'ticket-mutations-v1'}),DISABLE_RATE_LIMIT:'true',JWT_SECRET:'synthetic-balanced-secret-at-least-32-characters',...(guarded?{LOCAL_BETA_ENABLED:'true',ENVIRONMENT:'local'}:{})},
   d1Databases:{DB:'routing-proof'},durableObjects:{BUDGET_COORDINATOR_DO:'BudgetCoordinatorDO',BUDGET_GRANT_HOLDER_DO:'BudgetGrantHolderDO'},unsafeEphemeralDurableObjects:true}]}));
  try{
  const db=await mf.getD1Database('DB') as unknown as D1Database;
@@ -302,5 +305,125 @@ test('native mounted HTTP balance action enforces current authentication, bounde
  await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='a' AND id='actor'").run();
  assert.equal((await request('revoked')).status,401);
  assert.equal((await f.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='a' AND ticket_id='target' AND kind='ticket.assignment_changed'").first<{n:number}>())?.n,1);
+ }finally{await f.mf.dispose();}
+});
+
+
+test('guarded beta admits balanced and activity routes with exact mutation counters and rollback',async()=>{
+ const f=await fixture(true,true);try{
+ await f.db.batch([
+  f.db.prepare("INSERT INTO local_beta_runs(run_id,ticket_limit,mutation_limit,recovery_reserve,upload_limit) VALUES('route-beta',20,4,1,1)"),
+  ...['a','b'].flatMap(tenant=>[
+   f.db.prepare("INSERT INTO local_beta_tenants VALUES('route-beta',?)").bind(tenant),
+   f.db.prepare("INSERT INTO local_beta_invitations VALUES('route-beta',?,'staff','actor')").bind(tenant),
+  ]),f.db.prepare("INSERT INTO local_beta_policy VALUES(1,'route-beta',1,'running')"),
+ ]);
+ for(const tenant of ['a','b']){
+  await f.ticket('target',tenant);
+  for(const id of ['attention','second'])await f.db.prepare(`INSERT INTO operator_activities
+   (tenant_id,id,ticket_id,recipient_user_id,kind,source_id,producer_kind,receipt_fingerprint,facts)
+   VALUES (?,?,'target','actor','assignment',?,'system',?,'{}')`).bind(tenant,id,id,'a'.repeat(64)).run();
+ }
+ await f.ticket('only-a');
+ const token=async(tenant='a')=>new SignJWT({sub:'actor',tenant_id:tenant,role:'agent',session_version:1,mfa_verified:true})
+  .setProtectedHeader({alg:'HS256'}).setAudience('app').setIssuedAt().setExpirationTime('1h')
+  .sign(new TextEncoder().encode('synthetic-balanced-secret-at-least-32-characters'));
+ const a=await token(),b=await token('b');
+ const request=(path:string,method='GET',body?:unknown,bearer:string|undefined=a,key?:string)=>f.mf.dispatchFetch('http://local'+path,{
+  method,headers:{...(bearer?{Authorization:`Bearer ${bearer}`} : {}),'Content-Type':'application/json',...(key?{'Idempotency-Key':key}:{})},
+  ...(body!==undefined?{body:JSON.stringify(body)}:{})});
+ const mutations=async()=>(await f.db.prepare("SELECT mutations FROM local_beta_runs WHERE run_id='route-beta'").first<{mutations:number}>())!.mutations;
+ const journals=async()=>(await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n;
+ const balance=(key:string,ticket='target')=>request('/api/tickets/'+ticket+'/balanced-assignment','POST',{},a,key);
+ const transition=(action:string,revision:number,id='attention')=>request('/api/activities/'+id+'/'+action,'PATCH',{expectedRevision:revision});
+ assert.equal((await request('/api/activities','GET',undefined,'')).status,401);
+ let response=await request('/api/activities');assert.equal(response.status,200,await response.clone().text());
+ const page=await response.json() as {page:{items:Array<{id:string}>}};assert.equal(page.page.items.length,2);assert.equal(await mutations(),0);
+ for(const [path,method] of [['/api/activities/extra','GET'],['/api/activities','POST'],['/api/activities/attention/other','PATCH'],['/api/v1/activities','GET'],['/api/tickets/target/balanced-assignment/extra','POST']]){
+  const denied=await request(path,method,method==='GET'?undefined:{});assert.equal(denied.status,503);assert.equal((await denied.json() as {code:string}).code,'feature_disabled');
+ }
+ response=await request('/api/tickets/only-a/balanced-assignment','POST',{},b,'foreign');assert.ok([403,404].includes(response.status),await response.text());
+ response=await balance('no-capacity');assert.equal(response.status,200,await response.clone().text());assert.equal((await response.json() as {outcome:string}).outcome,'no_capacity');assert.equal(await mutations(),1);
+ assert.equal((await balance('no-capacity')).status,200);assert.equal(await mutations(),1);
+ await f.candidate('available');response=await balance('assigned');assert.equal(response.status,200,await response.clone().text());assert.equal(await mutations(),2);
+ assert.equal((await balance('assigned')).status,200);assert.equal(await mutations(),2);
+ const beforeActivity=(await (await f.mf.dispatchFetch('http://local/__budget-control')).json() as {canonicalBatches:unknown[]}).canonicalBatches.length;
+ assert.equal((await transition('read',1)).status,200);assert.equal(await mutations(),3);
+ const activityBatches=(await (await f.mf.dispatchFetch('http://local/__budget-control')).json() as {canonicalBatches:Array<{rowsWritten:number}>}).canonicalBatches.slice(beforeActivity);
+ assert.ok(activityBatches.reduce((n,batch)=>n+batch.rowsWritten,0)<=ACTIVITY_TRANSITION_ENVELOPE.d1RowsWritten,'beta counter and ledger fit the unchanged activity write allowance');
+ assert.equal((await transition('read',1)).status,404);assert.equal(await mutations(),3);
+ let before=await journals();await f.db.prepare("UPDATE local_beta_policy SET state='writes_stopped'").run();
+ assert.equal((await transition('dismiss',2)).status,503);assert.equal(await journals(),before);assert.equal(await mutations(),3);
+ await f.db.prepare("UPDATE operator_capacity SET availability='unavailable'").run();
+ assert.equal((await balance('stopped','only-a')).status,503);assert.equal(await journals(),before);assert.equal(await mutations(),3);
+ await f.db.prepare("UPDATE local_beta_policy SET state='running'").run();
+ assert.equal((await transition('dismiss',2)).status,200);assert.equal(await mutations(),4);
+ before=await journals();assert.equal((await transition('read',1,'second')).status,429);assert.equal(await journals(),before);assert.equal(await mutations(),4);
+ assert.equal((await balance('exhausted','only-a')).status,503);assert.equal(await journals(),before);assert.equal(await mutations(),4);
+ assert.equal((await f.db.prepare("SELECT count(*) AS n FROM balanced_assignment_receipts WHERE tenant_id='a'").first<{n:number}>())?.n,2);
+ assert.equal((await f.db.prepare("SELECT revision FROM operator_activities WHERE tenant_id='b' AND id='attention'").first<{revision:number}>())?.revision,1);
+ await f.db.prepare("DELETE FROM local_beta_invitations WHERE tenant_id='a'").run();assert.equal((await request('/api/activities')).status,403);
+ await f.db.prepare("INSERT INTO local_beta_invitations VALUES('route-beta','a','staff','actor')").run();
+ await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='a' AND id='actor'").run();assert.equal((await request('/api/activities')).status,401);
+ const control=await (await f.mf.dispatchFetch('http://local/__budget-control')).json() as {canonicalBatches:Array<{statements:number;rowsRead:number;rowsWritten:number}>};
+ console.log(JSON.stringify({fixture:'guarded-beta-route-inventory',batches:control.canonicalBatches}));
+ }finally{await f.mf.dispose();}
+});
+
+
+test('guarded activity invitation revocation after admission rolls back counter journal and transition',async()=>{
+ const f=await fixture(true,true);try{
+ await f.ticket('target');
+ await f.db.batch([
+  f.db.prepare("INSERT INTO local_beta_runs(run_id,ticket_limit,mutation_limit,recovery_reserve,upload_limit) VALUES('route-beta',20,4,1,1)"),
+  f.db.prepare("INSERT INTO local_beta_tenants VALUES('route-beta','a'),('route-beta','b')"),
+  f.db.prepare("INSERT INTO local_beta_invitations VALUES('route-beta','a','staff','actor')"),
+  f.db.prepare("INSERT INTO local_beta_policy VALUES(1,'route-beta',1,'running')"),
+  f.db.prepare(`INSERT INTO operator_activities(tenant_id,id,ticket_id,recipient_user_id,kind,source_id,producer_kind,receipt_fingerprint,facts)
+    VALUES('a','attention','target','actor','assignment','synthetic','system',?,'{}')`).bind('a'.repeat(64)),
+ ]);
+ const token=await new SignJWT({sub:'actor',tenant_id:'a',role:'agent',session_version:1,mfa_verified:true})
+  .setProtectedHeader({alg:'HS256'}).setAudience('app').setIssuedAt().setExpirationTime('1h')
+  .sign(new TextEncoder().encode('synthetic-balanced-secret-at-least-32-characters'));
+ const control=(body?:unknown)=>f.mf.dispatchFetch('http://local/__budget-control',body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined);
+ await control({pauseNextCanonical:true});
+ const pending=f.mf.dispatchFetch('http://local/api/activities/attention/read',{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:1})});
+ let paused=false;
+ for(let i=0;i<100;i++){
+  if((await (await control()).json() as {canonicalPaused:boolean}).canonicalPaused){paused=true;break;}
+  await new Promise(resolve=>setTimeout(resolve,10));
+ }
+ assert.equal(paused,true);
+ await f.db.prepare("DELETE FROM local_beta_invitations WHERE tenant_id='a'").run();
+ await control({releaseCanonical:true});const response=await pending;
+ assert.equal(response.status,403,await response.clone().text());
+ assert.equal((await f.db.prepare("SELECT mutations FROM local_beta_runs WHERE run_id='route-beta'").first<{mutations:number}>())?.mutations,0);
+ assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n,0);
+ assert.equal((await f.db.prepare("SELECT revision FROM operator_activities WHERE id='attention'").first<{revision:number}>())?.revision,1);
+ }finally{await f.mf.dispose();}
+});
+
+
+for(const mode of ['missing','off','no-do'] as const)test(`guarded activity rejects ${mode} budget configuration without legacy fallback`,async()=>{
+ const f=await fixture(true,true,mode);try{
+ await f.ticket('target');
+ await f.db.batch([
+  f.db.prepare("INSERT INTO local_beta_runs(run_id,ticket_limit,mutation_limit,recovery_reserve,upload_limit) VALUES('route-beta',20,4,1,1)"),
+  f.db.prepare("INSERT INTO local_beta_tenants VALUES('route-beta','a'),('route-beta','b')"),
+  f.db.prepare("INSERT INTO local_beta_invitations VALUES('route-beta','a','staff','actor')"),
+  f.db.prepare("INSERT INTO local_beta_policy VALUES(1,'route-beta',1,'running')"),
+  f.db.prepare(`INSERT INTO operator_activities(tenant_id,id,ticket_id,recipient_user_id,kind,source_id,producer_kind,receipt_fingerprint,facts)
+    VALUES('a','attention','target','actor','assignment','synthetic','system',?,'{}')`).bind('a'.repeat(64)),
+ ]);
+ const token=await new SignJWT({sub:'actor',tenant_id:'a',role:'agent',session_version:1,mfa_verified:true})
+  .setProtectedHeader({alg:'HS256'}).setAudience('app').setIssuedAt().setExpirationTime('1h')
+  .sign(new TextEncoder().encode('synthetic-balanced-secret-at-least-32-characters'));
+ for(const [path,method] of [['/api/activities','GET'],['/api/activities/attention/read','PATCH'],['/api/activities/attention/dismiss','PATCH']]){
+  const response=await f.mf.dispatchFetch('http://local'+path,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(method==='PATCH'?{body:JSON.stringify({expectedRevision:1})}:{})});
+  assert.equal(response.status,503,await response.clone().text());assert.equal((await response.json() as {code:string}).code,'budget_admission_unavailable');
+ }
+ assert.equal((await f.db.prepare("SELECT mutations FROM local_beta_runs WHERE run_id='route-beta'").first<{mutations:number}>())?.mutations,0);
+ assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n,0);
+ assert.equal((await f.db.prepare("SELECT revision FROM operator_activities WHERE id='attention'").first<{revision:number}>())?.revision,1);
  }finally{await f.mf.dispose();}
 });

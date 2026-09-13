@@ -26,6 +26,9 @@ export function localBetaRoute(method: string, path: string): BetaRouteClass {
   if (method === 'GET' && path === '/api/v1/customer/config') return 'configuration';
   if (method === 'GET' && /^\/api\/operators\/[^/]+\/capacity$/.test(path)) return 'conversation-read';
   if (method === 'PUT' && /^\/api\/operators\/[^/]+\/capacity$/.test(path)) return 'configuration';
+  if (method === 'GET' && path === '/api/activities') return 'conversation-read';
+  if (method === 'PATCH' && /^\/api\/activities\/[^/]+\/(?:read|dismiss)$/.test(path)) return 'conversation-write';
+  if (method === 'POST' && /^\/api\/tickets\/[^/]+\/balanced-assignment$/.test(path)) return 'conversation-write';
   if (method === 'GET' && path === '/api/sla-policy') return 'conversation-read';
   if (method === 'PUT' && path === '/api/sla-policy') return 'configuration';
   if (method === 'GET' && /^\/api(?:\/v1(?:\/customer)?)?\/tickets(?:\/[^/]+(?:\/(?:history|support-state|sla))?)?$/.test(path)) return 'conversation-read';

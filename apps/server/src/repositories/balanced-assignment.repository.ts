@@ -98,6 +98,7 @@ export class BalancedAssignmentRepository {
     ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
       .bind(tid, tid, commit.ticketId, tid, decision.groupId, owner, decision.policyRevision, decision.sequence));
     statements.push(...budgetGrantOperationStatements(this.db, this.scope, commit.authority));
+    if (!owner && this.beta) statements.push(...this.beta.statements('conversation'));
     if (owner) {
       const eventId = crypto.randomUUID();
       const audit = auditedTicketUpdateStatements(this.db, this.scope, this.beta, commit.ticketId, { assigned_to: owner }, { kind: 'staff', id: this.scope.actorId, source: 'dashboard' }, true, { 'ticket.assignment_changed': eventId }, null, true);

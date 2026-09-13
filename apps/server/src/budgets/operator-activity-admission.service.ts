@@ -1,3 +1,4 @@
+import { localBetaEnabled } from '../types/local-beta';
 import type { Env } from '../bindings';
 import type { JWTPayload } from '../types';
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
@@ -14,7 +15,8 @@ export const ACTIVITY_READ_ENVELOPE=Object.freeze({workerRequests:1,d1RowsRead:4
 export const ACTIVITY_TRANSITION_ENVELOPE=Object.freeze({...ACTIVITY_READ_ENVELOPE,d1RowsRead:4608});
 export async function admitOperatorActivity(input:{env:Env;deps:TenantRequestDeps;payload:JWTPayload;operation:ActivityOperation;target:readonly unknown[];now:()=>number}):Promise<ActivityAdmission>{
   const {env,deps,payload}=input;
-  if(env.BUDGET_ADMISSION_POLICY===undefined||staffTicketAdmissionMode(env)==='disabled')return{status:'disabled'};
+  if(env.BUDGET_ADMISSION_POLICY===undefined||staffTicketAdmissionMode(env)==='disabled')
+    return localBetaEnabled(env)?{status:'rejected',reason:'unavailable'}:{status:'disabled'};
   if(staffTicketAdmissionMode(env)!=='enabled'||!env.BUDGET_COORDINATOR_DO||payload.sub!==deps.scope.actorId||payload.tenant_id!==deps.scope.tenantId
     ||(payload.role!=='agent'&&payload.role!=='admin')||!deps.scope.roles.includes(payload.role)||payload.mfa_verified!==true
     ||!Number.isSafeInteger(payload.session_version)||!Number.isSafeInteger(payload.exp))return{status:'rejected',reason:'unavailable'};
