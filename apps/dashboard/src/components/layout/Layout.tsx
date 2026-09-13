@@ -1,3 +1,4 @@
+import { GlobalSearch } from './GlobalSearch';
 import { OperatorCapacityPanel } from '../capacity/OperatorCapacityPanel';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
@@ -14,7 +15,6 @@ import {
   Key,
   Settings,
   LogOut,
-  Search,
   Book,
   Menu,
   X,
@@ -206,39 +206,9 @@ function LayoutContent() {
   const navigationTrigger = useRef<HTMLButtonElement>(null);
   const restoreNavigationFocus = useRef(true);
   const main = useRef<HTMLElement>(null);
-  const globalSearchInput = useRef<HTMLInputElement>(null);
   const isInboxRoute = location.pathname.startsWith('/inbox');
 
   useEffect(() => { main.current?.focus(); }, [location.pathname]);
-  const [searchInput, setSearchInput] = useState('');
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const search = params.get('search');
-    if (location.pathname === '/tickets' && search) {
-      setSearchInput(search);
-    } else if (location.pathname !== '/tickets') {
-      setSearchInput('');
-    }
-  }, [location.pathname, location.search]);
-
-  const clearGlobalTicketSearch = () => {
-    setSearchInput('');
-    navigate('/tickets');
-  };
-
-  useEffect(() => {
-    const focusGlobalSearch = (event: KeyboardEvent) => {
-      if (preferences.shortcutsEnabled && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        globalSearchInput.current?.focus();
-        globalSearchInput.current?.select();
-      }
-    };
-    window.addEventListener('keydown', focusGlobalSearch);
-    return () => window.removeEventListener('keydown', focusGlobalSearch);
-  }, [preferences.shortcutsEnabled]);
-
   const loadActivity = React.useCallback(async () => {
     const generation = ++activityRequestGeneration.current;
     setActivityLoading(true); setActivityError(null); setActivityRetry(null);
@@ -356,37 +326,7 @@ function LayoutContent() {
             <Menu className="w-6 h-6" />
           </TocynButton>
 
-          <div className="max-w-md w-full relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <TocynInput
-              ref={globalSearchInput}
-              type="text"
-              placeholder="Search all authorised tickets..."
-              aria-label="Search all tickets (global shell)"
-              aria-keyshortcuts={preferences.shortcutsEnabled ? "Control+K Meta+K" : undefined}
-              aria-describedby="global-ticket-search-scope"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (searchInput.trim()) {
-                    navigate(`/tickets?search=${encodeURIComponent(searchInput.trim())}`);
-                  } else {
-                    navigate('/tickets');
-                  }
-                } else if (e.key === 'Escape' && searchInput) {
-                  e.preventDefault();
-                  clearGlobalTicketSearch();
-                }
-              }}
-              className="w-full pl-10 pr-20 py-2 bg-slate-100 border-none rounded-full text-sm focus:ring-2 focus:ring-brand-500 transition-all focus:bg-white focus:shadow-inner"
-            />
-            <TocynButton type="button" aria-label="Clear global ticket search" disabled={!searchInput} onClick={clearGlobalTicketSearch}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
-            <p id="global-ticket-search-scope" className="sr-only">Searches all tickets you are authorised to access. {preferences.shortcutsEnabled ? 'Press Command or Control K to focus this search.' : ''} Filter this view is available in the Inbox.</p>
-            {preferences.shortcutsEnabled && <span data-tocyn-focus-decoration="" aria-hidden="true" className="pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 text-[10px] font-semibold text-slate-500 sm:inline">⌘/Ctrl K</span>}
-          </div>
+          <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
 
           <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
             <Popover.Trigger asChild>
