@@ -358,7 +358,7 @@ function LayoutContent() {
             <TocynButton type="button" aria-label="Clear global ticket search" disabled={!searchInput} onClick={clearGlobalTicketSearch}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
             <p id="global-ticket-search-scope" className="sr-only">Searches all tickets you are authorised to access. Press Command or Control K to focus this search. Filter this view is available in the Inbox.</p>
-            <span aria-hidden="true" className="pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 text-[10px] font-semibold text-slate-500 sm:inline">⌘/Ctrl K</span>
+            <span data-tocyn-focus-decoration="" aria-hidden="true" className="pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 text-[10px] font-semibold text-slate-500 sm:inline">⌘/Ctrl K</span>
           </div>
 
           <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>

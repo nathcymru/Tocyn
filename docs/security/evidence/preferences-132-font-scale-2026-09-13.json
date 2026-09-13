@@ -1,0 +1,100 @@
+{
+  "recordedAt": "2026-09-13T10:57:01.468Z",
+  "revision": "6dd13e80ec9c9e4532423e93b634f241c2c5fe6b",
+  "sourceSha256": {
+    "apps/dashboard/src/index.css": "0855144b0639102390365c60257733a05af6b80158658c758a72f9470dade344",
+    "packages/ui/src/styles/tocyn.css": "97ff19493f3efa7fba005a81fb142572860b2e06c48d50c89fbe3995d4c6e4ba",
+    "apps/dashboard/src/components/layout/Layout.tsx": "54a66e17f68c7f0e2633feb43bcb88eb299cdb52a8196db0e4311c16039dfbe6"
+  },
+  "results": [
+    {
+      "browserBase": 16,
+      "scale": "normal",
+      "measured": {
+        "root": 16,
+        "label": 14,
+        "heading": 14,
+        "button": 14,
+        "select": 14,
+        "workspaceText": 14
+      }
+    },
+    {
+      "browserBase": 16,
+      "scale": "large",
+      "measured": {
+        "root": 18,
+        "label": 15.75,
+        "heading": 15.75,
+        "button": 15.75,
+        "select": 15.75,
+        "workspaceText": 15.75
+      }
+    },
+    {
+      "browserBase": 16,
+      "scale": "larger",
+      "measured": {
+        "root": 20,
+        "label": 17.5,
+        "heading": 17.5,
+        "button": 17.5,
+        "select": 17.5,
+        "workspaceText": 17.5
+      }
+    },
+    {
+      "browserBase": 16,
+      "reset": "passed",
+      "focusDecoration": "passed",
+      "browser": "152.0.7977.64"
+    },
+    {
+      "browserBase": 20,
+      "scale": "normal",
+      "measured": {
+        "root": 20,
+        "label": 17.5,
+        "heading": 17.5,
+        "button": 17.5,
+        "select": 17.5,
+        "workspaceText": 17.5
+      }
+    },
+    {
+      "browserBase": 20,
+      "scale": "large",
+      "measured": {
+        "root": 22.5,
+        "label": 19.6875,
+        "heading": 19.6875,
+        "button": 19.6875,
+        "select": 19.6875,
+        "workspaceText": 19.6875
+      }
+    },
+    {
+      "browserBase": 20,
+      "scale": "larger",
+      "measured": {
+        "root": 25,
+        "label": 21.875,
+        "heading": 21.875,
+        "button": 21.875,
+        "select": 21.875,
+        "workspaceText": 21.875
+      }
+    },
+    {
+      "browserBase": 20,
+      "reset": "passed",
+      "focusDecoration": "passed",
+      "browser": "152.0.7977.64"
+    }
+  ],
+  "limitations": [
+    "Synthetic representative markup with actual shared/dashboard CSS; no backend or full workspace integration.",
+    "16px and 20px browser defaults supplied through Blink setting; not an OS accessibility session.",
+    "No 200% zoom/reflow, critical-state preservation or spoken screen-reader acceptance claim."
+  ]
+}
