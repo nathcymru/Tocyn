@@ -447,3 +447,26 @@ it('quiet activity retains the list until explicit refresh while ticket invalida
   await waitFor(() => expect(activityReads).toBe(count + 1));
   await waitFor(() => expect(screen.queryByText('Updates available. Refresh to load current activity.')).not.toBeInTheDocument());
 });
+
+
+it.each([false, true])('counts only visible activity when dismissed records are retained (visible=%s)', async (hasVisible) => {
+  const dismissed = { id: 'dismissed', ticketId: 'ticket-one', ticketSubject: 'Dismissed assignment', kind: 'assignment', facts: {}, revision: 2, createdAt: '2026-09-13T00:00:00Z', readAt: null, dismissedAt: '2026-09-13T01:00:00Z' };
+  const visible = { ...dismissed, id: 'visible', ticketSubject: 'Current assignment', dismissedAt: null };
+  const fallback = vi.mocked(dashboardApi.get).getMockImplementation()!;
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => path === '/activities?limit=20'
+    ? { page: { items: hasVisible ? [dismissed, visible] : [dismissed], next: null }, unread: { status: 'available', count: hasVisible ? 1 : 0 } }
+    : fallback(path));
+  await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
+  await waitFor(() => expect(dashboardApi.get).toHaveBeenCalledWith('/activities?limit=20'));
+  expect(screen.queryByRole('button', { name: /Open assignment activity for Dismissed/ })).not.toBeInTheDocument();
+  if (hasVisible) {
+    expect(await screen.findByRole('button', { name: 'Open assignment activity for Current assignment' })).toBeInTheDocument();
+    expect(screen.getByText('Showing 1 activity item.')).toBeInTheDocument();
+    expect(screen.queryByText('Showing 2 activity items.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No current activity.')).not.toBeInTheDocument();
+  } else {
+    expect(await screen.findByText('No current activity.')).toBeInTheDocument();
+    expect(screen.queryByText(/Showing \d+ activity item/)).not.toBeInTheDocument();
+  }
+});
