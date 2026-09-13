@@ -33,13 +33,13 @@ type AuditedUpdateEventId = Partial<Record<'ticket.assignment_changed' | 'ticket
  */
 export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTenantScope,
   admission: LocalBetaAdmissionRepository | undefined, id: string, data: AuditedTicketUpdate,
-  actor: ConversationActor, retainSystemNote = false, expectedAssignedToOrEvents?: string | null | AuditedUpdateEventId): { statements: D1PreparedStatement[]; updateIndex?: number } {
+  actor: ConversationActor, retainSystemNote = false, expectedAssignedToOrEvents?: string | null | AuditedUpdateEventId, ownerPrecondition?: string | null): { statements: D1PreparedStatement[]; updateIndex?: number } {
   const eventIds = typeof expectedAssignedToOrEvents === 'string' || expectedAssignedToOrEvents === null
     ? undefined
     : expectedAssignedToOrEvents;
   const expectedAssignedTo = typeof expectedAssignedToOrEvents === 'string' || expectedAssignedToOrEvents === null
     ? expectedAssignedToOrEvents
-    : undefined;
+    : ownerPrecondition;
   const statements: D1PreparedStatement[] = [...(admission?.ticketChangeStatements(id,data as unknown as Partial<Pick<Ticket,
     'status' | 'priority' | 'assigned_to' | 'group_id' | 'custom_fields'>>)??[])];
   const createdEventIds: string[] = [];

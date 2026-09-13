@@ -206,12 +206,26 @@ describe("Dashboard Handler Integration Tests", () => {
   });
 
   describe("PATCH /tickets/:id", () => {
+    for (const policy of ['off','ticket-mutations-v1','invalid']) {
+      for (const assigned_to of [null,'123e4567-e89b-12d3-a456-426614174000']) {
+        it(`rejects generic assignment atomically with ${policy} admission and owner ${assigned_to}`, async () => {
+          const res = await request('/tickets/t-1', {
+            method:'PATCH', headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},
+            body:JSON.stringify({status:'resolved',assigned_to}),
+          }, {BUDGET_ADMISSION_POLICY:policy});
+          expect(res.status).toBe(policy === 'invalid' ? 503 : 400);
+          expect((await res.json()).code).toBe(policy === 'invalid' ? 'budget_admission_unavailable' : 'responsible_owner_endpoint_required');
+          expect(mockDB.batch).not.toHaveBeenCalled();
+          expect(mockBucket.put).not.toHaveBeenCalled();
+        });
+      }
+    }
+
     it("should update ticket and create a system note", async () => {
       // D1 returns one result for each submitted batch statement.
       mockDB.batch.mockImplementation(async (statements: unknown[]) => statements.map((_, index) => ({ results: index >= statements.length - 2 ? [{ id: 't-1' }] : [] })));
       mockDB.run.mockResolvedValue({ success: true, meta: { changes: 1 } });
 
-      const validUuid = "123e4567-e89b-12d3-a456-426614174000";
 
       const res = await dashboard.request(
         "/tickets/t-1",
@@ -222,8 +236,7 @@ describe("Dashboard Handler Integration Tests", () => {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            status: "resolved",
-            assigned_to: validUuid
+            status: "resolved"
           })
         },
         { BUDGET_ADMISSION_POLICY: 'off', DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket }
@@ -233,8 +246,8 @@ describe("Dashboard Handler Integration Tests", () => {
       expect(await res.json()).toEqual({ success: true });
 
       // Verify ticket update query
-      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET status=?,assigned_to=?,updated_at=CURRENT_TIMESTAMP"));
-      expect(mockDB.bind).toHaveBeenCalledWith("resolved", validUuid, "default-tenant", "t-1", "resolved", validUuid);
+      expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET status=?,updated_at=CURRENT_TIMESTAMP"));
+      expect(mockDB.bind).toHaveBeenCalledWith("resolved", "default-tenant", "t-1", "resolved");
       expect(mockDB.batch).toHaveBeenCalledTimes(1);
       expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO conversation_events"));
       // Verify system note insertion
