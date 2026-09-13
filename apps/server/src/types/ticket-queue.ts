@@ -3,7 +3,7 @@
  * from saved filter IDs: a saved filter can refine a queue but cannot replace
  * its support-state predicate.
  */
-export const TICKET_QUEUE_KEYS = ['actionable', 'snoozed', 'drafts', 'mine', 'unassigned'] as const;
+export const TICKET_QUEUE_KEYS = ['actionable', 'snoozed', 'drafts', 'mine', 'unassigned', 'mentions'] as const;
 export type TicketQueueKey = typeof TICKET_QUEUE_KEYS[number];
 
 export type TicketQueueInclusionReason = TicketQueueKey;
@@ -21,3 +21,5 @@ export type TicketQueuePage<T> = Readonly<{
   limit: number;
   totalPages: number;
 }>;
+
+export type TicketQueueCounts = Readonly<{ scope: 'standard_queues'; counts: Readonly<Record<TicketQueueKey | 'all', number>> }>;

@@ -51,6 +51,7 @@ beforeEach(()=>{
     if(url==='/api/workspace/drafts?limit=50')return json({items:[{ticketId:'ticket-20',updatedAt:'2026-09-11T00:00:00Z'}],next:null});
     if(url==='/api/settings/filters')return json([{id:'priority-follow-up',name:'Priority follow-up'}]);
     if(url==='/api/settings')return json({TICKET_PREFIX:'#'});
+    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0}});
     if(url.startsWith('/api/tickets?'))return json({data:tickets,meta:{page:1,limit:20,total:20,total_pages:1}});
     if(url==='/api/ticket-sla/projections')return json(Object.fromEntries(tickets.map(ticket=>[ticket.id,unavailableSla])));
     return json([]);
@@ -102,9 +103,9 @@ it('uses the authoritative actionable and snoozed queue views without losing the
   expect(screen.getByRole('button',{name:'Snoozed'})).toHaveAttribute('aria-pressed','true');
   await waitFor(()=>expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed'));
 
-  fireEvent.click(screen.getByRole('button',{name:'Actionable'}));
+  fireEvent.click(screen.getByRole('button',{name:'Needs Action'}));
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
-  expect(screen.getByRole('button',{name:'Actionable'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Needs Action'})).toHaveAttribute('aria-pressed','true');
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBeInTheDocument();
 });
 
@@ -207,6 +208,7 @@ it('shows recovery and no historical rows when the current tenant list read is d
     if(url==='/api/workspace/drafts?limit=50')return json({items:[],next:null});
     if(url==='/api/settings/filters')return json([]);
     if(url==='/api/settings')return json({TICKET_PREFIX:'#'});
+    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0}});
     if(url.startsWith('/api/tickets?'))return json({error:'Forbidden'},403);
     return json({});
   }));
@@ -375,4 +377,24 @@ it('opens authoritative Mine and Unassigned views without claiming refreshed own
   expect(screen.getByText('Open and pending conversations without an assignee and ready for work.')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Table view'}));
   expect(within(screen.getByRole('table')).getByText('No unassigned conversations')).toBeInTheDocument();
+});
+
+it('shows server standard totals separately from filtered results and retries unavailable counts without inventing zero',async()=>{
+  const fallback=fetch;let available=false;
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url==='/api/tickets/queue-counts')return available?json({scope:'standard_queues',counts:{all:42,actionable:12,mine:4,unassigned:8,mentions:2,drafts:3,snoozed:5}}):json({error:'Unavailable'},503);
+    if(url.startsWith('/api/tickets?')&&new URL(url,'http://localhost').searchParams.get('queue')==='mentions')return json({data:[{...tickets[0],inclusion_reason:'mentions'}],meta:{page:1,limit:20,total:1,total_pages:1}});
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/actionable');
+  await screen.findByRole('button',{name:'Retry queue totals'});
+  expect(screen.getByRole('button',{name:'Needs Action'})).not.toHaveAttribute('aria-describedby');
+  available=true;fireEvent.click(screen.getByRole('button',{name:'Retry queue totals'}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Needs Action'})).toHaveAccessibleDescription('12 conversations in this standard queue'));
+  expect(screen.getByText('Queue totals cover standard views before search or custom filters.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Mentions'}));
+  await screen.findByLabelText('Inclusion reason: mentions');
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mentions');
+  expect(screen.getByText('1 conversations')).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Mentions'})).toHaveAccessibleDescription('2 conversations in this standard queue');
 });

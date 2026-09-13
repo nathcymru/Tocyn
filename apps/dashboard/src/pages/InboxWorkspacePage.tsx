@@ -9,7 +9,7 @@ import { useFilters } from '../hooks/useFilters';
 import { OperatorWorkspaceProvider,useOperatorDraftIndicators,useOperatorWorkspaceState,type WorkspacePreference } from '../hooks/useOperatorWorkspaceState';
 import { useSettings } from '../hooks/useSettings';
 import { useTicketSlaBatch } from '../hooks/useTicketSla';
-import { useTickets } from '../hooks/useTickets';
+import { useStandardQueueCounts, useTickets } from '../hooks/useTickets';
 import { ticketReference } from '../utils/ticket-reference';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { TicketDetailPage } from './TicketDetailPage';
@@ -17,9 +17,9 @@ import { TicketDetailPage } from './TicketDetailPage';
 const statusStyle={open:'bg-emerald-50 text-emerald-800 border-emerald-200',pending:'bg-amber-50 text-amber-900 border-amber-200',
   resolved:'bg-slate-100 text-slate-700 border-slate-200',closed:'bg-slate-100 text-slate-700 border-slate-200'} as const;
 const priorityStyle={low:'text-slate-500',normal:'text-blue-600',high:'text-orange-700',urgent:'text-red-700'} as const;
-const queueViews={mine:{label:'Mine',description:'Open and pending conversations assigned to you and ready for work.'},unassigned:{label:'Unassigned',description:'Open and pending conversations without an assignee and ready for work.'},drafts:{label:'Drafts',description:'Conversations with your saved drafts.'},actionable:{label:'Actionable',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
+const queueViews={mentions:{label:'Mentions',description:'Actionable conversations with a mention for you that has not been dismissed.'},mine:{label:'Mine',description:'Open and pending conversations assigned to you and ready for work.'},unassigned:{label:'Unassigned',description:'Open and pending conversations without an assignee and ready for work.'},drafts:{label:'Drafts',description:'Conversations with your saved drafts.'},actionable:{label:'Needs Action',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
 type QueueView=keyof typeof queueViews;
-function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed'||value==='drafts'||value==='mine'||value==='unassigned';}
+function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed'||value==='drafts'||value==='mine'||value==='unassigned'||value==='mentions';}
 function pageFromAnchor(anchor:string){const match=/^page:([1-9]\d*)$/.exec(anchor);const page=match?Number(match[1]):1;return Number.isSafeInteger(page)?page:1;}
 function pageAnchor(page:number){return `page:${Math.max(1,Math.floor(page))}`;}
 
@@ -83,6 +83,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   const workspace=useOperatorWorkspaceState();
   const {data:filters,isLoading:isLoadingFilters}=useFilters();
   const drafts=useOperatorDraftIndicators();
+  const queueCounts=useStandardQueueCounts();
   const {data:settings}=useSettings();
   const prefix=settings?.TICKET_PREFIX||'#';
   const queue=isQueueView(activeView)?activeView:undefined;
@@ -120,19 +121,20 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
         <h1 ref={heading} tabIndex={-1} className="mt-1 text-2xl font-bold text-slate-900">Inbox</h1></div>
         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{meta.total} conversations</span></div>
       <nav aria-label="Work views" className="mt-4 flex gap-2 overflow-x-auto pb-1">
-        {(['mine','unassigned'] as const).map(view=><TocynButton key={view} type="button" aria-pressed={activeView===view} onClick={()=>selectView(view)}
-          className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView===view?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>{queueViews[view].label}</TocynButton>)}
-        <TocynButton type="button" aria-pressed={activeView==='actionable'} onClick={()=>selectView('actionable')}
-          className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='actionable'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>Actionable</TocynButton>
-        <TocynButton type="button" aria-pressed={activeView==='drafts'} onClick={()=>selectView('drafts')}
-          className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='drafts'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>Drafts</TocynButton>
-        <TocynButton type="button" aria-pressed={activeView==='snoozed'} onClick={()=>selectView('snoozed')}
-          className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='snoozed'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>Snoozed</TocynButton>
-        <TocynButton type="button" aria-pressed={activeView==='all'} onClick={()=>selectView('all')}
-          className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='all'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>All tickets</TocynButton>
+        {(['mine','unassigned','mentions','drafts','snoozed','actionable','all'] as const).map(view=>{
+          const label=view==='all'?'All tickets':queueViews[view].label;
+          const total=!queueCounts.isFetching&&!queueCounts.error?queueCounts.data?.[view]:undefined;
+          return <TocynButton key={view} type="button" aria-label={label} aria-pressed={activeView===view}
+            aria-describedby={total===undefined?undefined:`queue-total-${view}`} onClick={()=>selectView(view)}
+            className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView===view?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>
+            {label}{total!==undefined&&<><span aria-hidden="true" className="ml-1.5">{total}</span><span id={`queue-total-${view}`} className="sr-only">{total} conversations in this standard queue</span></>}
+          </TocynButton>;
+        })}
         {isLoadingFilters?<span role="status" className="px-2 py-2 text-sm text-slate-500">Loading saved views…</span>:filters?.map(filter=><TocynButton key={filter.id} type="button"
           aria-pressed={activeView===filter.id} onClick={()=>selectView(filter.id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold',
             activeView===filter.id?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}><Filter className="h-3.5 w-3.5" aria-hidden="true" />{filter.name}</TocynButton>)}</nav>
+      <p className="mt-2 text-xs text-slate-500">Queue totals cover standard views before search or custom filters.</p>
+      {queueCounts.isFetching?<p role="status" className="mt-1 text-xs text-slate-500">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="mt-1 text-xs text-slate-600">Queue totals unavailable. <TocynButton type="button" onClick={()=>void queueCounts.refetch()} className="underline">Retry queue totals</TocynButton></p>:null}
       <p className="mt-3 text-xs text-slate-600">Current view: <span className="font-semibold text-slate-800">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
       <form className="relative mt-4" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-500" aria-hidden="true" />

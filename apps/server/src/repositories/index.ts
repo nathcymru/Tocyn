@@ -359,11 +359,11 @@ export class SqlTicketRepository implements TicketRepository {
     }
 
     if (options.queue) {
-      if (['drafts', 'mine', 'unassigned'].includes(options.queue) && (!options.viewer || options.viewer.actorId !== this.scope.actorId
+      if (['drafts', 'mine', 'unassigned', 'mentions'].includes(options.queue) && (!options.viewer || options.viewer.actorId !== this.scope.actorId
         || !this.scope.roles.includes(options.viewer.role) || !['admin', 'agent'].includes(options.viewer.role))) {
         throw new Error('Queue requires the current operator');
       }
-      const queue = ticketQueuePredicate(options.queue, 'tickets', options.queue === 'drafts' || options.queue === 'mine'
+      const queue = ticketQueuePredicate(options.queue, 'tickets', options.queue === 'drafts' || options.queue === 'mine' || options.queue === 'mentions'
         ? { actorId: this.scope.actorId, notExpiredAt: options.draftNotExpiredAt } : undefined);
       query += ` AND ${queue.sql}`;
       countQuery += ` AND ${queue.sql}`;

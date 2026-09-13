@@ -78,3 +78,14 @@ export function useCreateTicket() {
     },
   });
 }
+
+export type StandardQueueKey='all'|'actionable'|'mine'|'unassigned'|'mentions'|'drafts'|'snoozed';
+export function useStandardQueueCounts(){
+  return useQuery({queryKey:['tickets','standard-queue-counts'],
+    queryFn:async()=>{
+      const result=await dashboardApi.get<{scope:string;counts:Record<StandardQueueKey,number>}>('/tickets/queue-counts');
+      if(result.scope!=='standard_queues'||!result.counts||(['all','actionable','mine','unassigned','mentions','drafts','snoozed'] as const)
+        .some(key=>!Number.isSafeInteger(result.counts[key])||result.counts[key]<0))throw new Error('Queue counts unavailable');
+      return result.counts;
+    },refetchInterval:()=>document.visibilityState==='visible'?30000:false});
+}

@@ -1,3 +1,5 @@
+import { settleTicketQueueCounts } from '../budgets/http-ticket-list-admission.service';
+import { TicketQueueCountsRepository } from '../repositories/ticket-queue-counts.repository';
 import { SUPPORT_SLA_RECEIPT_SNAPSHOTS } from '../repositories/support-sla-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import { articlePageQuery, assertConversationResponseBounds, ConversationReadError } from '../services/conversation-read-bounds';
@@ -1017,6 +1019,27 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
   }
 });
 
+/** Standard queue totals deliberately ignore current custom-view/search filters. */
+dashboard.get('/tickets/queue-counts',async c=>{
+  const d=c.get('tenantDeps') as TenantRequestDeps;
+  const payload=c.get('jwtPayload') as JWTPayload;
+  if(!payload||!['admin','agent'].includes(payload.role)||payload.sub!==d.scope.actorId
+    ||payload.tenant_id!==d.scope.tenantId||!d.scope.roles.includes(payload.role)||payload.mfa_verified!==true)
+    return c.json({error:'Operator session required'},403);
+  const draftNotExpiredAt=c.env.ENVIRONMENT==='local'&&c.env.LOCAL_BETA_ENABLED==='true'
+    ?new Date(c.env.localNow?.()??Date.now()).toISOString():undefined;
+  const admission=await admitHttpTicketList({env:c.env,deps:d,payload,operation:'dashboard.ticket.queue-counts',draftNotExpiredAt,now:()=>c.env.localNow?.()??Date.now()});
+  if(admission.status==='rejected')return c.json(admission.reason==='exhausted'
+    ?{code:'budget_exhausted',error:'Configured budget capacity is exhausted'}
+    :{code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},admission.reason==='exhausted'?429:503);
+  try {
+    const result=await new TicketQueueCountsRepository(d.database,d.scope).counts({snapshot:admission.snapshot,draftNotExpiredAt,commit:admission.commit,
+      credential:{role:payload.role as 'admin'|'agent',sessionVersion:payload.session_version??-1,expiresAt:payload.exp}});
+    if(admission.commit)settleTicketQueueCounts(admission.commit,'committed',c.env.localNow?.()??Date.now());
+    return c.json(result);
+  } catch{if(admission.commit)settleTicketQueueCounts(admission.commit,'unknown',c.env.localNow?.()??Date.now());return c.json({code:'queue_counts_unavailable',error:'Queue counts are unavailable'},503);}
+});
+
 /**
  * GET /api/tickets
  * List tickets with filters and pagination
@@ -1030,7 +1053,7 @@ dashboard.get("/tickets", async (c) => {
   if (!sort.success) return c.json({ error: 'Invalid ticket sort' }, 400);
   const queue = z.enum(TICKET_QUEUE_KEYS).optional().safeParse(c.req.query('queue'));
   if (!queue.success) return c.json({ error: 'Invalid ticket queue' }, 400);
-  if (queue.data && ['drafts', 'mine', 'unassigned'].includes(queue.data) && (!payload || !['admin', 'agent'].includes(payload.role)
+  if (queue.data && ['drafts', 'mine', 'unassigned', 'mentions'].includes(queue.data) && (!payload || !['admin', 'agent'].includes(payload.role)
     || payload.sub !== d.scope.actorId || payload.tenant_id !== d.scope.tenantId
     || !d.scope.roles.includes(payload.role) || payload.mfa_verified !== true)) {
     return c.json({ error: 'Operator session required' }, 403);
