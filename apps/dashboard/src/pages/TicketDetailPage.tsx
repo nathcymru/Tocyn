@@ -1414,7 +1414,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-900">{viewer.name}</p>
-                    <p className="text-[10px] text-green-600 font-medium flex items-center gap-1">
+                    <p className="text-[10px] tocyn-presence-viewing font-medium flex items-center gap-1">
                       <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                       Viewing
                     </p>
