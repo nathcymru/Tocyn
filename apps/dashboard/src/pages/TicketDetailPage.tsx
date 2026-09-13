@@ -1,10 +1,11 @@
+import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
-import React, { useEffect, useState, useRef, useId } from 'react';
+import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
 import { useTicket, useAssignResponsibleOwner, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
@@ -55,13 +56,14 @@ export function TicketDetailPage({id:providedId,workspaceBackHref}:{id?:string;w
   const { id:routeId } = useParams<{ id: string }>();
   const id=providedId??routeId;
   const generation = useAuthStore(state => state.sessionGeneration);
-  return <TicketDetail key={`${generation}:${id}`} id={id!} workspaceBackHref={workspaceBackHref} />;
+  const user = useAuthStore(state => state.user);
+  return <TicketDetail key={JSON.stringify([generation, user?.tenant_id, user?.id, user?.role, id])} id={id!} workspaceBackHref={workspaceBackHref} />;
 }
 
 function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:string }) {
   type TicketSelectControl = 'status' | 'priority' | 'assigned_to' | 'group_id';
   const queryClient = useQueryClient();
-  const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError } = useTicket(id!);
+  const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError, isFetchedAfterMount, isFetching } = useTicket(id!);
   const { data: groups } = useGroups();
   const { data: agents } = useAgents();
   const { data: settings } = useSettings();
@@ -70,7 +72,9 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const customFieldPrefix = useId();
   const updateTicket = useUpdateTicket();
   const assignResponsibleOwner = useAssignResponsibleOwner();
-  const ticketMutationPending = updateTicket.isPending || assignResponsibleOwner.isPending;
+  const [assignmentBlocked, setAssignmentBlocked] = useState(false);
+  const ticketMutationPending = updateTicket.isPending || assignResponsibleOwner.isPending || assignmentBlocked;
+  const refreshAssignment = useCallback(async () => { await refetch({ throwOnError: true }); }, [refetch]);
   const {
     data: supportStates = [],
     loadMore: loadMoreSupportStates,
@@ -272,7 +276,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   }, [lastMessage, id, queryClient]);
 
   const handleTicketChange = async (changes: TicketChanges, control?: TicketSelectControl) => {
-    if (changing.current || (control && pendingTicketSelectRefresh)) return;
+    if (changing.current || assignmentBlocked || (control && pendingTicketSelectRefresh)) return;
     changing.current = true;
     setChangeError(null);
     setNotice('');
@@ -365,7 +369,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   
   const submitSupportState = async (event?: React.FormEvent, snoozedUntilOverride?: string | null) => {
     event?.preventDefault();
-    if (supportStateFlight.current) return;
+    if (supportStateFlight.current || assignmentBlocked) return;
     const current = supportState.data;
     const definition = selectedSupportStateDefinition;
     if (!current) return;
@@ -575,7 +579,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
 
   const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reply.trim() || submission.current || sentDraftVersion) return;
+    if (assignmentBlocked || !reply.trim() || submission.current || sentDraftVersion) return;
     if (staleReplyReview) {
       setReplyError('Review the refreshed conversation and rebase the saved draft before sending. Your draft is retained.');
       return;
@@ -693,7 +697,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
               aria-label="Status" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
               value={ticket.status}
               onChange={(e) => {
-                if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
+                if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
                 void handleTicketChange({ status: e.target.value as TicketChanges['status'] }, 'status');
               }}
               className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
@@ -731,13 +735,13 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
             </label>
             <p className="mt-1 text-xs text-slate-600">The shared queue will resurface this ticket at the selected local time.</p>
             <div className="mt-2 flex flex-wrap gap-3">
-              <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
-              {supportState.data.snoozed_until && <TocynButton type="button" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="rounded border border-slate-400 px-3 py-2 text-sm font-semibold text-slate-700">Unsnooze ticket</TocynButton>}
+              <TocynButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
+              {supportState.data.snoozed_until && <TocynButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="rounded border border-slate-400 px-3 py-2 text-sm font-semibold text-slate-700">Unsnooze ticket</TocynButton>}
             </div>
             {supportState.data.snoozed_until && <p role="status" className="mt-2 text-sm text-slate-700">Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
           </div>
           {selectedSupportStateNeedsDetails && <p role="status" className="text-sm text-slate-700">Load the current support-state definition before saving.</p>}
-          <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || !selectedSupportStateDefinition} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
+          <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
           {hasMoreSupportStates && <TocynButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className="underline">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</TocynButton>}
           {isLoadMoreSupportStatesError && <p role="alert" className="text-sm text-red-800">Could not load more support states. Try again.</p>}
         </form>}
@@ -1137,7 +1141,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                   </TocynButton>
                   <TocynButton
                     type="submit"
-                    aria-disabled={!replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion) || Boolean(staleReplyReview)}
+                    aria-disabled={assignmentBlocked || !replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion) || Boolean(staleReplyReview)}
                     className={clsx(
                       "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
                       isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"
@@ -1206,7 +1210,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                   id="ticket-priority" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.priority}
                   onChange={(e) => {
-                    if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.priority; return; }
+                    if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.priority; return; }
                     void handleTicketChange({ priority: e.target.value as TicketChanges['priority'] }, 'priority');
                   }}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
@@ -1227,7 +1231,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                   id="ticket-assigned_to" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.assigned_to || ''}
                   onChange={(e) => {
-                    if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.assigned_to || ''; return; }
+                    if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.assigned_to || ''; return; }
                     void handleTicketChange({ assigned_to: e.target.value || null }, 'assigned_to');
                   }}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
@@ -1237,6 +1241,10 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                     <option key={agent.id} value={agent.id}>{agent.full_name || agent.email}</option>
                   ))}
                 </TocynSelect>
+                <TicketAssignmentActions ticketId={id} ownerId={ticket.assigned_to ?? null}
+                  agents={agents ?? []} fresh={isFetchedAfterMount && !isFetching && !error}
+                  disabled={updateTicket.isPending || assignResponsibleOwner.isPending || isSupportStateSubmitting || isSubmitting || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  refreshTicket={refreshAssignment} onBlocked={setAssignmentBlocked} />
               </div>
             </div>
             <div>
@@ -1248,7 +1256,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
                   id="ticket-group_id" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.group_id || ''}
                   onChange={(e) => {
-                    if (changing.current || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.group_id || ''; return; }
+                    if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.group_id || ''; return; }
                     void handleTicketChange({ group_id: e.target.value || null }, 'group_id');
                   }}
                   className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"

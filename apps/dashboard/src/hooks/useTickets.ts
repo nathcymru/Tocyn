@@ -1,5 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
+import { useAuthStore } from '../store/authStore';
+import { assignmentIdentity } from './useTicketAssignment';
 import { Ticket, TicketWithDetails, PaginatedResponse } from '@luminatick/shared';
 
 export function useTickets(params: Record<string, string> = {}) {
@@ -17,10 +19,17 @@ export function useTickets(params: Record<string, string> = {}) {
 
 type TicketPage = TicketWithDetails & { pagination?: { next_cursor: string | null; has_more: boolean } };
 export function useTicket(id: string) {
+  const user = useAuthStore(state => state.user);
+  const generation = useAuthStore(state => state.sessionGeneration);
+  const identity = assignmentIdentity();
   const query = useInfiniteQuery({
-    queryKey: ['ticket', id],
+    queryKey: ['ticket', id, user?.tenant_id, user?.id, user?.role, generation],
     initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => dashboardApi.get<TicketPage>(`/tickets/${id}${pageParam ? `?article_cursor=${encodeURIComponent(pageParam)}` : ''}`),
+    queryFn: async ({ pageParam }) => {
+      const result = await dashboardApi.get<TicketPage>(`/tickets/${id}${pageParam ? `?article_cursor=${encodeURIComponent(pageParam)}` : ''}`);
+      if (assignmentIdentity() !== identity) throw new DOMException('Obsolete ticket response', 'AbortError');
+      return result;
+    },
     getNextPageParam: (page) => page.pagination?.next_cursor ?? undefined,
     enabled: !!id,
     refetchInterval: () => document.visibilityState === 'visible' ? 30000 : false,
@@ -49,14 +58,18 @@ export function useUpdateTicket() {
 export function useAssignResponsibleOwner() {
   const queryClient = useQueryClient();
   return useMutation({
+    onMutate: () => assignmentIdentity(),
     mutationFn: ({ id, ownerId, expectedOwnerId, idempotencyKey }: {
       id: string; ownerId: string | null; expectedOwnerId: string | null; idempotencyKey: string;
     }) => dashboardApi.patch<{ success: true; responsibleOwnerId: string | null }>(`/tickets/${id}/responsible-owner`,
       { ownerId, expectedOwnerId }, { headers: { 'Idempotency-Key': idempotencyKey } }),
-    onSuccess: (_, variables) => Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['tickets'] }),
-      queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] }),
-    ]),
+    onSuccess: (_, variables, identity) => {
+      if (identity !== assignmentIdentity()) return;
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tickets'] }),
+        queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] }),
+      ]);
+    },
   });
 }
 
