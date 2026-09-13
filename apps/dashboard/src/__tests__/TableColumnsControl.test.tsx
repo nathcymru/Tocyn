@@ -24,5 +24,5 @@ it('retains focus on the moved column at both boundaries and announces its posit
   expect(down).toBeDisabled();
   expect(up).toHaveFocus();
   expect(screen.getByRole('status')).toHaveTextContent('updated moved to column 2 of 2.');
-  expect(screen.getByRole('checkbox', { name: 'reference', exact: true })).toBeDisabled();
+  expect(screen.getByRole('checkbox', { name: 'reference' })).toBeDisabled();
 });
