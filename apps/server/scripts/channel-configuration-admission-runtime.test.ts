@@ -64,10 +64,10 @@ test('native email-channel admission preserves configuration semantics and bound
       }
     }
     const sustainedProof=await(await mf.dispatchFetch('http://runtime.test/__channel-control')).json() as any;
-    assert.equal(sustainedProof.coordinatorCalls.reconcile,1,'forty reads close exactly one full block');
-    assert.equal(sustainedProof.coordinatorCalls.reserve,6,'five work blocks plus one prepaid recovery');
-    assert.equal(sustainedProof.cache.holders,4);assert.equal(sustainedProof.cache.refills,4);
-    assert.equal((await db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<any>()).n,1);
+    assert.equal(sustainedProof.coordinatorCalls.reconcile,4,'forty reads close each of four exhausted blocks');
+    assert.equal(sustainedProof.coordinatorCalls.reserve,9,'five work blocks plus four prepaid recoveries');
+    assert.equal(sustainedProof.cache.holders,1);assert.equal(sustainedProof.cache.refills,1);
+    assert.equal((await db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<any>()).n,4);
 
     const createdInput={email_address:'owned@example.test',name:'Owned support',group_id:group,is_default:true};
     const created=await request('/api/channels/emails','POST',agent,createdInput,'channel-create');assert.equal(created.status,201,await created.clone().text());const createdBody=await created.json() as any;

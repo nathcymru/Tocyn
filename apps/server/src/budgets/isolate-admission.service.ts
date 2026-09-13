@@ -299,23 +299,25 @@ export class IsolateBudgetAdmissionCache {
       let allocatingAuthority = authority;
       entry.pending = (async () => {
         // Serialize recovery with allocation for this exact binding/work scope.
+        // Recover a quiescent holder on every cold return, before sparse scopes
+        // accumulate four expired blocks each. Warm spends above perform no recovery.
         // Failed or unconfirmed closure never returns a refill credit.
-        if (allocatingEntry.refills >= MAX_ISOLATE_SCOPE_REFILLS && input.recoverGrant && holderScope.purpose === 'new-work') {
+        if (input.recoverGrant && holderScope.purpose === 'new-work') {
           const sealed = this.sealQuiescentGrant(allocatingEntry, input.scope.tenantId, input.credentialKey, input.now(), 0, true);
           if (sealed) {
             try {
               if (await input.recoverGrant(sealed, input.now()) === 'reconciled') {
                 this.completeApiGrantRecovery(sealed);
-                // Recovery refreshed central authority; never replay the older
-                // pre-recovery authority timestamp when allocating a new block.
-                const refreshed = await resolve();
-                if (!refreshed || !this.currentGeneration(allocatingEntry, generation)
-                  || !this.observeAuthority(allocatingEntry, refreshed) || !sameEpoch(allocatingEntry, refreshed)) {
-                  this.retire(allocatingEntry); return null;
-                }
-                allocatingAuthority = refreshed;
               }
             } catch { /* The original holder and its full charge remain retained. */ }
+            // Even an unconfirmed recovery may have refreshed central authority.
+            // Never allocate with the pre-recovery authority timestamp.
+            const refreshed = await resolve();
+            if (!refreshed || !this.currentGeneration(allocatingEntry, generation)
+              || !this.observeAuthority(allocatingEntry, refreshed) || !sameEpoch(allocatingEntry, refreshed)) {
+              this.retire(allocatingEntry); return null;
+            }
+            allocatingAuthority = refreshed;
           }
         }
         if (!this.currentGeneration(allocatingEntry, generation)) return null;

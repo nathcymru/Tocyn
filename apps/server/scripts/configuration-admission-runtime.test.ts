@@ -62,10 +62,10 @@ test('native configuration admission is current, atomic, replayable and populati
       }
     }
     const sustainedProof=await(await mf.dispatchFetch('http://runtime.test/__configuration-control')).json() as any;
-    assert.equal(sustainedProof.coordinatorCalls.reconcile,1,'forty reads close exactly one full block');
-    assert.equal(sustainedProof.coordinatorCalls.reserve,6,'five work blocks plus one prepaid recovery');
-    assert.equal(sustainedProof.cache.holders,4);assert.equal(sustainedProof.cache.refills,4);
-    assert.equal((await db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<any>()).n,1);
+    assert.equal(sustainedProof.coordinatorCalls.reconcile,4,'forty reads close each of four exhausted blocks');
+    assert.equal(sustainedProof.coordinatorCalls.reserve,9,'five work blocks plus four prepaid recoveries');
+    assert.equal(sustainedProof.cache.holders,1);assert.equal(sustainedProof.cache.refills,1);
+    assert.equal((await db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<any>()).n,4);
 
     const fieldBody={name:'customer_tier',label:'Customer tier',field_type:'select',options:'["standard","premium"]',is_active:true};
     const createdField=await request('/api/ticket-fields','POST',agent,fieldBody,'field-create');assert.equal(createdField.status,201,await createdField.clone().text());
