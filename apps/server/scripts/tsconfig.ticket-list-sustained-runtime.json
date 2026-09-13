@@ -1,0 +1,1 @@
+{"extends":"../tsconfig.json","compilerOptions":{"noEmit":true},"include":["ticket-list-sustained-runtime.test.ts","budget-admission-runtime-entry.ts","split-sql.ts"]}

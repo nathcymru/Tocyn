@@ -1,3 +1,5 @@
+import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
+import { budgetCommitConstraint,budgetGrantOperationStatements } from './budget-commit-fence';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { EncryptJWT, jwtDecrypt } from 'jose';
 import type { VerifiedTenantScope } from '../types/tenant';
@@ -25,6 +27,8 @@ type Row = {
   producer_kind: 'staff' | 'system'; producer_id: string | null; facts: string; receipt_fingerprint: string; revision: number;
   created_at: string; resurfaced_at: string | null; read_at: string | null; dismissed_at: string | null; ticket_subject?: string | null;
 };
+type ActivityPageRow = Row & { row_kind: 'summary' | 'item'; candidate_count: number | null };
+type ActivityUnreadRow = { candidate_count: number; visible_count: number };
 type SqlCondition = Readonly<{ sql: string; values: readonly (string | number)[] }>;
 export type PreparedActivityAppend = Readonly<{ statement: D1PreparedStatement }>;
 type ImmutableActivity = Readonly<{
@@ -92,10 +96,19 @@ async function fingerprint(value: Omit<ImmutableActivity, 'fingerprint'>): Promi
  * producers compose statements into their canonical D1 batch, and consumers
  * receive only their own currently-authorized rows.
  */
+export class ActivityBudgetFenceError extends Error {}
 export class OperatorActivityRepository {
   private cursorKeyPromise?: Promise<Uint8Array>;
 
   constructor(private readonly scope: VerifiedTenantScope, private readonly db: D1Database, private readonly cursorSecret?: string) {}
+
+  private completionStatements(credential:ActivityPresentationCredential,authority:BudgetCommitAuthority){
+    const recipient=this.recipientAuthority(credential),budget=budgetCommitConstraint(authority,this.scope.tenantId);
+    return [this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+      VALUES (?,CASE WHEN (${recipient.sql}) AND (${budget.sql}) THEN 1 ELSE 0 END)
+      ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId,...recipient.values,...budget.values),
+      ...budgetGrantOperationStatements(this.db,this.scope,authority)];
+  }
 
   private cursorKey(): Promise<Uint8Array> {
     if (!this.cursorSecret) throw new Error('Activity pagination key unavailable; restart pagination after configuration is restored');
@@ -266,22 +279,21 @@ export class OperatorActivityRepository {
     return { activity: activityFromRow(existing), idempotent: true };
   }
 
-  async listForRecipient(options: Readonly<{ cursor?: string | null; limit: number }>, credential: ActivityPresentationCredential): Promise<OperatorActivityPage | null> {
+  private async preparePage(options: Readonly<{ cursor?: string | null; limit: number }>, credential: ActivityPresentationCredential): Promise<D1PreparedStatement> {
     if (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > MAX_PAGE_SIZE) throw new Error('Invalid activity page size');
-    if (!(await this.isLiveRecipient(credential))) return null;
     await this.cursorKey();
     const cursor = await this.decodeCursor(options.cursor);
     const access = this.ticketAccess(credential);
     // The tuple predicate seeks directly in the recipient index, including on
     // later pages. At most 100 candidates are authorized; the 101st is lookahead.
     const seek = cursor ? 'AND (a.created_at,a.id)<(?,?)' : '';
-    const { results } = await this.db.prepare(`WITH candidates AS MATERIALIZED (
+    return this.db.prepare(`WITH candidates AS MATERIALIZED (
         SELECT a.* FROM operator_activities a WHERE a.tenant_id=? AND a.recipient_user_id=? ${seek}
         ORDER BY a.created_at DESC,a.id DESC LIMIT ?
       ), window AS MATERIALIZED (
         SELECT * FROM candidates ORDER BY created_at DESC,id DESC LIMIT ?
       ), visible AS (
-        SELECT a.*,t.subject AS ticket_subject FROM window a JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id
+        SELECT a.*,CASE WHEN length(t.subject)>512 THEN substr(t.subject,1,512)||'…' ELSE t.subject END AS ticket_subject FROM window a JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id
         WHERE ${access.sql}
       )
       SELECT 'summary' AS row_kind,(SELECT count(*) FROM candidates) AS candidate_count,
@@ -294,61 +306,94 @@ export class OperatorActivityRepository {
       SELECT 'item',NULL,${selectColumns},a.ticket_subject FROM visible a
       ORDER BY row_kind DESC,created_at DESC,id DESC`)
       .bind(this.scope.tenantId, this.scope.actorId, ...(cursor ? [cursor.createdAt, cursor.id] : []),
-        OPERATOR_ACTIVITY_CANDIDATE_LIMIT + 1, OPERATOR_ACTIVITY_CANDIDATE_LIMIT, ...access.values)
-      .all<Row & { row_kind: 'summary' | 'item'; candidate_count: number | null }>();
-    if (!(await this.isLiveRecipient(credential))) return null;
-    const rows = results ?? [];
+        OPERATOR_ACTIVITY_CANDIDATE_LIMIT + 1, OPERATOR_ACTIVITY_CANDIDATE_LIMIT, ...access.values);
+  }
+
+  private async pageFromRows(rows: ActivityPageRow[], limit: number, credential: ActivityPresentationCredential): Promise<OperatorActivityPage> {
     const summary = rows.find(row => row.row_kind === 'summary');
     const visibleRows = rows.filter(row => row.row_kind === 'item');
-    const items = visibleRows.slice(0, options.limit).map(activityFromRow);
+    const items = visibleRows.slice(0, limit).map(activityFromRow);
     const last = items[items.length - 1];
     // Full visible pages resume after their last returned row. A sparse or empty
     // window resumes after its scanned boundary, encrypted so inaccessible row
     // identifiers/timestamps never leave the server in a readable cursor.
-    const boundary = visibleRows.length > options.limit && last ? { createdAt: last.createdAt, id: last.id }
+    const boundary = visibleRows.length > limit && last ? { createdAt: last.createdAt, id: last.id }
       : (summary?.candidate_count ?? 0) > OPERATOR_ACTIVITY_CANDIDATE_LIMIT && summary
         ? { createdAt: summary.created_at, id: summary.id } : null;
     return { status: 'available', items, next: boundary ? await this.encodeCursor(boundary, credential) : null };
   }
 
-  async unreadCount(credential: ActivityPresentationCredential): Promise<OperatorActivityUnreadCount | null> {
+  private prepareUnread(credential: ActivityPresentationCredential): D1PreparedStatement {
     const access = this.ticketAccess(credential);
-    if (!(await this.isLiveRecipient(credential))) return null;
-    const row = await this.db.prepare(`WITH candidates AS MATERIALIZED (
+    return this.db.prepare(`WITH candidates AS MATERIALIZED (
         SELECT a.tenant_id,a.ticket_id FROM operator_activities a
         WHERE a.tenant_id=? AND a.recipient_user_id=? AND a.read_at IS NULL AND a.dismissed_at IS NULL
         ORDER BY a.created_at DESC,a.id DESC LIMIT ?
       ), visible AS (
         SELECT 1 FROM candidates a JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id WHERE ${access.sql}
       ) SELECT (SELECT count(*) FROM candidates) AS candidate_count,(SELECT count(*) FROM visible) AS visible_count`)
-      .bind(this.scope.tenantId, this.scope.actorId, OPERATOR_ACTIVITY_CANDIDATE_LIMIT + 1, ...access.values)
-      .first<{ candidate_count: number; visible_count: number }>();
-    if (!(await this.isLiveRecipient(credential))) return null;
+      .bind(this.scope.tenantId, this.scope.actorId, OPERATOR_ACTIVITY_CANDIDATE_LIMIT + 1, ...access.values);
+  }
+
+  private unreadFromRow(row: ActivityUnreadRow | null | undefined): OperatorActivityUnreadCount {
     if ((row?.candidate_count ?? 0) > OPERATOR_ACTIVITY_CANDIDATE_LIMIT) {
       return { status: 'unavailable', reason: 'recipient_activity_candidate_cap_exceeded', count: null };
     }
     return { status: 'available', count: row?.visible_count ?? 0 };
   }
 
-  async markRead(id: string, expectedRevision: number, credential: ActivityPresentationCredential): Promise<OperatorActivity | null> {
-    return this.transition(id, expectedRevision, credential, 'read');
+
+  async readAdmitted(options: Readonly<{ cursor?: string | null; limit: number }>, credential: ActivityPresentationCredential, authority: BudgetCommitAuthority): Promise<{ page: OperatorActivityPage; unread: OperatorActivityUnreadCount }> {
+    const pageStatement = await this.preparePage(options, credential);
+    const statements = [...this.completionStatements(credential, authority), pageStatement, this.prepareUnread(credential)];
+    let results;
+    try { results = await this.db.batch<ActivityPageRow | ActivityUnreadRow>(statements); }
+    catch { throw new ActivityBudgetFenceError('Activity admission authority changed'); }
+    // Authorization, both projections and the exact operation receipt share one snapshot.
+    const pageRows = results[results.length - 2].results as ActivityPageRow[];
+    const unreadRows = results[results.length - 1].results as ActivityUnreadRow[];
+    return { page: await this.pageFromRows(pageRows, options.limit, credential), unread: this.unreadFromRow(unreadRows[0]) };
   }
 
-  async dismiss(id: string, expectedRevision: number, credential: ActivityPresentationCredential): Promise<OperatorActivity | null> {
-    return this.transition(id, expectedRevision, credential, 'dismiss');
+  async listForRecipient(options: Readonly<{ cursor?: string | null; limit: number }>, credential: ActivityPresentationCredential): Promise<OperatorActivityPage | null> {
+    if (!(await this.isLiveRecipient(credential))) return null;
+    const statement = await this.preparePage(options, credential);
+    const { results } = await statement.all<ActivityPageRow>();
+    if (!(await this.isLiveRecipient(credential))) return null;
+    return this.pageFromRows(results ?? [], options.limit, credential);
   }
 
-  private async transition(id: string, expectedRevision: number, credential: ActivityPresentationCredential, action: 'read' | 'dismiss'): Promise<OperatorActivity | null> {
+  async unreadCount(credential: ActivityPresentationCredential): Promise<OperatorActivityUnreadCount | null> {
+    if (!(await this.isLiveRecipient(credential))) return null;
+    const row = await this.prepareUnread(credential).first<ActivityUnreadRow>();
+    if (!(await this.isLiveRecipient(credential))) return null;
+    return this.unreadFromRow(row);
+  }
+
+  async markRead(id: string, expectedRevision: number, credential: ActivityPresentationCredential, authority?:BudgetCommitAuthority): Promise<OperatorActivity | null> {
+    return this.transition(id, expectedRevision, credential, 'read',authority);
+  }
+
+  async dismiss(id: string, expectedRevision: number, credential: ActivityPresentationCredential, authority?:BudgetCommitAuthority): Promise<OperatorActivity | null> {
+    return this.transition(id, expectedRevision, credential, 'dismiss',authority);
+  }
+
+  private async transition(id: string, expectedRevision: number, credential: ActivityPresentationCredential, action: 'read' | 'dismiss', authority?:BudgetCommitAuthority): Promise<OperatorActivity | null> {
     requireIdentifier(id, 'id');
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error('Invalid activity revision');
     const access = this.ticketAccess(credential);
     const set = action === 'read' ? "read_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')" : "dismissed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')";
     const state = action === 'read' ? 'operator_activities.read_at IS NULL AND operator_activities.dismissed_at IS NULL' : 'operator_activities.dismissed_at IS NULL';
-    const row = await this.db.prepare(`UPDATE operator_activities SET ${set},revision=revision+1
+    const statement = this.db.prepare(`UPDATE operator_activities SET ${set},revision=revision+1
       WHERE tenant_id=? AND recipient_user_id=? AND id=? AND revision=? AND ${state}
         AND ${this.ticketForMutationSql(credential, access.sql)}
       RETURNING ${columns}`)
-      .bind(this.scope.tenantId, this.scope.actorId, id, expectedRevision, ...access.values).first<Row>();
+      .bind(this.scope.tenantId, this.scope.actorId, id, expectedRevision, ...access.values);
+    let row:Row|null;
+    if(authority){
+      try{const results=await this.db.batch([...this.completionStatements(credential,authority),statement]);row=(results[results.length-1].results[0] as Row|undefined)??null;}
+      catch{throw new ActivityBudgetFenceError('Activity admission authority changed');}
+    }else row=await statement.first<Row>();
     return row ? activityFromRow(row) : null;
   }
 

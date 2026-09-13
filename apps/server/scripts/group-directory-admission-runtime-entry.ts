@@ -9,7 +9,7 @@ let wrappedDatabase:any,wrappedNamespace:any;
 let beforeDirectory:{kind:string;groupId?:string}|undefined;
 let active:Measurement|undefined;
 const measurements:Measurement[]=[];
-const coordinatorCalls={refresh:0,reserve:0};
+const coordinatorCalls={refresh:0,reserve:0,reconcile:0};
 
 function record(meta:any){if(!active)return;active.calls++;active.rowsRead+=meta?.rows_read??0;active.rowsWritten+=meta?.rows_written??0;}
 
@@ -79,7 +79,7 @@ function instrumentNamespace(namespace:any):any{
       refreshFromTrustedAuthority:async(input:any)=>{coordinatorCalls.refresh++;return target.refreshFromTrustedAuthority(input);},
       reserveFromTrustedAuthority:async(input:any)=>{coordinatorCalls.reserve++;return target.reserveFromTrustedAuthority(input);},
       revokeFromTrustedAuthority:(input:any)=>target.revokeFromTrustedAuthority(input),
-      reconcileFromTrustedAuthority:(input:any)=>target.reconcileFromTrustedAuthority(input),
+      reconcileFromTrustedAuthority:(input:any)=>{coordinatorCalls.reconcile++;return target.reconcileFromTrustedAuthority(input);},
     };
   }};return wrappedNamespace;
 }

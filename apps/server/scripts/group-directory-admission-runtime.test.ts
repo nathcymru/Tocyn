@@ -211,3 +211,22 @@ test('a delayed read or mutation cannot cross a whole-grant closure and retains 
     assert.equal((await mutation.db.prepare("SELECT count(*) AS count FROM budget_grant_closures").first<{count:number}>())!.count,1);
   }finally{await mutation.mf.dispose();}
 });
+
+
+test('group directory sustains forty reads with RPC-free warm blocks and bounded recovery',async()=>{
+  const f=await fixture();
+  try {
+    const auth=await token();let firstReadCalls:unknown;
+    for(let index=0;index<40;index++){
+      const response=await request(f.mf,'/api/groups',auth);
+      assert.equal(response.status,200,`sustained read ${index+1}: ${await response.clone().text()}`);await response.body?.cancel();
+      if(index===0||index===7){const proof=await control(f.mf);
+        if(index===0)firstReadCalls=proof.coordinatorCalls;
+        else assert.deepEqual(proof.coordinatorCalls,firstReadCalls,'warm reads make no additional DO RPC');}
+    }
+    const proof=await control(f.mf);
+    assert.equal(proof.coordinatorCalls.reconcile,1);assert.equal(proof.coordinatorCalls.reserve,6);
+    assert.equal(proof.cache.holders,4);assert.equal(proof.cache.refills,4);
+    assert.equal((await f.db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<{n:number}>())!.n,1);
+  }finally{await f.mf.dispose();}
+});

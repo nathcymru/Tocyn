@@ -1,3 +1,4 @@
+import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import type { ConversationActor } from '../types/conversation-audit';
 import { articleBodyFormat, type ArticleBodyFormat } from '@luminatick/shared';
 import type { VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
@@ -31,8 +32,8 @@ export type InitialConversationInput = {
 export class TenantTicketService {
   constructor(private deps: TenantRequestDeps) {}
 
-  async findTickets({ page, limit, customerEmail, scanFence, currentCredential }: { page: number, limit: number, customerEmail: string, scanFence?: TicketListScanSnapshot, currentCredential?: TicketListCurrentCredential }) {
-    return this.deps.repositories.tickets.findCustomerTickets(customerEmail, page, limit, scanFence, currentCredential);
+  async findTickets({ page, limit, customerEmail, scanFence, currentCredential, budgetAuthority }: { page: number, limit: number, customerEmail: string, scanFence?: TicketListScanSnapshot, currentCredential?: TicketListCurrentCredential; budgetAuthority?:BudgetCommitAuthority }) {
+    return this.deps.repositories.tickets.findCustomerTickets(customerEmail, page, limit, scanFence, currentCredential, budgetAuthority);
   }
 
   async findTicketById(id: string): Promise<Ticket | null> {

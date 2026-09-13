@@ -13,6 +13,11 @@ let workspaceBatches = 0;
 let workspaceRowsRead = 0;
 let workspaceRowsWritten = 0;
 let r2Gets = 0;
+let settlements:{operationId:string;outcome:string}[]=[];
+const originalSettle=apiTicketBudgetCache.settleOperation.bind(apiTicketBudgetCache);
+apiTicketBudgetCache.settleOperation=(authority,outcome,now)=>{
+  settlements.push({operationId:authority.operationId,outcome});originalSettle(authority,outcome,now);
+};
 
 async function applyAction(db: any, action: string | undefined) {
   if (!action) return;
@@ -92,12 +97,12 @@ export default {
     if (url.pathname === '/__workspace-control') {
       if (request.method === 'POST') {
         const input = await request.json() as { beforeWorkspaceBatch?: string; beforeR2Get?: string; beforeStateClear?: boolean; reset?: boolean };
-        if (input.reset) { workspaceBatches = 0; workspaceRowsRead = 0; workspaceRowsWritten = 0; r2Gets = 0; }
+        if (input.reset) { settlements=[]; workspaceBatches = 0; workspaceRowsRead = 0; workspaceRowsWritten = 0; r2Gets = 0; }
         if (input.beforeWorkspaceBatch) beforeWorkspaceBatch = input.beforeWorkspaceBatch;
         if (input.beforeR2Get) beforeR2Get = input.beforeR2Get;
         if (input.beforeStateClear) beforeStateClear = true;
       }
-      return Response.json({ workspaceBatches, workspaceRowsRead, workspaceRowsWritten, r2Gets,
+      return Response.json({ settlements, workspaceBatches, workspaceRowsRead, workspaceRowsWritten, r2Gets,
         cache: apiTicketBudgetCache.inspectForTrustedRuntime() });
     }
     const database = instrumentDatabase(env.DB);

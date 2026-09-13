@@ -11,7 +11,7 @@ import { OperatorWorkspaceError, OperatorWorkspaceService } from '../services/op
 import { AttachmentReferenceError } from '../services/attachment-references';
 import { LOCAL_DRAFT_RETENTION } from '../types/operator-draft-retention';
 import { OperatorWorkspaceFenceError, type OperatorPresentationCredential, type OperatorWorkspaceCommit } from '../repositories/operator-workspace.repository';
-import { admitOperatorWorkspace, type WorkspaceAdmission, type WorkspaceAdmissionOperation } from '../budgets/operator-workspace-admission.service';
+import { admitOperatorWorkspace, settleOperatorWorkspace, type WorkspaceAdmission, type WorkspaceAdmissionOperation } from '../budgets/operator-workspace-admission.service';
 
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const generation = z.string().uuid();
@@ -56,6 +56,15 @@ workspace.use('*', async (c, next) => {
   await next();
 });
 workspace.use('*', requestBounds(64 * 1024));
+const activeAdmissions=new WeakMap<object,OperatorWorkspaceCommit>();
+workspace.use('*',async(c,next)=>{
+  let outcome:'committed'|'unknown'='unknown';
+  try {await next();if(!c.error&&c.res.status<400)outcome='committed';}
+  finally {
+    const commit=activeAdmissions.get(c);activeAdmissions.delete(c);
+    if(commit)settleOperatorWorkspace(commit,outcome,c.env.localNow?.()??Date.now());
+  }
+});
 function service(c: any, admission?: OperatorWorkspaceCommit) {
   const localRetention = c.env.ENVIRONMENT === 'local' && c.env.LOCAL_BETA_ENABLED === 'true';
   return new OperatorWorkspaceService(c.get('tenantDeps') as TenantRequestDeps,
@@ -69,8 +78,10 @@ function failure(c: any, error: unknown) {
   throw error;
 }
 async function admission(c: any, operation: WorkspaceAdmissionOperation, ticketId?: string): Promise<WorkspaceAdmission> {
-  return admitOperatorWorkspace({ env: c.env, deps: c.get('tenantDeps') as TenantRequestDeps, payload: c.get('jwtPayload'), operation, ticketId,
+  const result=await admitOperatorWorkspace({ env: c.env, deps: c.get('tenantDeps') as TenantRequestDeps, payload: c.get('jwtPayload'), operation, ticketId,
     now: () => c.env.localNow?.() ?? Date.now() });
+  if(result.status==='admitted')activeAdmissions.set(c,result.commit);
+  return result;
 }
 function admissionFailure(c: any, result: WorkspaceAdmission): Response | null {
   return result.status === 'rejected' ? c.json(result.reason === 'exhausted'

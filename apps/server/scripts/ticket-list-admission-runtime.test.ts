@@ -1,4 +1,5 @@
 import { TicketQueueCountsRepository } from '../src/repositories/ticket-queue-counts.repository';
+import { apiTicketBudgetCache } from '../src/middleware/budget-admission.middleware';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
@@ -86,7 +87,12 @@ test('ticket list keeps exact search results while current group authority appli
       { tenantId, id: nonMember.id, kind: 'staff' }],
       limits: { ticketLimit: 2, mutationLimit: 8, recoveryReserve: 2, uploadLimit: 2 } });
     await fixture.enableCombinedTicketAdmission();
-    body = await list(fixture, nonMember.token);
+    const settlements:{operationId:string;outcome:string}[]=[];
+    const originalSettle=apiTicketBudgetCache.settleOperation.bind(apiTicketBudgetCache);
+    apiTicketBudgetCache.settleOperation=(authority,outcome,now)=>{settlements.push({operationId:authority.operationId,outcome});originalSettle(authority,outcome,now);};
+    try {body = await list(fixture, nonMember.token);} finally {apiTicketBudgetCache.settleOperation=originalSettle;}
+    assert.equal(settlements.length,1);assert.equal(settlements[0].outcome,'committed');
+    assert.equal((await fixture.db.prepare('SELECT count(*) AS n FROM budget_grant_operations WHERE operation_id=?').bind(settlements[0].operationId).first<{n:number}>())?.n,1);
     assert.deepEqual(body.data.map(ticket => ticket.id), ['list-ungrouped']);
     assert.equal(body.meta.total, 1, 'a non-member cannot retain hidden rows or their total when metering is enabled');
     body = await list(fixture, agent.token);
@@ -104,6 +110,17 @@ test('ticket list keeps exact search results while current group authority appli
     const portal = await fixture.request('/api/v1/customer/tickets?limit=50', { token: customer });
     assert.equal(portal.status, 200, await portal.clone().text());
     assert.equal((await portal.json<{ total: number }>()).total, 4, 'portal keeps all of the customer’s tickets');
+    const beforeFailed=(await fixture.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n;
+    const originalList=SqlTicketRepository.prototype.list;settlements.length=0;
+    apiTicketBudgetCache.settleOperation=(authority,outcome,now)=>{settlements.push({operationId:authority.operationId,outcome});originalSettle(authority,outcome,now);};
+    SqlTicketRepository.prototype.list=async function(options){
+      await fixture.db.prepare("UPDATE budget_owner_policies SET policy_json=policy_json||' '").run();
+      return originalList.call(this,options);
+    };
+    try {assert.equal((await fixture.request('/api/tickets',{token:admin.token})).status,503);}
+    finally {SqlTicketRepository.prototype.list=originalList;apiTicketBudgetCache.settleOperation=originalSettle;}
+    assert.deepEqual(settlements.map(item=>item.outcome),['unknown']);
+    assert.equal((await fixture.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n,beforeFailed);
     await fixture.db.prepare('DELETE FROM user_groups WHERE tenant_id=? AND user_id=? AND group_id=?').bind(tenantId, agent.id, 'list-visible-group').run();
     assert.equal((await fixture.request('/api/tickets?search=full-history-needle', { token: agent.token })).status, 401,
       'a revoked staff session is denied before list metadata or business work');
@@ -293,5 +310,49 @@ test('Mine and Unassigned HTTP queues require a current operator and bind Mine i
     assert.equal((await read('unassigned',agent.token)).meta.total,0);
     await fixture.db.prepare('UPDATE users SET session_version=session_version+1 WHERE tenant_id=? AND id=?').bind(tenantId,agent.id).run();
     for(const queue of ['mine','unassigned']) assert.notEqual((await fixture.request(`/api/tickets?queue=${queue}`,{token:agent.token})).status,200);
+  });
+});
+
+test('list completion ledger shares atomic policy, credential and population fences',async()=>{
+  await withTwoTenantFixture(async fixture=>{
+    await initializeLocalBetaFixture(fixture,{runId:'list-ledger',tenants:[fixture.principals.operatorA.tenantId,fixture.principals.operatorB.tenantId],
+      invitations:Object.values(fixture.principals).map(principal=>({tenantId:principal.tenantId,id:principal.localId,kind:principal.role==='customer'?'customer' as const:'staff' as const})),
+      limits:{ticketLimit:100,mutationLimit:100,recoveryReserve:10,uploadLimit:10}});
+    await fixture.enableCombinedTicketAdmission();
+    const tenantId=fixture.principals.operatorA.tenantId;
+    const actor=await fixture.createAgentSession(tenantId);
+    const scope=createVerifiedTenantScope(tenantId,actor.id,['agent'],1);
+    const {BudgetAuthorityRepository}=await import('../src/repositories/budget-authority.repository');
+    const currentCredential={role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600};
+    for(const change of ['normal','empty','policy','credential','population','closed','foreign'] as const){
+      const snapshot=await new TicketListScanRepository(fixture.db,scope).snapshot();
+      const resolution=await new BudgetAuthorityRepository(fixture.db,scope).resolveForVerifiedScope(scope,Date.now());
+      assert.equal(resolution.kind,'active');if(resolution.kind!=='active')throw new Error('Synthetic authority unavailable');
+      const operationId=crypto.randomUUID(),operationFingerprint='synthetic-list-fingerprint';
+      const envelope=ticketListEnvelope(snapshot,{groupRestricted:true})!;
+      const authority={snapshot:resolution.commitSnapshot,expiresAt:Date.now()+60000,purpose:'new-work' as const,operationId,operationFingerprint,
+        grant:{tenantId,aggregateId:resolution.authority.aggregateId,reservationId:crypto.randomUUID(),holderId:'synthetic-list-holder',operationId,operationFingerprint,operationEnvelope:envelope}};
+      const before=(await fixture.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n;
+      if(change==='closed')await fixture.db.prepare(`INSERT INTO budget_grant_closures
+        (tenant_id,reservation_id,holder_id,aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json)
+        VALUES (?,?,?,?,?,?,1,'{}','{}')`).bind(tenantId,authority.grant.reservationId,authority.grant.holderId,
+          authority.grant.aggregateId,crypto.randomUUID(),'synthetic-closed').run();
+      if(change==='foreign')authority.snapshot={...authority.snapshot,tenant_id:fixture.principals.operatorB.tenantId};
+      if(change==='policy')await fixture.db.prepare('UPDATE budget_owner_policies SET policy_json=policy_json||?').bind(' ').run();
+      if(change==='credential')await fixture.db.prepare('UPDATE users SET session_version=2 WHERE tenant_id=? AND id=?').bind(tenantId,scope.actorId).run();
+      if(change==='population')await fixture.db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_email,source) VALUES (?,'new-population','Synthetic','synthetic@example.invalid','email')").bind(tenantId).run();
+      const observations:D1Observation[]=[];
+      const work=new SqlTicketRepository(scope,observeDatabase(fixture.db,observations)).list({page:1,limit:50,scanFence:snapshot,currentCredential,
+        viewer:{role:'agent',actorId:scope.actorId},budgetAuthority:authority,...(change==='empty'?{customerEmail:'missing@example.invalid'}:{})});
+      if(change==='normal'||change==='empty'){
+        const result=await work;if(change==='empty')assert.equal(result.total,0);
+        assert.equal((await fixture.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n,before+1);
+        assert.equal(observations.length,5);assert.ok(observations.reduce((sum,item)=>sum+item.rowsWritten,0)<=16);
+      }else{
+        await assert.rejects(work,error=>error instanceof TicketListScanError);
+        assert.equal((await fixture.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n,before);
+      }
+      if(change==='credential')await fixture.db.prepare('UPDATE users SET session_version=1 WHERE tenant_id=? AND id=?').bind(tenantId,scope.actorId).run();
+    }
   });
 });

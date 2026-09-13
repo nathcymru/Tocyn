@@ -3,7 +3,7 @@ import type { Env } from '../bindings';
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
 import type { AppVariables, JWTPayload } from '../types';
 import { ConversationAuditService, ConversationHistoryError, type ConversationHistoryPage } from '../services/conversation-audit.service';
-import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.service';
+import { admitHttpTicketRead, withHttpTicketReadCompletion, type HttpTicketReadAdmission } from '../budgets/http-ticket-read-admission.service';
 export type { ConversationHistoryPage } from '../services/conversation-audit.service';
 
 /** Validate before a metered API read can reserve capacity. */
@@ -22,15 +22,16 @@ export async function conversationHistory(c: Context<{ Bindings: Env; Variables:
     });
     const deps = c.get('tenantDeps') as TenantRequestDeps;
     const ticketId = c.req.param('id')!;
+    let admission: HttpTicketReadAdmission = { status: 'disabled' };
     if (audience === 'staff' || audience === 'customer') {
-      const admission = await admitHttpTicketRead({ env: c.env, deps, payload: c.get('jwtPayload') as JWTPayload,
+      admission = await admitHttpTicketRead({ env: c.env, deps, payload: c.get('jwtPayload') as JWTPayload,
         operation: audience === 'staff' ? 'dashboard.ticket.history' : 'portal.ticket.history', ticketId, page: options,
         now: () => c.env.localNow?.() ?? Date.now() });
       if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
         ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
         : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
     }
-    return c.json(await new ConversationAuditService(deps).history(ticketId,audience,options));
+    return await withHttpTicketReadCompletion(admission, async () => c.json(await new ConversationAuditService(deps).history(ticketId,audience,options)));
   } catch (error) {
     if (error instanceof ConversationHistoryError) return c.json({error:error.message},error.status);
     return c.json({error:'Conversation history unavailable'},503);

@@ -28,9 +28,9 @@ import type { RequestCredentialAuthDecision } from '../observability/request-aut
 import { MutationInputError, mutationInputErrorBody, normalizeAttachmentReferences, portalTicketCreateSchema, portalTicketReplySchema, readIdempotencyKey, readMutationJson } from './mutation-request';
 import { admitConfiguredCustomerTicketMutation, customerTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { admitCustomerAttachment } from '../budgets/customer-storage-admission.service';
-import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.service';
+import { admitHttpTicketRead, withHttpTicketReadCompletion } from '../budgets/http-ticket-read-admission.service';
 import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
-import { admitHttpTicketList } from '../budgets/http-ticket-list-admission.service';
+import { admitHttpTicketList,settleHttpTicketList } from '../budgets/http-ticket-list-admission.service';
 import { TicketListScanError } from '../repositories/ticket-list-scan.repository';
 import { admitCustomerAuthEffect } from '../budgets/customer-auth-admission.service';
 import { CustomerAuthBudgetFenceError } from '../repositories/customer-auth-budget-fence';
@@ -264,15 +264,16 @@ app.get('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddlew
   const ticketService = new TenantTicketService(deps);
   const page = parseInt(c.req.query('page') || '1');
   const limit = parseInt(c.req.query('limit') || '50');
+  let listOutcome:'committed'|'unknown'='unknown';
   try {
     const tickets = await ticketService.findTickets({ page, limit, customerEmail: payload.email,
-      ...(admission.snapshot ? { scanFence: admission.snapshot, currentCredential: { role: 'customer',
+      ...(admission.snapshot ? { scanFence: admission.snapshot, budgetAuthority:admission.budgetAuthority, currentCredential: { role: 'customer',
         sessionVersion: payload.session_version ?? -1, expiresAt: payload.exp, email: payload.email } } : {}) });
-    return c.json(tickets);
+    const response=c.json(tickets);listOutcome='committed';return response;
   } catch (error) {
     if (error instanceof TicketListScanError) return c.json({ code: 'budget_admission_unavailable', error: 'Ticket list capacity changed; retry the request' }, 503);
     throw error;
-  }
+  } finally {settleHttpTicketList(admission,listOutcome,c.env.localNow?.()??Date.now());}
 });
 
 app.post('/tickets', widgetAuthMiddleware, roleGuard(['customer']), tenantMiddleware, rateLimiter(3, 60000), async (c) => {
@@ -335,6 +336,7 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
   if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
     ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
     : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
+  return withHttpTicketReadCompletion(admission, async () => {
   const ticketService = new TenantTicketService(deps);
   const ticket = await ticketService.findTicketById(ticketId);
 
@@ -392,6 +394,7 @@ app.get('/tickets/:id', widgetAuthMiddleware, roleGuard(['customer']), tenantMid
       ticket,
       articlesWithAttachments.map(article => article.canonical),
     ),
+  });
   });
 });
 

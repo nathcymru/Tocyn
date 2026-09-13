@@ -119,6 +119,30 @@ describe('budget coordinator pure state', () => {
       certifiedClosure: { operationSetFingerprint: 'synthetic-closure-fingerprint', expiresAt: grant.expiresAt } }).outcome).toBe('already-reconciled');
   });
 
+  it('retires expired certified metadata only with the entire original envelope still charged', () => {
+    const capped = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 2,
+      authority: { effectivePolicy: policy(), authorityCheckedAt: 0 } });
+    const granted = reserve(capped, 'holder-a', 'expired-full-charge', 'new-work', { queueOperations: 50 }, 1);
+    const grant = granted.outcome.reservation!;
+    const input = { reservationId: grant.reservationId, holderId: grant.holderId, expectedPolicyId: 'owner-policy',
+      expectedPolicyRevision: 3, expectedRestrictionRevision: 2, terminalEvidenceId: 'expired-terminal', measured: {},
+      uncertain: { queueOperations: 50 }, now: 12,
+      certifiedClosure: { operationSetFingerprint: 'expired-set', expiresAt: grant.expiresAt, retireExpired: true as const } };
+    expect(reconcileBudgetGrant(granted.state, { ...input, now: 2 }).outcome).toBe('rejected');
+    expect(reconcileBudgetGrant(granted.state, { ...input, uncertain: { queueOperations: 49 } }).outcome).toBe('rejected');
+    expect(reconcileBudgetGrant(granted.state, { ...input, measured: { queueOperations: 1 }, uncertain: { queueOperations: 49 } }).outcome).toBe('rejected');
+    expect(reconcileBudgetGrant(granted.state, { ...input, holderId: 'wrong-holder' }).outcome).toBe('rejected');
+    expect(reconcileBudgetGrant(granted.state, { ...input, certifiedClosure: { ...input.certifiedClosure, expiresAt: 10 } }).outcome).toBe('rejected');
+    expect(reconcileBudgetGrant(granted.state, { ...input, certifiedClosure: { operationSetFingerprint: 'expired-set', expiresAt: grant.expiresAt } }).outcome).toBe('rejected');
+    const retired = reconcileBudgetGrant(granted.state, input);
+    expect(retired.outcome).toBe('reconciled');
+    expect(retired.state.closedCharges).toMatchObject([{ dimension: 'queueOperations', purpose: 'new-work', units: 50 }]);
+    expect(reserve(retired.state, 'holder-b', 'fresh-paid-slot', 'new-work', { queueOperations: 30 }, 12).outcome.status).toBe('granted');
+    expect(reserve(retired.state, 'holder-b', 'no-expiry-refund', 'new-work', { queueOperations: 31 }, 12).outcome).toMatchObject({ reason: 'exhausted' });
+    // Expired tombstone removal cannot become a false positive acknowledgement.
+    expect(reconcileBudgetGrant(retired.state, input).outcome).toBe('rejected');
+  });
+
   it('keeps sustained certified closures in one allocation rollup instead of exhausting detailed slots', () => {
     let state = createBudgetCoordinatorState({ coordinatorId: 'budget-do-tenant-a', maxReservations: 2,
       authority: { effectivePolicy: policy(3, 2, 100), authorityCheckedAt: 0 } });

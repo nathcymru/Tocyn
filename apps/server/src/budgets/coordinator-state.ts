@@ -162,7 +162,9 @@ export type ReconcileBudgetGrantInput = Readonly<{
   /** Derived inside the DO from the normalized complete certificate; caller values are overwritten. */
   certifiedCompletionDigest?: string;
   /** Supplied only after the existing 0040 closure journal has accepted the exact whole-grant set. */
-  certifiedClosure?: Readonly<{ operationSetFingerprint: string; expiresAt: number; recoveryReservationId?: string; recoveryHolderId?: string }>;
+  certifiedClosure?: Readonly<{ operationSetFingerprint: string; expiresAt: number; recoveryReservationId?: string; recoveryHolderId?: string;
+    /** Expired retirement releases metadata only; the entire envelope stays charged. */
+    retireExpired?: true }>;
 }>;
 
 function assertIdentity(value: unknown, description: string): asserts value is string {
@@ -562,13 +564,19 @@ export function reconcileBudgetGrant(state: BudgetCoordinatorState, input: Recon
   const certified = input.certifiedClosure;
   if (certified && (typeof certified.operationSetFingerprint !== 'string' || certified.operationSetFingerprint.length === 0
     || certified.operationSetFingerprint.length > 160 || /[\u0000-\u001f\u007f]/.test(certified.operationSetFingerprint)
-    || !Number.isSafeInteger(certified.expiresAt) || certified.expiresAt <= input.now)) {
+    || !Number.isSafeInteger(certified.expiresAt)
+    || (certified.retireExpired !== undefined && certified.retireExpired !== true)
+    || (!certified.retireExpired && certified.expiresAt <= input.now))) {
     return { state: expired, outcome: 'rejected' };
   }
   const index = expired.grants.findIndex(grant => grant.reservationId === input.reservationId);
   // Absence is never completion evidence, even for a well-shaped certificate.
   if (index < 0) return { state: expired, outcome: 'rejected' };
   const grant = expired.grants[index];
+  if (certified?.retireExpired && (input.now < grant.expiresAt || Object.keys(measured).length > 0
+    || RESOURCE_DIMENSIONS.some(dimension => (uncertain[dimension] ?? 0) !== (grant.envelope[dimension] ?? 0)))) {
+    return { state: expired, outcome: 'rejected' };
+  }
   if (grant.holderId !== input.holderId || input.expectedPolicyId !== expired.policyId || input.expectedPolicyRevision !== grant.policyRevision
     || input.expectedRestrictionRevision !== grant.restrictionRevision || (certified && certified.expiresAt !== grant.expiresAt)) return { state: expired, outcome: 'rejected' };
   const evidenceFingerprint = fingerprint({ terminalEvidenceId: input.terminalEvidenceId, measured, uncertain });

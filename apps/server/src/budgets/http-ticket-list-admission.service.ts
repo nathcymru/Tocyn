@@ -1,4 +1,6 @@
 import type { TicketQueueCountCommit } from '../repositories/ticket-queue-counts.repository';
+import { BudgetGrantRecoveryService } from './budget-grant-recovery.service';
+import type { BudgetCommitAuthority } from './isolate-admission.service';
 import type { TicketQueueKey } from '../types/ticket-queue';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { Env } from '../bindings';
@@ -16,6 +18,7 @@ export type HttpTicketListAdmission = Readonly<{
   reason?: 'exhausted' | 'unavailable';
   snapshot?: TicketListScanSnapshot;
   commit?:TicketQueueCountCommit;
+  budgetAuthority?: BudgetCommitAuthority;
 }>;
 
 type AdmissionInput = Readonly<{
@@ -31,7 +34,7 @@ type AdmissionInput = Readonly<{
 }>;
 
 const COUNTER_BYTE_READ_UNIT = 256;
-const FIXED_LIST_ADMISSION_READS = 4_096;
+const FIXED_LIST_ADMISSION_READS = 4_096 + 512;
 
 function safeIdentity(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
@@ -76,9 +79,9 @@ export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { se
   // once for actionable and once for snoozed; both require eight units per ticket.
   const supportStateReads = input.aggregateCounts || input.queue && ['actionable', 'snoozed', 'mine', 'unassigned', 'mentions'].includes(input.queue)
     ? scaled(snapshot.ticketRows, 8) : 0;
-  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, input.aggregateCounts ? 512 : 0, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1, supportStateReads ?? -1, mentionReads ?? -1, materializedReads ?? -1);
+  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1, supportStateReads ?? -1, mentionReads ?? -1, materializedReads ?? -1);
   if (reads === null) return null;
-  return Object.freeze({ workerRequests: 1, d1RowsRead: reads, ...(input.aggregateCounts?{d1RowsWritten:16}:{}),
+  return Object.freeze({ workerRequests: 1, d1RowsRead: reads, d1RowsWritten:16,
     ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
 }
 
@@ -87,8 +90,8 @@ async function digest(parts: readonly unknown[]): Promise<string> {
   const result = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(result), value => value.toString(16).padStart(2, '0')).join('');
 }
-function rejected(outcome: { status: string; reason?: string }, snapshot: TicketListScanSnapshot): HttpTicketListAdmission {
-  if (outcome.status === 'spent' || outcome.status === 'idempotent') return { status: 'admitted', snapshot };
+function rejected(outcome: { status: string; reason?: string; commitAuthority?: BudgetCommitAuthority }, snapshot: TicketListScanSnapshot, operationId:string, fingerprint:string): HttpTicketListAdmission {
+  if ((outcome.status === 'spent' || outcome.status === 'idempotent') && outcome.commitAuthority?.operationId===operationId && outcome.commitAuthority.operationFingerprint===fingerprint) return { status: 'admitted', snapshot, budgetAuthority:outcome.commitAuthority };
   return { status: 'rejected', snapshot, reason: outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted' ? 'exhausted' : 'unavailable' };
 }
 
@@ -121,16 +124,17 @@ export async function admitHttpTicketList(input: AdmissionInput): Promise<HttpTi
       if (!business) return { status: 'rejected', reason: 'unavailable' };
       const fingerprint = await digest(['http-ticket-list-v1', input.operation, input.deps.scope.tenantId, input.deps.scope.actorId,
         input.filterId ?? null, input.search ?? null, input.queue ?? null, ...(input.operation==='dashboard.ticket.queue-counts'?[input.draftNotExpiredAt ?? null]:[]), snapshot]);
-      const outcome=await sessionTicketBudgetAdmission.admit({ repository: input.deps.repositories.budgetAuthority,
+      const operationId=crypto.randomUUID();
+      const outcome=await sessionTicketBudgetAdmission.admit({ database:input.deps.database, repository: input.deps.repositories.budgetAuthority,
         sessions: new SessionBudgetAuthorityRepository(input.deps.database, input.deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
         scope: input.deps.scope, credential, requirements: {},
-        intent: { operationId: crypto.randomUUID(), operationFingerprint: fingerprint, workScopeKey: input.operation }, business, now: input.now });
-      if(input.operation==='dashboard.ticket.queue-counts'){
-        if((outcome.status!=='spent'&&outcome.status!=='idempotent')||!outcome.commitAuthority)return {status:'rejected',reason:outcome.reason==='exhausted'||outcome.reason==='capacity-exhausted'?'exhausted':'unavailable'};
+        intent: { operationId, operationFingerprint: fingerprint, workScopeKey: input.operation }, business, now: input.now });
+      const admission=rejected(outcome,snapshot,operationId,fingerprint);
+      if(input.operation==='dashboard.ticket.queue-counts'&&admission.status==='admitted'&&admission.budgetAuthority){
         return {status:'admitted',snapshot,commit:Object.freeze({operation:input.operation,requestKey:fingerprint,credential,snapshot,
-          draftNotExpiredAt:input.draftNotExpiredAt,authority:outcome.commitAuthority})};
+          draftNotExpiredAt:input.draftNotExpiredAt,authority:admission.budgetAuthority})};
       }
-      return rejected(outcome,snapshot);
+      return admission;
     }
     const sessionVersion = input.payload.session_version, email = input.payload.email;
     if (input.payload.role !== 'customer' || typeof sessionVersion !== 'number' || !Number.isSafeInteger(sessionVersion)
@@ -144,14 +148,17 @@ export async function admitHttpTicketList(input: AdmissionInput): Promise<HttpTi
     const business = ticketListEnvelope(snapshot, { groupRestricted: false });
     if (!business) return { status: 'rejected', reason: 'unavailable' };
     const fingerprint = await digest(['http-ticket-list-v1', input.operation, input.deps.scope.tenantId, input.deps.scope.actorId, snapshot]);
+    const operationId=crypto.randomUUID();
+    const authorization={authorize:(scope:TenantRequestDeps['scope'])=>scope.tenantId===input.deps.scope.tenantId&&scope.actorId===input.deps.scope.actorId
+      ?new CustomerCurrentCredentialRepository(input.deps.database,input.deps.scope).authorize(credential,{},input.now()):Promise.resolve(null)};
+    const credentialKey=`customer-list:${input.deps.scope.tenantId}:${input.payload.sub}`;
+    const recovery=new BudgetGrantRecoveryService(input.deps.database,input.deps.repositories.budgetAuthority,input.env.BUDGET_COORDINATOR_DO,input.deps.scope,{credentialKey,authorization});
     return rejected(await apiTicketBudgetCache.admit({ repository: input.deps.repositories.budgetAuthority,
       namespace: input.env.BUDGET_COORDINATOR_DO, scope: input.deps.scope,
-      credentialKey: `customer-list:${input.deps.scope.tenantId}:${input.payload.sub}`,
-      intent: { operationId: crypto.randomUUID(), operationFingerprint: fingerprint, workScopeKey: input.operation }, business, now: input.now,
-      authorization: { authorize: scope => scope.tenantId === input.deps.scope.tenantId && scope.actorId === input.deps.scope.actorId
-        ? new CustomerCurrentCredentialRepository(input.deps.database, input.deps.scope).authorize(credential, {}, input.now())
-        : Promise.resolve(null) },
-    }), snapshot);
+      credentialKey,
+      intent: { operationId, operationFingerprint: fingerprint, workScopeKey: input.operation }, business, now: input.now,
+      authorization,recoverGrant:(sealed,now)=>recovery.recover(sealed,now),
+    }), snapshot,operationId,fingerprint);
   } catch (error) {
     if (error instanceof TicketListScanError) return { status: 'rejected', reason: 'unavailable' };
     return { status: 'rejected', reason: 'unavailable' };
@@ -160,4 +167,8 @@ export async function admitHttpTicketList(input: AdmissionInput): Promise<HttpTi
 
 export function settleTicketQueueCounts(commit:TicketQueueCountCommit,outcome:'committed'|'unknown',now:number):void {
   apiTicketBudgetCache.settleOperation(commit.authority,outcome,now);
+}
+
+export function settleHttpTicketList(admission:HttpTicketListAdmission,outcome:'committed'|'unknown',now:number):void {
+  if(admission.status==='admitted'&&admission.budgetAuthority)apiTicketBudgetCache.settleOperation(admission.budgetAuthority,outcome,now);
 }

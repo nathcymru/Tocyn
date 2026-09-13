@@ -1,3 +1,5 @@
+import { ticketListCompletionStatements } from './ticket-list-completion';
+import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import { SessionBudgetAuthorityRepository } from './session-budget-authority.repository';
 import { BudgetAuthorityRepository } from './budget-authority.repository';
 import { TicketMutationReplayRepository } from './ticket-mutation-replay.repository';
@@ -334,7 +336,7 @@ export class SqlTicketRepository implements TicketRepository {
       /** Present only after the dynamic list reservation has been accepted. */
       scanFence?: TicketListScanSnapshot;
       /** Rechecked atomically with the admitted count/page batch. */
-      currentCredential?: TicketListCurrentCredential;
+      currentCredential?: TicketListCurrentCredential; budgetAuthority?:BudgetCommitAuthority;
     }
   ): Promise<{ data: Ticket[]; total: number; meta: { total: number; page: number; limit: number; total_pages: number } }> {
     const page = Math.max(1, Number.isFinite(options.page) ? options.page! : 1);
@@ -494,6 +496,7 @@ export class SqlTicketRepository implements TicketRepository {
     const baseAssertion = scanFence ? ticketListScanAssertionSql(this.scope.tenantId, options.scanFence!) : undefined;
     const assertion = baseAssertion ? { sql: `${baseAssertion.sql.replace(/\s+LIMIT 1\s*$/, '')}${current ? ` AND ${current.sql}` : ''} LIMIT 1`,
       values: [...baseAssertion.values, ...(current?.values ?? [])] } : undefined;
+    if(options.budgetAuthority&&(!assertion||!current))throw new TicketListScanError('authority_changed');
     if (!assertion) {
       const countResult = await countStatement.first<{ total: number }>();
       const total = countResult?.total || 0;
@@ -501,12 +504,15 @@ export class SqlTicketRepository implements TicketRepository {
       const { results } = await pageStatement.all<Ticket & { custom_fields?: string | Record<string, any> }>();
       return this.listResponse(results, total, page, limit, totalPages);
     }
-    const batch = await this.db.batch([this.db.prepare(assertion.sql).bind(...assertion.values), countStatement, pageStatement]);
-    if (!batch[0]?.results?.[0]) throw new TicketListScanError('authority_changed');
-    const countResult = batch[1]?.results?.[0] as { total?: number } | undefined;
+    const guards=options.budgetAuthority?ticketListCompletionStatements(this.db,this.scope,options.budgetAuthority,assertion):[this.db.prepare(assertion.sql).bind(...assertion.values)];
+    let batch;
+    try {batch=await this.db.batch([...guards,countStatement,pageStatement]);}
+    catch {throw new TicketListScanError('authority_changed');}
+    if (!options.budgetAuthority&&!batch[0]?.results?.[0]) throw new TicketListScanError('authority_changed');
+    const countResult = batch[batch.length-2]?.results?.[0] as { total?: number } | undefined;
     const total = typeof countResult?.total === 'number' ? countResult.total : 0;
     const totalPages = Math.ceil(total / limit);
-    const results = (batch[2]?.results ?? []) as (Ticket & { custom_fields?: string | Record<string, any> })[];
+    const results = (batch[batch.length-1]?.results ?? []) as (Ticket & { custom_fields?: string | Record<string, any> })[];
 
     return this.listResponse(results, total, page, limit, totalPages);
   }
@@ -653,7 +659,7 @@ export class SqlTicketRepository implements TicketRepository {
       .run();
   }
 
-  async findCustomerTickets(customerEmail: string, page: number, limit: number, scanFence?: TicketListScanSnapshot, currentCredential?: TicketListCurrentCredential): Promise<{ data: Ticket[], total: number }> {
+  async findCustomerTickets(customerEmail: string, page: number, limit: number, scanFence?: TicketListScanSnapshot, currentCredential?: TicketListCurrentCredential, budgetAuthority?:BudgetCommitAuthority): Promise<{ data: Ticket[], total: number }> {
     const offset = (page - 1) * limit;
     const fence = scanFence ? ticketListScanFenceSql(scanFence) : undefined;
     let where = `tenant_id = ? AND customer_email = ?${fence ? ` AND ${fence.sql}` : ''}`;
@@ -662,6 +668,7 @@ export class SqlTicketRepository implements TicketRepository {
     if (current) { where += ` AND ${current.sql}`; params.push(...current.values); }
     const baseAssertion = scanFence ? ticketListScanAssertionSql(this.scope.tenantId, scanFence) : undefined;
     const assertion = baseAssertion ? { sql: `${baseAssertion.sql.replace(/\s+LIMIT 1\s*$/, '')}${current ? ` AND ${current.sql}` : ''} LIMIT 1`, values: [...baseAssertion.values, ...(current?.values ?? [])] } : undefined;
+    if(budgetAuthority&&(!assertion||!current))throw new TicketListScanError('authority_changed');
     if (!assertion) {
       const items = await this.db.prepare(`SELECT * FROM tickets WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
         .bind(...params, limit, offset).all<Ticket>();
@@ -669,14 +676,16 @@ export class SqlTicketRepository implements TicketRepository {
         .bind(...params).first<{ count: number }>();
       return { data: items.results || [], total: total?.count || 0 };
     }
-    const batch = await this.db.batch([
-      this.db.prepare(assertion.sql).bind(...assertion.values),
+    const guards=budgetAuthority?ticketListCompletionStatements(this.db,this.scope,budgetAuthority,assertion):[this.db.prepare(assertion.sql).bind(...assertion.values)];
+    let batch;
+    try {batch = await this.db.batch([
+      ...guards,
       this.db.prepare(`SELECT COUNT(*) as count FROM tickets WHERE ${where}`).bind(...params),
       this.db.prepare(`SELECT * FROM tickets WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(...params, limit, offset),
-    ]);
-    if (!batch[0]?.results?.[0]) throw new TicketListScanError('authority_changed');
-    const total = batch[1]?.results?.[0] as { count?: number } | undefined;
-    const items = batch[2]?.results as Ticket[] | undefined;
+    ]);}catch {throw new TicketListScanError('authority_changed');}
+    if (!budgetAuthority&&!batch[0]?.results?.[0]) throw new TicketListScanError('authority_changed');
+    const total = batch[batch.length-2]?.results?.[0] as { count?: number } | undefined;
+    const items = batch[batch.length-1]?.results as Ticket[] | undefined;
     return { data: items || [], total: total?.count || 0 };
   }
 

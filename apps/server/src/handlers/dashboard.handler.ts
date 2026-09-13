@@ -1,5 +1,7 @@
 import { settleTicketQueueCounts } from '../budgets/http-ticket-list-admission.service';
 import { TicketQueueCountsRepository } from '../repositories/ticket-queue-counts.repository';
+import { admitOperatorActivity,settleOperatorActivity } from '../budgets/operator-activity-admission.service';
+import { ActivityBudgetFenceError } from '../repositories/operator-activity.repository';
 import { SUPPORT_SLA_RECEIPT_SNAPSHOTS } from '../repositories/support-sla-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import { articlePageQuery, assertConversationResponseBounds, ConversationReadError } from '../services/conversation-read-bounds';
@@ -43,9 +45,9 @@ import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, 
 import { SupportSlaMutationService } from '../services/support-sla-mutation.service';
 import type { SupportSlaBudgetOperation } from '../middleware/budget-admission.middleware';
 import { admitDashboardAttachment } from '../budgets/storage-admission.service';
-import { admitHttpTicketRead } from '../budgets/http-ticket-read-admission.service';
+import { admitHttpTicketRead, withHttpTicketReadCompletion } from '../budgets/http-ticket-read-admission.service';
 import { BoundedConversationReadRepository } from '../repositories/bounded-conversation-read.repository';
-import { admitHttpTicketList } from '../budgets/http-ticket-list-admission.service';
+import { admitHttpTicketList,settleHttpTicketList } from '../budgets/http-ticket-list-admission.service';
 import { TicketListScanError } from '../repositories/ticket-list-scan.repository';
 import { ConfigurationAdmissionError, ConfigurationAdmissionService, CONFIGURATION_REQUEST_BYTES } from '../services/configuration-admission.service';
 import type { SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
@@ -412,18 +414,28 @@ dashboard.get('/activities', async c => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) return c.json({ error: 'Invalid activity page size' }, 400);
   const credential = activityCredential(c);
   if (!credential) return c.json({ error: 'Forbidden' }, 403);
+  const cursor=c.req.query('cursor');
+  if(cursor&&cursor.length>2048)return c.json({error:'Invalid or expired activity cursor; restart activity recovery'},400);
+  const d=c.get('tenantDeps') as TenantRequestDeps;
+  const gate=await admitOperatorActivity({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:'dashboard.activity.read',target:[limit,cursor??null],now:()=>c.env.localNow?.()??Date.now()});
+  if(gate.status==='rejected')return dashboardSummaryBudgetFailure(c,gate.reason);
+  let outcome:'committed'|'unknown'='unknown';
   try {
-    const service = new OperatorActivityService(c.get('tenantDeps') as TenantRequestDeps);
-    const page = await service.list({ limit, cursor: c.req.query('cursor') }, credential);
-    const unread = await service.unreadCount(credential);
+    const service = new OperatorActivityService(d);
+    const options = { limit, cursor: c.req.query('cursor') };
+    const { page, unread } = gate.status === 'admitted'
+      ? await d.operatorActivity.readAdmitted(options, credential, gate.authority)
+      : { page: await service.list(options, credential), unread: await service.unreadCount(credential) };
     if (!page || !unread) return c.json({ error: 'Activity is unavailable' }, 403);
-    return c.json({ page, unread });
+    const response=c.json({ page, unread });outcome='committed';return response;
   } catch (error) {
+    if(error instanceof ActivityBudgetFenceError)return dashboardSummaryBudgetFailure(c,'unavailable');
     if (error instanceof Error && error.message.startsWith('Invalid or expired activity cursor')) {
       return c.json({ error: 'Invalid or expired activity cursor; restart activity recovery' }, 400);
     }
     throw error;
-  }
+  }finally{settleOperatorActivity(gate,outcome,c.env.localNow?.()??Date.now());}
 });
 
 async function transitionActivity(c: any, action: 'read' | 'dismiss') {
@@ -432,12 +444,21 @@ async function transitionActivity(c: any, action: 'read' | 'dismiss') {
   if (!parsed.success) return c.json({ error: 'Invalid activity transition' }, 400);
   const credential = activityCredential(c);
   if (!credential) return c.json({ error: 'Forbidden' }, 403);
-  const service = new OperatorActivityService(c.get('tenantDeps') as TenantRequestDeps);
-  const activity = action === 'read'
-    ? await service.markRead(c.req.param('id'), parsed.data.expectedRevision, credential)
-    : await service.dismiss(c.req.param('id'), parsed.data.expectedRevision, credential);
-  // A revoked group/session or a stale revision all remain non-disclosing to the caller.
-  return activity ? c.json(activity) : c.json({ error: 'Activity not found or changed' }, 404);
+  const id=c.req.param('id');
+  if(!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id))return c.json({error:'Invalid activity id'},400);
+  const d=c.get('tenantDeps') as TenantRequestDeps;
+  const gate=await admitOperatorActivity({env:c.env,deps:d,payload:c.get('jwtPayload') as JWTPayload,
+    operation:action==='read'?'dashboard.activity.mark-read':'dashboard.activity.dismiss',target:[id,parsed.data.expectedRevision],now:()=>c.env.localNow?.()??Date.now()});
+  if(gate.status==='rejected')return dashboardSummaryBudgetFailure(c,gate.reason);
+  let outcome:'committed'|'unknown'='unknown';
+  try{
+    const authority=gate.status==='admitted'?gate.authority:undefined;
+    const activity=action==='read'?await d.operatorActivity.markRead(id,parsed.data.expectedRevision,credential,authority)
+      :await d.operatorActivity.dismiss(id,parsed.data.expectedRevision,credential,authority);
+    if(!activity)return c.json({error:'Activity not found or changed'},404);
+    const response=c.json(activity);outcome='committed';return response;
+  }catch(error){if(error instanceof ActivityBudgetFenceError)return dashboardSummaryBudgetFailure(c,'unavailable');throw error;}
+  finally{settleOperatorActivity(gate,outcome,c.env.localNow?.()??Date.now());}
 }
 
 dashboard.patch('/activities/:id/read', requestBounds(1024), c => transitionActivity(c, 'read'));
@@ -1065,6 +1086,7 @@ dashboard.get("/tickets", async (c) => {
   if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
     ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
     : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
+  let listOutcome:'committed'|'unknown'='unknown';
   try {
     const viewer: { role: 'agent' | 'admin'; actorId: string } = {
       role: payload.role === 'agent' ? 'agent' : 'admin', actorId: d.scope.actorId,
@@ -1080,21 +1102,22 @@ dashboard.get("/tickets", async (c) => {
       groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:search.data,
       page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50),
       viewer,
-      ...(admission.snapshot ? { scanFence: admission.snapshot } : {}),
+      ...(admission.snapshot ? { scanFence: admission.snapshot, budgetAuthority:admission.budgetAuthority } : {}),
       ...(admission.snapshot ? { currentCredential } : {}),
       ...(queue.data ? { queue: queue.data as TicketQueueKey } : {}),
       ...(draftNotExpiredAt ? { draftNotExpiredAt } : {}),
     };
     if (queue.data) {
       const result = await d.repositories.queues.list({ ...listOptions, queue: queue.data });
-      return c.json({ data: result.items.map(item => ({ ...item.ticket, inclusion_reason: item.inclusionReason })),
+      const response=c.json({ data: result.items.map(item => ({ ...item.ticket, inclusion_reason: item.inclusionReason })),
         meta: { total: result.total, page: result.page, limit: result.limit, total_pages: result.totalPages } });
+      listOutcome='committed';return response;
     }
-    return c.json(await d.repositories.tickets.list(listOptions));
+    const response=c.json(await d.repositories.tickets.list(listOptions));listOutcome='committed';return response;
   } catch (error) {
     if (error instanceof TicketListScanError) return c.json({ code: 'budget_admission_unavailable', error: 'Ticket list capacity changed; retry the request' }, 503);
     throw error;
-  }
+  } finally {settleHttpTicketList(admission,listOutcome,c.env.localNow?.()??Date.now());}
 });
 
 /**
@@ -1120,6 +1143,7 @@ dashboard.get("/tickets/:id", async (c) => {
     ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
     : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
 
+  return withHttpTicketReadCompletion(admission, async () => {
   const ticket = await d.repositories.tickets.get(id);
   if (!ticket) {
     return c.json({ error: "Ticket not found" }, 404);
@@ -1180,6 +1204,7 @@ dashboard.get("/tickets/:id", async (c) => {
     articles: articlesWithAttachments,
     customer:displayUser(customer),
     assignee:displayUser(assignee),
+  });
   });
 });
 

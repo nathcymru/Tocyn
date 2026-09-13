@@ -19,7 +19,7 @@ async function token(id:string,role:'admin'|'agent',version=1,tenantId=tenant){r
   .setProtectedHeader({alg:'HS256'}).setAudience('app').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));}
 
 test('native configuration admission is current, atomic, replayable and population bounded',async()=>{
-  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/configuration-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto']});
+  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/configuration-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto','node:async_hooks']});
   const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'configuration-admission',modules:true,compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script:bundle.outputFiles[0].text,
     bindings:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',DISABLE_RATE_LIMIT:'true',ENVIRONMENT:'local',JWT_SECRET:secret},d1Databases:{DB:'configuration-d1'},
     durableObjects:{BUDGET_COORDINATOR_DO:'BudgetCoordinatorDO',BUDGET_GRANT_HOLDER_DO:'BudgetGrantHolderDO',NOTIFICATION_DO:'NotificationDO'},unsafeEphemeralDurableObjects:true}]}));
@@ -50,6 +50,22 @@ test('native configuration admission is current, atomic, replayable and populati
     const request=(path:string,method:string,bearer:string,body?:unknown,key?:string)=>mf.dispatchFetch(`http://runtime.test${path}`,{method,headers:{authorization:`Bearer ${bearer}`,
       ...(body===undefined?{}:{'content-type':'application/json'}),...(key?{'idempotency-key':key}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
     const control=async(value:Record<string,unknown>={})=>await (await mf.dispatchFetch('http://runtime.test/__configuration-control',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(value)})).json() as any;
+
+    let firstReadCalls: unknown;
+    for (let index=0;index<40;index++) {
+      const sustained=await request('/api/ticket-fields','GET',admin);
+      assert.equal(sustained.status,200,`sustained read ${index+1}: ${await sustained.clone().text()}`);await sustained.body?.cancel();
+      if(index===0||index===7) {
+        const proof=await(await mf.dispatchFetch('http://runtime.test/__configuration-control')).json() as any;
+        if(index===0)firstReadCalls=proof.coordinatorCalls;
+        else assert.deepEqual(proof.coordinatorCalls,firstReadCalls,'reads two through eight use no additional DO RPC');
+      }
+    }
+    const sustainedProof=await(await mf.dispatchFetch('http://runtime.test/__configuration-control')).json() as any;
+    assert.equal(sustainedProof.coordinatorCalls.reconcile,1,'forty reads close exactly one full block');
+    assert.equal(sustainedProof.coordinatorCalls.reserve,6,'five work blocks plus one prepaid recovery');
+    assert.equal(sustainedProof.cache.holders,4);assert.equal(sustainedProof.cache.refills,4);
+    assert.equal((await db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<any>()).n,1);
 
     const fieldBody={name:'customer_tier',label:'Customer tier',field_type:'select',options:'["standard","premium"]',is_active:true};
     const createdField=await request('/api/ticket-fields','POST',agent,fieldBody,'field-create');assert.equal(createdField.status,201,await createdField.clone().text());
@@ -163,7 +179,7 @@ test('native configuration admission is current, atomic, replayable and populati
 });
 
 test('explicit off policy preserves legacy configuration lists and writes with trigger costs',async()=>{
-  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/configuration-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto']});
+  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/configuration-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto','node:async_hooks']});
   const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'configuration-off',modules:true,compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script:bundle.outputFiles[0].text,
     bindings:{BUDGET_ADMISSION_POLICY:'off',DISABLE_RATE_LIMIT:'true',ENVIRONMENT:'local',JWT_SECRET:secret},d1Databases:{DB:'configuration-off-d1'},
     durableObjects:{BUDGET_COORDINATOR_DO:'BudgetCoordinatorDO',BUDGET_GRANT_HOLDER_DO:'BudgetGrantHolderDO',NOTIFICATION_DO:'NotificationDO'},unsafeEphemeralDurableObjects:true}]}));

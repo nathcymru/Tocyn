@@ -1,3 +1,6 @@
+import { recoveryRuntimeCounters, recoveryRuntimeDatabase } from './recovery-runtime-counters';
+const recoveryCounters = recoveryRuntimeCounters();
+const recoveryDatabase = recoveryRuntimeDatabase();
 export { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
 export { NotificationDO } from '../src/durable_objects/NotificationDO';
@@ -55,9 +58,9 @@ export default {async fetch(request:Request,env:any,ctx:ExecutionContext):Promis
     if(request.method==='POST'){const control=await request.json() as {pauseCanonical?:boolean;releaseCanonical?:boolean;beforeCanonical?:typeof beforeCanonical;discard?:boolean};
       if(control.pauseCanonical)pauseCanonical=true;if(control.releaseCanonical)releaseCanonical?.();if(control.beforeCanonical)beforeCanonical=control.beforeCanonical;
       if(control.discard)apiTicketBudgetCache.discardForTrustedRuntime();}
-    return Response.json({attempts,canonicalPaused:!!releaseCanonical});
+    return Response.json({coordinatorCalls:recoveryCounters.coordinatorCalls,cache:apiTicketBudgetCache.inspectForTrustedRuntime(),attempts,canonicalPaused:!!releaseCanonical});
   }
   const metric:Metric={path:url.pathname,method:request.method,d1RowsRead:0,d1RowsWritten:0,d1Calls:0,maxBatchRead:0,maxBatchWritten:0,
     preAdmissionConditionLoads:0};
-  try{return await app.fetch(request,{...env,DB:instrumentDatabase(env.DB,metric)},ctx);}finally{attempts.push(metric);}
+  try{return await recoveryDatabase.run(instrumentDatabase(env.DB,metric),()=>app.fetch(request,{...env,BUDGET_COORDINATOR_DO:recoveryCounters.wrap(env.BUDGET_COORDINATOR_DO),DB:recoveryDatabase.binding},ctx));}finally{attempts.push(metric);}
 }};

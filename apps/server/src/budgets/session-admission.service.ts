@@ -1,8 +1,9 @@
-import type { DurableObjectNamespace } from '@cloudflare/workers-types';
+import type { D1Database, DurableObjectNamespace } from '@cloudflare/workers-types';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { BudgetAuthorityRepository } from '../repositories/budget-authority.repository';
 import type { SessionBudgetAuthorityRepository, SessionBudgetCredential, SessionBudgetRequirements } from '../repositories/session-budget-authority.repository';
+import { BudgetGrantRecoveryService } from './budget-grant-recovery.service';
 import { IsolateBudgetAdmissionCache, type CanonicalBudgetIntent } from './isolate-admission.service';
 
 /**
@@ -18,6 +19,7 @@ export class SessionBudgetAdmissionService {
   async admit(input: {
     repository: BudgetAuthorityRepository; sessions: SessionBudgetAuthorityRepository; namespace: DurableObjectNamespace;
     scope: VerifiedTenantScope; credential: SessionBudgetCredential; requirements: SessionBudgetRequirements;
+    database?: D1Database;
     intent: CanonicalBudgetIntent; business: ResourceAmounts; now: () => number;
   }) {
     // A digest keeps the full credential/capability/group fence bounded without
@@ -30,10 +32,13 @@ export class SessionBudgetAdmissionService {
     if (new TextEncoder().encode(serialized).byteLength > 16_384) return { status: 'rejected' as const, reason: 'stale-policy' as const };
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialized));
     const credentialKey = `session:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+    const authorization = { authorize: (scope: VerifiedTenantScope) => scope.tenantId === input.scope.tenantId && scope.actorId === input.scope.actorId
+      ? input.sessions.authorize(credential, requirements, input.now()) : Promise.resolve(null) };
+    const recovery = input.database ? new BudgetGrantRecoveryService(input.database, input.repository, input.namespace, input.scope,
+      { credentialKey, authorization }) : undefined;
     return this.cache.admit({ repository: input.repository, namespace: input.namespace, scope: input.scope,
-      credentialKey, intent, business, now: input.now,
-      authorization: { authorize: scope => scope.tenantId === input.scope.tenantId && scope.actorId === input.scope.actorId
-        ? input.sessions.authorize(credential, requirements, input.now()) : Promise.resolve(null) },
+      credentialKey, intent, business, now: input.now, authorization,
+      ...(recovery ? { recoverGrant: (sealed: Parameters<BudgetGrantRecoveryService['recover']>[0], now: number) => recovery.recover(sealed, now) } : {}),
     });
   }
 }

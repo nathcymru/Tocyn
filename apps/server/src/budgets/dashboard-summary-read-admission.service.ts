@@ -36,7 +36,7 @@ export function dashboardSummaryReadEnvelope(operation: DashboardSummaryReadOper
   }
   const reads = safeAdd(FIXED_READS, variable);
   if (reads === null) return null;
-  return Object.freeze({ workerRequests: 1, d1RowsRead: reads, ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
+  return Object.freeze({ workerRequests: 1, d1RowsRead: reads, d1RowsWritten:16, ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
 }
 
 export type DashboardSummaryReadAdmission = Readonly<{ status: 'disabled' | 'admitted' | 'rejected';
@@ -72,7 +72,7 @@ export async function admitDashboardSummaryRead(input: DashboardSummaryReadInput
     const business = dashboardSummaryReadEnvelope(input.operation, snapshot);
     if (!business) return { status: 'rejected', reason: 'unavailable' };
     const requestKey = await digest(['dashboard-summary-read-v1', input.operation, input.deps.scope.tenantId, input.deps.scope.actorId, input.target, snapshot]);
-    const outcome = await sessionTicketBudgetAdmission.admit({ repository: input.deps.repositories.budgetAuthority,
+    const outcome = await sessionTicketBudgetAdmission.admit({ database: input.deps.database, repository: input.deps.repositories.budgetAuthority,
       sessions: new SessionBudgetAuthorityRepository(input.deps.database, input.deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
       scope: input.deps.scope, credential, requirements: {}, intent: { operationId: crypto.randomUUID(), operationFingerprint: requestKey,
         workScopeKey: input.operation }, business, now: input.now });
