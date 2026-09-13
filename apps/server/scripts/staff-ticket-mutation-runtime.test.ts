@@ -82,7 +82,10 @@ async function fixture() {
       refreshFromTrustedAuthority:async (input:Parameters<BudgetCoordinatorDO['refreshFromTrustedAuthority']>[0]) => {calls.refresh++;return coordinator.refreshFromTrustedAuthority(input);},
       reserveFromTrustedAuthority:async (input:Parameters<BudgetCoordinatorDO['reserveFromTrustedAuthority']>[0]) => {calls.reserve++;return coordinator.reserveFromTrustedAuthority(input);},
     }) } as unknown as DurableObjectNamespace;
-    const admission = new SessionBudgetAdmissionService(new IsolateBudgetAdmissionCache());
+    const cache = new IsolateBudgetAdmissionCache();
+    const terminals: Array<{authority: unknown; outcome: string}> = [];
+    const settle = (authority: Parameters<typeof cache.settleOperation>[0], outcome: 'committed' | 'unknown', now: number) => { terminals.push({authority,outcome}); cache.settleOperation(authority,outcome,now); };
+    const admission = new SessionBudgetAdmissionService(cache);
     let admissionNow:number|undefined;
     let afterAuthority:(()=>Promise<void>)|undefined;
     class Authority extends BudgetAuthorityRepository {
@@ -126,7 +129,7 @@ async function fixture() {
       const activity = new OperatorActivityService({ scope: activeScope,
         operatorActivity: new OperatorActivityRepository(activeScope, canonicalDb) } as TenantRequestDeps);
       return new StaffTicketMutationService(db,activeScope,credential(tenant,actor,role),new Canonical(canonicalDb,activeScope),
-        {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},capability,activity);
+        {service:admission,settle,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},capability,activity);
     };
     const betaService = (tenant='a',actor='staff') => {
       const activeScope=scope(tenant,actor),activeCredential=credential(tenant,actor);
@@ -141,7 +144,7 @@ async function fixture() {
       const activity = new OperatorActivityService({ scope: activeScope,
         operatorActivity: new OperatorActivityRepository(activeScope, canonicalDb) } as TenantRequestDeps);
       return {service:new StaffTicketMutationService(db,activeScope,activeCredential,canonical,
-        {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},undefined,activity),canonicalSli};
+        {service:admission,settle,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},undefined,activity),canonicalSli};
     };
     const capacity=async(targetId:string,input?:OperatorCapacityInput,tenant='a',role:'admin'|'agent'='admin')=>{
       const activeScope=scope(tenant,'staff',role),c=credential(tenant,'staff',role),operation=input?'operator.capacity.write':'operator.capacity.read';
@@ -161,7 +164,7 @@ async function fixture() {
       return result;
     };
     const betaCounters=()=>db.prepare("SELECT tickets,mutations FROM local_beta_runs WHERE run_id='staff-beta'").first<{tickets:number;mutations:number}>();
-    return {mf,db,service,capacity,betaService,betaCounters,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
+    return {mf,db,service,terminals,capacity,betaService,betaCounters,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
       clock:(value:number)=>{admissionNow=value;},afterAuthority:(action:()=>Promise<void>)=>{afterAuthority=action;},canonicalAttempts:()=>canonicalAttempts};
   } catch (error) {await mf.dispose();throw error;}
 }
@@ -967,4 +970,28 @@ test('capacity lifecycle removes only deleted tenant operator config and preserv
   assert.equal(await f.db.prepare("SELECT 1 FROM operator_capacity WHERE tenant_id='a' AND user_id='capacity-owner'").first(),null);
   assert.ok(await f.db.prepare("SELECT 1 FROM operator_capacity WHERE tenant_id='b' AND user_id='capacity-owner'").first());
  }finally{await f.mf.dispose();}
+});
+
+
+test('staff terminal retains exact admission identity and downgrades uncertain replay exactly once', async () => {
+  const f=await fixture(); try {
+    const s=f.service(), prepared=await s.prepareStaffMutation(reply(),'terminal-known');
+    const admitted=await s.admit(prepared); assert.notEqual(admitted.status,'rejected');
+    if ('commitAuthority' in admitted && admitted.commitAuthority) {
+      const verifyFrozen=(value:unknown):void=>{if(value&&typeof value==='object'){assert.equal(Object.isFrozen(value),true);Object.values(value).forEach(verifyFrozen);}};
+      verifyFrozen(admitted.commitAuthority);
+      assert.throws(()=>Object.assign(admitted.commitAuthority!,{operationId:'changed'}),TypeError);
+    }
+    await s.commit(prepared); assert.equal(f.terminals.length,0,'canonical work is not route completion');
+    s.finish(prepared,'committed'); s.finish(prepared,'unknown');
+    assert.equal(f.terminals.length,1); assert.equal(f.terminals[0].outcome,'committed');
+    assert.equal(f.terminals[0].authority,'commitAuthority' in admitted ? admitted.commitAuthority : undefined);
+    const replay=await s.prepareStaffMutation(reply(),'terminal-known'); s.finish(replay,'committed');
+    assert.equal(f.terminals.length,1,'unadmitted replay has no terminal allocation');
+    f.lose(); const lost=await accept(s,reply('uncertain'),'terminal-lost');
+    assert.equal(lost.outcome.replayed,true); s.finish(lost.prepared,'committed'); s.finish(lost.prepared,'committed');
+    assert.equal(f.terminals.length,2); assert.equal(f.terminals[1].outcome,'unknown');
+    const early=await s.prepareStaffMutation(reply('invalid attachment'),'terminal-early'); await s.admit(early);
+    s.finish(early,'committed'); assert.equal(f.terminals[2].outcome,'unknown','no canonical proof cannot be promoted');
+  } finally {await f.mf.dispose();}
 });

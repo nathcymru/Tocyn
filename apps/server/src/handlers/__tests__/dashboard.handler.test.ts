@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { StaffTicketMutationService } from '../../services/staff-ticket-mutation.service';
+import { BroadcastService } from '../../services/broadcast.service';
+import { TicketEmailDeliveryAdmissionService } from '../../services/email/ticket-email-admission.service';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import dashboard from "../dashboard.handler";
 import { authService } from "../../services/auth/auth.service";
 
@@ -73,6 +76,60 @@ describe("Dashboard Handler Integration Tests", () => {
       tenant_id: "default-tenant",
     };
     validToken = await authService.generateToken(mockUser as any, JWT_SECRET, true);
+  });
+
+  describe('admitted staff route terminal lifecycle', () => {
+    afterEach(() => vi.restoreAllMocks());
+    const outcome = { body:{id:'created'},status:201,ticket:{id:'created'},article:{id:'article',is_internal:false},attachments:[],replayed:false,keyed:true };
+    const prepared = {replay:null};
+    function setup() {
+      vi.spyOn(StaffTicketMutationService.prototype,'prepareStaffMutation').mockResolvedValue(prepared);
+      vi.spyOn(StaffTicketMutationService.prototype,'admit').mockResolvedValue({status:'spent',commitAuthority:{}} as any);
+      vi.spyOn(StaffTicketMutationService.prototype,'commit').mockResolvedValue(outcome as any);
+      vi.spyOn(StaffTicketMutationService.prototype,'broadcastGrant').mockReturnValue(null);
+      vi.spyOn(StaffTicketMutationService.prototype,'ticketEmailGrant').mockReturnValue({} as any);
+      const finish=vi.spyOn(StaffTicketMutationService.prototype,'finish').mockImplementation(()=>{});
+      const broadcast=vi.spyOn(BroadcastService.prototype,'notifyTicketCreated').mockResolvedValue({status:'accepted',attempts:1});
+      const email=vi.spyOn(TicketEmailDeliveryAdmissionService.prototype,'deliver').mockResolvedValue(true);
+      return {finish,broadcast,email};
+    }
+    const createRequest=()=>request('/tickets',{method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},body:JSON.stringify({subject:'Synthetic',customer_email:'fixture@example.test',body:'Synthetic'})},{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+    it('waits for broadcast and email before settling the constructed response',async()=>{
+      const {finish,broadcast,email}=setup();
+      let releaseBroadcast!:()=>void,releaseEmail!:()=>void;
+      broadcast.mockImplementation(()=>new Promise(resolve=>{releaseBroadcast=()=>resolve({status:'accepted',attempts:1});}));
+      email.mockImplementation(()=>new Promise(resolve=>{releaseEmail=()=>resolve(true);}));
+      const pending=createRequest();
+      await vi.waitFor(()=>expect(releaseBroadcast).toBeTypeOf('function')); expect(finish).not.toHaveBeenCalled();
+      releaseBroadcast(); await vi.waitFor(()=>expect(releaseEmail).toBeTypeOf('function')); expect(finish).not.toHaveBeenCalled();
+      releaseEmail(); const response=await pending; expect(response.status).toBe(201);
+      expect(finish.mock.calls).toEqual([[prepared,'committed']]);
+    });
+    it('response serialization failure keeps the completed side effects unknown',async()=>{
+      const {finish}=setup();
+      const body:Record<string,unknown>={}; body.self=body;
+      vi.mocked(StaffTicketMutationService.prototype.commit).mockResolvedValue({...outcome,body} as any);
+      const response=await createRequest(); expect(response.status).toBe(500); expect(finish.mock.calls).toEqual([[prepared,'unknown']]);
+    });
+    it('internal notes finish normally without email delivery',async()=>{
+      const {finish,email}=setup();
+      vi.mocked(StaffTicketMutationService.prototype.commit).mockResolvedValue({...outcome,article:{id:'article',is_internal:true}} as any);
+      vi.spyOn(BroadcastService.prototype,'broadcast').mockResolvedValue({status:'accepted',attempts:1});
+      const response=await request('/tickets/created/articles',{method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},body:JSON.stringify({body:'Synthetic internal note',is_internal:true})},{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+      expect(response.status).toBe(201); expect(email).not.toHaveBeenCalled(); expect(finish.mock.calls).toEqual([[prepared,'committed']]);
+    });
+    it('an admitted attachment rejection settles unknown before its early response',async()=>{
+      const {finish}=setup();
+      const response=await request('/tickets/created/articles',{method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},body:JSON.stringify({body:'Synthetic',attachments:[{storageKey:'invalid',filename:'test.txt'}]})},{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+      expect(response.status).toBe(400); expect(StaffTicketMutationService.prototype.commit).not.toHaveBeenCalled(); expect(finish.mock.calls).toEqual([[prepared,'unknown']]);
+    });
+    it.each(['broadcast','email-false','email-throw'] as const)('retains unknown after %s failure',async(kind)=>{
+      const {finish,broadcast,email}=setup();
+      if(kind==='broadcast')broadcast.mockResolvedValue({status:'failed',attempts:2});
+      if(kind==='email-false')email.mockResolvedValue(false);
+      if(kind==='email-throw')email.mockRejectedValue(new Error('Synthetic delivery uncertainty'));
+      const response=await createRequest(); expect(response.status).toBe(201); expect(finish.mock.calls).toEqual([[prepared,'unknown']]);
+    });
   });
 
   describe("GET /tickets", () => {
