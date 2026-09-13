@@ -698,6 +698,8 @@ test('native 0040 to 0041 upgrade preserves legacy closure rows with unknown exp
     await h.db.batch(splitSql(readFileSync(join(serverRoot, 'migrations/0041_budget_grant_closure_expiry.sql'), 'utf8')).map(sql => h.db.prepare(sql)));
     const after = await h.db.prepare('SELECT * FROM budget_grant_closures').first();
     assert.deepEqual(after, { ...before, expires_at: null });
+    await h.db.batch(splitSql(readFileSync(join(serverRoot, 'migrations/0073_budget_grant_closure_reconciliation.sql'), 'utf8')).map(sql => h.db.prepare(sql)));
+    assert.equal((await h.db.prepare('SELECT reconciled_at FROM budget_grant_closures').first<{ reconciled_at: number | null }>())!.reconciled_at, null);
     await new BudgetGrantClosureRepository(h.db).pruneExpired('runtime-tenant', Number.MAX_SAFE_INTEGER);
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{ n: number }>())!.n, 1);
     assert.equal((await h.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{ n: number }>())!.n, 1);
@@ -814,6 +816,12 @@ test('lost reconciliation replies use two bounded attempts and then block the se
     }
     const control = await h.control();
     assert.equal(control.calls.reconcile,2);
+    assert.equal((await h.db.prepare('SELECT reconciled_at FROM budget_grant_closures').first<{ reconciled_at: number | null }>())!.reconciled_at,null,
+      'lost central replies never become durable acknowledgments');
+    const evidenceBefore = await h.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{ n: number }>();
+    await new BudgetGrantClosureRepository(h.db).pruneExpired('runtime-tenant',Number.MAX_SAFE_INTEGER);
+    assert.equal((await h.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{ n: number }>())!.n,1);
+    assert.equal((await h.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{ n: number }>())!.n,evidenceBefore!.n);
     assert.equal((await h.grants()).filter(grant => grant.purpose === 'recovery').length,1);
     assert.equal((await h.grants()).some(grant => grant.purpose === 'new-work' && !grant.compacted),false);
     assert.ok((await h.coordinatorState()).tenantStates.find(tenant => tenant.tenantId === 'runtime-tenant')?.closedCharges.length,
@@ -821,7 +829,7 @@ test('lost reconciliation replies use two bounded attempts and then block the se
   } finally { await h.mf.dispose(); }
 });
 
-test('native expired closure cleanup removes only stale D1 proof while retained certified accounting survives', async () => {
+test('native expired cleanup uses its partial index and preserves unconfirmed closure evidence and links', async () => {
   const h = await warmHarness();
   try {
     const response = await h.create('closure-prune'); assert.equal(response.status, 201); await response.body?.cancel();
@@ -831,11 +839,31 @@ test('native expired closure cleanup removes only stale D1 proof while retained 
     const retained = structuredClone(before.closedCharges);
     assert.ok(retained.length);
     const closureRepository = new BudgetGrantClosureRepository(h.db);
+    const acknowledged = await h.db.prepare('SELECT reconciled_at FROM budget_grant_closures WHERE terminal_evidence_id=?')
+      .bind(sealed.terminalEvidenceId).first<{ reconciled_at: number | null }>();
+    assert.equal(acknowledged?.reconciled_at, h.initialNow + 1);
+    await h.db.batch([
+      h.db.prepare(`INSERT INTO budget_grant_operations (tenant_id,reservation_id,holder_id,operation_id,aggregate_id,operation_fingerprint,operation_envelope_json)
+        SELECT tenant_id,'unconfirmed-reservation','unconfirmed-holder',operation_id,aggregate_id,operation_fingerprint,operation_envelope_json
+        FROM budget_grant_operations WHERE tenant_id=? AND reservation_id=? AND holder_id=?`).bind(sealed.tenantId,sealed.reservationId,sealed.holderId),
+      h.db.prepare(`INSERT INTO budget_grant_closures (tenant_id,reservation_id,holder_id,aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json,expires_at)
+        SELECT tenant_id,'unconfirmed-reservation','unconfirmed-holder',aggregate_id,'unconfirmed-terminal',operation_set_fingerprint,operation_count,measured_json,uncertain_json,expires_at
+        FROM budget_grant_closures WHERE tenant_id=? AND reservation_id=? AND holder_id=?`).bind(sealed.tenantId,sealed.reservationId,sealed.holderId),
+    ]);
+    await closureRepository.markReconciled({ ...sealed, reservationId: 'unconfirmed-reservation', holderId: 'unconfirmed-holder' },
+      { terminalEvidenceId: 'unconfirmed-terminal', operationSetFingerprint: 'wrong-set', uncertain: {} }, h.initialNow + 2);
+    assert.equal((await h.db.prepare("SELECT reconciled_at FROM budget_grant_closures WHERE reservation_id='unconfirmed-reservation'")
+      .first<{ reconciled_at: number | null }>())!.reconciled_at, null, 'a mismatched acknowledgment cannot enable cleanup');
+    const plan = (await h.db.prepare(`EXPLAIN QUERY PLAN SELECT reservation_id,holder_id FROM budget_grant_closures
+      WHERE reconciled_at IS NOT NULL AND tenant_id=? AND expires_at<=? ORDER BY expires_at,reservation_id,holder_id LIMIT 2`)
+      .bind(sealed.tenantId,sealed.expiresAt).all<{ detail: string }>()).results.map((row: { detail: string }) => row.detail).join('\n');
+    assert.match(plan,/USING INDEX budget_grant_closures_reconciled_expiry_idx/);
+    assert.doesNotMatch(plan,/SCAN |TEMP B-TREE/);
     await closureRepository.pruneExpired(sealed.tenantId, sealed.expiresAt);
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM budget_grant_closures WHERE tenant_id=?').bind(sealed.tenantId)
-      .first<{ count: number }>())?.count, 0);
+      .first<{ count: number }>())?.count, 1, 'expired unconfirmed closure survives');
     assert.equal((await h.db.prepare('SELECT count(*) AS count FROM budget_grant_operations WHERE tenant_id=?').bind(sealed.tenantId)
-      .first<{ count: number }>())?.count, 0);
+      .first<{ count: number }>())?.count, sealed.operations.length, 'unconfirmed exact journal survives');
     const after = (await h.coordinatorState()).tenantStates.find(tenant => tenant.tenantId === sealed.tenantId)!;
     assert.deepEqual(after.closedCharges, retained, 'expiry removes retry evidence only after its policy horizon; stock/window accounting remains');
     assert.equal(await recovery.recover(sealed, sealed.expiresAt), 'rejected', 'expired proof can never authorize delayed recovery');

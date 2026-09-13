@@ -5,7 +5,7 @@ import { BetaAdmissionError } from '../types/local-beta';
 import { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import type { SessionBudgetCredential } from './session-budget-authority.repository';
-import { budgetCommitConstraint } from './budget-commit-fence';
+import { budgetCommitConstraint, budgetGrantOperationStatements } from './budget-commit-fence';
 import { DRAFT_EXPIRY_SQL } from '../types/operator-draft-retention';
 import { OPERATOR_PRESENTATION_PREFERENCES_VERSION } from '../types/operator-workspace';
 import type {
@@ -113,15 +113,11 @@ export class OperatorWorkspaceRepository {
     if (!commit) return (await statement.all<T>()).results ?? [];
     const authority = this.workspaceAuthority(commit, operation, ticketId);
     try {
-      const guard = operation === 'workspace.drafts.list'
-        ? this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
-            VALUES (?,CASE WHEN ${authority.sql} THEN 1 ELSE 0 END)
-            ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
-          .bind(this.scope.tenantId, ...authority.values)
-        : this.db.prepare(`SELECT 1 AS authorized WHERE ${authority.sql}`).bind(...authority.values);
-      const results = await this.db.batch([guard, statement]);
-      if (operation !== 'workspace.drafts.list' && !results[0]?.results?.[0]) throw new OperatorWorkspaceFenceError('Operator workspace authority changed');
-      return (results[1]?.results ?? []) as T[];
+      const guard = this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+        VALUES (?,CASE WHEN ${authority.sql} THEN 1 ELSE 0 END)
+        ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId,...authority.values);
+      const results = await this.db.batch([guard,...budgetGrantOperationStatements(this.db,this.scope,commit.authority),statement]);
+      return (results[results.length-1]?.results ?? []) as T[];
     } catch (error) {
       if (error instanceof OperatorWorkspaceFenceError) throw error;
       throw new OperatorWorkspaceFenceError('Operator workspace authority changed');
@@ -215,7 +211,7 @@ export class OperatorWorkspaceRepository {
         VALUES (?,CASE WHEN ${workspace.sql} THEN 1 ELSE 0 END)
         ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId, ...workspace.values)] : [];
       const betaStatements = this.betaAdmission?.conditionalConversationStatements(condition) ?? [];
-      const results = await this.db.batch([...workspaceStatements, ...betaStatements, statement]);
+      const results = await this.db.batch([...workspaceStatements, ...(commit ? budgetGrantOperationStatements(this.db,this.scope,commit.authority) : []), ...betaStatements, statement]);
       return (results[results.length - 1]?.results?.[0] as T | undefined) ?? null;
     } catch {
       // Keep the externally visible local-beta failure classification, never turn an admission fault into a successful save.
@@ -343,9 +339,9 @@ export class OperatorWorkspaceRepository {
       const results = await this.db.batch([
         this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted) VALUES (?,CASE WHEN ${authority.sql} THEN 1 ELSE 0 END)
           ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId, ...authority.values),
-        statement,
+        ...budgetGrantOperationStatements(this.db,this.scope,commit.authority),statement,
       ]);
-      return results[1]?.meta?.changes ?? 0;
+      return results[results.length-1]?.meta?.changes ?? 0;
     } catch { throw new OperatorWorkspaceFenceError('Operator workspace authority changed'); }
   }
 

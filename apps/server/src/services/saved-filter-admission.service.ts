@@ -35,7 +35,7 @@ export class SavedFilterAdmissionService {
   private readonly repo: SavedFilterAdmissionRepository;
   private readonly sessions: SessionBudgetAuthorityRepository;
   private readonly attempts=new WeakMap<object,Attempt>();
-  constructor(db:D1Database,private readonly scope:VerifiedTenantScope,private readonly credential:SessionBudgetCredential,
+  constructor(private readonly db:D1Database,private readonly scope:VerifiedTenantScope,private readonly credential:SessionBudgetCredential,
     private readonly budget:{service:SessionBudgetAdmissionService;repository:BudgetAuthorityRepository;namespace:DurableObjectNamespace;
       now:()=>number;settle:(authority:BudgetCommitAuthority,outcome:'committed'|'unknown',now:number)=>void}) {
     this.repo=new SavedFilterAdmissionRepository(db,scope);this.sessions=new SessionBudgetAuthorityRepository(db,scope);
@@ -45,7 +45,7 @@ export class SavedFilterAdmissionService {
   }
   private async admit(operation:SavedFilterOperation,requirements:SessionBudgetRequirements,intent:Attempt['intent'],business:ResourceAmounts) {
     await this.authorize(requirements);
-    const result=await this.budget.service.admit({repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,
+    const result=await this.budget.service.admit({database:this.db,repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,
       scope:this.scope,credential:this.credential,requirements,intent,business,now:this.budget.now});
     if(result.status==='rejected') throw result.reason==='exhausted'||result.reason==='capacity-exhausted'?exhausted():unavailable();
     if(!result.commitAuthority||result.commitAuthority.operationId!==intent.operationId||result.commitAuthority.operationFingerprint!==intent.operationFingerprint) throw unavailable();

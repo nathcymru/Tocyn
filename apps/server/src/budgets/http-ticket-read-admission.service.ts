@@ -5,6 +5,9 @@ import type { JWTPayload } from '../types';
 import { CustomerCurrentCredentialRepository, type CustomerBudgetCredential } from '../repositories/customer-current-credential.repository';
 import { SessionBudgetAuthorityRepository, type SessionBudgetCredential } from '../repositories/session-budget-authority.repository';
 import { apiTicketBudgetCache, customerTicketAdmissionMode, sessionTicketBudgetAdmission, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
+import type { BudgetCommitAuthority, IsolateAdmissionResult } from './isolate-admission.service';
+import { HttpTicketReadReceiptRepository } from '../repositories/http-ticket-read-receipt.repository';
+import { BudgetGrantRecoveryService } from './budget-grant-recovery.service';
 import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
 
 export type HttpTicketReadOperation = 'dashboard.ticket.detail' | 'dashboard.ticket.history' | 'portal.ticket.detail' | 'portal.ticket.history';
@@ -16,11 +19,13 @@ export type HttpTicketReadOperation = 'dashboard.ticket.detail' | 'dashboard.tic
  */
 export const HTTP_TICKET_READ_ENVELOPE: Readonly<ResourceAmounts> = Object.freeze({
   workerRequests: 1,
-  d1RowsRead: 2_560,
+  d1RowsRead: 2_560 + 512,
+  d1RowsWritten: 16, // terminal principal/policy fence, operation link and assertion (including index overhead)
   ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }),
 });
 
-export type HttpTicketReadAdmission = Readonly<{ status: 'disabled' | 'admitted' | 'rejected'; reason?: 'exhausted' | 'unavailable' }>;
+export type HttpTicketReadAdmission = Readonly<{ status: 'disabled' | 'rejected'; reason?: 'exhausted' | 'unavailable' }>
+  | Readonly<{ status: 'admitted'; authority: BudgetCommitAuthority; complete: () => Promise<void>; fail: () => void }>;
 
 type AdmissionInput = Readonly<{
   env: Env;
@@ -42,9 +47,30 @@ async function digest(parts: readonly unknown[]): Promise<string> {
   return Array.from(new Uint8Array(result), value => value.toString(16).padStart(2, '0')).join('');
 }
 
-function rejected(outcome: { status: string; reason?: string }): HttpTicketReadAdmission {
-  if (outcome.status === 'spent' || outcome.status === 'idempotent') return { status: 'admitted' };
-  return { status: 'rejected', reason: outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted' ? 'exhausted' : 'unavailable' };
+function prepared(outcome: IsolateAdmissionResult, input: AdmissionInput, credential: SessionBudgetCredential | CustomerBudgetCredential): HttpTicketReadAdmission {
+  if ((outcome.status !== 'spent' && outcome.status !== 'idempotent') || !outcome.commitAuthority) {
+    return { status: 'rejected', reason: outcome.reason === 'exhausted' || outcome.reason === 'capacity-exhausted' ? 'exhausted' : 'unavailable' };
+  }
+  const authority = outcome.commitAuthority;
+  const captured = structuredClone(credential);
+  return { status: 'admitted', authority,
+    complete: async () => {
+      await new HttpTicketReadReceiptRepository(input.deps.database, input.deps.scope).complete(authority, captured, input.ticketId);
+      apiTicketBudgetCache.settleOperation(authority, 'committed', input.now());
+    },
+    fail: () => apiTicketBudgetCache.settleOperation(authority, 'unknown', input.now()),
+  };
+}
+
+/** A successful response is withheld until its exact durable completion fence commits. */
+export async function withHttpTicketReadCompletion<T extends Response>(admission: HttpTicketReadAdmission, read: () => Promise<T>): Promise<T> {
+  if (admission.status !== 'admitted') return read();
+  let completed = false;
+  try {
+    const response = await read();
+    if (response.status >= 200 && response.status < 300) { await admission.complete(); completed = true; }
+    return response;
+  } finally { if (!completed) admission.fail(); }
 }
 
 /**
@@ -73,11 +99,11 @@ export async function admitHttpTicketRead(input: AdmissionInput): Promise<HttpTi
       }
       const credential: SessionBudgetCredential = { tenantId: input.deps.scope.tenantId, actorId: input.payload.sub,
         role: input.payload.role, sessionVersion, expiresAt: input.payload.exp, mfaVerified: true };
-      return rejected(await sessionTicketBudgetAdmission.admit({ repository: input.deps.repositories.budgetAuthority,
+      return prepared(await sessionTicketBudgetAdmission.admit({ database: input.deps.database, repository: input.deps.repositories.budgetAuthority,
         sessions: new SessionBudgetAuthorityRepository(input.deps.database, input.deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
         scope: input.deps.scope, credential, requirements: { readTicketId: input.ticketId },
         intent: { operationId: crypto.randomUUID(), operationFingerprint: fingerprint, workScopeKey: input.operation },
-        business: HTTP_TICKET_READ_ENVELOPE, now: input.now }));
+        business: HTTP_TICKET_READ_ENVELOPE, now: input.now }), input, credential);
     }
     const sessionVersion = input.payload.session_version;
     const email = input.payload.email;
@@ -85,14 +111,17 @@ export async function admitHttpTicketRead(input: AdmissionInput): Promise<HttpTi
       || !Number.isSafeInteger(input.payload.exp) || !safeIdentity(email)) return { status: 'rejected', reason: 'unavailable' };
     const credential: CustomerBudgetCredential = { tenantId: input.deps.scope.tenantId, actorId: input.payload.sub,
       role: 'customer', sessionVersion, expiresAt: input.payload.exp, email };
-    return rejected(await apiTicketBudgetCache.admit({ repository: input.deps.repositories.budgetAuthority,
+    const authorization = { authorize: (scope: TenantRequestDeps['scope']) => scope.tenantId === input.deps.scope.tenantId && scope.actorId === input.deps.scope.actorId
+        ? new CustomerCurrentCredentialRepository(input.deps.database, input.deps.scope).authorize(credential, { readTicketId: input.ticketId }, input.now())
+        : Promise.resolve(null) };
+    const credentialKey = `customer-read:${input.deps.scope.tenantId}:${input.payload.sub}`;
+    const recovery = new BudgetGrantRecoveryService(input.deps.database, input.deps.repositories.budgetAuthority, input.env.BUDGET_COORDINATOR_DO, input.deps.scope, { credentialKey, authorization });
+    return prepared(await apiTicketBudgetCache.admit({ repository: input.deps.repositories.budgetAuthority,
       namespace: input.env.BUDGET_COORDINATOR_DO, scope: input.deps.scope,
-      credentialKey: `customer-read:${input.deps.scope.tenantId}:${input.payload.sub}`,
+      credentialKey,
       intent: { operationId: crypto.randomUUID(), operationFingerprint: fingerprint, workScopeKey: input.operation },
       business: HTTP_TICKET_READ_ENVELOPE, now: input.now,
-      authorization: { authorize: scope => scope.tenantId === input.deps.scope.tenantId && scope.actorId === input.deps.scope.actorId
-        ? new CustomerCurrentCredentialRepository(input.deps.database, input.deps.scope).authorize(credential, { readTicketId: input.ticketId }, input.now())
-        : Promise.resolve(null) },
-    }));
+      authorization, recoverGrant: (sealed, now) => recovery.recover(sealed, now),
+    }), input, credential);
   } catch { return { status: 'rejected', reason: 'unavailable' }; }
 }

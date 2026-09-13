@@ -1,3 +1,4 @@
+import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import type { SessionBudgetAuthorityRepository } from './session-budget-authority.repository';
 import type { D1PreparedStatement } from '@cloudflare/workers-types';
 import type { BudgetAuthorityRepository } from './budget-authority.repository';
@@ -75,7 +76,7 @@ export interface TicketRepository {
   completeRetention(id: string, token: string): Promise<boolean>;
   withExternalWrite<T>(id: string, operation: () => Promise<T>, fenceStatements?: () => readonly D1PreparedStatement[]): Promise<T>;
 
-  list(options: {page?: number; limit?: number; filterId?: string; status?: string; priority?: string; assignedTo?: string; groupId?: string; ticketNo?: string; search?: string; customerEmail?: string; queue?: TicketQueueKey; draftNotExpiredAt?: string; sort?: OperatorWorkspaceSort; viewer?: { role: 'admin' | 'agent'; actorId: string }; scanFence?: TicketListScanSnapshot; currentCredential?: TicketListCurrentCredential}): Promise<{data:Ticket[]; total:number; meta:{total:number;page:number;limit:number;total_pages:number}}>;
+  list(options: {page?: number; limit?: number; filterId?: string; status?: string; priority?: string; assignedTo?: string; groupId?: string; ticketNo?: string; search?: string; customerEmail?: string; queue?: TicketQueueKey; draftNotExpiredAt?: string; sort?: OperatorWorkspaceSort; viewer?: { role: 'admin' | 'agent'; actorId: string }; scanFence?: TicketListScanSnapshot; currentCredential?: TicketListCurrentCredential; budgetAuthority?:BudgetCommitAuthority}): Promise<{data:Ticket[]; total:number; meta:{total:number;page:number;limit:number;total_pages:number}}>;
   dashboardStats(): Promise<any>;
   findBySubject(subject: string): Promise<Ticket | null>;
   get(id: string): Promise<Ticket | null>;
@@ -84,7 +85,7 @@ export interface TicketRepository {
   update(id: string, data: Partial<Ticket>): Promise<void>;
   touch(id: string): Promise<void>;
   delete(id: string): Promise<void>;
-  findCustomerTickets(customerEmail: string, page: number, limit: number, scanFence?: TicketListScanSnapshot, currentCredential?: TicketListCurrentCredential): Promise<{ data: Ticket[], total: number }>;
+  findCustomerTickets(customerEmail: string, page: number, limit: number, scanFence?: TicketListScanSnapshot, currentCredential?: TicketListCurrentCredential, budgetAuthority?:BudgetCommitAuthority): Promise<{ data: Ticket[], total: number }>;
   findTicketsForRetention(cutoffStr: string): Promise<Ticket[]>;
 }
 

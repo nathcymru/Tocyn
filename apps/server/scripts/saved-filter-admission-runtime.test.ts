@@ -19,7 +19,7 @@ async function token(id:string,role:'admin'|'agent',version=1,tenantId=tenant){r
   .setProtectedHeader({alg:'HS256'}).setAudience('app').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));}
 
 test('native Worker/D1/DO saved-filter admission is current, replayable and population-bounded',async()=>{
-  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/saved-filter-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto']});
+  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/saved-filter-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto','node:async_hooks']});
   const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'saved-filter-admission',modules:true,compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script:bundle.outputFiles[0].text,
     bindings:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',DISABLE_RATE_LIMIT:'true',ENVIRONMENT:'local',JWT_SECRET:secret},d1Databases:{DB:'saved-filter-d1'},
     durableObjects:{BUDGET_COORDINATOR_DO:'BudgetCoordinatorDO',BUDGET_GRANT_HOLDER_DO:'BudgetGrantHolderDO',NOTIFICATION_DO:'NotificationDO'},unsafeEphemeralDurableObjects:true}]}));
@@ -47,6 +47,22 @@ test('native Worker/D1/DO saved-filter admission is current, replayable and popu
     let admin=await token('admin','admin'),agent=await token('agent','agent');
     const request=(path:string,method:string,bearer:string,body?:unknown,key?:string)=>mf.dispatchFetch(`http://runtime.test${path}`,{method,headers:{authorization:`Bearer ${bearer}`,
       ...(body===undefined?{}:{'content-type':'application/json'}),...(key?{'idempotency-key':key}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+    let firstReadCalls: unknown;
+    for (let index=0;index<40;index++) {
+      const sustained=await request('/api/settings/filters','GET',admin);
+      assert.equal(sustained.status,200,`sustained read ${index+1}: ${await sustained.clone().text()}`);await sustained.body?.cancel();
+      if(index===0||index===7) {
+        const proof=await(await mf.dispatchFetch('http://runtime.test/__filter-control')).json() as any;
+        if(index===0)firstReadCalls=proof.coordinatorCalls;
+        else assert.deepEqual(proof.coordinatorCalls,firstReadCalls,'reads two through eight use no additional DO RPC');
+      }
+    }
+    const sustainedProof=await(await mf.dispatchFetch('http://runtime.test/__filter-control')).json() as any;
+    assert.equal(sustainedProof.coordinatorCalls.reconcile,1,'forty reads close exactly one full block');
+    assert.equal(sustainedProof.coordinatorCalls.reserve,6,'five work blocks plus one prepaid recovery');
+    assert.equal(sustainedProof.cache.holders,4);assert.equal(sustainedProof.cache.refills,4);
+    assert.equal((await db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<any>()).n,1);
+
     const createBody={name:'Priority owned',conditions:[{field:'priority',operator:'in',value:['high','urgent']}]};
     const created=await request('/api/settings/filters','POST',admin,createBody,'create-key');assert.equal(created.status,201,await created.clone().text());const createdBody=await created.json() as any;
     assert.equal(createdBody.name,'Priority owned');assert.equal(createdBody.tenant_id,tenant);
@@ -138,7 +154,7 @@ test('native Worker/D1/DO saved-filter admission is current, replayable and popu
 });
 
 test('explicit off policy retains the legacy full filter contract',async()=>{
-  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/saved-filter-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto']});
+  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/saved-filter-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto','node:async_hooks']});
   const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'saved-filter-off',modules:true,compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script:bundle.outputFiles[0].text,
     bindings:{BUDGET_ADMISSION_POLICY:'off',DISABLE_RATE_LIMIT:'true',ENVIRONMENT:'local',JWT_SECRET:secret},d1Databases:{DB:'saved-filter-off-d1'},
     durableObjects:{BUDGET_COORDINATOR_DO:'BudgetCoordinatorDO',BUDGET_GRANT_HOLDER_DO:'BudgetGrantHolderDO',NOTIFICATION_DO:'NotificationDO'},unsafeEphemeralDurableObjects:true}]}));

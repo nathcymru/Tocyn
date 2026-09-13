@@ -31,7 +31,8 @@ export type SealedIsolateBudgetGrant = Readonly<{ tenantId: string; aggregateId:
   policyId: string; policyRevision: number; restrictionRevision: number;
   credentialKey: string; snapshot: BudgetCommitSnapshot; expiresAt: number;
   terminalEvidenceId: string; operations: readonly Readonly<{ operationId: string; operationFingerprint: string; operationEnvelope: ResourceAmounts }>[];
-  operationIds: readonly string[]; operationFingerprint: string; operationEnvelopes: readonly ResourceAmounts[]; envelope: ResourceAmounts }>;
+  operationIds: readonly string[]; operationFingerprint: string; operationEnvelopes: readonly ResourceAmounts[]; envelope: ResourceAmounts;
+  retireExpired?: true }>;
 type RevisionFloor = { deploymentId: string; policyId: string; authorityRevision: number; policyRevision: number; restrictionRevision: number };
 type CacheEntry = {
   bindingIdentity: object; namespace: DurableObjectNamespace; key: string; epoch: string; snapshot: BudgetCommitSnapshot; expiresAt: number; refills: number;
@@ -98,12 +99,12 @@ const exhausted = (): IsolateGrantSpendResult => ({ status: 'rejected', reason: 
 
 /**
  * Bounded isolate registry: at most 64 entries TOTAL across all binding contexts,
- * four prepaid blocks per entry/window across all policy generations and eight
+ * four unreconciled prepaid blocks per entry/window across all policy generations and eight
  * operations per block. Entries are not LRU-evicted to reset refill/replay
  * counters. Policy retirement can renew only into a newly charged holder.
  * Expiry retires holders and retains pending allocations until they settle;
  * it never releases their central charge. Stock-only entries remain bounded
- * and fail closed at the refill cap until isolate replacement.
+ * and fail closed at the refill cap unless exact durable reconciliation retires a holder.
  */
 export class IsolateBudgetAdmissionCache {
   private readonly settledAttempts = new WeakSet<BudgetCommitAuthority>();
@@ -201,6 +202,8 @@ export class IsolateBudgetAdmissionCache {
     credentialKey: string; intent: CanonicalBudgetIntent; business: ResourceAmounts; now: () => number;
     /** Recovery is a separately charged, bounded reservation purpose. */
     purpose?: BudgetPurpose;
+    /** Trusted composition only: called on the bounded cold path, never an individual warm read. */
+    recoverGrant?: (sealed: SealedIsolateBudgetGrant, now: number) => Promise<'reconciled' | 'pending' | 'rejected'>;
   }): Promise<IsolateAdmissionResult> {
     const ownerIngress = input.repository.ownerIngressAdmission;
     let business = input.business;
@@ -292,7 +295,32 @@ export class IsolateBudgetAdmissionCache {
     }
     if (!entry.pending) {
       entry.failure = undefined;
-      entry.pending = this.allocate(entry, generation, authority, holderScope, business, input.now);
+      const allocatingEntry = entry;
+      let allocatingAuthority = authority;
+      entry.pending = (async () => {
+        // Serialize recovery with allocation for this exact binding/work scope.
+        // Failed or unconfirmed closure never returns a refill credit.
+        if (allocatingEntry.refills >= MAX_ISOLATE_SCOPE_REFILLS && input.recoverGrant && holderScope.purpose === 'new-work') {
+          const sealed = this.sealQuiescentGrant(allocatingEntry, input.scope.tenantId, input.credentialKey, input.now(), 0, true);
+          if (sealed) {
+            try {
+              if (await input.recoverGrant(sealed, input.now()) === 'reconciled') {
+                this.completeApiGrantRecovery(sealed);
+                // Recovery refreshed central authority; never replay the older
+                // pre-recovery authority timestamp when allocating a new block.
+                const refreshed = await resolve();
+                if (!refreshed || !this.currentGeneration(allocatingEntry, generation)
+                  || !this.observeAuthority(allocatingEntry, refreshed) || !sameEpoch(allocatingEntry, refreshed)) {
+                  this.retire(allocatingEntry); return null;
+                }
+                allocatingAuthority = refreshed;
+              }
+            } catch { /* The original holder and its full charge remain retained. */ }
+          }
+        }
+        if (!this.currentGeneration(allocatingEntry, generation)) return null;
+        return this.allocate(allocatingEntry, generation, allocatingAuthority, holderScope, business, input.now);
+      })();
     }
     const pending = entry.pending;
     const held = await pending;
@@ -335,15 +363,24 @@ export class IsolateBudgetAdmissionCache {
   sealIdleApiGrant(tenantId: string, credentialKey: string, now: number, idleMs: number): SealedIsolateBudgetGrant | null {
     if (!Number.isSafeInteger(now) || !Number.isSafeInteger(idleMs) || idleMs < 1) return null;
     for (const entry of this.entries) {
-      for (const held of entry.holders) {
-        // Expiry retains the central charge; it cannot create closure evidence.
-        if (now >= held.expiresAt) continue;
+      const sealed = this.sealQuiescentGrant(entry, tenantId, credentialKey, now, idleMs, false);
+      if (sealed) return sealed;
+    }
+    return null;
+  }
+
+  private sealQuiescentGrant(entry: CacheEntry, tenantId: string, credentialKey: string, now: number, idleMs: number,
+    allowExpired: boolean): SealedIsolateBudgetGrant | null {
+    if (!Number.isSafeInteger(now) || now < 0) return null;
+    for (const held of entry.holders) {
+        // Expired retirement is metadata-only and requires the full original charge.
+        if (now >= held.expiresAt && !allowExpired) continue;
         if (held.sealed && held.sealedGrant && held.tenantId === tenantId && held.credentialKey === credentialKey) {
           if (held.recoveryCompleted || held.recoveryAttempts >= MAX_ISOLATE_GRANT_RECOVERY_ATTEMPTS) continue;
           held.recoveryAttempts++;
           return held.sealedGrant;
         }
-        if (held.sealed || held.operations.size < 1 || held.tenantId !== tenantId || held.credentialKey !== credentialKey || !held.lastSettledAt || now - held.lastSettledAt < idleMs) continue;
+        if (held.sealed || held.operations.size < 1 || held.tenantId !== tenantId || held.credentialKey !== credentialKey || held.lastSettledAt === undefined || now - held.lastSettledAt < idleMs) continue;
         const operations = [...held.operations.entries()];
         if (operations.some(([, operation]) => operation.state !== 'committed' || operation.activeAttempts !== 0)) continue;
         // Irreversible before I/O: any concurrent/reentrant admission sees it.
@@ -354,6 +391,7 @@ export class IsolateBudgetAdmissionCache {
           credentialKey: held.credentialKey, snapshot: entry.snapshot, expiresAt: held.expiresAt,
           policyId: entry.snapshot.policy_id, policyRevision: entry.snapshot.policy_revision, restrictionRevision: JSON.parse(entry.snapshot.restriction_json).revision,
           terminalEvidenceId: `closure:${crypto.randomUUID()}`,
+          ...(now >= held.expiresAt ? { retireExpired: true as const } : {}),
           operations: Object.freeze(ids.map(id => Object.freeze({ operationId: id, operationFingerprint: held.operations.get(id)!.fingerprint,
             operationEnvelope: Object.freeze(structuredClone(held.operations.get(id)!.envelope)) }))),
           operationIds: Object.freeze(ids), operationFingerprint: fingerprint,
@@ -361,7 +399,6 @@ export class IsolateBudgetAdmissionCache {
         held.sealedGrant = sealed;
         held.recoveryAttempts = 1;
         return sealed;
-      }
     }
     return null;
   }
@@ -369,7 +406,15 @@ export class IsolateBudgetAdmissionCache {
   /** A completed closure may make room for a later freshly charged holder; a failed bounded attempt never does. */
   completeApiGrantRecovery(sealed: SealedIsolateBudgetGrant): void {
     for (const entry of this.entries) for (const held of entry.holders) {
-      if (held.sealedGrant?.terminalEvidenceId === sealed.terminalEvidenceId) { held.recoveryCompleted = true; return; }
+      if (held.sealedGrant === sealed && held.sealed && !held.recoveryCompleted) {
+        held.recoveryCompleted = true;
+        // Only confirmed durable reconciliation returns this local metadata
+        // slot. Central measured/uncertain liability is not altered here.
+        entry.holders = entry.holders.filter(candidate => candidate !== held);
+        for (const [id, candidate] of entry.operations) if (candidate === held) entry.operations.delete(id);
+        entry.refills = Math.max(0, entry.refills - 1);
+        return;
+      }
     }
   }
 

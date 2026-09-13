@@ -18,7 +18,7 @@ async function staffToken() { return new SignJWT({ sub: 'reader-agent', role: 'a
 async function customerToken() { return new SignJWT({ sub: 'reader-customer', role: 'customer', tenant_id: 'read-tenant', session_version: 1, email: 'reader@example.test' })
   .setProtectedHeader({ alg: 'HS256' }).setAudience('widget').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret)); }
 
-async function fixture(limit = 1_000_000) {
+async function fixture(limit = 1_000_000, grantLifetime = 60_000) {
   const bundled = await build({ entryPoints: [resolve(import.meta.dirname, 'budget-admission-runtime-entry.ts')], bundle: true,
     format: 'esm', platform: 'neutral', external: ['cloudflare:workers', 'node:crypto'], write: false });
   const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'http-ticket-read-proof', modules: true,
@@ -35,7 +35,7 @@ async function fixture(limit = 1_000_000) {
     }
     const limits = Object.fromEntries(dimensions.map(dimension => [dimension, limit]));
     const owner = { schemaVersion: 1, policyId: 'read-policy', revision: 1, deploymentId: 'read-deployment', mode: 'conservative',
-      catalogueVersion: 'synthetic-2026-09', maxGrantLifetimeMs: 60_000,
+      catalogueVersion: 'synthetic-2026-09', maxGrantLifetimeMs: grantLifetime,
       budgets: dimensions.map(dimension => ({ dimension, limit: limits[dimension], allocationId: `read-${dimension}`, recoveryPercent: 20,
         provenance: 'owner-allocation', window: { kind: 'interval', id: 'read-window', startsAt: now - 1_000, endsAt: now + 60_000 } })) };
     const restriction = { schemaVersion: 1, tenantId: 'read-tenant', ownerPolicyId: owner.policyId, ownerPolicyRevision: 1, revision: 1,
@@ -43,7 +43,7 @@ async function fixture(limit = 1_000_000) {
     await db.batch([
       db.prepare("INSERT INTO budget_deployment_authority VALUES ('read-deployment',1,'active',?)").bind(now),
       db.prepare(`INSERT INTO budget_owner_policies (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
-        VALUES ('read-deployment','read-policy',1,1,'read-coordinator',64,30000,?)`).bind(JSON.stringify(owner)),
+        VALUES ('read-deployment','read-policy',1,1,'read-coordinator',64,?,?)`).bind(Math.min(30_000,grantLifetime),JSON.stringify(owner)),
       db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('read-tenant','reader-agent','agent@example.test','agent',1,1)"),
       db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('read-tenant','reader-customer','reader@example.test','customer',1,0)"),
       db.prepare("INSERT INTO groups (tenant_id,id,name) VALUES ('read-tenant','reader-group','Reader group')"),
@@ -85,6 +85,13 @@ test('dashboard and portal reads are separately prepaid and retain their private
     const control = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { calls: { refresh: number; reserve: number }; detailArticleRowsRead: number; historyRowsRead: number; cache: { operations: number } };
     assert.deepEqual(control.calls, { refresh: 4, reserve: 4, revoke: 0, reconcile: 0 });
     assert.equal(control.cache.operations, 4, 'each HTTP execution consumes its own admitted operation');
+    const links=await f.db.prepare('SELECT operation_fingerprint,operation_envelope_json FROM budget_grant_operations').all<{operation_fingerprint:string;operation_envelope_json:string}>();
+    assert.equal(links.results.length,4,'all four successful read paths retain durable completion links');
+    assert.ok(links.results.every((row:{operation_fingerprint:string;operation_envelope_json:string})=>/^[a-f0-9]{64}$/.test(row.operation_fingerprint)&&!/Public reply|Internal note|reader@example/.test(row.operation_envelope_json)));
+    const native=await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {canonicalBatches:{rowsRead:number;rowsWritten:number}[]};
+    assert.equal(native.canonicalBatches.length,4);
+    assert.ok(native.canonicalBatches.every(batch=>batch.rowsRead<=512&&batch.rowsWritten<=16),'native receipt/fence work fits added allowance');
+
     assert.ok(control.detailArticleRowsRead + control.historyRowsRead <= (HTTP_TICKET_READ_ENVELOPE.d1RowsRead ?? 0));
   } finally { await f.mf.dispose(); }
 });
@@ -133,4 +140,120 @@ test('portal detail bounds canonical references on long histories outside local-
     assert.ok(measured.detailReferenceRowsRead > 0, 'reference query was measured');
     assert.ok(measured.detailReferenceRowsRead <= 204, `reference lookup stays page-bound: ${measured.detailReferenceRowsRead}`);
   } finally { await f.mf.dispose(); }
+});
+
+async function control(mf:Miniflare,body?:Record<string,unknown>) {
+ return mf.dispatchFetch('http://runtime.test/__budget-control',body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:undefined);
+}
+for(const scenario of [
+ {name:'staff group revoked',path:'/api/tickets/read-ticket',staff:true,sql:"DELETE FROM user_groups WHERE tenant_id='read-tenant' AND user_id='reader-agent'"},
+ {name:'staff session revoked',path:'/api/tickets/read-ticket/history',staff:true,sql:"UPDATE users SET session_version=2 WHERE tenant_id='read-tenant' AND id='reader-agent'"},
+ {name:'customer owner changed',path:'/api/v1/customer/tickets/read-ticket',staff:false,sql:"UPDATE tickets SET customer_id=NULL,customer_email='other@example.test' WHERE tenant_id='read-tenant' AND id='read-ticket'"},
+ {name:'customer policy revoked',path:'/api/v1/customer/tickets/read-ticket/history',staff:false,sql:"UPDATE budget_deployment_authority SET state='revoked'"},
+])test(`completion withholds response and rolls back link when ${scenario.name} after business reads`,async()=>{
+ const f=await fixture();try{
+  await(await control(f.mf,{pauseNextCanonical:true})).body?.cancel();
+  const pending=request(f.mf,scenario.path,await(scenario.staff?staffToken():customerToken()));
+  let paused=false;
+  for(let attempt=0;attempt<100;attempt++){
+   const state=await(await control(f.mf)).json() as {canonicalPaused:boolean};if(state.canonicalPaused){paused=true;break}
+   await new Promise(resolve=>setTimeout(resolve,10));
+  }
+  assert.equal(paused,true,'business read reached native completion batch');
+  await f.db.prepare(scenario.sql).run();await(await control(f.mf,{releaseCanonical:true})).body?.cancel();
+  const response=await pending;assert.ok(response.status>=500);await response.body?.cancel();
+  assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n,0);
+  assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{n:number}>())!.n,0);
+ }finally{await f.mf.dispose()}
+});
+test('lost completion acknowledgement retains durable link but withholds response and does not certify closure',async()=>{
+ const f=await fixture();try{
+  await(await control(f.mf,{loseCanonicalAck:true})).body?.cancel();
+  const response=await request(f.mf,'/api/tickets/read-ticket',await staffToken());assert.ok(response.status>=500);await response.body?.cancel();
+  assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n,1);
+  assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{n:number}>())!.n,0);
+ }finally{await f.mf.dispose()}
+});
+
+for (const customer of [false, true]) test(`sustained ${customer ? 'customer' : 'staff'} detail reads reconcile full grants and exceed32 without growing local slots`, async () => {
+  const f = await fixture();
+  try {
+    const token = await (customer ? customerToken() : staffToken());
+    const path = customer ? '/api/v1/customer/tickets/read-ticket' : '/api/tickets/read-ticket';
+    for (let index = 0; index < 64; index++) {
+      const response = await request(f.mf, path, token);
+      assert.equal(response.status, 200, `read${index + 1}: ${await response.text()}; control=${response.status===200?'':await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).text()}`);
+    }
+    const control = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
+      calls: { refresh: number; reserve: number; reconcile: number }; cache: { scopes: number; holders: number; operations: number; refills: number }
+    };
+    assert.equal(control.calls.reconcile, 4, 'one closure per exhausted8-operation block after initial4 blocks');
+    assert.equal(control.calls.reserve, 12, '8 work blocks plus4 separately charged recovery reservations');
+    assert.deepEqual(control.cache, { scopes: 1, holders: 4, operations: 32, refills: 4 });
+    const count = await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>();
+    assert.equal(count?.n, 64, 'all successful responses have durable grant links');
+  } finally { await f.mf.dispose(); }
+});
+
+test('spaced successful reads retire expired slots while retaining their full original liability', async () => {
+  const f = await fixture(1_000_000, 1_000);
+  try {
+    const token = await staffToken();
+    const startedAt = Date.now();
+    for (let index = 0; index < 7; index++) {
+      await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method:'POST', body:JSON.stringify({now:startedAt + index * 2_000}) });
+      const response = await request(f.mf, '/api/tickets/read-ticket', token);
+      assert.equal(response.status, 200, `spaced read${index + 1}: ${await response.text()}`);
+    }
+    const control = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
+      calls: { reconcile: number }; cache: { holders: number; refills: number }
+    };
+    assert.equal(control.calls.reconcile, 3);
+    assert.equal(control.cache.holders, 4);
+    assert.equal(control.cache.refills, 4);
+  } finally { await f.mf.dispose(); }
+});
+
+test('concurrent refill requests share one certified closure and one new block', async () => {
+  const f = await fixture();
+  try {
+    const token = await staffToken();
+    for(let i=0;i<32;i++){const response=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(response.status,200);await response.body?.cancel();}
+    const responses=await Promise.all(Array.from({length:8},()=>request(f.mf,'/api/tickets/read-ticket',token)));
+    for(const response of responses)assert.equal(response.status,200,await response.text());
+    const control=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reconcile:number;reserve:number};cache:{operations:number;holders:number;refills:number}};
+    assert.equal(control.calls.reconcile,1);assert.equal(control.calls.reserve,6);
+    assert.equal(control.cache.operations,32);assert.equal(control.cache.holders,4);assert.equal(control.cache.refills,4);
+  }finally{await f.mf.dispose();}
+});
+
+for(const lostAcks of [1,2])test(`lost reconciliation acknowledgement remains closed until confirmed (${lostAcks} losses)`,async()=>{
+  const f=await fixture();
+  try{
+    const token=await staffToken();
+    for(let i=0;i<32;i++){const response=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(response.status,200);await response.body?.cancel();}
+    await f.mf.dispatchFetch('http://runtime.test/__budget-control',{method:'POST',body:JSON.stringify({loseReconcileAcks:lostAcks})});
+    const first=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(first.status,429,await first.text());
+    const before=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reconcile:number};cache:{holders:number;operations:number;refills:number}};
+    assert.equal(before.calls.reconcile,1);assert.equal(before.cache.holders,4);assert.equal(before.cache.operations,32);assert.equal(before.cache.refills,4);
+    const retry=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(retry.status,lostAcks===1?200:429,await retry.text());
+    const after=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reconcile:number};cache:{holders:number;refills:number}};
+    assert.equal(after.calls.reconcile,2);assert.equal(after.cache.holders,4);assert.equal(after.cache.refills,4);
+  }finally{await f.mf.dispose();}
+});
+
+test('four grants with unknown read completions cannot reclaim slots from durable links alone',async()=>{
+  const f=await fixture();
+  try{
+    const token=await staffToken();
+    for(let i=0;i<32;i++){
+      if(i%8===0)await f.mf.dispatchFetch('http://runtime.test/__budget-control',{method:'POST',body:JSON.stringify({loseCanonicalAck:true})});
+      const response=await request(f.mf,'/api/tickets/read-ticket',token);
+      assert.equal(response.status,i%8===0?500:200,await response.text());
+    }
+    const response=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(response.status,429,await response.text());
+    const control=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reconcile:number};cache:{holders:number;operations:number;refills:number}};
+    assert.equal(control.calls.reconcile,0);assert.equal(control.cache.holders,4);assert.equal(control.cache.operations,32);assert.equal(control.cache.refills,4);
+    const closures=await f.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{n:number}>();assert.equal(closures?.n,0);
+  }finally{await f.mf.dispose();}
 });

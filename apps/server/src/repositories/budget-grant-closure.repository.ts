@@ -61,7 +61,7 @@ export class BudgetGrantClosureRepository {
     let envelopes: ResourceAmounts[];
     try { envelopes = rows.map(row => JSON.parse(row.operation_envelope_json) as ResourceAmounts); } catch { return null; }
     let uncertain: ResourceAmounts;
-    try { uncertain = amounts([ISOLATE_COLD_ENVELOPE,...envelopes]); } catch { return null; }
+    try { uncertain = sealed.retireExpired ? amounts([sealed.envelope]) : amounts([ISOLATE_COLD_ENVELOPE,...envelopes]); } catch { return null; }
     if (RESOURCE_DIMENSIONS.some(dimension => (uncertain[dimension] ?? 0) > (sealed.envelope[dimension] ?? 0))) return null;
     const measured: ResourceAmounts = {};
     const existing = await this.db.prepare(`SELECT aggregate_id,terminal_evidence_id,operation_set_fingerprint,operation_count,measured_json,uncertain_json,expires_at
@@ -94,21 +94,27 @@ export class BudgetGrantClosureRepository {
     return { terminalEvidenceId: sealed.terminalEvidenceId, uncertain, operationSetFingerprint };
   }
 
-  /**
-   * Closure evidence can no longer authorize recovery after its bounded grant
-   * expiry. Delete at most two closed grants and their at-most-eight links;
-   * uncertain grants have no closure row and therefore cannot be removed here.
-   */
+  /** Called only after the central coordinator confirms this exact closure. */
+  async markReconciled(sealed: SealedIsolateBudgetGrant, closure: DurableGrantClosure, now: number): Promise<void> {
+    if (!Number.isSafeInteger(now) || now < 0) return;
+    await this.db.prepare(`UPDATE budget_grant_closures SET reconciled_at=COALESCE(reconciled_at,?)
+      WHERE tenant_id=? AND reservation_id=? AND holder_id=? AND aggregate_id=?
+        AND terminal_evidence_id=? AND operation_set_fingerprint=? AND expires_at=?`)
+      .bind(now,sealed.tenantId,sealed.reservationId,sealed.holderId,sealed.aggregateId,
+        closure.terminalEvidenceId,closure.operationSetFingerprint,sealed.expiresAt).run();
+  }
+
+  /** Delete at most two expired, centrally acknowledged closures and their links. */
   async pruneExpired(tenantId: string, now: number): Promise<void> {
     if (!identity(tenantId) || !Number.isSafeInteger(now) || now < 0) return;
     const rows = (await this.db.prepare(`SELECT reservation_id,holder_id FROM budget_grant_closures
-      WHERE tenant_id=? AND expires_at<=? ORDER BY expires_at,reservation_id,holder_id LIMIT 2`).bind(tenantId,now)
+      WHERE reconciled_at IS NOT NULL AND tenant_id=? AND expires_at<=? ORDER BY expires_at,reservation_id,holder_id LIMIT 2`).bind(tenantId,now)
       .all<{ reservation_id: string; holder_id: string }>()).results;
     if (!rows.length) return;
     await this.db.batch(rows.flatMap(row => [
       this.db.prepare(`DELETE FROM budget_grant_operations WHERE tenant_id=? AND reservation_id=? AND holder_id=?`)
         .bind(tenantId,row.reservation_id,row.holder_id),
-      this.db.prepare(`DELETE FROM budget_grant_closures WHERE tenant_id=? AND reservation_id=? AND holder_id=? AND expires_at<=?`)
+      this.db.prepare(`DELETE FROM budget_grant_closures WHERE tenant_id=? AND reservation_id=? AND holder_id=? AND expires_at<=? AND reconciled_at IS NOT NULL`)
         .bind(tenantId,row.reservation_id,row.holder_id,now),
     ]));
   }

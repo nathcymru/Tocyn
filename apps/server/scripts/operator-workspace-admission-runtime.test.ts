@@ -73,7 +73,7 @@ function request(f:Awaited<ReturnType<typeof fixture>>,path:string,method='GET',
 }
 async function control(f:Awaited<ReturnType<typeof fixture>>,input?:object) {
   return (await (await f.mf.dispatchFetch('http://runtime.test/__workspace-control',input?{method:'POST',body:JSON.stringify(input)}:undefined)).json()) as {
-    workspaceBatches:number;workspaceRowsRead:number;workspaceRowsWritten:number;r2Gets:number;cache:{operations:number};
+    settlements:{operationId:string;outcome:string}[];workspaceBatches:number;workspaceRowsRead:number;workspaceRowsWritten:number;r2Gets:number;cache:{operations:number};
   };
 }
 const draft=(expectedRevision=0,expectedGeneration:string|null=null)=>({expectedRevision,expectedGeneration,mode:'public',body:'Synthetic draft',bodyFormat:'plain',
@@ -81,7 +81,7 @@ const draft=(expectedRevision=0,expectedGeneration:string|null=null)=>({expected
 
 test('workspace envelopes include cleanup and the complete ten-reference attachment pass',()=>{
   assert.equal(OPERATOR_WORKSPACE_ENVELOPES['workspace.draft.write'].r2ClassBOperations,10);
-  assert.equal(OPERATOR_WORKSPACE_ENVELOPES['workspace.draft.write'].d1RowsWritten,1_024,
+  assert.equal(OPERATOR_WORKSPACE_ENVELOPES['workspace.draft.write'].d1RowsWritten,1_040,
     'workspace mutations retain the canonical attempt ceiling');
   assert.ok((OPERATOR_WORKSPACE_ENVELOPES['workspace.drafts.list'].d1RowsWritten??0)>=100);
   assert.ok((OPERATOR_WORKSPACE_ENVELOPES['workspace.draft.read'].d1RowsWritten??0)>=100);
@@ -133,10 +133,14 @@ test('workspace routes spend independently and preserve exact CAS, rebase and re
     response=await request(f,`/api/workspace/drafts/draft-ticket?generation=${rebased.generation}&revision=${rebased.revision}`,'DELETE');assert.equal(response.status,204);
     assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_draft_actor_population WHERE tenant_id='workspace-tenant' AND user_id='workspace-agent'").first<{n:number}>())?.n,0,'the atomic delete removes the zero population row');
     const measured=await control(f);assert.equal(measured.cache.operations,11,'every route execution, including CAS conflicts, owns one spend');
+    assert.equal(measured.settlements.length,11);assert.equal(new Set(measured.settlements.map(item=>item.operationId)).size,11);
+    assert.equal(measured.settlements.filter(item=>item.outcome==='committed').length,6);
+    assert.equal(measured.settlements.filter(item=>item.outcome==='unknown').length,5);
+    assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n,11);
   }finally{await f.mf.dispose();}
 });
 
-test('state read retry keeps two authority assertions and the successful clear inside four writes',async context=>{
+test('state read retry links one operation and settles only after the successful clear',async context=>{
   const f=await fixture();try{
     await f.db.prepare(`INSERT INTO operator_workspace_state
       (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel)
@@ -148,6 +152,8 @@ test('state read retry keeps two authority assertions and the successful clear i
     assert.deepEqual({revision:state.revision,selectedTicketId:state.selectedTicketId},{revision:3,selectedTicketId:null});
     const measured=await control(f);assert.equal(measured.workspaceBatches,4,'read, lost clear, retry read and successful clear are all fenced');
     assert.ok(measured.workspaceRowsWritten>0 && measured.workspaceRowsWritten<=(OPERATOR_WORKSPACE_ENVELOPES['workspace.state.read'].d1RowsWritten??0),JSON.stringify(measured));
+    assert.deepEqual(measured.settlements.map(item=>item.outcome),['committed']);
+    assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n,1);
     context.diagnostic(JSON.stringify({fixture:'native-d1-state-read-cas-retry',measured}));
   }finally{await f.mf.dispose();}
 });
@@ -190,6 +196,8 @@ for(const change of ['session','mfa','membership','policy'] as const)test(`final
       : change==='policy'?'/api/workspace/drafts?limit=50':'/api/workspace/theme-preference';
     const response=await request(f,path);
     assert.equal(response.status,503,await response.clone().text());
+    assert.deepEqual((await control(f)).settlements.map(item=>item.outcome),['unknown']);
+    assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n,0);
   }finally{await f.mf.dispose();}
 });
 

@@ -112,7 +112,7 @@ export async function admitGroupDirectory(input: AdmissionInput): Promise<GroupD
     if (!business) return { status: 'rejected', reason: 'unavailable' };
     const requestKey = await digest(['group-directory-v1',input.operation,input.deps.scope.tenantId,
       input.deps.scope.actorId,input.target,population??null,input.capability??null]);
-    const outcome = await sessionTicketBudgetAdmission.admit({ repository: input.deps.repositories.budgetAuthority,
+    const outcome = await sessionTicketBudgetAdmission.admit({ database: input.deps.database, repository: input.deps.repositories.budgetAuthority,
       sessions: new SessionBudgetAuthorityRepository(input.deps.database,input.deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
       scope: input.deps.scope, credential, requirements: input.capability ? { capability: input.capability } : {},
       intent: { operationId: crypto.randomUUID(), operationFingerprint: requestKey, workScopeKey: input.operation },
