@@ -131,4 +131,31 @@ describe('coordinator format3 dictionaries',()=>{
   expect(reconcileOwnerAggregate(decodeCoordinatorState(encodeCoordinatorState(closed.state)),{...terminal,measured:{d1RowsRead:2,workerRequests:1}}).outcome).toBe('already-reconciled');
  });
 
+ it('format4 preserves relative, equal and literal keys, old-format reads and replay',()=>{
+  let state=createBudgetOwnerAggregateState(authority());
+  const inputs=[reserve('tenant-a','holder-a','holder-a:block:1',1),reserve('tenant-a','holder-b','holder-b',1),reserve('tenant-a','holder-c','literal-key',1)];
+  for(const input of inputs)state=reserveOwnerAggregate(state,input).state;
+  state={...state,tenantStates:state.tenantStates.map(t=>({...t,grants:t.grants.map(g=>({...g,compacted:false}))}))};
+  const wire=JSON.parse(encodeCoordinatorState(state));expect(wire.format).toBe(4);
+  expect(wire.state.tenantStates[0].grants.map((r:unknown[])=>r[2])).toEqual([[':block:1'],[''],'literal-key']);
+  const decoded=decodeCoordinatorState(JSON.stringify(wire));expect(decoded).toEqual(state);
+  for(const input of inputs)expect(reserveOwnerAggregate(decoded,input).outcome.status).toBe('idempotent');
+  const legacy=structuredClone(wire);legacy.format=3;
+  for(const t of [legacy.state.ownerIngress,...legacy.state.tenantStates])for(const row of t.grants)if(Array.isArray(row[2]))row[2]=row[1]+row[2][0];
+  expect(decodeCoordinatorState(JSON.stringify(legacy))).toEqual(state);
+  expect(decodeCoordinatorState(JSON.stringify(state))).toEqual(state);
+  expect(decoded.tenantStates[0].grants.map(encodedGrantBytes)).toEqual(state.tenantStates[0].grants.map(encodedGrantBytes));
+  expect(JSON.stringify(wire).length).toBeLessThan(JSON.stringify(legacy).length);
+ });
+ it('rejects malformed relative keys and unknown versions without guessing',()=>{
+  for(const bad of [[],['x','y'],[1],[null],['x'.repeat(161)],['\u0000']]){
+   const wire=JSON.parse(encodeCoordinatorState(fixture()));wire.state.tenantStates[0].grants[0][2]=bad;
+   expect(()=>decodeCoordinatorState(JSON.stringify(wire))).toThrow();
+  }
+  const empty=JSON.parse(encodeCoordinatorState(fixture()));empty.state.tenantStates[0].grants[0][1]='';empty.state.tenantStates[0].grants[0][2]=['suffix'];
+  expect(()=>decodeCoordinatorState(JSON.stringify(empty))).toThrow();
+  const old=JSON.parse(encodeCoordinatorState(fixture()));old.format=3;old.state.tenantStates[0].grants[0][2]=['suffix'];expect(()=>decodeCoordinatorState(JSON.stringify(old))).toThrow();
+  for(const format of [1,5,'4',null]){const wire=JSON.parse(encodeCoordinatorState(fixture()));wire.format=format;expect(()=>decodeCoordinatorState(JSON.stringify(wire))).toThrow();}
+ });
+
 });

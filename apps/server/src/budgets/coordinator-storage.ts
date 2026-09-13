@@ -55,6 +55,10 @@ function packedTenant(tenant: TenantState): unknown {
   const amountIndices = new Map<string, number>(), proofIndices = new Map<string, number>();
   const grants = tenant.grants.map(grant => {
     const row = packedGrant(grant, tenant.allocations);
+    // Format4 stores only an exact suffix; decoding restores the original key.
+    if (grant.holderId.length > 0 && grant.idempotencyKey.startsWith(grant.holderId)) {
+      row[2] = [grant.idempotencyKey.slice(grant.holderId.length)];
+    }
     for (const field of [10, 11, 12]) {
       if (row[field] === null) continue;
       const value = amount(row[field]), key = JSON.stringify(value);
@@ -72,7 +76,7 @@ function packedTenant(tenant: TenantState): unknown {
   });
   return { ...tenant, grants, amounts, proofs };
 }
-function unpackedTenant(value: unknown): TenantState {
+function unpackedTenant(value: unknown, relativeKeys: boolean): TenantState {
   if (!record(value) || !Array.isArray(value.grants) || value.grants.length > MAX_RETAINED_BUDGET_GRANTS
     || !Array.isArray(value.allocations) || value.allocations.length > MAX_TENANT_BUDGET_ALLOCATIONS
     || !Array.isArray(value.amounts) || value.amounts.length > 3 * value.grants.length
@@ -84,6 +88,12 @@ function unpackedTenant(value: unknown): TenantState {
   const grants = rows.map(row => {
     if (!Array.isArray(row) || row.length !== 17 || !Array.isArray(row[13]) || row[13].length > RESOURCE_DIMENSIONS.length) return invalid();
     const expanded = [...row];
+    if (Array.isArray(row[2])) {
+      if (!relativeKeys || row[2].length !== 1 || typeof row[2][0] !== 'string'
+        || typeof row[1] !== 'string' || row[1].length === 0 || row[1].length + row[2][0].length > 160
+        || /[\u0000-\u001f\u007f]/.test(row[1]) || /[\u0000-\u001f\u007f]/.test(row[2][0])) return invalid();
+      expanded[2] = row[1] + row[2][0];
+    } else if (typeof row[2] !== 'string') return invalid();
     expanded[10] = { ...amounts[index(row[10], amounts.length)] };
     for (const field of [11, 12]) expanded[field] = {
       ...(row[field] === null ? expanded[10] as ResourceAmounts : amounts[index(row[field], amounts.length)]),
@@ -103,7 +113,7 @@ function unpackedTenant(value: unknown): TenantState {
   return { ...tenant, grants } as unknown as TenantState;
 }
 export function encodeCoordinatorState(state: BudgetOwnerAggregateState): string {
-  return JSON.stringify({ format: 3, state: { ...state,
+  return JSON.stringify({ format: 4, state: { ...state,
     ownerIngress: state.ownerIngress ? packedTenant(state.ownerIngress) : undefined,
     tenantStates: state.tenantStates.map(packedTenant) } });
 }
@@ -111,14 +121,17 @@ export function decodeCoordinatorState(value: BudgetOwnerAggregateState | string
   if (value instanceof Uint8Array) value = new TextDecoder().decode(value);
   if (typeof value !== 'string') return value;
   const parsed = JSON.parse(value);
-  if (parsed.format === 3) {
+  if (parsed.format === 3 || parsed.format === 4) {
     if (!record(parsed.state) || !Array.isArray(parsed.state.tenantStates)
       || parsed.state.tenantStates.length > 128) return invalid();
     return { ...parsed.state,
-      ...(parsed.state.ownerIngress ? { ownerIngress: unpackedTenant(parsed.state.ownerIngress) } : {}),
-      tenantStates: parsed.state.tenantStates.map(unpackedTenant) } as BudgetOwnerAggregateState;
+      ...(parsed.state.ownerIngress ? { ownerIngress: unpackedTenant(parsed.state.ownerIngress, parsed.format === 4) } : {}),
+      tenantStates: parsed.state.tenantStates.map((tenant: unknown) => unpackedTenant(tenant, parsed.format === 4)) } as BudgetOwnerAggregateState;
   }
-  if (parsed.format !== 2) return parsed as BudgetOwnerAggregateState;
+  if (parsed.format !== 2) {
+    if (record(parsed) && 'format' in parsed) return invalid();
+    return parsed as BudgetOwnerAggregateState;
+  }
   return { ...parsed.state,
     ...(parsed.state.ownerIngress ? { ownerIngress: { ...parsed.state.ownerIngress,
       grants: parsed.state.ownerIngress.grants.map((grant: unknown[]) => unpackedGrant(grant, parsed.state.ownerIngress.allocations)) } } : {}),
