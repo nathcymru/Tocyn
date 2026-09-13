@@ -25,3 +25,44 @@ The first browser launch could not find the Playwright browser cache. The instal
 ## Limits and remaining acceptance
 
 This exercised a real browser with a synthetic component fixture, not the complete ticket workspace, production bundle or backend permission enforcement. Clipboard outcomes were simulated. Accessible names and descriptions were inspected, but no spoken VoiceOver output was observed; this does not satisfy screen-reader acceptance. Existing server-authority and unsafe-link evidence must be combined with future integrated #128 workspace and assistive-technology checks before #138 closes. No B2 or production readiness is claimed.
+
+## Supplemental complete-page integration
+
+The additional `TicketDetailUtilityIntegration.test.tsx` suite exercises the actual
+`TicketDetailPage`, utility query hook, strict manifest parser and action bar under
+React Router/Query providers. Synthetic HTTP responses replace external services;
+this is deterministic integration evidence, not a real-backend or screen-reader
+acceptance claim. Three tests verify:
+
+- A utility HTTP 503 keeps the current conversation visible, removes utility
+  commands, and restores them only after the explicit Retry ticket actions request.
+- Navigation to a second ticket rejects a manifest naming the previous ticket;
+  retry renders the second ticket's server-declared denial, disables its commands
+  and provides explanations without a guidance link.
+- Navigation while the reference dialog and asynchronous copy are active unmounts
+  the previous dialog, discards its late success status, and opens the second
+  ticket's correct reference with close/focus return to its current opener.
+
+A separate temporary loopback harness reused the existing local two-tenant fixture,
+real local authentication/MFA and guarded beta policy. The production dashboard
+was built from `1ba78d698e765824039aa7795eedf83f9fcab9c3` (merged by #260).
+Synthetic session values stayed in harness/browser memory and were not recorded.
+Native Helium, operated through CUA, loaded the complete inbox and ticket workspace.
+Copy displayed its success status; Tab reached More, Enter expanded it, and Tab
+reached View ticket reference. Browser interaction then transferred to the user,
+so further automated UI actions stopped. This run does not establish integrated
+dialog keyboard behavior or spoken screen-reader output. The initial appearance
+loading state resolved normally. Service-level unavailable and later
+last-confirmed refresh notices were observed without captured HTTP status evidence;
+they remain fixture observations, not diagnosed application defects.
+
+The deterministic suite was rerun with the #132 preference corrections integrated
+at main `72f8e0ad4997fd2c550582ef48b447c200eb1534`. The first harness run failed
+because a setup hook returned a mock function that Vitest invoked as cleanup;
+correcting the hook resolved that harness error. Dashboard TypeScript validation
+and the three integration tests passed. The production build emitted existing
+future Vite config-loader and large-chunk warnings.
+
+Remaining #138 acceptance still includes #128 dependency acceptance and an
+uncontended integrated keyboard/assistive-technology session. These tests support
+partial progress and do not close #138 or declare Beta.2 ready.
