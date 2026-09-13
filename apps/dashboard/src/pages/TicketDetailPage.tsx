@@ -1,3 +1,5 @@
+import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
+import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
@@ -52,15 +54,15 @@ type PendingAttachment = Readonly<{
 /** A server-derived review revision; retry means that the bracketing reads disagreed. */
 type StaleReplyReview = number | 'refreshing' | 'retry';
 
-export function TicketDetailPage({id:providedId,workspaceBackHref}:{id?:string;workspaceBackHref?:string}={}) {
+export function TicketDetailPage({id:providedId,workspaceBackHref,onResolved}:{id?:string;workspaceBackHref?:string;onResolved?:(id:string)=>void}={}) {
   const { id:routeId } = useParams<{ id: string }>();
   const id=providedId??routeId;
   const generation = useAuthStore(state => state.sessionGeneration);
   const user = useAuthStore(state => state.user);
-  return <TicketDetail key={JSON.stringify([generation, user?.tenant_id, user?.id, user?.role, id])} id={id!} workspaceBackHref={workspaceBackHref} />;
+  return <TicketDetail key={JSON.stringify([generation, user?.tenant_id, user?.id, user?.role, id])} id={id!} workspaceBackHref={workspaceBackHref} onResolved={onResolved} />;
 }
 
-function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:string }) {
+function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspaceBackHref?:string;onResolved?:(id:string)=>void }) {
   type TicketSelectControl = 'status' | 'priority' | 'assigned_to' | 'group_id';
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError, isFetchedAfterMount, isFetching } = useTicket(id!);
@@ -92,6 +94,28 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
   const utilityActions = useTicketUtilityActions(id);
   const replyCapability = replyCapabilities.data?.modes.find(mode => mode.visibility === draft.mode);
   const workspace = useOperatorWorkspaceState();
+  const preferences = useOptionalOperatorPreferencesContext();
+  const lifetimeIdentity = useRef(assignmentIdentity());
+  const mounted = useRef(false);
+  React.useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const advanceEnabled = useRef(preferences?.advanceAfterResolve ?? false);
+  React.useLayoutEffect(() => { advanceEnabled.current = preferences?.advanceAfterResolve ?? false; }, [preferences?.advanceAfterResolve]);
+  const [advanceConfirmationRequired, setAdvanceConfirmationRequired] = useState(false);
+  const pendingAdvance = useRef<((id:string)=>void)|null>(null);
+  const confirmedResolve = (status?: string) => {
+    if (!pendingAdvance.current || status !== 'resolved') return;
+    const advance = pendingAdvance.current;
+    pendingAdvance.current = null;
+    setAdvanceConfirmationRequired(false);
+    if (advanceEnabled.current && mounted.current && assignmentIdentity() === lifetimeIdentity.current) advance(id);
+  };
+  const contextApplied = useRef(false);
+  useEffect(() => {
+    if (contextApplied.current || !ticket || !preferences || ['loading','idle','error'].includes(preferences.status)
+      || !['restored','saved'].includes(workspace.status)) return;
+    contextApplied.current = true;
+    if (preferences.contextDefault !== 'remember') workspace.update({ panel: preferences.contextDefault });
+  }, [preferences, ticket, workspace]);
   const customerHistory = useTicketHistory(id, workspace.panel === 'details');
   const sessionGeneration = useAuthStore(state => state.sessionGeneration);
   const currentUserId = useAuthStore(state => state.user?.id);
@@ -209,7 +233,8 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
     setIsConfirmingTicketSelect(true);
     const retryOwnedFocus = trigger !== undefined && document.activeElement === trigger;
     try {
-      await refetch({ throwOnError: true });
+      const confirmation = await refetch({ throwOnError: true });
+      confirmedResolve(confirmation.data?.pages[0]?.status);
       if (pendingTicketSelectRefresh) {
         const control = pendingTicketSelectRefresh;
         setPendingTicketSelectRefresh(null);
@@ -287,10 +312,12 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
       } else {
         await updateTicket.mutateAsync({ id, ...changes });
       }
+      pendingAdvance.current = changes.status === 'resolved' && preferences?.advanceAfterResolve ? onResolved ?? null : null;
       if (control) {
         setIsConfirmingTicketSelect(true);
         try {
-          await refetch({ throwOnError: true });
+          const confirmation = await refetch({ throwOnError: true });
+          confirmedResolve(confirmation.data?.pages[0]?.status);
           refreshTicketSelect(control);
         } catch {
           setPendingTicketSelectRefresh(control);
@@ -388,6 +415,11 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
       const saved = await transitionSupportState.mutateAsync({ ticketId: id, definitionId: definition.id, waitingReason: waitingReason || null, nextAction: nextAction || null, snoozedUntil, expectedRevision: current.revision });
       restoreSupportStateDraft(saved);
       setSupportStateNotice('Support state saved.');
+      pendingAdvance.current = definition.legacy_status === 'resolved' && preferences?.advanceAfterResolve ? onResolved ?? null : null;
+      if (pendingAdvance.current) {
+        try { const confirmation = await refetch({ throwOnError: true }); confirmedResolve(confirmation.data?.pages[0]?.status); }
+        catch { setAdvanceConfirmationRequired(true); setSupportStateNotice('Support state saved. Confirm the ticket before advancing.'); }
+      }
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409) {
         setSupportStateError('This support state changed elsewhere. Your input is retained. Refresh the current state, then review and retry.');
@@ -670,6 +702,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
         {supportStateError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{supportStateError} <TocynButton type="button" onClick={() => void refreshSupportState()} className="underline">Refresh current support state</TocynButton></p>}
         {notice && <p role="status" className="text-slate-700">{notice}</p>}
         {supportStateNotice && <p role="status" className="text-slate-700">{supportStateNotice}</p>}
+        {advanceConfirmationRequired && <TocynButton type="button" disabled={isConfirmingTicketSelect} onClick={event => void retryTicketDetail(event.currentTarget)}>Confirm resolved ticket</TocynButton>}
         {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="text-sm text-slate-700">
           {workspace.status === 'saving' && 'Saving workspace preference…'}
           {workspace.status === 'saved' && 'Workspace preference saved.'}
@@ -684,6 +717,7 @@ function TicketDetail({ id,workspaceBackHref }: { id: string;workspaceBackHref?:
           <div className="flex items-center gap-2">
             <TocynButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
               onClick={() => {
+                contextApplied.current = true;
                 const opening = workspace.panel !== 'details';
                 if (opening) setFocusContext(true);
                 else contextTriggerRef.current?.focus();

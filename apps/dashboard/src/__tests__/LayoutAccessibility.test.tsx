@@ -130,7 +130,7 @@ it('keeps search and workspace navigation visible and keyboard reachable when fo
 });
 
 it('keeps preference failure recovery and connection state reachable after using the Focus mode control', async () => {
-  const preference = { version: 1, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
+  const preference = { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
   vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
     if (path === '/workspace/presentation-preference') return preference;
     if (path === '/workspace/theme-preference') return { revision: 0, mode: 'system', updatedAt: null };
@@ -376,7 +376,7 @@ it('opens own current work on demand and contains keyboard focus before returnin
 });
 
 it('keeps initial preference restore recovery visible through a local edit and validates revision before saving', async () => {
-  const preference = { version: 1, revision: 4, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
+  const preference = { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  revision: 4, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
   let restores = 0;
   vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
     if (path === '/workspace/presentation-preference') {
@@ -403,4 +403,47 @@ it('keeps initial preference restore recovery visible through a local edit and v
   await screen.findByText('Workspace preferences saved.');
   expect(dashboardApi.put).toHaveBeenLastCalledWith('/workspace/presentation-preference', expect.objectContaining({ expectedRevision: 4, density: 'compact' }));
   expect(restores).toBe(2);
+});
+
+it('renders labelled navigation and disables only the app search accelerator', async () => {
+  const previous = vi.mocked(dashboardApi.get).getMockImplementation()!;
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => path === '/workspace/presentation-preference'
+    ? { version: 2, revision: 3, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'labelled', contextDefault: 'remember', shortcutsEnabled: false, interruptionLevel: 'standard', advanceAfterResolve: false, updatedAt: null }
+    : previous(path));
+  await renderReady();
+  const navigation = screen.getByRole('navigation', { name: 'Workspace navigation' });
+  await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Inbox' })).toHaveTextContent('Inbox'));
+  const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
+  const account = screen.getByRole('button', { name: 'Account options' });
+  account.focus();
+  fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+  expect(account).toHaveFocus();
+  expect(search).not.toHaveAttribute('aria-keyshortcuts');
+  await userEvent.keyboard('{Enter}');
+  await screen.findByRole('link', { name: 'Security Profile' });
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(account).toHaveFocus());
+});
+
+it('quiet activity retains the list until explicit refresh while ticket invalidation remains active', async () => {
+  let activityReads = 0;
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
+    if (path === '/workspace/presentation-preference') return { version: 2, revision: 1, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'quiet', advanceAfterResolve: false, updatedAt: null };
+    if (path === '/workspace/theme-preference') return { revision: 0, mode: 'system', updatedAt: null };
+    if (path === '/activities?limit=20') { activityReads++; return { page: { items: [], next: null }, unread: { status: 'available', count: 0 } }; }
+    return { version: '1', light: {}, dark: {}, fallback: false };
+  });
+  const view = await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
+  await screen.findByText('No current activity.');
+  const count = activityReads;
+  const invalidate = vi.spyOn(client, 'invalidateQueries');
+  vi.mocked(useRealtime).mockReturnValue({ ...realtime, lastMessage: { type: 'ticket.updated', payload: { id: 'synthetic-ticket' } } } as ReturnType<typeof useRealtime>);
+  view.rerender(tree());
+  await screen.findByText('Updates available. Refresh to load current activity.');
+  expect(activityReads).toBe(count);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ticket', 'synthetic-ticket'] });
+  await userEvent.click(screen.getByRole('button', { name: /^Refresh$/ }));
+  await waitFor(() => expect(activityReads).toBe(count + 1));
+  await waitFor(() => expect(screen.queryByText('Updates available. Refresh to load current activity.')).not.toBeInTheDocument());
 });

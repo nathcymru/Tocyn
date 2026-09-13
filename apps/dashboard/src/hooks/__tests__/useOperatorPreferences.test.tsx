@@ -14,7 +14,7 @@ import { useAuthStore } from '../../store/authStore';
 
 const user = { id: 'operator', tenant_id: 'tenant-a', email: 'operator@example.invalid', full_name: 'Operator', role: 'admin', mfa_enabled: true };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-const preference = (revision = 0) => ({ version: 1, revision, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null });
+const preference = (revision = 0) => ({ version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  revision, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null });
 let value!: ReturnType<typeof useOperatorPreferences>;
 function Harness() { value = useOperatorPreferences(); return <output data-testid="preferences">{JSON.stringify({ status: value.status, revision: value.revision, density: value.density, fontScale: value.fontScale, focusMode: value.focusMode, motion: value.motion, error: value.error })}</output>; }
 function current() { return JSON.parse(screen.getByTestId('preferences').textContent || '{}'); }
@@ -26,7 +26,7 @@ it('restores only the validated server record and persists an edited choice with
   render(<Harness />); await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 0 }));
   act(() => value.update({ density: 'compact' })); await act(async () => { await value.save(); });
   expect(current()).toMatchObject({ status: 'saved', revision: 1, density: 'compact' });
-  expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ version: 1, expectedRevision: 0, density: 'compact', fontScale: 'normal', focusMode: false, motion: 'system' });
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  expectedRevision: 0, density: 'compact', fontScale: 'normal', focusMode: false, motion: 'system' });
 });
 
 it('persists the explicit reduced-motion choice and exposes it to the workspace without remounting', async () => {
@@ -37,7 +37,7 @@ it('persists the explicit reduced-motion choice and exposes it to the workspace 
   expect(document.documentElement.dataset.tocynMotion).toBe('reduced');
   await act(async () => { await value.save(); });
   expect(current()).toMatchObject({ status: 'saved', revision: 1, motion: 'reduced' });
-  expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ version: 1, expectedRevision: 0, motion: 'reduced' });
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ version: 2, expectedRevision: 0, motion: 'reduced' });
 });
 
 it('retains the user choice when the system preference is reduced but the saved mode is explicit', async () => {
@@ -66,7 +66,7 @@ it('restores after StrictMode effect replay without accepting the obsolete reque
   expect(current()).toMatchObject({ status: 'restored', revision: 3, density: 'compact' });
 });
 
-it('keeps recovery available after editing a malformed restore, then saves against the recovered revision', async () => {
+it('keeps safe defaults and disables edits until malformed preferences recover', async () => {
   const fetch = vi.fn().mockResolvedValueOnce(json({ ...preference(), version: 99 }))
     .mockResolvedValueOnce(json(preference(4)))
     .mockResolvedValueOnce(json({ ...preference(5), density: 'compact' }));
@@ -74,11 +74,12 @@ it('keeps recovery available after editing a malformed restore, then saves again
   render(<Harness />);
   await waitFor(() => expect(current().status).toBe('error'));
   act(() => value.update({ density: 'compact' }));
-  expect(current()).toMatchObject({ status: 'error', density: 'compact' });
+  expect(current()).toMatchObject({ status: 'error', density: 'comfortable' });
   await act(async () => { await value.save(); });
   expect(fetch).toHaveBeenCalledTimes(1);
   act(() => value.retry());
-  await waitFor(() => expect(current()).toMatchObject({ status: 'unsaved', revision: 4, density: 'compact' }));
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 4, density: 'comfortable' }));
+  act(() => value.update({ density: 'compact' }));
   await act(async () => { await value.save(); });
   expect(current()).toMatchObject({ status: 'saved', revision: 5, density: 'compact' });
   expect(JSON.parse(fetch.mock.calls[2][1].body)).toMatchObject({ expectedRevision: 4, density: 'compact' });
@@ -158,4 +159,55 @@ it.each([
   expect(current()).toMatchObject({ status: 'restored', revision: 3, density: 'comfortable', fontScale: 'normal', motion: 'reduced', error: null });
   expect(document.documentElement.dataset.tocynFontScale).toBe('normal');
   expect(document.documentElement.dataset.tocynMotion).toBe('reduced');
+});
+
+
+it.each(['navigation','contextDefault','interruptionLevel'])('rejects an array masquerading as the %s enum', async field => {
+  const valid=preference();
+  const fetch=vi.fn().mockResolvedValue(json({...valid,[field]:[(valid as any)[field]]}));
+  vi.stubGlobal('fetch',fetch);render(<Harness/>);
+  await waitFor(()=>expect(value.schemaUnavailable).toBe(true));
+  act(()=>value.update({navigation:'labelled'}));
+  await act(async()=>value.save());
+  expect(value.navigation).toBe('compact');expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it('preserves a local preview on ordinary network restore failure but never writes without a recovered revision',async()=>{
+  const fetch=vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(json(preference(4)));
+  vi.stubGlobal('fetch',fetch);render(<Harness/>);
+  await waitFor(()=>expect(value.status).toBe('error'));
+  expect(value.schemaUnavailable).toBe(false);
+  act(()=>value.update({navigation:'labelled'}));
+  await act(async()=>value.save());
+  expect(value.navigation).toBe('labelled');expect(fetch).toHaveBeenCalledTimes(1);
+  act(()=>value.retry());
+  await waitFor(()=>expect(value.status).toBe('unsaved'));
+  expect(value.navigation).toBe('labelled');expect(value.revision).toBe(4);
+});
+
+
+it('clears invalid preview state and enables editing after a valid schema retry',async()=>{
+  const fetch=vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(json({...preference(3),version:99}))
+    .mockResolvedValueOnce(json({...preference(4),navigation:'labelled'}));
+  vi.stubGlobal('fetch',fetch);render(<Harness/>);
+  await waitFor(()=>expect(value.status).toBe('error'));
+  act(()=>value.update({density:'compact'}));
+  act(()=>value.retry());
+  await waitFor(()=>expect(value.schemaUnavailable).toBe(true));
+  expect(value.density).toBe('comfortable');
+  act(()=>value.retry());
+  await waitFor(()=>expect(value.status).toBe('restored'));
+  expect(value.schemaUnavailable).toBe(false);expect(value.navigation).toBe('labelled');expect(value.revision).toBe(4);
+  act(()=>value.update({density:'compact'}));expect(value.status).toBe('unsaved');
+});
+
+
+it('treats an explicit schema error from PUT as protected defaults until restore',async()=>{
+  const fetch=vi.fn().mockResolvedValueOnce(json(preference(2))).mockResolvedValueOnce(json({error:'Schema unavailable',code:'presentation_schema_unavailable'},503));
+  vi.stubGlobal('fetch',fetch);render(<Harness/>);
+  await waitFor(()=>expect(value.status).toBe('restored'));
+  act(()=>value.update({navigation:'labelled'}));await act(async()=>value.save());
+  expect(value.schemaUnavailable).toBe(true);expect(value.navigation).toBe('compact');
+  act(()=>value.update({density:'compact'}));await act(async()=>value.save());
+  expect(fetch).toHaveBeenCalledTimes(2);
 });

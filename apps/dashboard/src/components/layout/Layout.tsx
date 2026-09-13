@@ -26,7 +26,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
-import { OperatorPreferencesControl, OperatorThemeControl, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
+import { useOperatorPreferencesContext, OperatorPreferencesControl, OperatorThemeControl, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
 
 function cn(...inputs: any[]) {
   return clsx(inputs);
@@ -81,7 +81,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
       </TocynButton></Popover.Trigger>
 
       <Popover.Positioner>
-        <Popover.Content aria-label="Account options" data-tocyn-inverse="" className=" w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
+        <Popover.Content aria-label="Account options" data-tocyn-inverse="" className="w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
           <div className="px-4 py-2 border-b border-slate-700">
             <p className="text-sm font-medium text-white truncate">{user?.full_name}</p>
             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
@@ -126,6 +126,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
 
 function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   const location = useLocation();
+  const labelled = useOperatorPreferencesContext().navigation === 'labelled';
   return (
         <div className="flex flex-col h-full items-center py-4">
           <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="w-11 h-11 rounded-xl flex items-center justify-center mb-8 hover:bg-slate-700 transition-colors">
@@ -144,13 +145,13 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
                   aria-current={isActive ? "page" : undefined}
                   onClick={onNavigate}
                   className={cn(
-                    "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
+                    labelled ? "flex min-h-11 items-center gap-3 w-full rounded-xl px-3 py-2 text-sm" : "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
                     isActive
                       ? "bg-slate-800 text-white shadow-inner"
                       : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
                   )}
                 >
-                  <item.icon className="w-6 h-6" />
+                  <item.icon aria-hidden="true" className="w-6 h-6 shrink-0" />{labelled && <span>{item.name}</span>}
                 </Link>
               );
             })}
@@ -163,13 +164,13 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
               aria-label="Settings"
               onClick={onNavigate}
               className={cn(
-                "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
+                labelled ? "flex min-h-11 items-center gap-3 w-full rounded-xl px-3 py-2 text-sm" : "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
                 location.pathname.startsWith('/settings')
                   ? "bg-slate-800 text-white shadow-inner"
                   : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
               )}
             >
-              <Settings className="w-6 h-6" />
+              <Settings aria-hidden="true" className="w-6 h-6 shrink-0" />{labelled && <span>Settings</span>}
             </Link>
 
             <UserMenu onNavigate={onNavigate} navigationFocus={navigationFocus} />
@@ -179,6 +180,8 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
 }
 
 function LayoutContent() {
+  const preferences = useOperatorPreferencesContext();
+  const [activityUpdatesAvailable, setActivityUpdatesAvailable] = useState(false);
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -226,7 +229,7 @@ function LayoutContent() {
 
   useEffect(() => {
     const focusGlobalSearch = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (preferences.shortcutsEnabled && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         globalSearchInput.current?.focus();
         globalSearchInput.current?.select();
@@ -234,14 +237,14 @@ function LayoutContent() {
     };
     window.addEventListener('keydown', focusGlobalSearch);
     return () => window.removeEventListener('keydown', focusGlobalSearch);
-  }, []);
+  }, [preferences.shortcutsEnabled]);
 
   const loadActivity = React.useCallback(async () => {
     const generation = ++activityRequestGeneration.current;
     setActivityLoading(true); setActivityError(null); setActivityRetry(null);
     try {
       const response = await dashboardApi.get<ActivityResponse>(`/activities?limit=${ACTIVITY_PAGE_SIZE}`);
-      if (generation === activityRequestGeneration.current) setActivity(response);
+      if (generation === activityRequestGeneration.current) { setActivity(response); setActivityUpdatesAvailable(false); }
     } catch {
       if (generation === activityRequestGeneration.current) {
         setActivityError('Activity could not be refreshed. Try again when the connection is available.');
@@ -289,8 +292,11 @@ function LayoutContent() {
     }
 
     // Signals never carry activity content. A visible panel recovers from D1.
-    if (activityOpen) void loadActivity();
-  }, [activityOpen, lastMessage, loadActivity, queryClient]);
+    if (activityOpen) {
+      if (preferences.interruptionLevel === 'quiet') setActivityUpdatesAvailable(true);
+      else void loadActivity();
+    }
+  }, [activityOpen, lastMessage, loadActivity, queryClient, preferences.interruptionLevel]);
 
   // Realtime is only an invalidation channel. Once a dropped connection is
   // restored, re-read the bounded durable projection so unread activity and
@@ -299,9 +305,9 @@ function LayoutContent() {
     const restored = !wasConnected.current && isConnected;
     wasConnected.current = isConnected;
     if (!restored) return;
-    setConnectionRecoveryMessage('Connection restored. Durable activity refreshed.');
-    void loadActivity();
-  }, [isConnected, loadActivity]);
+    setConnectionRecoveryMessage(preferences.interruptionLevel === 'quiet' ? 'Connection restored. Activity updates are available.' : 'Connection restored. Durable activity refreshed.');
+    if (preferences.interruptionLevel === 'quiet') setActivityUpdatesAvailable(true); else void loadActivity();
+  }, [isConnected, loadActivity, preferences.interruptionLevel]);
 
   const openActivity = (open: boolean) => {
     setActivityOpen(open);
@@ -318,14 +324,14 @@ function LayoutContent() {
 
   return (
     <div className={cn('flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
-      <aside data-tocyn-inverse="" className="hidden lg:block w-16 shrink-0 bg-slate-900 border-r border-slate-800">
+      <aside data-tocyn-inverse="" className={cn('hidden lg:block shrink-0 bg-slate-900 border-r border-slate-800', preferences.navigation === 'labelled' ? 'w-52' : 'w-16')}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
         <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
           labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
           finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
           data-tocyn-dialog-edge="" data-tocyn-inverse=""
-          className="fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none w-20 overflow-visible border-0 bg-slate-900 text-white p-2 backdrop:bg-slate-900/50">
+          className={cn('fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none overflow-y-auto border-0 bg-slate-900 text-white p-2 backdrop:bg-slate-900/50', preferences.navigation === 'labelled' ? 'w-56 max-w-[90vw]' : 'w-20')}>
           <h2 id={`${mobileDialogId}-title`} className="sr-only">Navigation</h2>
           <TocynButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
             className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X aria-hidden="true" /></TocynButton>
@@ -355,7 +361,7 @@ function LayoutContent() {
               type="text"
               placeholder="Search all authorised tickets..."
               aria-label="Search all tickets (global shell)"
-              aria-keyshortcuts="Control+K Meta+K"
+              aria-keyshortcuts={preferences.shortcutsEnabled ? "Control+K Meta+K" : undefined}
               aria-describedby="global-ticket-search-scope"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -376,8 +382,8 @@ function LayoutContent() {
             />
             <TocynButton type="button" aria-label="Clear global ticket search" disabled={!searchInput} onClick={clearGlobalTicketSearch}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
-            <p id="global-ticket-search-scope" className="sr-only">Searches all tickets you are authorised to access. Press Command or Control K to focus this search. Filter this view is available in the Inbox.</p>
-            <span data-tocyn-focus-decoration="" aria-hidden="true" className="pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 text-[10px] font-semibold text-slate-500 sm:inline">⌘/Ctrl K</span>
+            <p id="global-ticket-search-scope" className="sr-only">Searches all tickets you are authorised to access. {preferences.shortcutsEnabled ? 'Press Command or Control K to focus this search.' : ''} Filter this view is available in the Inbox.</p>
+            {preferences.shortcutsEnabled && <span data-tocyn-focus-decoration="" aria-hidden="true" className="pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 text-[10px] font-semibold text-slate-500 sm:inline">⌘/Ctrl K</span>}
           </div>
 
           <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
@@ -390,6 +396,7 @@ function LayoutContent() {
             <Popover.Positioner>
               <Popover.Content aria-label="Activity" className="w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
                 <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-bold text-slate-900">Activity</h2><TocynButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2">Refresh</TocynButton></div>
+                {activityUpdatesAvailable && <p role="status" className="p-2 text-sm">Updates available. Refresh to load current activity.</p>}
                 {activityError && <div role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900"><p>{activityError}</p><TocynButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="mt-2 rounded px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2">Retry loading activity</TocynButton></div>}
                 {activityLoading && !activity && <p role="status" className="p-2 text-sm text-slate-600">Loading durable activity…</p>}
                 {activity?.unread.status === 'unavailable' && <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">Unread count is temporarily unavailable. Your activity remains available below.</p>}
