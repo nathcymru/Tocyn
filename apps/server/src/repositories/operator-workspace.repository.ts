@@ -7,11 +7,11 @@ import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service
 import type { SessionBudgetCredential } from './session-budget-authority.repository';
 import { budgetCommitConstraint, budgetGrantOperationStatements } from './budget-commit-fence';
 import { DRAFT_EXPIRY_SQL } from '../types/operator-draft-retention';
-import { OPERATOR_PRESENTATION_PREFERENCES_VERSION } from '../types/operator-workspace';
+import { OPERATOR_PRESENTATION_PREFERENCES_VERSION, OPERATOR_TABLE_COLUMNS } from '../types/operator-workspace';
 import type {
   OperatorDraft, OperatorDraftAttachment, OperatorDraftMode, OperatorWorkspaceFilters,
   OperatorWorkspaceSort, OperatorWorkspaceState, OperatorWorkspaceView,
-  OperatorThemeMode, OperatorThemePreference,
+  OperatorThemeMode, OperatorThemePreference, OperatorTableColumn,
   OperatorPresentationPreference,
 } from '../types/operator-workspace';
 
@@ -19,19 +19,26 @@ export class OperatorPresentationSchemaError extends Error {}
 type PresentationRow = { version: number | null; revision: number; density: OperatorPresentationPreference['density'];
   font_scale: OperatorPresentationPreference['fontScale']; focus_mode: number; motion: OperatorPresentationPreference['motion'];
   navigation: OperatorPresentationPreference['navigation']; context_default: OperatorPresentationPreference['contextDefault'];
-  shortcuts_enabled: number; interruption_level: OperatorPresentationPreference['interruptionLevel']; advance_after_resolve: number; updated_at: string };
+  shortcuts_enabled: number; interruption_level: OperatorPresentationPreference['interruptionLevel']; advance_after_resolve: number; table_columns: string; updated_at: string };
+const defaultTableColumns = [...OPERATOR_TABLE_COLUMNS] as OperatorTableColumn[];
+function parseTableColumns(value: string): OperatorTableColumn[] {
+  let parsed: unknown; try { parsed = JSON.parse(value); } catch { throw new OperatorPresentationSchemaError('Workspace preferences cannot be safely read. Saving is unavailable.'); }
+  if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 6 || new TextEncoder().encode(value).length > 128 || !parsed.includes('reference')
+    || parsed.some(column => !OPERATOR_TABLE_COLUMNS.includes(column as OperatorTableColumn)) || new Set(parsed).size !== parsed.length) throw new OperatorPresentationSchemaError('Workspace preferences cannot be safely read. Saving is unavailable.');
+  return parsed as OperatorTableColumn[];
+}
 function presentationFromRow(row: PresentationRow): OperatorPresentationPreference {
   if (row.version !== OPERATOR_PRESENTATION_PREFERENCES_VERSION || !Number.isSafeInteger(row.revision) || row.revision < 1
     || !['comfortable','compact'].includes(row.density) || !['normal','large','larger'].includes(row.font_scale)
     || ![0,1].includes(row.focus_mode) || !['system','reduced','full'].includes(row.motion)
     || !['compact','labelled'].includes(row.navigation) || !['remember','conversation','details'].includes(row.context_default)
     || ![0,1].includes(row.shortcuts_enabled) || !['standard','quiet'].includes(row.interruption_level)
-    || ![0,1].includes(row.advance_after_resolve) || typeof row.updated_at !== 'string') {
+    || ![0,1].includes(row.advance_after_resolve) || typeof row.table_columns !== 'string' || typeof row.updated_at !== 'string') {
     throw new OperatorPresentationSchemaError('Workspace preferences cannot be safely read. Saving is unavailable.');
   }
   return { version: 2, revision: row.revision, density: row.density, fontScale: row.font_scale, focusMode: row.focus_mode === 1,
     motion: row.motion, navigation: row.navigation, contextDefault: row.context_default, shortcutsEnabled: row.shortcuts_enabled === 1,
-    interruptionLevel: row.interruption_level, advanceAfterResolve: row.advance_after_resolve === 1, updatedAt: row.updated_at };
+    interruptionLevel: row.interruption_level, advanceAfterResolve: row.advance_after_resolve === 1, tableColumns: parseTableColumns(row.table_columns), updatedAt: row.updated_at };
 }
 
 type DraftRow = {
@@ -192,30 +199,33 @@ export class OperatorWorkspaceRepository {
     if (!row) return null;
     if (row.version === null) return { version: 2, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false,
       motion: 'system', navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true,
-      interruptionLevel: 'standard', advanceAfterResolve: false, updatedAt: null };
+      interruptionLevel: 'standard', advanceAfterResolve: false, tableColumns: defaultTableColumns, updatedAt: null };
     return presentationFromRow(row);
   }
 
   async savePresentationPreference(input: Omit<OperatorPresentationPreference, 'updatedAt'>, credential: OperatorPresentationCredential,
     commit?: OperatorWorkspaceCommit): Promise<OperatorPresentationPreference | null> {
     if (input.version !== 2 || !Number.isSafeInteger(input.revision) || input.revision < 0 || input.revision >= Number.MAX_SAFE_INTEGER) return null;
+    // Validate repository callers independently of the HTTP schema before preparing any mutation.
+    const tableColumns = input.tableColumns === undefined ? undefined : parseTableColumns(JSON.stringify(input.tableColumns));
     const authority = this.themeAuthority(credential);
     const condition: MutationCondition = { sql: `${authority.sql} AND ((?=0 AND NOT EXISTS
       (SELECT 1 FROM operator_presentation_preference WHERE tenant_id=? AND user_id=?))
       OR EXISTS (SELECT 1 FROM operator_presentation_preference WHERE tenant_id=? AND user_id=? AND revision=? AND version=2))`,
       values: [...authority.values, input.revision, this.scope.tenantId, this.scope.actorId, this.scope.tenantId, this.scope.actorId, input.revision] };
     const statement = this.db.prepare(`INSERT INTO operator_presentation_preference
-      (tenant_id,user_id,version,revision,density,font_scale,focus_mode,motion,navigation,context_default,shortcuts_enabled,interruption_level,advance_after_resolve,updated_at)
-      SELECT ?,?,2,1,?,?,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE ${condition.sql}
+      (tenant_id,user_id,version,revision,density,font_scale,focus_mode,motion,navigation,context_default,shortcuts_enabled,interruption_level,advance_after_resolve,table_columns,updated_at)
+      SELECT ?,?,2,1,?,?,?,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE ${condition.sql}
       ON CONFLICT(tenant_id,user_id) DO UPDATE SET revision=operator_presentation_preference.revision+1,
         density=excluded.density,font_scale=excluded.font_scale,focus_mode=excluded.focus_mode,motion=excluded.motion,
         navigation=excluded.navigation,context_default=excluded.context_default,shortcuts_enabled=excluded.shortcuts_enabled,
-        interruption_level=excluded.interruption_level,advance_after_resolve=excluded.advance_after_resolve,updated_at=excluded.updated_at
+        interruption_level=excluded.interruption_level,advance_after_resolve=excluded.advance_after_resolve,table_columns=CASE WHEN ?=1 THEN excluded.table_columns ELSE operator_presentation_preference.table_columns END,updated_at=excluded.updated_at
       WHERE operator_presentation_preference.revision=? AND operator_presentation_preference.version=2
       RETURNING *`)
       .bind(this.scope.tenantId, this.scope.actorId, input.density, input.fontScale, input.focusMode ? 1 : 0, input.motion,
         input.navigation, input.contextDefault, input.shortcutsEnabled ? 1 : 0, input.interruptionLevel, input.advanceAfterResolve ? 1 : 0,
-        ...condition.values, input.revision);
+        JSON.stringify(tableColumns ?? defaultTableColumns),
+        ...condition.values, input.tableColumns === undefined ? 0 : 1, input.revision);
     const row = await this.runWorkspaceMutation<PresentationRow>(statement, condition, commit, 'workspace.presentation.write');
     return row ? presentationFromRow(row) : null;
   }

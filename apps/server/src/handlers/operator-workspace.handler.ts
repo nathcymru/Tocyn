@@ -6,7 +6,7 @@ import type { AppVariables } from '../types';
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { requestBounds } from '../middleware/request-bounds';
 import { MutationInputError, readMutationJson } from './mutation-request';
-import { OPERATOR_WORKSPACE_SORTS, OPERATOR_WORKSPACE_VIEWS } from '../types/operator-workspace';
+import { OPERATOR_TABLE_COLUMNS, OPERATOR_WORKSPACE_SORTS, OPERATOR_WORKSPACE_VIEWS } from '../types/operator-workspace';
 import { OperatorWorkspaceError, OperatorWorkspaceService } from '../services/operator-workspace.service';
 import { AttachmentReferenceError } from '../services/attachment-references';
 import { LOCAL_DRAFT_RETENTION } from '../types/operator-draft-retention';
@@ -46,7 +46,9 @@ const themePreferenceInput = z.object({ expectedRevision: revision, mode: z.enum
 const presentationPreferenceInput = z.object({ version: z.literal(2), expectedRevision: revision.max(Number.MAX_SAFE_INTEGER - 1),
   density: z.enum(['comfortable', 'compact']), fontScale: z.enum(['normal', 'large', 'larger']), focusMode: z.boolean(), motion: z.enum(['system', 'reduced', 'full']),
   navigation: z.enum(['compact', 'labelled']), contextDefault: z.enum(['remember', 'conversation', 'details']),
-  shortcutsEnabled: z.boolean(), interruptionLevel: z.enum(['standard', 'quiet']), advanceAfterResolve: z.boolean() }).strict();
+  shortcutsEnabled: z.boolean(), interruptionLevel: z.enum(['standard', 'quiet']), advanceAfterResolve: z.boolean(), tableColumns: z.array(z.enum(OPERATOR_TABLE_COLUMNS)).min(1).max(6).optional() }).strict().superRefine((value, ctx) => {
+    if (value.tableColumns && (!value.tableColumns.includes('reference') || new Set(value.tableColumns).size !== value.tableColumns.length || new TextEncoder().encode(JSON.stringify(value.tableColumns)).length > 128)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid table columns' });
+  });
 function themeCredential(c: any): OperatorPresentationCredential {
   const payload = c.get('jwtPayload');
   if (!payload || !['admin', 'agent'].includes(payload.role) || !Number.isSafeInteger(payload.session_version ?? 0)
@@ -143,7 +145,7 @@ workspace.put('/presentation-preference', async c => {
     const gate = await admission(c, 'workspace.presentation.write'); const denied = admissionFailure(c, gate); if (denied) return denied;
     const repository = (c.get('tenantDeps') as TenantRequestDeps).repositories.operatorWorkspace;
     const result = await repository.savePresentationPreference({ version: parsed.data.version, revision: parsed.data.expectedRevision,
-      density: parsed.data.density, fontScale: parsed.data.fontScale, focusMode: parsed.data.focusMode, motion: parsed.data.motion, navigation: parsed.data.navigation, contextDefault: parsed.data.contextDefault, shortcutsEnabled: parsed.data.shortcutsEnabled, interruptionLevel: parsed.data.interruptionLevel, advanceAfterResolve: parsed.data.advanceAfterResolve }, themeCredential(c), admittedCommit(gate));
+      density: parsed.data.density, fontScale: parsed.data.fontScale, focusMode: parsed.data.focusMode, motion: parsed.data.motion, navigation: parsed.data.navigation, contextDefault: parsed.data.contextDefault, shortcutsEnabled: parsed.data.shortcutsEnabled, interruptionLevel: parsed.data.interruptionLevel, advanceAfterResolve: parsed.data.advanceAfterResolve, tableColumns: parsed.data.tableColumns }, themeCredential(c), admittedCommit(gate));
     if (!result) throw new OperatorWorkspaceError(409, 'Workspace preferences changed before they could be saved');
     return c.json(result);
   } catch (error) { return failure(c, error); }

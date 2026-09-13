@@ -53,13 +53,13 @@ test('presentation preferences are tenant/actor-scoped, version-safe, CAS-safe a
   await withTwoTenantFixture(async fixture => {
     const token = await login(fixture, 'operatorA'); const other = await login(fixture, 'operatorB');
     const path = '/api/workspace/presentation-preference';
-    const defaults: OperatorPresentationPreference = { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
+    const defaults: OperatorPresentationPreference = { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, tableColumns: ['reference','subject','status','priority','customer','updated'], revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
     assert.equal((await fixture.request(path)).status, 401);
     assert.deepEqual(await (await fixture.request(path, { token })).json(), defaults);
     const save = (revision: number, body: Record<string, unknown>, session = token) => fixture.request(path, { method: 'PUT', token: session, body: { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  expectedRevision: revision, density: 'compact', fontScale: 'large', focusMode: true, motion: 'reduced', ...body } });
     assert.equal((await save(0, { motion: 'blur' })).status, 400);
     const first = await save(0, {}); assert.equal(first.status, 200);
-    assert.deepEqual(await first.json(), { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  revision: 1, density: 'compact', fontScale: 'large', focusMode: true, motion: 'reduced', updatedAt: (await fixture.db.prepare('SELECT updated_at FROM operator_presentation_preference').first<{updated_at:string}>())?.updated_at });
+    assert.deepEqual(await first.json(), { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, tableColumns: ['reference','subject','status','priority','customer','updated'], revision: 1, density: 'compact', fontScale: 'large', focusMode: true, motion: 'reduced', updatedAt: (await fixture.db.prepare('SELECT updated_at FROM operator_presentation_preference').first<{updated_at:string}>())?.updated_at });
     assert.deepEqual(await (await fixture.request(path, { token: other })).json(), defaults);
     const race = await Promise.all([save(1, { density: 'comfortable' }), save(1, { fontScale: 'larger' })]);
     assert.deepEqual(race.map(response => response.status).sort(), [200, 409]);
@@ -77,6 +77,31 @@ test('presentation preferences are tenant/actor-scoped, version-safe, CAS-safe a
     await fixture.revokePrincipalSessions('operatorA');
     assert.equal(await repository.getPresentationPreference(credential), null);
     assert.equal(await fixture.db.prepare('SELECT count(*) AS n FROM operator_workspace_state').first<{n:number}>().then(row => row?.n), 0, 'Presentation settings never overwrite ticket navigation state');
+  });
+});
+
+test('legacy v2 writes that omit tableColumns preserve a custom table configuration', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const token = await login(fixture, 'operatorA'); const path = '/api/workspace/presentation-preference';
+    const base = { version: 2, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false };
+    const first = await fixture.request(path, { method: 'PUT', token, body: { ...base, expectedRevision: 0, tableColumns: ['status', 'reference'] } });
+    assert.equal(first.status, 200);
+    const legacy = await fixture.request(path, { method: 'PUT', token, body: { ...base, expectedRevision: 1 } });
+    assert.equal(legacy.status, 200);
+    assert.deepEqual((await legacy.json<{ tableColumns: string[] }>()).tableColumns, ['status', 'reference']);
+  });
+});
+
+test('repository rejects malformed table columns before mutation', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const token = await login(fixture, 'operatorA'); const payload = decodeJwt(token); const principal = fixture.principals.operatorA;
+    const repository = new OperatorWorkspaceRepository(createVerifiedTenantScope(principal.tenantId, principal.localId, ['admin'], 1), fixture.db);
+    const credential = { role: 'admin' as const, sessionVersion: Number(payload.session_version ?? 0), expiresAt: Number(payload.exp) };
+    const base = { version: 2 as const, revision: 0, density: 'comfortable' as const, fontScale: 'normal' as const, focusMode: false, motion: 'system' as const, navigation: 'compact' as const, contextDefault: 'remember' as const, shortcutsEnabled: true, interruptionLevel: 'standard' as const, advanceAfterResolve: false };
+    for (const columns of [[], ['status'], ['reference', 'reference'], ['reference', 'unknown']] as unknown[]) {
+      await assert.rejects(() => repository.savePresentationPreference({ ...base, tableColumns: columns as any }, credential));
+    }
+    assert.equal((await fixture.db.prepare('SELECT count(*) AS n FROM operator_presentation_preference').first<{n:number}>())?.n, 0);
   });
 });
 

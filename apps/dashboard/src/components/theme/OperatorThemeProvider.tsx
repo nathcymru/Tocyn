@@ -2,7 +2,7 @@ import * as React from 'react';
 import { createTocynThemeScope } from '@luminatick/ui';
 import { TocynButton } from '@luminatick/ui/primitives';
 import { useOperatorTheme, type OperatorThemeMode } from '../../hooks/useOperatorTheme';
-import { useOperatorPreferences, type OperatorDensity, type OperatorFontScale, type OperatorMotion } from '../../hooks/useOperatorPreferences';
+import { useOperatorPreferences, OPERATOR_TABLE_COLUMNS, type OperatorDensity, type OperatorFontScale, type OperatorMotion } from '../../hooks/useOperatorPreferences';
 
 type ThemeContextValue = ReturnType<typeof useOperatorTheme>;
 const ThemeContext = React.createContext<ThemeContextValue | null>(null);
@@ -49,6 +49,27 @@ export function OperatorThemeControl() {
   </section>;
 }
 
+function TableColumnsControl({ preferences }: { preferences: ReturnType<typeof useOperatorPreferences> }) {
+  const ordered = [...preferences.tableColumns, ...OPERATOR_TABLE_COLUMNS.filter(column => !preferences.tableColumns.includes(column))];
+  const move = (index: number, delta: -1 | 1) => {
+    const target = index + delta;
+    if (target < 0 || target >= preferences.tableColumns.length) return;
+    const next = [...preferences.tableColumns];
+    [next[index], next[target]] = [next[target], next[index]];
+    preferences.update({ tableColumns: next });
+  };
+  return <fieldset><legend>Table columns</legend>
+    {ordered.map(column => {
+      const index = preferences.tableColumns.indexOf(column); const visible = index >= 0;
+      return <div key={column} role="group" aria-label={`${column} table column`}>
+        <label><input type="checkbox" checked={visible} disabled={column === 'reference'} onChange={event => { if (column !== 'reference') preferences.update({ tableColumns: event.target.checked ? [...preferences.tableColumns, column] : preferences.tableColumns.filter(item => item !== column) }); }} /> {column}</label>
+        {visible && <><TocynButton type="button" aria-label={`Move ${column} table column up`} disabled={index === 0} onClick={() => move(index, -1)} onKeyDown={event => { if (event.key === 'ArrowUp') { event.preventDefault(); move(index, -1); } }}>↑</TocynButton>
+          <TocynButton type="button" aria-label={`Move ${column} table column down`} disabled={index === preferences.tableColumns.length - 1} onClick={() => move(index, 1)} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); move(index, 1); } }}>↓</TocynButton></>}
+      </div>;
+    })}
+  </fieldset>;
+}
+
 export function OperatorPreferencesControl() {
   const preferences = useOperatorPreferencesContext();
   const busy = preferences.status === 'loading' || preferences.status === 'saving' || preferences.schemaUnavailable || preferences.status === 'conflict';
@@ -63,6 +84,7 @@ export function OperatorPreferencesControl() {
     <label><input type="checkbox" checked={preferences.shortcutsEnabled} onChange={event => preferences.update({ shortcutsEnabled: event.target.checked })} /> Enable search shortcut</label>
     <label>Activity updates<select aria-label="Activity interruption level" value={preferences.interruptionLevel} onChange={event => preferences.update({ interruptionLevel: event.target.value as 'standard'|'quiet' })}><option value="standard">Standard</option><option value="quiet">Quiet — refresh activity manually</option></select></label>
     <label><input type="checkbox" checked={preferences.advanceAfterResolve} onChange={event => preferences.update({ advanceAfterResolve: event.target.checked })} /> Advance after resolving a conversation</label>
+    <TableColumnsControl preferences={preferences} />
     </fieldset>
     <div><TocynButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</TocynButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <TocynButton type="button" onClick={preferences.retry}>Retry workspace preferences</TocynButton>}{preferences.status === 'conflict' && <TocynButton type="button" onClick={preferences.restore}>Restore server preferences</TocynButton>}</div>
     <p role="status" aria-live="polite">{preferences.error || (preferences.status === 'saved' ? 'Workspace preferences saved.' : preferences.status === 'saving' ? 'Saving workspace preferences…' : preferences.status === 'unsaved' ? 'Unsaved workspace preferences.' : preferences.status === 'loading' ? 'Restoring workspace preferences…' : '')}</p>
