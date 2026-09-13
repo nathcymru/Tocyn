@@ -1,3 +1,4 @@
+import { SlaPriorityQueueService,SlaQueueRestart,type SlaQueuePage } from '../budgets/sla-priority-queue-admission.service';
 import { balancedAssignmentHandler } from './balanced-assignment.handler';
 import { admitCapacity,settleCapacity } from '../budgets/operator-capacity-admission.service';
 import { OperatorCapacityRepository,OperatorCapacityError,type CapacityCommit } from '../repositories/operator-capacity.repository';
@@ -1136,6 +1137,35 @@ dashboard.get("/tickets", async (c) => {
   }
   const draftNotExpiredAt = queue.data === 'drafts' && c.env.ENVIRONMENT === 'local' && c.env.LOCAL_BETA_ENABLED === 'true'
     ? new Date(c.env.localNow?.() ?? Date.now()).toISOString() : undefined;
+  if (sort.data === 'sla_priority') {
+    const limit=Number(c.req.query('limit')||20),pageNumber=Number(c.req.query('page')||1),cursor=c.req.query('cursor');
+    if(c.req.query('offset')!==undefined||!Number.isInteger(limit)||limit<1||limit>50||!Number.isInteger(pageNumber)||pageNumber<1)
+      return c.json({error:'Invalid SLA pagination'},400);
+    if(pageNumber>1)return c.json({code:'sla_sort_restart',error:'Restart SLA ordering from the first page'},409);
+    if(staffTicketAdmissionMode(c.env)!=='enabled'||!c.env.BUDGET_COORDINATOR_DO||!payload
+      ||!['admin','agent'].includes(payload.role)||payload.sub!==d.scope.actorId||payload.tenant_id!==d.scope.tenantId
+      ||!Number.isSafeInteger(payload.session_version)||!Number.isSafeInteger(payload.exp)||payload.mfa_verified!==true)
+      return c.json({code:'sla_sort_unavailable',error:'SLA ordering authority is unavailable'},503);
+    const service=new SlaPriorityQueueService(d.database,d.scope,{tenantId:d.scope.tenantId,actorId:d.scope.actorId,
+      role:payload.role as 'admin'|'agent',sessionVersion:payload.session_version!,expiresAt:payload.exp,mfaVerified:true},
+      {service:sessionTicketBudgetAdmission,repository:d.repositories.budgetAuthority,namespace:c.env.BUDGET_COORDINATOR_DO,
+       secret:c.env.JWT_SECRET,now:()=>c.env.localNow?.()??Date.now(),settle:(authority,outcome,now)=>apiTicketBudgetCache.settleOperation(authority,outcome,now)});
+    let completed:SlaQueuePage|undefined;
+    try{
+      const selection=Object.fromEntries(Object.entries({customerEmail:c.req.query('customer_email'),filterId:c.req.query('filter_id'),
+        status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),groupId:c.req.query('group_id'),
+        ticketNo:c.req.query('ticket_no'),search:search.data,queue:queue.data,draftNotExpiredAt}).filter(([,value])=>value!==undefined));
+      const result=await service.read(selection,{limit,cursor});
+      const body={data:result.data.map(item=>item.ticket),meta:{page:result.page,limit,total:result.total,total_pages:Math.ceil(result.total/limit)},
+        sla:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.sla])),asOf:result.asOf,next:result.next};
+      assertConversationResponseBounds(body);
+      const response=c.json(body);completed=result;return response;
+    }catch(error){
+      return error instanceof SlaQueueRestart
+        ? c.json({code:'sla_sort_restart',error:'Queue changed or expired; restart SLA ordering'},409)
+        : c.json({code:'sla_sort_unavailable',error:'The complete SLA queue is unavailable within current bounds'},503);
+    }finally{service.finish(completed);}
+  }
   const admission = await admitHttpTicketList({ env: c.env, deps: d, payload, operation: 'dashboard.ticket.list',
     filterId: c.req.query('filter_id'), search: search.data, queue: queue.data, now: () => c.env.localNow?.() ?? Date.now() });
   if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'

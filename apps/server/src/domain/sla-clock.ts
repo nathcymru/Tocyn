@@ -31,12 +31,46 @@ export type SlaEvaluationLimits = Readonly<{
   /** Maximum working intervals emitted by one calculation. */
   maxIntervals: number;
 }>;
+/** Deterministic work units, never a CPU billing measurement. Shared by one caller's whole batch. */
+export class SlaEvaluationExhaustedError extends Error {
+  readonly code = 'sla-evaluation-exhausted';
+  constructor() { super('SLA evaluation work allowance exhausted'); this.name = 'SlaEvaluationExhaustedError'; }
+}
+export class SlaEvaluationMeter {
+  private used = 0;
+  private exhausted = false;
+  constructor(readonly allowance: number) {
+    if (!Number.isSafeInteger(allowance) || allowance < 0) throw new RangeError('Invalid SLA work allowance');
+  }
+  get consumed(): number { return this.used; }
+  exhaust(): never {
+    this.exhausted = true;
+    throw new SlaEvaluationExhaustedError();
+  }
+  charge(units = 1): void {
+    if (this.exhausted || !Number.isSafeInteger(units) || units < 0 || units > this.allowance - this.used) {
+      this.exhausted = true;
+      throw new SlaEvaluationExhaustedError();
+    }
+    this.used += units;
+  }
+}
+
+/** Bounds parsing input separately from calendar/array iteration charges. Oversize input exhausts the whole caller meter. */
+export function parseMeteredSlaCalendarJson(raw: string, meter: SlaEvaluationMeter): SlaCalendar {
+  if (raw.length > 65_536) meter.exhaust();
+  meter.charge(Math.ceil(raw.length / 64));
+  if (new TextEncoder().encode(raw).byteLength > 65_536) meter.exhaust();
+  return parseSlaCalendar(JSON.parse(raw), meter);
+}
+
 export type SlaClockInput = Readonly<{
   calendar: SlaCalendar;
   startedAt: Date | number;
   evaluatedAt: Date | number;
   pauses?: readonly SlaPauseInterval[];
   limits?: Partial<SlaEvaluationLimits>;
+  meter?: SlaEvaluationMeter;
 }>;
 export type SlaDeadlineInput = Readonly<{
   calendar: SlaCalendar;
@@ -44,6 +78,7 @@ export type SlaDeadlineInput = Readonly<{
   targetWorkingMilliseconds: number;
   pauses?: readonly SlaPauseInterval[];
   limits?: Partial<SlaEvaluationLimits>;
+  meter?: SlaEvaluationMeter;
 }>;
 export type SlaClockResult = Readonly<{
   elapsedWorkingMilliseconds: number;
@@ -100,10 +135,11 @@ function assertInteger(value: unknown, description: string, minimum: number, max
   }
 }
 
-function assertTimeZone(value: unknown): asserts value is string {
+function assertTimeZone(value: unknown, meter?: SlaEvaluationMeter): asserts value is string {
   if (typeof value !== 'string' || value.length < 1 || value.length > 128) {
     throw new SlaClockError('invalid-calendar', 'timeZone must be a non-empty IANA timezone name');
   }
+  meter?.charge(256);
   try {
     new Intl.DateTimeFormat('en-GB', { timeZone: value }).format(0);
   } catch {
@@ -125,11 +161,12 @@ function assertDateKey(value: unknown): asserts value is string {
   }
 }
 
-function validateIntervals(value: unknown, description: string): readonly SlaWorkingInterval[] {
+function validateIntervals(value: unknown, description: string, meter?: SlaEvaluationMeter): readonly SlaWorkingInterval[] {
   if (!Array.isArray(value) || value.length > MAX_INTERVALS_PER_DAY) {
     throw new SlaClockError('invalid-calendar', `${description} must contain at most ${MAX_INTERVALS_PER_DAY} intervals`);
   }
   const intervals = value.map((item, index) => {
+    meter?.charge();
     if (!isRecord(item)) throw new SlaClockError('invalid-calendar', `${description}[${index}] must be an object`);
     assertInteger(item.startMinute, `${description}[${index}].startMinute`, 0, 1_439);
     assertInteger(item.endMinute, `${description}[${index}].endMinute`, 1, 1_440);
@@ -139,6 +176,7 @@ function validateIntervals(value: unknown, description: string): readonly SlaWor
     return Object.freeze({ startMinute: item.startMinute, endMinute: item.endMinute });
   });
   for (let index = 1; index < intervals.length; index += 1) {
+    meter?.charge();
     if (intervals[index - 1].endMinute > intervals[index].startMinute) {
       throw new SlaClockError('invalid-calendar', `${description} intervals must be sorted and non-overlapping`);
     }
@@ -150,9 +188,9 @@ function validateIntervals(value: unknown, description: string): readonly SlaWor
  * Validates untrusted configuration into immutable, bounded pure data. Empty
  * weekly days and empty exceptions are intentional calendar closures.
  */
-export function parseSlaCalendar(value: unknown): SlaCalendar {
+export function parseSlaCalendar(value: unknown, meter?: SlaEvaluationMeter): SlaCalendar {
   if (!isRecord(value)) throw new SlaClockError('invalid-calendar', 'calendar must be an object');
-  assertTimeZone(value.timeZone);
+  assertTimeZone(value.timeZone, meter);
   if (!isRecord(value.weekly)) throw new SlaClockError('invalid-calendar', 'calendar.weekly must be an object');
   if (!isRecord(value.dst) || !['earlier', 'later', 'both'].includes(value.dst.ambiguousLocalTime as string)
     || !['next-valid', 'previous-valid', 'reject'].includes(value.dst.nonexistentLocalTime as string)) {
@@ -160,7 +198,8 @@ export function parseSlaCalendar(value: unknown): SlaCalendar {
   }
   const weekly: Partial<Record<SlaWeekday, readonly SlaWorkingInterval[]>> = {};
   for (const day of SLA_WEEKDAYS) {
-    if (value.weekly[day] !== undefined) weekly[day] = validateIntervals(value.weekly[day], `calendar.weekly.${day}`);
+    meter?.charge();
+    if (value.weekly[day] !== undefined) weekly[day] = validateIntervals(value.weekly[day], `calendar.weekly.${day}`, meter);
   }
   if (Object.keys(value.weekly).some(key => !SLA_WEEKDAYS.includes(key as SlaWeekday))) {
     throw new SlaClockError('invalid-calendar', 'calendar.weekly contains an unknown weekday');
@@ -174,11 +213,12 @@ export function parseSlaCalendar(value: unknown): SlaCalendar {
   }
   const seenDates = new Set<string>();
   const exceptions = rawExceptions.map((item, index) => {
+    meter?.charge();
     if (!isRecord(item)) throw new SlaClockError('invalid-calendar', `calendar.exceptions[${index}] must be an object`);
     assertDateKey(item.date);
     if (seenDates.has(item.date)) throw new SlaClockError('invalid-calendar', 'calendar.exceptions dates must be unique');
     seenDates.add(item.date);
-    return Object.freeze({ date: item.date, intervals: validateIntervals(item.intervals, `calendar.exceptions[${index}].intervals`) });
+    return Object.freeze({ date: item.date, intervals: validateIntervals(item.intervals, `calendar.exceptions[${index}].intervals`, meter) });
   });
   return Object.freeze({
     timeZone: value.timeZone,
@@ -214,7 +254,8 @@ type LocalDate = Pick<LocalDateTime, 'year' | 'month' | 'day' | 'weekday'>;
 type EpochInterval = Readonly<{ startsAt: number; endsAt: number }>;
 
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
-function formatter(timeZone: string): Intl.DateTimeFormat {
+function formatter(timeZone: string, meter?: SlaEvaluationMeter): Intl.DateTimeFormat {
+  meter?.charge(256); // Reserve formatter setup even on cache hits: deterministic across isolates.
   let cached = formatterCache.get(timeZone);
   if (!cached) {
     if (formatterCache.size >= MAX_FORMATTER_CACHE_ENTRIES) formatterCache.clear();
@@ -224,9 +265,10 @@ function formatter(timeZone: string): Intl.DateTimeFormat {
   return cached;
 }
 
-function localDateTime(instant: number, timeZone: string): LocalDateTime {
+function localDateTime(instant: number, timeZone: string, meter?: SlaEvaluationMeter): LocalDateTime {
+  meter?.charge(16);
   const values: Record<string, string> = {};
-  for (const part of formatter(timeZone).formatToParts(instant)) if (part.type !== 'literal') values[part.type] = part.value;
+  for (const part of formatter(timeZone, meter).formatToParts(instant)) if (part.type !== 'literal') values[part.type] = part.value;
   const weekday = values.weekday.toLowerCase() as SlaWeekday;
   if (!SLA_WEEKDAYS.includes(weekday)) throw new SlaClockError('invalid-calendar', 'timezone formatter returned an unsupported weekday');
   return { year: Number(values.year), month: Number(values.month), day: Number(values.day), hour: Number(values.hour), minute: Number(values.minute), weekday };
@@ -246,27 +288,28 @@ function sameLocalMinute(actual: LocalDateTime, expected: LocalDateTime): boolea
   return actual.year === expected.year && actual.month === expected.month && actual.day === expected.day && actual.hour === expected.hour && actual.minute === expected.minute;
 }
 
-function offsetsNear(nominal: number, timeZone: string): readonly number[] {
+function offsetsNear(nominal: number, timeZone: string, meter?: SlaEvaluationMeter): readonly number[] {
   const result = new Set<number>();
   for (let delta = -36 * 60; delta <= 36 * 60; delta += 360) {
+    meter?.charge();
     const instant = nominal + delta * MS_PER_MINUTE;
-    const local = localDateTime(instant, timeZone);
+    const local = localDateTime(instant, timeZone, meter);
     const renderedAsUtc = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute);
     result.add(renderedAsUtc - instant);
   }
   return [...result];
 }
 
-function localMinuteToInstants(local: LocalDateTime, timeZone: string): readonly number[] {
+function localMinuteToInstants(local: LocalDateTime, timeZone: string, meter?: SlaEvaluationMeter): readonly number[] {
   const nominal = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute);
-  return offsetsNear(nominal, timeZone)
+  return offsetsNear(nominal, timeZone, meter)
     .map(offset => nominal - offset)
-    .filter(candidate => sameLocalMinute(localDateTime(candidate, timeZone), local))
+    .filter(candidate => sameLocalMinute(localDateTime(candidate, timeZone, meter), local))
     .sort((left, right) => left - right);
 }
 
-function boundaryInstant(local: LocalDateTime, calendar: SlaCalendar, edge: 'start' | 'end'): number {
-  const exact = localMinuteToInstants(local, calendar.timeZone);
+function boundaryInstant(local: LocalDateTime, calendar: SlaCalendar, edge: 'start' | 'end', meter?: SlaEvaluationMeter): number {
+  const exact = localMinuteToInstants(local, calendar.timeZone, meter);
   if (exact.length > 0) {
     if (calendar.dst.ambiguousLocalTime === 'later') return exact[exact.length - 1];
     if (calendar.dst.ambiguousLocalTime === 'both') return edge === 'start' ? exact[0] : exact[exact.length - 1];
@@ -277,19 +320,22 @@ function boundaryInstant(local: LocalDateTime, calendar: SlaCalendar, edge: 'sta
   }
   const direction = calendar.dst.nonexistentLocalTime === 'next-valid' ? 1 : -1;
   for (let minutes = 1; minutes <= 180; minutes += 1) {
+    meter?.charge();
     const shifted = new Date(Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute + direction * minutes));
     const candidate: LocalDateTime = {
       year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, day: shifted.getUTCDate(), hour: shifted.getUTCHours(), minute: shifted.getUTCMinutes(), weekday: local.weekday,
     };
-    const instants = localMinuteToInstants(candidate, calendar.timeZone);
+    const instants = localMinuteToInstants(candidate, calendar.timeZone, meter);
     if (instants.length > 0) return direction === 1 ? instants[0] : instants[instants.length - 1];
   }
   throw new SlaClockError('nonexistent-local-time', 'no valid instant was found within the DST gap bound');
 }
 
-function normalizeEpochIntervals(intervals: readonly EpochInterval[]): readonly EpochInterval[] {
+function normalizeEpochIntervals(intervals: readonly EpochInterval[], meter?: SlaEvaluationMeter): readonly EpochInterval[] {
+  meter?.charge(intervals.length);
   const normalized: EpochInterval[] = [];
-  for (const interval of [...intervals].filter(interval => interval.startsAt < interval.endsAt).sort((left, right) => left.startsAt - right.startsAt)) {
+  for (const interval of [...intervals].filter(interval => interval.startsAt < interval.endsAt).sort((left, right) => { meter?.charge(); return left.startsAt - right.startsAt; })) {
+    meter?.charge();
     const previous = normalized[normalized.length - 1];
     if (previous && interval.startsAt <= previous.endsAt) {
       normalized[normalized.length - 1] = { startsAt: previous.startsAt, endsAt: Math.max(previous.endsAt, interval.endsAt) };
@@ -306,65 +352,71 @@ function localMinute(date: LocalDate, minute: number): LocalDateTime {
   };
 }
 
-function hasFoldedMinute(date: LocalDate, interval: SlaWorkingInterval, timeZone: string): boolean {
+function hasFoldedMinute(date: LocalDate, interval: SlaWorkingInterval, timeZone: string, meter?: SlaEvaluationMeter): boolean {
   // Avoid inspecting every scheduled minute on dates whose nearby UTC offsets
   // are stable. A transition date is still checked at minute precision.
   const midday = Date.UTC(date.year, date.month - 1, date.day, 12);
-  if (offsetsNear(midday, timeZone).length < 2) return false;
+  if (offsetsNear(midday, timeZone, meter).length < 2) return false;
   for (let minute = interval.startMinute; minute < interval.endMinute; minute += 1) {
-    if (localMinuteToInstants(localMinute(date, minute), timeZone).length > 1) return true;
+    meter?.charge();
+    if (localMinuteToInstants(localMinute(date, minute), timeZone, meter).length > 1) return true;
   }
   return false;
 }
 
-function bothFoldIntervals(date: LocalDate, interval: SlaWorkingInterval, timeZone: string): readonly EpochInterval[] {
+function bothFoldIntervals(date: LocalDate, interval: SlaWorkingInterval, timeZone: string, meter?: SlaEvaluationMeter): readonly EpochInterval[] {
   const mapped: EpochInterval[] = [];
   for (let minute = interval.startMinute; minute < interval.endMinute; minute += 1) {
-    for (const startsAt of localMinuteToInstants(localMinute(date, minute), timeZone)) {
+    meter?.charge();
+    for (const startsAt of localMinuteToInstants(localMinute(date, minute), timeZone, meter)) {
+      meter?.charge();
       // Schedules are minute-precise. Every existing local minute therefore
       // contributes its own UTC minute, which preserves any gap between the
       // two occurrences of a folded local window.
       mapped.push({ startsAt, endsAt: startsAt + MS_PER_MINUTE });
     }
   }
-  return normalizeEpochIntervals(mapped);
+  return normalizeEpochIntervals(mapped, meter);
 }
 
-function dateIntervals(date: LocalDate, calendar: SlaCalendar, exceptions: ReadonlyMap<string, readonly SlaWorkingInterval[]>): readonly EpochInterval[] {
+function dateIntervals(date: LocalDate, calendar: SlaCalendar, exceptions: ReadonlyMap<string, readonly SlaWorkingInterval[]>, meter?: SlaEvaluationMeter): readonly EpochInterval[] {
   const intervals = exceptions.get(localDateKey(date)) ?? calendar.weekly[date.weekday] ?? [];
   const mapped = intervals.flatMap(interval => {
-    if (calendar.dst.ambiguousLocalTime === 'both' && hasFoldedMinute(date, interval, calendar.timeZone)) {
-      return bothFoldIntervals(date, interval, calendar.timeZone);
+    meter?.charge();
+    if (calendar.dst.ambiguousLocalTime === 'both' && hasFoldedMinute(date, interval, calendar.timeZone, meter)) {
+      return bothFoldIntervals(date, interval, calendar.timeZone, meter);
     }
     const startHour = Math.floor(interval.startMinute / 60);
     const startMinute = interval.startMinute % 60;
     const endDate = interval.endMinute === 1_440 ? nextLocalDate(date) : date;
     const endHour = interval.endMinute === 1_440 ? 0 : Math.floor(interval.endMinute / 60);
     const endMinute = interval.endMinute === 1_440 ? 0 : interval.endMinute % 60;
-    const startsAt = boundaryInstant({ ...date, hour: startHour, minute: startMinute }, calendar, 'start');
-    const endsAt = boundaryInstant({ ...endDate, hour: endHour, minute: endMinute }, calendar, 'end');
+    const startsAt = boundaryInstant({ ...date, hour: startHour, minute: startMinute }, calendar, 'start', meter);
+    const endsAt = boundaryInstant({ ...endDate, hour: endHour, minute: endMinute }, calendar, 'end', meter);
     return [Object.freeze({ startsAt, endsAt })];
   });
-  return normalizeEpochIntervals(mapped);
+  return normalizeEpochIntervals(mapped, meter);
 }
 
-function pauseIntervals(value: readonly SlaPauseInterval[] | undefined): readonly EpochInterval[] {
+function pauseIntervals(value: readonly SlaPauseInterval[] | undefined, meter?: SlaEvaluationMeter): readonly EpochInterval[] {
   if (!value) return [];
   if (value.length > 4_096) throw new SlaClockError('invalid-pause', 'pause intervals cannot exceed 4096');
+  meter?.charge(value.length);
   const sorted = value.map(interval => {
     if (!isRecord(interval)) throw new SlaClockError('invalid-pause', 'pause interval must be an object');
     const startsAt = epoch(interval.startsAt, 'invalid-pause');
     const endsAt = epoch(interval.endsAt, 'invalid-pause');
     if (startsAt >= endsAt) throw new SlaClockError('invalid-pause', 'pause interval must end after it starts');
     return { startsAt, endsAt };
-  }).sort((left, right) => left.startsAt - right.startsAt);
-  return normalizeEpochIntervals(sorted);
+  }).sort((left, right) => { meter?.charge(); return left.startsAt - right.startsAt; });
+  return normalizeEpochIntervals(sorted, meter);
 }
 
-function unpausedSlices(interval: EpochInterval, pauses: readonly EpochInterval[]): readonly EpochInterval[] {
+function unpausedSlices(interval: EpochInterval, pauses: readonly EpochInterval[], meter?: SlaEvaluationMeter): readonly EpochInterval[] {
   const slices: EpochInterval[] = [];
   let cursor = interval.startsAt;
   for (const pause of pauses) {
+    meter?.charge();
     if (pause.endsAt <= cursor) continue;
     if (pause.startsAt >= interval.endsAt) break;
     if (pause.startsAt > cursor) slices.push({ startsAt: cursor, endsAt: Math.min(pause.startsAt, interval.endsAt) });
@@ -376,18 +428,20 @@ function unpausedSlices(interval: EpochInterval, pauses: readonly EpochInterval[
 }
 
 type CollectedIntervals = Readonly<{ intervals: readonly EpochInterval[]; inspectedCalendarDays: number; inspectedIntervals: number; exhausted: boolean }>;
-function collectIntervals(calendar: SlaCalendar, startsAt: number, endsAt: number, evaluationLimits: SlaEvaluationLimits): CollectedIntervals {
+function collectIntervals(calendar: SlaCalendar, startsAt: number, endsAt: number, evaluationLimits: SlaEvaluationLimits, meter?: SlaEvaluationMeter): CollectedIntervals {
   if (startsAt > endsAt) throw new SlaClockError('invalid-instant', 'evaluatedAt must not precede startedAt');
-  const exceptions = new Map(calendar.exceptions.map(exception => [exception.date, exception.intervals]));
+  const exceptions = new Map(calendar.exceptions.map(exception => { meter?.charge(); return [exception.date, exception.intervals] as const; }));
   const intervals: EpochInterval[] = [];
-  let date: LocalDate = localDateTime(startsAt, calendar.timeZone);
-  const finalDate = localDateTime(endsAt, calendar.timeZone);
+  let date: LocalDate = localDateTime(startsAt, calendar.timeZone, meter);
+  const finalDate = localDateTime(endsAt, calendar.timeZone, meter);
   let inspectedCalendarDays = 0;
   let inspectedIntervals = 0;
   while (inspectedCalendarDays < evaluationLimits.maxCalendarDays) {
-    const dayIntervals = dateIntervals(date, calendar, exceptions);
+    meter?.charge();
+    const dayIntervals = dateIntervals(date, calendar, exceptions, meter);
     inspectedCalendarDays += 1;
     for (const interval of dayIntervals) {
+      meter?.charge();
       inspectedIntervals += 1;
       if (inspectedIntervals > evaluationLimits.maxIntervals) return { intervals, inspectedCalendarDays, inspectedIntervals, exhausted: true };
       if (interval.endsAt > startsAt && interval.startsAt < endsAt) intervals.push({ startsAt: Math.max(interval.startsAt, startsAt), endsAt: Math.min(interval.endsAt, endsAt) });
@@ -400,11 +454,12 @@ function collectIntervals(calendar: SlaCalendar, startsAt: number, endsAt: numbe
   return { intervals, inspectedCalendarDays, inspectedIntervals, exhausted: true };
 }
 
-function worked(intervals: readonly EpochInterval[], pauses: readonly EpochInterval[]): { elapsedWorkingMilliseconds: number; activePauseMilliseconds: number } {
+function worked(intervals: readonly EpochInterval[], pauses: readonly EpochInterval[], meter?: SlaEvaluationMeter): { elapsedWorkingMilliseconds: number; activePauseMilliseconds: number } {
   let elapsedWorkingMilliseconds = 0;
   let activePauseMilliseconds = 0;
   for (const interval of intervals) {
-    const slices = unpausedSlices(interval, pauses);
+    meter?.charge();
+    const slices = unpausedSlices(interval, pauses, meter);
     const available = slices.reduce((total, slice) => total + slice.endsAt - slice.startsAt, 0);
     elapsedWorkingMilliseconds += available;
     activePauseMilliseconds += interval.endsAt - interval.startsAt - available;
@@ -414,12 +469,13 @@ function worked(intervals: readonly EpochInterval[], pauses: readonly EpochInter
 
 /** Returns elapsed scheduled working time after subtracting the explicit pauses. */
 export function elapsedWorkingTime(input: SlaClockInput): SlaClockResult {
+  const meter = input.meter; meter?.charge();
   const startedAt = epoch(input.startedAt);
   const evaluatedAt = epoch(input.evaluatedAt);
   const evaluationLimits = limits(input.limits);
-  const collected = collectIntervals(input.calendar, startedAt, evaluatedAt, evaluationLimits);
+  const collected = collectIntervals(input.calendar, startedAt, evaluatedAt, evaluationLimits, meter);
   if (collected.exhausted) throw new SlaClockError('resource-limit', 'working-time calculation exceeded configured evaluation limits');
-  return { ...worked(collected.intervals, pauseIntervals(input.pauses)), inspectedCalendarDays: collected.inspectedCalendarDays, inspectedIntervals: collected.inspectedIntervals };
+  return { ...worked(collected.intervals, pauseIntervals(input.pauses, meter), meter), inspectedCalendarDays: collected.inspectedCalendarDays, inspectedIntervals: collected.inspectedIntervals };
 }
 
 /**
@@ -427,19 +483,21 @@ export function elapsedWorkingTime(input: SlaClockInput): SlaClockResult {
  * passed. `null` denotes an intentionally empty calendar, not a breach.
  */
 export function deadlineAfterWorkingTime(input: SlaDeadlineInput): SlaDeadlineResult {
+  const meter = input.meter; meter?.charge();
   const startedAt = epoch(input.startedAt);
   if (!Number.isSafeInteger(input.targetWorkingMilliseconds) || input.targetWorkingMilliseconds < 0) {
     throw new SlaClockError('invalid-target', 'targetWorkingMilliseconds must be a non-negative safe integer');
   }
   const evaluationLimits = limits(input.limits);
-  const pauses = pauseIntervals(input.pauses);
+  const pauses = pauseIntervals(input.pauses, meter);
   if (input.targetWorkingMilliseconds === 0) return { dueAt: new Date(startedAt), elapsedWorkingMilliseconds: 0, activePauseMilliseconds: 0, inspectedCalendarDays: 0, inspectedIntervals: 0 };
+  meter?.charge(input.calendar.exceptions.length + 7);
   if (!Object.values(input.calendar.weekly).some(intervals => intervals && intervals.length > 0)
     && !input.calendar.exceptions.some(exception => exception.intervals.length > 0)) {
     return { dueAt: null, reason: 'no-working-time', elapsedWorkingMilliseconds: 0, activePauseMilliseconds: 0, inspectedCalendarDays: 0, inspectedIntervals: 0 };
   }
-  const exceptions = new Map(input.calendar.exceptions.map(exception => [exception.date, exception.intervals]));
-  let date: LocalDate = localDateTime(startedAt, input.calendar.timeZone);
+  const exceptions = new Map(input.calendar.exceptions.map(exception => { meter?.charge(); return [exception.date, exception.intervals] as const; }));
+  let date: LocalDate = localDateTime(startedAt, input.calendar.timeZone, meter);
   let cursor = startedAt;
   let remaining = input.targetWorkingMilliseconds;
   let elapsedWorkingMilliseconds = 0;
@@ -447,19 +505,22 @@ export function deadlineAfterWorkingTime(input: SlaDeadlineInput): SlaDeadlineRe
   let inspectedCalendarDays = 0;
   let inspectedIntervals = 0;
   while (inspectedCalendarDays < evaluationLimits.maxCalendarDays) {
-    const dayIntervals = dateIntervals(date, input.calendar, exceptions);
+    meter?.charge();
+    const dayIntervals = dateIntervals(date, input.calendar, exceptions, meter);
     inspectedCalendarDays += 1;
     for (const dayInterval of dayIntervals) {
+      meter?.charge();
       inspectedIntervals += 1;
       if (inspectedIntervals > evaluationLimits.maxIntervals) return { dueAt: null, reason: 'resource-limit', elapsedWorkingMilliseconds, activePauseMilliseconds, inspectedCalendarDays, inspectedIntervals };
       const interval = { startsAt: Math.max(dayInterval.startsAt, cursor), endsAt: dayInterval.endsAt };
       if (interval.startsAt >= interval.endsAt) continue;
-      const slices = unpausedSlices(interval, pauses);
+      const slices = unpausedSlices(interval, pauses, meter);
       const available = slices.reduce((total, slice) => total + slice.endsAt - slice.startsAt, 0);
       elapsedWorkingMilliseconds += available;
       activePauseMilliseconds += interval.endsAt - interval.startsAt - available;
       if (available >= remaining) {
         for (const slice of slices) {
+          meter?.charge();
           const duration = slice.endsAt - slice.startsAt;
           if (duration >= remaining) {
             return { dueAt: new Date(slice.startsAt + remaining), elapsedWorkingMilliseconds: input.targetWorkingMilliseconds, activePauseMilliseconds, inspectedCalendarDays, inspectedIntervals };
@@ -484,10 +545,11 @@ export function slaClockStart(input: Readonly<{ openedAt: Date | number; reopene
 }
 
 function targetResult(input: SlaDeadlineInput & Readonly<{ evaluatedAt: Date | number }>): SlaTargetResult {
+  const meter = input.meter; meter?.charge();
   const evaluatedAt = epoch(input.evaluatedAt);
   const deadline = deadlineAfterWorkingTime(input);
   if (!deadline.dueAt) return { ...deadline, targetWorkingMilliseconds: input.targetWorkingMilliseconds, remainingWorkingMilliseconds: Math.max(0, input.targetWorkingMilliseconds - deadline.elapsedWorkingMilliseconds), state: 'unavailable' };
-  const elapsed = elapsedWorkingTime({ calendar: input.calendar, startedAt: input.startedAt, evaluatedAt, pauses: input.pauses, limits: input.limits });
+  const elapsed = elapsedWorkingTime({ calendar: input.calendar, startedAt: input.startedAt, evaluatedAt, pauses: input.pauses, limits: input.limits, meter });
   return {
     ...deadline,
     elapsedWorkingMilliseconds: elapsed.elapsedWorkingMilliseconds,

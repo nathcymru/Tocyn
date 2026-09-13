@@ -5,7 +5,7 @@ import type { SessionBudgetCredential } from './session-budget-authority.reposit
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { SupportStateDefinition,TicketSupportState } from '../types/support-state';
 import { budgetCommitConstraint,budgetGrantOperationStatements } from './budget-commit-fence';
-import { DEFAULT_SLA_CALENDAR, type SlaPauseInterval } from '../domain/sla-clock';
+import { DEFAULT_SLA_CALENDAR, type SlaPauseInterval, type SlaEvaluationMeter } from '../domain/sla-clock';
 import { projectSlaClock } from './sla-clock.repository';
 import type { TicketSlaClock, TicketSlaProjection } from '../types/sla';
 
@@ -33,7 +33,7 @@ export type SlaMainRow=Readonly<Record<string,unknown>&{ticket_id:string;handler
 export type DashboardSlaRows=Readonly<{main:SlaMainRow;pauses:readonly {started_at:string;ended_at:string|null}[]}>;
 
 /** Evaluates the accepted clock semantics after the atomic read fence returns the complete pause history. */
-export function projectDashboardSlaRows(rows: DashboardSlaRows, now = new Date()): TicketSlaProjection {
+export function projectDashboardSlaRows(rows: DashboardSlaRows, now = new Date(), meter?:SlaEvaluationMeter): TicketSlaProjection {
   const clock: TicketSlaClock = { ticketId: rows.main.ticket_id, responseStartedAt: rows.main.response_started_at,
     responseCompletedAt: rows.main.response_completed_at, resolutionStartedAt: rows.main.resolution_started_at,
     resolutionCompletedAt: rows.main.resolution_completed_at, pausedAt: rows.main.paused_at, pauseReason: rows.main.pause_reason,
@@ -42,9 +42,10 @@ export function projectDashboardSlaRows(rows: DashboardSlaRows, now = new Date()
     policyResolutionTargetMs: rows.main.resolution_target_ms,
     policyResponseReopenPolicy: rows.main.response_reopen_policy === 'restart' ? 'restart' : 'continue',
     policyResolutionReopenPolicy: rows.main.resolution_reopen_policy === 'restart' ? 'restart' : 'continue' };
+  meter?.charge(rows.pauses.length);
   const pauses: SlaPauseInterval[] = rows.pauses.map(pause => ({ startsAt: new Date(pause.started_at), endsAt: new Date(pause.ended_at ?? now.toISOString()) }));
   return projectSlaClock(clock, { calendar: DEFAULT_SLA_CALENDAR, responseTargetMs: null, resolutionTargetMs: null,
-    reopenPolicy: { response: 'continue', resolution: 'continue' }, revision: 0 }, pauses, rows.main.handler_name, now);
+    reopenPolicy: { response: 'continue', resolution: 'continue' }, revision: 0 }, pauses, rows.main.handler_name, now,meter);
 }
 
 const cursorVersion=1;

@@ -1,3 +1,4 @@
+import { ticketListPredicate } from './ticket-list-predicate';
 import { ticketListCompletionStatements } from './ticket-list-completion';
 import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import { capacityAssignmentStatement } from './operator-capacity-predicate';
@@ -8,7 +9,6 @@ import type { OperatorWorkspaceSort } from '../types/operator-workspace';
 import { OperatorWorkspaceRepository } from './operator-workspace.repository';
 import { SupportStateRepository } from './support-state.repository';
 import { TicketQueueRepository } from './ticket-queue.repository';
-import { ticketQueuePredicate } from './ticket-queue-predicate';
 import type { TicketQueueKey } from '../types/ticket-queue';
 import { SlaClockRepository } from './sla-clock.repository';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
@@ -344,143 +344,12 @@ export class SqlTicketRepository implements TicketRepository {
     const limit = Math.min(100, Math.max(1, Number.isFinite(options.limit) ? options.limit! : 50));
     const offset = (page - 1) * limit;
 
-    let query = "SELECT tickets.*, (SELECT snippet FROM articles WHERE articles.tenant_id = tickets.tenant_id AND ticket_id = tickets.id ORDER BY created_at DESC LIMIT 1) as snippet FROM tickets WHERE tenant_id = ?";
-    let countQuery = "SELECT COUNT(*) as total FROM tickets WHERE tenant_id = ?";
-    const params: any[] = [this.scope.tenantId];
+    const predicate = await ticketListPredicate(this.db,this.scope,options);
+    const {params,scanFence,current} = predicate;
+    let query = `SELECT tickets.*, (SELECT snippet FROM articles WHERE articles.tenant_id = tickets.tenant_id AND ticket_id = tickets.id ORDER BY created_at DESC LIMIT 1) as snippet FROM tickets WHERE ${predicate.sql}`;
+    const countQuery = `SELECT COUNT(*) as total FROM tickets WHERE ${predicate.sql}`;
 
-    if (options.viewer?.role === 'agent') {
-      const visible = "(group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership WHERE membership.tenant_id = tickets.tenant_id AND membership.user_id = ? AND membership.group_id = tickets.group_id))";
-      query += ` AND ${visible}`;
-      countQuery += ` AND ${visible}`;
-      params.push(options.viewer.actorId);
-    }
-
-    if (options.customerEmail) {
-      query += " AND customer_email = ?";
-      countQuery += " AND customer_email = ?";
-      params.push(options.customerEmail);
-    }
-
-    if (options.queue) {
-      if (['drafts', 'mine', 'unassigned', 'mentions'].includes(options.queue) && (!options.viewer || options.viewer.actorId !== this.scope.actorId
-        || !this.scope.roles.includes(options.viewer.role) || !['admin', 'agent'].includes(options.viewer.role))) {
-        throw new Error('Queue requires the current operator');
-      }
-      const queue = ticketQueuePredicate(options.queue, 'tickets', options.queue === 'drafts' || options.queue === 'mine' || options.queue === 'mentions'
-        ? { actorId: this.scope.actorId, notExpiredAt: options.draftNotExpiredAt } : undefined);
-      query += ` AND ${queue.sql}`;
-      countQuery += ` AND ${queue.sql}`;
-      params.push(...queue.values);
-    }
-
-    if (options.search) {
-      const numericMatch = options.search.match(/\d+/);
-      const searchPattern = `%${options.search}%`;
-
-      let searchCondition = "(subject LIKE ? OR customer_email LIKE ? OR id LIKE ? OR EXISTS (SELECT 1 FROM articles WHERE articles.tenant_id = tickets.tenant_id AND ticket_id = tickets.id AND (snippet LIKE ? OR body LIKE ?)))";
-      const searchParams = [searchPattern, searchPattern, searchPattern, searchPattern, searchPattern];
-
-      if (numericMatch) {
-        searchCondition = `(${searchCondition} OR CAST(ticket_no AS TEXT) LIKE ?)`;
-        const numPattern = `%${numericMatch[0]}%`;
-        searchParams.push(numPattern);
-      }
-
-      query += ` AND ${searchCondition}`;
-      countQuery += ` AND ${searchCondition}`;
-      params.push(...searchParams);
-    }
-
-    if (options.filterId) {
-      const snapshotFilter = options.scanFence?.filter;
-      const filter = snapshotFilter?.exists
-        ? await this.db.prepare(`SELECT tf.conditions FROM ticket_filters tf WHERE tf.tenant_id=? AND tf.id=? AND EXISTS
-          (SELECT 1 FROM ticket_list_filter_scan_counters f WHERE f.tenant_id=tf.tenant_id AND f.filter_id=tf.id
-            AND f.condition_bytes<=? AND f.revision=?)`).bind(this.scope.tenantId, options.filterId, snapshotFilter.conditionBytes, snapshotFilter.revision).first<{ conditions: string }>()
-        : snapshotFilter ? null : await this.db.prepare("SELECT conditions FROM ticket_filters WHERE tenant_id = ? AND id = ?")
-          .bind(this.scope.tenantId, options.filterId).first<{ conditions: string }>();
-      if (snapshotFilter?.exists && !filter) throw new TicketListScanError('fence_changed');
-
-      if (filter) {
-        try {
-          const conditions = JSON.parse(filter.conditions);
-          if (Array.isArray(conditions)) {
-            for (const condition of conditions) {
-              const { field, operator, value } = condition;
-              // Prevent SQL injection by allowing only specific fields
-              const allowedFields = ["status", "priority", "assigned_to", "group_id", "source", "subject", "customer_email", "ticket_no"];
-              if (allowedFields.includes(field)) {
-                if (operator === "in" && typeof value === "string" && value.length > 0) {
-                  const vals = value.split(",");
-                  query += ` AND ${field} IN (${vals.map(() => "?").join(",")})`;
-                  countQuery += ` AND ${field} IN (${vals.map(() => "?").join(",")})`;
-                  params.push(...vals);
-                } else if (operator === "in" && Array.isArray(value) && value.length > 0) {
-                  query += ` AND ${field} IN (${value.map(() => "?").join(",")})`;
-                  countQuery += ` AND ${field} IN (${value.map(() => "?").join(",")})`;
-                  params.push(...value);
-                } else if (operator === "equals" && value !== undefined && value !== null) {
-                  query += ` AND ${field} = ?`;
-                  countQuery += ` AND ${field} = ?`;
-                  params.push(value);
-                } else if (operator === "not_equals" && value !== undefined && value !== null) {
-                  query += ` AND ${field} != ?`;
-                  countQuery += ` AND ${field} != ?`;
-                  params.push(value);
-                } else if (operator === "contains" && typeof value === "string" && value.length > 0) {
-                  query += ` AND ${field} LIKE ?`;
-                  countQuery += ` AND ${field} LIKE ?`;
-                  params.push(`%${value}%`);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          throw new Error("Invalid saved filter");
-        }
-      } else {
-        query += " AND 0=1"; countQuery += " AND 0=1";
-      }
-    } else {
-      if (options.status) {
-        const statuses = options.status.split(",");
-        query += ` AND status IN (${statuses.map(() => "?").join(",")})`;
-        countQuery += ` AND status IN (${statuses.map(() => "?").join(",")})`;
-        params.push(...statuses);
-      }
-      if (options.priority) {
-        const priorities = options.priority.split(",");
-        query += ` AND priority IN (${priorities.map(() => "?").join(",")})`;
-        countQuery += ` AND priority IN (${priorities.map(() => "?").join(",")})`;
-        params.push(...priorities);
-      }
-      if (options.assignedTo) {
-        query += " AND assigned_to = ?";
-        countQuery += " AND assigned_to = ?";
-        params.push(options.assignedTo);
-      }
-      if (options.groupId) {
-        query += " AND group_id = ?";
-        countQuery += " AND group_id = ?";
-        params.push(options.groupId);
-      }
-      if (options.ticketNo) {
-        query += " AND ticket_no = ?";
-        countQuery += " AND ticket_no = ?";
-        params.push(parseInt(options.ticketNo));
-      }
-    }
-
-    const scanFence = options.scanFence ? ticketListScanFenceSql(options.scanFence) : undefined;
-    if (scanFence) {
-      query += ` AND ${scanFence.sql}`;
-      countQuery += ` AND ${scanFence.sql}`;
-      params.push(...scanFence.values);
-    }
-    const current = options.currentCredential ? ticketListCurrentCredentialSql(this.scope.tenantId, this.scope.actorId, options.currentCredential) : undefined;
-    if (current) { query += ` AND ${current.sql}`; countQuery += ` AND ${current.sql}`; params.push(...current.values); }
-
-    const sortClauses: Record<OperatorWorkspaceSort, string> = {
+    const sortClauses: Partial<Record<OperatorWorkspaceSort, string>> = {
       updated_desc: 'tickets.updated_at DESC', updated_asc: 'tickets.updated_at ASC',
       created_desc: 'tickets.created_at DESC', created_asc: 'tickets.created_at ASC',
       priority_desc: "CASE tickets.priority WHEN 'urgent' THEN 3 WHEN 'high' THEN 2 WHEN 'normal' THEN 1 ELSE 0 END DESC",

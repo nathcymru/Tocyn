@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { CapabilityFenceError, capabilityWriteConstraint, requireCapabilityWrite, type CapabilityWriteFence } from '../auth/capability-policy';
-import { DEFAULT_SLA_CALENDAR, SlaClockError as DomainSlaClockError, evaluateResolutionSla, evaluateResponseSla, parseSlaCalendar, type SlaCalendar, type SlaPauseInterval, type SlaReopenPolicy } from '../domain/sla-clock';
+import { SlaEvaluationMeter, parseMeteredSlaCalendarJson, DEFAULT_SLA_CALENDAR, SlaClockError as DomainSlaClockError, evaluateResolutionSla, evaluateResponseSla, parseSlaCalendar, type SlaCalendar, type SlaPauseInterval, type SlaReopenPolicy } from '../domain/sla-clock';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { SlaPolicy, SlaPolicyInput, SlaTargetProjection, TicketSlaClock, TicketSlaProjection } from '../types/sla';
 import type { TicketStateWriteFence } from './support-state.repository';
@@ -37,25 +37,27 @@ export class SlaClockError extends Error {
 }
 
 /** Shared pure projection over an already authorized, complete clock snapshot. */
-export function projectSlaClock(clock: TicketSlaClock, currentPolicy: SlaPolicy, pauses: SlaPauseInterval[], handlerName: string | null, now = new Date()): TicketSlaProjection {
+export function projectSlaClock(clock: TicketSlaClock, currentPolicy: SlaPolicy, pauses: SlaPauseInterval[], handlerName: string | null, now = new Date(), meter?: SlaEvaluationMeter): TicketSlaProjection {
   const frozenPolicy = clock.policyCalendarJson ? {
-    calendar: calendar(JSON.parse(clock.policyCalendarJson)), responseTargetMs: clock.policyResponseTargetMs,
+    calendar: meter ? parseMeteredSlaCalendarJson(clock.policyCalendarJson, meter) : calendar(JSON.parse(clock.policyCalendarJson)), responseTargetMs: clock.policyResponseTargetMs,
     resolutionTargetMs: clock.policyResolutionTargetMs,
     reopenPolicy: { response: clock.policyResponseReopenPolicy ?? 'continue', resolution: clock.policyResolutionReopenPolicy ?? 'continue' }, revision: clock.policyRevision,
-  } : currentPolicy;
+  } : meter ? { ...currentPolicy, calendar: parseSlaCalendar(currentPolicy.calendar, meter) } : currentPolicy;
+  meter?.charge();
   const projectTarget = (targetMs: number | null, startedAt: string, completedAt: string | null, pausedAt: string | null,
     kind: 'response' | 'resolution'): SlaTargetProjection => {
     if (targetMs === null) return { state: 'unavailable', phase: 'unavailable', completedAt: null, dueAt: null, remainingWorkingMilliseconds: null, targetWorkingMilliseconds: null };
     const evaluatedAt = new Date(completedAt ?? pausedAt ?? now.toISOString());
     const cutoff = evaluatedAt.getTime();
     const applicablePauses = pauses.flatMap(pause => {
+      meter?.charge();
       const startsAt = Math.max(new Date(pause.startsAt).getTime(), new Date(startedAt).getTime());
       const endsAt = Math.min(new Date(pause.endsAt).getTime(), cutoff);
       return startsAt < endsAt ? [{ startsAt, endsAt }] : [];
     });
     const result = kind === 'response'
-      ? evaluateResponseSla({ calendar: frozenPolicy.calendar, startedAt: new Date(startedAt), evaluatedAt, targetWorkingMilliseconds: targetMs, pauses: applicablePauses })
-      : evaluateResolutionSla({ calendar: frozenPolicy.calendar, startedAt: new Date(startedAt), evaluatedAt, targetWorkingMilliseconds: targetMs, pauses: applicablePauses });
+      ? evaluateResponseSla({ calendar: frozenPolicy.calendar, startedAt: new Date(startedAt), evaluatedAt, targetWorkingMilliseconds: targetMs, pauses: applicablePauses, meter })
+      : evaluateResolutionSla({ calendar: frozenPolicy.calendar, startedAt: new Date(startedAt), evaluatedAt, targetWorkingMilliseconds: targetMs, pauses: applicablePauses, meter });
     return { state: result.state, phase: completedAt ? 'completed' : pausedAt ? 'paused' : 'running', completedAt,
       dueAt: !completedAt && pausedAt ? null : result.dueAt?.toISOString() ?? null,
       remainingWorkingMilliseconds: result.state === 'unavailable' ? null : result.remainingWorkingMilliseconds, targetWorkingMilliseconds: targetMs };

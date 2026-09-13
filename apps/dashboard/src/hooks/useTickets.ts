@@ -2,19 +2,23 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { assignmentIdentity } from './useTicketAssignment';
-import { Ticket, TicketWithDetails, PaginatedResponse } from '@luminatick/shared';
+import { Ticket, TicketWithDetails } from '@luminatick/shared';
+import { useSlaPriorityTickets, type TicketQueryPage } from './useSlaPriorityTickets';
 
 export function useTickets(params: Record<string, string> = {}) {
   const queryParams = new URLSearchParams(params).toString();
-  return useQuery({
+  const sla = useSlaPriorityTickets(params, params.sort === 'sla_priority');
+  const ordinary = useQuery({
+    enabled: params.sort !== 'sla_priority',
     queryKey: ['tickets', params],
     placeholderData: previous => previous,
     queryFn: async () => {
-      const data = await dashboardApi.get<PaginatedResponse<Ticket>>(`/tickets?${queryParams}`);
+      const data = await dashboardApi.get<TicketQueryPage>(`/tickets?${queryParams}`);
       return data;
     },
     refetchInterval: () => document.visibilityState === 'visible' ? 30000 : false,
   });
+  return params.sort === 'sla_priority' ? sla : { ...ordinary, restartSla: sla.restartSla };
 }
 
 type TicketPage = TicketWithDetails & { pagination?: { next_cursor: string | null; has_more: boolean } };

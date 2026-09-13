@@ -1,0 +1,1 @@
+{"extends":"../tsconfig.json","compilerOptions":{"noEmit":true},"include":["sla-priority-queue-runtime.test.ts"]}
