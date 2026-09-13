@@ -33,7 +33,7 @@ export type BudgetAuthorityPrincipal =
   | Readonly<{ kind: 'api-key'; apiKeyId: string; requiredPermission: string }>
   | Readonly<{ kind: 'widget'; widgetKey: string }>
   /** Trusted workflow composition only; never constructed from a request. */
-  | Readonly<{ kind: 'system'; actor: 'vectorize-workflow' | 'scheduled-retention' | 'knowledge-delete' }>;
+  | Readonly<{ kind: 'system'; actor: 'vectorize-workflow' | 'scheduled-retention' | 'knowledge-delete' | 'scheduled-snooze-resurface' }>;
 
 export const BUDGET_AUTHORITY_MAX_TENANT_ALLOCATIONS = 128 as const;
 /** Each coherent snapshot statement stops after this sentinel; a matching index bounds its candidate scan. */
