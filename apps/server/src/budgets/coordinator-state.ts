@@ -49,7 +49,7 @@ export type CoordinatorGrant = Readonly<{
   createdAt: number;
   expiresAt: number;
   status: CoordinatorGrantStatus;
-  /** Certified accounting is rolled up; this bounded record retains exact retry identity until expiry. */
+  /** Rolled-up accounting. Uncertain expiry tombstones retain their original retry identity; certified records expire normally. */
   compacted?: boolean;
   /**
    * Delivery is deliberately finite. The coordinator commits this before each
@@ -355,7 +355,7 @@ function pruneHistoricalAccounting(state: BudgetCoordinatorState, now: number): 
     throw new BudgetCoordinatorStateError('tenant budget accounting metadata capacity exhausted');
   }
   return cloneState(state, { closedCharges: charges, allocations,
-    grants: state.grants.filter(grant => !grant.compacted || now < grant.expiresAt) });
+    grants: state.grants.filter(grant => !grant.compacted || grant.status !== 'reconciled' || now < grant.expiresAt) });
 }
 
 function expire(state: BudgetCoordinatorState, now: number): BudgetCoordinatorState {
@@ -418,6 +418,27 @@ export function createBudgetCoordinatorState(input: CreateBudgetCoordinatorState
     closedCharges: [],
     capacityDefects: [],
   };
+}
+
+/** Irreversible full-envelope accounting, not certified business completion.
+ * The caller owns one total bounded allowance across all owner/tenant ledgers.
+ */
+export function retireExpiredBudgetGrants(state: BudgetCoordinatorState, now: number, limit: number): Readonly<{
+  state: BudgetCoordinatorState; retired: number;
+}> {
+  assertSafeInstant(now, 'expired accounting time');
+  if (!Number.isSafeInteger(limit) || limit < 0 || limit > 2) throw new BudgetCoordinatorStateError('expired accounting retirement limit is invalid');
+  if (state.capacityDefects.length > 0 || limit === 0) return { state, retired: 0 };
+  let next = state, retired = 0;
+  for (const grant of state.grants) {
+    if (retired >= limit) break;
+    if (grant.compacted || grant.purpose !== 'new-work' || now < grant.expiresAt
+      || (grant.status !== 'reserved' && grant.status !== 'uncertain')
+      || fingerprint(grant.accounted) !== fingerprint(grant.envelope)) continue;
+    next = compactCharges(next, { ...grant, status: 'uncertain' }, now);
+    retired++;
+  }
+  return { state: next, retired };
 }
 
 /** Marks expired credits uncertain; expiry is never evidence that they were unused. */
@@ -579,6 +600,13 @@ export function reconcileBudgetGrant(state: BudgetCoordinatorState, input: Recon
   }
   if (grant.holderId !== input.holderId || input.expectedPolicyId !== expired.policyId || input.expectedPolicyRevision !== grant.policyRevision
     || input.expectedRestrictionRevision !== grant.restrictionRevision || (certified && certified.expiresAt !== grant.expiresAt)) return { state: expired, outcome: 'rejected' };
+  const expiryAccounted = grant.compacted && grant.status === 'uncertain';
+  // A later exact expiry certificate can acknowledge the original charge, but
+  // no ordinary/lower measurement may refund it or roll it up a second time.
+  if (expiryAccounted && (!certified?.retireExpired || Object.keys(measured).length > 0
+    || RESOURCE_DIMENSIONS.some(dimension => (uncertain[dimension] ?? 0) !== (grant.envelope[dimension] ?? 0)))) {
+    return { state: expired, outcome: 'rejected' };
+  }
   const evidenceFingerprint = fingerprint({ terminalEvidenceId: input.terminalEvidenceId, measured, uncertain });
   const certifiedFingerprint = certified ? input.certifiedCompletionDigest ?? certifiedGrantFingerprint(input) : undefined;
   if (grant.status === 'reconciled') {
@@ -605,7 +633,8 @@ export function reconcileBudgetGrant(state: BudgetCoordinatorState, input: Recon
     return { state: cloneState(expired, { grants, capacityDefects: [...expired.capacityDefects, capacityDefect] }), outcome: 'capacity-defect' };
   }
   const reconciled = cloneState(expired, { grants });
-  let next = certified ? compactCharges(reconciled, grants[index], input.now) : reconciled;
+  let next = expiryAccounted ? pruneHistoricalAccounting(reconciled, input.now)
+    : certified ? compactCharges(reconciled, grants[index], input.now) : reconciled;
   if (recovery) {
     // The entire two-attempt recovery envelope stays charged. Both reservation
     // slots retire atomically, but their exact retry identities remain bounded.

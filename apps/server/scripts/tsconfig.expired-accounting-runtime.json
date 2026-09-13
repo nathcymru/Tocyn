@@ -1,0 +1,1 @@
+{"extends":"../tsconfig.json","compilerOptions":{"noEmit":true},"include":["expired-accounting-runtime.test.ts","expired-accounting-runtime-entry.ts"]}

@@ -20,6 +20,7 @@ import {
   reconcileBudgetGrant,
   MAX_RETAINED_BUDGET_GRANTS,
   reserveBudgetGrant,
+  retireExpiredBudgetGrants,
   type BudgetCoordinatorState,
   type CoordinatorAllocation,
   type CoordinatorCapacityDefect,
@@ -524,6 +525,29 @@ export function revokeBudgetOwnerAggregateAuthority(state: BudgetOwnerAggregateS
     authorityExpiresAt: revocation.authorityCheckedAt,
     newAdmissionsBlocked: true,
   };
+}
+
+/** At most two total expired full-charge retirements per trusted transition.
+ * Recovery grants and defect-bearing aggregates are never automatically retired.
+ */
+export function retireExpiredOwnerGrants(state: BudgetOwnerAggregateState, now: number): BudgetOwnerAggregateState {
+  if (!Number.isSafeInteger(now) || now < 0) throw new BudgetCoordinatorStateError('expired owner accounting time is invalid');
+  if (state.capacityDefects.length > 0) return state;
+  let remaining = 2;
+  const ingress = retireExpiredBudgetGrants(state.ownerIngress, now, remaining);
+  remaining -= ingress.retired;
+  const tenantStates = state.tenantStates.map(tenant => {
+    if (remaining === 0) return tenant;
+    const result = retireExpiredBudgetGrants(tenant, now, remaining);
+    remaining -= result.retired;
+    return result.state;
+  });
+  if (remaining === 2) return state;
+  if ((ingress.state.closedCharges?.length ?? 0)
+    + tenantStates.reduce((sum, tenant) => sum + (tenant.closedCharges?.length ?? 0), 0) > 8_192) {
+    throw new BudgetCoordinatorStateError('owner budget accounting metadata capacity exhausted');
+  }
+  return { ...state, ownerIngress: ingress.state, tenantStates };
 }
 
 /** Reconciliation remains bound to the tenant/holder grant and blocks the whole aggregate on an overrun. */

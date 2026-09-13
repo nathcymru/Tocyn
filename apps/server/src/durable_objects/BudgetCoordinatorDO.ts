@@ -12,6 +12,7 @@ import {
   refreshBudgetOwnerAggregateAuthority,
   revokeBudgetOwnerAggregateAuthority,
   reserveOwnerAggregate,
+  retireExpiredOwnerGrants,
   reserveOwnerIngress,
   type BudgetOwnerAggregateState,
   type HandoffOwnerIngressInput,
@@ -106,7 +107,7 @@ export class BudgetCoordinatorDO extends DurableObject<Env> {
       return;
     }
     const current = decodeCoordinatorState(existing);
-    const next = refreshBudgetOwnerAggregateAuthority(current, authority);
+    const next = retireExpiredOwnerGrants(refreshBudgetOwnerAggregateAuthority(current, authority), authority.authorityCheckedAt);
     if (next.authorityRevision !== current.authorityRevision) assertGrowthCapacity(next);
     await this.write(next);
   }
@@ -119,11 +120,16 @@ export class BudgetCoordinatorDO extends DurableObject<Env> {
 
   /** Caller supplies only already verified, server-derived inputs. */
   async reserveFromTrustedAuthority(input: ReserveOwnerAggregateInput): Promise<ReturnType<typeof reserveOwnerAggregate>['outcome']> {
-    const current = await this.read();
+    const persisted = await this.read();
+    const current = retireExpiredOwnerGrants(persisted, input.now);
     const result = reserveOwnerAggregate(current, input);
     if (result.outcome.status === 'granted') {
       try { assertGrowthCapacity(result.state); }
-      catch { return { status: 'rejected', reason: 'capacity-exhausted' }; }
+      catch {
+        // Commit only conservative accounting progress, never the refused grant.
+        if (current !== persisted) await this.write(current);
+        return { status: 'rejected', reason: 'capacity-exhausted' };
+      }
     }
     await this.write(result.state);
     return result.outcome;
