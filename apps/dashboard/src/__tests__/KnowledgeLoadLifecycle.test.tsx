@@ -18,7 +18,8 @@ vi.mock('../components/theme/OperatorThemeProvider', () => ({
   useOptionalOperatorPreferencesContext: () => ({ advanceAfterResolve: presentation.enabled, contextDefault: presentation.contextDefault, status: 'restored' }),
 }));
 let client: QueryClient;
-function show() {
+function show(deferContent = false) {
+  const contentPending: Array<(response: Response) => void> = [];
   const pending: Array<(response: Response) => void> = [];
   let saved = false;
   let failConfirmation = false;
@@ -28,7 +29,7 @@ function show() {
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit = {}) => {
     const path = new URL(url, 'http://localhost').pathname;
     if (path === '/api/knowledge/articles') return new Promise<Response>(resolve => pending.push(resolve));
-    if (path === '/api/knowledge/articles/answer/content') return json({content:'Verified synthetic answer'});
+    if (path === '/api/knowledge/articles/answer/content') return deferContent ? new Promise<Response>(resolve => contentPending.push(resolve)) : json({content:'Verified synthetic answer'});
     if (/^\/api\/tickets\/[^/]+$/.test(path)) {
       if (options.method === 'PATCH') { writes.push(JSON.parse(String(options.body))); saved = true; failConfirmation = true; return json({success: true}); }
       if (failConfirmation) return json({error: 'Synthetic confirmation unavailable'}, 503);
@@ -45,7 +46,7 @@ function show() {
   client = new QueryClient({defaultOptions:{queries:{retry:false}, mutations:{retry:false}}});
   const router = createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage onResolved={onResolved}/>}],{initialEntries:['/tickets/workspace-ticket']});
   render(<QueryClientProvider client={client}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
-  return {router,pending};
+  return {router,pending,contentPending};
 }
 afterEach(() => {cleanup();client?.clear();useAuthStore.getState().logout();presentation.enabled=true;presentation.contextDefault='remember';localStorage.clear();vi.unstubAllGlobals();vi.restoreAllMocks();});
 
@@ -91,4 +92,38 @@ it.each(['ticket','identity'])('discards a pending response after %s remount', a
   await act(async()=>f.pending[0](json(answer('Old identity answer'))));
   expect(screen.queryByRole('button',{name:/Old identity answer/})).not.toBeInTheDocument();
   await act(async()=>f.pending[1](json(answer('Current answer'))));await screen.findByRole('button',{name:'Insert Current answer into reply'});
+});
+
+
+it('inserts into the latest draft after a pending fresh content read', async () => {
+  const f=show(true);await openKnowledge();await act(async()=>f.pending[0](json(answer())));
+  const editor=document.getElementById('reply-message')!;fireEvent.change(editor,{target:{value:'Original'}});
+  fireEvent.click(await screen.findByRole('button',{name:'Insert Synthetic answer into reply'}));
+  await waitFor(()=>expect(f.contentPending).toHaveLength(1));expect(screen.getByText('Loading Synthetic answer for insertion…')).toBeInTheDocument();fireEvent.change(editor,{target:{value:'Original plus new typing'}});
+  await act(async()=>f.contentPending[0](json({content:'Verified synthetic answer'})));
+  await waitFor(()=>expect(editor).toHaveValue('Original plus new typing\n\nVerified synthetic answer'));
+  await screen.findByText('Inserted knowledge: Synthetic answer');await waitFor(()=>expect(editor).toHaveFocus());
+});
+
+
+it('previews content without changing the mounted conversation draft', async () => {
+  const f=show();await openKnowledge();await act(async()=>f.pending[0](json(answer())));
+  const editor=document.getElementById('reply-message')!;fireEvent.change(editor,{target:{value:'Keep preview draft'}});
+  fireEvent.click(await screen.findByRole('button',{name:'Preview Synthetic answer'}));await screen.findByText('Verified synthetic answer');
+  expect(editor).toHaveValue('Keep preview draft');expect(screen.queryByText('Inserted knowledge: Synthetic answer')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Close preview'}));expect(screen.getByRole('button',{name:'Preview Synthetic answer'})).toHaveFocus();expect(editor).toHaveValue('Keep preview draft');
+});
+
+
+it('does not restore discarded text or announce insertion after a pending content read', async () => {
+  const f=show(true);await openKnowledge();await act(async()=>f.pending[0](json(answer())));
+  const editor=document.getElementById('reply-message')!;fireEvent.change(editor,{target:{value:'Discard this draft'}});
+  fireEvent.click(await screen.findByRole('button',{name:'Insert Synthetic answer into reply'}));
+  await waitFor(()=>expect(f.contentPending).toHaveLength(1));
+  fireEvent.click(await screen.findByRole('button',{name:'Discard draft'}));
+  await screen.findByText('Draft discarded.');
+  await act(async()=>f.contentPending[0](json({content:'Late content must not return'})));
+  expect(editor).toHaveValue('');
+  expect(screen.queryByText('Inserted knowledge: Synthetic answer')).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Insert Synthetic answer into reply'})).toBeEnabled();
 });
