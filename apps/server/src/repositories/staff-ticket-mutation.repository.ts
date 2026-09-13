@@ -4,7 +4,7 @@ import type { VerifiedTenantScope } from '../types/tenant';
 import type { Ticket } from '../types';
 import type { StaffMutationCommit, StaffMutationNamespace, StaffMutationReceipt } from '../types/staff-ticket-mutation';
 import { MAX_SESSION_BUDGET_GROUPS } from './session-budget-authority.repository';
-import { budgetCommitConstraint } from './budget-commit-fence';
+import { budgetCommitConstraint, budgetGrantOperationStatements } from './budget-commit-fence';
 import type { StaffReplyPreconditionConstraint } from './staff-reply-precondition.repository';
 
 const namespaceWhere = 'tenant_id=? AND principal_id=? AND operation=? AND key_hash=?';
@@ -17,6 +17,21 @@ export class StaffTicketMutationRepository {
     return this.db.prepare(`SELECT payload_hash,fingerprint_version,response_version,lifecycle,result_ticket_id,result_article_id,response_status,response_snapshot
       FROM staff_ticket_mutation_receipts WHERE ${namespaceWhere} AND expires_at>unixepoch()`)
       .bind(...namespaceValues(this.scope,ns)).first<StaffMutationReceipt>();
+  }
+  /** Current receipt read completion only; never repeats business mutation or delivery. */
+  async completeAdmittedReplay(commit: StaffMutationCommit, receipt: StaffMutationReceipt): Promise<void> {
+    if (!commit.namespace) throw new Error('Replay namespace required');
+    const ns = commit.namespace;
+    await this.db.batch([
+      staffMutationStatements(this.db,this.scope,commit)[0],
+      this.db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN EXISTS (
+        SELECT 1 FROM staff_ticket_mutation_receipts r WHERE ${namespaceWhere} AND expires_at>unixepoch()
+        AND (r.result_article_id IS NULL OR EXISTS (SELECT 1 FROM articles a WHERE a.tenant_id=r.tenant_id AND a.ticket_id=r.result_ticket_id AND a.id=r.result_article_id))
+        AND lifecycle='completed' AND payload_hash=? AND response_snapshot=? AND result_ticket_id IS ? AND result_article_id IS ?)
+        THEN 1 ELSE 0 END WHERE tenant_id=?`)
+        .bind(...namespaceValues(this.scope,ns),ns.payloadHash,receipt.response_snapshot,receipt.result_ticket_id,receipt.result_article_id,this.scope.tenantId),
+      ...budgetGrantOperationStatements(this.db,this.scope,commit.authority),
+    ]);
   }
   async ticket(id: string): Promise<Ticket | null> {
     return this.db.prepare('SELECT * FROM tickets WHERE tenant_id=? AND id=? LIMIT 1').bind(this.scope.tenantId,id).first<Ticket>();

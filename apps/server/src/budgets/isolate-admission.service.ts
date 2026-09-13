@@ -61,10 +61,11 @@ function withIngressLiability(business: ResourceAmounts, ingress: Readonly<Resou
 }
 
 /** Static owner/tenant ceilings select a possible block; the coordinator remains the live balance authority. */
-export function selectIsolateBlockSize(authority: TrustedBudgetCoordinatorAuthority, policy: EffectiveTenantCostPolicy, business: ResourceAmounts): number {
+export function selectIsolateBlockSize(authority: TrustedBudgetCoordinatorAuthority, policy: EffectiveTenantCostPolicy, business: ResourceAmounts, maxBlockOperations: 1 | undefined = undefined): number {
+  if (maxBlockOperations !== undefined && maxBlockOperations !== 1) return 0;
   const cost = isolateWarmReservedEnvelope(business);
   if (!cost) return 0;
-  for (let size = MAX_ISOLATE_BLOCK_OPERATIONS; size >= 1; size--) {
+  for (let size = maxBlockOperations ?? MAX_ISOLATE_BLOCK_OPERATIONS; size >= 1; size--) {
     const envelope = scaledEnvelope(cost, size);
     const fits = Object.entries(envelope).every(([dimension, units]) => {
       const owner = authority.ownerPolicy.budgets.find(budget => budget.dimension === dimension);
@@ -155,12 +156,12 @@ export class IsolateBudgetAdmissionCache {
       operations: this.entries.reduce((sum, entry) => sum + entry.operations.size, 0), refills: this.entries.reduce((sum, entry) => sum + entry.refills, 0) };
   }
 
-  private async allocate(entry: CacheEntry, generation: number, authority: ActiveAuthority, scope: IsolateGrantScope, business: ResourceAmounts, now: () => number): Promise<HeldGrant | null> {
+  private async allocate(entry: CacheEntry, generation: number, authority: ActiveAuthority, scope: IsolateGrantScope, business: ResourceAmounts, now: () => number, maxBlockOperations?: 1): Promise<HeldGrant | null> {
     if (entry.refills >= MAX_ISOLATE_SCOPE_REFILLS) { entry.failure = { status: 'rejected', reason: 'capacity-exhausted' }; return null; }
     entry.refills++;
-    const size = selectIsolateBlockSize(authority.trusted, authority.policy, business);
+    const size = selectIsolateBlockSize(authority.trusted, authority.policy, business, maxBlockOperations);
     if (!size) { entry.failure = exhausted(); return null; }
-    const holder = new IsolateBudgetGrantHolder(scope, MAX_ISOLATE_BLOCK_OPERATIONS);
+    const holder = new IsolateBudgetGrantHolder(scope, maxBlockOperations ?? MAX_ISOLATE_BLOCK_OPERATIONS);
     const coordinator = entry.namespace.get(entry.namespace.idFromName(authority.trusted.aggregateId)) as unknown as BudgetCoordinatorDO;
     const cost = isolateWarmReservedEnvelope(business)!;
     for (const operations of size === 1 ? [1] : [size, 1]) {
@@ -202,14 +203,18 @@ export class IsolateBudgetAdmissionCache {
     credentialKey: string; intent: CanonicalBudgetIntent; business: ResourceAmounts; now: () => number;
     /** Recovery is a separately charged, bounded reservation purpose. */
     purpose?: BudgetPurpose;
+    /** Trusted composition may prepay one complete operation; never discounts its envelope. */
+    maxBlockOperations?: 1;
     /** Trusted composition only: called on the bounded cold path, never an individual warm read. */
     recoverGrant?: (sealed: SealedIsolateBudgetGrant, now: number) => Promise<'reconciled' | 'pending' | 'rejected'>;
   }): Promise<IsolateAdmissionResult> {
+    if (input.maxBlockOperations !== undefined && input.maxBlockOperations !== 1) return { status: 'rejected', reason: 'invalid-request' };
+    const maxBlockOperations = input.maxBlockOperations;
     const ownerIngress = input.repository.ownerIngressAdmission;
     let business = input.business;
     const holderScope: IsolateGrantScope = { tenantId: input.scope.tenantId, credentialKey: input.credentialKey,
       workScopeKey: input.intent.workScopeKey, purpose: input.purpose ?? 'new-work' };
-    const key = JSON.stringify(holderScope);
+    const key = JSON.stringify(maxBlockOperations === undefined ? holderScope : { ...holderScope, maxBlockOperations });
     const checkedAt = input.now();
     this.entries = this.entries.filter(entry => { if (checkedAt < entry.expiresAt) return true; this.retire(entry); return !!entry.pending; });
     let entry = this.entries.find(candidate => candidate.bindingIdentity === input.repository.bindingIdentity && candidate.namespace === input.namespace && candidate.key === key);
@@ -321,7 +326,7 @@ export class IsolateBudgetAdmissionCache {
           }
         }
         if (!this.currentGeneration(allocatingEntry, generation)) return null;
-        return this.allocate(allocatingEntry, generation, allocatingAuthority, holderScope, business, input.now);
+        return this.allocate(allocatingEntry, generation, allocatingAuthority, holderScope, business, input.now, maxBlockOperations);
       })();
     }
     const pending = entry.pending;

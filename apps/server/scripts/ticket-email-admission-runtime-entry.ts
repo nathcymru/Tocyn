@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 export { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
 export { NotificationDO } from '../src/durable_objects/NotificationDO';
@@ -7,6 +8,8 @@ import { LocalAuthCaptureTransport } from '../src/services/email/transport';
 
 type Attempt = { path:string; method:string; d1RowsRead:number; d1RowsWritten:number; d1Calls:number; r2Gets:number };
 const attempts:Attempt[]=[];
+const metricContext=new AsyncLocalStorage<Attempt>();
+const databaseWrappers=new WeakMap<object,any>();
 const capture=new LocalAuthCaptureTransport();
 const deliverySettlements:string[]=[];
 const settleOperation=apiTicketBudgetCache.settleOperation.bind(apiTicketBudgetCache);
@@ -16,9 +19,10 @@ apiTicketBudgetCache.settleOperation=(authority,outcome,now)=>{
 };
 let beforeDelivery:''|'session'|'mfa'|'role'|'policy'|'restriction'|'closure'|'ticket'='';
 
-function instrumentDatabase(db:any,metric:Attempt):any {
+function instrumentDatabase(db:any):any {
+  const existing=databaseWrappers.get(db);if(existing)return existing;
   const statements=new WeakMap<object,{raw:any;sql:string;values:any[]}>();
-  const add=(meta:any)=>{metric.d1Calls++;metric.d1RowsRead+=meta?.rows_read??0;metric.d1RowsWritten+=meta?.rows_written??0;};
+  const add=(meta:any)=>{const metric=metricContext.getStore();if(!metric)throw new Error('Synthetic metric context unavailable');metric.d1Calls++;metric.d1RowsRead+=meta?.rows_read??0;metric.d1RowsWritten+=meta?.rows_written??0;};
   const wrap=(raw:any,sql:string,values:any[]=[]):any=>{const proxy=new Proxy(raw,{get(target,property){
     if(property==='bind')return(...bound:any[])=>wrap(target.bind(...bound),sql,bound);
     if(property==='first')return async(column?:string)=>{const result=await target.all();add(result.meta);const row=result.results?.[0]??null;return column&&row?row[column]:row;};
@@ -28,7 +32,7 @@ function instrumentDatabase(db:any,metric:Attempt):any {
       const rows=(result.results??[]).map((row:any)=>keys.map(key=>row[key]));return options?.columnNames?[keys,...rows]:rows;};
     const value=Reflect.get(target,property);return typeof value==='function'?value.bind(target):value;
   }});statements.set(proxy,{raw,sql,values});return proxy;};
-  return new Proxy(db,{get(target,property){
+  const wrapped=new Proxy(db,{get(target,property){
     if(property==='prepare')return(sql:string)=>wrap(target.prepare(sql),sql);
     if(property==='batch')return async(batch:any[])=>{
       const delivery=batch.some(statement=>statements.get(statement)?.sql.includes('tickets t JOIN articles a'));
@@ -49,6 +53,7 @@ function instrumentDatabase(db:any,metric:Attempt):any {
     };
     const value=Reflect.get(target,property);return typeof value==='function'?value.bind(target):value;
   }});
+  databaseWrappers.set(db,wrapped);return wrapped;
 }
 function instrumentBucket(bucket:any,metric:Attempt):any{return new Proxy(bucket,{get(target,property){const value=Reflect.get(target,property);
   if(property==='get')return(...args:any[])=>{metric.r2Gets++;return value.apply(target,args);};return typeof value==='function'?value.bind(target):value;}});}
@@ -63,6 +68,6 @@ export default {async fetch(request:Request,env:any,ctx:ExecutionContext):Promis
       deliverySettlements,cache:apiTicketBudgetCache.inspectForTrustedRuntime()});
   }
   const metric:Attempt={path:url.pathname,method:request.method,d1RowsRead:0,d1RowsWritten:0,d1Calls:0,r2Gets:0};
-  try{return await app.fetch(request,{...env,DB:instrumentDatabase(env.DB,metric),ATTACHMENTS_BUCKET:instrumentBucket(env.ATTACHMENTS_BUCKET,metric),
-    emailTransport:capture},ctx);}finally{attempts.push(metric);}
+  try{return await metricContext.run(metric,()=>app.fetch(request,{...env,DB:instrumentDatabase(env.DB),ATTACHMENTS_BUCKET:instrumentBucket(env.ATTACHMENTS_BUCKET,metric),
+    emailTransport:capture},ctx));}finally{attempts.push(metric);}
 }};

@@ -59,7 +59,7 @@ export class TicketEmailDeliveryAdmissionService {
   private readonly repository: TicketEmailAdmissionRepository;
   private readonly sessions: SessionBudgetAuthorityRepository;
   private readonly consumed = new WeakSet<TicketEmailCanonicalGrant>();
-  constructor(db: D1Database, private readonly scope: VerifiedTenantScope, private readonly budget: {
+  constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope, private readonly budget: {
     service: SessionBudgetAdmissionService;
     repository: BudgetAuthorityRepository;
     namespace: DurableObjectNamespace;
@@ -84,12 +84,12 @@ export class TicketEmailDeliveryAdmissionService {
     const fingerprint = await digest(JSON.stringify([grant.version,grant.sourceOperation,grant.sourceAuthority,
       grant.ticket,grant.article,grant.attachments]));
     const intent: CanonicalBudgetIntent = { operationId:`ticket-email:${fingerprint.slice(0,64)}`,
-      operationFingerprint:fingerprint,workScopeKey:`ticket-email:${grant.ticket.id}` };
+      operationFingerprint:fingerprint,workScopeKey:'ticket-email.delivery' };
     const business = ticketEmailDeliveryEnvelope(this.budget.externalProvider);
-    const admission = await this.budget.service.admit({ repository:this.budget.repository,
+    const admission = await this.budget.service.admit({ database:this.db,repository:this.budget.repository,
       sessions:this.sessions,
       namespace:this.budget.namespace,scope:this.scope,credential:grant.credential,
-      requirements:{ticket:{id:grant.ticket.id,groupId:grant.ticket.groupId}},intent,business,now:this.budget.now });
+      requirements:{ticket:{id:grant.ticket.id,groupId:grant.ticket.groupId}},emailDeliveryPartition:'ticket-email-v1',intent,business,now:this.budget.now });
     const authority = admission.commitAuthority;
     if (admission.status === 'rejected' || !authority || authority.operationId !== intent.operationId
       || authority.operationFingerprint !== intent.operationFingerprint) return false;

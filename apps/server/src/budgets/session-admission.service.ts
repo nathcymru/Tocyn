@@ -21,6 +21,8 @@ export class SessionBudgetAdmissionService {
     scope: VerifiedTenantScope; credential: SessionBudgetCredential; requirements: SessionBudgetRequirements;
     database?: D1Database;
     readScopePartition?: 'ticket-read-v1';
+    emailDeliveryPartition?: 'ticket-email-v1';
+    singleOperationGrant?: 'target-write-v1';
     intent: CanonicalBudgetIntent; business: ResourceAmounts; now: () => number;
   }) {
     // A digest keeps the full credential/capability/group fence bounded without
@@ -31,7 +33,26 @@ export class SessionBudgetAdmissionService {
     const business = structuredClone(input.business);
     // This trusted opt-in changes accounting partitioning only. The complete
     // original target requirements still authorize every request and recovery.
+    const singleOperation = input.singleOperationGrant !== undefined;
     const sharedRead = input.readScopePartition !== undefined;
+    const sharedEmail = input.emailDeliveryPartition !== undefined;
+    const validTarget = (value: unknown): value is string => typeof value === 'string' && value.length > 0
+      && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
+    if (singleOperation && (input.singleOperationGrant !== 'target-write-v1' || sharedRead || sharedEmail
+      || !/^(dashboard\.ticket\.(reply|update|sla\.initialize|support-state\.transition)):[0-9a-f]{64}$/.test(intent.workScopeKey)
+      || Object.keys(requirements).some(key => key !== 'ticket' && key !== 'capability')
+      || !requirements.ticket || Object.keys(requirements.ticket).length !== 2
+      || !validTarget(requirements.ticket.id)
+      || (requirements.ticket.groupId !== null && !validTarget(requirements.ticket.groupId)))) {
+      return { status: 'rejected' as const, reason: 'invalid-request' as const };
+    }
+    if (sharedEmail && (sharedRead || input.emailDeliveryPartition !== 'ticket-email-v1'
+      || intent.workScopeKey !== 'ticket-email.delivery' || Object.keys(requirements).length !== 1
+      || !requirements.ticket || Object.keys(requirements.ticket).length !== 2
+      || !validTarget(requirements.ticket.id)
+      || (requirements.ticket.groupId !== null && !validTarget(requirements.ticket.groupId)))) {
+      return { status: 'rejected' as const, reason: 'invalid-request' as const };
+    }
     if (sharedRead && (input.readScopePartition !== 'ticket-read-v1'
       || !['dashboard.ticket.detail', 'dashboard.ticket.history', 'workspace.draft.read'].includes(intent.workScopeKey)
       || Object.keys(requirements).length !== 1
@@ -41,7 +62,8 @@ export class SessionBudgetAdmissionService {
     }
     const serialized = JSON.stringify(sharedRead
       ? ['session-ticket-read-partition-v1', credential, intent.workScopeKey]
-      : [credential, requirements]);
+      : sharedEmail ? ['session-ticket-email-partition-v1', credential, intent.workScopeKey]
+        : [credential, requirements]);
     if (new TextEncoder().encode(serialized).byteLength > 16_384) return { status: 'rejected' as const, reason: 'stale-policy' as const };
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialized));
     const credentialKey = `session:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')}`;
@@ -51,6 +73,7 @@ export class SessionBudgetAdmissionService {
       { credentialKey, authorization }) : undefined;
     return this.cache.admit({ repository: input.repository, namespace: input.namespace, scope: input.scope,
       credentialKey, intent, business, now: input.now, authorization,
+      ...(singleOperation ? { maxBlockOperations: 1 as const } : {}),
       ...(recovery ? { recoverGrant: (sealed: Parameters<BudgetGrantRecoveryService['recover']>[0], now: number) => recovery.recover(sealed, now) } : {}),
     });
   }

@@ -202,7 +202,9 @@ export class StaffTicketMutationService {
       const receipt = await this.receipts.findActive(attempt.namespace);
       if (receipt) return { status:'replayed' as const,outcome:await this.replay(receipt,attempt.namespace) };
     }
-    const result = await this.budget.service.admit({ database:this.db,repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,
+    const result = await this.budget.service.admit({
+      ...(attempt.input.operation === 'dashboard.ticket.reply' || attempt.input.operation === 'dashboard.ticket.update' ? { singleOperationGrant: 'target-write-v1' as const } : {}),
+      database:this.db,repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,
       scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:{...this.budget.business,d1RowsWritten:Math.max(this.budget.business.d1RowsWritten ?? 0,CANONICAL_MUTATION_D1_WRITES)},now:() => this.now() });
     const authority = result.status !== 'rejected' ? result.commitAuthority : undefined;
     attempt.authority = authority && authority.operationId === attempt.intent.operationId
@@ -232,12 +234,22 @@ export class StaffTicketMutationService {
     }
     return outcome;
   }
+  private async admittedReplay(attempt: Attempt, receipt: StaffMutationReceipt): Promise<StaffMutationOutcome> {
+    if (!attempt.namespace) throw unavailable();
+    if (!attempt.authority) return this.replay(receipt,attempt.namespace);
+    const outcome = await this.replay(receipt,attempt.namespace);
+    await this.receipts.completeAdmittedReplay({credential:this.credential,
+      requirements:{...attempt.requirements,ticket:{id:outcome.ticket.id,groupId:outcome.ticket.group_id ?? null}},
+      authority:attempt.authority,namespace:attempt.namespace},receipt);
+    // The original business outcome is still uncertain for this attempt.
+    return outcome;
+  }
   async commit(prepared: PreparedStaffMutation, verified: VerifiedMutationAttachment[] = []): Promise<StaffMutationOutcome> {
     const attempt = this.attempts.get(prepared); if (!attempt) throw unavailable();
     await this.authorize(attempt.requirements);
     if (attempt.namespace) {
       const receipt = await this.receipts.findActive(attempt.namespace);
-      if (receipt) return this.replay(receipt,attempt.namespace);
+      if (receipt) return this.admittedReplay(attempt,receipt);
     }
     if (!attempt.authority || this.now() >= attempt.authority.expiresAt || attempt.commitStarted) throw unavailable();
     const input = attempt.input, now = new Date(this.now()).toISOString();
@@ -263,7 +275,7 @@ export class StaffTicketMutationService {
       } catch (error) {
         await this.authorize(attempt.requirements);
         const winner = await this.receipts.findActive(attempt.namespace);
-        if (winner) return this.replay(winner,attempt.namespace);
+        if (winner) return this.admittedReplay(attempt,winner);
         if (input.data.responsibleOwnerAssignment) {
           const ticket = await this.receipts.ticket(input.ticketId);
           if (ticket && ticket.assigned_to !== (input.data.expectedAssignedTo ?? null)) throw ownerConflict();
@@ -314,7 +326,7 @@ export class StaffTicketMutationService {
     } catch (error) {
       await this.authorize(attempt.requirements);
       const winner = attempt.namespace ? await this.receipts.findActive(attempt.namespace) : null;
-      if (winner && attempt.namespace) return this.replay(winner,attempt.namespace);
+      if (winner && attempt.namespace) return this.admittedReplay(attempt,winner);
       if (error instanceof StaffReplyPreconditionConflictError) throw staleDraft();
       if (String(error).includes('operator_activity_recipient_unavailable')) throw unavailableMention();
       throw unavailable();

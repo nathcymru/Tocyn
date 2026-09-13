@@ -50,7 +50,7 @@ async function seed(db:D1Database,history:number){const owner=policy();const res
       VALUES(?,?,?,'history.txt',1,'text/plain',?)`).bind(tenant,`history-${id}`,'historical-article',`history/${id}`);}));
 }
 async function runtime(history=3_000){const bundled=await build({entryPoints:[resolve(import.meta.dirname,'ticket-email-admission-runtime-entry.ts')],bundle:true,format:'esm',platform:'neutral',
-  external:['cloudflare:workers','node:crypto'],write:false});const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'ticket-email-admission',modules:true,
+  external:['cloudflare:workers','node:crypto','node:async_hooks'],write:false});const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'ticket-email-admission',modules:true,
     compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script:bundled.outputFiles[0].text,
     bindings:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',DISABLE_RATE_LIMIT:'true',ENVIRONMENT:'local',JWT_SECRET:jwtSecret,APP_MASTER_KEY:'synthetic-master-key-32-characters'},
     d1Databases:{DB:'ticket-email-admission-d1'},r2Buckets:{ATTACHMENTS_BUCKET:'ticket-email-admission-r2'},
@@ -63,7 +63,9 @@ async function runtime(history=3_000){const bundled=await build({entryPoints:[re
     body:JSON.stringify({body,body_format:'plain',is_internal:isInternal,attachments})}));
   const reply=(key:string,body:string,isInternal=false,attachments:unknown[]=[])=>requestReply(token,key,body,isInternal,attachments);
   const replyOther=(key:string,body:string)=>requestReply(otherToken,key,body,false,[]);
-  return{mf,db,bucket,control,reply,replyOther};}
+  const replyTarget=(id:string,key:string,attachments:unknown[]=[])=>mf.dispatchFetch(`http://runtime.test/api/tickets/${id}/articles`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`,'idempotency-key':key},body:JSON.stringify({body:'Synthetic distinct delivery',body_format:'plain',is_internal:false,attachments})});
+  const createTarget=(index:number)=>mf.dispatchFetch('http://runtime.test/api/tickets',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`,'idempotency-key':`email-create-${index}`},body:JSON.stringify({subject:`Synthetic delivery ${index}`,customer_email:'tocyn-auth-test-a@example.invalid',body:'Synthetic delivery',status:'open',priority:'normal'})});
+  return{mf,db,bucket,control,reply,replyOther,replyTarget,createTarget};}
 async function expectCommitted(response:{status:number;json():Promise<unknown>}){assert.equal(response.status,201);return response.json() as Promise<{id:string}>;}
 
 test('real handler claims one bounded ticket email and preserves canonical success across replay, failure and revocation',async t=>{const h=await runtime();try{
@@ -116,3 +118,56 @@ test('delivery manifest work stays bounded after same-article attachment growth'
   const manifest=JSON.parse(Object.values(result.results[0])[0] as string);
   assert.equal(manifest.length,11,'one sentinel beyond the ten permitted attachments rejects growth');
 }finally{await h.mf.dispose();}});
+
+
+test('twenty distinct canonical email deliveries share one exact session accounting scope and recover full blocks', async () => {
+ const h=await runtime(0);try{
+  for(let index=0;index<20;index++){
+    const response=await h.createTarget(index);assert.equal(response.status,201,`create ${index+1}: ${await response.clone().text()}; cache=${JSON.stringify((await h.control()).cache)}`);await response.body?.cancel();
+  }
+  const state=await h.control();assert.equal(state.messages.length,10,'capture intentionally retains only ten latest messages');assert.deepEqual(state.deliverySettlements,Array(20).fill('committed'));
+  const rows=(await h.db.prepare("SELECT reservation_id,operation_id FROM budget_grant_operations WHERE operation_id LIKE 'ticket-email:%'").all<{reservation_id:string;operation_id:string}>()).results;
+  assert.equal(rows.length,20);assert.equal(new Set(rows.map((row:{reservation_id:string})=>row.reservation_id)).size,3,'twenty deliveries use three prepaid blocks');
+  const closures=(await h.db.prepare("SELECT c.operation_count FROM budget_grant_closures c WHERE EXISTS(SELECT 1 FROM budget_grant_operations o WHERE o.reservation_id=c.reservation_id AND o.operation_id LIKE 'ticket-email:%')").all<{operation_count:number}>()).results;
+  assert.deepEqual(closures.map((row:{operation_count:number})=>row.operation_count),[8,8]);
+ }finally{await h.mf.dispose();}
+});
+
+
+test('an unknown delivery poisons its shared block while later clean blocks remain recoverable', async () => {
+ const h=await runtime(0);try{
+  await h.control({failNext:1});
+  for(let index=0;index<17;index++)await expectCommitted(await h.createTarget(index));
+  const state=await h.control();assert.deepEqual(state.deliverySettlements,['unknown',...Array(16).fill('committed')]);
+  const closures=(await h.db.prepare("SELECT c.operation_count FROM budget_grant_closures c WHERE EXISTS(SELECT 1 FROM budget_grant_operations o WHERE o.reservation_id=c.reservation_id AND o.operation_id LIKE 'ticket-email:%')").all<{operation_count:number}>()).results;
+  assert.deepEqual(closures.map((row:{operation_count:number})=>row.operation_count),[8],'only the second all-committed block can close');
+ }finally{await h.mf.dispose();}
+});
+
+test('stable binding preserves concurrent per-request metering and independent delivery claims', async () => {
+ const h=await runtime(0);try{
+  for(const id of ['metric-a','metric-b'])await h.db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_id,customer_email,source,group_id) VALUES(?,?,'Metric proof','customer','tocyn-auth-test-a@example.invalid','dashboard',NULL)").bind(tenant,id).run();
+  const key=`agent-attachments/${staff}/metric.txt`;await h.bucket.put(`${tenant}/${key}`,'metric',{httpMetadata:{contentType:'text/plain'}});
+  const responses=await Promise.all([h.replyTarget('metric-a','metric-a',[{storageKey:key,filename:'metric.txt'}]),h.replyTarget('metric-b','metric-b')]);
+  for(const response of responses)await expectCommitted(response);
+  const state=await h.control();const a=state.attempts.find(row=>row.path.includes('metric-a')),b=state.attempts.find(row=>row.path.includes('metric-b'));
+  assert.equal(a?.r2Gets,2);assert.equal(b?.r2Gets,0);assert.ok(a!.d1Calls>0&&b!.d1Calls>0);
+  assert.deepEqual(state.deliverySettlements,['committed','committed']);assert.equal(state.messages.length,2);
+ }finally{await h.mf.dispose();}
+});
+
+test('twenty distinct reply targets retain separate single-operation write grants within unchanged liability limits', async t => {
+ const h=await runtime(0);try{
+  for(let index=0;index<20;index++)await h.db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_id,customer_email,source,group_id) VALUES(?,?,'Write allocation proof','customer','tocyn-auth-test-a@example.invalid','dashboard',NULL)").bind(tenant,`write-target-${index}`).run();
+  let completed=0,rejected=0;
+  for(let index=0;index<20;index++){
+    const response=await h.replyTarget(`write-target-${index}`,`write-target-${index}`);
+    if(response.status!==201){rejected=response.status;await response.body?.cancel();break;}
+    completed++;await response.body?.cancel();
+  }
+  assert.equal(rejected,0);assert.equal(completed,20,'single-operation target write grants fit the unchanged 200M policy');
+  const state=await h.control();
+  t.diagnostic(JSON.stringify({policyLogLimit:200_000_000,newWorkLogLimit:160_000_000,completed,rejected,cache:state.cache,
+    observedD1Reads:state.attempts.reduce((sum,row)=>sum+row.d1RowsRead,0),observedD1Writes:state.attempts.reduce((sum,row)=>sum+row.d1RowsWritten,0),observedR2Gets:state.attempts.reduce((sum,row)=>sum+row.r2Gets,0),measuredLogs:false}));
+ }finally{await h.mf.dispose();}
+});

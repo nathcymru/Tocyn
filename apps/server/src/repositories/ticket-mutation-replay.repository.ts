@@ -1,5 +1,5 @@
 import { capacityAssignmentStatement } from './operator-capacity-predicate';
-import { apiBudgetMutationStatements, type ApiMutationCommit } from './budget-commit-fence';
+import { budgetGrantOperationStatements, apiBudgetMutationStatements, type ApiMutationCommit } from './budget-commit-fence';
 import { customerMutationStatement, type CustomerMutationCommit } from './customer-ticket-mutation.repository';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
 import { staffMutationStatements, staffMutationReceiptStatement } from './staff-ticket-mutation.repository';
@@ -142,7 +142,7 @@ export class TicketMutationReplayRepository {
       || (expectedAssignedTo !== undefined && (!staff.responsibleOwner || staff.responsibleOwner.ticketId !== ticketId
         || staff.responsibleOwner.ownerId !== (data.assigned_to ?? null)))
       || (expectedAssignedTo === undefined && staff.responsibleOwner !== undefined)) throw new Error('Invalid staff update mutation');
-    const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff)];
+    const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff),...budgetGrantOperationStatements(this.db,this.scope,staff.authority)];
     const audit = assignmentActivity
       ? auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,
         { 'ticket.assignment_changed': assignmentActivity.eventId },expectedAssignedTo,!!staff.responsibleOwner)
@@ -232,7 +232,7 @@ export class TicketMutationReplayRepository {
     const operation=candidate.ticket?'create':'conversation';
     const staffPrecondition = staff && precondition ? staffReplyPreconditionConstraint(this.scope, candidate, precondition) : undefined;
     const statements: D1PreparedStatement[] = [...(api ? apiBudgetMutationStatements(this.db,this.scope,api) : []),
-      ...(staff ? staffMutationStatements(this.db,this.scope,staff,staffPrecondition) : []),
+      ...(staff ? [...staffMutationStatements(this.db,this.scope,staff,staffPrecondition),...budgetGrantOperationStatements(this.db,this.scope,staff.authority)] : []),
       ...(customer ? [customerMutationStatement(this.db,this.scope,customer)] : []), ...(this.admission?.statements(operation)??[])];
     if (ns) {
       // Exact expired-key reuse and at most 99 other expired rows: bounded 100.
