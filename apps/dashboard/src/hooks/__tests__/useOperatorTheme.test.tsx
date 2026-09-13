@@ -202,3 +202,44 @@ it('keeps system resolution consistent after save and operating-system changes',
   act(() => listener({ matches: true } as MediaQueryListEvent));
   expect(current()).toMatchObject({ mode: 'system', resolved: 'dark', revision: 3 });
 });
+
+it.each([
+  { label: 'user', id: 'second-operator', tenant_id: 'tenant-a' },
+  { label: 'tenant', id: 'operator', tenant_id: 'tenant-b' },
+  { label: 'session', id: 'operator', tenant_id: 'tenant-a' },
+])('discards an obsolete appearance save after $label replacement', async nextUser => {
+  const oldSave = deferred<Response>(); let reads = 0;
+  vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+    if (options.method === 'PUT') return oldSave.promise;
+    if (String(url).endsWith('/workspace/theme-preference')) return json({ revision: ++reads === 1 ? 1 : 3, mode: 'light', updatedAt: null });
+    return json(tenant);
+  }));
+  render(<Harness />); await waitFor(() => expect(current().status).toBe('restored'));
+  act(() => value.updateMode('dark'));
+  let pending!: Promise<void>; act(() => { pending = value.save(); });
+  await waitFor(() => expect(current().status).toBe('saving'));
+  act(() => useAuthStore.getState().setAuth('session-b', user(nextUser.id, nextUser.tenant_id)));
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 3, mode: 'light' }));
+  await act(async () => { oldSave.resolve(json({ revision: 9, mode: 'dark', updatedAt: 'obsolete' })); await pending; });
+  expect(current()).toMatchObject({ status: 'restored', revision: 3, mode: 'light', resolved: 'light', error: null });
+});
+
+it('restores the saved appearance record after remounting', async () => {
+  let stored = { revision: 0, mode: 'system', updatedAt: null as string | null }; let reads = 0;
+  vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+    if (options.method === 'PUT') {
+      const body = JSON.parse(options.body); stored = { revision: body.expectedRevision + 1, mode: body.mode, updatedAt: 'saved' };
+      return json(stored);
+    }
+    if (String(url).endsWith('/workspace/theme-preference')) { reads++; return json(stored); }
+    return json(tenant);
+  }));
+  const view = render(<Harness />); await waitFor(() => expect(current().status).toBe('restored'));
+  act(() => value.updateMode('dark')); await act(async () => { await value.save(); });
+  expect(current()).toMatchObject({ status: 'saved', revision: 1, mode: 'dark' });
+  view.unmount(); render(<Harness />);
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 1, mode: 'dark', resolved: 'dark' }));
+  expect(reads).toBe(2);
+});
