@@ -61,7 +61,7 @@ export class StaffTicketMutationService {
   private normalize(input: StaffMutationInput): StaffMutationInput {
     if (input.operation === 'dashboard.ticket.update') {
       if (typeof input.ticketId !== 'string' || !input.ticketId || !input.data || Object.getPrototypeOf(input.data) !== Object.prototype) throw invalid();
-      const allowed = ['status','priority','assigned_to','group_id','custom_fields','responsibleOwnerAssignment','expectedAssignedTo'];
+      const allowed = ['status','priority','assigned_to','group_id','custom_fields','responsibleOwnerAssignment','expectedAssignedTo','capacityOverride'];
       const supplied = Object.keys(input.data);
       if (!supplied.length || supplied.some(key => !allowed.includes(key))) throw invalid();
       const data = input.data;
@@ -71,13 +71,17 @@ export class StaffTicketMutationService {
       if (data.group_id !== undefined && data.group_id !== null && (typeof data.group_id !== 'string' || !data.group_id)) throw invalid();
       if (data.custom_fields !== undefined && data.custom_fields !== null && Object.getPrototypeOf(data.custom_fields) !== Object.prototype) throw invalid();
       if (data.responsibleOwnerAssignment === true) {
-        if (supplied.length !== 3 || data.assigned_to === undefined || data.expectedAssignedTo === undefined
+        if (supplied.length !== (data.capacityOverride === undefined ? 3 : 4) || data.assigned_to === undefined || data.expectedAssignedTo === undefined
           || (data.expectedAssignedTo !== null && (typeof data.expectedAssignedTo !== 'string' || !data.expectedAssignedTo))) throw invalid();
+        if (data.capacityOverride !== undefined && (this.credential.role !== 'admin' || !data.capacityOverride
+          || Object.keys(data.capacityOverride).length !== 1 || typeof data.capacityOverride.reason !== 'string'
+          || !data.capacityOverride.reason.trim() || new TextEncoder().encode(data.capacityOverride.reason).length > 512)) throw invalid();
         return { operation: input.operation, ticketId: input.ticketId, data: {
+          ...(data.capacityOverride ? {capacityOverride:{reason:data.capacityOverride.reason.trim()}} : {}),
           assigned_to:data.assigned_to, responsibleOwnerAssignment:true, expectedAssignedTo:data.expectedAssignedTo,
         } };
       }
-      if (data.responsibleOwnerAssignment !== undefined || data.expectedAssignedTo !== undefined) throw invalid();
+      if (data.responsibleOwnerAssignment !== undefined || data.expectedAssignedTo !== undefined || data.capacityOverride !== undefined) throw invalid();
       if (Object.prototype.hasOwnProperty.call(data,'assigned_to')) throw new TicketMutationError(400,'responsible_owner_endpoint_required','Use the responsible-owner endpoint to change assignment');
       return { operation: input.operation, ticketId: input.ticketId, data: { ...data } };
     }
@@ -231,7 +235,7 @@ export class StaffTicketMutationService {
       attempt.commitStarted = true;
       try {
         const responsibleOwner = input.data.responsibleOwnerAssignment
-          ? { ticketId: input.ticketId, ownerId: input.data.assigned_to ?? null } : undefined;
+          ? { ticketId: input.ticketId, ownerId: input.data.assigned_to ?? null, ...(input.data.capacityOverride ? {overrideReason:input.data.capacityOverride.reason} : {}) } : undefined;
         const assignmentEventId = input.data.assigned_to === undefined || input.data.assigned_to === null
           ? undefined : crypto.randomUUID();
         const assignmentActivity = assignmentEventId
@@ -252,6 +256,8 @@ export class StaffTicketMutationService {
         if (input.data.responsibleOwnerAssignment) {
           const ticket = await this.receipts.ticket(input.ticketId);
           if (ticket && ticket.assigned_to !== (input.data.expectedAssignedTo ?? null)) throw ownerConflict();
+          if (!await this.receipts.capacityAvailable(input.ticketId,input.data.assigned_to??null,input.data.capacityOverride?.reason))
+            throw new TicketMutationError(409,'assignment_capacity_unavailable','Assignment is unavailable under current capacity policy');
         }
         throw unavailable();
       }

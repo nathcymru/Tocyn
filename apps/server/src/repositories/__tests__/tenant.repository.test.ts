@@ -25,7 +25,9 @@ class D1Mock implements D1Database {
     return {
       bind: (...args: any[]) => {
         return {
-          _execute: () => { const info = this.db.prepare(query).run(...args); return { success: true, meta: { changes: info.changes } }; },
+          _execute: () => { const statement=this.db.prepare(query);
+            if(statement.reader)return {success:true,results:statement.all(...args),meta:{changes:0}};
+            const info=statement.run(...args);return {success:true,results:[],meta:{changes:info.changes}}; },
           first: async <T>() => {
             const stmt = this.db.prepare(query);
             return (stmt.get(...args) || null) as T | null;

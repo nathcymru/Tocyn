@@ -1,3 +1,4 @@
+import { operatorCapacityAssignmentSql } from './operator-capacity-predicate';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { Ticket } from '../types';
@@ -27,6 +28,12 @@ export class StaffTicketMutationRepository {
   async customer(email: string): Promise<{ id: string } | null> {
     // Preserve dashboard's existing link-to-existing-user behavior; no customer creation.
     return this.db.prepare('SELECT id FROM users WHERE tenant_id=? AND email=? LIMIT 1').bind(this.scope.tenantId,email).first();
+  }
+  async capacityAvailable(ticketId:string,ownerId:string|null,overrideReason?:string):Promise<boolean>{
+    const row=await this.db.prepare(`SELECT 1 AS admitted FROM tickets t CROSS JOIN (SELECT ? AS id,? AS can_override) capacity_target
+      WHERE t.tenant_id=? AND t.id=? AND ${operatorCapacityAssignmentSql('t','capacity_target.id','capacity_target.can_override')}`)
+      .bind(ownerId,overrideReason===undefined?0:1,this.scope.tenantId,ticketId).first();
+    return !!row;
   }
   async eligibleResponsibleOwner(ticketId: string, ownerId: string | null): Promise<boolean> {
     const row = await this.db.prepare(`SELECT 1 AS eligible FROM tickets t WHERE t.tenant_id=? AND t.id=?
@@ -66,6 +73,12 @@ export function staffMutationStatements(db: D1Database, scope: VerifiedTenantSco
         AND owner.role IN ('admin','agent') AND (t.group_id IS NULL OR EXISTS (SELECT 1 FROM user_groups membership
           WHERE membership.tenant_id=t.tenant_id AND membership.user_id=owner.id AND membership.group_id=t.group_id)))))`);
     values.push(scope.tenantId,assignment.ticketId,assignment.ownerId,assignment.ownerId);
+    const override = assignment.overrideReason;
+    const overrideValid = override === undefined || (c.role === 'admin' && override.trim().length > 0
+      && new TextEncoder().encode(override).length <= 512);
+    sql.push(`?=1 AND EXISTS (SELECT 1 FROM tickets t CROSS JOIN (SELECT ? AS id,? AS can_override) capacity_target
+      WHERE t.tenant_id=? AND t.id=? AND ${operatorCapacityAssignmentSql('t','capacity_target.id','capacity_target.can_override')})`);
+    values.push(overrideValid?1:0,assignment.ownerId,override === undefined?0:1,scope.tenantId,assignment.ticketId);
   }
   if (requirement.capability) {
     const f = requirement.capability;

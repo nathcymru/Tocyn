@@ -1,5 +1,6 @@
 import { ticketListCompletionStatements } from './ticket-list-completion';
 import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
+import { capacityAssignmentStatement } from './operator-capacity-predicate';
 import { SessionBudgetAuthorityRepository } from './session-budget-authority.repository';
 import { BudgetAuthorityRepository } from './budget-authority.repository';
 import { TicketMutationReplayRepository } from './ticket-mutation-replay.repository';
@@ -564,12 +565,15 @@ export class SqlTicketRepository implements TicketRepository {
 
   async create(data: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'ticket_no'>): Promise<Ticket> {
     const id = crypto.randomUUID();
-    const result = await this.db.prepare(
+    const statement = this.db.prepare(
       "INSERT INTO tickets (tenant_id, id, subject, status, priority, customer_id, customer_email, assigned_to, group_id, source, source_email, custom_fields, intake_received_at, intake_processed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *"
     ).bind(
       this.scope.tenantId, id, data.subject, data.status, data.priority, data.customer_id || null, data.customer_email, data.assigned_to || null, data.group_id || null, data.source, data.source_email || null, data.custom_fields ? (typeof data.custom_fields === 'string' ? data.custom_fields : JSON.stringify(data.custom_fields)) : null,
       data.intake_received_at ?? null, data.intake_processed_at ?? null,
-    ).first<Ticket>();
+    );
+    const result = data.assigned_to
+      ? (await this.db.batch<Ticket>([capacityAssignmentStatement(this.db,this.scope.tenantId,data.assigned_to,null),statement])).at(-1)?.results[0]
+      : await statement.first<Ticket>();
     if (!result) throw new Error("Failed to create ticket");
     return result;
   }
@@ -588,6 +592,7 @@ export class SqlTicketRepository implements TicketRepository {
     this.canonicalMutationSli?.recordAttempt();
     let results;
     try { results = await this.db.batch<Ticket | Article>([
+      ...(ticket.assigned_to ? [capacityAssignmentStatement(this.db,this.scope.tenantId,ticket.assigned_to,null)] : []),
       this.db.prepare(`INSERT INTO tickets
         (tenant_id, id, subject, status, priority, customer_id, customer_email, assigned_to, group_id, source, source_email, custom_fields, intake_received_at, intake_processed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`).bind(
@@ -623,8 +628,8 @@ export class SqlTicketRepository implements TicketRepository {
         .bind(this.scope.tenantId,ticketId),
       ...(data.audit ? [conversationMutationEvent(this.db,this.scope,{id:crypto.randomUUID(),ticketId,articleId,actor:data.audit,intake:true,internal:false})] : []),
     ]); } catch (error) { this.canonicalMutationSli?.recordUncertain(); throw error; }
-    const createdTicket = results[0].results[0] as Ticket | undefined;
-    const createdArticle = results[1].results[0] as Article | undefined;
+    const createdTicket = results[ticket.assigned_to?1:0].results[0] as Ticket | undefined;
+    const createdArticle = results[ticket.assigned_to?2:1].results[0] as Article | undefined;
     if (!createdTicket || !createdArticle) {
       this.canonicalMutationSli?.recordUncertain();
       throw new Error('Failed to create ticket and initial article');
@@ -650,7 +655,9 @@ export class SqlTicketRepository implements TicketRepository {
 
     values.push(this.scope.tenantId, id);
     const query = `UPDATE tickets SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?`;
-    await this.db.prepare(query).bind(...values).run();
+    const statement=this.db.prepare(query).bind(...values);
+    if(data.assigned_to!==undefined)await this.db.batch([capacityAssignmentStatement(this.db,this.scope.tenantId,data.assigned_to,id),statement]);
+    else await statement.run();
   }
 
   async delete(id: string): Promise<void> {

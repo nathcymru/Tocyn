@@ -33,13 +33,13 @@ export type SupportSlaBudgetOperation = SupportSlaMutationOperation;
  * Provider metering is unmeasured; no billing guarantee is claimed.
  */
 export const API_TICKET_ENVELOPES: Readonly<Record<ApiTicketBudgetOperation, ResourceAmounts>> = Object.freeze({
-  'api.ticket.create': Object.freeze({ d1RowsRead: 2_560, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
+  'api.ticket.create': Object.freeze({ d1RowsRead: 2_560 + 2_048, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }), logEvents: (estimateDiagnosticEnvelope({ httpRequests: 2 }).logEvents ?? 0) + 2 }),
   'api.ticket.reply': Object.freeze({ d1RowsRead: 2_560, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }), logEvents: (estimateDiagnosticEnvelope({ httpRequests: 2 }).logEvents ?? 0) + 2 }),
   // An update has the same durable authority, receipt, audit and recovery
   // boundary as the other API mutations. It has no external provider work.
-  'api.ticket.update': Object.freeze({ d1RowsRead: 2_560, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
+  'api.ticket.update': Object.freeze({ d1RowsRead: 2_560 + 2_048, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }), logEvents: (estimateDiagnosticEnvelope({ httpRequests: 2 }).logEvents ?? 0) + 2 }),
 });
 
@@ -54,7 +54,7 @@ export const API_TICKET_ENVELOPES: Readonly<Record<ApiTicketBudgetOperation, Res
  */
 export const STAFF_TICKET_ENVELOPES: Readonly<Record<StaffTicketBudgetOperation, ResourceAmounts>> = Object.freeze({
   'dashboard.ticket.create': Object.freeze(sumResourceEnvelopes({
-    workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
+    workerRequests: 2, d1RowsRead: 2_570 + 2_048, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
     r2ClassBOperations: 20,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
@@ -66,7 +66,7 @@ export const STAFF_TICKET_ENVELOPES: Readonly<Record<StaffTicketBudgetOperation,
   // Ticket field changes can write two event categories, their retained system
   // notes, the bounded receipt cleanup, and the dashboard notification.
   'dashboard.ticket.update': Object.freeze(sumResourceEnvelopes({
-    workerRequests: 2, d1RowsRead: 2_570, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES,
+    workerRequests: 2, d1RowsRead: 2_570 + 4_096, d1RowsWritten: CANONICAL_MUTATION_D1_WRITES + 4,
     ...estimateDiagnosticEnvelope({ httpRequests: 2 }),
   }, estimateNotificationBroadcastWithCleanupEnvelope())),
 });

@@ -25,6 +25,12 @@ describe('localBetaRoute', () => {
     ] as const) expect(localBetaRoute(method, path)).toBe('disabled');
   });
 
+  it('admits only exact capacity read and configuration routes',()=>{
+    expect(localBetaRoute('GET','/api/operators/operator/capacity')).toBe('conversation-read');
+    expect(localBetaRoute('PUT','/api/operators/operator/capacity')).toBe('configuration');
+    expect(localBetaRoute('POST','/api/operators/operator/capacity')).toBe('disabled');
+    expect(localBetaRoute('PUT','/api/v1/operators/operator/capacity')).toBe('disabled');
+  });
   it('admits the responsible-owner transition as a bounded conversation write', () => {
     expect(localBetaRoute('PATCH', '/api/tickets/ticket-1/responsible-owner')).toBe('conversation-write');
   });

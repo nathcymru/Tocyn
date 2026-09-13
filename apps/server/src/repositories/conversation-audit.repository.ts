@@ -1,3 +1,4 @@
+import { capacityAssignmentStatement } from './operator-capacity-predicate';
 import { BetaAdmissionError } from '../types/local-beta';
 import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
@@ -33,7 +34,7 @@ type AuditedUpdateEventId = Partial<Record<'ticket.assignment_changed' | 'ticket
  */
 export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTenantScope,
   admission: LocalBetaAdmissionRepository | undefined, id: string, data: AuditedTicketUpdate,
-  actor: ConversationActor, retainSystemNote = false, expectedAssignedToOrEvents?: string | null | AuditedUpdateEventId, ownerPrecondition?: string | null): { statements: D1PreparedStatement[]; updateIndex?: number } {
+  actor: ConversationActor, retainSystemNote = false, expectedAssignedToOrEvents?: string | null | AuditedUpdateEventId, ownerPrecondition?: string | null, capacityChecked=false): { statements: D1PreparedStatement[]; updateIndex?: number } {
   const eventIds = typeof expectedAssignedToOrEvents === 'string' || expectedAssignedToOrEvents === null
     ? undefined
     : expectedAssignedToOrEvents;
@@ -42,6 +43,7 @@ export function auditedTicketUpdateStatements(db: D1Database, scope: VerifiedTen
     : ownerPrecondition;
   const statements: D1PreparedStatement[] = [...(admission?.ticketChangeStatements(id,data as unknown as Partial<Pick<Ticket,
     'status' | 'priority' | 'assigned_to' | 'group_id' | 'custom_fields'>>)??[])];
+  if(data.assigned_to!==undefined&&!capacityChecked)statements.push(capacityAssignmentStatement(db,scope.tenantId,data.assigned_to,id));
   const createdEventIds: string[] = [];
   const allKeys = ['status','priority','assigned_to','group_id','custom_fields'] as const;
   const supplied = allKeys.filter(key => data[key] !== undefined);

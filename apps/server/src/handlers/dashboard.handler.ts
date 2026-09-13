@@ -1,3 +1,5 @@
+import { admitCapacity,settleCapacity } from '../budgets/operator-capacity-admission.service';
+import { OperatorCapacityRepository,OperatorCapacityError,type CapacityCommit } from '../repositories/operator-capacity.repository';
 import { settleTicketQueueCounts } from '../budgets/http-ticket-list-admission.service';
 import { TicketQueueCountsRepository } from '../repositories/ticket-queue-counts.repository';
 import { admitOperatorActivity,settleOperatorActivity } from '../budgets/operator-activity-admission.service';
@@ -304,9 +306,35 @@ const updateTicketSchema = z.object({
   group_id: z.string().uuid().nullable().optional(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
 });
+const capacityInputSchema=z.object({expectedRevision:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER-1),
+  availability:z.enum(['available','unavailable']),assignmentCeiling:z.number().int().min(0).max(1000)}).strict();
+async function operatorCapacity(c:any,write:boolean):Promise<Response>{
+  const deps=c.get('tenantDeps') as TenantRequestDeps,payload=c.get('jwtPayload');
+  const targetId=c.req.param('userId');
+  if(typeof targetId!=='string'||!targetId||targetId.length>128)return c.json({error:'Invalid operator'},400);
+  if(!payload||!['admin','agent'].includes(payload.role)||(payload.role!=='admin'&&(write||targetId!==deps.scope.actorId)))
+    return c.json({code:'capacity_access_denied',error:'Capacity access denied'},403);
+  const parsed=write?capacityInputSchema.safeParse(await readMutationJson(c)):undefined;
+  if(parsed&&!parsed.success)return c.json({error:'Invalid capacity configuration'},400);
+  let commit:CapacityCommit|null=null;
+  const now=()=>c.env.localNow?.()??Date.now();
+  try{
+    commit=await admitCapacity({env:c.env,deps,payload,operation:write?'operator.capacity.write':'operator.capacity.read',targetId,
+      input:parsed?.success?parsed.data:undefined,now});
+    if(!commit)return c.json({code:'capacity_admission_unavailable',error:'Capacity admission unavailable'},503);
+    const result=await new OperatorCapacityRepository(deps.database,deps.scope,deps.betaAdmission).execute(commit,new Date(now()).toISOString());
+    settleCapacity(commit,'committed',now());c.header('Cache-Control','private, no-store');return c.json(result);
+  }catch(error){
+    if(commit)settleCapacity(commit,error instanceof OperatorCapacityError&&error.status===409?'committed':'unknown',now());
+    if(error instanceof OperatorCapacityError)return c.json({code:error.code,error:'Capacity operation unavailable'},error.status);
+    return c.json({code:'capacity_unavailable',error:'Capacity operation unavailable'},503);
+  }
+}
+
 const responsibleOwnerSchema = z.object({
   ownerId: z.string().uuid().nullable(),
   expectedOwnerId: z.string().uuid().nullable(),
+  capacityOverride: z.object({reason:z.string().trim().min(1).max(512).refine(value=>new TextEncoder().encode(value).length<=512)}).strict().optional(),
 }).strict();
 
 const supportStateDefinitionSchema = z.object({
@@ -1392,6 +1420,7 @@ async function assignResponsibleOwner(c: any): Promise<Response> {
   const mutation = staffMutationService(c,d,'dashboard.ticket.update');
   const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId,data:{
     assigned_to:parsed.data.ownerId, responsibleOwnerAssignment:true, expectedAssignedTo:parsed.data.expectedOwnerId,
+    ...(parsed.data.capacityOverride ? {capacityOverride:parsed.data.capacityOverride} : {}),
   } },key);
   if (prepared.replay) {
     c.header('Idempotency-Replayed', 'true');
@@ -1404,6 +1433,9 @@ async function assignResponsibleOwner(c: any): Promise<Response> {
   c.header('Idempotency-Replayed', 'false');
   return c.json({ success:true, responsibleOwnerId:outcome.ticket.assigned_to ?? null }, outcome.status);
 }
+
+dashboard.get('/operators/:userId/capacity',c=>operatorCapacity(c,false));
+dashboard.put('/operators/:userId/capacity',requestBounds(1024),c=>operatorCapacity(c,true));
 
 dashboard.patch('/tickets/:id/responsible-owner', requestBounds(1024), async (c) => {
   try {

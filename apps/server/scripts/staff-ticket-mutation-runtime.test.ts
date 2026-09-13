@@ -1,3 +1,8 @@
+import { capacityFingerprint,CAPACITY_ENVELOPE } from '../src/budgets/operator-capacity-admission.service';
+import { OperatorCapacityRepository,type CapacityCommit } from '../src/repositories/operator-capacity.repository';
+import { SessionBudgetAuthorityRepository } from '../src/repositories/session-budget-authority.repository';
+import type { OperatorCapacityInput } from '../src/types/operator-capacity';
+import { operatorCapacityLoadSql } from '../src/repositories/operator-capacity-predicate';
 import { CANONICAL_MUTATION_ATTEMPT_D1_WRITES } from '../src/budgets/canonical-mutation-envelope';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -114,13 +119,13 @@ async function fixture() {
         return result;
       }
     }
-    const scope = (tenant='a',actor='staff') => createVerifiedTenantScope(tenant,actor,['agent'],1);
-    const credential = (tenant='a',actor='staff') => ({tenantId:tenant,actorId:actor,role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600,mfaVerified:true});
-    const service = (tenant='a',actor='staff',capability?:CapabilityWriteFence) => {
-      const activeScope=scope(tenant,actor);
+    const scope = (tenant='a',actor='staff',role:'admin'|'agent'='agent') => createVerifiedTenantScope(tenant,actor,[role],1);
+    const credential = (tenant='a',actor='staff',role:'admin'|'agent'='agent') => ({tenantId:tenant,actorId:actor,role,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600,mfaVerified:true});
+    const service = (tenant='a',actor='staff',capability?:CapabilityWriteFence,role:'admin'|'agent'='agent') => {
+      const activeScope=scope(tenant,actor,role);
       const activity = new OperatorActivityService({ scope: activeScope,
         operatorActivity: new OperatorActivityRepository(activeScope, canonicalDb) } as TenantRequestDeps);
-      return new StaffTicketMutationService(db,activeScope,credential(tenant,actor),new Canonical(canonicalDb,activeScope),
+      return new StaffTicketMutationService(db,activeScope,credential(tenant,actor,role),new Canonical(canonicalDb,activeScope),
         {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},capability,activity);
     };
     const betaService = (tenant='a',actor='staff') => {
@@ -138,6 +143,16 @@ async function fixture() {
       return {service:new StaffTicketMutationService(db,activeScope,activeCredential,canonical,
         {service:admission,repository:new Authority(db,activeScope),namespace,business:{workerRequests:1,d1RowsRead:4096,d1RowsWritten:128,logEvents:136},now:()=>admissionNow??Date.now()},undefined,activity),canonicalSli};
     };
+    const capacity=async(targetId:string,input?:OperatorCapacityInput,tenant='a',role:'admin'|'agent'='admin')=>{
+      const activeScope=scope(tenant,'staff',role),c=credential(tenant,'staff',role),operation=input?'operator.capacity.write':'operator.capacity.read';
+      const fingerprint=await capacityFingerprint(operation,tenant,'staff',targetId,input);
+      const result=await admission.admit({repository:new Authority(db,activeScope),sessions:new SessionBudgetAuthorityRepository(db,activeScope),namespace,
+        scope:activeScope,credential:c,requirements:{},intent:{operationId:crypto.randomUUID(),operationFingerprint:fingerprint,workScopeKey:operation},business:CAPACITY_ENVELOPE,now:()=>Date.now()});
+      assert.ok((result.status==='spent'||result.status==='idempotent')&&result.commitAuthority);
+      const commit:CapacityCommit={operation,targetId,input,credential:c,authority:result.commitAuthority!};
+      const repository=new OperatorCapacityRepository(canonicalDb,activeScope,new LocalBetaAdmissionRepository(canonicalDb,activeScope,{kind:'staff',id:'staff'},c));
+      return {commit,repository,run:()=>repository.execute(commit,new Date().toISOString())};
+    };
     const counts = async () => {
       const result:Record<string,number> = {};
       for (const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','staff_ticket_mutation_receipts','operator_activities']) {
@@ -146,7 +161,7 @@ async function fixture() {
       return result;
     };
     const betaCounters=()=>db.prepare("SELECT tickets,mutations FROM local_beta_runs WHERE run_id='staff-beta'").first<{tickets:number;mutations:number}>();
-    return {mf,db,service,betaService,betaCounters,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
+    return {mf,db,service,capacity,betaService,betaCounters,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
       clock:(value:number)=>{admissionNow=value;},afterAuthority:(action:()=>Promise<void>)=>{afterAuthority=action;},canonicalAttempts:()=>canonicalAttempts};
   } catch (error) {await mf.dispose();throw error;}
 }
@@ -629,9 +644,9 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
         'The accepted staff and bounded-detail event indexes are accounted for');
       else if (table === 'tickets') {
         const names = indexes.results.map((index: {name:string}) => index.name);
-        assert.deepEqual(names.sort(),['idx_tickets_list_tenant_created_id','idx_tickets_list_tenant_updated_id','idx_tickets_operational_metric_projection','idx_tickets_retention_cursor','idx_tickets_tenant_customer_created','idx_tickets_tenant_group','sqlite_autoindex_tickets_1']);
+        assert.deepEqual(names.sort(),['idx_tickets_capacity_load','idx_tickets_list_tenant_created_id','idx_tickets_list_tenant_updated_id','idx_tickets_operational_metric_projection','idx_tickets_retention_cursor','idx_tickets_tenant_customer_created','idx_tickets_tenant_group','sqlite_autoindex_tickets_1']);
         console.log(JSON.stringify({fixture:'reviewed-ticket-indexes',names:names.sort()}));
-        assert.equal(indexes.results.length,7,'Ticket list, retention and group indexes are included in the native measured write bound');
+        assert.equal(indexes.results.length,8,'Ticket capacity, list, retention and group indexes are included in the native measured write bound');
       } else if(table==='articles') {
         assert.deepEqual(indexes.results.map((index:{name:string})=>index.name).sort(),
           ['idx_articles_retention_cursor','idx_articles_tenant_ticket_recent','idx_articles_tenant_ticket_visibility_created_id','idx_articles_ticket','sqlite_autoindex_articles_1']);
@@ -649,7 +664,7 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
     assert.equal(inventory.conversation_events,7, 'Two unique keys and five deliberate query indexes are accounted for');
-    assert.ok(100*5+50*9+(2*3*2)<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+    assert.ok(100*5+50*9+(2*3*2)+8+4+2<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
 });
@@ -847,4 +862,109 @@ test('staff reply precondition stays in the fingerprint and atomically retains a
     await assert.rejects(service.prepareStaffMutation({ ...rebased, data: { ...rebased.data, draft: { generation, revision: 1, baseConversationRevision: 0 } } }, 'fingerprint'),
       (error: any) => error.status === 409, 'The acknowledged draft reference is part of the idempotency fingerprint');
   } finally { await f.mf.dispose(); }
+});
+
+
+test('capacity admission serializes the last slot, preserves replay/no-op and rechecks changed availability',async()=>{
+  const f=await fixture();try{
+    const owner=mentionRecipientIds[0];
+    await f.db.batch([
+      f.db.prepare("INSERT INTO operator_capacity VALUES ('a',?,1,'available',1,'2026-09-13','staff')").bind(owner),
+      f.db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_email,group_id,source) VALUES ('a','second','Second','customer-a@example.test','group','dashboard')"),
+    ]);
+    const first=f.service(),second=f.service();
+    const a=await first.prepareStaffMutation(responsibleOwner(owner,null),'capacity-first');
+    const secondInput={...responsibleOwner(owner,null),ticketId:'second'} as StaffMutationInput;
+    const b=await second.prepareStaffMutation(secondInput,'capacity-second');
+    await first.admit(a);await second.admit(b);
+    const outcomes=await Promise.allSettled([first.commit(a),second.commit(b)]);
+    assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
+    const failure=outcomes.find(x=>x.status==='rejected') as PromiseRejectedResult;
+    assert.equal(failure.reason.code,'assignment_capacity_unavailable');
+    const owned=await f.db.prepare("SELECT id FROM tickets WHERE tenant_id='a' AND assigned_to=?").bind(owner).first<{id:string}>();
+    assert.ok(owned);
+    const winnerInput={...responsibleOwner(owner,null),ticketId:owned.id} as StaffMutationInput;
+    const key=owned.id==='ticket'?'capacity-first':'capacity-second';
+    assert.equal((await f.service().prepareStaffMutation(winnerInput,key)).replay?.replayed,true);
+    await f.db.prepare("UPDATE operator_capacity SET assignment_ceiling=0,availability='unavailable',revision=2 WHERE tenant_id='a' AND user_id=?").bind(owner).run();
+    await accept(f.service(),{...responsibleOwner(owner,owner),ticketId:owned.id} as StaffMutationInput,'capacity-noop');
+    const loserId=owned.id==='ticket'?'second':'ticket';
+    await f.db.prepare("UPDATE operator_capacity SET assignment_ceiling=2,availability='available',revision=3 WHERE tenant_id='a' AND user_id=?").bind(owner).run();
+    const changed=f.service(),pending=await changed.prepareStaffMutation({...responsibleOwner(owner,null),ticketId:loserId} as StaffMutationInput,'capacity-race');
+    await changed.admit(pending);
+    f.before(async()=>{await f.db.prepare("UPDATE operator_capacity SET availability='unavailable',revision=4 WHERE tenant_id='a' AND user_id=?").bind(owner).run();});
+    await assert.rejects(changed.commit(pending),(e:any)=>e.code==='assignment_capacity_unavailable');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a' AND kind='assignment'").first<{n:number}>())?.n,1);
+    const plan=await f.db.prepare(`EXPLAIN QUERY PLAN SELECT ${operatorCapacityLoadSql("'a'", "'"+owner+"'")}`).all();
+    assert.match(JSON.stringify(plan.results),/COVERING INDEX idx_tickets_capacity_load/);
+  }finally{await f.mf.dispose();}
+});
+
+
+test('capacity configuration is scoped and versioned; private current load includes waiting/snoozed and overflow is unavailable',async()=>{
+ const f=await fixture();try{
+  await f.db.prepare("UPDATE users SET role='admin' WHERE id='staff'").run();
+  await f.db.prepare("UPDATE users SET session_version=1 WHERE id='staff'").run();
+  const owner=mentionRecipientIds[0];
+  const configured=await f.capacity(owner,{expectedRevision:0,availability:'available',assignmentCeiling:3});
+  assert.equal((await configured.run()).revision,1);
+  await assert.rejects(f.db.prepare("UPDATE operator_capacity SET revision=9007199254740992 WHERE tenant_id='a' AND user_id=?").bind(owner).run());
+  await assert.rejects((await f.capacity(owner,{expectedRevision:0,availability:'unavailable',assignmentCeiling:0})).run(),(e:any)=>e.status===409);
+  await f.db.batch(['open','pending','pending','resolved'].map((status,i)=>f.db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_email,source,status,assigned_to) VALUES ('a',?,'Load','customer-a@example.test','dashboard',?,?)").bind('load-'+i,status,owner)));
+  await f.db.prepare("UPDATE ticket_support_state SET snoozed_until='2099-01-01T00:00:00.000Z' WHERE tenant_id='a' AND ticket_id='load-1'").run();
+  await f.db.prepare("UPDATE ticket_support_state SET waiting_reason='Synthetic wait' WHERE tenant_id='a' AND ticket_id='load-2'").run();
+  await f.db.batch([0,1].map(i=>f.db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_email,source,status,assigned_to) VALUES ('b',?,'Foreign','customer-b@example.test','dashboard','open',?)").bind('foreign-load-'+i,owner)));
+  assert.equal((await (await f.capacity(owner)).run()).currentWork,3);
+  assert.equal((await (await f.capacity(owner,undefined,'b')).run()).currentWork,2);
+  const revoked=await f.capacity(owner,{expectedRevision:1,availability:'unavailable',assignmentCeiling:0});
+  await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='a' AND id='staff'").run();
+  const ledgerBefore=(await f.db.prepare("SELECT count(*) AS n FROM budget_grant_operations").first<{n:number}>())!.n;
+  await assert.rejects(revoked.run());
+  assert.equal((await f.db.prepare("SELECT count(*) AS n FROM budget_grant_operations").first<{n:number}>())!.n,ledgerBefore);
+  await f.db.prepare("UPDATE users SET session_version=1 WHERE tenant_id='a' AND id='staff'").run();
+  await f.db.prepare(`WITH RECURSIVE n(x) AS(SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<1001)
+    INSERT INTO tickets(tenant_id,id,subject,customer_email,source,status,assigned_to)
+    SELECT 'a','overflow-'||x,'Load','customer-a@example.test','dashboard','open',? FROM n`).bind(owner).run();
+  const over=await (await f.capacity(owner)).run();assert.equal(over.currentWork,null);assert.equal(over.status,'unavailable');
+  console.log(JSON.stringify({fixture:'capacity-config-native',maxRowsRead:Math.max(...f.batches.map(b=>b.rowsRead)),maxRowsWritten:Math.max(...f.batches.map(b=>b.rowsWritten))}));
+  assert.ok(f.batches.every(b=>b.rowsRead<=CAPACITY_ENVELOPE.d1RowsRead&&b.rowsWritten<=CAPACITY_ENVELOPE.d1RowsWritten));
+ }finally{await f.mf.dispose();}
+});
+
+test('admin capacity override is explicit and internal with policy revision; agents cannot supply override',async()=>{
+ const f=await fixture();try{
+  const owner=mentionRecipientIds[0];
+  await f.db.prepare("INSERT INTO operator_capacity VALUES ('a',?,1,'unavailable',0,'2026-09-13','staff')").bind(owner).run();
+  const input=responsibleOwner(owner,null);if(input.operation!=='dashboard.ticket.update')throw new Error('fixture');
+  input.data.capacityOverride={reason:'Synthetic urgent coverage'};
+  await assert.rejects(f.service().prepareStaffMutation(input,'agent-override'),(e:any)=>e.status===400);
+  await f.db.prepare("UPDATE users SET role='admin' WHERE tenant_id='a' AND id='staff'").run();
+  await f.db.prepare("UPDATE users SET session_version=1 WHERE tenant_id='a' AND id='staff'").run();
+  await accept(f.service('a','staff',undefined,'admin'),input,'admin-override');
+  const event=await f.db.prepare("SELECT visibility,facts FROM conversation_events WHERE tenant_id='a' AND kind='ticket.assignment_changed'").first<{visibility:string;facts:string}>();
+  assert.equal(event?.visibility,'internal');assert.deepEqual(JSON.parse(event!.facts).capacityOverride,
+   {reason:'Synthetic urgent coverage',policyRevision:1,availability:'unavailable',assignmentCeiling:0});
+  const unconfigured=responsibleOwner(mentionRecipientIds[1],owner);if(unconfigured.operation!=='dashboard.ticket.update')throw new Error('fixture');
+  unconfigured.data.capacityOverride={reason:'Explicit unconfigured choice'};
+  await accept(f.service('a','staff',undefined,'admin'),unconfigured,'unconfigured-override');
+  const latest=await f.db.prepare("SELECT facts FROM conversation_events WHERE tenant_id='a' AND kind='ticket.assignment_changed' ORDER BY sequence DESC LIMIT 1").first<{facts:string}>();
+  assert.equal(JSON.parse(latest!.facts).capacityOverride.policyRevision,0);
+ }finally{await f.mf.dispose();}
+});
+
+
+test('capacity lifecycle removes only deleted tenant operator config and preserves historical configuration author',async()=>{
+ const f=await fixture();try{
+  // Fresh users have no unrelated pre-existing ticket/group FK references.
+  for(const tenant of ['a','b'])await f.db.batch([
+    f.db.prepare("INSERT INTO users(tenant_id,id,email,role,mfa_enabled,session_version) VALUES (?,'capacity-owner',?,'agent',1,1)").bind(tenant,`owner-delete-${tenant}@example.test`),
+    f.db.prepare("INSERT INTO users(tenant_id,id,email,role,mfa_enabled,session_version) VALUES (?,'capacity-admin',?,'admin',1,1)").bind(tenant,`admin-delete-${tenant}@example.test`),
+    f.db.prepare("INSERT INTO operator_capacity VALUES (?,'capacity-owner',1,'available',2,'2026-09-13','capacity-admin')").bind(tenant),
+  ]);
+  await f.db.prepare("DELETE FROM users WHERE tenant_id='a' AND id='capacity-admin'").run();
+  assert.equal((await f.db.prepare("SELECT updated_by FROM operator_capacity WHERE tenant_id='a' AND user_id='capacity-owner'").first<{updated_by:string}>())?.updated_by,'capacity-admin');
+  await f.db.prepare("DELETE FROM users WHERE tenant_id='a' AND id='capacity-owner'").run();
+  assert.equal(await f.db.prepare("SELECT 1 FROM operator_capacity WHERE tenant_id='a' AND user_id='capacity-owner'").first(),null);
+  assert.ok(await f.db.prepare("SELECT 1 FROM operator_capacity WHERE tenant_id='b' AND user_id='capacity-owner'").first());
+ }finally{await f.mf.dispose();}
 });

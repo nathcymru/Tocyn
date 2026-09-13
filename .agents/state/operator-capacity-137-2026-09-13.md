@@ -1,0 +1,7 @@
+# #137 capacity admission partial delivery
+
+- Branch: codex/137-capacity-contract; isolated capacity-137 worktree. Developed at436e01d0; refreshed onto signed c074805f with #64 completion imports preserved.
+- Root approved finite backend configuration/manual-admission slice, migration0074, ceiling1000/sentinel1001, assignment-admission semantics, internal explicit admin override and ordinary API/staff/direct assignment guards. No auto-routing/UI/release acceptance.
+- GPT owns consequential transaction/authentication/accounting work. Coordinator supplied bounded source packet. Local Granite refused at4.54GiB available against6GiB guard (1.46GiB shortfall); guard remained intact. Free Ollama Cloud gpt-oss:120b returned a synthetic fixture proposal (486 input/450 output tokens); GPT checked counts and executed native tests. These are worker counts, not total usage or measured savings.
+- Evidence: docs/security/evidence/operator-capacity-137-2026-09-13.md. Integrated server766 pass, API native14 pass; first fullstaff37/38 inventory-only failure corrected, focused native5, lifecycle1 and marginal index2 pass, types pass, audits0. Exact-head CI remains required.
+- Next: verify integrated #64 generic durable recovery opt-in and final exact-head checks; signed Progresses137 PR after coordinator review. Preserve existing issue progress/baselines until accepted outcomes support a new estimate.
