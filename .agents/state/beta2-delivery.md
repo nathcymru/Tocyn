@@ -1,3 +1,5 @@
+Current maintainer-directed test policy: [essential local Beta.2 release path — 13 September 2026](beta2-essential-release-path-2026-09-13.md). This supersedes earlier testing-priority statements below; historical checkpoints remain preserved. The 90–150 minute hands-on estimate is not a release ETA, and required security, SLA, core boundaries and Gate A acceptance remain mandatory.
+
 Current authoritative queue: [16:00 BST integration checkpoint](beta2-checkpoint-2026-09-11-1600.md). Accepted main PR202; full beta.2 remains incomplete. Earlier active-state paragraphs below are historical. No owner approval missing.
 
 Current coordinator checkpoint: [list admission and active workstreams](budget-64-list-admission.md). Accepted main b5705ade (PR201); full beta2 remains incomplete. This supersedes older ownership/pending statements below.
