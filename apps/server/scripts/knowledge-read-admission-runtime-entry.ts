@@ -7,7 +7,7 @@ let beforeRead:'session'|'policy'|'growth'|'source'|undefined;
 let afterRead:'session'|'policy'|'closure'|undefined;
 let wrappedDatabase:any,wrappedNamespace:any;
 let r2Gets=0,r2Bytes=0,knowledgeRowsRead=0,knowledgeRowsWritten=0,knowledgeBusinessRows=0;
-const calls={refresh:0,reserve:0};
+const calls={refresh:0,reserve:0,reconcile:0};
 let lastGrant:{tenantId:string;reservationId:string;holderId:string;aggregateId:string}|undefined;
 
 async function mutate(db:any,action:string|undefined){
@@ -55,6 +55,7 @@ function instrumentBucket(bucket:any){return new Proxy(bucket,{get(target,proper
 function instrumentNamespace(namespace:any){
   if(wrappedNamespace)return wrappedNamespace;
   wrappedNamespace={idFromName:(name:string)=>namespace.idFromName(name),get:(id:any)=>{const target=namespace.get(id);return{
+    reconcileFromTrustedAuthority:async(input:any)=>{calls.reconcile++;return target.reconcileFromTrustedAuthority(input);},
     refreshFromTrustedAuthority:async(input:any)=>{calls.refresh++;return target.refreshFromTrustedAuthority(input);},
     reserveFromTrustedAuthority:async(input:any)=>{calls.reserve++;const result=await target.reserveFromTrustedAuthority(input);
       if((result.status==='granted'||result.status==='idempotent')&&result.reservation)lastGrant={tenantId:input.tenantId,
