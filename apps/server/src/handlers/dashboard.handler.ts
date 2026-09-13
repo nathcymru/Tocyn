@@ -1030,7 +1030,7 @@ dashboard.get("/tickets", async (c) => {
   if (!sort.success) return c.json({ error: 'Invalid ticket sort' }, 400);
   const queue = z.enum(TICKET_QUEUE_KEYS).optional().safeParse(c.req.query('queue'));
   if (!queue.success) return c.json({ error: 'Invalid ticket queue' }, 400);
-  if (queue.data === 'drafts' && (!payload || !['admin', 'agent'].includes(payload.role)
+  if (queue.data && ['drafts', 'mine', 'unassigned'].includes(queue.data) && (!payload || !['admin', 'agent'].includes(payload.role)
     || payload.sub !== d.scope.actorId || payload.tenant_id !== d.scope.tenantId
     || !d.scope.roles.includes(payload.role) || payload.mfa_verified !== true)) {
     return c.json({ error: 'Operator session required' }, 403);

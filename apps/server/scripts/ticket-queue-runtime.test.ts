@@ -174,3 +174,83 @@ test('Drafts queue keeps actor, tenant, current membership and local expiry in o
 
   } finally { await mf.dispose(); }
 });
+
+test('Mine and Unassigned retain actionable state, current ownership and bounded tenant-visible counts', async t => {
+  const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'ownership-queues',modules:true,
+    script:'export default { fetch() { return new Response("ownership fixture") } }',d1Databases:{DB:'5138a60b-d423-42cb-b70d-aa16e053e4a1'}}]}));
+  try {
+    const db=await mf.getD1Database('DB');
+    const migrationDir=join(import.meta.dirname,'..','migrations');
+    for(const file of readdirSync(migrationDir).filter(file=>file.endsWith('.sql')).sort())
+      await db.batch(splitSql(readFileSync(join(migrationDir,file),'utf8')).map(sql=>db.prepare(sql)));
+    for(const tenant of ['owner-a','owner-b']) {
+      await db.batch([
+        db.prepare("INSERT INTO users(tenant_id,id,email,role,mfa_enabled) VALUES(?, 'alice',?,'agent',1),(?,'bob',?,'admin',1)").bind(tenant,`${tenant}-alice@example.invalid`,tenant,`${tenant}-bob@example.invalid`),
+        db.prepare("INSERT INTO groups(tenant_id,id,name) VALUES(?,'visible','Visible'),(?,'hidden','Hidden')").bind(tenant,tenant),
+        db.prepare("INSERT INTO user_groups(tenant_id,user_id,group_id) VALUES(?,'alice','visible')").bind(tenant),
+      ]);
+      for(const [id,assigned,status,group,priority] of [
+        ['mine','alice','open',null,'high'],['mine-pending','alice','pending','visible','low'],
+        ['colleague','bob','open',null,'high'],['unassigned',null,'open',null,'high'],
+        ['unassigned-pending',null,'pending','visible','low'],['hidden-mine','alice','open','hidden','high'],
+        ['hidden-unassigned',null,'open','hidden','high'],['closed-mine','alice','closed',null,'high'],
+        ['resolved-unassigned',null,'resolved',null,'high'],['snoozed-mine','alice','open',null,'high'],
+        ['snoozed-unassigned',null,'open',null,'high']]) {
+        await db.prepare('INSERT INTO tickets(tenant_id,id,subject,assigned_to,status,group_id,priority,customer_email,source) VALUES(?,?,?,?,?,?,?, ?,?)')
+          .bind(tenant,id,`Synthetic ${id}`,assigned,status,group,priority,'synthetic@example.invalid','fixture').run();
+      }
+      await db.prepare("UPDATE ticket_support_state SET snoozed_until='2099-01-01T00:00:00.000Z' WHERE tenant_id=? AND ticket_id LIKE 'snoozed-%'").bind(tenant).run();
+    }
+    const scope=createVerifiedTenantScope('owner-a','alice',['agent'],1);
+    const repos=createRepositories(scope,db);
+    const viewer={role:'agent' as const,actorId:'alice'};
+    const filter=await repos.ticketFilters.create({name:'High',conditions:[{field:'priority',operator:'equals',value:'high'}]});
+    for(const queue of ['actionable','snoozed','mine','unassigned'] as const) {
+      const predicate=ticketQueuePredicate(queue,'tickets',{actorId:'alice'});
+      const plan=await db.prepare(`EXPLAIN QUERY PLAN SELECT tickets.id FROM tickets WHERE tickets.tenant_id=? AND ${predicate.sql}`).bind('owner-a',...predicate.values).all<{detail:string}>();
+      t.diagnostic(`${queue} lookup plan: ${plan.results.map((row:{detail:string})=>row.detail).join('; ')}`);
+      assert.ok(plan.results.some((row:{detail:string})=>/SEARCH queue_state USING INDEX (?:idx_ticket_support_state_snooze|sqlite_autoindex_ticket_support_state_1).*tenant_id=\?.*ticket_id=\?/.test(row.detail)));
+      assert.ok(plan.results.some((row:{detail:string})=>/SEARCH queue_definition USING (?:COVERING )?INDEX sqlite_autoindex_support_state_definitions_1/.test(row.detail)));
+    }
+    for(const queue of ['mine','unassigned'] as const) {
+      const options={queue,viewer};
+
+      const first=await repos.queues.list({...options,limit:1});
+      const second=await repos.queues.list({...options,limit:1,page:2});
+      assert.equal(first.total,2);
+      assert.deepEqual([...first.items,...second.items].map(item=>item.ticket.id).sort(),[queue,`${queue}-pending`]);
+      assert.ok(first.items.every(item=>item.inclusionReason===queue));
+      assert.equal(await repos.queues.count(options),2);
+      assert.equal((await repos.queues.list({...options,filterId:filter.id})).total,1);
+      assert.equal(await repos.queues.count({...options,filterId:filter.id}),1);
+      assert.equal(await repos.queues.count({...options,assignedTo:'bob'}),0,'caller filter cannot replace canonical ownership');
+      await assert.rejects(repos.queues.list({queue}),/current operator/);
+      await assert.rejects(repos.queues.list({queue,viewer:{role:'admin',actorId:'bob'}}),/current operator/);
+      for(const role of ['customer','api-key']) await assert.rejects(createRepositories(createVerifiedTenantScope('owner-a','alice',[role],1),db).queues.list(options),/current operator/);
+      const foreign=createRepositories(createVerifiedTenantScope('owner-b','alice',['agent'],1),db);
+      assert.equal(await foreign.queues.count(options),2,'same ticket/actor IDs in another tenant remain isolated');
+      const snapshot=await new TicketListScanRepository(db,scope).snapshot(filter.id);
+      const envelope=ticketListEnvelope(snapshot,{groupRestricted:true,queue});
+      let reads=0;let batches=0;
+      const observed=new Proxy(db,{get(target,property){
+        if(property==='batch')return async(statements:Parameters<typeof db.batch>[0])=>{
+          const results=await target.batch(statements);batches++;
+          reads+=results.reduce((sum:number,result:{meta:{rows_read?:number}})=>sum+(result.meta.rows_read??0),0);return results;
+        };
+        const value=Reflect.get(target,property);return typeof value==='function'?value.bind(target):value;
+      }});
+      const measured=await createRepositories(scope,observed).queues.list({...options,filterId:filter.id,scanFence:snapshot});
+      assert.equal(measured.total,1);assert.equal(batches,1);assert.ok(reads>0&&reads<=envelope!.d1RowsRead!);
+      t.diagnostic(`${queue}: ${snapshot.ticketRows} candidates, ${reads} native fenced batch reads, ${envelope!.d1RowsRead} reserved`);
+    }
+    await db.prepare("DELETE FROM user_groups WHERE tenant_id='owner-a' AND user_id='alice'").run();
+    assert.equal(await repos.queues.count({queue:'mine',viewer}),1);
+    assert.equal(await repos.queues.count({queue:'unassigned',viewer}),1);
+    await repos.supportStates.resurfaceDue('2099-01-01T00:00:00.000Z');
+    assert.equal(await repos.queues.count({queue:'mine',viewer}),2,'due own ticket returns to Mine');
+    assert.equal(await repos.queues.count({queue:'unassigned',viewer}),2,'due unassigned ticket returns to Unassigned');
+    await db.prepare("UPDATE tickets SET assigned_to='alice' WHERE tenant_id='owner-a' AND id='unassigned'").run();
+    assert.equal(await repos.queues.count({queue:'mine',viewer}),3);
+    assert.equal(await repos.queues.count({queue:'unassigned',viewer}),1,'current assignment moves membership without stale queue state');
+  } finally {await mf.dispose();}
+});

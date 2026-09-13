@@ -174,7 +174,7 @@ test('many current group-visible tickets, saved filters, and an all-miss substri
       fixture.db.prepare('INSERT INTO user_groups(tenant_id,user_id,group_id) VALUES(?,?,?)').bind(tenantId, agent.id, 'list-scale-group'),
       fixture.db.prepare('INSERT INTO ticket_filters(tenant_id,id,name,conditions) VALUES(?,?,?,?)').bind(tenantId, 'list-scale-filter', 'scale', JSON.stringify([{ field: 'status', operator: 'equals', value: 'open' }])),
     ]);
-    for (let offset = 0; offset < 4_200; offset += 100) {
+    for (let offset = 0; offset < 10_000; offset += 100) {
       await fixture.db.batch(Array.from({ length: 100 }, (_, index) => fixture.db.prepare(
         "INSERT INTO tickets(tenant_id,id,subject,customer_email,group_id,source,status) VALUES(?,?,?,?,?,?,?)")
         .bind(tenantId, `list-scale-${String(offset + index).padStart(5, '0')}`, 'scale candidate', fixture.principals.customerA.email, 'list-scale-group', 'fixture', 'open')));
@@ -189,8 +189,23 @@ test('many current group-visible tickets, saved filters, and an all-miss substri
     assert.equal(result.total, 0);
     const actualReads = observations.reduce((total, observation) => total + observation.rowsRead, 0);
     assert.equal(observations.length, 3);
-    assert.ok(actualReads > 0 && actualReads <= envelope!.d1RowsRead!, `native group/filter/all-miss reads ${actualReads} fit ${envelope!.d1RowsRead}`);
+    const boundFailures:string[]=[];
+    if(!(actualReads > 0 && actualReads <= envelope!.d1RowsRead!)) boundFailures.push(`existing group/filter/all-miss reads ${actualReads} exceed ${envelope!.d1RowsRead}`);
     t.diagnostic(`real local D1: ${snapshot.ticketRows} tickets, group/filter all-miss reads ${actualReads}, admitted ${envelope!.d1RowsRead}`);
+    // Measure the added finite predicates beyond the fixed reserve; no queue surcharge is assumed.
+    for(const queue of ['unassigned','mine'] as const) {
+      if(queue==='mine') await fixture.db.prepare('UPDATE tickets SET assigned_to=? WHERE tenant_id=?').bind(agent.id,tenantId).run();
+      const queueSnapshot=await new TicketListScanRepository(fixture.db,scope).snapshot('list-scale-filter');
+      const queueEnvelope=ticketListEnvelope(queueSnapshot,{groupRestricted:true,queue});
+      const queueObservations:D1Observation[]=[];
+      const page=await new SqlTicketRepository(scope,observeDatabase(fixture.db,queueObservations)).list({queue,
+        page:1,limit:50,filterId:'list-scale-filter',viewer:{role:'agent',actorId:agent.id},scanFence:queueSnapshot});
+      assert.equal(page.total,10001);
+      const reads=queueObservations.reduce((sum,item)=>sum+item.rowsRead,0);
+      t.diagnostic(`${queue}: ${queueSnapshot.ticketRows} candidates, ${reads} native reads, ${queueEnvelope!.d1RowsRead} reserved`);
+      if(reads>queueEnvelope!.d1RowsRead!) boundFailures.push(`${queue} reads ${reads} exceed ${queueEnvelope!.d1RowsRead}`);
+    }
+    assert.deepEqual(boundFailures,[]);
   });
 });
 
@@ -233,5 +248,40 @@ test('authenticated Drafts queue preserves production-like retention and applies
       'the queue read filters local expiry without deleting stored drafts');
     await fixture.db.prepare("UPDATE users SET session_version=session_version+1 WHERE tenant_id=? AND id=?").bind(tenantId,agent.id).run();
     assert.notEqual((await fixture.request('/api/tickets?queue=drafts',{token:agent.token})).status,200);
+  });
+});
+
+test('Mine and Unassigned HTTP queues require a current operator and bind Mine independently of caller filters',async()=>{
+  await withTwoTenantFixture(async fixture=>{
+    const tenantId=fixture.principals.operatorA.tenantId;
+    const agent=await fixture.createAgentSession(tenantId);
+    const colleague=await fixture.createAgentSession(tenantId);
+    const read=async(queue:string,token:string,extra='')=>{
+      const response=await fixture.request(`/api/tickets?queue=${queue}${extra}`,{token});
+      assert.equal(response.status,200);return response.json<{data:Array<{id:string;inclusion_reason:string}>;meta:{total:number}}>();
+    };
+    assert.equal((await read('unassigned',agent.token)).meta.total,1);
+    assert.equal((await read('mine',agent.token)).meta.total,0);
+    await fixture.db.prepare("UPDATE tickets SET assigned_to=? WHERE tenant_id=? AND id='fixture-ticket'").bind(agent.id,tenantId).run();
+    assert.equal((await read('unassigned',agent.token)).meta.total,0);
+    const own=await read('mine',agent.token);
+    assert.equal(own.meta.total,1);assert.equal(own.data[0].inclusion_reason,'mine');
+    assert.equal((await read('mine',colleague.token)).meta.total,0);
+    assert.equal((await read('mine',agent.token,`&assigned_to=${colleague.id}`)).meta.total,0);
+    const customerToken=(await (await fixture.login('customerA')).json<{token:string}>()).token;
+    const key=await fixture.createScopedApiKey('operatorA',['tickets:read']);
+    for(const queue of ['mine','unassigned']){
+      assert.equal((await fixture.request(`/api/tickets?queue=${queue}`,{token:customerToken})).status,403);
+      assert.notEqual((await fixture.request(`/api/tickets?queue=${queue}`,{headers:{'X-API-Key':key.apiKey}})).status,200);
+    }
+    await initializeLocalBetaFixture(fixture,{runId:'ownership-queue-admission',tenants:[tenantId,fixture.principals.operatorB.tenantId],
+      invitations:[...Object.values(fixture.principals).map(principal=>({tenantId:principal.tenantId,id:principal.localId,kind:principal.role==='customer'?'customer' as const:'staff' as const})),
+        {tenantId,id:agent.id,kind:'staff'},{tenantId,id:colleague.id,kind:'staff'}],
+      limits:{ticketLimit:2,mutationLimit:8,recoveryReserve:2,uploadLimit:2}});
+    await fixture.enableCombinedTicketAdmission();
+    assert.equal((await read('mine',agent.token)).meta.total,1);
+    assert.equal((await read('unassigned',agent.token)).meta.total,0);
+    await fixture.db.prepare('UPDATE users SET session_version=session_version+1 WHERE tenant_id=? AND id=?').bind(tenantId,agent.id).run();
+    for(const queue of ['mine','unassigned']) assert.notEqual((await fixture.request(`/api/tickets?queue=${queue}`,{token:agent.token})).status,200);
   });
 });

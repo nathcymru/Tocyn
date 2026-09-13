@@ -3,7 +3,7 @@
  * from saved filter IDs: a saved filter can refine a queue but cannot replace
  * its support-state predicate.
  */
-export const TICKET_QUEUE_KEYS = ['actionable', 'snoozed', 'drafts'] as const;
+export const TICKET_QUEUE_KEYS = ['actionable', 'snoozed', 'drafts', 'mine', 'unassigned'] as const;
 export type TicketQueueKey = typeof TICKET_QUEUE_KEYS[number];
 
 export type TicketQueueInclusionReason = TicketQueueKey;
