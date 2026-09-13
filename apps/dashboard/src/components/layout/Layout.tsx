@@ -293,6 +293,7 @@ function LayoutContent() {
   const transitionActivity = async (item: ActivityItem, action: 'read' | 'dismiss') => {
     try {
       await dashboardApi.patch(`/activities/${encodeURIComponent(item.id)}/${action}`, { expectedRevision: item.revision });
+      if(action==='dismiss')await queryClient.invalidateQueries({queryKey:['tickets']});
       await loadActivity();
     } catch { setActivityError('Activity changed before it could be updated. The list was refreshed.'); void loadActivity(); }
   };

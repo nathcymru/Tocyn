@@ -1,3 +1,4 @@
+import type { TicketQueueCountCommit } from '../repositories/ticket-queue-counts.repository';
 import type { TicketQueueKey } from '../types/ticket-queue';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { Env } from '../bindings';
@@ -9,11 +10,12 @@ import { TicketListScanError, TicketListScanRepository, type TicketListScanSnaps
 import { apiTicketBudgetCache, customerTicketAdmissionMode, sessionTicketBudgetAdmission, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { estimateDiagnosticEnvelope } from '../observability/resource-envelope';
 
-export type HttpTicketListOperation = 'dashboard.ticket.list' | 'portal.ticket.list';
+export type HttpTicketListOperation = 'dashboard.ticket.list' | 'dashboard.ticket.queue-counts' | 'portal.ticket.list';
 export type HttpTicketListAdmission = Readonly<{
   status: 'disabled' | 'admitted' | 'rejected';
   reason?: 'exhausted' | 'unavailable';
   snapshot?: TicketListScanSnapshot;
+  commit?:TicketQueueCountCommit;
 }>;
 
 type AdmissionInput = Readonly<{
@@ -24,6 +26,7 @@ type AdmissionInput = Readonly<{
   filterId?: string;
   search?: string;
   queue?: TicketQueueKey;
+  draftNotExpiredAt?:string;
   now: () => number;
 }>;
 
@@ -55,7 +58,7 @@ function byteReadUnits(value: number): number | null {
  * two ticket passes, two article passes for substring search, optional
  * group-membership lookups in both passes, and a conservative byte-equivalent D1-read margin.
  */
-export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { search?: string; groupRestricted: boolean; queue?: TicketQueueKey }): ResourceAmounts | null {
+export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { search?: string; groupRestricted: boolean; queue?: TicketQueueKey; aggregateCounts?: boolean }): ResourceAmounts | null {
   const articlePasses = input.search ? scaled(snapshot.articleRows, 2) : 0;
   const articleBytes = input.search ? scaled(snapshot.articleSearchBytes, 2) : 0;
   // Each statement may also probe the covering (tenant,user,group) membership PK.
@@ -63,16 +66,19 @@ export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { se
   const ticketBytes = scaled(snapshot.ticketSearchBytes, 2);
   const byteUnits = safeAdd(byteReadUnits(ticketBytes ?? -1) ?? -1, byteReadUnits(articleBytes ?? -1) ?? -1,
     byteReadUnits(snapshot.filter?.conditionBytes ?? 0) ?? -1);
-  // Count and page each perform at most one indexed draft lookup per ticket.
-  // Reserve index plus row access for both passes; draft population cannot multiply it.
-  const draftReads = input.queue === 'drafts' ? scaled(snapshot.ticketRows, 4) : 0;
-  // Canonical queues perform one state and one definition PK lookup per candidate.
-  // Reserve index plus row for each lookup in both count and page statements.
-  const supportStateReads = input.queue && ['actionable', 'snoozed', 'mine', 'unassigned'].includes(input.queue)
+  // Lists probe each membership in count and page; aggregates probe it once.
+  // Reserve index plus row per exact ticket lookup, independent of history population.
+  const draftReads = input.aggregateCounts ? scaled(snapshot.ticketRows, 2) : input.queue === 'drafts' ? scaled(snapshot.ticketRows, 4) : 0;
+  const mentionReads = input.aggregateCounts ? scaled(snapshot.ticketRows, 2) : input.queue === 'mentions' ? scaled(snapshot.ticketRows, 4) : 0;
+  // Two materialized passes consume visible rows and then stored classification flags.
+  const materializedReads = input.aggregateCounts ? scaled(snapshot.ticketRows, 2) : 0;
+  // Lists probe state/definition in count and page. Aggregate flags probe them
+  // once for actionable and once for snoozed; both require eight units per ticket.
+  const supportStateReads = input.aggregateCounts || input.queue && ['actionable', 'snoozed', 'mine', 'unassigned', 'mentions'].includes(input.queue)
     ? scaled(snapshot.ticketRows, 8) : 0;
-  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1, supportStateReads ?? -1);
+  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, input.aggregateCounts ? 512 : 0, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1, supportStateReads ?? -1, mentionReads ?? -1, materializedReads ?? -1);
   if (reads === null) return null;
-  return Object.freeze({ workerRequests: 1, d1RowsRead: reads,
+  return Object.freeze({ workerRequests: 1, d1RowsRead: reads, ...(input.aggregateCounts?{d1RowsWritten:16}:{}),
     ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
 }
 
@@ -89,7 +95,7 @@ function rejected(outcome: { status: string; reason?: string }, snapshot: Ticket
 /** Current credential first; the counter read is admission metadata, never a ticket/article list. */
 export async function admitHttpTicketList(input: AdmissionInput): Promise<HttpTicketListAdmission> {
   if (input.env.BUDGET_ADMISSION_POLICY === undefined) return { status: 'disabled' };
-  const staff = input.operation === 'dashboard.ticket.list';
+  const staff = input.operation === 'dashboard.ticket.list' || input.operation === 'dashboard.ticket.queue-counts';
   const mode = staff ? staffTicketAdmissionMode(input.env) : customerTicketAdmissionMode(input.env);
   if (mode === 'disabled') return { status: 'disabled' };
   if (mode !== 'enabled' || !input.env.BUDGET_COORDINATOR_DO || !safeIdentity(input.deps.scope.tenantId)
@@ -111,14 +117,20 @@ export async function admitHttpTicketList(input: AdmissionInput): Promise<HttpTi
         return { status: 'rejected', reason: 'unavailable' };
       }
       snapshot = await new TicketListScanRepository(input.deps.database, input.deps.scope).snapshot(input.filterId);
-      const business = ticketListEnvelope(snapshot, { search: input.search, groupRestricted: credential.role === 'agent', queue: input.queue });
+      const business = ticketListEnvelope(snapshot, { search: input.search, groupRestricted: credential.role === 'agent', queue: input.queue, aggregateCounts: input.operation === 'dashboard.ticket.queue-counts' });
       if (!business) return { status: 'rejected', reason: 'unavailable' };
       const fingerprint = await digest(['http-ticket-list-v1', input.operation, input.deps.scope.tenantId, input.deps.scope.actorId,
-        input.filterId ?? null, input.search ?? null, input.queue ?? null, snapshot]);
-      return rejected(await sessionTicketBudgetAdmission.admit({ repository: input.deps.repositories.budgetAuthority,
+        input.filterId ?? null, input.search ?? null, input.queue ?? null, ...(input.operation==='dashboard.ticket.queue-counts'?[input.draftNotExpiredAt ?? null]:[]), snapshot]);
+      const outcome=await sessionTicketBudgetAdmission.admit({ repository: input.deps.repositories.budgetAuthority,
         sessions: new SessionBudgetAuthorityRepository(input.deps.database, input.deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
         scope: input.deps.scope, credential, requirements: {},
-        intent: { operationId: crypto.randomUUID(), operationFingerprint: fingerprint, workScopeKey: input.operation }, business, now: input.now }), snapshot);
+        intent: { operationId: crypto.randomUUID(), operationFingerprint: fingerprint, workScopeKey: input.operation }, business, now: input.now });
+      if(input.operation==='dashboard.ticket.queue-counts'){
+        if((outcome.status!=='spent'&&outcome.status!=='idempotent')||!outcome.commitAuthority)return {status:'rejected',reason:outcome.reason==='exhausted'||outcome.reason==='capacity-exhausted'?'exhausted':'unavailable'};
+        return {status:'admitted',snapshot,commit:Object.freeze({operation:input.operation,requestKey:fingerprint,credential,snapshot,
+          draftNotExpiredAt:input.draftNotExpiredAt,authority:outcome.commitAuthority})};
+      }
+      return rejected(outcome,snapshot);
     }
     const sessionVersion = input.payload.session_version, email = input.payload.email;
     if (input.payload.role !== 'customer' || typeof sessionVersion !== 'number' || !Number.isSafeInteger(sessionVersion)
@@ -144,4 +156,8 @@ export async function admitHttpTicketList(input: AdmissionInput): Promise<HttpTi
     if (error instanceof TicketListScanError) return { status: 'rejected', reason: 'unavailable' };
     return { status: 'rejected', reason: 'unavailable' };
   }
+}
+
+export function settleTicketQueueCounts(commit:TicketQueueCountCommit,outcome:'committed'|'unknown',now:number):void {
+  apiTicketBudgetCache.settleOperation(commit.authority,outcome,now);
 }

@@ -328,3 +328,23 @@ it('keeps nested account content fixed-positioned and dismisses it before mobile
   await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Navigation'})).not.toBeInTheDocument());
   await waitFor(()=>expect(screen.getByRole('button',{name:'Open navigation'})).toHaveFocus());
 });
+
+it('invalidates ticket queues after dismissing activity while reading retains mention membership',async()=>{
+  const item={id:'mention-one',ticketId:'ticket-one',ticketSubject:'Synthetic mention',kind:'mention',facts:{},revision:1,createdAt:'2026-09-13T00:00:00Z',readAt:null,dismissedAt:null};
+  const fallback=vi.mocked(dashboardApi.get).getMockImplementation()!;
+  vi.mocked(dashboardApi.get).mockImplementation(async(path:string)=>path==='/activities?limit=20'
+    ?{page:{items:[item],next:null},unread:{status:'available',count:1}}:fallback(path));
+  vi.mocked(dashboardApi.patch).mockResolvedValue({});
+  const invalidated=vi.spyOn(client,'invalidateQueries');
+  await renderReady();
+  fireEvent.click(screen.getByRole('button',{name:/Activity/}));
+  const open=await screen.findByRole('button',{name:'Open mention activity for Synthetic mention'});
+  fireEvent.click(open);
+  await waitFor(()=>expect(dashboardApi.patch).toHaveBeenCalledWith('/activities/mention-one/read',{expectedRevision:1}));
+  await screen.findByRole('heading',{name:'Route /inbox/all/ticket-one',level:1});
+  expect(invalidated).not.toHaveBeenCalledWith({queryKey:['tickets']});
+  const trigger=screen.getByRole('button',{name:/Activity/});
+  if(trigger.getAttribute('aria-expanded')!=='true')fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole('button',{name:'Dismiss mention activity for Synthetic mention'}));
+  await waitFor(()=>expect(invalidated).toHaveBeenCalledWith({queryKey:['tickets']}));
+});

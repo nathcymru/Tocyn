@@ -7,6 +7,15 @@ export type TicketQueuePredicate = Readonly<{
   values: readonly unknown[];
 }>;
 
+/** Only membership is read; recipient activity facts never leave this predicate. */
+export function ticketMentionPredicate(ticketAlias: string, actorId: string): TicketQueuePredicate {
+  if (!actorId) throw new Error('Mentions queue requires an operator');
+  return { inclusionReason: 'mentions', values: [actorId],
+    sql: `EXISTS (SELECT 1 FROM operator_activities queue_mention
+      WHERE queue_mention.tenant_id=${ticketAlias}.tenant_id AND queue_mention.recipient_user_id=?
+        AND queue_mention.ticket_id=${ticketAlias}.id AND queue_mention.kind='mention' AND queue_mention.dismissed_at IS NULL)` };
+}
+
 /**
  * Support-state queues use the canonical projection, not a client clock. Due
  * snoozes remain Snoozed until the controlled resurface worker clears their
@@ -14,6 +23,11 @@ export type TicketQueuePredicate = Readonly<{
  * notion of "now".
  */
 export function ticketQueuePredicate(queue: TicketQueueKey, ticketAlias = 'tickets', operator?: Readonly<{ actorId: string; notExpiredAt?: string }>): TicketQueuePredicate {
+  if (queue === 'mentions') {
+    const actionable=ticketQueuePredicate('actionable',ticketAlias);
+    const mention=ticketMentionPredicate(ticketAlias,operator?.actorId ?? '');
+    return {inclusionReason:'mentions',sql:`${actionable.sql} AND ${mention.sql}`,values:mention.values};
+  }
   if (queue === 'drafts') {
     if (!operator?.actorId) throw new Error('Draft queue requires an operator');
     const expiry = DRAFT_EXPIRY_SQL.replaceAll('expires_at', 'queue_draft.expires_at').replaceAll('updated_at', 'queue_draft.updated_at');

@@ -1,3 +1,4 @@
+import { TicketQueueCountsRepository } from '../src/repositories/ticket-queue-counts.repository';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
@@ -205,6 +206,15 @@ test('many current group-visible tickets, saved filters, and an all-miss substri
       t.diagnostic(`${queue}: ${queueSnapshot.ticketRows} candidates, ${reads} native reads, ${queueEnvelope!.d1RowsRead} reserved`);
       if(reads>queueEnvelope!.d1RowsRead!) boundFailures.push(`${queue} reads ${reads} exceed ${queueEnvelope!.d1RowsRead}`);
     }
+    const countSnapshot=await new TicketListScanRepository(fixture.db,scope).snapshot();
+    const countObservations:D1Observation[]=[];
+    const totals=await new TicketQueueCountsRepository(observeDatabase(fixture.db,countObservations),scope).counts({snapshot:countSnapshot,
+      credential:{role:'agent',sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600}});
+    assert.equal(totals.counts.all,10001);assert.equal(totals.counts.mine,10001);assert.equal(totals.counts.unassigned,0);
+    const countReads=countObservations.reduce((sum,item)=>sum+item.rowsRead,0);
+    const countEnvelope=ticketListEnvelope(countSnapshot,{groupRestricted:true,aggregateCounts:true})!;
+    assert.ok(countReads>0&&countReads<=countEnvelope.d1RowsRead!);
+    t.diagnostic(`aggregate standard queues: ${countSnapshot.ticketRows} candidates, ${countReads} native read rows, ${countEnvelope.d1RowsRead} reserved`);
     assert.deepEqual(boundFailures,[]);
   });
 });
