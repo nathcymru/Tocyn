@@ -453,3 +453,34 @@ it.each(['List view','Table view'] as const)('recovers a shrunken last page with
   expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1);
   if(presentation==='Table view')expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(2);
 });
+
+it('uses whole-view SLA ordering and same-snapshot projections, then restarts an expired queue without losing the conversation',async()=>{
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const slaRequests:string[]=[];
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&String(url).includes('sort=sla_priority')){
+      slaRequests.push(String(url));
+      if(String(url).includes('cursor='))return json({code:'sla_sort_restart',error:'Queue changed or expired.'},409);
+      return json({data:[...tickets].reverse(),meta:{page:1,limit:20,total:21,total_pages:2},
+        sla:Object.fromEntries(tickets.map(ticket=>[ticket.id,unavailableSla])),asOf:new Date().toISOString(),next:'synthetic-next-cursor'});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all/ticket-1');
+  await screen.findByRole('option',{name:/Fixture conversation 20/});
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/ticket-sla/projections')).toBe(true));
+  const before=vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/ticket-sla/projections').length;
+  fireEvent.change(screen.getByRole('combobox',{name:'Sort conversations'}),{target:{value:'sla_priority'}});
+  await waitFor(()=>expect(slaRequests).toHaveLength(1));
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  await waitFor(()=>expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 20'));
+  expect(vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/ticket-sla/projections')).toHaveLength(before);
+  fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
+  await screen.findByRole('button',{name:'Restart SLA ordering'});
+  expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
+  expect(within(list).queryAllByRole('option')).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button',{name:'Restart SLA ordering'}));
+  await within(list).findByRole('option',{name:/Fixture conversation 20/});
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
+  expect(slaRequests).toHaveLength(3);
+});

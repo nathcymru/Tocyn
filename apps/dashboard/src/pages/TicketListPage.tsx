@@ -1,3 +1,4 @@
+import { SlaQueueNotice } from '../components/SlaQueueNotice';
 import { useTicketSlaBatch } from '../hooks/useTicketSla';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { Popover } from '@luminatick/ui/ark';
@@ -94,7 +95,7 @@ export function TicketListPage() {
 
   const { data: filters, isLoading: isLoadingFilters } = useFilters();
 
-  const { data: paginatedData, isLoading: isLoadingTickets, error: ticketsError, isFetching, isPlaceholderData, refetch } = useTickets({
+  const { data: paginatedData, isLoading: isLoadingTickets, error: ticketsError, isFetching, isPlaceholderData, refetch, restartSla } = useTickets({
     page: page.toString(),
     sort: workspace.sort,
     ...(activeFilterId ? { filter_id: activeFilterId } : {}),
@@ -102,7 +103,10 @@ export function TicketListPage() {
   });
 
   const tickets = paginatedData?.data || [];
-  const ticketSla = useTicketSlaBatch(tickets.map(ticket => ticket.id), !isPlaceholderData && !ticketsError && Boolean(paginatedData));
+  const slaSort = workspace.sort === 'sla_priority';
+  const batchSla = useTicketSlaBatch(tickets.map(ticket => ticket.id), !slaSort && !isPlaceholderData && !ticketsError && Boolean(paginatedData));
+  const ticketSla = slaSort ? { ...batchSla, isLoading: isLoadingTickets, isError: Boolean(ticketsError), isFetching, refetch, data: Object.fromEntries(Object.entries(paginatedData?.sla ?? {}).filter(([, value]) => value !== null)) } : batchSla;
+  const restartSlaOrder = () => { restartSla(); workspace.update({ listAnchor: pageAnchor(1) }); setFeedStatus('SLA ordering restarted.'); };
   const meta = paginatedData?.meta || { page: 1, limit: 20, total: 0, total_pages: 1 };
 
   const { data: groups } = useGroups();
@@ -119,6 +123,7 @@ export function TicketListPage() {
   }, [isFetching, ticketsError]);
 
   const retryFeed = async () => {
+    if (slaSort) { restartSlaOrder(); return; }
     if (isFetching || retryingFeed) return;
     setRetryingFeed(true);
     setFeedStatus('Refreshing tickets…');
@@ -168,6 +173,7 @@ export function TicketListPage() {
   };
 
   const handleSortChange = (sort: WorkspacePreference['sort']) => {
+    if (sort === 'sla_priority') restartSla();
     workspace.update({ sort, listAnchor: pageAnchor(1) });
   };
 
@@ -239,6 +245,7 @@ export function TicketListPage() {
         <p role="status" aria-label="Workspace preference status" className="text-sm text-slate-700">
           {workspace.status === 'loading' ? 'Restoring workspace preferences…' : workspace.status === 'saving' ? 'Saving workspace preferences…' : workspace.status === 'saved' ? 'Workspace preferences saved.' : ''}
         </p>
+        {slaSort && <SlaQueueNotice asOf={paginatedData?.asOf} error={ticketsError} busy={isFetching} restart={restartSlaOrder} />}
         {tickets.length > 0 && ticketSla.isLoading && <p role="status">Loading service levels…</p>}
         {tickets.length > 0 && ticketSla.isError && <p role="status">Service levels could not be refreshed. <TocynButton type="button" disabled={ticketSla.isFetching} onClick={() => void ticketSla.refetch()} className="underline">Retry service levels</TocynButton></p>}
         {draftIndicators.status === 'partial' && <p role="status" aria-label="Draft indicator status" className="text-sm text-amber-800">Draft indicators are incomplete. Only the first 200 drafts were checked.</p>}
@@ -309,6 +316,7 @@ export function TicketListPage() {
                   <option value="created_asc">Oldest created</option>
                   <option value="priority_desc">Highest priority</option>
                   <option value="priority_asc">Lowest priority</option>
+                  <option value="sla_priority">Earliest SLA deadline</option>
                 </TocynSelect>
               </label>
               <div className="text-sm text-slate-500 font-medium">

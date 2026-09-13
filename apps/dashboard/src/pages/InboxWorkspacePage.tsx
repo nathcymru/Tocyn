@@ -3,6 +3,7 @@ import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,LayoutList,Sear
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
+import { SlaQueueNotice } from '../components/SlaQueueNotice';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { useFilters } from '../hooks/useFilters';
@@ -104,7 +105,10 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   const query=useTickets({page:String(page),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{})});
   const tickets=query.data?.data??[];
   const meta=query.data?.meta??{page:1,limit:20,total:0,total_pages:1};
-  const ticketSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
+  const slaSort=workspace.sort==='sla_priority';
+  const batchSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),!slaSort&&routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
+  const ticketSla=slaSort?{...query,data:Object.fromEntries(Object.entries(query.data?.sla??{}).filter(([,value])=>value!==null))}:batchSla;
+  const restartSla=()=>{query.restartSla();workspace.update({listAnchor:'page:1'});setStatus('SLA ordering restarted. The selected conversation stays open.');};
 
   const outOfRange=Boolean(query.data&&!query.isFetching&&!query.isPlaceholderData&&!query.error
     &&meta.page===page&&page>1&&tickets.length===0&&meta.total>0);
@@ -131,8 +135,8 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
   },[activeView,meta.page,page,query.error,query.isFetching,query.isPlaceholderData,recoveringView]);
   useEffect(()=>setFilterInput(workspace.listQuery),[workspace.listQuery]);
   useEffect(()=>{
-    if(!query.isFetching&&paging.current){paging.current=false;if(!query.error)heading.current?.focus();}
-  },[query.error,query.isFetching]);
+    if(!query.isFetching&&paging.current){paging.current=false;if(!query.error||slaSort)heading.current?.focus();}
+  },[query.error,query.isFetching,slaSort]);
   useEffect(()=>{
     const selected=tickets.findIndex(ticket=>ticket.id===selectedTicketId);
     setFocusedIndex(current=>selected>=0?selected:current>=tickets.length?Math.max(0,tickets.length-1):current);
@@ -173,17 +177,18 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
           className="absolute right-2 top-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
       </form>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><label className="text-xs font-semibold text-slate-600">Sort
-        <TocynSelect aria-label="Sort conversations" value={workspace.sort} onChange={event=>workspace.update({sort:event.target.value as WorkspacePreference['sort'],listAnchor:'page:1'})}
+        <TocynSelect aria-label="Sort conversations" value={workspace.sort} onChange={event=>{if(event.target.value==='sla_priority')query.restartSla();workspace.update({sort:event.target.value as WorkspacePreference['sort'],listAnchor:'page:1'});}}
           className="ml-2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"><option value="updated_desc">Recently updated</option><option value="updated_asc">Least recently updated</option>
-          <option value="created_desc">Newest</option><option value="created_asc">Oldest</option><option value="priority_desc">Highest priority</option><option value="priority_asc">Lowest priority</option></TocynSelect></label>
+          <option value="created_desc">Newest</option><option value="created_asc">Oldest</option><option value="priority_desc">Highest priority</option><option value="priority_asc">Lowest priority</option><option value="sla_priority">Earliest SLA deadline</option></TocynSelect></label>
         <div role="group" aria-label="Conversation presentation" className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
           <TocynButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('rounded-md p-1.5',presentation==='list'?'bg-brand-50 text-brand-800':'text-slate-600')}><LayoutList className="h-4 w-4" aria-hidden="true" /></TocynButton>
           <TocynButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('rounded-md p-1.5',presentation==='table'?'bg-brand-50 text-brand-800':'text-slate-600')}><Table2 className="h-4 w-4" aria-hidden="true" /></TocynButton>
         </div></div>
         <p role="status" aria-label="Inbox status" className="text-xs text-slate-600">{recoveringPage?'Loading the first page after the conversation list changed…':query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p></div>
     </header>
+    {slaSort&&<SlaQueueNotice asOf={query.data?.asOf} error={query.error} busy={query.isFetching} restart={restartSla} />}
     {query.error&&<div role="alert" className="m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900"><p>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</p>
-      <TocynButton type="button" disabled={query.isFetching} onClick={()=>void query.refetch()} className="mt-2 font-semibold underline">Retry conversations</TocynButton></div>}
+      <TocynButton type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()} className="mt-2 font-semibold underline">Retry conversations</TocynButton></div>}
     {workspace.status==='error'||workspace.status==='conflict'?<div role="alert" className="mx-4 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{workspace.error}
       <TocynButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave} className="ml-2 font-semibold underline">{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</TocynButton></div>:null}
     {drafts.status==='partial'&&<p role="status" className="mx-4 mt-3 text-xs text-amber-900">Some draft indicators are still loading.</p>}
