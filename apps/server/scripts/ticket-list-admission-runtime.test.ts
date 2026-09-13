@@ -193,3 +193,45 @@ test('many current group-visible tickets, saved filters, and an all-miss substri
     t.diagnostic(`real local D1: ${snapshot.ticketRows} tickets, group/filter all-miss reads ${actualReads}, admitted ${envelope!.d1RowsRead}`);
   });
 });
+
+test('authenticated Drafts queue preserves production-like retention and applies only explicitly enabled local expiry', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantId=fixture.principals.operatorA.tenantId;
+    const agent=await fixture.createAgentSession(tenantId);
+    const colleague=await fixture.createAgentSession(tenantId);
+    await fixture.db.batch([
+      fixture.db.prepare("INSERT INTO tickets(tenant_id,id,subject,status,customer_email,source) VALUES(?, 'draft-old','Old saved draft','open','synthetic@example.invalid','fixture')").bind(tenantId),
+      fixture.db.prepare("INSERT INTO operator_drafts(tenant_id,user_id,ticket_id,generation,revision,mode,body,attachments,base_conversation_revision,updated_at,expires_at) VALUES(?,?, 'fixture-ticket',?,1,'internal','Synthetic own draft','[]',0,'2000-01-01T00:00:00.000Z','2099-01-01T00:00:00.000Z')").bind(tenantId,agent.id,crypto.randomUUID()),
+      fixture.db.prepare("INSERT INTO operator_drafts(tenant_id,user_id,ticket_id,generation,revision,mode,body,attachments,base_conversation_revision,updated_at,expires_at) VALUES(?,?, 'draft-old',?,1,'internal','Synthetic old draft','[]',0,'2000-01-01T00:00:00.000Z',NULL)").bind(tenantId,agent.id,crypto.randomUUID()),
+    ]);
+    const read=async(token:string)=>{
+      const response=await fixture.request('/api/tickets?queue=drafts',{token});
+      assert.equal(response.status,200);
+      return response.json<{data:Array<{id:string;inclusion_reason:string}>;meta:{total:number}}>();
+    };
+    let result=await read(agent.token);
+    assert.equal(result.meta.total,2,'no local retention is inferred when local beta is off');
+    assert.ok(result.data.every(item=>item.inclusion_reason==='drafts'));
+    assert.equal((await read(colleague.token)).meta.total,0,'another authenticated operator receives no own-draft matches');
+    const customer=await fixture.login('customerA');
+    const customerToken=(await customer.json<{token:string}>()).token;
+    assert.equal((await fixture.request('/api/tickets?queue=drafts',{token:customerToken})).status,403);
+    const key=await fixture.createScopedApiKey('operatorA',['tickets:read']);
+    assert.notEqual((await fixture.request('/api/tickets?queue=drafts',{headers:{'X-API-Key':key.apiKey}})).status,200);
+    assert.notEqual((await fixture.request('/api/tickets?queue=drafts')).status,200);
+
+    await initializeLocalBetaFixture(fixture,{runId:'draft-queue-admission',tenants:[tenantId,fixture.principals.operatorB.tenantId],
+      invitations:[...Object.values(fixture.principals).map(principal=>({tenantId:principal.tenantId,id:principal.localId,kind:principal.role==='customer'?'customer' as const:'staff' as const})),
+        {tenantId,id:agent.id,kind:'staff'},{tenantId,id:colleague.id,kind:'staff'}],
+      limits:{ticketLimit:2,mutationLimit:8,recoveryReserve:2,uploadLimit:2}});
+    await fixture.enableCombinedTicketAdmission();
+    result=await read(agent.token);
+    assert.deepEqual(result.data.map(item=>item.id),['fixture-ticket']);
+    assert.equal(result.meta.total,1);
+    assert.equal((await read(colleague.token)).meta.total,0);
+    assert.equal((await fixture.db.prepare('SELECT COUNT(*) AS total FROM operator_drafts WHERE tenant_id=? AND user_id=?').bind(tenantId,agent.id).first<{total:number}>())?.total,2,
+      'the queue read filters local expiry without deleting stored drafts');
+    await fixture.db.prepare("UPDATE users SET session_version=session_version+1 WHERE tenant_id=? AND id=?").bind(tenantId,agent.id).run();
+    assert.notEqual((await fixture.request('/api/tickets?queue=drafts',{token:agent.token})).status,200);
+  });
+});

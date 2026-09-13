@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["ticket-queue-runtime.test.ts", "ticket-list-admission-runtime.test.ts"],
+  "exclude": []
+}

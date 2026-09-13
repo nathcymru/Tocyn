@@ -324,8 +324,10 @@ export class SqlTicketRepository implements TicketRepository {
       ticketNo?: string;
       search?: string;
       customerEmail?: string;
-      /** Server-owned support-state queue predicate; filters only refine it. */
+      /** Server-owned queue predicate; filters only refine it. */
       queue?: TicketQueueKey;
+      /** Supplied only by the local-beta retention boundary, never a client clock. */
+      draftNotExpiredAt?: string;
       sort?: OperatorWorkspaceSort;
       /** Current dashboard viewers retain the same group rule as ticket detail. */
       viewer?: Readonly<{ role: 'admin' | 'agent'; actorId: string }>;
@@ -357,7 +359,12 @@ export class SqlTicketRepository implements TicketRepository {
     }
 
     if (options.queue) {
-      const queue = ticketQueuePredicate(options.queue);
+      if (options.queue === 'drafts' && (!options.viewer || options.viewer.actorId !== this.scope.actorId
+        || !this.scope.roles.includes(options.viewer.role) || !['admin', 'agent'].includes(options.viewer.role))) {
+        throw new Error('Draft queue requires the current operator');
+      }
+      const queue = ticketQueuePredicate(options.queue, 'tickets', options.queue === 'drafts'
+        ? { actorId: this.scope.actorId, notExpiredAt: options.draftNotExpiredAt } : undefined);
       query += ` AND ${queue.sql}`;
       countQuery += ` AND ${queue.sql}`;
       params.push(...queue.values);

@@ -6,6 +6,8 @@ import type { TicketListCurrentCredential, TicketListScanSnapshot } from './tick
 
 export type TicketQueueListOptions = Readonly<{
   queue: TicketQueueKey;
+  /** Local-beta policy cutoff, captured once on the server for count and page. */
+  draftNotExpiredAt?: string;
   page?: number;
   limit?: number;
   filterId?: string;
@@ -30,7 +32,7 @@ function reasonFor(queue: TicketQueueKey): TicketQueueInclusionReason {
  * Queue reads intentionally delegate to the established ticket-list contract.
  * That keeps saved filters, visibility rules, page limits, and the count/page
  * predicate in one implementation while the queue key adds only its
- * authoritative support-state condition.
+ * authoritative condition.
  */
 export class TicketQueueRepository {
   constructor(private readonly tickets: TicketRepository) {}

@@ -1030,8 +1030,15 @@ dashboard.get("/tickets", async (c) => {
   if (!sort.success) return c.json({ error: 'Invalid ticket sort' }, 400);
   const queue = z.enum(TICKET_QUEUE_KEYS).optional().safeParse(c.req.query('queue'));
   if (!queue.success) return c.json({ error: 'Invalid ticket queue' }, 400);
+  if (queue.data === 'drafts' && (!payload || !['admin', 'agent'].includes(payload.role)
+    || payload.sub !== d.scope.actorId || payload.tenant_id !== d.scope.tenantId
+    || !d.scope.roles.includes(payload.role) || payload.mfa_verified !== true)) {
+    return c.json({ error: 'Operator session required' }, 403);
+  }
+  const draftNotExpiredAt = queue.data === 'drafts' && c.env.ENVIRONMENT === 'local' && c.env.LOCAL_BETA_ENABLED === 'true'
+    ? new Date(c.env.localNow?.() ?? Date.now()).toISOString() : undefined;
   const admission = await admitHttpTicketList({ env: c.env, deps: d, payload, operation: 'dashboard.ticket.list',
-    filterId: c.req.query('filter_id'), search: search.data, now: () => c.env.localNow?.() ?? Date.now() });
+    filterId: c.req.query('filter_id'), search: search.data, queue: queue.data, now: () => c.env.localNow?.() ?? Date.now() });
   if (admission.status === 'rejected') return c.json(admission.reason === 'exhausted'
     ? { code: 'budget_exhausted', error: 'Configured budget capacity is exhausted' }
     : { code: 'budget_admission_unavailable', error: 'Budget admission authority is unavailable' }, admission.reason === 'exhausted' ? 429 : 503);
@@ -1053,6 +1060,7 @@ dashboard.get("/tickets", async (c) => {
       ...(admission.snapshot ? { scanFence: admission.snapshot } : {}),
       ...(admission.snapshot ? { currentCredential } : {}),
       ...(queue.data ? { queue: queue.data as TicketQueueKey } : {}),
+      ...(draftNotExpiredAt ? { draftNotExpiredAt } : {}),
     };
     if (queue.data) {
       const result = await d.repositories.queues.list({ ...listOptions, queue: queue.data });
