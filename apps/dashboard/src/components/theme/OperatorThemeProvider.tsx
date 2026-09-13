@@ -49,24 +49,39 @@ export function OperatorThemeControl() {
   </section>;
 }
 
-function TableColumnsControl({ preferences }: { preferences: ReturnType<typeof useOperatorPreferences> }) {
+export function TableColumnsControl({ preferences }: { preferences: Pick<ReturnType<typeof useOperatorPreferences>, 'tableColumns' | 'update'> }) {
+  type Column = typeof OPERATOR_TABLE_COLUMNS[number];
+  const rowRefs = React.useRef(new Map<Column, HTMLDivElement>());
+  const pendingFocus = React.useRef<{ column: Column; delta: -1 | 1 } | null>(null);
+  const [announcement, setAnnouncement] = React.useState('');
+  React.useLayoutEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    pendingFocus.current = null;
+    const buttons = Array.from(rowRefs.current.get(pending.column)?.querySelectorAll('button') ?? []);
+    const preferred = buttons[pending.delta === -1 ? 0 : 1];
+    (preferred && !preferred.disabled ? preferred : buttons.find(button => !button.disabled))?.focus();
+  }, [preferences.tableColumns]);
   const ordered = [...preferences.tableColumns, ...OPERATOR_TABLE_COLUMNS.filter(column => !preferences.tableColumns.includes(column))];
   const move = (index: number, delta: -1 | 1) => {
     const target = index + delta;
     if (target < 0 || target >= preferences.tableColumns.length) return;
     const next = [...preferences.tableColumns];
     [next[index], next[target]] = [next[target], next[index]];
+    pendingFocus.current = { column: preferences.tableColumns[index], delta };
     preferences.update({ tableColumns: next });
+    setAnnouncement(`${preferences.tableColumns[index]} moved to column ${target + 1} of ${next.length}.`);
   };
   return <fieldset><legend>Table columns</legend>
     {ordered.map(column => {
       const index = preferences.tableColumns.indexOf(column); const visible = index >= 0;
-      return <div key={column} role="group" aria-label={`${column} table column`}>
+      return <div key={column} ref={element => { if (element) rowRefs.current.set(column, element); else rowRefs.current.delete(column); }} role="group" aria-label={`${column} table column`}>
         <label><input type="checkbox" checked={visible} disabled={column === 'reference'} onChange={event => { if (column !== 'reference') preferences.update({ tableColumns: event.target.checked ? [...preferences.tableColumns, column] : preferences.tableColumns.filter(item => item !== column) }); }} /> {column}</label>
         {visible && <><TocynButton type="button" aria-label={`Move ${column} table column up`} disabled={index === 0} onClick={() => move(index, -1)} onKeyDown={event => { if (event.key === 'ArrowUp') { event.preventDefault(); move(index, -1); } }}>↑</TocynButton>
           <TocynButton type="button" aria-label={`Move ${column} table column down`} disabled={index === preferences.tableColumns.length - 1} onClick={() => move(index, 1)} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); move(index, 1); } }}>↓</TocynButton></>}
       </div>;
     })}
+    <p role="status" aria-live="polite">{announcement}</p>
   </fieldset>;
 }
 
