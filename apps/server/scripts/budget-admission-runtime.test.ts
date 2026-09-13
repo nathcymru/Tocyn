@@ -105,7 +105,7 @@ test('real local API-key create reserves configured aggregate capacity before it
     }] }));
     const db = await mf.getD1Database('DB');
     await applyMigrations(db);
-    await seed(db);
+    await seed(db, 31, policy({ d1RowsRead: 9_600 }));
     const snapshot = await new BudgetAuthorityRepository(db).resolveForVerifiedPrincipal(
       createVerifiedTenantScope('runtime-tenant', 'runtime-key', ['integration'], 1),
       { kind: 'api-key', apiKeyId: 'runtime-key', requiredPermission: 'tickets:write' }, now,
@@ -1046,7 +1046,7 @@ test('real local API creates and same-ticket replies reuse prepaid blocks withou
     }] }));
     const db = await mf.getD1Database('DB');
     await applyMigrations(db);
-    await seed(db, 0, policy({ workerRequests: 40, d1RowsRead: 120_000, d1RowsWritten: 100_000,
+    await seed(db, 0, policy({ workerRequests: 40, d1RowsRead: 140_000, d1RowsWritten: 100_000,
       doRequests: 40, doRowsWritten: 40, doRowsRead: 40, logEvents: 10_000 }));
     const request = (subject: string, key: string) => mf!.dispatchFetch('http://runtime.test/api/v1/tickets', {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'idempotency-key': key },
