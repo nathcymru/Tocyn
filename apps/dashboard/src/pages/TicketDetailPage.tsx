@@ -1,5 +1,6 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
+import { KnowledgeBrowser } from '../components/KnowledgeBrowser';
 import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
@@ -376,27 +377,42 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
     return () => { active = false; };
   }, [workspace.panel, knowledgeAttempt]);
 
+  const knowledgeDraftLifecycle = useRef(0);
+  const cancelKnowledgeInsertion = () => {
+    knowledgeDraftLifecycle.current += 1;
+    setKnowledgeInserting(null);
+  };
+
   const insertKnowledgeArticle = async (article: KnowledgeDoc) => {
     if (knowledgeInserting || submission.current || isSubmitting || draft.status === 'loading') return;
+    const identity = assignmentIdentity();
+    const lifecycle = knowledgeDraftLifecycle.current;
+    const current = () => mounted.current && assignmentIdentity() === identity && knowledgeDraftLifecycle.current === lifecycle;
     setKnowledgeInserting(article.id);
     setChangeError(null);
     try {
       const source = await dashboardApi.get<{ content: string }>(`/knowledge/articles/${encodeURIComponent(article.id)}/content`);
+      if (!current() || submission.current) return;
+      const snapshot = draft.currentSnapshot();
+      if (!snapshot || snapshot.status === 'loading') return;
       const content = source.content.trim();
       if (!content) { setChangeError('This knowledge article has no insertable content.'); return; }
-      const nextBody = reply.trim() ? `${reply.replace(/\s+$/, '')}\n\n${content}` : content;
-      updateDraft({ body: nextBody });
+      const body = snapshot.body;
+      const nextBody = body.trim() ? `${body.replace(/\s+$/, '')}\n\n${content}` : content;
+      if (!updateDraft({ body: nextBody })) return;
       setNotice(`Inserted knowledge: ${article.title}`);
       requestAnimationFrame(() => {
+        if (!current()) return;
         const editor = document.getElementById('reply-message') as HTMLTextAreaElement | null;
         editor?.focus();
         editor?.setSelectionRange(nextBody.length, nextBody.length);
       });
     } catch (error) {
+      if (!current()) return;
       setChangeError(error instanceof ApiError && [401, 403, 404].includes(error.status)
         ? 'Knowledge content is unavailable for this tenant or session.'
         : 'Knowledge content could not be loaded. Try again.');
-      } finally { setKnowledgeInserting(null); }
+      } finally { if (current()) setKnowledgeInserting(null); }
     };
 
   
@@ -447,7 +463,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   };
 
   const updateDraft = (changes: Partial<OperatorDraftValue>) => {
-    if (draft.currentSnapshot()?.status === 'loading') return;
+    const snapshot = draft.currentSnapshot();
+    if (!snapshot || snapshot.status === 'loading') return false;
     draft.update(current => ({
       mode: changes.mode ?? current.mode,
       body: changes.body ?? current.body,
@@ -457,6 +474,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
       baseConversationRevision: current.baseConversationRevision,
     }));
     if (changes.body !== undefined) announceTyping(id, draft.baseConversationRevision, changes.body.trim().length > 0);
+    return true;
   };
 
   const uploadAttachment = async (pending: PendingAttachment) => {
@@ -522,6 +540,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
 
   const discardDraft = async () => {
     if (submission.current) return;
+    cancelKnowledgeInsertion();
     activeUploads.current.clear();
     setPendingAttachments(current => current.map(attachment => ({ ...attachment, status: 'error' })));
     const result = await draft.discard();
@@ -632,6 +651,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
       setNotice('Retrying failed attachment uploads before sending.');
       return;
     }
+    cancelKnowledgeInsertion();
     submission.current = true;
     setReplyError(null);
     setNotice('');
@@ -1391,14 +1411,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               {knowledgeLoading ? 'Loading tenant knowledge…' : knowledgeError ? 'Knowledge is temporarily unavailable. No content was inserted.' : knowledgeArticles.length ? 'Select an article to append its verified content to the reply.' : 'No eligible internal knowledge articles are available.'}
             </p>
             {knowledgeError && <TocynButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className="text-sm underline">Retry knowledge</TocynButton>}
-            {knowledgeArticles.length > 0 && <ul aria-describedby="knowledge-insert-help" className="space-y-2">
-              {knowledgeArticles.map(article => <li key={article.id}>
-                <TocynButton type="button" aria-disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} aria-label={`Insert ${article.title} into reply`}
-                  onClick={() => void insertKnowledgeArticle(article)} className="w-full justify-start rounded border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-50">
-                  {knowledgeInserting === article.id ? `Loading ${article.title}…` : `Insert ${article.title}`}
-                </TocynButton>
-              </li>)}
-            </ul>}
+            {workspace.panel === 'details' && knowledgeArticles.length > 0 && <KnowledgeBrowser articles={knowledgeArticles} insertingId={knowledgeInserting}
+              disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} onInsert={article => void insertKnowledgeArticle(article)} />}
           </div>
         </details>
 

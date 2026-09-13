@@ -1,0 +1,13 @@
+# Inline knowledge title search and preview — #134
+
+Approved scope is explicit title-only search over the complete already-admitted active answer/SOP metadata, not full-text or global search. New KnowledgeBrowser uses submitted queries and Clear with polite match counts rather than per-keystroke announcements. Preview loads the existing authorized content GET and displays at most4000characters as plain text, with visible truncation, loading/error/Retry and Close focus return. No HTML rendering or backend/provider endpoint is added.
+
+Preview request generations and current identity/mounted boundaries discard stale responses; context close unmounts preview. Existing parent keyed ticket/tenant/actor/generation/role boundaries remain. Preview never inserts or changes a draft. Explicit insertion uses a fresh content GET, appends to latest committed draft text and fences late notices/focus/updates. Backend whole-read resource limits remain unchanged; display truncation does not claim smaller network/R2 reads.
+
+Focused actual component/mounted TicketDetail tests cover mixed-case title search/Clear/no-match, plain-text4000character truncation, pending/error/retry/close focus, superseded/closed/identity responses, insertion latest-text race, and unchanged draft during preview. Existing loading/ticket identity regressions remain. Actual keyboard search→preview→close→insert and spoken AT require coordinator evidence after merge; no browser pass claimed here.
+
+Routing: local refused3.70GiB against4GiB guard; no model loaded. Root brokered one free cloud scenario proposal523input/304output, nontruncated. Coordinator rejected invented exactcopy and supplied missing no-match; normalized scenarios were used as a test checklist, not execution evidence. GPT owns source/boundaries/tests. No measured token-saving claim, billing fallback or further invocation. Standing VoiceOver configure/leave-enabled authority remains; no spoken AT acceptance is implied. Preserve issue progress, baselines and forecasts; partial134/140 delivery only.
+
+Accepted Send and explicit Discard advance an insertion lifecycle token before asynchronous draft work. Late knowledge content and scheduled focus cannot restore a sent/discarded draft; ordinary typing and autosave revisions do not cancel insertion. A current loaded draft snapshot and successful update are required before the insertion notice.
+
+Validation on e615532c application base: 12/12 focused KnowledgeBrowser and KnowledgeLoadLifecycle component tests, dashboard TypeScript, and git diff check passed. Local direct ESLint invocation was unavailable because this repository has no ESLint configuration; required normal CI remains mandatory. No new native fixture or browser run.
