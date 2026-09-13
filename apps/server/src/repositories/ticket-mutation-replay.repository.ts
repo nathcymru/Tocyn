@@ -1,3 +1,4 @@
+import { capacityAssignmentStatement } from './operator-capacity-predicate';
 import { apiBudgetMutationStatements, type ApiMutationCommit } from './budget-commit-fence';
 import { customerMutationStatement, type CustomerMutationCommit } from './customer-ticket-mutation.repository';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
@@ -144,10 +145,20 @@ export class TicketMutationReplayRepository {
     const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff)];
     const audit = assignmentActivity
       ? auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,
-        { 'ticket.assignment_changed': assignmentActivity.eventId },expectedAssignedTo)
-      : auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo);
+        { 'ticket.assignment_changed': assignmentActivity.eventId },expectedAssignedTo,!!staff.responsibleOwner)
+      : auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo,undefined,!!staff.responsibleOwner);
     const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
     statements.push(...audit.statements);
+    if (staff.responsibleOwner?.overrideReason && assignmentActivity) {
+      statements.push(this.db.prepare(`UPDATE conversation_events SET facts=json_set(facts,'$.capacityOverride',
+        json_object('reason',?,'policyRevision',COALESCE((SELECT revision FROM operator_capacity WHERE tenant_id=? AND user_id=?),0),
+          'availability',(SELECT availability FROM operator_capacity WHERE tenant_id=? AND user_id=?),
+          'assignmentCeiling',(SELECT assignment_ceiling FROM operator_capacity WHERE tenant_id=? AND user_id=?)))
+        WHERE tenant_id=? AND ticket_id=? AND id=? AND kind='ticket.assignment_changed'`)
+        .bind(staff.responsibleOwner.overrideReason,this.scope.tenantId,staff.responsibleOwner.ownerId,
+          this.scope.tenantId,staff.responsibleOwner.ownerId,this.scope.tenantId,staff.responsibleOwner.ownerId,
+          this.scope.tenantId,ticketId,assignmentActivity.eventId));
+    }
     // The prepared activity reads the preceding tenant-qualified canonical event
     // inside the same atomic D1 batch.
     if (assignmentActivity) statements.push(assignmentActivity.statement);
@@ -233,6 +244,7 @@ export class TicketMutationReplayRepository {
     }
     if (candidate.ticket) {
       const t = candidate.ticket;
+      if(t.assigned_to)statements.push(capacityAssignmentStatement(this.db,this.scope.tenantId,t.assigned_to,null));
       statements.push(this.db.prepare(`INSERT INTO tickets
         (tenant_id,id,subject,status,priority,customer_id,customer_email,assigned_to,group_id,source,source_email,custom_fields,intake_received_at,intake_processed_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
