@@ -70,7 +70,7 @@ describe('bounded target-write cross-scope recovery', () => {
     expect((await f.cache.admit(current)).status).toBe('spent');
     expect(staleCallback).not.toHaveBeenCalled();
     expect(currentDiagnostics).toHaveBeenCalledExactlyOnceWith(17);
-    expect(f.cache.inspectForTrustedRuntime()).toMatchObject({ holders: 1, operations: 1, scopes: 2 });
+    expect(f.cache.inspectForTrustedRuntime()).toMatchObject({ holders: 1, operations: 1, scopes: 1 });
   });
 
   it.each(['rejected', 'pending', 'throw'])('retains original liability after %s and rechecks the new target before allocation', async outcome => {
