@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["inbound-email-receipt-runtime.test.ts", "split-sql.ts"]
+}

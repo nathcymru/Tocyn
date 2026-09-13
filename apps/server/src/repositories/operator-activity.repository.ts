@@ -218,8 +218,9 @@ export class OperatorActivityRepository {
       SELECT e.tenant_id,?,?,?,?,?,?,?,?,?,NULL
       FROM conversation_events e JOIN tickets t ON t.tenant_id=e.tenant_id AND t.id=e.ticket_id
       WHERE e.tenant_id=? AND e.id=? AND e.ticket_id=? AND e.article_id=?
-        AND e.kind='message.reply' AND e.actor_kind='customer' AND e.actor_provenance='authenticated-customer'
-        AND e.source IN ('portal','widget') AND e.visibility='public'
+        AND e.kind='message.reply' AND e.visibility='public'
+        AND ((e.actor_kind='customer' AND e.actor_provenance='authenticated-customer' AND e.source IN ('portal','widget'))
+          OR (e.actor_kind='system' AND e.actor_id='inbound-email' AND e.actor_provenance='gateway-email' AND e.source='email'))
         AND t.assigned_to=? AND t.assigned_to IS NOT NULL
       ON CONFLICT (tenant_id,recipient_user_id,kind,source_id) DO NOTHING RETURNING ${columns}`)
       .bind(
