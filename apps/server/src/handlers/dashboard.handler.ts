@@ -1387,6 +1387,9 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
   if (admissionMode === 'enabled') {
     try {
       const payload = await readMutationJson(c);
+      if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload,'assigned_to')) {
+        return c.json({ code:'responsible_owner_endpoint_required', error:'Use the responsible-owner endpoint to change assignment' },400);
+      }
       const result = updateTicketSchema.safeParse(payload);
       if (!result.success) return c.json({ error: "Validation failed", details: result.error.flatten().fieldErrors }, 400);
       const updateFields = result.data;
@@ -1410,6 +1413,9 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
     }
   }
   const payload = await c.req.json();
+  if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload,'assigned_to')) {
+    return c.json({ code:'responsible_owner_endpoint_required', error:'Use the responsible-owner endpoint to change assignment' },400);
+  }
   const agent = c.get("jwtPayload") as JWTPayload;
 
   const result = updateTicketSchema.safeParse(payload);

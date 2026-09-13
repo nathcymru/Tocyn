@@ -72,12 +72,11 @@ describe("Ticket Detail Fixes Verification", () => {
     expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("ORDER BY created_at ASC"));
   });
 
-  it("should allow updating priority, assigned_to, and group_id", async () => {
+  it("should allow updating priority and group_id", async () => {
       // D1 returns one result for each submitted batch statement.
       mockDB.batch.mockImplementation(async (statements: unknown[]) => statements.map((_, index) => ({ results: index >= statements.length - 2 ? [{ id: 't-1' }] : [] })));
     mockDB.run.mockResolvedValue({ success: true });
 
-    const validAgentUuid = "11111111-1111-1111-1111-111111111111";
     const validGroupUuid = "22222222-2222-2222-2222-222222222222";
 
     const res = await dashboard.request(
@@ -90,7 +89,6 @@ describe("Ticket Detail Fixes Verification", () => {
         },
         body: JSON.stringify({
           priority: "urgent",
-          assigned_to: validAgentUuid,
           group_id: validGroupUuid
         })
       },
@@ -101,8 +99,8 @@ describe("Ticket Detail Fixes Verification", () => {
     expect(await res.json()).toEqual({ success: true });
 
     // Verify ticket update query includes all fields
-    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET priority=?,assigned_to=?,group_id=?,updated_at=CURRENT_TIMESTAMP"));
-    expect(mockDB.bind).toHaveBeenCalledWith("urgent", validAgentUuid, validGroupUuid, "default-tenant", "t-1", "urgent", validAgentUuid, validGroupUuid);
+    expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("UPDATE tickets SET priority=?,group_id=?,updated_at=CURRENT_TIMESTAMP"));
+    expect(mockDB.bind).toHaveBeenCalledWith("urgent", validGroupUuid, "default-tenant", "t-1", "urgent", validGroupUuid);
     expect(mockDB.batch).toHaveBeenCalledTimes(1);
     expect(mockDB.prepare).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO conversation_events"));
   });});

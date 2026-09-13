@@ -78,6 +78,7 @@ export class StaffTicketMutationService {
         } };
       }
       if (data.responsibleOwnerAssignment !== undefined || data.expectedAssignedTo !== undefined) throw invalid();
+      if (Object.prototype.hasOwnProperty.call(data,'assigned_to')) throw new TicketMutationError(400,'responsible_owner_endpoint_required','Use the responsible-owner endpoint to change assignment');
       return { operation: input.operation, ticketId: input.ticketId, data: { ...data } };
     }
     const d = input.data;
@@ -231,12 +232,6 @@ export class StaffTicketMutationService {
       try {
         const responsibleOwner = input.data.responsibleOwnerAssignment
           ? { ticketId: input.ticketId, ownerId: input.data.assigned_to ?? null } : undefined;
-        if (responsibleOwner) {
-          const raw = await this.canonical.commitStaffUpdate(input.ticketId,input.data,{kind:'staff',id:this.credential.actorId,source:'dashboard'},
-            { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace,responsibleOwner },
-            undefined,input.data.expectedAssignedTo);
-          return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
-        }
         const assignmentEventId = input.data.assigned_to === undefined || input.data.assigned_to === null
           ? undefined : crypto.randomUUID();
         const assignmentActivity = assignmentEventId
@@ -246,8 +241,9 @@ export class StaffTicketMutationService {
           }) : undefined;
         if (assignmentEventId && !assignmentActivity) throw unavailable();
         const raw = await this.canonical.commitStaffUpdate(input.ticketId,input.data,{kind:'staff',id:this.credential.actorId,source:'dashboard'},
-          { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace },
-          assignmentActivity ? { eventId: assignmentEventId!, statement: assignmentActivity.statement } : undefined, undefined);
+          { credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace,responsibleOwner },
+          assignmentActivity ? { eventId: assignmentEventId!, statement: assignmentActivity.statement } : undefined,
+          input.data.expectedAssignedTo);
         return this.committed(prepared,this.render(raw,input.operation,false,attempt.keyed));
       } catch (error) {
         await this.authorize(attempt.requirements);

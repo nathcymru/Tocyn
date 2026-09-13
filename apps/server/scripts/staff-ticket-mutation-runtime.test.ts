@@ -161,10 +161,25 @@ async function accept(service:StaffTicketMutationService,input:StaffMutationInpu
   assert.equal((await service.admit(prepared)).status,'spent');return {prepared,outcome:await service.commit(prepared)};
 }
 
+test('generic existing-ticket assignment is rejected before admission without partial updates', async () => {
+  const f = await fixture(); try {
+    const before = await f.counts();
+    for (const assigned_to of [null,mentionRecipientIds[0]]) {
+      for (const data of [{assigned_to},{status:'resolved' as const,assigned_to}]) {
+        await assert.rejects(f.service().prepareStaffMutation(update(data),'generic-assignment'),
+          (error:any) => error.status === 400 && error.code === 'responsible_owner_endpoint_required');
+      }
+    }
+    assert.deepEqual(await f.counts(),before);
+    assert.equal(f.canonicalAttempts(),0);
+    assert.deepEqual(await f.db.prepare("SELECT status,assigned_to FROM tickets WHERE tenant_id='a' AND id='ticket'").first(),{status:'open',assigned_to:null});
+  } finally {await f.mf.dispose();}
+});
+
 test('direct assignment creates activity only from its authenticated tenant-qualified canonical event', async () => {
   const f = await fixture(); try {
     const recipient = mentionRecipientIds[0];
-    const first = await accept(f.service(),update({ assigned_to: recipient }),'assignment-activity');
+    const first = await accept(f.service(),responsibleOwner(recipient,null),'assignment-activity');
     assert.equal(first.outcome.ticket.assigned_to,recipient);
     const activity = await f.db.prepare(`SELECT id,source_id,facts,producer_id FROM operator_activities
       WHERE tenant_id='a' AND recipient_user_id=? AND kind='assignment'`).bind(recipient).first<{
@@ -178,18 +193,17 @@ test('direct assignment creates activity only from its authenticated tenant-qual
       tenant_id:'a',ticket_id:'ticket',kind:'ticket.assignment_changed',actor_id:'staff',actor_provenance:'mfa-staff',source:'dashboard',visibility:'internal',
     });
 
-    const replay = await f.service().prepareStaffMutation(update({ assigned_to: recipient }),'assignment-activity');
+    const replay = await f.service().prepareStaffMutation(responsibleOwner(recipient,null),'assignment-activity');
     assert.equal(replay.replay?.replayed,true);
     assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a' AND kind='assignment'").first<{n:number}>())?.n,1,
       'the canonical receipt replay cannot create a second activity');
 
-    await accept(f.service(),update({ assigned_to: recipient }),'assignment-noop');
+    await accept(f.service(),responsibleOwner(recipient,recipient),'assignment-noop');
     assert.equal((await f.db.prepare("SELECT count(*) AS n FROM operator_activities WHERE tenant_id='a' AND kind='assignment'").first<{n:number}>())?.n,1,
       'a request without a changed canonical assignment event creates no activity');
 
-    const rejected = f.service(); const prepared = await rejected.prepareStaffMutation(update({ assigned_to:'33333333-3333-4333-8333-333333333333' }),'assignment-foreign');
-    assert.equal((await rejected.admit(prepared)).status,'spent'); const before = await f.counts();
-    await assert.rejects(rejected.commit(prepared),(error:any) => error.status === 503);
+    const before = await f.counts();
+    await assert.rejects(f.service().prepareStaffMutation(responsibleOwner('33333333-3333-4333-8333-333333333333',recipient),'assignment-foreign'),(error:any) => error.status === 403);
     assert.deepEqual(await f.counts(),before,'a same-looking recipient from another tenant cannot create activity or update the ticket');
   } finally {
     await f.mf.dispose();
@@ -232,6 +246,12 @@ test('responsible-owner assignment is tenant-qualified, audited, receipted, and 
     await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='a' AND user_id='owner-2' AND group_id='group'").run();
     await assert.rejects(revokedService.commit(revoked),(error:any)=>error.status===503);
     assert.deepEqual(await f.counts(),beforeRevocation,'a revoked target cannot acquire responsibility or emit an audit event');
+    const released=await accept(f.service(),responsibleOwner(null,'owner'),'release-owner');
+    assert.equal(released.outcome.ticket.assigned_to,null);
+    const releasedReplay=await f.service().prepareStaffMutation(responsibleOwner(null,'owner'),'release-owner');
+    assert.equal(releasedReplay.replay?.replayed,true);
+    assert.equal(releasedReplay.replay?.ticket.assigned_to,null);
+
   } finally { await f.mf.dispose(); }
 });
 
@@ -277,7 +297,7 @@ test('same-key concurrency and lost committed response return one canonical muta
 test('staff update preserves the dashboard success contract with an atomic v2 receipt, no-op evidence, and replay conflict', async () => {
   const f = await fixture(); try {
     const s = f.service();
-    const first = await accept(s,update({ status:'pending',priority:'urgent',assigned_to:null,group_id:'group',custom_fields:{ long:'x'.repeat(60_000),flag:true } }),'update-retry');
+    const first = await accept(s,update({ status:'pending',priority:'urgent',group_id:'group',custom_fields:{ long:'x'.repeat(60_000),flag:true } }),'update-retry');
     assert.equal(first.outcome.status,200); assert.deepEqual(first.outcome.body,{success:true});
     assert.equal(first.outcome.ticket.status,'pending'); assert.equal(first.outcome.ticket.priority,'urgent');
     const receipt = await f.db.prepare(`SELECT response_version,response_status,result_article_id,response_snapshot FROM staff_ticket_mutation_receipts
@@ -287,7 +307,7 @@ test('staff update preserves the dashboard success contract with an atomic v2 re
     assert.equal((await f.db.prepare("SELECT count(*) AS n FROM conversation_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,1);
     assert.equal((await f.db.prepare("SELECT count(*) AS n FROM articles WHERE tenant_id='a' AND ticket_id='ticket' AND sender_type='system'").first<{n:number}>())?.n,2,
       'state and custom-field changes retain their ordinary dashboard notes');
-    const replay = await s.prepareStaffMutation(update({ status:'pending',priority:'urgent',assigned_to:null,group_id:'group',custom_fields:{flag:true,long:'x'.repeat(60_000)} }),'update-retry');
+    const replay = await s.prepareStaffMutation(update({ status:'pending',priority:'urgent',group_id:'group',custom_fields:{flag:true,long:'x'.repeat(60_000)} }),'update-retry');
     assert.equal(replay.replay?.replayed,true); assert.deepEqual(replay.replay?.body,{success:true});
     await assert.rejects(s.prepareStaffMutation(update({status:'resolved'}),'update-retry'),(error:any)=>error.status===409&&error.code==='idempotency_conflict');
 
@@ -326,7 +346,7 @@ test('staff update receipt cleanup and maximal field projection remain within th
       INSERT INTO staff_ticket_mutation_receipts (tenant_id,principal_id,operation,key_hash,payload_hash,fingerprint_version,response_version,result_ticket_id,result_article_id,response_status,response_snapshot,created_at,expires_at)
       SELECT tenant_id,principal_id,operation,printf('%064d',x),payload_hash,1,2,result_ticket_id,NULL,200,response_snapshot,unixepoch()-100,unixepoch()-1
       FROM staff_ticket_mutation_receipts,n WHERE tenant_id='a' AND principal_id='staff' AND operation='dashboard.ticket.update' LIMIT 150`).run();
-    const result = await accept(s,update({status:'resolved',priority:'urgent',assigned_to:null,group_id:'group',custom_fields:{payload:'x'.repeat(60_000),first:true,second:42,third:null}}),'update-envelope');
+    const result = await accept(s,update({status:'resolved',priority:'urgent',group_id:'group',custom_fields:{payload:'x'.repeat(60_000),first:true,second:42,third:null}}),'update-envelope');
     const measured = f.batches.at(-1)!;
     console.log(JSON.stringify({fixture:'native-d1-staff-update-envelope',measured}));
     assert.equal(result.outcome.status,200); assert.ok(measured.rowsWritten>100,'the exact 99-row bounded cleanup is exercised');
