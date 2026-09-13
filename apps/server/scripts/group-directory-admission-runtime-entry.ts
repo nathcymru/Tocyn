@@ -1,3 +1,5 @@
+import { LocalAuthCaptureTransport } from '../src/services/email/transport';
+const localCapture = new LocalAuthCaptureTransport();
 export { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
 export { NotificationDO } from '../src/durable_objects/NotificationDO';
@@ -95,6 +97,6 @@ export default {async fetch(request:Request,env:any,ctx:ExecutionContext):Promis
     return Response.json({measurements,coordinatorCalls,cache:apiTicketBudgetCache.inspectForTrustedRuntime()});
   }
   active={path,calls:0,rowsRead:0,rowsWritten:0};
-  try{return await app.fetch(request,{...env,DB:instrumentDatabase(env.DB),BUDGET_COORDINATOR_DO:instrumentNamespace(env.BUDGET_COORDINATOR_DO)},ctx);}
+  try{return await app.fetch(request,{...env,emailTransport:localCapture,DB:instrumentDatabase(env.DB),BUDGET_COORDINATOR_DO:instrumentNamespace(env.BUDGET_COORDINATOR_DO)},ctx);}
   finally{measurements.push(active);active=undefined;}
 }};

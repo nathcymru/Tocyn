@@ -1,3 +1,4 @@
+import { initializeLocalBetaFixture } from './local-beta-fixture';
 import assert from 'node:assert/strict';
 import { SignJWT } from 'jose';
 import { readFileSync,readdirSync } from 'node:fs';
@@ -19,12 +20,12 @@ const dimensions=['workerRequests','d1RowsRead','d1RowsWritten','doRequests','do
 async function token(){return new SignJWT({sub:actor,role:'agent',tenant_id:'directory-tenant',session_version:1,mfa_verified:true})
   .setProtectedHeader({alg:'HS256'}).setAudience('app').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));}
 
-async function fixture(population=0,limit=10_000_000){
+async function fixture(population=0,limit=10_000_000,guarded=false){
   const bundled=await build({entryPoints:[resolve(import.meta.dirname,'group-directory-admission-runtime-entry.ts')],bundle:true,
     format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto'],write:false});
   const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'group-directory-proof',modules:true,
     compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script:bundled.outputFiles[0].text,
-    bindings:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',DISABLE_RATE_LIMIT:'true',JWT_SECRET:secret},
+    bindings:{...(guarded?{LOCAL_BETA_ENABLED:'true',ENVIRONMENT:'local'}:{}),BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',DISABLE_RATE_LIMIT:'true',JWT_SECRET:secret},
     d1Databases:{DB:'group-directory-d1'},r2Buckets:{ATTACHMENTS_BUCKET:'group-directory-r2'},
     durableObjects:{BUDGET_COORDINATOR_DO:'BudgetCoordinatorDO',BUDGET_GRANT_HOLDER_DO:'BudgetGrantHolderDO',NOTIFICATION_DO:'NotificationDO'},
     unsafeEphemeralDurableObjects:true}]}));
@@ -70,6 +71,11 @@ async function fixture(population=0,limit=10_000_000){
     if(population>0)await db.prepare(`WITH RECURSIVE seq(i) AS (SELECT 0 UNION ALL SELECT i+1 FROM seq WHERE i+1<?)
       INSERT INTO users(tenant_id,id,email,role) SELECT 'foreign-tenant',printf('30000000-0000-4000-8000-%012d',i),'foreign-'||i||'@example.test','agent' FROM seq`)
       .bind(Math.min(population,400)).run();
+    if (guarded) await initializeLocalBetaFixture({db,enableLocalBeta:()=>{}} as any, {
+      runId:'directory-guarded',tenants:['directory-tenant','foreign-tenant'],
+      invitations:[{tenantId:'directory-tenant',id:actor,kind:'staff'}],
+      limits:{ticketLimit:20,mutationLimit:100,recoveryReserve:10,uploadLimit:10},
+    });
     return{mf,db};
   }catch(error){await mf.dispose();throw error;}
 }
@@ -229,4 +235,36 @@ test('group directory sustains forty reads with RPC-free warm blocks and bounded
     assert.equal(proof.cache.holders,1);assert.equal(proof.cache.refills,1);
     assert.equal((await f.db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<{n:number}>())!.n,4);
   }finally{await f.mf.dispose();}
+});
+
+
+test('guarded directory read preserves tenant, current session, capability, invitation and method gates', async () => {
+  const f = await fixture(0,10_000_000,true);
+  try {
+    const auth = await token();
+    await f.db.prepare("INSERT INTO users(tenant_id,id,email,full_name,role) VALUES('foreign-tenant',?,'foreign@example.test','Foreign colliding actor','admin')").bind(actor).run();
+    const success = await request(f.mf,'/api/users',auth);
+    assert.equal(success.status,200,await success.clone().text());
+    const result = await success.json() as {users:{id:string;email:string}[]};
+    assert.deepEqual(result.users.map(user=>[user.id,user.email]),[[actor,'operator@example.test']]);
+    const counts = await f.db.prepare("SELECT tickets,mutations FROM local_beta_runs WHERE run_id='directory-guarded'").first();
+    assert.deepEqual(counts,{tickets:0,mutations:0});
+    const measurement = (await control(f.mf)).measurements.find((row:any)=>row.path==='/api/users');
+    assert.ok(measurement.rowsRead>0 && measurement.rowsWritten>0,'Real admitted D1 work ran');
+    const allowance=groupDirectoryEnvelope('directory.users.list',{count:1} as any)!;
+    assert.ok(measurement.rowsRead<=allowance.d1RowsRead! && measurement.rowsWritten<=allowance.d1RowsWritten!, 'Guarded directory remains within the existing allowance');
+    for(const [method,path] of [['POST','/api/users'],['PATCH',`/api/users/${actor}`],['DELETE',`/api/users/${actor}`]]) {
+      const denied=await request(f.mf,path,auth,{method});
+      assert.equal(denied.status,503);assert.equal((await denied.json() as any).code,'feature_disabled');
+    }
+    const missing=await f.mf.dispatchFetch('http://runtime.test/api/users');assert.equal(missing.status,401);await missing.body?.cancel();
+    await f.db.prepare("UPDATE tenant_role_capability_policies SET enabled=0 WHERE tenant_id='directory-tenant' AND capability='users.manage'").run();
+    const capability=await request(f.mf,'/api/users',auth);assert.equal(capability.status,403);await capability.body?.cancel();
+    await f.db.prepare("UPDATE tenant_role_capability_policies SET enabled=1 WHERE tenant_id='directory-tenant' AND capability='users.manage'").run();
+    await f.db.prepare("DELETE FROM local_beta_invitations WHERE run_id='directory-guarded'").run();
+    const invitation=await request(f.mf,'/api/users',auth);assert.equal(invitation.status,403);assert.equal((await invitation.json() as any).code,'beta_not_invited');
+    await f.db.prepare("INSERT INTO local_beta_invitations(run_id,tenant_id,principal_kind,principal_id) VALUES('directory-guarded','directory-tenant','staff',?)").bind(actor).run();
+    await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='directory-tenant' AND id=?").bind(actor).run();
+    const stale=await request(f.mf,'/api/users',auth);assert.equal(stale.status,401);await stale.body?.cancel();
+  } finally { await f.mf.dispose(); }
 });
