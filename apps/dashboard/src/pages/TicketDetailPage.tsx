@@ -149,7 +149,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeDoc[]>([]);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeError, setKnowledgeError] = useState(false);
-  const [knowledgeLoaded, setKnowledgeLoaded] = useState(false);
+  const knowledgeLoaded = useRef(false);
+  const [knowledgeAttempt, setKnowledgeAttempt] = useState(0);
   const [knowledgeInserting, setKnowledgeInserting] = useState<string | null>(null);
   const qaChanging = useRef(false);
   const [qaPending, setQaPending] = useState(false);
@@ -361,14 +362,19 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   };
 
   useEffect(() => {
-    if (workspace.panel !== 'details' || knowledgeLoaded || knowledgeLoading || knowledgeError) return;
+    if (workspace.panel !== 'details') { setKnowledgeLoading(false); return; }
+    if (knowledgeLoaded.current) return;
     let active = true;
     setKnowledgeLoading(true);
+    setKnowledgeError(false);
     void dashboardApi.get<KnowledgeDoc[]>('/knowledge/articles').then(articles => {
-      if (active) { setKnowledgeArticles(articles.filter(article => article.status === 'active' && (article.tier === 'answer' || article.tier === 'sop'))); setKnowledgeLoaded(true); }
+      if (active) {
+        setKnowledgeArticles(articles.filter(article => article.status === 'active' && (article.tier === 'answer' || article.tier === 'sop')));
+        knowledgeLoaded.current = true;
+      }
     }).catch(() => { if (active) setKnowledgeError(true); }).finally(() => { if (active) setKnowledgeLoading(false); });
     return () => { active = false; };
-  }, [workspace.panel, knowledgeLoaded, knowledgeLoading, knowledgeError]);
+  }, [workspace.panel, knowledgeAttempt]);
 
   const insertKnowledgeArticle = async (article: KnowledgeDoc) => {
     if (knowledgeInserting || submission.current || isSubmitting || draft.status === 'loading') return;
@@ -1384,7 +1390,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             <p id="knowledge-insert-help" role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
               {knowledgeLoading ? 'Loading tenant knowledge…' : knowledgeError ? 'Knowledge is temporarily unavailable. No content was inserted.' : knowledgeArticles.length ? 'Select an article to append its verified content to the reply.' : 'No eligible internal knowledge articles are available.'}
             </p>
-            {knowledgeError && <TocynButton type="button" onClick={() => { setKnowledgeError(false); setKnowledgeLoaded(false); }} className="text-sm underline">Retry knowledge</TocynButton>}
+            {knowledgeError && <TocynButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className="text-sm underline">Retry knowledge</TocynButton>}
             {knowledgeArticles.length > 0 && <ul aria-describedby="knowledge-insert-help" className="space-y-2">
               {knowledgeArticles.map(article => <li key={article.id}>
                 <TocynButton type="button" aria-disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} aria-label={`Insert ${article.title} into reply`}
