@@ -22,7 +22,7 @@ The browser checks passed at `2026-09-13T10:13:19Z`:
 
 The first browser launch could not find the Playwright browser cache. The installed Helium executable supplied the browser. An initial temporary-fixture routing mistake loaded the repository page instead of the component; correcting the harness to Vite's custom application mode resolved it. These were harness failures, not application passes. Both the browser and fixture server were closed after execution.
 
-## Limits and remaining acceptance
+## Limits of the component check
 
 This exercised a real browser with a synthetic component fixture, not the complete ticket workspace, production bundle or backend permission enforcement. Clipboard outcomes were simulated. Accessible names and descriptions were inspected, but no spoken VoiceOver output was observed; this does not satisfy screen-reader acceptance. Existing server-authority and unsafe-link evidence must be combined with future integrated #128 workspace and assistive-technology checks before #138 closes. No B2 or production readiness is claimed.
 
@@ -63,6 +63,25 @@ correcting the hook resolved that harness error. Dashboard TypeScript validation
 and the three integration tests passed. The production build emitted existing
 future Vite config-loader and large-chunk warnings.
 
-Remaining #138 acceptance still includes #128 dependency acceptance and an
+At this earlier stage, remaining #138 acceptance included #128 dependency acceptance and an
 uncontended integrated keyboard/assistive-technology session. These tests support
 partial progress and do not close #138 or declare Beta.2 ready.
+
+
+## Integrated CUA keyboard and accessibility-tree observation
+
+The coordinator directly observed the complete local synthetic workspace through CUA on 13 September 2026 at 11:40 UTC. The preview application source was merged revision [`3e61f4893efd4c53f861053af5234b8949afa4bd`](https://github.com/nathcymru/Tocyn/commit/3e61f4893efd4c53f861053af5234b8949afa4bd), including the utility fixes from [PR #260](https://github.com/nathcymru/Tocyn/pull/260) and the integrated regression coverage from [PR #264](https://github.com/nathcymru/Tocyn/pull/264). This receipt records the coordinator's actual observation; the documentation worker did not independently repeat those UI actions.
+
+| Action | Observed result |
+| --- | --- |
+| Press Return on More ticket actions | Disclosure opens. |
+| Press Tab to View ticket reference, then Return | Ticket reference dialog opens; its accessibility tree contains only the dialog subtree and initial focus is Close ticket reference. |
+| Press Tab, then Shift+Tab in the dialog | Both moves keep focus on its sole Close control. |
+| Press Escape | Dialog closes and focus returns to View ticket reference. |
+| Press Shift+Tab twice, then Return on Copy ticket reference | Visible status reads “Ticket reference copied.” Clipboard contents were not inspected. |
+
+Ticket refresh and service-level errors were visible during this run: “Could not refresh this ticket. Showing last confirmed details” and “Service level unavailable”. The separate [#64 capacity receipt](https://github.com/nathcymru/Tocyn/issues/64#issuecomment-5653061090) records the native 32-read capacity reproduction. These errors limit the integrated observation: successful utility keyboard interactions are not evidence of a fully healthy workspace or sustained runtime acceptance.
+
+At 12:04 UTC the coordinator reverified computer access and observed the fixture ticket and SLA displayed normally after a single backend refresh. That later health observation does not erase the capacity failure or establish sustained availability. The local candidate remains subject to the unresolved #64 lifecycle limit.
+
+This adds actual integrated keyboard/focus and accessibility-tree evidence. It does not establish spoken VoiceOver/screen-reader output, responsive viewport behavior, complete #128 integration, or all #138 acceptance. Existing permission-denial and unsafe-link tests remain separate evidence. No vendor activation, deployment, accepted Beta.2 or production-readiness claim follows from these checks.
