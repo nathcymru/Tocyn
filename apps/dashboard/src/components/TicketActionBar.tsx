@@ -21,14 +21,27 @@ export function TicketActionBar({ reference, actions, loading, error, retry }: T
   const close = React.useRef<HTMLButtonElement>(null);
   const titleId = React.useId();
   const descriptionId = React.useId();
+  const copyGeneration = React.useRef(0);
+  React.useEffect(() => {
+    setNotice(null);
+    setDialogAction(null);
+    return () => { copyGeneration.current++; };
+  }, [reference]);
   const action = (id: TicketUtilityAction['id']) => actions.find(candidate => candidate.id === id);
   const copy = action('copy-ticket-reference');
   const more = actions.filter(candidate => candidate.slot === 'more');
 
   const copyReference = async () => {
-    if (!copy?.enabled || !navigator.clipboard?.writeText) return;
-    try { await navigator.clipboard.writeText(reference); setNotice('Ticket reference copied.'); }
-    catch { setNotice('The ticket reference could not be copied. Select it in More ticket actions instead.'); }
+    if (!copy?.enabled) return;
+    const generation = ++copyGeneration.current;
+    const failed = 'The ticket reference could not be copied. Select it in More ticket actions instead.';
+    if (!navigator.clipboard?.writeText) { setNotice(failed); return; }
+    try {
+      await navigator.clipboard.writeText(reference);
+      if (generation === copyGeneration.current) setNotice('Ticket reference copied.');
+    } catch {
+      if (generation === copyGeneration.current) setNotice(failed);
+    }
   };
 
   const renderAction = (current: TicketUtilityAction) => {
