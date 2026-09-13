@@ -24,6 +24,11 @@ with no LRU removal. Expiry requires the original horizon and no active admissio
 allocation or recovery lock. This deliberately tightens stale-snapshot rejection
 across targets within the same full session identity. It does not reuse permission.
 
+Operational compatibility: the new codec reads raw legacy, format 2 and format 3.
+Pre-format-3 code cannot read newly written format 3; no downgrade compatibility is
+claimed. This is a local candidate upgrade only. Separate migration and runtime gates
+remain; no production migration is authorized by this receipt.
+
 Fresh authorization, target checks, SQL completion fences, provider terminal outcome,
 central acknowledgement, reservation charges and retry limits are unchanged. A
 same-key admission after cleanup needs a newly charged holder. No guard, TTL, refund
