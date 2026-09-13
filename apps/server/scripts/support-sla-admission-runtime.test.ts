@@ -81,9 +81,16 @@ test('real combined admission protects all bounded support-state/SLA writes with
   try {
     const db = await mf.getD1Database('DB'); await applyMigrations(db); await seed(db);
     const admin = await token('admin', 'admin'); let agent = await token('agent', 'agent');
-    const request = (path: string, method: string, bearer: string, body: unknown, key?: string) => mf.dispatchFetch(`http://runtime.test${path}`, {
-      method, headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', ...(key ? { 'idempotency-key': key } : {}) }, body: JSON.stringify(body),
-    });
+    const request = async (path: string, method: string, bearer: string, body: unknown, key?: string) => {
+      const response=await mf.dispatchFetch(`http://runtime.test${path}`, {
+        method, headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', ...(key ? { 'idempotency-key': key } : {}) }, body: JSON.stringify(body),
+      });
+      if(response.status>=200&&response.status<300&&key&&response.headers.get('Idempotency-Replayed')!=='true'){
+        const operationId=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key))),byte=>byte.toString(16).padStart(2,'0')).join('');
+        assert.ok(await db.prepare('SELECT 1 FROM budget_grant_operations WHERE tenant_id=? AND operation_id=? LIMIT 1').bind(tenant,operationId).first(),`${method} ${path} must retain its canonical journal`);
+      }
+      return response;
+    };
 
     const control = async (body?: { rollbackNextCanonical?: boolean; afterSlaPolicyCommit?: string; afterSupportStateCommit?: { tenantId: string; id: string; label: string } }) => {
       const response = await mf.dispatchFetch('http://runtime.test/__budget-control', {
@@ -228,4 +235,40 @@ test('real combined admission protects all bounded support-state/SLA writes with
     assert.equal(revoked.status, 401, 'a revoked current session is rejected before a receipt or business write'); await revoked.body?.cancel();
     assert.equal((await db.prepare("SELECT count(*) AS n FROM support_sla_mutation_receipts WHERE tenant_id=? AND operation='dashboard.support-state.create'").bind(tenant).first<{ n: number }>())?.n, 5);
   } finally { await mf.dispose(); }
+});
+
+for(const kind of ['sla','staff'] as const) test(`actual ${kind} routes retain exact journals and reconcile whole grants after terminal responses`, async()=>{
+  const bundle=await build({absWorkingDir:root,entryPoints:['scripts/budget-admission-runtime-entry.ts'],bundle:true,write:false,format:'esm',platform:'neutral',external:['cloudflare:workers','node:crypto']});
+  const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'staff-sla-journal-runtime',modules:true,compatibilityDate:'2024-04-03',compatibilityFlags:['nodejs_compat'],script:bundle.outputFiles[0].text,
+    bindings:{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',DISABLE_RATE_LIMIT:'true',ENVIRONMENT:'local',JWT_SECRET:secret},d1Databases:{DB:'staff-sla-journal-runtime-d1'},
+    durableObjects:{BUDGET_COORDINATOR_DO:'BudgetCoordinatorDO',BUDGET_GRANT_HOLDER_DO:'BudgetGrantHolderDO',NOTIFICATION_DO:'NotificationDO'},unsafeEphemeralDurableObjects:true}]}));
+  try{
+    const db=await mf.getD1Database('DB');await applyMigrations(db);await seed(db);const bearer=await token('admin','admin');
+    if(kind==='staff'){
+      const row=await db.prepare('SELECT policy_json FROM budget_owner_policies').first<{policy_json:string}>();
+      const funded=JSON.parse(row!.policy_json);
+      for(const budget of funded.budgets)if(budget.dimension==='logEvents')budget.limit=500_000_000;
+      await db.prepare('UPDATE budget_owner_policies SET policy_json=?').bind(JSON.stringify(funded)).run();
+      await db.prepare("UPDATE budget_tenant_allocations SET restriction_json=json_set(restriction_json,'$.limits.logEvents',500000000)").run();
+    }
+    {
+      for(let i=0;i<36;i++){
+        const path=kind==='sla'?'/api/support-states':'/api/tickets/ticket';
+        const body=kind==='sla'?state(`journal-${i}`):{priority:i%2?'urgent':'normal'};
+        const response=await mf.dispatchFetch(`http://runtime.test${path}`,{method:kind==='sla'?'POST':'PATCH',headers:{authorization:`Bearer ${bearer}`,'content-type':'application/json','idempotency-key':`${kind}-journal-${i}`},body:JSON.stringify(body)});
+        const text=await response.text();assert.equal(response.status,kind==='sla'?201:200,`${kind} operation${i}: ${text}`);
+      }
+      const closures=await db.prepare('SELECT operation_count,reconciled_at FROM budget_grant_closures WHERE tenant_id=? AND reconciled_at IS NOT NULL').bind(tenant).all<{operation_count:number;reconciled_at:number}>();
+      assert.ok(closures.results.length>0,`${kind} routes must add durable central closure`);
+      assert.ok(closures.results.every((row:{operation_count:number})=>row.operation_count>0));
+    }
+    const journal=await db.prepare('SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id=?').bind(tenant).first<{n:number}>();
+    assert.equal(journal?.n,36,'one durable operation per actual successful mutation');
+    if(kind==='sla'){
+    const before=journal.n;
+    const replay=await mf.dispatchFetch('http://runtime.test/api/support-states',{method:'POST',headers:{authorization:`Bearer ${bearer}`,'content-type':'application/json','idempotency-key':'sla-journal-0'},body:JSON.stringify(state('journal-0'))});
+    assert.equal(replay.status,201);assert.equal(replay.headers.get('Idempotency-Replayed'),'true');await replay.body?.cancel();
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id=?').bind(tenant).first<{n:number}>())?.n,before,'pre-admission replay must not create a journal');
+    }
+  }finally{await mf.dispose();}
 });

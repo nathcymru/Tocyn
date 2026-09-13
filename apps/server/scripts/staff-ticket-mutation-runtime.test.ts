@@ -1,3 +1,4 @@
+import { BudgetGrantRecoveryService } from '../src/budgets/budget-grant-recovery.service';
 import { capacityFingerprint,CAPACITY_ENVELOPE } from '../src/budgets/operator-capacity-admission.service';
 import { OperatorCapacityRepository,type CapacityCommit } from '../src/repositories/operator-capacity.repository';
 import { SessionBudgetAuthorityRepository } from '../src/repositories/session-budget-authority.repository';
@@ -43,7 +44,7 @@ async function fixture() {
       await db.batch(splitSql(readFileSync(join(root,'migrations',file),'utf8')).map(sql => db.prepare(sql)));
     }
     const now = Date.now();
-    const limits = {workerRequests:1000,d1RowsRead:10_000_000,d1RowsWritten:100_000,doRequests:1000,doRowsRead:1000,doRowsWritten:1000,logEvents:100_000};
+    const limits = {workerRequests:1000,d1RowsRead:10_000_000,d1RowsWritten:100_000,doRequests:1000,doRowsRead:100_000,doRowsWritten:100_000,logEvents:100_000};
     const policy = {schemaVersion:1,policyId:'staff-policy',revision:1,deploymentId:'staff-deployment',mode:'conservative',catalogueVersion:'synthetic',maxGrantLifetimeMs:60_000,
       budgets:Object.entries(limits).map(([dimension,limit]) => ({dimension,limit,allocationId:`staff-${dimension}`,recoveryPercent:20,provenance:'owner-allocation',window:{kind:'interval',id:'staff-window',startsAt:now-1,endsAt:now+3_600_000}}))};
     await db.batch([
@@ -77,12 +78,17 @@ async function fixture() {
     ]);
     const rawNamespace = await mf.getDurableObjectNamespace('BUDGET_COORDINATOR_DO') as unknown as DurableObjectNamespace<BudgetCoordinatorDO>;
     const coordinator = rawNamespace.get(rawNamespace.idFromName('staff-aggregate')) as unknown as BudgetCoordinatorDO;
-    const calls = {refresh:0,reserve:0};
+    const calls = {refresh:0,reserve:0,reconcile:0};
     const namespace = { idFromName:(name:string) => rawNamespace.idFromName(name),get:() => ({
+      reconcileFromTrustedAuthority:async (input:Parameters<BudgetCoordinatorDO['reconcileFromTrustedAuthority']>[0]) => {calls.reconcile++;return coordinator.reconcileFromTrustedAuthority(input);},
       refreshFromTrustedAuthority:async (input:Parameters<BudgetCoordinatorDO['refreshFromTrustedAuthority']>[0]) => {calls.refresh++;return coordinator.refreshFromTrustedAuthority(input);},
       reserveFromTrustedAuthority:async (input:Parameters<BudgetCoordinatorDO['reserveFromTrustedAuthority']>[0]) => {calls.reserve++;return coordinator.reserveFromTrustedAuthority(input);},
     }) } as unknown as DurableObjectNamespace;
-    const cache = new IsolateBudgetAdmissionCache();
+    let lastInput!: Parameters<IsolateBudgetAdmissionCache['admit']>[0];
+    class RecordingCache extends IsolateBudgetAdmissionCache {
+      override async admit(input: Parameters<IsolateBudgetAdmissionCache['admit']>[0]) { lastInput=input; return super.admit(input); }
+    }
+    const cache = new RecordingCache();
     const terminals: Array<{authority: unknown; outcome: string}> = [];
     const settle = (authority: Parameters<typeof cache.settleOperation>[0], outcome: 'committed' | 'unknown', now: number) => { terminals.push({authority,outcome}); cache.settleOperation(authority,outcome,now); };
     const admission = new SessionBudgetAdmissionService(cache);
@@ -164,7 +170,13 @@ async function fixture() {
       return result;
     };
     const betaCounters=()=>db.prepare("SELECT tickets,mutations FROM local_beta_runs WHERE run_id='staff-beta'").first<{tickets:number;mutations:number}>();
-    return {mf,db,service,terminals,capacity,betaService,betaCounters,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
+    const seal = () => cache.sealIdleApiGrant('a',lastInput.credentialKey,Date.now()+1,1);
+    const recover = async (sealed: NonNullable<ReturnType<typeof seal>>) => {
+      const result = await new BudgetGrantRecoveryService(db,new Authority(db,scope()),namespace,scope(),
+        {credentialKey:lastInput.credentialKey,authorization:lastInput.authorization!}).recover(sealed,Date.now());
+      if(result==='reconciled')cache.completeApiGrantRecovery(sealed);return result;
+    };
+    return {mf,db,service,terminals,seal,recover,capacity,betaService,betaCounters,scope,credential,calls,counts,coordinator,batches,before:(action:()=>Promise<void>) => {beforeCommit=action;},lose:() => {loseResponse=true;},
       clock:(value:number)=>{admissionNow=value;},afterAuthority:(action:()=>Promise<void>)=>{afterAuthority=action;},canonicalAttempts:()=>canonicalAttempts};
   } catch (error) {await mf.dispose();throw error;}
 }
@@ -273,14 +285,17 @@ test('responsible-owner assignment is tenant-qualified, audited, receipted, and 
   } finally { await f.mf.dispose(); }
 });
 
-test('staff identity, response contracts, atomic receipts, warm zero-DO admission, current authorized replay and tenant isolation', async () => {
+test('staff identity, stable create warm admission, single-operation replies, current authorized replay and tenant isolation', async () => {
   const f=await fixture();try {
     const s=f.service();const initial=await accept(s,create(),'create');
     assert.equal(initial.outcome.ticket.source,'dashboard');assert.equal(initial.outcome.ticket.customer_id,'customer');
     assert.equal(initial.outcome.article.sender_type,'customer');assert.equal(initial.outcome.article.sender_id,'customer');
     assert.equal(initial.outcome.body.id,initial.outcome.ticket.id);
-    const first=await accept(s,reply(),'one');const cold={...f.calls};
-    const second=await accept(s,reply('Second'),'two');assert.deepEqual(f.calls,cold);
+    const createCold={...f.calls};await accept(s,create(),'create-warm');assert.deepEqual(f.calls,createCold,'stable create retains prepaid warm zero-RPC admission');
+    const first=await accept(s,reply(),'one');const replyCold={...f.calls};
+    const second=await accept(s,reply('Second'),'two');
+    assert.deepEqual(f.calls,{...replyCold,refresh:replyCold.refresh+1,reserve:replyCold.reserve+1},'each new target reply prepays one complete operation');
+    const cold={...f.calls};
     assert.equal(first.outcome.article.sender_id,'staff');assert.equal(first.outcome.article.sender_type,'agent');
     assert.equal(second.outcome.article.is_internal,false);assert.deepEqual(second.outcome.body.attachments,[]);
     const before=await f.counts();const replayed=await s.prepareStaffMutation(reply(),'one');
@@ -309,6 +324,9 @@ test('same-key concurrency and lost committed response return one canonical muta
     const before=await f.counts();f.lose();const lost=await accept(s,reply('Lost response'),'lost');
     assert.equal(lost.outcome.replayed,true);assert.equal((await f.counts()).articles,before.articles+1);
     assert.equal((await s.prepareStaffMutation(reply('Lost response'),'lost')).replay?.article.id,lost.outcome.article.id);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id='a'").first<{n:number}>())?.n,2,'raced and lost-response completion retain one exact journal per operation');
+    s.finish(a,'committed');s.finish(b,'committed');s.finish(lost.prepared,'committed');
+    assert.deepEqual(f.terminals.map(t=>t.outcome).sort(),['committed','unknown','unknown']);
   } finally {await f.mf.dispose();}
 });
 
@@ -641,7 +659,7 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
       'idx_conversation_events_ticket_kind_visibility_sequence', 'sqlite_autoindex_conversation_events_1',
       'sqlite_autoindex_conversation_events_2',
     ].sort();
-    for(const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','support_state_definitions','ticket_support_state','budget_mutation_assertion','local_beta_assertion','local_beta_runs','ticket_mutation_receipts','staff_ticket_mutation_receipts']) {
+    for(const table of ['tickets','articles','attachments','conversation_events','sla_policies','ticket_sla_clocks','ticket_sla_events','support_state_definitions','ticket_support_state','budget_mutation_assertion','budget_grant_operations','local_beta_assertion','local_beta_runs','ticket_mutation_receipts','staff_ticket_mutation_receipts']) {
       const indexes=await f.db.prepare(`PRAGMA index_list(${table})`).all();inventory[table]=indexes.results.length;
       if (table === 'conversation_events') assert.deepEqual(indexes.results.map((index: { name: string }) => index.name).sort(), conversationEventIndexes,
         'The accepted staff and bounded-detail event indexes are accounted for');
@@ -667,7 +685,7 @@ test('native staff metadata includes 100-receipt cleanup, ten attachments, audit
     }
     assert.equal(inventory.ticket_mutation_receipts,4);assert.equal(inventory.staff_ticket_mutation_receipts,4);
     assert.equal(inventory.conversation_events,7, 'Two unique keys and five deliberate query indexes are accounted for');
-    assert.ok(100*5+50*9+(2*3*2)+8+4+2<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
+    assert.ok(100*5+52*9+(2*3*2)+8+4+2<=CANONICAL_MUTATION_ATTEMPT_D1_WRITES);
     console.log(JSON.stringify({fixture:'native-d1-index-inventory',inventory}));
   }finally{await f.mf.dispose();}
 });
@@ -994,4 +1012,39 @@ test('staff terminal retains exact admission identity and downgrades uncertain r
     const early=await s.prepareStaffMutation(reply('invalid attachment'),'terminal-early'); await s.admit(early);
     s.finish(early,'committed'); assert.equal(f.terminals[2].outcome,'unknown','no canonical proof cannot be promoted');
   } finally {await f.mf.dispose();}
+});
+
+
+test('staff canonical journals close only after route terminal and preserve rollback evidence', async()=>{
+  const f=await fixture();try{
+    const s=f.service(),prepared=await s.prepareStaffMutation(reply(),'journal-close');
+    const admitted=await s.admit(prepared);assert.equal(admitted.status,'spent');
+    await s.commit(prepared);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id='a'").first<{n:number}>())?.n,1);
+    assert.equal(f.seal(),null,'durable journal alone is not route completion');
+    s.finish(prepared,'committed');const sealed=f.seal();assert.ok(sealed);
+    assert.equal(await f.recover(sealed),'reconciled');assert.equal(f.calls.reconcile,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM budget_grant_closures WHERE tenant_id='a' AND reconciled_at IS NOT NULL").first<{n:number}>())?.n,1);
+    const next=await s.prepareStaffMutation(reply('rejected'),'journal-rollback');await s.admit(next);
+    const before=(await f.db.prepare("SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id='a'").first<{n:number}>())!.n;
+    f.before(async()=>{await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='a' AND user_id='staff'").run();});
+    await assert.rejects(s.commit(next));s.finish(next,'unknown');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id='a'").first<{n:number}>())?.n,before);
+  }finally{await f.mf.dispose();}
+});
+
+
+test('staff create reply and responsible-owner winners each journal and reach certified closure',async()=>{
+  const f=await fixture();try{
+    const s=f.service();
+    for(const [index,input] of [create(),reply('Journal reply'),responsibleOwner('staff',null)].entries()){
+      const accepted=await accept(s,input,`winner-journal-${index}`);
+      const operationId=s.admissionIntent(accepted.prepared).operationId;
+      assert.ok(await f.db.prepare("SELECT 1 FROM budget_grant_operations WHERE tenant_id='a' AND operation_id=?").bind(operationId).first());
+      assert.equal(f.seal(),null,'canonical journal is not route terminal');
+      s.finish(accepted.prepared,'committed');const sealed=f.seal();assert.ok(sealed);
+      assert.equal(await f.recover(sealed),'reconciled');
+    }
+    assert.equal(f.calls.reconcile,3);
+  }finally{await f.mf.dispose();}
 });

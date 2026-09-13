@@ -1,3 +1,4 @@
+import { budgetGrantOperationStatements } from './budget-commit-fence';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { VerifiedTenantScope } from '../types/tenant';
 import type { SupportSlaMutationCommit, SupportSlaMutationNamespace, SupportSlaMutationReceipt } from '../types/support-sla-mutation';
@@ -8,6 +9,17 @@ const values = (scope: VerifiedTenantScope, ns: SupportSlaMutationNamespace) => 
 
 export class SupportSlaMutationRepository {
   constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope) {}
+  /** Journal only this newly admitted receipt read, with no repeated SLA mutation. */
+  async completeAdmittedReplay(commit: SupportSlaMutationCommit, receipt: SupportSlaMutationReceipt): Promise<void> {
+    await this.db.batch([
+      supportSlaFenceStatements(this.db,this.scope,commit)[0],
+      this.db.prepare(`UPDATE budget_mutation_assertion SET accepted=CASE WHEN EXISTS (
+        SELECT 1 FROM support_sla_mutation_receipts WHERE ${namespaceWhere} AND expires_at>unixepoch()
+        AND lifecycle='completed' AND payload_hash=? AND response_snapshot=?) THEN 1 ELSE 0 END WHERE tenant_id=?`)
+        .bind(...values(this.scope,commit.namespace),commit.namespace.payloadHash,receipt.response_snapshot,this.scope.tenantId),
+      ...budgetGrantOperationStatements(this.db,this.scope,commit.authority),
+    ]);
+  }
   async ticketGroup(ticketId: string): Promise<{ group_id: string | null } | null> {
     return this.db.prepare('SELECT group_id FROM tickets WHERE tenant_id=? AND id=? LIMIT 1')
       .bind(this.scope.tenantId, ticketId).first<{ group_id: string | null }>();

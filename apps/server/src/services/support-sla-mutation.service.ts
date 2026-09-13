@@ -1,3 +1,4 @@
+import { budgetGrantOperationStatements } from '../repositories/budget-commit-fence';
 import type { D1Database, DurableObjectNamespace } from '@cloudflare/workers-types';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { VerifiedTenantScope } from '../types/tenant';
@@ -80,7 +81,9 @@ export class SupportSlaMutationService {
     await this.authorize(attempt.requirements);
     const receipt=await this.receipts.findActive(attempt.namespace);
     if (receipt) { if(receipt.payload_hash!==attempt.namespace.payloadHash) throw conflict(); if(!receipt.response_snapshot) throw unavailable(); return {status:'replayed' as const,outcome:{ status: receipt.response_status, body: JSON.parse(receipt.response_snapshot) } as SupportSlaMutationOutcome}; }
-    const result=await this.budget.service.admit({database:this.db,repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:this.budget.business,now:()=>this.now()});
+    const result=await this.budget.service.admit({
+      ...(attempt.input.operation === 'dashboard.ticket.sla.initialize' || attempt.input.operation === 'dashboard.ticket.support-state.transition' ? { singleOperationGrant: 'target-write-v1' as const } : {}),
+      database:this.db,repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:this.budget.business,now:()=>this.now()});
     attempt.authority=result.status==='rejected'?undefined:result.commitAuthority;
     return result;
   }
@@ -89,7 +92,7 @@ export class SupportSlaMutationService {
     decodeWinner: (body: unknown) => T = body => body as T): Promise<T> {
     const attempt=this.attempts.get(prepared); if(!attempt || prepared.replay || attempt.started || !attempt.authority || this.now()>=attempt.authority.expiresAt) throw unavailable();
     await this.authorize(attempt.requirements); attempt.started=true;
-    const original=this.db, prefix=supportSlaFenceStatements(original,this.scope,{credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace});
+    const original=this.db, prefix=[...supportSlaFenceStatements(original,this.scope,{credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace}),...budgetGrantOperationStatements(original,this.scope,attempt.authority)];
     const proxy=new Proxy(original,{get:(target,property)=> property==='batch' ? async (business: any[]) => {
       const at=receiptAfterBusinessIndex ?? business.length;
       if (!Number.isSafeInteger(at) || at<0 || at>business.length) throw unavailable();
@@ -116,6 +119,7 @@ export class SupportSlaMutationService {
       await this.authorize(attempt.requirements); const winner=await this.receipts.findActive(attempt.namespace);
       if (winner?.response_snapshot) {
         if (winner.payload_hash !== attempt.namespace.payloadHash) throw conflict();
+        await this.receipts.completeAdmittedReplay({credential:this.credential,requirements:attempt.requirements,authority:attempt.authority,namespace:attempt.namespace},winner);
         return decodeWinner(JSON.parse(winner.response_snapshot));
       }
       throw error;
