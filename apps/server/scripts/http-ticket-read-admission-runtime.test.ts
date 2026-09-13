@@ -187,9 +187,9 @@ for (const customer of [false, true]) test(`sustained ${customer ? 'customer' : 
     const control = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
       calls: { refresh: number; reserve: number; reconcile: number }; cache: { scopes: number; holders: number; operations: number; refills: number }
     };
-    assert.equal(control.calls.reconcile, 4, 'one closure per exhausted8-operation block after initial4 blocks');
-    assert.equal(control.calls.reserve, 12, '8 work blocks plus4 separately charged recovery reservations');
-    assert.deepEqual(control.cache, { scopes: 1, holders: 4, operations: 32, refills: 4 });
+    assert.equal(control.calls.reconcile, 7, 'one closure per exhausted8-operation block before each cold replacement');
+    assert.equal(control.calls.reserve, 15, '8 work blocks plus7 separately charged recovery reservations');
+    assert.deepEqual(control.cache, { scopes: 1, holders: 1, operations: 8, refills: 1 });
     const count = await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>();
     assert.equal(count?.n, 64, 'all successful responses have durable grant links');
   } finally { await f.mf.dispose(); }
@@ -208,9 +208,9 @@ test('spaced successful reads retire expired slots while retaining their full or
     const control = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
       calls: { reconcile: number }; cache: { holders: number; refills: number }
     };
-    assert.equal(control.calls.reconcile, 3);
-    assert.equal(control.cache.holders, 4);
-    assert.equal(control.cache.refills, 4);
+    assert.equal(control.calls.reconcile, 6);
+    assert.equal(control.cache.holders, 1);
+    assert.equal(control.cache.refills, 1);
   } finally { await f.mf.dispose(); }
 });
 
@@ -222,23 +222,29 @@ test('concurrent refill requests share one certified closure and one new block',
     const responses=await Promise.all(Array.from({length:8},()=>request(f.mf,'/api/tickets/read-ticket',token)));
     for(const response of responses)assert.equal(response.status,200,await response.text());
     const control=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reconcile:number;reserve:number};cache:{operations:number;holders:number;refills:number}};
-    assert.equal(control.calls.reconcile,1);assert.equal(control.calls.reserve,6);
-    assert.equal(control.cache.operations,32);assert.equal(control.cache.holders,4);assert.equal(control.cache.refills,4);
+    assert.equal(control.calls.reconcile,4);assert.equal(control.calls.reserve,9);
+    assert.equal(control.cache.operations,8);assert.equal(control.cache.holders,1);assert.equal(control.cache.refills,1);
   }finally{await f.mf.dispose();}
 });
 
-for(const lostAcks of [1,2])test(`lost reconciliation acknowledgement remains closed until confirmed (${lostAcks} losses)`,async()=>{
+for(const lostAcks of [1,2])test(`lost reconciliation acknowledgement retains its slot until confirmed (${lostAcks} losses)`,async()=>{
   const f=await fixture();
   try{
     const token=await staffToken();
-    for(let i=0;i<32;i++){const response=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(response.status,200);await response.body?.cancel();}
+    for(let i=0;i<8;i++){const initial=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(initial.status,200);await initial.body?.cancel();}
     await f.mf.dispatchFetch('http://runtime.test/__budget-control',{method:'POST',body:JSON.stringify({loseReconcileAcks:lostAcks})});
-    const first=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(first.status,429,await first.text());
+    const first=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(first.status,200,await first.text());
     const before=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reconcile:number};cache:{holders:number;operations:number;refills:number}};
-    assert.equal(before.calls.reconcile,1);assert.equal(before.cache.holders,4);assert.equal(before.cache.operations,32);assert.equal(before.cache.refills,4);
-    const retry=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(retry.status,lostAcks===1?200:429,await retry.text());
+    assert.equal(before.calls.reconcile,1);assert.equal(before.cache.holders,2);assert.equal(before.cache.operations,9);assert.equal(before.cache.refills,2);
+    // The unconfirmed closure did not return credit. A warm request uses the new
+    // separately charged block without another recovery RPC.
+    const warm=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(warm.status,200);await warm.body?.cancel();
+    const warmState=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reconcile:number}};
+    assert.equal(warmState.calls.reconcile,1);
+    for(let i=0;i<6;i++){const fill=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(fill.status,200);await fill.body?.cancel();}
+    const retry=await request(f.mf,'/api/tickets/read-ticket',token);assert.equal(retry.status,200,await retry.text());
     const after=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reconcile:number};cache:{holders:number;refills:number}};
-    assert.equal(after.calls.reconcile,2);assert.equal(after.cache.holders,4);assert.equal(after.cache.refills,4);
+    assert.equal(after.calls.reconcile,2);assert.equal(after.cache.holders,lostAcks===1?2:3);assert.equal(after.cache.refills,lostAcks===1?2:3);
   }finally{await f.mf.dispose();}
 });
 
@@ -256,4 +262,55 @@ test('four grants with unknown read completions cannot reclaim slots from durabl
     assert.equal(control.calls.reconcile,0);assert.equal(control.cache.holders,4);assert.equal(control.cache.operations,32);assert.equal(control.cache.refills,4);
     const closures=await f.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{n:number}>();assert.equal(closures?.n,0);
   }finally{await f.mf.dispose();}
+});
+
+
+test('cold sparse authenticated scopes retire their own expired grants before the fourth refill', async () => {
+  const f = await fixture(1_000_000, 1_000);
+  try {
+    const staff = await staffToken(), customer = await customerToken();
+    const routes = [
+      ['/api/tickets/read-ticket', staff], ['/api/tickets/read-ticket/history', staff],
+      ['/api/v1/customer/tickets/read-ticket', customer], ['/api/v1/customer/tickets/read-ticket/history', customer],
+    ];
+    const startedAt = Date.now();
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ now: startedAt + cycle * 2_000 }) });
+      for (const [path, token] of routes) {
+        const response = await request(f.mf, path, token);
+        assert.equal(response.status, 200, await response.text());
+      }
+    }
+    const state = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
+      calls: { reconcile: number }; cache: { scopes: number; holders: number; refills: number }
+    };
+    assert.equal(state.calls.reconcile, 8, 'each of four exact scopes retires its prior expired grant on each cold return');
+    assert.equal(state.cache.scopes, 4);
+    assert.equal(state.cache.holders, 4);
+    assert.equal(state.cache.refills, 4);
+  } finally { await f.mf.dispose(); }
+});
+
+for (const change of ['policy', 'credential'] as const) test(`cold recovery rechecks current ${change} after awaited reservation`, async () => {
+  const f = await fixture(1_000_000, 1_000);
+  try {
+    const token = await staffToken();
+    const first = await request(f.mf, '/api/tickets/read-ticket', token);
+    assert.equal(first.status, 200); await first.body?.cancel();
+    await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ now: Date.now() + 2_000, pauseNextReserve: true }) });
+    const pending = request(f.mf, '/api/tickets/read-ticket', token);
+    let paused = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const state = await (await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as { reservePaused: boolean };
+      if (state.reservePaused) { paused = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.equal(paused, true);
+    await f.db.prepare(change === 'policy' ? "UPDATE budget_deployment_authority SET state='revoked'" : "UPDATE users SET session_version=2 WHERE tenant_id='read-tenant' AND id='reader-agent'").run();
+    await f.mf.dispatchFetch('http://runtime.test/__budget-control', { method: 'POST', body: JSON.stringify({ releaseReserve: true }) });
+    const response = await pending;
+    assert.notEqual(response.status, 200, await response.text());
+    const count = await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>();
+    assert.equal(count?.n, 0, 'expired prior links were retired; revoked request creates no new completion receipt');
+  } finally { await f.mf.dispose(); }
 });

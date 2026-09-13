@@ -225,8 +225,8 @@ test('group directory sustains forty reads with RPC-free warm blocks and bounded
         else assert.deepEqual(proof.coordinatorCalls,firstReadCalls,'warm reads make no additional DO RPC');}
     }
     const proof=await control(f.mf);
-    assert.equal(proof.coordinatorCalls.reconcile,1);assert.equal(proof.coordinatorCalls.reserve,6);
-    assert.equal(proof.cache.holders,4);assert.equal(proof.cache.refills,4);
-    assert.equal((await f.db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<{n:number}>())!.n,1);
+    assert.equal(proof.coordinatorCalls.reconcile,4);assert.equal(proof.coordinatorCalls.reserve,9);
+    assert.equal(proof.cache.holders,1);assert.equal(proof.cache.refills,1);
+    assert.equal((await f.db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<{n:number}>())!.n,4);
   }finally{await f.mf.dispose();}
 });

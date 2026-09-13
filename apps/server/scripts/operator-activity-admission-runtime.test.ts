@@ -82,7 +82,7 @@ test('activity summaries retain full stored titles and sustain64 admitted combin
     }
     assert.equal((await f.db.prepare("SELECT subject FROM tickets WHERE tenant_id='read-tenant'").first<{subject:string}>())?.subject,title);
     const control=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {calls:{reserve:number;reconcile:number};cache:{holders:number;operations:number}};
-    assert.equal(control.calls.reserve,12);assert.equal(control.calls.reconcile,4);assert.equal(control.cache.holders,4);assert.equal(control.cache.operations,32);
+    assert.equal(control.calls.reserve,15);assert.equal(control.calls.reconcile,7);assert.equal(control.cache.holders,1);assert.equal(control.cache.operations,8);
     assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n,64);
     const envelope=await f.db.prepare('SELECT operation_envelope_json FROM budget_grant_operations LIMIT 1').first<{operation_envelope_json:string}>();
     assert.equal(JSON.parse(envelope!.operation_envelope_json).d1RowsWritten,16);

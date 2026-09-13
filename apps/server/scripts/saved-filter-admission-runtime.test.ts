@@ -58,10 +58,10 @@ test('native Worker/D1/DO saved-filter admission is current, replayable and popu
       }
     }
     const sustainedProof=await(await mf.dispatchFetch('http://runtime.test/__filter-control')).json() as any;
-    assert.equal(sustainedProof.coordinatorCalls.reconcile,1,'forty reads close exactly one full block');
-    assert.equal(sustainedProof.coordinatorCalls.reserve,6,'five work blocks plus one prepaid recovery');
-    assert.equal(sustainedProof.cache.holders,4);assert.equal(sustainedProof.cache.refills,4);
-    assert.equal((await db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<any>()).n,1);
+    assert.equal(sustainedProof.coordinatorCalls.reconcile,4,'forty reads close each of four exhausted blocks');
+    assert.equal(sustainedProof.coordinatorCalls.reserve,9,'five work blocks plus four prepaid recoveries');
+    assert.equal(sustainedProof.cache.holders,1);assert.equal(sustainedProof.cache.refills,1);
+    assert.equal((await db.prepare('SELECT count(*) n FROM budget_grant_closures WHERE reconciled_at IS NOT NULL').first<any>()).n,4);
 
     const createBody={name:'Priority owned',conditions:[{field:'priority',operator:'in',value:['high','urgent']}]};
     const created=await request('/api/settings/filters','POST',admin,createBody,'create-key');assert.equal(created.status,201,await created.clone().text());const createdBody=await created.json() as any;

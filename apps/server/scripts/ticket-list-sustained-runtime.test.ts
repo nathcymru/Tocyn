@@ -83,9 +83,9 @@ for(const customer of [false,true])test(`sustained ${customer?'customer':'staff'
     }
     const diagnostic=await(await f.mf.dispatchFetch('http://runtime.test/__budget-control')).json() as {
       calls:{reserve:number;reconcile:number};cache:{scopes:number;holders:number;operations:number;refills:number}};
-    assert.equal(diagnostic.calls.reserve,12);assert.equal(diagnostic.calls.reconcile,4);
-    assert.deepEqual(diagnostic.cache,{scopes:1,holders:4,operations:32,refills:4});
+    assert.equal(diagnostic.calls.reserve,15);assert.equal(diagnostic.calls.reconcile,7);
+    assert.deepEqual(diagnostic.cache,{scopes:1,holders:1,operations:8,refills:1});
     assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())?.n,64);
-    assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{n:number}>())?.n,4);
+    assert.equal((await f.db.prepare('SELECT count(*) AS n FROM budget_grant_closures').first<{n:number}>())?.n,7);
   }finally{await f.mf.dispose();}
 });
