@@ -115,6 +115,7 @@ function staffMutationService(c: any, d: TenantRequestDeps, operation: 'dashboar
   }, d.ticketMutations, {
     service: sessionTicketBudgetAdmission, repository: d.repositories.budgetAuthority,
     namespace: c.env.BUDGET_COORDINATOR_DO, business: STAFF_TICKET_ENVELOPES[operation],
+    settle:(authority,outcome,now)=>apiTicketBudgetCache.settleOperation(authority,outcome,now),
     now: () => c.env.localNow?.() ?? Date.now(),
   }, undefined, new OperatorActivityService(d));
 }
@@ -141,6 +142,7 @@ function supportSlaMutationService(c: any, d: TenantRequestDeps, operation: Supp
   return new SupportSlaMutationService(d.database,d.scope,{tenantId:d.scope.tenantId,actorId:agent.sub,role:agent.role,
     sessionVersion,expiresAt:agent.exp,mfaVerified:agent.mfa_verified===true},{service:sessionTicketBudgetAdmission,
     repository:d.repositories.budgetAuthority,namespace:c.env.BUDGET_COORDINATOR_DO,business:SUPPORT_SLA_ENVELOPES[operation],
+    settle:(authority,outcome,now)=>apiTicketBudgetCache.settleOperation(authority,outcome,now),
     now:()=>c.env.localNow?.()??Date.now()});
 }
 
@@ -615,9 +617,12 @@ dashboard.put('/sla-policy', requestBounds(64 * 1024), roleGuard(['admin']), per
       const prepared=await mutation.prepareMutation({operation:'dashboard.sla.policy.set',payload:parsed.data,capability:fence},readIdempotencyKey(c));
       if (prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.sla.policy.set',mutation,prepared); if(rejection) return rejection;
-      const result=await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.policy,[d.scope.tenantId],
-        database=>new SlaClockService(supportSlaDeps(d,database)).setPolicy(parsed.data as SlaPolicyInput,fence),true,d.betaAdmission ? 3 : 1);
-      if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(result);
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      try {
+        const result=await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.policy,[d.scope.tenantId],
+          database=>new SlaClockService(supportSlaDeps(d,database)).setPolicy(parsed.data as SlaPolicyInput,fence),true,d.betaAdmission ? 3 : 1);
+        if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); const response = c.json(result); terminal = 'committed'; return response;
+      } finally { mutation.finish(prepared, terminal); }
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? slaFailure(c,error); }
   }
   try { return c.json(await new SlaClockService(c.get('tenantDeps') as TenantRequestDeps).setPolicy(parsed.data as SlaPolicyInput, permissionWriteFence(c, 'general'))); }
@@ -640,9 +645,12 @@ dashboard.post('/support-states', requestBounds(64 * 1024), roleGuard(['admin'])
       const prepared=await mutation.prepareMutation({operation:'dashboard.support-state.create',payload:parsed.data,capability:fence},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.support-state.create',mutation,prepared); if(rejection) return rejection;
-      const state=await mutation.commit(prepared,201,SUPPORT_SLA_RECEIPT_SNAPSHOTS.definition,[d.scope.tenantId,parsed.data.id],database=>
-        new SupportStateService(supportSlaDeps(d,database)).createDefinition(parsed.data,fence),true,5);
-      if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(state,201);
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      try {
+        const state=await mutation.commit(prepared,201,SUPPORT_SLA_RECEIPT_SNAPSHOTS.definition,[d.scope.tenantId,parsed.data.id],database=>
+          new SupportStateService(supportSlaDeps(d,database)).createDefinition(parsed.data,fence),true,5);
+        if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); const response = c.json(state,201); terminal = 'committed'; return response;
+      } finally { mutation.finish(prepared, terminal); }
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? supportStateFailure(c,error); }
   }
   try {
@@ -670,9 +678,12 @@ dashboard.patch('/support-states/:id', requestBounds(64 * 1024), roleGuard(['adm
       const prepared=await mutation.prepareMutation({operation:'dashboard.support-state.update',payload:{id,...parsed.data},capability:fence},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.support-state.update',mutation,prepared); if(rejection) return rejection;
-      const state=await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.definition,[d.scope.tenantId,id],database=>
-        new SupportStateService(supportSlaDeps(d,database)).updateDefinition(id,parsed.data,fence),true,1);
-      if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(state);
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      try {
+        const state=await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.definition,[d.scope.tenantId,id],database=>
+          new SupportStateService(supportSlaDeps(d,database)).updateDefinition(id,parsed.data,fence),true,1);
+        if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); const response = c.json(state); terminal = 'committed'; return response;
+      } finally { mutation.finish(prepared, terminal); }
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? supportStateFailure(c,error); }
   }
   try {
@@ -699,9 +710,12 @@ dashboard.post('/support-states/:id/deactivate', requestBounds(64 * 1024), roleG
       const prepared=await mutation.prepareMutation({operation:'dashboard.support-state.deactivate',payload:{id,...parsed.data},capability:fence},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.support-state.deactivate',mutation,prepared); if(rejection) return rejection;
-      await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.success,[],database=>
-        new SupportStateService(supportSlaDeps(d,database)).deactivate(id,parsed.data,fence),true);
-      if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json({success:true});
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      try {
+        await mutation.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.success,[],database=>
+          new SupportStateService(supportSlaDeps(d,database)).deactivate(id,parsed.data,fence),true);
+        if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); const response = c.json({success:true}); terminal = 'committed'; return response;
+      } finally { mutation.finish(prepared, terminal); }
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? supportStateFailure(c,error); }
   }
   try {
@@ -758,9 +772,12 @@ dashboard.post('/tickets/:id/sla/initialize', requestBounds(1024), roleGuard(['a
       const prepared=await mutation.prepareMutation({operation:'dashboard.ticket.sla.initialize',ticketId:id,payload:{},capability:fence},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await mutation.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.ticket.sla.initialize',mutation,prepared); if(rejection) return rejection;
-      const initialized=await mutation.commit(prepared,201,SUPPORT_SLA_RECEIPT_SNAPSHOTS.initialized,[],database=>
-        new SlaClockService(supportSlaDeps(d,database)).initializeExistingTicket(id,fence),false,d.betaAdmission ? 6 : 4,body=>Boolean((body as { initialized?: unknown }).initialized));
-      const body={initialized}; if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(body,initialized?201:200);
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      try {
+        const initialized=await mutation.commit(prepared,201,SUPPORT_SLA_RECEIPT_SNAPSHOTS.initialized,[],database=>
+          new SlaClockService(supportSlaDeps(d,database)).initializeExistingTicket(id,fence),false,d.betaAdmission ? 6 : 4,body=>Boolean((body as { initialized?: unknown }).initialized));
+        const body={initialized}; if(mutation.keyed(prepared)) c.header('Idempotency-Replayed','false'); const response = c.json(body,initialized?201:200); terminal = 'committed'; return response;
+      } finally { mutation.finish(prepared, terminal); }
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? slaFailure(c,error); }
   }
   try {
@@ -808,9 +825,12 @@ dashboard.patch('/tickets/:id/support-state', requestBounds(64 * 1024), async (c
       const prepared=await admission.prepareMutation({operation:'dashboard.ticket.support-state.transition',ticketId:id,payload:parsed.data},readIdempotencyKey(c));
       if(prepared.replay) { const replay=await admission.replay(prepared); if (!replay) throw new TicketMutationError(503,'support_sla_mutation_unavailable','Support-state or SLA mutation unavailable'); c.header('Idempotency-Replayed','true'); return c.json(replay.body,replay.status); }
       const rejection=await admitConfiguredSupportSlaMutation(c,'dashboard.ticket.support-state.transition',admission,prepared); if(rejection) return rejection;
-      const state=await admission.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.state,[d.scope.tenantId,id],database=>
-        new SupportStateService(supportSlaDeps(d,database)).transition(id,parsed.data),true,d.betaAdmission ? 5 : 3);
-      if(admission.keyed(prepared)) c.header('Idempotency-Replayed','false'); return c.json(state);
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      try {
+        const state=await admission.commit(prepared,200,SUPPORT_SLA_RECEIPT_SNAPSHOTS.state,[d.scope.tenantId,id],database=>
+          new SupportStateService(supportSlaDeps(d,database)).transition(id,parsed.data),true,d.betaAdmission ? 5 : 3);
+        if(admission.keyed(prepared)) c.header('Idempotency-Replayed','false'); const response = c.json(state); terminal = 'committed'; return response;
+      } finally { admission.finish(prepared, terminal); }
     } catch(error) { const failure=staffMutationFailure(c,error); return failure ?? supportStateFailure(c,error); }
   }
   try {
@@ -1004,16 +1024,22 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
       }
       const rejection = await admitConfiguredStaffTicketMutation(c, 'dashboard.ticket.create', mutation, prepared);
       if (rejection) return rejection;
-      const outcome = await mutation.commit(prepared);
-      // A raced receipt winner is already durable work. Only the canonical
-      // winner performs the existing best-effort delivery side effects.
-      if (!outcome.replayed) {
-        await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketCreated(outcome.ticket, mutation.broadcastGrant(prepared,outcome));
-        try { await deliverCommittedTicketEmail(c,d,mutation,prepared,outcome); }
-        catch { console.error('Initial ticket email delivery failed'); }
-      }
-      if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
-      return c.json(outcome.body, outcome.status);
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      let sideEffectsKnown = true;
+      try {
+        const outcome = await mutation.commit(prepared);
+        // A raced receipt winner is already durable work. Only the canonical
+        // winner performs the existing best-effort delivery side effects.
+        if (!outcome.replayed) {
+          if ((await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketCreated(outcome.ticket, mutation.broadcastGrant(prepared,outcome))).status === 'failed') sideEffectsKnown = false;
+          try { if (!await deliverCommittedTicketEmail(c,d,mutation,prepared,outcome)) sideEffectsKnown = false; }
+          catch { sideEffectsKnown = false; console.error('Initial ticket email delivery failed'); }
+        }
+        if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
+        const response = c.json(outcome.body, outcome.status);
+        if (sideEffectsKnown) terminal = 'committed';
+        return response;
+      } finally { mutation.finish(prepared, terminal); }
     } catch (error) {
       const failure = staffMutationFailure(c,error); if (failure) return failure;
       if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard budgeted ticket create failed');
@@ -1328,21 +1354,27 @@ dashboard.post("/tickets/:id/articles", requestBounds(64 * 1024), rateLimiter(10
       }
       const rejection = await admitConfiguredStaffTicketMutation(c, 'dashboard.ticket.reply', mutation, prepared);
       if (rejection) return rejection;
-      let verified;
-      try { verified = await validateAttachmentReferences(d, `agent-attachments/${(c.get('jwtPayload') as JWTPayload).sub}/`, parsed.data.attachments); }
-      catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
-      const outcome = await mutation.commit(prepared,verified);
-      if (!outcome.replayed) {
-        if (!outcome.article.is_internal) {
-          // The canonical commit returned these exact attachment rows; do not
-          // re-list metadata after admission before the bounded stream path.
-          try { await deliverCommittedTicketEmail(c,d,mutation,prepared,outcome); }
-          catch { console.error('Ticket reply email delivery failed'); }
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      let sideEffectsKnown = true;
+      try {
+        let verified;
+        try { verified = await validateAttachmentReferences(d, `agent-attachments/${(c.get('jwtPayload') as JWTPayload).sub}/`, parsed.data.attachments); }
+        catch { return c.json({ error: 'Invalid attachment reference' }, 400); }
+        const outcome = await mutation.commit(prepared,verified);
+        if (!outcome.replayed) {
+          if (!outcome.article.is_internal) {
+            // The canonical commit returned these exact attachment rows; do not
+            // re-list metadata after admission before the bounded stream path.
+            try { if (!await deliverCommittedTicketEmail(c,d,mutation,prepared,outcome)) sideEffectsKnown = false; }
+            catch { sideEffectsKnown = false; console.error('Ticket reply email delivery failed'); }
+          }
+          if ((await new BroadcastService(c.env,d.scope,d.emitResourceOperation).broadcast('article.created',{ticket_id:ticketId,article_id:outcome.article.id},2,mutation.broadcastGrant(prepared,outcome))).status === 'failed') sideEffectsKnown = false;
         }
-        await new BroadcastService(c.env,d.scope,d.emitResourceOperation).broadcast('article.created',{ticket_id:ticketId,article_id:outcome.article.id},2,mutation.broadcastGrant(prepared,outcome));
-      }
-      if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
-      return c.json(outcome.body, outcome.status);
+        if (outcome.replayed) c.header('Idempotency-Replayed', 'true');
+        const response = c.json(outcome.body, outcome.status);
+        if (sideEffectsKnown) terminal = 'committed';
+        return response;
+      } finally { mutation.finish(prepared, terminal); }
     } catch (error) {
       const failure = staffMutationFailure(c,error); if (failure) return failure;
       if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard budgeted ticket reply failed');
@@ -1428,10 +1460,16 @@ async function assignResponsibleOwner(c: any): Promise<Response> {
   }
   const rejection = await admitConfiguredStaffTicketMutation(c,'dashboard.ticket.update',mutation,prepared);
   if (rejection) return rejection;
-  const outcome = await mutation.commit(prepared);
-  await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket,mutation.broadcastGrant(prepared,outcome));
-  c.header('Idempotency-Replayed', 'false');
-  return c.json({ success:true, responsibleOwnerId:outcome.ticket.assigned_to ?? null }, outcome.status);
+  let terminal: 'committed' | 'unknown' = 'unknown';
+  let sideEffectsKnown = true;
+  try {
+    const outcome = await mutation.commit(prepared);
+    if ((await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket,mutation.broadcastGrant(prepared,outcome))).status === 'failed') sideEffectsKnown = false;
+    c.header('Idempotency-Replayed', 'false');
+    const response = c.json({ success:true, responsibleOwnerId:outcome.ticket.assigned_to ?? null }, outcome.status);
+    if (sideEffectsKnown) terminal = 'committed';
+    return response;
+  } finally { mutation.finish(prepared, terminal); }
 }
 
 dashboard.get('/operators/:userId/capacity',c=>operatorCapacity(c,false));
@@ -1490,10 +1528,16 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
       }
       const rejection = await admitConfiguredStaffTicketMutation(c,'dashboard.ticket.update',mutation,prepared);
       if (rejection) return rejection;
-      const outcome = await mutation.commit(prepared);
-      if (!outcome.replayed) await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket,mutation.broadcastGrant(prepared,outcome));
-      if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
-      return c.json(outcome.body,outcome.status);
+      let terminal: 'committed' | 'unknown' = 'unknown';
+      let sideEffectsKnown = true;
+      try {
+        const outcome = await mutation.commit(prepared);
+        if (!outcome.replayed) if ((await new BroadcastService(c.env,d.scope,d.emitResourceOperation).notifyTicketUpdated(outcome.ticket,mutation.broadcastGrant(prepared,outcome))).status === 'failed') sideEffectsKnown = false;
+        if (outcome.keyed) c.header('Idempotency-Replayed', String(outcome.replayed));
+        const response = c.json(outcome.body,outcome.status);
+        if (sideEffectsKnown) terminal = 'committed';
+        return response;
+      } finally { mutation.finish(prepared, terminal); }
     } catch (error) {
       const failure = staffMutationFailure(c,error); if (failure) return failure;
       if (c.env.LOCAL_BETA_ENABLED !== 'true') console.error('Dashboard budgeted ticket update failed');

@@ -31,13 +31,17 @@ const MAX_ARTICLE_BODY_SIZE = 16_000;
 async function digest(text: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))), byte => byte.toString(16).padStart(2,'0')).join('');
 }
-function owned<T>(value: T): T {
-  const clone = structuredClone(value);
-  const freeze = (item: unknown) => { if (item && typeof item === 'object') { Object.values(item).forEach(freeze); Object.freeze(item); } };
-  freeze(clone); return clone;
+function freezeInPlace<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    Object.values(value).forEach(freezeInPlace);
+    Object.freeze(value);
+  }
+  return value;
 }
+function owned<T>(value: T): T { return freezeInPlace(structuredClone(value)); }
+
 type Attempt = { input: StaffMutationInput; namespace?: StaffMutationNamespace; requirements: SessionBudgetRequirements;
-  intent: CanonicalBudgetIntent; authority?: BudgetCommitAuthority; commitStarted: boolean; keyed: boolean;
+  intent: CanonicalBudgetIntent; authority?: BudgetCommitAuthority; terminal?: boolean; commitStarted: boolean; keyed: boolean;
   broadcastGrant?: CanonicalBroadcastGrant; ticketEmailGrant?: TicketEmailCanonicalGrant; committedOutcome?: StaffMutationOutcome };
 
 /** Staff canonical mutations and receipts used by the configured dashboard admission path. */
@@ -47,12 +51,19 @@ export class StaffTicketMutationService {
   private readonly attempts = new WeakMap<PreparedStaffMutation,Attempt>();
   private readonly credential: SessionBudgetCredential;
   private readonly capability?: CapabilityWriteFence;
-  constructor(db: D1Database, private readonly scope: VerifiedTenantScope, credential: SessionBudgetCredential,
+  constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope, credential: SessionBudgetCredential,
     private readonly canonical: TicketMutationReplayRepository,
     private readonly budget: { service: SessionBudgetAdmissionService; repository: BudgetAuthorityRepository;
-      namespace: DurableObjectNamespace; business: ResourceAmounts; now?: () => number }, capability?: CapabilityWriteFence, private readonly activity?: OperatorActivityService) {
+      namespace: DurableObjectNamespace; business: ResourceAmounts; now?: () => number; settle: (authority: BudgetCommitAuthority, outcome: 'committed' | 'unknown', now: number) => void }, capability?: CapabilityWriteFence, private readonly activity?: OperatorActivityService) {
     this.credential = owned(credential); this.capability = capability && owned(capability);
     this.receipts = new StaffTicketMutationRepository(db,scope); this.sessions = new SessionBudgetAuthorityRepository(db,scope);
+  }
+  /** Route terminal only: a response receipt from another attempt is not completion proof. */
+  finish(prepared: PreparedStaffMutation, outcome: 'committed' | 'unknown'): void {
+    const attempt = this.attempts.get(prepared);
+    if (!attempt?.authority || attempt.terminal) return;
+    attempt.terminal = true;
+    this.budget.settle(attempt.authority, outcome === 'committed' && attempt.committedOutcome !== undefined ? 'committed' : 'unknown', this.now());
   }
   private now() { return this.budget.now?.() ?? Date.now(); }
   private async authorize(requirements: SessionBudgetRequirements): Promise<void> {
@@ -191,11 +202,11 @@ export class StaffTicketMutationService {
       const receipt = await this.receipts.findActive(attempt.namespace);
       if (receipt) return { status:'replayed' as const,outcome:await this.replay(receipt,attempt.namespace) };
     }
-    const result = await this.budget.service.admit({ repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,
+    const result = await this.budget.service.admit({ database:this.db,repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,
       scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:{...this.budget.business,d1RowsWritten:Math.max(this.budget.business.d1RowsWritten ?? 0,CANONICAL_MUTATION_D1_WRITES)},now:() => this.now() });
     const authority = result.status !== 'rejected' ? result.commitAuthority : undefined;
     attempt.authority = authority && authority.operationId === attempt.intent.operationId
-      && authority.operationFingerprint === attempt.intent.operationFingerprint ? owned(authority) : undefined;
+      && authority.operationFingerprint === attempt.intent.operationFingerprint ? freezeInPlace(authority) : undefined;
     return result;
   }
   /**

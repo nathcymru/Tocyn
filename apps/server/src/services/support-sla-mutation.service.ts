@@ -23,7 +23,7 @@ function omitUndefined(value: unknown): unknown {
   return value;
 }
 
-type Attempt = SupportSlaMutationAttempt & { authority?: BudgetCommitAuthority; started: boolean; keyed: boolean };
+type Attempt = SupportSlaMutationAttempt & { authority?: BudgetCommitAuthority; terminal?: boolean; started: boolean; acknowledged?: boolean; completed?: boolean; keyed: boolean };
 
 /** Adds the admission and immutable-receipt boundary around one existing D1 batch. */
 export class SupportSlaMutationService {
@@ -31,8 +31,15 @@ export class SupportSlaMutationService {
   private readonly sessions: SessionBudgetAuthorityRepository;
   private readonly attempts = new WeakMap<PreparedSupportSlaMutation, Attempt>();
   constructor(private readonly db: D1Database, private readonly scope: VerifiedTenantScope, private readonly credential: SessionBudgetCredential,
-    private readonly budget: { service: SessionBudgetAdmissionService; repository: BudgetAuthorityRepository; namespace: DurableObjectNamespace; business: ResourceAmounts; now?: () => number }) {
+    private readonly budget: { service: SessionBudgetAdmissionService; repository: BudgetAuthorityRepository; namespace: DurableObjectNamespace; business: ResourceAmounts; now?: () => number; settle: (authority: BudgetCommitAuthority, outcome: 'committed' | 'unknown', now: number) => void }) {
     this.receipts = new SupportSlaMutationRepository(db,scope); this.sessions = new SessionBudgetAuthorityRepository(db,scope);
+  }
+  /** Route terminal only: a response receipt from another attempt is not completion proof. */
+  finish(prepared: PreparedSupportSlaMutation, outcome: 'committed' | 'unknown'): void {
+    const attempt = this.attempts.get(prepared);
+    if (!attempt?.authority || attempt.terminal) return;
+    attempt.terminal = true;
+    this.budget.settle(attempt.authority, outcome === 'committed' && attempt.completed === true ? 'committed' : 'unknown', this.now());
   }
   private now() { return this.budget.now?.() ?? Date.now(); }
   private async authorize(requirements: Attempt['requirements']) { if (!await this.sessions.authorize(this.credential,requirements,this.now())) throw denied(); }
@@ -73,7 +80,7 @@ export class SupportSlaMutationService {
     await this.authorize(attempt.requirements);
     const receipt=await this.receipts.findActive(attempt.namespace);
     if (receipt) { if(receipt.payload_hash!==attempt.namespace.payloadHash) throw conflict(); if(!receipt.response_snapshot) throw unavailable(); return {status:'replayed' as const,outcome:{ status: receipt.response_status, body: JSON.parse(receipt.response_snapshot) } as SupportSlaMutationOutcome}; }
-    const result=await this.budget.service.admit({repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:this.budget.business,now:()=>this.now()});
+    const result=await this.budget.service.admit({database:this.db,repository:this.budget.repository,sessions:this.sessions,namespace:this.budget.namespace,scope:this.scope,credential:this.credential,requirements:attempt.requirements,intent:attempt.intent,business:this.budget.business,now:()=>this.now()});
     attempt.authority=result.status==='rejected'?undefined:result.commitAuthority;
     return result;
   }
@@ -88,6 +95,7 @@ export class SupportSlaMutationService {
       if (!Number.isSafeInteger(at) || at<0 || at>business.length) throw unavailable();
       const receipt=supportSlaReceiptStatement(target,this.scope,attempt.namespace,responseStatus,snapshot,snapshotValues,requirePreviousChange);
       const results=await target.batch([...prefix,...business.slice(0,at),receipt,...business.slice(at)]);
+      attempt.acknowledged = true;
       const start=prefix.length;
       return [...results.slice(start,start+at),...results.slice(start+at+1,start+business.length+1)];
     } : typeof Reflect.get(target,property)==='function' ? Reflect.get(target,property).bind(target) : Reflect.get(target,property)}) as D1Database;
@@ -99,9 +107,12 @@ export class SupportSlaMutationService {
       const committed = await this.receipts.findActive(attempt.namespace);
       if (!committed?.response_snapshot) throw unavailable();
       if (committed.payload_hash !== attempt.namespace.payloadHash) throw conflict();
-      return decodeWinner(JSON.parse(committed.response_snapshot));
+      const result = decodeWinner(JSON.parse(committed.response_snapshot));
+      attempt.completed = attempt.acknowledged === true;
+      return result;
     }
     catch (error) {
+      attempt.completed = false;
       await this.authorize(attempt.requirements); const winner=await this.receipts.findActive(attempt.namespace);
       if (winner?.response_snapshot) {
         if (winner.payload_hash !== attempt.namespace.payloadHash) throw conflict();
