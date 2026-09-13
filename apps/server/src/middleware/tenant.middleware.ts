@@ -77,7 +77,7 @@ export function createTenantRequestDeps(scope: VerifiedTenantScope, env: any, cr
     : new TenantAttachmentStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation);
   const legacyArticleStorage = scope.tenantId === 'default-tenant' ? new LegacyArticleBodyStorage(scope, env.ATTACHMENTS_BUCKET, emitResourceOperation) : undefined;
   const vectorStorage = new TenantVectorStorage(scope, env.VECTOR_INDEX);
-  const operatorActivity = new OperatorActivityRepository(scope, db, env.JWT_SECRET);
+  const operatorActivity = new OperatorActivityRepository(scope, db, env.JWT_SECRET, betaAdmission);
 
   return {
     database: db,

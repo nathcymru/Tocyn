@@ -1,3 +1,4 @@
+import type { LocalBetaAdmissionRepository } from './local-beta-admission.repository';
 import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import { budgetCommitConstraint,budgetGrantOperationStatements } from './budget-commit-fence';
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
@@ -100,7 +101,7 @@ export class ActivityBudgetFenceError extends Error {}
 export class OperatorActivityRepository {
   private cursorKeyPromise?: Promise<Uint8Array>;
 
-  constructor(private readonly scope: VerifiedTenantScope, private readonly db: D1Database, private readonly cursorSecret?: string) {}
+  constructor(private readonly scope: VerifiedTenantScope, private readonly db: D1Database, private readonly cursorSecret?: string, private readonly beta?: LocalBetaAdmissionRepository) {}
 
   private completionStatements(credential:ActivityPresentationCredential,authority:BudgetCommitAuthority){
     const recipient=this.recipientAuthority(credential),budget=budgetCommitConstraint(authority,this.scope.tenantId);
@@ -390,9 +391,22 @@ export class OperatorActivityRepository {
       RETURNING ${columns}`)
       .bind(this.scope.tenantId, this.scope.actorId, id, expectedRevision, ...access.values);
     let row:Row|null;
-    if(authority){
-      try{const results=await this.db.batch([...this.completionStatements(credential,authority),statement]);row=(results[results.length-1].results[0] as Row|undefined)??null;}
-      catch{throw new ActivityBudgetFenceError('Activity admission authority changed');}
+    if(authority || this.beta){
+      const condition = {
+        sql: `EXISTS (SELECT 1 FROM operator_activities WHERE tenant_id=? AND recipient_user_id=? AND id=? AND revision=? AND ${state}
+          AND ${this.ticketForMutationSql(credential, access.sql)})`,
+        values: [this.scope.tenantId, this.scope.actorId, id, expectedRevision, ...access.values],
+      };
+      try {
+        const results=await this.db.batch([
+          ...(authority ? this.completionStatements(credential,authority) : []),
+          ...(this.beta?.conditionalConversationStatements(condition) ?? []), statement,
+        ]);
+        row=(results[results.length-1].results[0] as Row|undefined)??null;
+      } catch {
+        if (this.beta) await this.beta.authorize('conversation');
+        throw new ActivityBudgetFenceError('Activity admission authority changed');
+      }
     }else row=await statement.first<Row>();
     return row ? activityFromRow(row) : null;
   }

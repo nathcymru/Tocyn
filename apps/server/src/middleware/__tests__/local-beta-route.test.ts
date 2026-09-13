@@ -47,3 +47,26 @@ describe('localBetaRoute', () => {
     expect(localBetaRoute('DELETE', '/api/tickets/ticket-1/route')).toBe('disabled');
   });
 });
+
+
+it('admits only the exact staff activity read inventory',()=>{
+  expect(localBetaRoute('GET','/api/activities')).toBe('conversation-read');
+  for(const [method,path] of [
+    ['POST','/api/activities'],['GET','/api/activities/extra'],
+    ['GET','/api/v1/activities'],['GET','/api/v1/customer/activities'],
+  ])expect(localBetaRoute(method,path)).toBe('disabled');
+});
+
+
+it('admits exact balanced and activity mutation forms without API or extra-path variants',()=>{
+  expect(localBetaRoute('POST','/api/tickets/ticket-1/balanced-assignment')).toBe('conversation-write');
+  expect(localBetaRoute('PATCH','/api/activities/activity-1/read')).toBe('conversation-write');
+  expect(localBetaRoute('PATCH','/api/activities/activity-1/dismiss')).toBe('conversation-write');
+  for(const [method,path] of [
+    ['GET','/api/tickets/ticket-1/balanced-assignment'],['PATCH','/api/tickets/ticket-1/balanced-assignment'],
+    ['POST','/api/tickets/ticket-1/balanced-assignment/extra'],['POST','/api/v1/tickets/ticket-1/balanced-assignment'],
+    ['POST','/api/activities/activity-1/read'],['GET','/api/activities/activity-1/dismiss'],
+    ['PATCH','/api/activities/activity-1/read/extra'],['PATCH','/api/activities/activity-1/other'],
+    ['PATCH','/api/v1/customer/activities/activity-1/read'],
+  ])expect(localBetaRoute(method,path)).toBe('disabled');
+});
