@@ -108,7 +108,7 @@ export async function admitKnowledgeRead(input:{env:Env;deps:TenantRequestDeps;p
       :input.operation==='knowledge.article.content'?await accounting.contentSnapshot(input.documentId!):undefined;
     const business=knowledgeReadEnvelope(input.operation,snapshot);
     if(!business)return {status:'rejected',reason:'unavailable'};
-    const outcome=await sessionTicketBudgetAdmission.admit({repository:deps.repositories.budgetAuthority,sessions,
+    const outcome=await sessionTicketBudgetAdmission.admit({repository:deps.repositories.budgetAuthority,sessions,database:deps.database,
       namespace:input.env.BUDGET_COORDINATOR_DO,scope:deps.scope,credential,requirements:{},
       intent:{operationId:crypto.randomUUID(),operationFingerprint:await digest(['knowledge-read-v1',deps.scope.tenantId,
         deps.scope.actorId,input.operation,input.documentId??null,snapshot]),workScopeKey:input.operation},business,now:input.now});

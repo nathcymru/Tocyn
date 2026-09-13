@@ -60,7 +60,7 @@ async function request(f:Awaited<ReturnType<typeof fixture>>,tenantId:string,pat
 async function control(f:Awaited<ReturnType<typeof fixture>>,value?:Record<string,string>){
   const response=await f.mf.dispatchFetch('http://runtime.test/__knowledge-read-control',value
     ?{method:'POST',body:JSON.stringify(value)}:undefined);
-  return response.json() as Promise<{r2Gets:number;r2Bytes:number;knowledgeRowsRead:number;knowledgeRowsWritten:number;knowledgeBusinessRows:number}>;
+  return response.json() as Promise<{calls:{refresh:number;reserve:number;reconcile:number};r2Gets:number;r2Bytes:number;knowledgeRowsRead:number;knowledgeRowsWritten:number;knowledgeBusinessRows:number}>;
 }
 async function insertDocument(db:any,tenantId:string,id:string,title:string,filePath=`knowledge/${id}/body.md`){
   await db.prepare(`INSERT INTO knowledge_docs (tenant_id,id,title,file_path,status,tier) VALUES (?,?,?,?,'pending','answer')`)
@@ -195,5 +195,25 @@ test('existing content reads require no new stored-byte allocation',async()=>{
     for(const row of operations.results){const envelope=JSON.parse(row.operation_envelope_json);
       assert.equal(envelope.r2StorageBytes??0,0);assert.equal(envelope.r2ClassBOperations,1);}
     assert.equal((await control(f)).r2Gets,2);
+  }finally{await f.mf.dispose();}
+});
+
+
+test('knowledge lists recover beyond four refills with exact journals and no warm RPC',async t=>{
+  const f=await fixture();try{
+    await insertDocument(f.db,'knowledge-a','shared','Synthetic knowledge');
+    let first:Awaited<ReturnType<typeof control>>|undefined;
+    for(let index=0;index<40;index++){
+      const response=await request(f,'knowledge-a','/articles');
+      assert.equal(response.status,200,`Knowledge list ${index+1}: ${await response.clone().text()}`);
+      const rows=await response.json() as {id:string}[];assert.deepEqual(rows.map(row=>row.id),['shared']);
+      if(index===0)first=await control(f);
+      if(index===1)assert.deepEqual((await control(f)).calls,first!.calls,'Second warm list adds no coordinator RPC');
+    }
+    const journals=await f.db.prepare("SELECT count(*) AS n FROM budget_grant_operations WHERE tenant_id='knowledge-a'").first<{n:number}>();
+    assert.equal(journals?.n,40);
+    const closures=await f.db.prepare("SELECT count(*) AS n FROM budget_grant_closures WHERE tenant_id='knowledge-a' AND reconciled_at IS NOT NULL").first<{n:number}>();
+    assert.ok(closures&&closures.n>0,'Confirmed whole-grant closure is required');
+    t.diagnostic(JSON.stringify({journals:journals.n,confirmedClosures:closures.n,calls:(await control(f)).calls}));
   }finally{await f.mf.dispose();}
 });
