@@ -80,3 +80,21 @@ it('admits only the exact existing budgeted user directory read', () => {
     ['DELETE', '/api/users/operator'], ['GET', '/api/v1/users'], ['GET', '/api/v1/customer/users'],
   ]) expect(localBetaRoute(method, path)).toBe('disabled');
 });
+
+
+it('admits only article list and content GETs for explicit human knowledge insertion', () => {
+  expect(localBetaRoute('GET', '/api/knowledge/articles')).toBe('conversation-read');
+  expect(localBetaRoute('GET', '/api/knowledge/articles/article-one/content')).toBe('conversation-read');
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']) {
+    expect(localBetaRoute(method, '/api/knowledge/articles')).toBe('disabled');
+    expect(localBetaRoute(method, '/api/knowledge/articles/article-one/content')).toBe('disabled');
+  }
+  for (const path of [
+    '/api/knowledge/articles/', '/api/knowledge/articles/article-one',
+    '/api/knowledge/articles/article-one/content/extra', '/api/knowledge/articles//content',
+    '/api/knowledge/articles/article-one/qa', '/api/knowledge/upload',
+    '/api/knowledge/suggest', '/api/knowledge/categories',
+    '/api/v1/knowledge/articles', '/api/v1/customer/knowledge/articles',
+    '/api/v1/knowledge/articles/article-one/content', '/api/v1/customer/knowledge/articles/article-one/content',
+  ]) expect(localBetaRoute('GET', path)).toBe('disabled');
+});
