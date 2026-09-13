@@ -140,6 +140,38 @@ test('workspace routes spend independently and preserve exact CAS, rebase and re
   }finally{await f.mf.dispose();}
 });
 
+test('workspace persists SLA priority across HTTP reload with exact CAS and tenant isolation',async()=>{
+  const f=await fixture();try{
+    await f.db.batch([
+      f.db.prepare("INSERT INTO users (tenant_id,id,email,role,session_version,mfa_enabled) VALUES ('workspace-other','workspace-agent','other-tenant@example.test','agent',1,1)"),
+      f.db.prepare(`INSERT INTO operator_workspace_state
+        (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel)
+        VALUES ('workspace-other','workspace-agent',7,'all','created_asc','{}','','',NULL,'details')`),
+    ]);
+    const state={expectedRevision:0,view:'all',sort:'sla_priority',filters:{},listQuery:'',listAnchor:'',selectedTicketId:'draft-ticket',panel:'conversation'};
+    const saved=await request(f,'/api/workspace/state','PUT',state);
+    assert.equal(saved.status,200,await saved.clone().text());
+    const result=await saved.json() as {revision:number;sort:string;selectedTicketId:string|null};
+    assert.deepEqual({revision:result.revision,sort:result.sort,selectedTicketId:result.selectedTicketId},
+      {revision:1,sort:'sla_priority',selectedTicketId:'draft-ticket'});
+    for(let reload=0;reload<2;reload++){
+      const restored=await request(f,'/api/workspace/state');
+      assert.equal(restored.status,200,await restored.clone().text());
+      assert.deepEqual(await restored.json(),result,'a fresh HTTP read restores the exact saved state');
+    }
+    const stale=await request(f,'/api/workspace/state','PUT',{...state,sort:'updated_desc'});
+    assert.equal(stale.status,409);await stale.body?.cancel();
+    const final=await request(f,'/api/workspace/state');assert.equal(final.status,200);
+    assert.deepEqual(await final.json(),result,'stale CAS does not replace the saved SLA sort');
+    const rows=(await f.db.prepare(`SELECT tenant_id,revision,sort_key,panel FROM operator_workspace_state
+      WHERE user_id='workspace-agent' ORDER BY tenant_id`).all()).results;
+    assert.deepEqual(rows,[
+      {tenant_id:'workspace-other',revision:7,sort_key:'created_asc',panel:'details'},
+      {tenant_id:'workspace-tenant',revision:1,sort_key:'sla_priority',panel:'conversation'},
+    ]);
+  }finally{await f.mf.dispose();}
+});
+
 test('state read retry links one operation and settles only after the successful clear',async context=>{
   const f=await fixture();try{
     await f.db.prepare(`INSERT INTO operator_workspace_state
