@@ -1,3 +1,4 @@
+import type { SessionBudgetCredential, SessionBudgetRequirements } from '../repositories/session-budget-authority.repository';
 import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { RESOURCE_DIMENSIONS, type BudgetPurpose, type EffectiveTenantCostPolicy, type ResourceAmounts } from '@luminatick/shared';
 import type { VerifiedTenantScope } from '../types/tenant';
@@ -22,6 +23,9 @@ export type BudgetGrantOperationLink = Readonly<{ tenantId: string; aggregateId:
 export type BudgetCommitAuthority = Readonly<{ snapshot: BudgetCommitSnapshot; expiresAt: number;
   purpose: BudgetPurpose; operationId: string; operationFingerprint: string; grant?: BudgetGrantOperationLink }>;
 export type IsolateAdmissionResult = IsolateGrantSpendResult & Readonly<{ commitAuthority?: BudgetCommitAuthority }>;
+export type TargetWriteRecoveryDescriptor = Readonly<{ credential: SessionBudgetCredential; requirements: SessionBudgetRequirements; credentialKey: string; recoveryGroupKey: string }>;
+type SessionRecovery = Readonly<{ groupKey: string; descriptor?: TargetWriteRecoveryDescriptor;
+  recover: (sealed: SealedIsolateBudgetGrant, descriptor: TargetWriteRecoveryDescriptor, now: number) => Promise<'reconciled' | 'pending' | 'rejected'> }>;
 type ActiveAuthority = { commitSnapshot: BudgetCommitSnapshot; trusted: TrustedBudgetCoordinatorAuthority; policy: EffectiveTenantCostPolicy; local: CurrentIsolateGrantAuthority };
 type HeldOperation = { activeAttempts: number; fingerprint: string; envelope: ResourceAmounts; state: 'in-flight' | 'committed' | 'unknown'; settledAt?: number };
 type HeldGrant = { holder: IsolateBudgetGrantHolder; reservationId: string; expiresAt: number; dimensions: readonly string[];
@@ -38,8 +42,21 @@ type CacheEntry = {
   bindingIdentity: object; namespace: DurableObjectNamespace; key: string; epoch: string; snapshot: BudgetCommitSnapshot; expiresAt: number; refills: number;
   generation: number; authorityCheckedAt: number;
   revisionFloors: RevisionFloor[];
+  targetRecovery?: TargetWriteRecoveryDescriptor; recoveryLock?: symbol;
   holders: HeldGrant[]; operations: Map<string, HeldGrant>; blocked: boolean; pending?: Promise<HeldGrant | null>; failure?: IsolateGrantSpendResult;
 };
+
+function snapshotTargetRecovery(input: TargetWriteRecoveryDescriptor): TargetWriteRecoveryDescriptor | null {
+  const snapshot = structuredClone({ credential: input.credential, requirements: input.requirements,
+    credentialKey: input.credentialKey, recoveryGroupKey: input.recoveryGroupKey });
+  const identity = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
+  if (!identity(snapshot.credentialKey) || !identity(snapshot.recoveryGroupKey)
+    || new TextEncoder().encode(JSON.stringify([snapshot.credential, snapshot.requirements])).byteLength > 16_384) return null;
+  const freeze = (value: unknown): void => {
+    if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value); }
+  };
+  freeze(snapshot); return snapshot;
+}
 
 function scaledEnvelope(cost: ResourceAmounts, operations: number): ResourceAmounts {
   const result: ResourceAmounts = {};
@@ -205,11 +222,22 @@ export class IsolateBudgetAdmissionCache {
     purpose?: BudgetPurpose;
     /** Trusted composition may prepay one complete operation; never discounts its envelope. */
     maxBlockOperations?: 1;
+    /** Current request recovery composition; only the bounded descriptor may be retained. */
+    sessionRecovery?: SessionRecovery;
     /** Trusted composition only: called on the bounded cold path, never an individual warm read. */
     recoverGrant?: (sealed: SealedIsolateBudgetGrant, now: number) => Promise<'reconciled' | 'pending' | 'rejected'>;
   }): Promise<IsolateAdmissionResult> {
     if (input.maxBlockOperations !== undefined && input.maxBlockOperations !== 1) return { status: 'rejected', reason: 'invalid-request' };
     const maxBlockOperations = input.maxBlockOperations;
+    const sessionRecovery = input.sessionRecovery;
+    const recoveryGroupKey = sessionRecovery?.groupKey;
+    const recoverSessionGrant = sessionRecovery?.recover;
+    const targetRecovery = sessionRecovery?.descriptor ? snapshotTargetRecovery(sessionRecovery.descriptor) : undefined;
+    if (sessionRecovery?.descriptor && (!targetRecovery || maxBlockOperations !== 1
+      || targetRecovery.credentialKey !== input.credentialKey || targetRecovery.recoveryGroupKey !== recoveryGroupKey
+      || targetRecovery.credential.tenantId !== input.scope.tenantId || targetRecovery.credential.actorId !== input.scope.actorId)) {
+      return { status: 'rejected', reason: 'invalid-request' };
+    }
     const ownerIngress = input.repository.ownerIngressAdmission;
     let business = input.business;
     const holderScope: IsolateGrantScope = { tenantId: input.scope.tenantId, credentialKey: input.credentialKey,
@@ -260,6 +288,7 @@ export class IsolateBudgetAdmissionCache {
         generation: 0, authorityCheckedAt: authority.trusted.authorityCheckedAt,
         revisionFloors: [{ deploymentId: authority.commitSnapshot.deployment_id, policyId: authority.policy.policyId,
           authorityRevision: authority.trusted.authorityRevision, policyRevision: authority.policy.revision, restrictionRevision: authority.policy.restrictionRevision }],
+        ...(targetRecovery ? { targetRecovery } : {}),
         refills: 0, holders: [], operations: new Map(), blocked: false };
       this.entries.push(entry);
     }
@@ -307,16 +336,32 @@ export class IsolateBudgetAdmissionCache {
         // Recover a quiescent holder on every cold return, before sparse scopes
         // accumulate four expired blocks each. Warm spends above perform no recovery.
         // Failed or unconfirmed closure never returns a refill credit.
-        if (input.recoverGrant && holderScope.purpose === 'new-work') {
-          const sealed = this.sealQuiescentGrant(allocatingEntry, input.scope.tenantId, input.credentialKey, input.now(), 0, true);
+        if (holderScope.purpose === 'new-work') {
+          let recoveryEntry = allocatingEntry;
+          let descriptor: TargetWriteRecoveryDescriptor | undefined;
+          let sealed = input.recoverGrant ? this.sealQuiescentGrant(allocatingEntry, input.scope.tenantId, input.credentialKey, input.now(), 0, true) : null;
+          if (!sealed && recoverSessionGrant) {
+            // In-memory scan only, bounded by MAX_ACTIVE_ISOLATE_SCOPES. Never
+            // reuse a read/email pool's changing target as recovery permission.
+            for (const candidate of this.entries) {
+              const original = candidate.targetRecovery;
+              if (candidate === allocatingEntry || candidate.pending || candidate.recoveryLock || !original
+                || candidate.bindingIdentity !== input.repository.bindingIdentity || candidate.namespace !== input.namespace
+                || original.credential.tenantId !== input.scope.tenantId || original.credential.actorId !== input.scope.actorId || original.recoveryGroupKey !== recoveryGroupKey) continue;
+              sealed = this.sealQuiescentGrant(candidate, input.scope.tenantId, original.credentialKey, input.now(), 0, true);
+              if (sealed) { recoveryEntry = candidate; descriptor = original; break; }
+            }
+          }
           if (sealed) {
+            const lock = Symbol('target-grant-recovery'); recoveryEntry.recoveryLock = lock;
             try {
-              if (await input.recoverGrant(sealed, input.now()) === 'reconciled') {
-                this.completeApiGrantRecovery(sealed);
-              }
+              const outcome = descriptor ? await recoverSessionGrant!(sealed, descriptor, input.now())
+                : await input.recoverGrant!(sealed, input.now());
+              if (outcome === 'reconciled') this.completeApiGrantRecovery(sealed);
             } catch { /* The original holder and its full charge remain retained. */ }
-            // Even an unconfirmed recovery may have refreshed central authority.
-            // Never allocate with the pre-recovery authority timestamp.
+            finally { if (recoveryEntry.recoveryLock === lock) recoveryEntry.recoveryLock = undefined; }
+            // Both original-target recovery and the new operation require live
+            // authority. Failed closure also invalidates the pre-attempt snapshot.
             const refreshed = await resolve();
             if (!refreshed || !this.currentGeneration(allocatingEntry, generation)
               || !this.observeAuthority(allocatingEntry, refreshed) || !sameEpoch(allocatingEntry, refreshed)) {
@@ -384,7 +429,7 @@ export class IsolateBudgetAdmissionCache {
 
   private sealQuiescentGrant(entry: CacheEntry, tenantId: string, credentialKey: string, now: number, idleMs: number,
     allowExpired: boolean): SealedIsolateBudgetGrant | null {
-    if (!Number.isSafeInteger(now) || now < 0) return null;
+    if (entry.recoveryLock || !Number.isSafeInteger(now) || now < 0) return null;
     for (const held of entry.holders) {
         // Expired retirement is metadata-only and requires the full original charge.
         if (now >= held.expiresAt && !allowExpired) continue;
