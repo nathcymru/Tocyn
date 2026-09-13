@@ -42,6 +42,7 @@ type CacheEntry = {
   bindingIdentity: object; namespace: DurableObjectNamespace; key: string; epoch: string; snapshot: BudgetCommitSnapshot; expiresAt: number; refills: number;
   generation: number; authorityCheckedAt: number;
   revisionFloors: RevisionFloor[];
+  activeAdmissions: number; closureProven?: true;
   targetRecovery?: TargetWriteRecoveryDescriptor; recoveryLock?: symbol;
   holders: HeldGrant[]; operations: Map<string, HeldGrant>; blocked: boolean; pending?: Promise<HeldGrant | null>; failure?: IsolateGrantSpendResult;
 };
@@ -124,9 +125,14 @@ const exhausted = (): IsolateGrantSpendResult => ({ status: 'rejected', reason: 
  * it never releases their central charge. Stock-only entries remain bounded
  * and fail closed at the refill cap unless exact durable reconciliation retires a holder.
  */
+type RecoveryGroupFloor = {
+  bindingIdentity: object; namespace: DurableObjectNamespace; tenantId: string; groupKey: string;
+  authorityCheckedAt: number; revisionFloors: RevisionFloor[]; expiresAt: number;
+};
 export class IsolateBudgetAdmissionCache {
   private readonly settledAttempts = new WeakSet<BudgetCommitAuthority>();
   private entries: CacheEntry[] = [];
+  private recoveryFloors: RecoveryGroupFloor[] = [];
 
   private retire(entry: CacheEntry): void {
     if (!entry.blocked) entry.generation++;
@@ -138,7 +144,7 @@ export class IsolateBudgetAdmissionCache {
     return !entry.blocked && entry.generation === generation;
   }
 
-  private observeAuthority(entry: CacheEntry, authority: ActiveAuthority): boolean {
+  private advanceFloor(entry: { authorityCheckedAt: number; revisionFloors: RevisionFloor[] }, authority: ActiveAuthority): boolean {
     // Retirement cannot erase a newer revision already observed locally, even
     // when that transition has not yet reached the central coordinator.
     const deploymentId = authority.commitSnapshot.deployment_id, policyId = authority.policy.policyId;
@@ -154,6 +160,48 @@ export class IsolateBudgetAdmissionCache {
     return true;
   }
 
+  private groupFloor(entry: CacheEntry): RecoveryGroupFloor | undefined {
+    const original = entry.targetRecovery;
+    if (!original) return undefined;
+    return this.recoveryFloors.find(floor => floor.bindingIdentity === entry.bindingIdentity
+      && floor.namespace === entry.namespace && floor.tenantId === original.credential.tenantId
+      && floor.groupKey === original.recoveryGroupKey);
+  }
+
+  private observeAuthority(entry: CacheEntry, authority: ActiveAuthority): boolean {
+    if (entry.targetRecovery) {
+      let group = this.groupFloor(entry);
+      if (!group) {
+        if (this.recoveryFloors.length >= MAX_ACTIVE_ISOLATE_SCOPES) return false;
+        group = { bindingIdentity: entry.bindingIdentity, namespace: entry.namespace,
+          tenantId: entry.targetRecovery.credential.tenantId, groupKey: entry.targetRecovery.recoveryGroupKey,
+          authorityCheckedAt: entry.authorityCheckedAt, revisionFloors: entry.revisionFloors.map(floor => ({ ...floor })),
+          expiresAt: entry.expiresAt };
+        this.recoveryFloors.push(group);
+      }
+      // The retained group floor is accounting history, never target permission.
+      // Sharing the maximum deliberately rejects more stale same-session snapshots.
+      if (!this.advanceFloor(group, authority)) return false;
+      group.expiresAt = Math.max(group.expiresAt, entry.expiresAt, intervalEnd(authority));
+    }
+    return this.advanceFloor(entry, authority);
+  }
+
+  private cleanupCompletedScopes(now: number): void {
+    this.entries = this.entries.filter(entry => {
+      if (!entry.targetRecovery || !entry.closureProven || entry.holders.length || entry.operations.size
+        || entry.refills !== 0 || entry.failure || entry.blocked || entry.pending || entry.recoveryLock
+        || entry.activeAdmissions !== 0 || !this.groupFloor(entry)) return true;
+      this.retire(entry);
+      return false;
+    });
+    this.recoveryFloors = this.recoveryFloors.filter(floor => now < floor.expiresAt
+      || this.entries.some(entry => entry.bindingIdentity === floor.bindingIdentity && entry.namespace === floor.namespace
+        && entry.targetRecovery?.credential.tenantId === floor.tenantId
+        && entry.targetRecovery.recoveryGroupKey === floor.groupKey
+        && (entry.activeAdmissions > 0 || !!entry.pending || !!entry.recoveryLock)));
+  }
+
   private renew(entry: CacheEntry, authority: ActiveAuthority): void {
     // Only current authority can begin a replacement generation. Old balances
     // and attempts are never imported; the next allocation needs a new charge.
@@ -166,7 +214,7 @@ export class IsolateBudgetAdmissionCache {
   }
 
   /** Synthetic runtime diagnostics; no application route exposes this control. Loss is never a refund. */
-  discardForTrustedRuntime(): void { for (const entry of this.entries) this.retire(entry); this.entries = []; }
+  discardForTrustedRuntime(): void { for (const entry of this.entries) this.retire(entry); this.entries = []; this.recoveryFloors = []; }
 
   inspectForTrustedRuntime(): Readonly<{ scopes: number; holders: number; operations: number; refills: number }> {
     return { scopes: this.entries.length, holders: this.entries.reduce((sum, entry) => sum + entry.holders.length, 0),
@@ -244,9 +292,16 @@ export class IsolateBudgetAdmissionCache {
       workScopeKey: input.intent.workScopeKey, purpose: input.purpose ?? 'new-work' };
     const key = JSON.stringify(maxBlockOperations === undefined ? holderScope : { ...holderScope, maxBlockOperations });
     const checkedAt = input.now();
-    this.entries = this.entries.filter(entry => { if (checkedAt < entry.expiresAt) return true; this.retire(entry); return !!entry.pending; });
+    this.cleanupCompletedScopes(checkedAt);
+    this.entries = this.entries.filter(entry => { if (checkedAt < entry.expiresAt) return true; this.retire(entry); return !!entry.pending || entry.activeAdmissions > 0 || !!entry.recoveryLock; });
     let entry = this.entries.find(candidate => candidate.bindingIdentity === input.repository.bindingIdentity && candidate.namespace === input.namespace && candidate.key === key);
     const observedEntry = entry, observedGeneration = entry?.generation;
+    const leased = new Set<CacheEntry>();
+    const lease = (candidate: CacheEntry | undefined): void => {
+      if (candidate && !leased.has(candidate)) { candidate.activeAdmissions++; leased.add(candidate); }
+    };
+    lease(entry);
+    try {
     const resolve = async (): Promise<ActiveAuthority | null> => {
       const principal = await input.authorization.authorize(input.scope);
       if (!principal) return null;
@@ -263,6 +318,7 @@ export class IsolateBudgetAdmissionCache {
     let authority = await resolve();
     // Another request may have inserted the same entry while this one loaded D1.
     entry = this.entries.find(candidate => candidate.bindingIdentity === input.repository.bindingIdentity && candidate.namespace === input.namespace && candidate.key === key);
+    lease(entry);
     if (entry && observedEntry === entry && observedGeneration !== entry.generation) return stale();
     if (!authority) { if (entry) this.retire(entry); return stale(); }
     const offeredIngress = ownerIngress?.tenantHandoff(input.scope.tenantId, input.now());
@@ -285,12 +341,14 @@ export class IsolateBudgetAdmissionCache {
     if (!entry) {
       if (this.entries.length >= MAX_ACTIVE_ISOLATE_SCOPES) return { status: 'rejected', reason: 'capacity-exhausted' };
       entry = { bindingIdentity: input.repository.bindingIdentity, namespace: input.namespace, key, epoch: epoch(authority), snapshot: authority.commitSnapshot, expiresAt: intervalEnd(authority),
-        generation: 0, authorityCheckedAt: authority.trusted.authorityCheckedAt,
+        generation: 0, activeAdmissions: 0, authorityCheckedAt: authority.trusted.authorityCheckedAt,
         revisionFloors: [{ deploymentId: authority.commitSnapshot.deployment_id, policyId: authority.policy.policyId,
           authorityRevision: authority.trusted.authorityRevision, policyRevision: authority.policy.revision, restrictionRevision: authority.policy.restrictionRevision }],
         ...(targetRecovery ? { targetRecovery } : {}),
         refills: 0, holders: [], operations: new Map(), blocked: false };
       this.entries.push(entry);
+      lease(entry);
+      if (!this.observeAuthority(entry, authority)) return stale();
     }
     const generation = entry.generation;
     const spend = (held: HeldGrant): IsolateAdmissionResult => {
@@ -395,6 +453,10 @@ export class IsolateBudgetAdmissionCache {
     const outcome = spend(held);
     if (outcome.status === 'spent') entry.operations.set(input.intent.operationId, held);
     return outcome;
+    } finally {
+      for (const candidate of leased) candidate.activeAdmissions--;
+      this.cleanupCompletedScopes(input.now());
+    }
   }
 
   /** The only transition after canonical commit. Any unconfirmed result poisons the whole local grant. */
@@ -471,6 +533,7 @@ export class IsolateBudgetAdmissionCache {
         entry.holders = entry.holders.filter(candidate => candidate !== held);
         for (const [id, candidate] of entry.operations) if (candidate === held) entry.operations.delete(id);
         entry.refills = Math.max(0, entry.refills - 1);
+        entry.closureProven = true;
         return;
       }
     }
