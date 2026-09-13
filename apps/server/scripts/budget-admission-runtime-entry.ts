@@ -1,3 +1,15 @@
+import { BudgetGrantRecoveryService } from '../src/budgets/budget-grant-recovery.service';
+let failReadAfterRecovery = false;
+let pendingPostRecoveryReadFailure = false;
+const originalRecovery = BudgetGrantRecoveryService.prototype.recover;
+BudgetGrantRecoveryService.prototype.recover = async function(...args) {
+  const result = await originalRecovery.apply(this, args);
+  if (result === 'reconciled' && failReadAfterRecovery) {
+    failReadAfterRecovery = false;
+    pendingPostRecoveryReadFailure = true;
+  }
+  return result;
+};
 export { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 export { BudgetGrantHolderDO } from '../src/durable_objects/BudgetGrantHolderDO';
 export { NotificationDO } from '../src/durable_objects/NotificationDO';
@@ -60,6 +72,10 @@ function instrumentDatabase(db: any): any {
     const proxy = new Proxy(raw,{get(target,property) {
       if (property==='bind') return (...values:any[])=>wrap(target.bind(...values),sql);
       if (property==='first') return async (...args:any[]) => {
+        if (pendingPostRecoveryReadFailure) {
+          pendingPostRecoveryReadFailure = false;
+          throw new Error('Synthetic transient D1 read failure after recovery');
+        }
         // A local competing canonical winner commits after this lookup has
         // observed null, then the caller continues into admission.
         const result = await target.first(...args);
@@ -232,7 +248,7 @@ export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     if (new URL(request.url).pathname === '/__budget-control') {
       if (request.method === 'POST') {
-        const control = await request.json() as { afterSlaPolicyCommit?: string; afterSupportStateCommit?: { tenantId: string; id: string; label: string }; pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown; rollbackNextCanonical?: boolean; revokeApiKeyAfterAuth?: { tenantId?: unknown; apiKeyId?: unknown } };
+        const control = await request.json() as { failReadAfterRecovery?: boolean; afterSlaPolicyCommit?: string; afterSupportStateCommit?: { tenantId: string; id: string; label: string }; pauseNextCanonical?: boolean; releaseCanonical?: boolean; discard?: boolean; now?: number; loseReserveAck?: boolean; loseReserveAcks?: number; loseReconcileAcks?: number; beforeCanonical?: string; canonicalDelayMs?: number; loseCanonicalAck?: boolean; loseR2PutAcknowledgement?: boolean; failCanonicalAttempts?: number; editPolicyAfterReserve?: boolean; pauseNextReserve?: boolean; releaseReserve?: boolean; receiptWinner?: unknown; rollbackNextCanonical?: boolean; revokeApiKeyAfterAuth?: { tenantId?: unknown; apiKeyId?: unknown } };
         if (control.pauseNextCanonical) pauseNextCanonical = true;
         if (control.releaseCanonical) releaseCanonical?.();
         if (control.pauseNextReserve) pauseNextReserve=true;
@@ -254,6 +270,7 @@ export default {
         if (control.now !== undefined) clock = control.now;
         if (control.loseReserveAck) lostReserveAcksRemaining = 1;
         if (control.loseReserveAcks === 2) lostReserveAcksRemaining = 2;
+        if (control.failReadAfterRecovery) failReadAfterRecovery = true;
         if (control.loseReconcileAcks && control.loseReconcileAcks <= 5) lostReconcileAcksRemaining = control.loseReconcileAcks;
       }
       return Response.json({ calls, canonicalBatches, canonicalAttempts, forcedRollbackCanonicalAttempts, r2Gets, r2Puts, notificationBroadcasts,

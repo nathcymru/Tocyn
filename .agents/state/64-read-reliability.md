@@ -1,0 +1,17 @@
+# #64 read reliability — partial evidence, 13 September 2026
+
+Coordinator-approved scope: transient cold-allocation promise cleanup and explicit accounting-only target sharing for three authenticated read operations. Base `5e8d67adc6b2da1e492455b55eac05dddfe95308`. No new percentage/baseline or completion claim.
+
+A one-shot synthetic D1 read error after successful grant recovery left a rejected `entry.pending` promise retained; both the failed request and its next retry returned503. The cache now clears only that same pending pointer in `finally`. The native regression verifies503 then200 with one already-completed reconciliation and a newly charged business reservation; no credit, attempt or generation guard changes.
+
+The trusted `ticket-read-v1` opt-in is limited to `dashboard.ticket.detail`, `dashboard.ticket.history` and `workspace.draft.read`, with a sole bounded `readTicketId` requirement (1–256 characters, no control characters). Its cache digest retains complete tenant/actor/role/session-version/expiry/MFA identity and a versioned operation domain. Only target ID is omitted from this accounting partition. Original target authorization runs on every admission/recovery; operation fingerprints, atomic terminal fences and exact durable links remain unchanged. Unsupported combinations reject. All default and write partitions remain unchanged.
+
+## Executed evidence
+
+Node22.19, existing dependencies. Final affected native suite23/23 passed (42.9s); ordinary server785/785 across83files; server and budget-runtime TypeScript; focused ESLint; diff whitespace check. Nineteen focused digest tests cover the allowlist, target-preserving authorization, all credential identity fields, default writes and unsupported/malformed inputs. Native evidence covers20 distinct authorized targets using three read scopes, membership revocation before each shared warm terminal batch, unknown completion across distinct targets, transient D1 failure, concurrent refill, lost acknowledgments and current policy/session fences.
+
+A separate persistent synthetic probe combined this patch with the frozen staff/SLA lifecycle patch (later signed PR277). Combined application tree `82ee8fceaf41f111f37af8e0829dc99b9469ac82`:20creates201 and all60 distinct detail/history/draft reads succeeded. Final28cache scopes,30holders,43central grants, zero capacity defects; existing64count/full catalogue/60sgrant/localbeta limits unchanged. No external provider: the existing local capture transport used its allowed synthetic recipient. Earlier synthetic recipient `synthetic@example.test` was outside the capture allowlist and correctly caused unknown delivery, a fixture mismatch preserved in separate evidence. With successful capture but without shared read partitions, ticket7 draft navigation still hit metadata pressure below64scopes; with the approved partition it completes all20.
+
+## Limits and handoff
+
+No original preview/storage was changed, cleared or retrospectively settled. Each isolated probe was disposed and its evidence storage retained. This is not a user-facing preview switch, full Beta.2 acceptance, remote deployment or provider activation. Draft GET continuity is covered; actual saved-draft editing/navigation, full root UI journey, further idle cycles and remaining active-resource paths remain release evidence tasks. Outbound per-ticket scopes and unknown completion liabilities still consume capacity; guards are unchanged. No Copilot request or routineCI native-suite addition.

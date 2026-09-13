@@ -20,6 +20,7 @@ export class SessionBudgetAdmissionService {
     repository: BudgetAuthorityRepository; sessions: SessionBudgetAuthorityRepository; namespace: DurableObjectNamespace;
     scope: VerifiedTenantScope; credential: SessionBudgetCredential; requirements: SessionBudgetRequirements;
     database?: D1Database;
+    readScopePartition?: 'ticket-read-v1';
     intent: CanonicalBudgetIntent; business: ResourceAmounts; now: () => number;
   }) {
     // A digest keeps the full credential/capability/group fence bounded without
@@ -28,7 +29,19 @@ export class SessionBudgetAdmissionService {
     const requirements = structuredClone(input.requirements);
     const intent = structuredClone(input.intent);
     const business = structuredClone(input.business);
-    const serialized = JSON.stringify([credential, requirements]);
+    // This trusted opt-in changes accounting partitioning only. The complete
+    // original target requirements still authorize every request and recovery.
+    const sharedRead = input.readScopePartition !== undefined;
+    if (sharedRead && (input.readScopePartition !== 'ticket-read-v1'
+      || !['dashboard.ticket.detail', 'dashboard.ticket.history', 'workspace.draft.read'].includes(intent.workScopeKey)
+      || Object.keys(requirements).length !== 1
+      || typeof requirements.readTicketId !== 'string' || requirements.readTicketId.length === 0
+      || requirements.readTicketId.length > 256 || /[\u0000-\u001f\u007f]/.test(requirements.readTicketId))) {
+      return { status: 'rejected' as const, reason: 'invalid-request' as const };
+    }
+    const serialized = JSON.stringify(sharedRead
+      ? ['session-ticket-read-partition-v1', credential, intent.workScopeKey]
+      : [credential, requirements]);
     if (new TextEncoder().encode(serialized).byteLength > 16_384) return { status: 'rejected' as const, reason: 'stale-policy' as const };
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialized));
     const credentialKey = `session:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')}`;

@@ -325,8 +325,14 @@ export class IsolateBudgetAdmissionCache {
       })();
     }
     const pending = entry.pending;
-    const held = await pending;
-    if (entry.pending === pending) entry.pending = undefined;
+    let held: HeldGrant | null;
+    try {
+      held = await pending;
+    } finally {
+      // A transient authority/read failure must not retain a rejected promise.
+      // Only release this request's allocation; a replacement stays owned.
+      if (entry.pending === pending) entry.pending = undefined;
+    }
     if (!held) return entry.failure ?? stale();
     // A request may await a shared cold grant. Recheck its own credentials and
     // epoch after that await, then decrement synchronously before returning.
