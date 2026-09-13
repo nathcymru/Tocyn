@@ -100,7 +100,7 @@ it('uses the authoritative actionable and snoozed queue views without losing the
   fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=snoozed'))).toBe(true));
   expect(screen.getByRole('button',{name:'Snoozed'})).toHaveAttribute('aria-pressed','true');
-  expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed');
+  await waitFor(()=>expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed'));
 
   fireEvent.click(screen.getByRole('button',{name:'Actionable'}));
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
@@ -300,4 +300,36 @@ it('keeps the custom list position and selected conversation when its draft refu
   expect(pane.scrollTop).toBe(640);
   expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
   expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveValue('created_asc');
+});
+
+it('uses server Drafts queue results and reports an empty saved-draft view without implying all work is complete',async()=>{
+  const fallback=fetch;
+  let empty=false;
+  let release!:()=>void;
+  let firstRead=true;
+  const pending=new Promise<void>(done=>{release=done;});
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url.startsWith('/api/tickets?')&&new URL(url,'http://localhost').searchParams.get('queue')==='drafts') {
+      if(firstRead){firstRead=false;await pending;}
+      return json({data:empty?[]:[{...tickets[19],inclusion_reason:'drafts'}],meta:{page:1,limit:20,total:empty?0:1,total_pages:empty?0:1}});
+    }
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/actionable');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  fireEvent.click(screen.getByRole('button',{name:'Drafts'}));
+  await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
+  expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toBeInTheDocument();
+  expect(screen.queryByLabelText('Inclusion reason: drafts')).not.toBeInTheDocument();
+  release();
+  await waitFor(()=>expect(within(screen.getByRole('listbox',{name:'Conversation list'})).getAllByRole('option')).toHaveLength(1));
+  expect(screen.getByRole('button',{name:'Drafts'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Drafts');
+  expect(screen.getByLabelText('Inclusion reason: drafts')).toBeInTheDocument();
+  expect(screen.queryByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).not.toBeInTheDocument();
+  empty=true;
+  await client.invalidateQueries({queryKey:['tickets']});
+  await screen.findByText('No saved drafts');
+  expect(screen.getByText('Conversations with your saved drafts.')).toBeInTheDocument();
+  expect(screen.queryByText(/all work complete|inbox zero/i)).not.toBeInTheDocument();
 });

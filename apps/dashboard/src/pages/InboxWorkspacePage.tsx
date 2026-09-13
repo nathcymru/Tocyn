@@ -17,9 +17,9 @@ import { TicketDetailPage } from './TicketDetailPage';
 const statusStyle={open:'bg-emerald-50 text-emerald-800 border-emerald-200',pending:'bg-amber-50 text-amber-900 border-amber-200',
   resolved:'bg-slate-100 text-slate-700 border-slate-200',closed:'bg-slate-100 text-slate-700 border-slate-200'} as const;
 const priorityStyle={low:'text-slate-500',normal:'text-blue-600',high:'text-orange-700',urgent:'text-red-700'} as const;
-const queueViews={actionable:{label:'Actionable',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
+const queueViews={drafts:{label:'Drafts',description:'Conversations with your saved drafts.'},actionable:{label:'Actionable',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
 type QueueView=keyof typeof queueViews;
-function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed';}
+function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed'||value==='drafts';}
 function pageFromAnchor(anchor:string){const match=/^page:([1-9]\d*)$/.exec(anchor);const page=match?Number(match[1]):1;return Number.isSafeInteger(page)?page:1;}
 function pageAnchor(page:number){return `page:${Math.max(1,Math.floor(page))}`;}
 
@@ -122,6 +122,8 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
       <nav aria-label="Work views" className="mt-4 flex gap-2 overflow-x-auto pb-1">
         <TocynButton type="button" aria-pressed={activeView==='actionable'} onClick={()=>selectView('actionable')}
           className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='actionable'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>Actionable</TocynButton>
+        <TocynButton type="button" aria-pressed={activeView==='drafts'} onClick={()=>selectView('drafts')}
+          className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='drafts'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>Drafts</TocynButton>
         <TocynButton type="button" aria-pressed={activeView==='snoozed'} onClick={()=>selectView('snoozed')}
           className={clsx('shrink-0 rounded-full border px-3 py-2 text-sm font-semibold',activeView==='snoozed'?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}>Snoozed</TocynButton>
         <TocynButton type="button" aria-pressed={activeView==='all'} onClick={()=>selectView('all')}
@@ -129,7 +131,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
         {isLoadingFilters?<span role="status" className="px-2 py-2 text-sm text-slate-500">Loading saved views…</span>:filters?.map(filter=><TocynButton key={filter.id} type="button"
           aria-pressed={activeView===filter.id} onClick={()=>selectView(filter.id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold',
             activeView===filter.id?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}><Filter className="h-3.5 w-3.5" aria-hidden="true" />{filter.name}</TocynButton>)}</nav>
-      <p className="mt-3 text-xs text-slate-600">Current view: <span className="font-semibold text-slate-800">{activeView==='all'?'All tickets':(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
+      <p className="mt-3 text-xs text-slate-600">Current view: <span className="font-semibold text-slate-800">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
       <form className="relative mt-4" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-500" aria-hidden="true" />
         <TocynInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
@@ -155,7 +157,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
     {drafts.status==='partial'&&<p role="status" className="mx-4 mt-3 text-xs text-amber-900">Some draft indicators are still loading.</p>}
     {presentation==='table'&&<p role="status" className="mx-4 mt-3 text-xs text-slate-600 sm:hidden">Table view uses the compact conversation list on small screens.</p>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx('flex-1 divide-y divide-slate-200',presentation==='table'&&'sm:hidden')}>
-      {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:tickets.length===0&&!query.error?<div className="p-8 text-center"><p className="font-semibold text-slate-800">{queue?`No ${queueViews[queue].label.toLowerCase()} conversations`:'No conversations in this view'}</p><p className="mt-1 text-sm text-slate-600">{queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'}</p></div>:tickets.map((ticket,index)=>{
+      {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:tickets.length===0&&!query.error?<div className="p-8 text-center"><p className="font-semibold text-slate-800">{queue==='drafts'?'No saved drafts':queue?`No ${queueViews[queue].label.toLowerCase()} conversations`:'No conversations in this view'}</p><p className="mt-1 text-sm text-slate-600">{queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'}</p></div>:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
           to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} onFocus={()=>setFocusedIndex(index)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();moveFocus(index+1);}if(event.key==='ArrowUp'){event.preventDefault();moveFocus(index-1);}}}
@@ -165,7 +167,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
           {ticket.snippet&&<p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600">{ticket.snippet}</p>}
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="font-mono font-semibold text-slate-600">{reference}</span>
             <span className={clsx('rounded-full border px-2 py-0.5 font-semibold capitalize',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span>
-            {queue&&<span className="rounded bg-brand-50 px-2 py-0.5 font-semibold text-brand-800" aria-label={`Inclusion reason: ${queue}`}>{queue==='actionable'?'Actionable':'Snoozed'}</span>}
+            {queue&&!query.isPlaceholderData&&<span className="rounded bg-brand-50 px-2 py-0.5 font-semibold text-brand-800" aria-label={`Inclusion reason: ${queue}`}>{queueViews[queue].label}</span>}
             <span className={clsx('inline-flex items-center gap-1 font-semibold capitalize',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{ticket.priority}</span>
             {drafts.ticketIds.has(ticket.id)&&<span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">Draft</span>}</div>
           <div className="mt-2">{ticketSla.isLoading?<span className="inline-flex items-center gap-1 text-xs text-slate-500"><Clock className="h-3 w-3" aria-hidden="true" />Loading service level…</span>
@@ -177,7 +179,7 @@ function ConversationList({activeView,selectedTicketId,routeReady}:{activeView:s
         <table className="min-w-[40rem] w-full text-left text-sm"><caption className="sr-only">Tickets in the current view</caption><thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600"><tr>
           <th scope="col" className="px-4 py-3">Reference</th><th scope="col" className="px-4 py-3">Subject</th><th scope="col" className="px-4 py-3">Status</th><th scope="col" className="px-4 py-3">Priority</th><th scope="col" className="px-4 py-3">Customer</th><th scope="col" className="px-4 py-3">Updated</th>
         </tr></thead><tbody className="divide-y divide-slate-200">
-        {query.isLoading?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">Loading conversations…</td></tr>:tickets.length===0&&!query.error?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">{queue?`No ${queueViews[queue].label.toLowerCase()} conversations`:'No conversations in this view'}</td></tr>:tickets.map(ticket=>{
+        {query.isLoading?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">Loading conversations…</td></tr>:tickets.length===0&&!query.error?<tr><td colSpan={6} className="px-4 py-10 text-center text-slate-600">{queue==='drafts'?'No saved drafts':queue?`No ${queueViews[queue].label.toLowerCase()} conversations`:'No conversations in this view'}</td></tr>:tickets.map(ticket=>{
           const reference=ticketReference(ticket,prefix);const selected=ticket.id===selectedTicketId;
           return <tr key={ticket.id} aria-selected={selected} className={clsx('hover:bg-slate-50',selected&&'bg-brand-50')}>
             <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-slate-600">{reference}</td>

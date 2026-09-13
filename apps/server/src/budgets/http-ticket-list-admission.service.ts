@@ -1,3 +1,4 @@
+import type { TicketQueueKey } from '../types/ticket-queue';
 import type { ResourceAmounts } from '@luminatick/shared';
 import type { Env } from '../bindings';
 import type { TenantRequestDeps } from '../middleware/tenant.middleware';
@@ -22,6 +23,7 @@ type AdmissionInput = Readonly<{
   operation: HttpTicketListOperation;
   filterId?: string;
   search?: string;
+  queue?: TicketQueueKey;
   now: () => number;
 }>;
 
@@ -53,14 +55,17 @@ function byteReadUnits(value: number): number | null {
  * two ticket passes, two article passes for substring search, an optional
  * group-membership pass, and a conservative byte-equivalent D1-read margin.
  */
-export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { search?: string; groupRestricted: boolean }): ResourceAmounts | null {
+export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { search?: string; groupRestricted: boolean; queue?: TicketQueueKey }): ResourceAmounts | null {
   const articlePasses = input.search ? scaled(snapshot.articleRows, 2) : 0;
   const articleBytes = input.search ? scaled(snapshot.articleSearchBytes, 2) : 0;
   const ticketPasses = scaled(snapshot.ticketRows, input.groupRestricted ? 3 : 2);
   const ticketBytes = scaled(snapshot.ticketSearchBytes, 2);
   const byteUnits = safeAdd(byteReadUnits(ticketBytes ?? -1) ?? -1, byteReadUnits(articleBytes ?? -1) ?? -1,
     byteReadUnits(snapshot.filter?.conditionBytes ?? 0) ?? -1);
-  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1);
+  // Count and page each perform at most one indexed draft lookup per ticket.
+  // Reserve index plus row access for both passes; draft population cannot multiply it.
+  const draftReads = input.queue === 'drafts' ? scaled(snapshot.ticketRows, 4) : 0;
+  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1);
   if (reads === null) return null;
   return Object.freeze({ workerRequests: 1, d1RowsRead: reads,
     ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
@@ -101,10 +106,10 @@ export async function admitHttpTicketList(input: AdmissionInput): Promise<HttpTi
         return { status: 'rejected', reason: 'unavailable' };
       }
       snapshot = await new TicketListScanRepository(input.deps.database, input.deps.scope).snapshot(input.filterId);
-      const business = ticketListEnvelope(snapshot, { search: input.search, groupRestricted: credential.role === 'agent' });
+      const business = ticketListEnvelope(snapshot, { search: input.search, groupRestricted: credential.role === 'agent', queue: input.queue });
       if (!business) return { status: 'rejected', reason: 'unavailable' };
       const fingerprint = await digest(['http-ticket-list-v1', input.operation, input.deps.scope.tenantId, input.deps.scope.actorId,
-        input.filterId ?? null, input.search ?? null, snapshot]);
+        input.filterId ?? null, input.search ?? null, input.queue ?? null, snapshot]);
       return rejected(await sessionTicketBudgetAdmission.admit({ repository: input.deps.repositories.budgetAuthority,
         sessions: new SessionBudgetAuthorityRepository(input.deps.database, input.deps.scope), namespace: input.env.BUDGET_COORDINATOR_DO,
         scope: input.deps.scope, credential, requirements: {},
