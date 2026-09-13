@@ -105,3 +105,39 @@ revision passed server and receipt-runtime typechecks, all29 focused raw/identit
 adapter tests (14/9/6), and all9 native D1 receipt tests. Existing latest-main
 assignment activity/CAS and unrelated dashboard evidence are retained. No inbound
 handler wiring, remote action or full admission/accounting acceptance is claimed.
+
+## 13 September 2026 — canonical inbound and real reservation evidence
+
+Current coherent increment adds constrained system/email provenance migration,
+canonical inbound customer/ticket/article/SLA/audit composition, and durable R2
+artifact fencing plus a bounded attachment writer. Every attachment's bytes and
+metadata are copied before the first asynchronous boundary; the complete manifest
+precedes object writes. Unknown provider acknowledgments propagate without deletion
+or refund. The inbound handler remains unwired.
+
+Executed local synthetic evidence: provenance migration 6 native test nodes,
+canonical inbound 5, actual BudgetCoordinator admission 5, receipt/R2 11,
+attachment helper 21 unit cases, and raw reader 14 unit cases. Server TypeScript
+and focused native configurations pass. The real admission suite exercises the
+actual adapter, cache, authority repository and DO: reservation links, replay with
+no additional central liability, tenant isolation, exhausted/revoked denial, and
+bounded recovery while unknown liability remains charged. Its explicit policy and
+resource envelope are fixtures; recovery advances the durable attempt lease only.
+Canonical and receipt suites use synthetic grant fixtures and do not independently
+prove actual DO accounting. Migration rollback, projection/redaction preservation
+and foreign-key checks pass locally; target-size migration rehearsal is outstanding.
+
+Remaining acceptance: reviewed complete composition envelope and MIME bounds,
+admission-before-read handler integration, end-to-end replay/charge/attachment
+behavior, and runtime/release clearance. No provider activation, remote data change,
+release, or completion of #243/#64/Beta.2 is claimed. Migration is a full table
+rebuild; backup/rehearsal is required before deployment and new gateway rows prevent
+a blind downgrade.
+
+Execution-capable GPT agents ran these tests and coordinator reviewed production
+changes. No Copilot review requested; checked-in setup remains manual-only and the
+live named Copilot ruleset contains only deletion/non-fast-forward protections.
+Project #243 is confirmed In progress with Actual start 2026-09-13. Progress and
+forecast fields are blank; no weighted percentage or reliable completion date is
+invented. Baselines are preserved. This partial is packaged on the existing draft
+PR #261; original-root duplicate edits are preserved untouched.

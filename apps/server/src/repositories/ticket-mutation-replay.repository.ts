@@ -1,3 +1,4 @@
+import { InboundEmailReceiptRepository, type InboundClaim } from './inbound-email-receipt.repository';
 import { apiBudgetMutationStatements, type ApiMutationCommit } from './budget-commit-fence';
 import { customerMutationStatement, type CustomerMutationCommit } from './customer-ticket-mutation.repository';
 import type { StaffMutationCommit } from '../types/staff-ticket-mutation';
@@ -213,6 +214,45 @@ export class TicketMutationReplayRepository {
     return this.commitCanonical(candidate, undefined, staff, undefined, undefined, precondition);
   }
 
+  /** Trusted inbound composition only. Customer resolution, canonical writes and
+   * receipt completion share one transaction; a changed participant or manifest
+   * rolls every relational effect back. R2 writes remain outside this boundary. */
+  async commitInbound(claim: InboundClaim, candidate: MutationCandidate, senderEmail: string): Promise<void> {
+    const identity=/^[a-zA-Z0-9-]{1,128}$/;
+    if (!this.scope.roles.includes('system') || this.scope.actorId!=='inbound-email'
+      || candidate.audit?.kind!=='system' || candidate.audit.id!=='inbound-email' || candidate.audit.source!=='email'
+      || !identity.test(candidate.ticketId) || !candidate.articleId || !identity.test(candidate.articleId)
+      || !candidate.article || candidate.article.sender_type!=='customer' || candidate.article.is_internal
+      || candidate.article.intake_source!=='email' || candidate.article.body_r2_key
+      || !senderEmail || senderEmail.length>320 || senderEmail!==senderEmail.trim().toLowerCase()
+      || candidate.activityStatements?.length || candidate.mentionedUserIds?.length
+      || candidate.attachments.length>10 || new Set(candidate.attachments.map(item=>item.storageKey)).size!==candidate.attachments.length
+      || new Set(candidate.attachments.map(item=>item.id)).size!==candidate.attachments.length || (candidate.ticket && (candidate.ticket.source!=='email'
+        || candidate.ticket.source_email!==claim.recipient || candidate.ticket.customer_email!==senderEmail))
+      || candidate.attachments.some(item=>!identity.test(item.id) || !Number.isSafeInteger(item.size)
+        || item.size<1 || item.size>2_097_152 || item.filename.length>255 || item.contentType.length>255)) {
+      throw new Error('Invalid inbound canonical mutation');
+    }
+    const tenant=this.scope.tenantId;
+    const participant=candidate.ticket ? '1=1' : `EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=? AND t.customer_email=?
+      AND (t.customer_id IS NULL OR EXISTS (SELECT 1 FROM users u WHERE u.tenant_id=t.tenant_id AND u.id=t.customer_id AND u.email=?)))`;
+    const matching=candidate.attachments.map(()=>`EXISTS (SELECT 1 FROM inbound_email_artifacts f WHERE f.tenant_id=?
+      AND f.source_hash=? AND f.attempt=? AND f.object_id=? AND f.byte_size=? AND f.state='stored')`);
+    const fence=this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+      VALUES (?,CASE WHEN ${participant} AND (SELECT count(*) FROM inbound_email_artifacts
+        WHERE tenant_id=? AND source_hash=? AND attempt=?)=?${matching.map(sql=>` AND ${sql}`).join('')} THEN 1 ELSE 0 END)
+      ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
+      .bind(tenant,...(candidate.ticket?[]:[tenant,candidate.ticketId,senderEmail,senderEmail]),tenant,claim.sourceHash,claim.attempt,candidate.attachments.length,
+        ...candidate.attachments.flatMap(item=>[tenant,claim.sourceHash,claim.attempt,item.storageKey,item.size]));
+    const customer=this.db.prepare(`INSERT INTO users(tenant_id,id,email,full_name,role,mfa_enabled)
+      VALUES (?,?,?,?,'customer',0) ON CONFLICT(tenant_id,email) DO NOTHING`)
+      .bind(tenant,crypto.randomUUID(),senderEmail,senderEmail);
+    const batch=await this.prepareCanonicalBatch(candidate,undefined,undefined,undefined,undefined,undefined,{senderEmail});
+    this.canonicalMutationSli?.recordAttempt();
+    await new InboundEmailReceiptRepository(this.db,this.scope).finish(claim,'committed',[fence,customer,...batch.statements]);
+    this.canonicalMutationSli?.recordDurablyCompleted();
+  }
+
   private async commitCanonical(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit,
     api?: ApiMutationCommit, customer?: CustomerMutationCommit, precondition?: StaffReplyPrecondition): Promise<string> {
     // This is after caller authorization/admission preparation and before
@@ -243,7 +283,7 @@ export class TicketMutationReplayRepository {
   /** Assemble the existing ordered transaction without executing it. Callers
    * remain responsible for their principal validation and transaction boundary. */
   private async prepareCanonicalBatch(candidate: MutationCandidate, ns?: MutationNamespace, staff?: StaffMutationCommit,
-    api?: ApiMutationCommit, customer?: CustomerMutationCommit, precondition?: StaffReplyPrecondition): Promise<{
+    api?: ApiMutationCommit, customer?: CustomerMutationCommit, precondition?: StaffReplyPrecondition, inbound?: {senderEmail:string}): Promise<{
       statements: D1PreparedStatement[]; responseIndex: number;
     }> {
     const operation=candidate.ticket?'create':'conversation';
@@ -263,8 +303,8 @@ export class TicketMutationReplayRepository {
       const t = candidate.ticket;
       statements.push(this.db.prepare(`INSERT INTO tickets
         (tenant_id,id,subject,status,priority,customer_id,customer_email,assigned_to,group_id,source,source_email,custom_fields,intake_received_at,intake_processed_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-        this.scope.tenantId, candidate.ticketId, t.subject, t.status, t.priority, t.customer_id ?? null,
+        VALUES (?,?,?,?,?,${inbound?'(SELECT id FROM users WHERE tenant_id=? AND email=?)':'?'},?,?,?,?,?,?,?,?)`).bind(
+        this.scope.tenantId, candidate.ticketId, t.subject, t.status, t.priority, ...(inbound?[this.scope.tenantId,inbound.senderEmail]:[t.customer_id ?? null]),
         t.customer_email, t.assigned_to ?? null, t.group_id ?? null, t.source, t.source_email ?? null,
         t.custom_fields === undefined ? null : typeof t.custom_fields === 'string' ? t.custom_fields : JSON.stringify(t.custom_fields),
         t.intake_received_at, t.intake_processed_at,
@@ -274,8 +314,8 @@ export class TicketMutationReplayRepository {
       const a = candidate.article;
       statements.push(this.db.prepare(`INSERT INTO articles
         (tenant_id,id,ticket_id,sender_id,sender_type,body,body_format,body_r2_key,snippet,raw_email_id,qa_type,is_internal,intake_source,received_at,processed_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-        this.scope.tenantId, candidate.articleId!, candidate.ticketId, a.sender_id ?? null, a.sender_type,
+        VALUES (?,?,?,${inbound?'(SELECT id FROM users WHERE tenant_id=? AND email=?)':'?'},?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        this.scope.tenantId, candidate.articleId!, candidate.ticketId, ...(inbound?[this.scope.tenantId,inbound.senderEmail]:[a.sender_id ?? null]), a.sender_type,
         a.body || null, a.body_format ?? 'plain', a.body_r2_key ?? null, a.snippet ?? null, a.raw_email_id ?? null, a.qa_type ?? null,
         a.is_internal ? 1 : 0, a.intake_source, a.received_at, a.processed_at,
       ));
@@ -328,7 +368,7 @@ export class TicketMutationReplayRepository {
     // Public canonical customer replies should both resurface shared snooze state
     // and feed durable operator activity projections. Both are prepared before the
     // durable receipt so idempotent replay rollbacks keep side-effects atomic.
-    if ((customer || candidate.audit?.kind === 'customer') && candidate.article?.sender_type === 'customer'
+    if ((customer || candidate.audit?.kind === 'customer' || (candidate.audit?.kind === 'system' && candidate.audit.source === 'email')) && candidate.article?.sender_type === 'customer'
       && !candidate.article.is_internal && eventId && candidate.articleId) {
       statements.push(...customerReplyResurfaceStatements(this.db,this.scope,{
         ticketId:candidate.ticketId,articleId:candidate.articleId,conversationEventId:eventId,

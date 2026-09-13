@@ -6,13 +6,15 @@ import type { Ticket } from '../types';
 import type { AuditedTicketUpdate, ConversationActor, ConversationEvent } from '../types/conversation-audit';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 
-const provenance = (actor: ConversationActor) => actor.kind === 'staff' ? 'mfa-staff' : actor.kind === 'customer' ? 'authenticated-customer' : 'api-key';
+const provenance = (actor: ConversationActor) => actor.kind === 'system' ? 'gateway-email' : actor.kind === 'staff' ? 'mfa-staff' : actor.kind === 'customer' ? 'authenticated-customer' : 'api-key';
 const sequence = '(SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=t.tenant_id AND e.ticket_id=t.id)';
 const columns = 'tenant_id,id,ticket_id,article_id,sequence,kind,actor_kind,actor_id,actor_provenance,source,visibility,facts';
 /** Fixed intake/reply statement, used only within the owning mutation's D1 batch. */
 export function conversationMutationEvent(db: D1Database, scope: VerifiedTenantScope, input: {
   id: string; ticketId: string; articleId?: string; actor: ConversationActor; intake: boolean; internal: boolean;
 }): D1PreparedStatement {
+  if (input.actor.kind === 'system' && (!scope.roles.includes('system') || scope.actorId !== 'inbound-email'
+    || input.actor.id !== 'inbound-email' || input.actor.source !== 'email' || input.internal)) throw new Error('Invalid inbound audit authority');
   const facts = input.intake
     ? "json_object('initial',json_object('status',t.status,'priority',t.priority,'assignedTo',t.assigned_to,'groupId',t.group_id))"
     : "json_object()";

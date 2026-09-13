@@ -144,6 +144,17 @@ export class InboundEmailReceiptRepository {
     return artifacts;
   }
 
+  /** Recheck live authority immediately before the external operation. R2 is
+   * not transactional with D1: attempt-qualified keys and retained allocation
+   * still account for a write completing after this authority expires. */
+  async beforeArtifactWrite(claim: InboundClaim, artifact: InboundArtifact): Promise<void> {
+    this.validate(claim);
+    const current=this.continuation(claim);
+    await this.db.batch([this.assertion(claim,`${current.sql} AND EXISTS (SELECT 1 FROM inbound_email_artifacts
+      WHERE tenant_id=? AND source_hash=? AND attempt=? AND ordinal=? AND object_id=? AND content_hash=? AND byte_size=? AND state='planned')`,
+    [...current.values,this.scope.tenantId,claim.sourceHash,claim.attempt,artifact.ordinal,artifact.objectId,artifact.contentHash,artifact.byteSize])]);
+  }
+
   /** Call only after a successful provider response for these exact bytes.
    * A stale acknowledgement cannot make a replacement attempt committable. */
   async confirmArtifact(claim: InboundClaim, artifact: InboundArtifact): Promise<void> {

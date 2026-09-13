@@ -1,9 +1,12 @@
+import { TenantAttachmentStorage } from '../src/storage/adapters';
+import { writeInboundAttachments } from '../src/services/email/inbound-attachments';
+import { TicketMutationReplayRepository, type MutationCandidate } from '../src/repositories/ticket-mutation-replay.repository';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import { createSystemTenantScope } from '../src/auth/scope';
 import { InboundEmailReceiptRepository, MAX_INBOUND_RECEIPTS_PER_TENANT, type InboundClaim } from '../src/repositories/inbound-email-receipt.repository';
 import { splitSql } from './split-sql';
@@ -25,7 +28,7 @@ function claim(tenant: string, key = source, attempt = 1): InboundClaim {
 
 test('native D1 inbound receipt claims and mutation fences',async t => {
   const mf = new Miniflare(convertV4MiniflareOptions({modules:true,script:'export default {fetch(){return new Response("synthetic")}}',
-    compatibilityDate:'2024-04-03',d1Databases:{DB:'inbound-receipt-tests'}}));
+    compatibilityDate:'2024-04-03',d1Databases:{DB:'inbound-receipt-tests'},r2Buckets:{ATTACHMENTS:'inbound-artifact-tests'}}));
   try {
     const db = await mf.getD1Database('DB') as unknown as D1Database;
     for (const name of readdirSync(join(root,'migrations')).filter(name=>name.endsWith('.sql')).sort()) {
@@ -85,6 +88,54 @@ test('native D1 inbound receipt claims and mutation fences',async t => {
       const history=await db.prepare('SELECT state FROM inbound_email_artifacts WHERE tenant_id=? AND source_hash=? ORDER BY attempt')
         .bind('a',original.sourceHash).all<{state:string}>();
       assert.deepEqual(history.results.map(row=>row.state),['planned','stored'],'uncertain artifact remains auditable');
+    });
+
+    await t.test('inbound canonical intake commits customer, article, audit and SLA once with its receipt',async()=>{
+      const current=claim('a','8'.repeat(64));
+      await repository().begin(current);await repository().prepare(current,envelope);await repository().planArtifacts(current,[]);
+      const now=new Date().toISOString();
+      const candidate:MutationCandidate={ticketId:'inbound-ticket',articleId:'inbound-article',audit:{kind:'system',id:'inbound-email',source:'email'},attachments:[],
+        ticket:{subject:'Synthetic inbound',status:'open',priority:'normal',customer_email:'new@example.invalid',source:'email',source_email:current.recipient,intake_received_at:now,intake_processed_at:now},
+        article:{sender_type:'customer',body:'Synthetic content',body_format:'plain',is_internal:false,intake_source:'email',received_at:now,processed_at:now}};
+      const canonical=new TicketMutationReplayRepository(db,createSystemTenantScope({tenantId:'a',actor:'inbound-email'}));
+      await canonical.commitInbound(current,candidate,'new@example.invalid');
+      await assert.rejects(canonical.commitInbound(current,candidate,'new@example.invalid'));
+      const ticket=await db.prepare("SELECT customer_id FROM tickets WHERE tenant_id='a' AND id='inbound-ticket'").first<{customer_id:string}>();
+      assert.ok(ticket?.customer_id);
+      assert.equal((await db.prepare("SELECT sender_id FROM articles WHERE tenant_id='a' AND id='inbound-article'").first<{sender_id:string}>())?.sender_id,ticket.customer_id);
+      assert.equal((await db.prepare("SELECT count(*) AS n FROM users WHERE tenant_id='a' AND email='new@example.invalid'").first<{n:number}>())?.n,1);
+      assert.deepEqual(await db.prepare("SELECT actor_kind,actor_id,actor_provenance,source FROM conversation_events WHERE tenant_id='a' AND ticket_id='inbound-ticket'").first(),
+        {actor_kind:'system',actor_id:'inbound-email',actor_provenance:'gateway-email',source:'email'});
+      assert.ok(await db.prepare("SELECT 1 AS present FROM ticket_sla_clocks WHERE tenant_id='a' AND ticket_id='inbound-ticket'").first());
+      assert.equal((await repository().find(current.sourceHash))?.state,'committed');
+    });
+
+    await t.test('real R2 lost-response writes remain recorded and recovery uses a different key',async()=>{
+      const first=claim('a','7'.repeat(64));
+      const scope=createSystemTenantScope({tenantId:'a',actor:'inbound-email'});
+      const bucket=await mf.getR2Bucket('ATTACHMENTS') as unknown as R2Bucket;
+      const storage=new TenantAttachmentStorage(scope,bucket as unknown as ConstructorParameters<typeof TenantAttachmentStorage>[1]);
+      const put=storage.putAttachment.bind(storage);
+      let interrupted=true;
+      storage.putAttachment=async(...args)=>{const result=await put(...args);if(interrupted)throw new Error('Synthetic lost R2 response');return result;};
+      const attachments=[{filename:'synthetic.txt',contentType:'text/plain',content:new Uint8Array([1,2,3])}];
+      await repository().begin(first);await repository().prepare(first,envelope);
+      await assert.rejects(writeInboundAttachments({storage,receipts:repository(),claim:first,attachments}),/lost R2 response/);
+      const old=await db.prepare('SELECT object_id,state FROM inbound_email_artifacts WHERE tenant_id=? AND source_hash=? AND attempt=1')
+        .bind('a',first.sourceHash).first<{object_id:string;state:string}>();
+      assert.equal(old?.state,'planned');assert.ok(await storage.getAttachment(old!.object_id),'provider accepted object despite lost response');
+      await assert.rejects(repository().finish(first,'committed'));
+      await repository().finish(first,'uncertain');
+      await db.prepare('UPDATE inbound_email_attempts SET expires_at=0 WHERE tenant_id=? AND source_hash=? AND attempt=1').bind('a',first.sourceHash).run();
+      const second=claim('a',first.sourceHash,2);interrupted=false;
+      await repository().begin(second);await repository().prepare(second,envelope);
+      const [stored]=await writeInboundAttachments({storage,receipts:repository(),claim:second,attachments});
+      assert.notEqual(stored.storageKey,old!.object_id);
+      assert.ok(await storage.getAttachment(stored.storageKey));
+      assert.ok(await storage.getAttachment(old!.object_id),'uncertain object is retained, never silently refunded or deleted');
+      await repository().finish(second,'committed');
+      assert.equal((await bucket.list()).objects.length,2);
+      assert.equal((await repository().find(first.sourceHash))?.state,'committed');
     });
 
     await t.test('colliding source identifiers remain tenant isolated',async()=>{
