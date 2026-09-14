@@ -126,7 +126,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     },
   });
   useEffect(() => { editor?.setEditable(!readOnly); if (readOnly || format === 'plain') setAutocomplete(null); }, [editor, readOnly, format]);
-  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => editor.getMarkdown(), set: (next: string) => { editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); const onLegacyChange = () => { if (readOnly) return; const next = editor.getMarkdown(); onChange(next); setAutocomplete(format === 'plain' ? null : findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); }; dom.addEventListener('change', onLegacyChange); return () => dom.removeEventListener('change', onLegacyChange); } }, [editor, id, readOnly, format, onChange, hooks]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => editor.getMarkdown(), set: (next: string) => { editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); const onLegacyChange = () => { if (readOnly) return; const next = editor.getMarkdown(); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); }; dom.addEventListener('change', onLegacyChange); return () => dom.removeEventListener('change', onLegacyChange); } }, [editor, id, readOnly, onChange, hooks]);
   useEffect(() => {
     if (!editor || editor.getMarkdown() === value) return;
     editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
@@ -171,7 +171,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
       ) : (
         <div className="tocyn-composer-markdown-editor" aria-busy={readOnly}>
           {editorToolbar}
-        <EditorContent editor={editor} id={id} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); onChange(next); setAutocomplete(format === 'plain' ? null : findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
+        <EditorContent editor={editor} id={id} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
         </div>
       )}
     </div>
