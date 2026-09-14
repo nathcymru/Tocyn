@@ -1054,12 +1054,12 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                       <ShieldCheck className="tocyn-ticket-detail-icon-sm" />
                       AI Auto-Draft
                     </span>
-                    <div className="flex items-center gap-3">
+                    <div className="tocyn-ticket-composer-suggestion-actions">
                       <TocynButton
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => updateDraft({ body: suggestion })}
-                        className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
+                        className="tocyn-ticket-composer-suggestion-action"
                       >
                         Replace All
                       </TocynButton>
@@ -1067,7 +1067,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => updateDraft({ body: reply ? `${reply}\n\n${suggestion}` : suggestion })}
-                        className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
+                        className="tocyn-ticket-composer-suggestion-action"
                       >
                         Append
                       </TocynButton>
@@ -1075,13 +1075,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                         type="button"
                         aria-label="Dismiss suggested reply"
                         onClick={() => setSuggestion(null)}
-                        className="text-slate-400 hover:text-slate-600"
+                        className="tocyn-ticket-composer-suggestion-dismiss"
                       >
                         <X className="tocyn-ticket-detail-icon-sm" />
                       </TocynButton>
                     </div>
                   </div>
-                  <p className="text-sm text-slate-700 italic leading-relaxed">"{suggestion}"</p>
+                  <p className="tocyn-ticket-composer-suggestion-copy">"{suggestion}"</p>
                 </div>
               )}
 
@@ -1112,7 +1112,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   })}
                 </div> : <p className="tocyn-ticket-detail-status">No colleagues are available to mention.</p>}
               </fieldset>}
-              <label className="mb-2 block text-sm text-slate-700">
+              <label className="tocyn-ticket-composer-format-label">
                 Message format
                 <ParkSelect aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
                   onChange={event => { if (!submission.current && (event.target.value === 'plain' || event.target.value === 'markdown-v1') && replyCapability?.body.acceptedFormats.includes(event.target.value)) updateDraft({ bodyFormat: event.target.value }); }}
