@@ -993,6 +993,7 @@
 .tocyn-composer-attachment-icon { inline-size: .75rem; block-size: .75rem; flex: 0 0 auto; color: var(--tocyn-color-text-muted); }
 .tocyn-composer-attachment-name { max-inline-size: 9.375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tocyn-composer-attachment-status { color: var(--tocyn-color-text-muted); }
+.tocyn-composer-attachment-status[role="alert"] { color: var(--tocyn-color-critical); }
 .tocyn-composer-attachment-remove { color: var(--tocyn-color-text); }
 .tocyn-composer-attachment-remove:hover { color: var(--tocyn-color-critical, #b91c1c); }
 .tocyn-composer-attachment-remove-icon { inline-size: .75rem; block-size: .75rem; }
