@@ -6,6 +6,7 @@ import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkInput, ParkSelect } from '@luminatick/ui/park';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
@@ -1102,7 +1103,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   {mentionCandidates.map(agent => {
                     const checked = mentionedUserIds.includes(agent.id);
                     return <label key={agent.id} className="flex min-h-11 items-center gap-2 text-sm text-slate-900">
-                      <input type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
+                      <ParkInput type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
                         onChange={() => updateDraft({ mentionedUserIds: checked ? mentionedUserIds.filter(id => id !== agent.id)
                           : mentionedUserIds.length < (replyCapabilities.data?.internalMentions?.maxRecipients ?? 0) ? [...mentionedUserIds, agent.id] : mentionedUserIds })} />
                       <span>{agent.full_name || agent.email}</span>
@@ -1112,11 +1113,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </fieldset>}
               <label className="mb-2 block text-sm text-slate-700">
                 Message format
-                <select aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
+                <ParkSelect aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
                   onChange={event => { if (!submission.current && (event.target.value === 'plain' || event.target.value === 'markdown-v1') && replyCapability?.body.acceptedFormats.includes(event.target.value)) updateDraft({ bodyFormat: event.target.value }); }}
-                  className="ml-2 rounded border border-slate-300 bg-white p-2 text-slate-900 focus-visible:outline focus-visible:outline-2">
+                  className="tocyn-form-control tocyn-ticket-detail-message-format">
                   <option value="plain" disabled={!replyCapability?.body.acceptedFormats.includes('plain')}>Plain text</option><option value="markdown-v1" disabled={!replyCapability?.body.acceptedFormats.includes('markdown-v1')}>Markdown</option>
-                </select>
+                </ParkSelect>
               </label>
               <RichComposer
                 id="reply-message"
