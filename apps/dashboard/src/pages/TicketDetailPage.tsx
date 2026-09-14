@@ -982,18 +982,18 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </p>
           </div>}
           <div className="tocyn-ticket-composer-panel">
-            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} {' '}
+            {replyError && <p role="alert" className="tocyn-ticket-composer-alert">{replyError} {' '}
               {staleReplyReview ? <>
                 {staleReplyReview === 'refreshing'
                   ? <span role="status">Refreshing the latest conversation…</span>
                   : typeof staleReplyReview !== 'number'
-                    ? <TocynButton type="button" onClick={() => void refreshConversationForStaleReply()} className="underline">Refresh and review conversation</TocynButton>
-                    : <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="underline">Rebase saved draft</TocynButton>}
-              </> : <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton>}
+                    ? <TocynButton type="button" onClick={() => void refreshConversationForStaleReply()} className="tocyn-ticket-detail-inline-action">Refresh and review conversation</TocynButton>
+                    : <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="tocyn-ticket-detail-inline-action">Rebase saved draft</TocynButton>}
+              </> : <TocynButton type="button" onClick={() => void refetch()} className="tocyn-ticket-detail-inline-action">Refresh conversation</TocynButton>}
             </p>}
             {(draft.status !== 'idle' && draft.status !== 'discarded') && <div role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} className={clsx(
-              'mb-4 flex flex-wrap items-center justify-between gap-3 rounded border p-3 text-sm',
-              draft.status === 'error' || draft.status === 'conflict' ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50 text-slate-700'
+              'tocyn-ticket-composer-draft-status',
+              draft.status === 'error' || draft.status === 'conflict' ? 'tocyn-ticket-composer-draft-status-error' : 'tocyn-ticket-composer-draft-status-neutral'
             )}>
               <span>
                 {draft.status === 'loading' && 'Restoring your saved draft…'}
@@ -1003,9 +1003,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 {draft.status === 'error' && (draft.error ?? 'Draft could not be saved.')}
                 {draft.status === 'conflict' && (draft.error ?? 'Draft changed in another session. Review before discarding it.')}
               </span>
-              <span className="flex items-center gap-3">
-                {draft.status === 'error' && <TocynButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className="underline">Retry draft</TocynButton>}
-                {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="underline">Discard draft</TocynButton>}
+              <span className="tocyn-ticket-composer-draft-actions">
+                {draft.status === 'error' && <TocynButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className="tocyn-ticket-detail-inline-action">Retry draft</TocynButton>}
+                {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="tocyn-ticket-detail-inline-action">Discard draft</TocynButton>}
               </span>
             </div>}
             <form onSubmit={handleSubmitReply} className="tocyn-ticket-composer-form">
@@ -1048,10 +1048,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
 
               {suggestion && (
-                <div className="bg-slate-50 border border-brand-100 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5" />
+                <div className="tocyn-ticket-composer-suggestion">
+                  <div className="tocyn-ticket-composer-suggestion-header">
+                    <span className="tocyn-ticket-composer-suggestion-label">
+                      <ShieldCheck className="tocyn-ticket-detail-icon-sm" />
                       AI Auto-Draft
                     </span>
                     <div className="flex items-center gap-3">
@@ -1085,7 +1085,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 </div>
               )}
 
-              {!replyCapability ? <div role="status" className="mb-2 text-sm text-slate-700">
+              {!replyCapability ? <div role="status" className="tocyn-ticket-reply-capability">
                 {replyCapabilities.isLoading ? 'Loading reply options…' : 'Reply options are unavailable.'}
                 {replyCapabilities.isError && <TocynButton
                   type="button"
@@ -1094,23 +1094,23 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 >
                   Retry reply options
                 </TocynButton>}
-              </div> : <p className="mb-2 text-sm text-slate-600">{replyCapability.channel === 'email'
+              </div> : <p className="tocyn-ticket-reply-capability tocyn-ticket-reply-capability-ready">{replyCapability.channel === 'email'
                 ? `Email reply to ${ticket.customer_email}. Delivery is attempted after saving.`
                 : 'Internal note. No email is sent.'} Up to {replyCapability.attachments.maxCount} attachments, {replyCapability.attachments.maxBytesPerFile / 1024 / 1024} MB each.</p>}
-              {isInternal && replyCapabilities.data?.internalMentions && <fieldset className="mb-3 rounded border border-amber-200 bg-amber-50 p-3">
-                <legend className="px-1 text-sm font-semibold text-amber-950">Mention colleagues</legend>
-                <p id="mention-help" className="mb-2 text-sm text-amber-900">Mentioned colleagues with current ticket access receive a private activity after this note is saved. Up to 16.</p>
-                {mentionCandidates.length ? <div className="grid gap-2 sm:grid-cols-2">
+              {isInternal && replyCapabilities.data?.internalMentions && <fieldset className="tocyn-composer-mentions">
+                <legend className="tocyn-composer-mentions-title">Mention colleagues</legend>
+                <p id="mention-help" className="tocyn-composer-mentions-help">Mentioned colleagues with current ticket access receive a private activity after this note is saved. Up to 16.</p>
+                {mentionCandidates.length ? <div className="tocyn-composer-mentions-list">
                   {mentionCandidates.map(agent => {
                     const checked = mentionedUserIds.includes(agent.id);
-                    return <label key={agent.id} className="flex min-h-11 items-center gap-2 text-sm text-slate-900">
+                    return <label key={agent.id} className="tocyn-composer-mention-option">
                       <ParkInput type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
                         onChange={() => updateDraft({ mentionedUserIds: checked ? mentionedUserIds.filter(id => id !== agent.id)
                           : mentionedUserIds.length < (replyCapabilities.data?.internalMentions?.maxRecipients ?? 0) ? [...mentionedUserIds, agent.id] : mentionedUserIds })} />
                       <span>{agent.full_name || agent.email}</span>
                     </label>;
                   })}
-                </div> : <p className="text-sm text-slate-700">No colleagues are available to mention.</p>}
+                </div> : <p className="tocyn-ticket-detail-status">No colleagues are available to mention.</p>}
               </fieldset>}
               <label className="mb-2 block text-sm text-slate-700">
                 Message format
