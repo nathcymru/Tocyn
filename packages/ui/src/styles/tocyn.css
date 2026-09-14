@@ -1898,3 +1898,8 @@
 .tocyn-groups-member-icon-md { inline-size: .875rem; block-size: .875rem; }
 .tocyn-ticket-table-actions-heading { text-align: right; }
 .tocyn-inbox-table-state { min-block-size: 8rem; border: 0; background: transparent; }
+.tocyn-inbox-metric-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-block: .75rem; }
+.tocyn-inbox-metric-card { display: grid; gap: .25rem; min-inline-size: 0; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .75rem; }
+.tocyn-inbox-metric-label { overflow: hidden; color: var(--tocyn-color-text-muted); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.tocyn-inbox-metric-value { color: var(--tocyn-color-text); font-size: 1.25rem; line-height: 1.2; }
+@media (max-width: 639px) { .tocyn-inbox-metric-strip { gap: .5rem; } .tocyn-inbox-metric-card { padding: .625rem; } }

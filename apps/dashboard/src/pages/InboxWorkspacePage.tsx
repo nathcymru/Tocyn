@@ -222,7 +222,13 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
             activeView===filter.id?'tocyn-inbox-view-button-active':'tocyn-inbox-view-button-inactive')}><Filter className="tocyn-inbox-filter-icon" aria-hidden="true" />{filter.name}</ParkButton>)}</nav>
       <p className="tocyn-inbox-status">Queue totals cover standard views before search or custom filters.</p>
       {queueCounts.isFetching?<p role="status" className="tocyn-inbox-status">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="tocyn-inbox-status">Queue totals unavailable. <ParkButton type="button" onClick={()=>void queueCounts.refetch()} className="tocyn-inbox-inline-retry">Retry queue totals</ParkButton></p>:null}
-      <p className="tocyn-inbox-status">Current view: <span className="tocyn-inbox-current-view-name">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
+      <div className="tocyn-inbox-metric-strip" aria-label="Queue metrics">
+        {(['all', 'actionable', 'unassigned'] as const).map(metric => <div key={metric} className="tocyn-inbox-metric-card">
+          <span className="tocyn-inbox-metric-label">{metric === 'all' ? 'All tickets' : queueViews[metric].label}</span>
+          <strong className="tocyn-inbox-metric-value tocyn-tabular">{queueCounts.isFetching ? '—' : queueCounts.data?.[metric] ?? 0}</strong>
+        </div>)}
+        <span className="tocyn-visually-hidden">Current view: <span className="tocyn-inbox-current-view-name">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</span>
+      </div>
       <form className="tocyn-inbox-search-shell" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="tocyn-inbox-search-icon" aria-hidden="true" />
         <ParkInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
