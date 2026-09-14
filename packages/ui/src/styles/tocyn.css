@@ -928,7 +928,7 @@
 .tocyn-ticket-detail-main { min-width: 0; display: grid; gap: 1.5rem; }
 @media (min-width: 1024px) { .tocyn-ticket-detail-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .tocyn-ticket-detail-main { grid-column: span 3; } }
 @media (min-width: 1280px) { .tocyn-ticket-detail-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } .tocyn-ticket-detail-main { grid-column: span 4; } }
-@media (max-width: 1023px) { .tocyn-ticket-detail-back--mobile-only { display: inline-flex; } }
+@media (max-width: 1023px) { .tocyn-ticket-detail-back--mobile-only { display: inline-flex; position: relative; z-index: 60; } }
 .tocyn-ticket-suggestion { border: 1px solid color-mix(in srgb, var(--tocyn-color-brand) 20%, var(--tocyn-color-divider)); border-radius: .75rem; padding: 1rem; background: var(--tocyn-color-surface-muted); }
 .tocyn-ticket-suggestion-header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-block-end: .5rem; }
 .tocyn-ticket-suggestion-label { display: flex; align-items: center; gap: .375rem; color: var(--tocyn-color-brand); font-size: .625rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
