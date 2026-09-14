@@ -105,14 +105,14 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
             onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); setTimeout(() => navigationFocus()?.focus(), 50); }}
             className="tocyn-shell-account-action"
           >
-            <Key className="w-4 h-4" />
+            <Key className="tocyn-shell-small-icon" />
             Security Profile
           </Link>
           <TocynButton
             onClick={handleLogout}
             className="tocyn-shell-account-action tocyn-shell-account-action-full"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="tocyn-shell-small-icon" />
             Sign out of all sessions
           </TocynButton>
           <TocynButton type="button" aria-haspopup="dialog" onClick={()=>{restoreAccountFocus.current=false;setIsOpen(false);setCapacityOpen(true);}}
@@ -363,7 +363,7 @@ function LayoutContent() {
                       <p className="tocyn-shell-activity-subject">{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
                       <p className="tocyn-shell-activity-meta">Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
                     </TocynButton>
-                    <TocynButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className="tocyn-shell-activity-dismiss"><X className="h-4 w-4" /></TocynButton>
+                    <TocynButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className="tocyn-shell-activity-dismiss"><X className="tocyn-shell-dismiss-icon" /></TocynButton>
                   </li>)}
                 </ul>
                 {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="tocyn-shell-activity-limit">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
@@ -403,7 +403,7 @@ function LayoutContent() {
                   )} />
                 </div>
 
-                <p role="status" className="text-sm text-slate-600">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
+                <p role="status" className="tocyn-shell-connection-copy">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
 
                 <div className="tocyn-shell-reconnect-divider">
                   <TocynButton
