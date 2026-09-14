@@ -10,12 +10,22 @@ if (!(globalThis as any).IntersectionObserver) {
   };
 }
 if (!HTMLElement.prototype.scrollTo) HTMLElement.prototype.scrollTo = () => {};
-if (!HTMLElement.prototype.getClientRects) HTMLElement.prototype.getClientRects = () => [] as unknown as DOMRectList;
-if (typeof Range !== 'undefined' && !Range.prototype.getClientRects) Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
-if (!HTMLElement.prototype.getBoundingClientRect) HTMLElement.prototype.getBoundingClientRect = () => new DOMRect();
+// jsdom does not provide layout geometry. ProseMirror asks every selected
+// element for these methods, including elements whose inherited implementation
+// is absent in a particular jsdom release, so install deterministic no-op
+// geometry for the complete DOM hierarchy used by the editor.
+if (typeof Element !== 'undefined') {
+  Element.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Element.prototype.getBoundingClientRect = () => new DOMRect();
+}
+if (typeof HTMLElement !== 'undefined') HTMLElement.prototype.scrollTo = () => {};
+if (typeof Range !== 'undefined') {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}
 if (typeof Text !== 'undefined') {
-  if (!(Text.prototype as any).getClientRects) (Text.prototype as any).getClientRects = () => [];
-  if (!(Text.prototype as any).getBoundingClientRect) (Text.prototype as any).getBoundingClientRect = () => new DOMRect();
+  (Text.prototype as any).getClientRects = () => [];
+  (Text.prototype as any).getBoundingClientRect = () => new DOMRect();
 }
 // Tiptap renders a contenteditable instead of a native textarea. Keep legacy
 // test helpers usable while assertions migrate to the editor's text content.

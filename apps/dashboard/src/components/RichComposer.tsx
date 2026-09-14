@@ -99,7 +99,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
       <ToolbarButton label="Add bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}><ListBullets weight="duotone" aria-hidden="true" /></ToolbarButton>
       <ToolbarButton label="Add code block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><CodeBlock weight="duotone" aria-hidden="true" /></ToolbarButton>
     </div>
-    <EditorContent editor={editor} id={id} aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} onChange={event => { if (!readOnly) onChange((event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown()); }} onKeyDown={event => { if (readOnly) event.preventDefault(); }} />
+    <EditorContent editor={editor} aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} onChange={event => { if (!readOnly) onChange((event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown()); }} onKeyDown={event => { if (readOnly) event.preventDefault(); }} />
   </div>;
 }
 
@@ -202,7 +202,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
       ) : (
         <div className="tocyn-composer-markdown-editor" aria-busy={readOnly}>
           {editorToolbar}
-        <EditorContent editor={editor} id={id} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onInput={handleLegacyInput} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); legacyValueRef.current = next; if (editor.getMarkdown() !== next) editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false }); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
+        <EditorContent editor={editor} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onInput={handleLegacyInput} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); legacyValueRef.current = next; if (editor.getMarkdown() !== next) editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false }); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
         </div>
       )}
     </div>

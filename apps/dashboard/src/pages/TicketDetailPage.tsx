@@ -404,9 +404,18 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
       setNotice(`Inserted knowledge: ${article.title}`);
       requestAnimationFrame(() => {
         if (!current()) return;
-        const editor = document.getElementById('reply-message') as HTMLTextAreaElement | null;
+        const editor = document.getElementById('reply-message') as (HTMLElement & { setSelectionRange?: (start: number, end: number) => void }) | null;
         editor?.focus();
-        editor?.setSelectionRange(nextBody.length, nextBody.length);
+        if (editor && typeof editor.setSelectionRange === 'function') {
+          editor.setSelectionRange(nextBody.length, nextBody.length);
+        } else if (editor) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
       });
     } catch (error) {
       if (!current()) return;
