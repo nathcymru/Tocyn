@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
+import { ParkButton } from '@luminatick/ui/park';
 
 /** Keep SPA navigation on the current ticket until its draft has durable acknowledgement. */
 export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your draft is not saved. Stay on this ticket, retry saving, then navigate again.' }: {
@@ -28,5 +29,5 @@ export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your dr
     });
     return () => { current = false; };
   }, [blocker]);
-  return failed ? <p role="alert">{failureMessage}</p> : null;
+  return failed ? <p role="alert" className="tocyn-draft-navigation-error">{failureMessage} <ParkButton type="button" className="tocyn-inline-link" onClick={() => { setFailed(false); void flushRef.current().then(saved => { if (!saved) setFailed(true); }, () => setFailed(true)); }}>Retry saving</ParkButton></p> : null;
 }

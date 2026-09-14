@@ -23,9 +23,13 @@ it('waits for durable acknowledgement before completing link navigation', async 
   expect(await screen.findByText('Next page')).toBeInTheDocument();
 });
 it('keeps browser-back navigation on the draft when saving fails', async () => {
-  const router = setup(async () => false);
+  const flush = vi.fn(async () => false);
+  const router = setup(flush);
   await act(async () => { await router.navigate(-1); });
   expect(await screen.findByRole('alert')).toHaveTextContent('Your draft is not saved');
+  const retry = screen.getByRole('button', { name: 'Retry saving' });
+  await act(async () => { fireEvent.click(retry); });
+  expect(flush).toHaveBeenCalledTimes(2);
   expect(router.state.location.pathname).toBe('/draft');
 });
 it('warns for document unload only while unsaved work remains', () => {
