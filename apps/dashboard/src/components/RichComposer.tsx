@@ -131,30 +131,43 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
   useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); const onLegacyChange = () => { if (readOnly) return; const next = legacyValueRef.current; onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); }; dom.addEventListener('change', onLegacyChange); return () => dom.removeEventListener('change', onLegacyChange); } }, [editor, id, readOnly, onChange, hooks]);
   useEffect(() => {
     if (!editor || editor.getMarkdown() === value) return;
+    if (readOnly) legacyValueRef.current = value;
     legacyValueRef.current = value; editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
-  }, [editor, value]);
-  const insert = (markdown: string) => {
-    if (!editor || readOnly || !autocomplete) return;
+  }, [editor, value, readOnly]);
+  const insert = (markdown: string, match = autocomplete) => {
+    if (!editor || readOnly || !match) return;
     const { from, to } = editor.state.selection;
-    const length = autocomplete.end - autocomplete.start;
+    const length = match.end - match.start;
     editor.chain().focus().deleteRange({ from: Math.max(1, from - length), to }).insertContent(markdown, { contentType: 'markdown' }).run();
-    legacyValueRef.current = insertMarkdownAtCursor(value, markdown, autocomplete.start, autocomplete.end);
+    legacyValueRef.current = insertMarkdownAtCursor(legacyValueRef.current, markdown, match.start, match.end);
     onChange(legacyValueRef.current);
     Object.defineProperty(editor.view.dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); } });
     setAutocomplete(null);
   };
-  const chooseAutocomplete = (option: AutocompleteOption) => {
-    insert(option.markdown);
+  const chooseAutocomplete = (option: AutocompleteOption, match = autocomplete) => {
+    insert(option.markdown, match);
     const inserted = { id: option.id, label: option.label, markdown: option.markdown };
     if (option.kind === 'knowledge') onKnowledgeInserted?.(inserted);
     if (option.kind === 'saved-response') onSavedResponseInserted?.(inserted);
   };
   const handleEditorKeyDown = (event: React.KeyboardEvent) => {
-    if (!autocomplete) return;
+    if (event.defaultPrevented) return;
+    const currentValue = legacyValueRef.current;
+    const currentAutocomplete = autocomplete ?? (format === 'plain' ? null : findComposerAutocomplete(currentValue, currentValue.length, hooks));
+    if (!currentAutocomplete) return;
     if (event.key === 'Escape') { event.preventDefault(); setAutocomplete(null); return; }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex(index => (index + (event.key === 'ArrowDown' ? 1 : autocomplete.options.length - 1)) % autocomplete.options.length); return; }
-    if (event.key === 'Enter') { event.preventDefault(); chooseAutocomplete(autocomplete.options[activeIndex]); }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex(index => (index + (event.key === 'ArrowDown' ? 1 : currentAutocomplete.options.length - 1)) % currentAutocomplete.options.length); return; }
+    if (event.key === 'Enter') { event.preventDefault(); chooseAutocomplete(currentAutocomplete.options[activeIndex] ?? currentAutocomplete.options[0], currentAutocomplete); }
   };
+  useLayoutEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    if (autocomplete) dom.setAttribute('aria-activedescendant', `${listboxId}-option-${activeIndex}`);
+    else dom.removeAttribute('aria-activedescendant');
+    const onKeyDown = (event: KeyboardEvent) => handleEditorKeyDown(event as unknown as React.KeyboardEvent);
+    dom.addEventListener('keydown', onKeyDown);
+    return () => dom.removeEventListener('keydown', onKeyDown);
+  }, [editor, autocomplete, activeIndex, listboxId]);
   const receiveImages = (files: FileList | readonly File[]) => { if (readOnly) return; const received = Array.from(files); const accepted = acceptedComposerImages(received); if (accepted.length) onImageFiles(accepted); if (accepted.length !== received.length) onRejectedImageFiles(received.length - accepted.length); };
   const receiveDrop = (event: DragEvent<HTMLElement>) => { const files = event.dataTransfer.files; if (!files.length) return; event.preventDefault(); receiveImages(files); };
   const receivePaste = (event: ClipboardEvent<HTMLElement>) => { const files = event.clipboardData.files; if (!files.length) return; event.preventDefault(); receiveImages(files); };
@@ -176,7 +189,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
       ) : (
         <div className="tocyn-composer-markdown-editor" aria-busy={readOnly}>
           {editorToolbar}
-        <EditorContent editor={editor} id={id} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
+        <EditorContent editor={editor} id={id} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); legacyValueRef.current = next; if (editor.getMarkdown() !== next) editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false }); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
         </div>
       )}
     </div>
