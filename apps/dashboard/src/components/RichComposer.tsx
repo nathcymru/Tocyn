@@ -87,6 +87,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
     onUpdate: ({ editor: instance }) => { if (!readOnly) onChange(instance.getMarkdown()); },
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
+  useEffect(() => { if (editor) { editor.view.dom.id = id; editor.view.dom.setAttribute('aria-label', 'Content (Markdown)'); } }, [editor, id]);
   useEffect(() => { if (editor && editor.getMarkdown() !== value) editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
   if (!editor) return <div id={id} className="tocyn-knowledge-editor-tiptap" aria-busy="true" aria-label="Content (Markdown)" />;
   return <div className="tocyn-knowledge-editor-tiptap" aria-disabled={readOnly}>
@@ -125,6 +126,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     },
   });
   useEffect(() => { editor?.setEditable(!readOnly); if (readOnly || format === 'plain') setAutocomplete(null); }, [editor, readOnly, format]);
+  useEffect(() => { if (editor) { editor.view.dom.id = id; editor.view.dom.setAttribute('aria-label', 'Reply message'); editor.view.dom.setAttribute('aria-autocomplete', 'list'); } }, [editor, id]);
   useEffect(() => {
     if (!editor || editor.getMarkdown() === value) return;
     editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
