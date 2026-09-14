@@ -17,7 +17,6 @@ export default defineConfig({
                 codeSplitting: {
                     groups: [
                         { name: 'entry-closure', test: /\/apps\/dashboard\/src\/main\.tsx$/, priority: 100 },
-                        { name: 'lucide-icons', test: /lucide-react/, priority: 10 },
                         { name: 'workspace-hooks', test: /apps\/dashboard\/src\/hooks\//, priority: 10 },
                         { name: 'administration-routes', test: /\/apps\/dashboard\/src\/pages\/(?:ApiKey|AgentPermissions|FiltersSettings|Groups|Settings|SupportStates|TicketFields|Users)Page\.tsx$/, priority: 0 },
                     ],
