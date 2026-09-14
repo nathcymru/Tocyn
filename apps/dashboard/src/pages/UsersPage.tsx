@@ -112,45 +112,45 @@ export const UsersPage: React.FC = () => {
       <TocynDialog open={Boolean(selectedUser && modalType)} onOpenChange={open => { if (!open) closeDialog(); }}
         labelledBy={dialogTitleId} initialFocusEl={() => closeControl.current} finalFocusEl={() => opener.current}>
         {selectedUser && (
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 id={dialogTitleId} className="text-xl font-bold text-slate-900">
+          <div className="tocyn-users-dialog">
+            <div className="tocyn-users-dialog-header">
+              <h2 id={dialogTitleId} className="tocyn-users-dialog-title">
                 {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'Edit User Profile' : 'User Activity Log'}
               </h2>
-              <TocynButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="text-slate-400 hover:text-slate-600">
-                <X className="w-6 h-6" />
+              <TocynButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="tocyn-users-dialog-close">
+                <X className="tocyn-users-dialog-close-icon" />
               </TocynButton>
             </div>
-            <div className="p-8">
-              <div className="flex items-center gap-4 mb-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
-                <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">
+            <div className="tocyn-users-dialog-body">
+              <div className="tocyn-users-dialog-identity">
+                <div className="tocyn-users-dialog-avatar">
                   {(selectedUser.full_name || selectedUser.email).charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900">{selectedUser.full_name || 'Unnamed User'}</h3>
-                  <p className="text-sm text-slate-500">{selectedUser.email}</p>
+                  <h3 className="tocyn-users-dialog-name">{selectedUser.full_name || 'Unnamed User'}</h3>
+                  <p className="tocyn-users-dialog-email">{selectedUser.email}</p>
                 </div>
               </div>
 
               {modalType === 'capacity' ? (
                 <OperatorCapacityPanel userId={selectedUser.id} editable={administrator}/>
               ) : modalType === 'edit' ? (
-                <div className="text-center py-6">
+                <div className="tocyn-users-dialog-unavailable">
                   <Settings className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-600 font-medium">User profile editing is currently read-only.</p>
-                  <p className="text-sm text-slate-500 mt-1">In this version, users must update their own profiles via the security settings.</p>
+                  <p className="tocyn-users-dialog-message">User profile editing is currently read-only.</p>
+                  <p className="tocyn-users-dialog-email tocyn-users-dialog-hint">In this version, users must update their own profiles via the security settings.</p>
                 </div>
               ) : (
-                <div className="text-center py-6">
-                  <p className="text-slate-600 font-medium">User activity is not available in this view yet.</p>
-                  <p className="text-sm text-slate-500 mt-1">No activity records have been loaded.</p>
+                <div className="tocyn-users-dialog-unavailable">
+                  <p className="tocyn-users-dialog-message">User activity is not available in this view yet.</p>
+                  <p className="tocyn-users-dialog-email tocyn-users-dialog-hint">No activity records have been loaded.</p>
                 </div>
               )}
             </div>
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <div className="tocyn-users-dialog-footer">
               <TocynButton
                 onClick={closeDialog}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                className="tocyn-users-dialog-submit"
               >
                 Close
               </TocynButton>

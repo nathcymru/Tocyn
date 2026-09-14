@@ -337,3 +337,28 @@
 .tocyn-shell-reconnect-button { display: flex; align-items: center; justify-content: center; gap: .5rem; inline-size: 100%; border-radius: .5rem; background: var(--tocyn-app-surface-muted); padding: .5rem .75rem; color: var(--tocyn-app-text); font-size: .75rem; font-weight: 700; }
 @media (min-width: 1024px) { .tocyn-shell-header { padding-inline: 2rem; } .tocyn-shell-mobile-trigger { display: none; } .tocyn-shell-sidebar-desktop { display: block; } }
 .tocyn-shell-connection-copy { color: var(--tocyn-app-text-muted); font-size: .875rem; }
+
+.tocyn-capacity-panel { display: grid; gap: 1rem; }
+.tocyn-capacity-description, .tocyn-capacity-copy { color: var(--tocyn-app-text-muted); font-size: .875rem; }
+.tocyn-capacity-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; color: var(--tocyn-app-text); font-size: .875rem; }
+.tocyn-capacity-confirmed { color: var(--tocyn-app-text-muted); font-size: .75rem; }
+.tocyn-capacity-refresh, .tocyn-capacity-save { border: 1px solid var(--tocyn-app-border); border-radius: .375rem; padding: .5rem .75rem; font-size: .875rem; }
+.tocyn-capacity-form { display: grid; gap: .75rem; border-block-start: 1px solid var(--tocyn-app-border); padding-block-start: 1rem; }
+.tocyn-capacity-label { display: block; color: var(--tocyn-app-text); font-size: .875rem; font-weight: 500; }
+.tocyn-capacity-input { inline-size: 100%; border: 1px solid var(--tocyn-app-border); border-radius: .375rem; padding: .5rem .75rem; }
+.tocyn-capacity-save { background: var(--tocyn-color-brand); color: #fff; }
+.tocyn-users-dialog { inline-size: 100%; max-inline-size: 32rem; max-block-size: 90vh; overflow-y: auto; border: 1px solid var(--tocyn-app-border); border-radius: .75rem; background: var(--tocyn-app-surface); box-shadow: 0 20px 40px rgb(15 23 42 / 20%); }
+.tocyn-users-dialog-header { display: flex; align-items: center; justify-content: space-between; border-block-end: 1px solid var(--tocyn-app-border); padding: 1.5rem; }
+.tocyn-users-dialog-title, .tocyn-users-dialog-name { color: var(--tocyn-app-text); font-weight: 700; }
+.tocyn-users-dialog-title { font-size: 1.25rem; }
+.tocyn-users-dialog-close { color: var(--tocyn-app-text-muted); }
+.tocyn-users-dialog-close-icon { inline-size: 1.5rem; block-size: 1.5rem; }
+.tocyn-users-dialog-body { padding: 2rem; }
+.tocyn-users-dialog-identity { display: flex; align-items: center; gap: 1rem; margin-block-end: 1.5rem; border: 1px solid var(--tocyn-app-border); border-radius: .5rem; background: var(--tocyn-app-surface-panel); padding: 1rem; }
+.tocyn-users-dialog-avatar { display: flex; align-items: center; justify-content: center; inline-size: 3rem; block-size: 3rem; border-radius: 999px; background: color-mix(in srgb, var(--tocyn-color-brand) 20%, transparent); color: var(--tocyn-color-brand); font-weight: 700; }
+.tocyn-users-dialog-email, .tocyn-users-dialog-hint { color: var(--tocyn-app-text-muted); font-size: .875rem; }
+.tocyn-users-dialog-unavailable { padding-block: 1.5rem; text-align: center; }
+.tocyn-users-dialog-message { color: var(--tocyn-app-text-muted); font-weight: 500; }
+.tocyn-users-dialog-hint { margin-block-start: .25rem; font-size: .875rem; }
+.tocyn-users-dialog-footer { display: flex; justify-content: flex-end; border-block-start: 1px solid var(--tocyn-app-border); background: var(--tocyn-app-surface-panel); padding: 1.5rem; }
+.tocyn-users-dialog-submit { border: 1px solid var(--tocyn-app-border); border-radius: .5rem; background: var(--tocyn-app-surface); padding: .5rem 1rem; color: var(--tocyn-app-text-muted); font-size: .875rem; font-weight: 700; }
