@@ -437,6 +437,16 @@
 [data-tocyn-inverse] .tocyn-button { border-color: #475569; background: #334155; color: #f8fafc; }
 [data-tocyn-inverse] .tocyn-button:hover:not(:disabled) { background: #475569; }
 :where(.tocyn-tabular, [data-tocyn-tabular], .tocyn-metric-card-value, .tocyn-ticket-reference-value, .tocyn-inbox-row-sla, .tocyn-sla-countdown, time) { font-family: var(--tocyn-font-tabular); font-feature-settings: "tnum" 1, "cv01" 1; font-variant-numeric: tabular-nums; }
+
+/* Keep interaction timing predictable for operators who request reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 :where([data-scope="select"][data-part="trigger"], [data-scope="tabs"][data-part="trigger"], [data-scope="popover"][data-part="trigger"], [data-scope="splitter"][data-part="resize-trigger"]) { min-block-size: 2.75rem; min-inline-size: 2.75rem; }
 [data-tocyn-primitive="select"],
 [data-tocyn-primitive="textarea"],
