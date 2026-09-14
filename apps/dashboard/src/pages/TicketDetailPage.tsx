@@ -864,61 +864,61 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </div>
           </div>
 
-          <div id="conversation-messages" className="p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
+          <div id="conversation-messages" className="tocyn-ticket-detail-messages">
             {ticket.articles.map((article) => (
               <div
                 key={article.id}
                 className={clsx(
-                  "flex gap-4 group",
-                  article.sender_type === 'agent' ? "flex-row-reverse" : "flex-row"
+                  "tocyn-timeline-row",
+                  article.sender_type === 'agent' && "is-agent"
                 )}
               >
                 <div className={clsx(
-                  "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-bold shadow-sm transition-transform group-hover:scale-105",
-                  article.sender_type === 'agent' ? "bg-brand-600 text-white" : "bg-white text-slate-600 border border-slate-200",
-                  article.is_internal && "bg-amber-100 text-amber-700 ring-2 ring-amber-200"
+                  "tocyn-timeline-avatar",
+                  article.sender_type === 'agent' ? "tocyn-timeline-avatar-agent" : "tocyn-timeline-avatar-customer",
+                  article.is_internal && "tocyn-timeline-avatar-internal"
                 )}>
                   {article.sender_type === 'agent' ? 'A' : article.sender_type === 'system' ? 'S' : 'C'}
                 </div>
                 <div className={clsx(
-                  "max-w-[80%] rounded-2xl p-4 shadow-sm border transition-all",
+                  "tocyn-timeline-bubble",
                   article.sender_type === 'agent'
-                    ? "bg-brand-600 text-white border-brand-700"
-                    : "bg-white text-slate-900 border-slate-200",
-                  article.is_internal && "!bg-amber-50 !border-amber-200 !text-amber-900 shadow-amber-100/50"
+                    ? "tocyn-timeline-bubble-agent"
+                    : "tocyn-timeline-bubble-customer",
+                  article.is_internal && "tocyn-timeline-bubble-internal"
                 )}>
-                  <div className="flex items-center justify-between gap-4 mb-2">
-                    <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest">
+                  <div className="tocyn-timeline-meta">
+                    <span className="tocyn-timeline-label">
                       {article.sender_type} {article.is_internal && '• Internal Note'}
                     </span>
-                    <span className="text-[10px] opacity-70">
+                    <span className="tocyn-timeline-time">
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   {/* Only explicitly versioned new content is interpreted as Markdown. */}
                   {article.body_format === 'markdown-v1'
-                    ? <SafeMarkdown className="break-words text-sm leading-relaxed">{article.body ?? ''}</SafeMarkdown>
-                    : <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{article.body ?? ''}</div>}
+                    ? <SafeMarkdown className="tocyn-timeline-body">{article.body ?? ''}</SafeMarkdown>
+                    : <div className="tocyn-timeline-body tocyn-timeline-body-plain">{article.body ?? ''}</div>}
 
                   {/* Attachments */}
                   {article.attachments && article.attachments.length > 0 && (
-                    <div className="mt-3 space-y-2">
+                    <div className="tocyn-timeline-attachments">
                       {article.attachments.map((att: any) => {
                         const filename = att.filename || att.file_name || 'Attachment';
                         return <div key={att.id}>
                           <TocynButton
                             onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, filename); }}
                             className={clsx(
-                              "flex w-full cursor-pointer hover:opacity-80 items-center gap-2 p-2 rounded-lg text-sm",
+                              "tocyn-timeline-attachment-link",
                               article.sender_type === 'agent'
-                                ? "bg-brand-700/50 text-white"
-                                : "bg-gray-50 text-gray-700 border border-gray-100",
-                              article.is_internal && "!bg-amber-100/50 !text-amber-900 border border-amber-200/50"
+                                ? "tocyn-timeline-attachment-link-agent"
+                                : "tocyn-timeline-attachment-link-customer",
+                              article.is_internal && "tocyn-timeline-attachment-link-internal"
                             )}
                           >
-                            <Paperclip className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate flex-1 text-left">{filename}</span>
-                            <span className="text-xs opacity-75">
+                            <Paperclip className="tocyn-timeline-attachment-icon" />
+                            <span className="tocyn-timeline-attachment-name">{filename}</span>
+                            <span className="tocyn-timeline-attachment-size">
                               {attachmentSize(att.size ?? att.file_size)}
                             </span>
                           </TocynButton>
@@ -934,16 +934,16 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     </div>
                   )}
 
-                  {article.qa_type === 'question' && <p className="text-sm text-slate-700 bg-white p-2">Legacy Question marker retained. Compatibility review is required before changing this marker.</p>}
+                  {article.qa_type === 'question' && <p className="tocyn-timeline-legacy-marker">Legacy Question marker retained. Compatibility review is required before changing this marker.</p>}
                   {/* QA Toggle Buttons */}
-                  <div className="mt-3 p-2 rounded bg-white text-slate-900 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                  <div className="tocyn-timeline-qa">
+                    <div className="tocyn-timeline-qa-actions">
                       <TocynButton
                         aria-label="Mark as SOP (internal procedure)" aria-pressed={article.qa_type === 'sop'} disabled={qaPending || article.qa_type === 'question'}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'sop' ? null : 'sop')}
                         className={clsx(
-                          "min-h-11 text-xs font-semibold px-3 py-2 rounded border transition-colors",
-                          article.qa_type === 'sop' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 border-slate-400 hover:bg-slate-100"
+                          "tocyn-timeline-qa-button",
+                          article.qa_type === 'sop' ? "tocyn-timeline-qa-button-active" : "tocyn-timeline-qa-button-inactive"
                         )}
                       >
                         {article.qa_type === 'sop' ? '✓ SOP (internal)' : 'Mark as SOP (internal)'}
@@ -952,16 +952,16 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                         aria-label="Mark as answer" aria-pressed={article.qa_type === 'answer'} disabled={qaPending || article.qa_type === 'question'}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'answer' ? null : 'answer')}
                         className={clsx(
-                          "min-h-11 text-xs font-semibold px-3 py-2 rounded border transition-colors",
-                          article.qa_type === 'answer' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 border-slate-400 hover:bg-slate-100"
+                          "tocyn-timeline-qa-button",
+                          article.qa_type === 'answer' ? "tocyn-timeline-qa-button-active" : "tocyn-timeline-qa-button-inactive"
                         )}
                       >
                         {article.qa_type === 'answer' ? '✓ Answer' : 'Mark as Answer'}
                       </TocynButton>
                     </div>
                     {article.qa_type && (
-                      <span className="flex items-center gap-1 text-xs font-semibold text-slate-700 px-2 py-1">
-                        <ShieldCheck className="w-3 h-3" />
+                      <span className="tocyn-timeline-qa-marked">
+                        <ShieldCheck className="tocyn-timeline-qa-marked-icon" />
                         QA marked
                       </span>
                     )}
