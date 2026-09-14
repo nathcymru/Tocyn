@@ -951,6 +951,15 @@
 .tocyn-composer-shell--public { background: color-mix(in srgb, var(--tocyn-color-surface-muted) 50%, transparent); }
 .tocyn-composer-format-help, .tocyn-composer-drop-help { margin: 0 0 .5rem; color: var(--tocyn-color-text-muted); font-size: .75rem; }
 .tocyn-composer-markdown-editor { overflow: hidden; border: 1px solid var(--tocyn-color-divider); border-radius: .375rem; background: var(--tocyn-color-surface); }
+.tocyn-composer-toolbar { display: flex; flex-wrap: wrap; gap: .25rem; padding: .25rem; border-block-end: 1px solid var(--tocyn-color-divider); background: var(--tocyn-color-surface); }
+.tocyn-composer-toolbar-button { min-block-size: 2.5rem; min-inline-size: 2.5rem; padding: .5rem; }
+.tocyn-composer-toolbar-button-active { background: var(--tocyn-color-selected); color: var(--tocyn-color-text); }
+.tocyn-composer-markdown-editor .ProseMirror,
+.tocyn-knowledge-editor-tiptap .ProseMirror { min-block-size: 11rem; max-inline-size: 100%; overflow-wrap: anywhere; padding: .75rem; background: var(--tocyn-color-input); color: var(--tocyn-color-text); font-family: var(--tocyn-font-primary); line-height: 1.5; outline: none; }
+.tocyn-composer-markdown-editor .ProseMirror:focus-visible,
+.tocyn-knowledge-editor-tiptap .ProseMirror:focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
+.tocyn-composer-markdown-editor .ProseMirror pre,
+.tocyn-knowledge-editor-tiptap .ProseMirror pre { overflow-x: auto; font-family: var(--tocyn-font-tabular); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "cv01" 1; }
 .tocyn-composer-autocomplete { margin-block-start: .25rem; border: 1px solid var(--tocyn-color-divider); border-radius: .375rem; background: var(--tocyn-color-surface); padding: .25rem; box-shadow: 0 4px 10px rgb(15 23 42 / 12%); }
 .tocyn-composer-autocomplete-option { display: block; width: 100%; border-radius: .25rem; padding: .25rem .5rem; text-align: left; font-size: .875rem; }
 .tocyn-composer-autocomplete-option:focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 1px; }
