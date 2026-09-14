@@ -9,7 +9,7 @@ export type OperatorMotion = 'system' | 'reduced' | 'full';
 export type OperatorPreferences = Readonly<{ version: typeof OPERATOR_PREFERENCES_VERSION; revision: number; density: OperatorDensity; fontScale: OperatorFontScale; focusMode: boolean; motion: OperatorMotion; navigation: 'compact'|'labelled'; contextDefault: 'remember'|'conversation'|'details'; shortcutsEnabled: boolean; interruptionLevel: 'standard'|'quiet'; advanceAfterResolve: boolean; updatedAt: string | null }>;
 export type OperatorPreferencesStatus = 'idle' | 'loading' | 'restored' | 'unsaved' | 'saving' | 'saved' | 'error' | 'conflict';
 export type OperatorPreferencesSnapshot = Readonly<OperatorPreferences & { status: OperatorPreferencesStatus; error: string | null; schemaUnavailable: boolean }>;
-const DEFAULT: OperatorPreferences = { version: OPERATOR_PREFERENCES_VERSION, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, updatedAt: null };
+const DEFAULT: OperatorPreferences = { version: OPERATOR_PREFERENCES_VERSION, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'labelled', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, updatedAt: null };
 const valid = (value: unknown): value is OperatorPreferences => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
