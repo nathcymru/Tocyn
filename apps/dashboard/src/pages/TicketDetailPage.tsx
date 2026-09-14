@@ -869,8 +869,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               <div
                 key={article.id}
                 className={clsx(
-                  "tocyn-timeline-row relative flex gap-4 group",
-                  article.sender_type === 'agent' ? "flex-row-reverse" : "flex-row"
+                  "tocyn-timeline-row relative flex flex-row gap-4 group",
                 )}
               >
                 <div className={clsx(

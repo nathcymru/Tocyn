@@ -10,12 +10,12 @@ if (typeof window !== 'undefined' && !window.ResizeObserver) {
 
 /** Park UI shaped splitter primitives backed by Ark's splitter state machine. */
 export function TocynSplitterRoot(props: ComponentProps<typeof Splitter.Root>) {
-  if (isTestEnvironment) return <div {...(props as any)} className={`tocyn-splitter-root ${props.className ?? ''}`} />;
+  if (isTestEnvironment) return <div {...(props as any)} className={`tocyn-splitter-root ${props.className ?? ''}`}>{props.children}</div>;
   return <Splitter.Root {...props} className={`tocyn-splitter-root ${props.className ?? ''}`} />;
 }
 
 export function TocynSplitterPanel(props: ComponentProps<typeof Splitter.Panel>) {
-  if (isTestEnvironment) return <div {...(props as any)} className={`tocyn-splitter-panel ${props.className ?? ''}`} />;
+  if (isTestEnvironment) return <div {...(props as any)} className={`tocyn-splitter-panel ${props.className ?? ''}`}>{props.children}</div>;
   return <Splitter.Panel {...props} className={`tocyn-splitter-panel ${props.className ?? ''}`} />;
 }
 
