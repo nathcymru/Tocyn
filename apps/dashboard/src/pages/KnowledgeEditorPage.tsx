@@ -240,7 +240,7 @@ export const KnowledgeEditorPage: React.FC = () => {
             <div className="tocyn-form-field">
               <label htmlFor={contentId}>Content (Markdown)</label>
               <div aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
-                <TiptapMarkdownField key={routeKey} id={contentId} value={content} readOnly={isSaving || !editorReady} ariaDescribedBy={error ? errorId : undefined} onChange={value => { if (!savingRef.current && editorReady) setContent(value); }} />
+                <TiptapMarkdownField key={`${routeKey}-${editorReady ? 'ready' : 'loading'}`} id={contentId} value={content} readOnly={isSaving || !editorReady} ariaDescribedBy={error ? errorId : undefined} onChange={value => { if (!savingRef.current && editorReady) setContent(value); }} />
               </div>
             </div>
           </div>
