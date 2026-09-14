@@ -1,7 +1,7 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { ParkButton, ParkEmptyState, ParkInput, ParkSelect, ParkSplitter } from '@luminatick/ui/park';
-import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,LayoutList,Search,Table2 } from 'lucide-react';
+import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,LayoutList,Search,Table2 } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';

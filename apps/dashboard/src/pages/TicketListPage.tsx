@@ -27,7 +27,7 @@ import {
   LayoutList,
   Copy,
   Check
-} from 'lucide-react';
+} from '../components/icons';
 import { clsx } from 'clsx';
 
 function cn(...inputs: any[]) {

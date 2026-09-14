@@ -5,7 +5,7 @@ import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
-import { User as UserIcon, Shield, Mail, Calendar, ShieldCheck, X, Settings } from 'lucide-react';
+import { User as UserIcon, Shield, Mail, Calendar, ShieldCheck, X, Settings } from '../components/icons';
 
 export const UsersPage: React.FC = () => {
   const { data: users = [], isLoading, error, refetch, isFetching } = useUsers();

@@ -39,7 +39,7 @@ import {
   Info,
   Activity,
   X,
-  Paperclip } from 'lucide-react';
+  Paperclip } from '../components/icons';
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
 import { browserDateTimeLocalToInstant, browserInstantToDateTimeLocal } from '../utils/localDateTime';

@@ -22,7 +22,7 @@ import {
   Bell,
   ChevronDown,
   RefreshCw,
-} from 'lucide-react';
+} from '../icons';
 import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
