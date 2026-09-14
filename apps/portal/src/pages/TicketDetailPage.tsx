@@ -5,11 +5,11 @@ import { useParams, Link } from 'react-router-dom';
 import { portalApi } from '../api/client';
 import type { Ticket, Article } from '../types';
 import {
-  FaSpinner,
-  FaArrowLeft,
-  FaPaperclip,
-  FaPaperPlane,
-  FaXmark
+  IconSpinner,
+  IconArrowLeft,
+  IconPaperclip,
+  IconPaperPlane,
+  IconXmark
 } from '@luminatick/ui/icons';
 import { formatDistanceToNow, format } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
@@ -314,7 +314,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
     <div className="tocyn-portal-ticket-detail">
       <div className="tocyn-portal-ticket-detail-header">
         <Link to="/tickets" aria-label="Back to Tickets" className="tocyn-portal-ticket-detail-back">
-          <FaArrowLeft className="tocyn-portal-chat-back-icon" />
+          <IconArrowLeft className="tocyn-portal-chat-back-icon" />
         </Link>
         <div>
           <h1 ref={conversationHeading} tabIndex={-1} className="tocyn-portal-ticket-detail-title">
@@ -369,7 +369,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                             isCustomer ? 'tocyn-portal-chat-attachment--customer' : 'tocyn-portal-chat-attachment--support'
                           }`}
                         >
-                          <FaPaperclip className="tocyn-portal-chat-attachment-icon" />
+                          <IconPaperclip className="tocyn-portal-chat-attachment-icon" />
                           <span className="tocyn-portal-chat-attachment-name">{att.filename || 'Attachment'}</span>
                           <span className="tocyn-portal-chat-attachment-size">
                             {attachmentSize(att.size)}
@@ -415,7 +415,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                 <div className="tocyn-portal-chat-attachment-list">
                   {attachments.map((file, idx) => (
                     <div key={idx} className="tocyn-portal-chat-attachment-item">
-                      <FaPaperclip className="tocyn-portal-chat-attachment-icon" />
+                      <IconPaperclip className="tocyn-portal-chat-attachment-icon" />
                       <span className="tocyn-portal-chat-attachment-name tocyn-portal-chat-attachment-name--compact">{file.name}</span>
                       <ParkButton
                         type="button"
@@ -424,7 +424,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                         onClick={() => removeAttachment(idx)}
                         className="tocyn-portal-chat-attachment-remove"
                       >
-                        <FaXmark className="tocyn-portal-chat-attachment-remove-icon" />
+                        <IconXmark className="tocyn-portal-chat-attachment-remove-icon" />
                       </ParkButton>
                     </div>
                   ))}
@@ -448,7 +448,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                     className="tocyn-portal-chat-attach-button"
                     aria-disabled={sending}
                   >
-                    <FaPaperclip className="tocyn-portal-chat-attach-icon" />
+                    <IconPaperclip className="tocyn-portal-chat-attach-icon" />
                     <span className="tocyn-portal-chat-attach-label">Attach Files</span>
                   </ParkButton>
                 </div>
@@ -458,7 +458,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                   aria-disabled={sending || !newMessage.trim()}
                   className="tocyn-portal-chat-send-button"
                 >
-                  {sending ? <FaSpinner className="tocyn-portal-chat-send-icon" /> : <FaPaperPlane className="tocyn-portal-chat-send-icon" />}
+                  {sending ? <IconSpinner className="tocyn-portal-chat-send-icon" /> : <IconPaperPlane className="tocyn-portal-chat-send-icon" />}
                   Send Reply
                 </ParkButton>
               </div>

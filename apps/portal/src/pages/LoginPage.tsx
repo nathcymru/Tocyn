@@ -4,9 +4,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { VerifyPage } from './VerifyPage';
 import { portalApi } from '../api/client';
 import {
-  FaEnvelope,
-  FaSpinner,
-  FaArrowRight
+  IconEnvelope,
+  IconSpinner,
+  IconArrowRight
 } from '@luminatick/ui/icons';
 import { Turnstile } from '@marsidev/react-turnstile';
 
@@ -77,7 +77,7 @@ export function LoginPage() {
       <div className="tocyn-portal-auth-shell">
         <div className="tocyn-portal-auth-heading tocyn-portal-auth-success">
           <div className="tocyn-portal-auth-success-icon">
-            <FaEnvelope className="tocyn-portal-auth-success-mark" />
+            <IconEnvelope className="tocyn-portal-auth-success-mark" />
           </div>
           <h2 ref={successHeading} tabIndex={-1} className="tocyn-portal-auth-success-title">Check your email</h2>
           <p className="tocyn-portal-auth-success-copy">
@@ -187,7 +187,7 @@ export function LoginPage() {
                 aria-disabled={loading || success || !email || (!!siteKey && !turnstileToken)}
                 className="tocyn-portal-auth-submit"
               >
-                {loading ? <FaSpinner className="tocyn-portal-auth-spinner" /> : <FaArrowRight className="tocyn-portal-auth-icon" />}
+                {loading ? <IconSpinner className="tocyn-portal-auth-spinner" /> : <IconArrowRight className="tocyn-portal-auth-icon" />}
                 {loading ? 'Sending...' : `Send ${type === 'magic_link' ? 'Magic Link' : 'Code'}`}
               </ParkButton>
             </div>

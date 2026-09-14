@@ -2,15 +2,15 @@ import { ParkButton, ParkEmptyState, ParkInput, ParkTextarea, ParkSelect } from 
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
 import {
-  FaBuilding,
-  FaGear,
-  FaEnvelope,
-  FaFloppyDisk,
-  FaSpinner,
-  FaCloud,
-  FaCircleExclamation,
-  FaShieldHalved,
-  FaChartLine
+  IconBuilding,
+  IconGear,
+  IconEnvelope,
+  IconFloppyDisk,
+  IconSpinner,
+  IconCloud,
+  IconCircleExclamation,
+  IconShieldHalved,
+  IconChartLine
 } from '@luminatick/ui/icons';
 import { ApiError } from '../api/client';
 
@@ -124,9 +124,9 @@ export const SettingsPage: React.FC = () => {
           className="tocyn-settings-save"
         >
           {updateSettings.isPending ? (
-            <FaSpinner className="tocyn-settings-save-icon tocyn-settings-save-icon--busy" />
+            <IconSpinner className="tocyn-settings-save-icon tocyn-settings-save-icon--busy" />
           ) : (
-            <FaFloppyDisk className="tocyn-settings-save-icon" />
+            <IconFloppyDisk className="tocyn-settings-save-icon" />
           )}
           Save Changes
         </ParkButton>
@@ -134,7 +134,7 @@ export const SettingsPage: React.FC = () => {
 
       {masterKeyError && (
         <div className="tocyn-settings-master-key-error">
-          <FaCircleExclamation className="tocyn-settings-master-key-icon" />
+          <IconCircleExclamation className="tocyn-settings-master-key-icon" />
           <div>
             <h3 className="tocyn-settings-master-key-title">Critical: Missing Encryption Key</h3>
             <p className="tocyn-settings-master-key-copy">
@@ -155,7 +155,7 @@ export const SettingsPage: React.FC = () => {
         {/* Organization Profile */}
         <section className="tocyn-settings-card">
           <div className="tocyn-settings-card-header">
-            <FaBuilding className="tocyn-settings-card-icon" />
+            <IconBuilding className="tocyn-settings-card-icon" />
             <h2>Organization Profile</h2>
           </div>
           <div className="tocyn-settings-card-body">
@@ -195,7 +195,7 @@ export const SettingsPage: React.FC = () => {
         {/* System Defaults */}
         <section className="tocyn-settings-card">
           <div className="tocyn-settings-card-header">
-            <FaGear className="tocyn-settings-card-icon" />
+            <IconGear className="tocyn-settings-card-icon" />
             <h2>System Defaults</h2>
           </div>
           <div className="tocyn-settings-card-body">
@@ -246,7 +246,7 @@ export const SettingsPage: React.FC = () => {
         {/* Agent Communication */}
         <section className="tocyn-settings-card">
           <div className="tocyn-settings-card-header">
-            <FaEnvelope className="tocyn-settings-card-icon" />
+            <IconEnvelope className="tocyn-settings-card-icon" />
             <h2>Agent Communication</h2>
           </div>
           <div className="tocyn-settings-card-body">
@@ -274,7 +274,7 @@ export const SettingsPage: React.FC = () => {
         {/* Cloudflare Integration */}
         <section className="tocyn-settings-card">
           <div className="tocyn-settings-card-header">
-            <FaCloud className="tocyn-settings-card-icon" />
+            <IconCloud className="tocyn-settings-card-icon" />
             <h2>Cloudflare API Credentials</h2>
           </div>
           <div className="tocyn-settings-card-body">
@@ -318,7 +318,7 @@ export const SettingsPage: React.FC = () => {
         {/* Security & Authentication */}
         <section className="tocyn-settings-card">
           <div className="tocyn-settings-card-header">
-            <FaShieldHalved className="tocyn-settings-card-icon" />
+            <IconShieldHalved className="tocyn-settings-card-icon" />
             <h2>Security & Authentication</h2>
           </div>
           <div className="tocyn-settings-card-body">

@@ -2,14 +2,14 @@ import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi, ApiError } from '../api/client';
 import {
-  FaCreditCard,
-  FaDatabase,
-  FaHardDrive,
-  FaMicrochip,
-  FaChartLine,
-  FaCircleExclamation,
-  FaArrowUpRightFromSquare,
-  FaBolt
+  IconCreditCard,
+  IconDatabase,
+  IconHardDrive,
+  IconMicrochip,
+  IconChartLine,
+  IconCircleExclamation,
+  IconArrowUpRightFromSquare,
+  IconBolt
 } from '@luminatick/ui/icons';
 import { UsageStats } from '@luminatick/shared';
 import { clsx } from 'clsx';
@@ -115,7 +115,7 @@ export function UsagePage() {
   const renderCredentialsForm = () => (
     <div className="tocyn-usage-credentials">
       <div className={cn("tocyn-usage-credentials-header", isAuthError ? "tocyn-usage-credentials-header--auth" : "tocyn-usage-credentials-header--update")}>
-        <FaCircleExclamation className="tocyn-usage-credentials-icon" />
+        <IconCircleExclamation className="tocyn-usage-credentials-icon" />
         <div>
           <h3 className="tocyn-usage-credentials-title">
             {isAuthError ? 'Cloudflare Credentials Required' : 'Update Cloudflare Credentials'}
@@ -136,7 +136,7 @@ export function UsagePage() {
           <h4 className="tocyn-usage-credentials-step-title">1. How to get your API Token:</h4>
           <ol className="tocyn-usage-credentials-steps">
             <li>
-              Go to your <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className="tocyn-usage-credentials-link">Cloudflare API Tokens <FaArrowUpRightFromSquare className="tocyn-usage-credentials-link-icon" /></a> dashboard.
+              Go to your <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className="tocyn-usage-credentials-link">Cloudflare API Tokens <IconArrowUpRightFromSquare className="tocyn-usage-credentials-link-icon" /></a> dashboard.
             </li>
             <li>Click <strong>Create Token</strong> and choose <strong>Create Custom Token</strong>.</li>
             <li>
@@ -212,12 +212,12 @@ export function UsagePage() {
       <div className="tocyn-usage-state-page">
         <div>
           <h1 className="tocyn-usage-state-title">
-            <FaCreditCard className="tocyn-usage-state-icon" />
+            <IconCreditCard className="tocyn-usage-state-icon" />
             Usage & Costs
           </h1>
         </div>
         <div className="tocyn-usage-critical">
-          <FaCircleExclamation className="tocyn-usage-critical-icon" />
+          <IconCircleExclamation className="tocyn-usage-critical-icon" />
           <div>
             <h3 className="tocyn-usage-critical-title">Critical: Missing Encryption Key</h3>
             <p className="tocyn-usage-critical-copy">
@@ -244,7 +244,7 @@ export function UsagePage() {
       <div className="tocyn-usage-state-page">
         <div>
           <h1 className="tocyn-usage-state-title">
-            <FaCreditCard className="tocyn-usage-state-icon" />
+            <IconCreditCard className="tocyn-usage-state-icon" />
             Usage & Costs
           </h1>
         </div>
@@ -267,7 +267,7 @@ export function UsagePage() {
       <div className="tocyn-usage-header">
         <div>
           <h1 className="tocyn-usage-title">
-            <FaCreditCard className="tocyn-usage-title-icon" />
+            <IconCreditCard className="tocyn-usage-title-icon" />
             Usage & Costs
           </h1>
           <p className="tocyn-usage-description">
@@ -291,7 +291,7 @@ export function UsagePage() {
           <StatCard
             title="D1 Reads and Writes"
             description="Database row operations"
-            icon={FaDatabase}
+            icon={IconDatabase}
             current={(data?.d1?.rowsRead || 0) + (data?.d1?.rowsWritten || 0)}
             limit={LIMITS.d1_reads_writes}
             unit="/ day"
@@ -304,7 +304,7 @@ export function UsagePage() {
           <StatCard
             title="R2 Operations (Class A)"
             description="Writes to storage"
-            icon={FaHardDrive}
+            icon={IconHardDrive}
             current={data?.r2?.classAOperations || 0}
             limit={LIMITS.r2_class_a}
             unit="/ month"
@@ -317,7 +317,7 @@ export function UsagePage() {
           <StatCard
             title="R2 Operations (Class B)"
             description="Reads from storage"
-            icon={FaHardDrive}
+            icon={IconHardDrive}
             current={data?.r2?.classBOperations || 0}
             limit={LIMITS.r2_class_b}
             unit="/ month"
@@ -330,7 +330,7 @@ export function UsagePage() {
           <StatCard
             title="Workers Requests"
             description="API calls, widget loads, pages"
-            icon={FaChartLine}
+            icon={IconChartLine}
             current={data?.workers?.requests || 0}
             limit={LIMITS.worker_requests}
             unit="/ day"
@@ -343,7 +343,7 @@ export function UsagePage() {
           <StatCard
             title="Workers AI Neurons"
             description="RAG, embedding, auto-responses"
-            icon={FaMicrochip}
+            icon={IconMicrochip}
             current={data?.workersAi?.neurons || 0}
             limit={LIMITS.ai_neurons}
             unit="/ day"
@@ -356,7 +356,7 @@ export function UsagePage() {
           <StatCard
             title="Durable Objects Requests"
             description="Real-time presence connections"
-            icon={FaBolt}
+            icon={IconBolt}
             current={data?.durableObjects?.requests || 0}
             limit={LIMITS.do_requests}
             unit="/ day"
@@ -369,7 +369,7 @@ export function UsagePage() {
           <StatCard
             title="Vectorize Queries"
             description="Vector search queries"
-            icon={FaDatabase}
+            icon={IconDatabase}
             current={data?.vectorize?.queried || 0}
             limit={LIMITS.vectorize_queries}
             unit="/ month"
@@ -382,7 +382,7 @@ export function UsagePage() {
           <StatCard
             title="Vectorize Writes"
             description="Vector index updates"
-            icon={FaDatabase}
+            icon={IconDatabase}
             current={data?.vectorize?.written || 0}
             limit={LIMITS.vectorize_writes}
             unit="/ month"

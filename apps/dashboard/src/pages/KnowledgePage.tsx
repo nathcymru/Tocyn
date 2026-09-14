@@ -5,12 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory, KnowledgeDoc } from '../types';
 import {
-  FaPlus,
-  FaFolder,
-  FaFileLines,
-  FaTrash,
-  FaChevronRight,
-  FaChevronDown
+  IconPlus,
+  IconFolder,
+  IconFileLines,
+  IconTrash,
+  IconChevronRight,
+  IconChevronDown
 } from '@luminatick/ui/icons';
 
 interface CategoryNode extends KnowledgeCategory {
@@ -169,13 +169,13 @@ export const KnowledgePage: React.FC = () => {
                 aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`} aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
                 className="tocyn-knowledge-category-toggle"
               >
-                {isExpanded ? <FaChevronDown size={14} /> : <FaChevronRight size={14} />}
+                {isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
               </ParkButton>
             ) : (
               <span className="tocyn-knowledge-category-spacer"></span>
             )}
             <ParkButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className="tocyn-knowledge-category-select">
-            <FaFolder size={14} className={isSelected ? 'tocyn-knowledge-category-icon-selected' : 'tocyn-knowledge-category-icon'} />
+            <IconFolder size={14} className={isSelected ? 'tocyn-knowledge-category-icon-selected' : 'tocyn-knowledge-category-icon'} />
             <span className="tocyn-knowledge-category-name">{node.name}</span>
             </ParkButton>
           </div>
@@ -189,7 +189,7 @@ export const KnowledgePage: React.FC = () => {
               className="tocyn-knowledge-category-add"
               title="Add Subcategory" aria-label={`Add subcategory to ${node.name}`}
             >
-              <FaPlus size={14} />
+              <IconPlus size={14} />
             </ParkButton>
             <ParkButton
               onClick={(e) => {
@@ -199,7 +199,7 @@ export const KnowledgePage: React.FC = () => {
               className="tocyn-knowledge-category-delete"
               title="Delete Category" aria-label={`Delete category ${node.name}`}
             >
-              <FaTrash size={14} />
+              <IconTrash size={14} />
             </ParkButton>
           </div>
         </div>
@@ -247,7 +247,7 @@ export const KnowledgePage: React.FC = () => {
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
           className="tocyn-knowledge-new-button"
         >
-          <FaPlus size={16} className="tocyn-knowledge-new-icon" />
+          <IconPlus size={16} className="tocyn-knowledge-new-icon" />
           New Article
         </ParkButton>
       </div>
@@ -268,7 +268,7 @@ export const KnowledgePage: React.FC = () => {
               className="tocyn-knowledge-add-category"
               title="Add Root Category"
             >
-              <FaPlus size={16} />
+              <IconPlus size={16} />
             </ParkButton>
           </div>
 
@@ -279,7 +279,7 @@ export const KnowledgePage: React.FC = () => {
               }`}
               onClick={() => setSelectedCategoryId(null)}
             >
-              <FaFileLines size={16} className="tocyn-knowledge-all-icon" />
+              <IconFileLines size={16} className="tocyn-knowledge-all-icon" />
               <span>All Articles</span>
             </ParkButton>
 

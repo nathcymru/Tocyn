@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ParkEmptyState } from '@luminatick/ui/park';
 import { useStats } from '../hooks/useStats';
-import { FaChartBar, FaUsers, FaTicket, FaCircleCheck, FaClock, FaCircleExclamation } from '@luminatick/ui/icons';
+import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
 
 export const DashboardPage: React.FC = () => {
   const { data: stats, isLoading } = useStats();
@@ -22,25 +22,25 @@ export const DashboardPage: React.FC = () => {
     {
       label: 'Total Tickets',
       value: totalTickets,
-      icon: FaTicket,
+      icon: IconTicket,
       color: 'tocyn-palette-blue-soft tocyn-palette-blue-text',
     },
     {
       label: 'Open Tickets',
       value: getStatusCount('open'),
-      icon: FaCircleExclamation,
+      icon: IconCircleExclamation,
       color: 'tocyn-palette-green-soft tocyn-palette-green-text',
     },
     {
       label: 'Pending Tickets',
       value: getStatusCount('pending'),
-      icon: FaClock,
+      icon: IconClock,
       color: 'tocyn-palette-amber-soft tocyn-palette-amber-text',
     },
     {
       label: 'Resolved Tickets',
       value: getStatusCount('resolved') + getStatusCount('closed'),
-      icon: FaCircleCheck,
+      icon: IconCircleCheck,
       color: 'tocyn-palette-neutral-soft tocyn-palette-neutral-text',
     },
   ];
@@ -75,7 +75,7 @@ export const DashboardPage: React.FC = () => {
       <div className="tocyn-dashboard-panels">
         <div className="tocyn-surface-card">
           <div className="tocyn-dashboard-card-heading">
-            <FaChartBar className="tocyn-dashboard-panel-icon" />
+            <IconChartBar className="tocyn-dashboard-panel-icon" />
             <h3 className="tocyn-dashboard-panel-title">Tickets by Priority</h3>
           </div>
           <div className="tocyn-priority-list">
@@ -106,20 +106,20 @@ export const DashboardPage: React.FC = () => {
 
         <div className="tocyn-surface-card">
           <div className="tocyn-dashboard-card-heading">
-            <FaUsers className="tocyn-dashboard-panel-icon" />
+            <IconUsers className="tocyn-dashboard-panel-icon" />
             <h3 className="tocyn-dashboard-panel-title">System Overview</h3>
           </div>
           <div className="tocyn-overview-grid">
             <div className="tocyn-overview-card">
               <div className="tocyn-overview-card-heading">
-                <FaUsers className="tocyn-overview-icon" />
+                <IconUsers className="tocyn-overview-icon" />
                 <span className="tocyn-overview-label">Total Users</span>
               </div>
               <p className="tocyn-overview-value">{stats?.totalUsers || 0}</p>
             </div>
             <div className="tocyn-overview-card">
               <div className="tocyn-overview-card-heading">
-                <FaUsers className="tocyn-overview-icon" />
+                <IconUsers className="tocyn-overview-icon" />
                 <span className="tocyn-overview-label">Active Groups</span>
               </div>
               <p className="tocyn-overview-value">{stats?.totalGroups || 0}</p>

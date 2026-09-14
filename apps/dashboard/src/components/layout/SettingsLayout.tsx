@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { FaGear, FaUsers, FaShieldHalved, FaBolt, FaKey, FaTableColumns, FaWpforms, FaEnvelope, FaCreditCard, FaDiagramProject, FaClock } from '@luminatick/ui/icons';
+import { IconGear, IconUsers, IconShieldHalved, IconBolt, IconKey, IconTableColumns, IconWpforms, IconEnvelope, IconCreditCard, IconDiagramProject, IconClock } from '@luminatick/ui/icons';
 import { clsx } from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { dashboardApi } from '../../api/client';
@@ -10,21 +10,21 @@ function cn(...inputs: any[]) {
 }
 
 const settingsNavigation = [
-  { name: 'General', href: '/settings/general', icon: FaGear, permissionKey: 'general' },
-  { name: 'Support States', href: '/settings/support-states', icon: FaDiagramProject, permissionKey: 'support_states' },
-  { name: 'Service Levels', href: '/settings/sla', icon: FaClock, permissionKey: 'general' },
-  { name: 'Users', href: '/settings/users', icon: FaUsers, permissionKey: 'users' },
-  { name: 'Groups', href: '/settings/groups', icon: FaShieldHalved, permissionKey: 'groups' },
-  { name: 'Ticket Fields', href: '/settings/ticket-fields', icon: FaWpforms, permissionKey: 'ticket_fields' },
-  { name: 'Filters', href: '/settings/filters', icon: FaTableColumns, permissionKey: 'filters' },
-  { name: 'Automations', href: '/settings/automations', icon: FaBolt, permissionKey: 'automations' },
-  { name: 'API Keys', href: '/settings/api-keys', icon: FaKey, permissionKey: 'api_keys' },
-  { name: 'Usage & Costs', href: '/settings/usage', icon: FaCreditCard, permissionKey: 'usage' },
+  { name: 'General', href: '/settings/general', icon: IconGear, permissionKey: 'general' },
+  { name: 'Support States', href: '/settings/support-states', icon: IconDiagramProject, permissionKey: 'support_states' },
+  { name: 'Service Levels', href: '/settings/sla', icon: IconClock, permissionKey: 'general' },
+  { name: 'Users', href: '/settings/users', icon: IconUsers, permissionKey: 'users' },
+  { name: 'Groups', href: '/settings/groups', icon: IconShieldHalved, permissionKey: 'groups' },
+  { name: 'Ticket Fields', href: '/settings/ticket-fields', icon: IconWpforms, permissionKey: 'ticket_fields' },
+  { name: 'Filters', href: '/settings/filters', icon: IconTableColumns, permissionKey: 'filters' },
+  { name: 'Automations', href: '/settings/automations', icon: IconBolt, permissionKey: 'automations' },
+  { name: 'API Keys', href: '/settings/api-keys', icon: IconKey, permissionKey: 'api_keys' },
+  { name: 'Usage & Costs', href: '/settings/usage', icon: IconCreditCard, permissionKey: 'usage' },
 ];
 
 const channelsNavigation = [
-  { name: 'Email', href: '/settings/channels/email', icon: FaEnvelope, permissionKey: 'channels_email' },
-  { name: 'Widget', href: '/settings/channels/widget', icon: FaTableColumns, permissionKey: 'channels_widget' },
+  { name: 'Email', href: '/settings/channels/email', icon: IconEnvelope, permissionKey: 'channels_email' },
+  { name: 'Widget', href: '/settings/channels/widget', icon: IconTableColumns, permissionKey: 'channels_widget' },
 ];
 
 export function SettingsLayout() {
@@ -82,7 +82,7 @@ export function SettingsLayout() {
                   )
                 }
               >
-                <FaShieldHalved className="tocyn-settings-nav-icon" />
+                <IconShieldHalved className="tocyn-settings-nav-icon" />
                 Agent Permissions
               </NavLink>
             )}

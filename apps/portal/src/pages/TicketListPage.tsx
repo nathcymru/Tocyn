@@ -6,8 +6,8 @@ import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { portalApi } from '../api/client';
 import type { Ticket, PaginatedResponse } from '../types';
 import {
-  FaSpinner,
-  FaPlus
+  IconSpinner,
+  IconPlus
 } from '@luminatick/ui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
@@ -131,7 +131,7 @@ export function TicketListPage() {
           onClick={() => { setCreateError(null); setIsCreating(true); }}
           className="tocyn-portal-ticket-list-create"
         >
-          <FaPlus className="tocyn-portal-ticket-list-icon" />
+          <IconPlus className="tocyn-portal-ticket-list-icon" />
           New Ticket
         </ParkButton>
       </div>
@@ -200,7 +200,7 @@ export function TicketListPage() {
                 aria-disabled={creatingTicket}
                 className="tocyn-portal-ticket-submit"
               >
-                {creatingTicket && <FaSpinner className="tocyn-portal-ticket-spinner" />}
+                {creatingTicket && <IconSpinner className="tocyn-portal-ticket-spinner" />}
                 Create Ticket
               </ParkButton>
             </div>
@@ -209,7 +209,7 @@ export function TicketListPage() {
 
       <div className="tocyn-portal-surface">
         {tickets.length === 0 ? (
-          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} className="tocyn-portal-ticket-empty-create"> <FaPlus className="tocyn-portal-ticket-list-icon" /> New Ticket</ParkButton>} className="tocyn-portal-ticket-empty" />
+          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} className="tocyn-portal-ticket-empty-create"> <IconPlus className="tocyn-portal-ticket-list-icon" /> New Ticket</ParkButton>} className="tocyn-portal-ticket-empty" />
         ) : (
           <ul className="tocyn-portal-ticket-list-items">
             {tickets.map((ticket) => (

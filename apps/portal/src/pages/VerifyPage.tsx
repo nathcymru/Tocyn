@@ -5,8 +5,8 @@ import type { User } from '../types';
 import { portalApi, getWidgetKey } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import {
-  FaSpinner,
-  FaCircleCheck
+  IconSpinner,
+  IconCircleCheck
 } from '@luminatick/ui/icons';
 
 export function VerifyPage({ challenge, onBack }: { challenge?: { email: string; challengeId?: string }; onBack?: () => void } = {}) {
@@ -80,7 +80,7 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
     return (
       <div className="tocyn-portal-auth-shell">
         <div role="status" aria-live="polite" className="tocyn-portal-auth-heading tocyn-portal-verify-loading">
-          <FaSpinner className="tocyn-portal-verify-spinner" />
+          <IconSpinner className="tocyn-portal-verify-spinner" />
           <h2 className="tocyn-portal-verify-loading-title">Verifying your login...</h2>
         </div>
       </div>
@@ -141,7 +141,7 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
                 aria-disabled={loading || code.length !== 6}
                 className="tocyn-portal-auth-submit"
               >
-                {loading ? <FaSpinner className="tocyn-portal-auth-spinner" /> : <FaCircleCheck className="tocyn-portal-auth-icon" />}
+                {loading ? <IconSpinner className="tocyn-portal-auth-spinner" /> : <IconCircleCheck className="tocyn-portal-auth-icon" />}
                 {loading ? 'Verifying...' : 'Verify Code'}
               </ParkButton>
             </div>

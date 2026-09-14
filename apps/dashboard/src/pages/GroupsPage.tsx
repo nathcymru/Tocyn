@@ -3,14 +3,14 @@ import { ParkButton, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { ParkEmptyState } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import {
-  FaUsers,
-  FaPlus,
-  FaTrash,
-  FaUserPlus,
-  FaXmark,
-  FaShieldHalved,
-  FaEnvelope,
-  FaMagnifyingGlass
+  IconUsers,
+  IconPlus,
+  IconTrash,
+  IconUserPlus,
+  IconXmark,
+  IconShieldHalved,
+  IconEnvelope,
+  IconMagnifyingGlass
 } from '@luminatick/ui/icons';
 import {
   useGroups,
@@ -112,7 +112,7 @@ export const GroupsPage: React.FC = () => {
             ref={createOpener} onClick={() => { setCreateError(''); setIsCreating(true); }}
             className="tocyn-groups-create"
           >
-            <FaPlus className="tocyn-groups-create-icon" />
+            <IconPlus className="tocyn-groups-create-icon" />
             Create Group
           </ParkButton>
         )}
@@ -124,7 +124,7 @@ export const GroupsPage: React.FC = () => {
           <div className="tocyn-groups-editor-header">
             <h2 id={createTitle} className="tocyn-groups-editor-title">New Support Group</h2>
             <ParkButton aria-label="Close group editor" disabled={creating} onClick={closeCreate} className="tocyn-groups-editor-close">
-              <FaXmark size={20} />
+              <IconXmark size={20} />
             </ParkButton>
           </div>
           <form onSubmit={handleCreateGroup} aria-labelledby={createTitle}>
@@ -215,7 +215,7 @@ export const GroupsPage: React.FC = () => {
                       onClick={event => { membersOpener.current = event.currentTarget; setManagingGroupId(group.id); setMembersOpen(true); }}
                       className="tocyn-groups-action tocyn-groups-action-primary"
                     >
-                      <FaUsers className="tocyn-groups-member-icon-md" />
+                      <IconUsers className="tocyn-groups-member-icon-md" />
                       Members
                     </ParkButton>
                     {isAdmin && (
@@ -224,7 +224,7 @@ export const GroupsPage: React.FC = () => {
                         className="tocyn-groups-action tocyn-groups-action-danger"
                         title="Delete Group"
                       >
-                        <FaTrash className="tocyn-groups-member-remove-icon" />
+                        <IconTrash className="tocyn-groups-member-remove-icon" />
                       </ParkButton>
                     )}
                   </td>
@@ -301,7 +301,7 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
             <p className="tocyn-groups-members-description">Add or remove agents from this group.</p>
           </div>
           <ParkButton ref={closeButton} disabled={pending} aria-label="Close group members" onClick={close} className="tocyn-groups-members-close">
-            <FaXmark size={24} />
+            <IconXmark size={24} />
           </ParkButton>
         </div>
 
@@ -332,10 +332,10 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
                       <div>
                         <div className="tocyn-groups-member-name">
                           {member.full_name || 'Unnamed'}
-                          {member.role === 'admin' && <FaShieldHalved className="tocyn-groups-member-admin-icon" />}
+                          {member.role === 'admin' && <IconShieldHalved className="tocyn-groups-member-admin-icon" />}
                         </div>
                         <div className="tocyn-groups-member-meta">
-                          <FaEnvelope className="tocyn-groups-member-icon" />
+                          <IconEnvelope className="tocyn-groups-member-icon" />
                           {member.email}
                         </div>
                       </div>
@@ -346,7 +346,7 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
                         className="tocyn-groups-member-remove"
                         title="Remove member"
                       >
-                        <FaTrash className="tocyn-groups-member-remove-icon" />
+                        <IconTrash className="tocyn-groups-member-remove-icon" />
                       </ParkButton>
                     )}
                   </div>
@@ -360,7 +360,7 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
             <div className="tocyn-groups-add-agent">
               <h3 className="tocyn-groups-members-heading">Add Agent</h3>
               <div className="tocyn-groups-agent-search">
-                <FaMagnifyingGlass className="tocyn-groups-agent-search-icon" />
+                <IconMagnifyingGlass className="tocyn-groups-agent-search-icon" />
                 <ParkInput
                   type="text"
                   aria-label="Search agents" disabled={pending} placeholder="Search agents by name or email..."
@@ -388,7 +388,7 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
                         <div className="tocyn-groups-agent-email">{agent.email}</div>
                       </div>
                     </div>
-                    <FaUserPlus className="tocyn-groups-agent-add-icon" />
+                    <IconUserPlus className="tocyn-groups-agent-add-icon" />
                   </ParkButton>
                 ))}
                 {availableAgents?.length === 0 && searchTerm && (

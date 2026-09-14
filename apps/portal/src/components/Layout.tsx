@@ -4,7 +4,7 @@ import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { portalApi } from '../api/client';
 import {
-  FaArrowRightFromBracket
+  IconArrowRightFromBracket
 } from '@luminatick/ui/icons';
 
 export function Layout() {
@@ -44,7 +44,7 @@ export function Layout() {
                 title="Sign out of all sessions"
                 aria-label="Sign out of all sessions"
               >
-                <FaArrowRightFromBracket className="tocyn-portal-logout-icon" />
+                <IconArrowRightFromBracket className="tocyn-portal-logout-icon" />
               </ParkButton>
             </div>
           </div>

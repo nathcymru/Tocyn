@@ -3,13 +3,13 @@ import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
 import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useEffect, useState } from 'react';
 import {
-  FaKey,
-  FaPlus,
-  FaTrash,
-  FaCopy,
-  FaCheck,
-  FaShieldHalved,
-  FaClock
+  IconKey,
+  IconPlus,
+  IconTrash,
+  IconCopy,
+  IconCheck,
+  IconShieldHalved,
+  IconClock
 } from '@luminatick/ui/icons';
 import { dashboardApi } from '../api/client';
 import { ApiKey, ApiKeyCreatedResponse } from '@luminatick/shared';
@@ -155,7 +155,7 @@ export function ApiKeyPage() {
           }}
           className="tocyn-api-key-create-button"
         >
-          <FaPlus className="tocyn-api-key-create-icon" />
+          <IconPlus className="tocyn-api-key-create-icon" />
           Create New Key
         </ParkButton>
       </div>
@@ -202,7 +202,7 @@ export function ApiKeyPage() {
       {createdKey && (
         <div className="tocyn-api-key-created">
           <div className="tocyn-api-key-created-header">
-            <FaShieldHalved className="tocyn-api-key-created-icon" />
+            <IconShieldHalved className="tocyn-api-key-created-icon" />
             <div>
               <h3 ref={createdHeading} tabIndex={-1} className="tocyn-api-key-created-title">New API Key Generated</h3>
               <p className="tocyn-api-key-created-help">
@@ -218,7 +218,7 @@ export function ApiKeyPage() {
               className="tocyn-api-key-copy"
               title="Copy to clipboard"
             >
-              {copied ? <FaCheck className="tocyn-api-key-copy-icon" /> : <FaCopy className="tocyn-api-key-copy-icon" />}
+              {copied ? <IconCheck className="tocyn-api-key-copy-icon" /> : <IconCopy className="tocyn-api-key-copy-icon" />}
             </ParkButton>
           </div>
 
@@ -293,7 +293,7 @@ export function ApiKeyPage() {
                     </td>
                     <td className="tocyn-api-key-date">
                       <div className="tocyn-api-key-last-used">
-                        <FaClock className="tocyn-api-key-clock" />
+                        <IconClock className="tocyn-api-key-clock" />
                         {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
                       </div>
                     </td>
@@ -303,7 +303,7 @@ export function ApiKeyPage() {
                         className="tocyn-api-key-revoke"
                         title="Revoke Key"
                       >
-                        <FaTrash className="tocyn-api-key-revoke-icon" />
+                        <IconTrash className="tocyn-api-key-revoke-icon" />
                       </ParkButton>
                     </td>
                   </tr>

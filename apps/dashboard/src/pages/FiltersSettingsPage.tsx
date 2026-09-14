@@ -3,10 +3,10 @@ import { ParkButton, ParkEmptyState, ParkInput, ParkSelect } from '@luminatick/u
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
 import {
-  FaPlus,
-  FaPenToSquare,
-  FaTrash,
-  FaXmark
+  IconPlus,
+  IconPenToSquare,
+  IconTrash,
+  IconXmark
 } from '@luminatick/ui/icons';
 import { TicketFilter, FilterCondition } from '@luminatick/shared';
 
@@ -152,7 +152,7 @@ export function FiltersSettingsPage() {
           onClick={event => handleOpenModal(undefined, event.currentTarget)}
           className="tocyn-filters-create"
         >
-          <FaPlus className="tocyn-filters-create-icon" />
+          <IconPlus className="tocyn-filters-create-icon" />
           Create Filter
         </ParkButton>
       </div>
@@ -198,7 +198,7 @@ export function FiltersSettingsPage() {
                         className="tocyn-filter-action tocyn-filter-action-edit"
                         title="Edit Filter"
                       >
-                        <FaPenToSquare className="tocyn-filter-action-icon" />
+                        <IconPenToSquare className="tocyn-filter-action-icon" />
                       </ParkButton>
                       {!filter.is_system && (
                         <ParkButton
@@ -206,7 +206,7 @@ export function FiltersSettingsPage() {
                           className="tocyn-filter-action tocyn-filter-action-delete"
                           title="Delete Filter"
                         >
-                          <FaTrash className="tocyn-filter-action-icon" />
+                          <IconTrash className="tocyn-filter-action-icon" />
                         </ParkButton>
                       )}
                     </div>
@@ -226,7 +226,7 @@ export function FiltersSettingsPage() {
                 {editingFilter ? 'Edit Filter' : 'Create Filter'}
               </h2>
               <ParkButton type="button" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal} className="tocyn-filter-dialog-close">
-                <FaXmark className="tocyn-filter-dialog-close-icon" />
+                <IconXmark className="tocyn-filter-dialog-close-icon" />
               </ParkButton>
             </div>
             <form onSubmit={handleSubmit} aria-labelledby={titleId} className="tocyn-filter-dialog-form">
@@ -252,7 +252,7 @@ export function FiltersSettingsPage() {
                     onClick={addCondition}
                     className="tocyn-filter-add-condition"
                   >
-                    <FaPlus className="tocyn-filter-action-icon" /> Add Condition
+                    <IconPlus className="tocyn-filter-action-icon" /> Add Condition
                   </ParkButton>
                 </div>
 
@@ -285,7 +285,7 @@ export function FiltersSettingsPage() {
                         aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}
                         className="tocyn-filter-condition-remove"
                       >
-                        <FaTrash className="tocyn-filter-action-icon" />
+                        <IconTrash className="tocyn-filter-action-icon" />
                       </ParkButton>
                     </div>
                   ))}

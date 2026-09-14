@@ -1,10 +1,10 @@
 import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  FaCircleExclamation,
-  FaSpinner,
-  FaFloppyDisk,
-  FaShieldHalved
+  IconCircleExclamation,
+  IconSpinner,
+  IconFloppyDisk,
+  IconShieldHalved
 } from '@luminatick/ui/icons';
 import { dashboardApi } from '../api/client';
 
@@ -87,16 +87,16 @@ export function AgentPermissionsPage() {
     <div className="tocyn-permissions-page">
       <div className="tocyn-permissions-header">
         <div>
-          <h1 className="tocyn-permissions-title"><FaShieldHalved className="tocyn-permissions-title-icon" /> Agent permissions</h1>
+          <h1 className="tocyn-permissions-title"><IconShieldHalved className="tocyn-permissions-title-icon" /> Agent permissions</h1>
           <p className="tocyn-permissions-description">Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
         </div>
         <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className="tocyn-permissions-save">
-          {saving ? <FaSpinner className="tocyn-permissions-save-icon" /> : <FaFloppyDisk className="tocyn-permissions-save-icon" />} Save changes
+          {saving ? <IconSpinner className="tocyn-permissions-save-icon" /> : <IconFloppyDisk className="tocyn-permissions-save-icon" />} Save changes
         </ParkButton>
       </div>
 
       {loading ? <ParkEmptyState title="Loading permissions…" headingLevel={false} aria-busy="true" className="tocyn-permissions-loading" /> : <p role="status" aria-live="polite" className="tocyn-permissions-status">{status}</p>}
-      {error && <div role="alert" className="tocyn-permissions-error"><FaCircleExclamation className="tocyn-permissions-error-icon" /><p className="tocyn-permissions-error-message">{error}</p><ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className="tocyn-permissions-retry">Reload permissions</ParkButton></div>}
+      {error && <div role="alert" className="tocyn-permissions-error"><IconCircleExclamation className="tocyn-permissions-error-icon" /><p className="tocyn-permissions-error-message">{error}</p><ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className="tocyn-permissions-retry">Reload permissions</ParkButton></div>}
 
       <div className="tocyn-permissions-list">
         {capabilities.length === 0 && !loading ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className="tocyn-permissions-empty" /> : capabilities.map(capability => {

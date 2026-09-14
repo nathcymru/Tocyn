@@ -4,13 +4,13 @@ import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
 import {
-  FaPlus,
-  FaXmark,
-  FaList,
-  FaSquareCheck,
-  FaAlignLeft,
-  FaFont,
-  FaToggleOff
+  IconPlus,
+  IconXmark,
+  IconList,
+  IconSquareCheck,
+  IconAlignLeft,
+  IconFont,
+  IconToggleOff
 } from '@luminatick/ui/icons';
 import { clsx } from 'clsx';
 import { useTicketFields } from '../hooks/useTicketFields';
@@ -24,11 +24,11 @@ export function TicketFieldsPage() {
 
   const getIconForType = (type: string) => {
     switch (type) {
-      case 'text': return <FaFont className="tocyn-ticket-field-type-icon" />;
-      case 'textarea': return <FaAlignLeft className="tocyn-ticket-field-type-icon" />;
-      case 'select': return <FaList className="tocyn-ticket-field-type-icon" />;
-      case 'checkbox': return <FaSquareCheck className="tocyn-ticket-field-type-icon" />;
-      default: return <FaFont className="tocyn-ticket-field-type-icon" />;
+      case 'text': return <IconFont className="tocyn-ticket-field-type-icon" />;
+      case 'textarea': return <IconAlignLeft className="tocyn-ticket-field-type-icon" />;
+      case 'select': return <IconList className="tocyn-ticket-field-type-icon" />;
+      case 'checkbox': return <IconSquareCheck className="tocyn-ticket-field-type-icon" />;
+      default: return <IconFont className="tocyn-ticket-field-type-icon" />;
     }
   };
 
@@ -43,7 +43,7 @@ export function TicketFieldsPage() {
           onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
           className="tocyn-ticket-fields-create"
         >
-          <FaPlus className="tocyn-ticket-fields-create-icon" />
+          <IconPlus className="tocyn-ticket-fields-create-icon" />
           Create Field
         </ParkButton>
       </div>
@@ -172,7 +172,7 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
         <div className="tocyn-ticket-field-dialog-header">
           <h2 id={titleId} className="tocyn-ticket-field-dialog-title">Create Ticket Field</h2>
           <ParkButton type="button" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close} className="tocyn-ticket-field-dialog-close">
-            <FaXmark className="tocyn-ticket-field-dialog-close-icon" />
+            <IconXmark className="tocyn-ticket-field-dialog-close-icon" />
           </ParkButton>
         </div>
 

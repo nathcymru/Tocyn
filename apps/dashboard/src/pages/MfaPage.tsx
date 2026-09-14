@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../store/authStore';
 import { dashboardApi } from '../api/client';
 import { AuthResponse } from '../types';
-import { FaShieldHalved, FaKey, FaTriangleExclamation } from '@luminatick/ui/icons';
+import { IconShieldHalved, IconKey, IconTriangleExclamation } from '@luminatick/ui/icons';
 
 interface SetupResponse {
   provisioning_uri: string;
@@ -100,9 +100,9 @@ export function MfaPage() {
         <div className="tocyn-auth-heading">
           <div className="tocyn-mfa-icon-wrap">
             {isSetupMode ? (
-              <FaKey className="tocyn-mfa-icon" />
+              <IconKey className="tocyn-mfa-icon" />
             ) : (
-              <FaShieldHalved className="tocyn-mfa-icon" />
+              <IconShieldHalved className="tocyn-mfa-icon" />
             )}
           </div>
           <h1 className="tocyn-mfa-title">
@@ -117,7 +117,7 @@ export function MfaPage() {
 
         {error && (
           <div id="mfa-error" role="alert" aria-atomic="true" className="tocyn-auth-alert tocyn-mfa-alert">
-            <FaTriangleExclamation className="tocyn-mfa-alert-icon" />
+            <IconTriangleExclamation className="tocyn-mfa-alert-icon" />
             <p>{error}</p>
           </div>
         )}

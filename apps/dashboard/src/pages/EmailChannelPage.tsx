@@ -6,17 +6,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
 import { useGroups } from '../hooks/useGroups';
 import {
-  FaEnvelope,
-  FaPlus,
-  FaTrash,
-  FaCheck,
-  FaCircleExclamation
+  IconEnvelope,
+  IconPlus,
+  IconTrash,
+  IconCheck,
+  IconCircleExclamation
 } from '@luminatick/ui/icons';
 import { clsx } from 'clsx';
 
 import {
-  FaGear,
-  FaFloppyDisk
+  IconGear,
+  IconFloppyDisk
 } from '@luminatick/ui/icons';
 
 
@@ -164,7 +164,7 @@ export function EmailChannelPage() {
             onClick={() => { setIsAdding(true); setError(null); setAddStatus(''); }}
             className="tocyn-email-channel-add"
           >
-            <FaPlus className="tocyn-email-channel-add-icon" />
+            <IconPlus className="tocyn-email-channel-add-icon" />
             Add Email
           </ParkButton>
         )}
@@ -175,7 +175,7 @@ export function EmailChannelPage() {
       <form aria-label="Outbound email configuration" aria-busy={savingResend} onSubmit={saveResendSettings} className="tocyn-email-channel-config">
         <div className="tocyn-email-channel-config-header">
           <div className="tocyn-email-channel-config-icon">
-            <FaGear className="tocyn-email-channel-config-icon-glyph" />
+            <IconGear className="tocyn-email-channel-config-icon-glyph" />
           </div>
           <div>
             <h2 className="tocyn-email-channel-config-title">Resend Integration</h2>
@@ -215,13 +215,13 @@ export function EmailChannelPage() {
           </div>
         </div>
         <div className="tocyn-email-channel-config-actions">
-          {resendSuccess && <span role="status" className="tocyn-email-channel-config-success"><FaCheck className="tocyn-email-channel-config-success-icon"/> Configuration saved; delivery has not been verified.</span>}
+          {resendSuccess && <span role="status" className="tocyn-email-channel-config-success"><IconCheck className="tocyn-email-channel-config-success-icon"/> Configuration saved; delivery has not been verified.</span>}
           <ParkButton
             type="submit"
             disabled={savingResend || settingsLoading || settingsFailed || !resendApiKey || !resendFromEmail}
             className="tocyn-email-channel-config-save"
           >
-            <FaFloppyDisk className="tocyn-email-channel-config-save-icon" />
+            <IconFloppyDisk className="tocyn-email-channel-config-save-icon" />
             {savingResend ? 'Saving...' : 'Save Configuration'}
           </ParkButton>
         </div>
@@ -242,7 +242,7 @@ export function EmailChannelPage() {
 
           {error && (
             <div role="alert" ref={addError} tabIndex={-1} className="tocyn-email-channel-add-error">
-              <FaCircleExclamation className="tocyn-email-channel-add-error-icon" />
+              <IconCircleExclamation className="tocyn-email-channel-add-error-icon" />
               {error}
             </div>
           )}
@@ -336,14 +336,14 @@ export function EmailChannelPage() {
               <div key={email.id} className="tocyn-email-channel-row">
                 <div className="tocyn-email-channel-identity">
                   <div className="tocyn-email-channel-row-icon">
-                    <FaEnvelope className="tocyn-email-channel-row-icon-glyph" />
+                    <IconEnvelope className="tocyn-email-channel-row-icon-glyph" />
                   </div>
                   <div>
                     <div className="tocyn-email-channel-row-heading">
                       <p className="tocyn-email-channel-row-address">{email.email_address}</p>
                       {email.is_default && (
                         <span className="tocyn-email-channel-default-badge">
-                          <FaCheck className="tocyn-email-channel-default-icon" /> Default
+                          <IconCheck className="tocyn-email-channel-default-icon" /> Default
                         </span>
                       )}
                     </div>
@@ -366,7 +366,7 @@ export function EmailChannelPage() {
                     className="tocyn-email-channel-row-delete"
                     title="Remove email"
                   >
-                    <FaTrash className="tocyn-email-channel-row-delete-icon" />
+                    <IconTrash className="tocyn-email-channel-row-delete-icon" />
                   </ParkButton>
                 </div>
               </div>

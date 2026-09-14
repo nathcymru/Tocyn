@@ -5,10 +5,10 @@ import { QRCodeSVG } from 'qrcode.react';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import {
-  FaShieldHalved,
-  FaShield,
-  FaKey,
-  FaTriangleExclamation
+  IconShieldHalved,
+  IconShield,
+  IconKey,
+  IconTriangleExclamation
 } from '@luminatick/ui/icons';
 
 interface SetupResponse {
@@ -119,7 +119,7 @@ export function SecurityProfilePage() {
         <div role="status" className="tocyn-security-status tocyn-security-status--success">
           <div className="tocyn-security-status-inner">
             <div className="tocyn-security-status-icon-wrap">
-              <FaShieldHalved className="tocyn-security-status-icon" />
+              <IconShieldHalved className="tocyn-security-status-icon" />
             </div>
             <div className="tocyn-security-status-copy">
               <p>{successMessage}</p>
@@ -132,7 +132,7 @@ export function SecurityProfilePage() {
         <div role="alert" className="tocyn-security-status tocyn-security-status--error">
           <div className="tocyn-security-status-inner">
             <div className="tocyn-security-status-icon-wrap">
-              <FaTriangleExclamation className="tocyn-security-status-icon" />
+              <IconTriangleExclamation className="tocyn-security-status-icon" />
             </div>
             <div className="tocyn-security-status-copy">
               <p>{error}</p>
@@ -144,7 +144,7 @@ export function SecurityProfilePage() {
       <div className="tocyn-security-card">
         <div className="tocyn-security-card-body">
           <h3 className="tocyn-security-card-title">
-            <FaShieldHalved className="tocyn-security-heading-icon" />
+            <IconShieldHalved className="tocyn-security-heading-icon" />
             Two-Factor Authentication (2FA)
           </h3>
           <div className="tocyn-security-card-description">
@@ -157,7 +157,7 @@ export function SecurityProfilePage() {
             {user.mfa_enabled ? (
               <div className="tocyn-security-status-stack">
                 <div className="tocyn-security-status-enabled">
-                  <FaShieldHalved className="tocyn-security-status-icon" />
+                  <IconShieldHalved className="tocyn-security-status-icon" />
                   2FA is currently enabled
                 </div>
                 {(user.role === 'admin' || user.role === 'agent') ? (
@@ -172,7 +172,7 @@ export function SecurityProfilePage() {
                     disabled={isLoading}
                     className="tocyn-security-action tocyn-security-action-danger"
                   >
-                    <FaShield className="tocyn-security-action-icon" />
+                    <IconShield className="tocyn-security-action-icon" />
                     Disable 2FA
                   </ParkButton>
                 )}
@@ -187,7 +187,7 @@ export function SecurityProfilePage() {
                     disabled={isLoading}
                     className="tocyn-security-action tocyn-security-action-primary"
                   >
-                    <FaKey className="tocyn-security-action-icon" />
+                    <IconKey className="tocyn-security-action-icon" />
                     Set up 2FA
                   </ParkButton>
                 ) : (

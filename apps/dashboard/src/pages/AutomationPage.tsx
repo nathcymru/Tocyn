@@ -5,15 +5,15 @@ import React, { useEffect, useState } from 'react';
 import { dashboardApi } from '../api/client';
 import { AutomationRule, AutomationCondition, WebhookConfig, RetentionConfig } from '../types';
 import {
-  FaPlus,
-  FaTrash,
-  FaToggleOff,
-  FaToggleOn,
-  FaPenToSquare,
-  FaFloppyDisk,
-  FaXmark,
-  FaCircleExclamation,
-  FaCircleCheck
+  IconPlus,
+  IconTrash,
+  IconToggleOff,
+  IconToggleOn,
+  IconPenToSquare,
+  IconFloppyDisk,
+  IconXmark,
+  IconCircleExclamation,
+  IconCircleCheck
 } from '@luminatick/ui/icons';
 
 const EVENT_TYPES = [
@@ -192,7 +192,7 @@ export const AutomationPage: React.FC = () => {
             onClick={startCreate}
             className="tocyn-automation-create"
           >
-            <FaPlus size={20} />
+            <IconPlus size={20} />
             Create Rule
           </ParkButton>
         )}
@@ -200,14 +200,14 @@ export const AutomationPage: React.FC = () => {
 
       {error && (
         <div role="alert" className="tocyn-automation-alert tocyn-automation-alert--error">
-          <FaCircleExclamation size={20} />
+          <IconCircleExclamation size={20} />
           {error}
         </div>
       )}
 
       {success && (
         <div role="status" className="tocyn-automation-alert tocyn-automation-alert--success">
-          <FaCircleCheck size={20} />
+          <IconCircleCheck size={20} />
           {success}
         </div>
       )}
@@ -220,7 +220,7 @@ export const AutomationPage: React.FC = () => {
                 {isEditing === 'new' ? 'Create New Automation Rule' : 'Edit Automation Rule'}
               </h2>
               <ParkButton aria-label="Close automation editor" onClick={() => setIsEditing(null)} className="tocyn-automation-editor-close">
-                <FaXmark size={24} />
+                <IconXmark size={24} />
               </ParkButton>
             </div>
 
@@ -271,7 +271,7 @@ export const AutomationPage: React.FC = () => {
                       onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
                       className="tocyn-automation-status-toggle"
                     >
-                      {editForm.is_active ? <FaToggleOn className="tocyn-automation-status-icon tocyn-automation-status-icon--active" size={40} /> : <FaToggleOff className="tocyn-automation-status-icon tocyn-automation-status-icon--paused" size={40} />}
+                      {editForm.is_active ? <IconToggleOn className="tocyn-automation-status-icon tocyn-automation-status-icon--active" size={40} /> : <IconToggleOff className="tocyn-automation-status-icon tocyn-automation-status-icon--paused" size={40} />}
                     </ParkButton>
                     <span className="tocyn-automation-status-label">{editForm.is_active ? 'Active' : 'Paused'}</span>
                   </div>
@@ -286,7 +286,7 @@ export const AutomationPage: React.FC = () => {
                   onClick={addCondition}
                   className="tocyn-automation-add-condition"
                 >
-                  <FaPlus size={16} /> Add Condition
+                  <IconPlus size={16} /> Add Condition
                 </ParkButton>
               </div>
               <div className="tocyn-automation-condition-list">
@@ -317,7 +317,7 @@ export const AutomationPage: React.FC = () => {
                       onChange={e => changeCondition(idx, 'value', e.target.value)}
                     />
                     <ParkButton aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)} className="tocyn-automation-condition-remove">
-                      <FaTrash size={18} />
+                      <IconTrash size={18} />
                     </ParkButton>
                   </div>
                 ))}
@@ -398,7 +398,7 @@ export const AutomationPage: React.FC = () => {
                 onClick={handleSave}
                 className="tocyn-automation-save"
               >
-                <FaFloppyDisk size={20} />
+                <IconFloppyDisk size={20} />
                 Save Automation Rule
               </ParkButton>
             </div>
@@ -423,9 +423,9 @@ export const AutomationPage: React.FC = () => {
               <div className="tocyn-automation-rule-summary">
                 <ParkButton aria-label={`Status of ${rule.name}`} aria-pressed={Boolean(rule.is_active)} onClick={() => handleToggle(rule.id, rule.is_active)} className="tocyn-automation-toggle">
                   {rule.is_active ? (
-                    <FaToggleOn className="tocyn-automation-toggle-icon tocyn-automation-toggle-icon--active" size={36} />
+                    <IconToggleOn className="tocyn-automation-toggle-icon tocyn-automation-toggle-icon--active" size={36} />
                   ) : (
-                    <FaToggleOff className="tocyn-automation-toggle-icon tocyn-automation-toggle-icon--paused" size={36} />
+                    <IconToggleOff className="tocyn-automation-toggle-icon tocyn-automation-toggle-icon--paused" size={36} />
                   )}
                 </ParkButton>
                 <div className="tocyn-automation-rule-info">
@@ -452,14 +452,14 @@ export const AutomationPage: React.FC = () => {
                   className="tocyn-automation-rule-action tocyn-automation-rule-action-edit"
                   title="Edit Rule"
                 >
-                  <FaPenToSquare size={20} />
+                  <IconPenToSquare size={20} />
                 </ParkButton>
                 <ParkButton
                   aria-label={`Delete ${rule.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(rule); setDeleteError(''); setDeleteOpen(true); }}
                   className="tocyn-automation-rule-action tocyn-automation-rule-action-delete"
                   title="Delete Rule"
                 >
-                  <FaTrash size={20} />
+                  <IconTrash size={20} />
                 </ParkButton>
               </div>
             </div>
