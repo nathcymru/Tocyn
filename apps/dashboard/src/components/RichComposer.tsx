@@ -152,7 +152,9 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
   };
   const handleEditorKeyDown = (event: React.KeyboardEvent) => {
     if (event.defaultPrevented) return;
-    const currentValue = legacyValueRef.current;
+    const targetValue = (event.target as HTMLElement).getAttribute?.('contenteditable') !== null ? (event.target as HTMLElement).textContent ?? '' : '';
+    const currentValue = targetValue || legacyValueRef.current;
+    if (targetValue && targetValue !== legacyValueRef.current) legacyValueRef.current = targetValue;
     const currentAutocomplete = autocomplete ?? (format === 'plain' ? null : findComposerAutocomplete(currentValue, currentValue.length, hooks));
     if (!currentAutocomplete) return;
     if (event.key === 'Escape') { event.preventDefault(); setAutocomplete(null); return; }
@@ -176,8 +178,8 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     if (autocomplete) dom.setAttribute('aria-activedescendant', `${listboxId}-option-${activeIndex}`);
     else dom.removeAttribute('aria-activedescendant');
     const onKeyDown = (event: KeyboardEvent) => handleEditorKeyDown(event as unknown as React.KeyboardEvent);
-    dom.addEventListener('keydown', onKeyDown);
-    return () => dom.removeEventListener('keydown', onKeyDown);
+    dom.addEventListener('keydown', onKeyDown, true);
+    return () => dom.removeEventListener('keydown', onKeyDown, true);
   }, [editor, autocomplete, activeIndex, listboxId]);
   const receiveImages = (files: FileList | readonly File[]) => { if (readOnly) return; const received = Array.from(files); const accepted = acceptedComposerImages(received); if (accepted.length) onImageFiles(accepted); if (accepted.length !== received.length) onRejectedImageFiles(received.length - accepted.length); };
   const receiveDrop = (event: DragEvent<HTMLElement>) => { const files = event.dataTransfer.files; if (!files.length) return; event.preventDefault(); receiveImages(files); };
@@ -194,7 +196,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
   </div>;
   return <section ref={rootRef} aria-label="Rich message composer" onDragOver={event => { if (!readOnly && event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={receiveDrop} onPaste={receivePaste} className={`tocyn-composer-shell ${mode === 'internal' ? 'tocyn-composer-shell--internal' : 'tocyn-composer-shell--public'}`}>
     {format === 'markdown-v1' && <p className="tocyn-composer-format-help">Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Formatting controls use accessible rich text editing.</p>}
-    <div onClickCapture={event => { if (readOnly) event.stopPropagation(); }} onKeyDownCapture={event => { if (readOnly) event.stopPropagation(); }}>
+    <div onClickCapture={event => { if (readOnly) event.stopPropagation(); }} onKeyDownCapture={event => { if (readOnly) event.stopPropagation(); else handleEditorKeyDown(event); }}>
       {format === 'plain' ? (
         <ParkTextarea id={id} aria-label="Reply message" value={value} readOnly={readOnly} onChange={event => { if (!readOnly) onChange(event.target.value); }} className="tocyn-composer-input" />
       ) : (
