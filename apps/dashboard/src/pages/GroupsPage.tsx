@@ -395,10 +395,10 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
                   </TocynButton>
                 ))}
                 {availableAgents?.length === 0 && searchTerm && (
-                  <div className="text-center py-4 text-slate-400 text-sm italic">No matching agents found.</div>
+                  <TocynEmptyState title="No matching agents found." description="Try a different name or email address." className="min-h-0 p-4" />
                 )}
                 {availableAgents?.length === 0 && !searchTerm && (
-                  <div className="text-center py-4 text-slate-400 text-sm italic">All available agents are already in this group.</div>
+                  <TocynEmptyState title="All available agents are already in this group." description="Remove a current member before adding another agent." className="min-h-0 p-4" />
                 )}
               </div>
             </div>
