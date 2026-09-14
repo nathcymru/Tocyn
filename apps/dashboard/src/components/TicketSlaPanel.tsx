@@ -1,5 +1,5 @@
 import { useTicketSla, type SlaTarget } from '../hooks/useTicketSla';
-import { ParkButton } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
 
 import { slaTargetLabel } from './SlaTargetStatus';
 
@@ -11,8 +11,8 @@ function Target({ label, target }: { label: string; target: SlaTarget }) {
 /** Independent ticket-detail section; the composing page mounts it after its own data boundary. */
 export function TicketSlaPanel({ ticketId }: { ticketId: string }) {
   const { data, isLoading, isError, refetch, isFetching } = useTicketSla(ticketId);
-  if (isLoading) return <section aria-label="Service level" className="tocyn-ticket-sla-state">Loading service level…</section>;
-  if (isError || !data) return <section aria-label="Service level" className="tocyn-ticket-sla-state">Service level is unavailable. <ParkButton type="button" className="tocyn-inline-link" disabled={isFetching} onClick={() => void refetch()}>Retry</ParkButton></section>;
+  if (isLoading) return <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading service level…" className="tocyn-ticket-sla-state" />;
+  if (isError || !data) return <ParkEmptyState role="alert" headingLevel={false} title="Service level is unavailable." className="tocyn-ticket-sla-state" action={<ParkButton type="button" className="tocyn-inline-link" disabled={isFetching} onClick={() => void refetch()}>Retry</ParkButton>} />;
   return <section aria-label="Service level" className="tocyn-ticket-sla-panel">
     <h2 className="tocyn-ticket-sla-title">Service level</h2>
     <dl className="tocyn-ticket-sla-grid"><Target label="First response" target={data.response}/><Target label="Resolution" target={data.resolution}/></dl>
