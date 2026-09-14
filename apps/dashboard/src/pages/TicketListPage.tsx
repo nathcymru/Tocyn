@@ -244,7 +244,7 @@ export function TicketListPage() {
         {slaSort && <SlaQueueNotice asOf={paginatedData?.asOf} error={ticketsError} busy={isFetching} restart={restartSlaOrder} />}
         {tickets.length > 0 && ticketSla.isLoading && <p role="status" className="tocyn-ticket-list-status">Loading service levels…</p>}
         {tickets.length > 0 && ticketSla.isError && <p role="status" className="tocyn-ticket-list-status">Service levels could not be refreshed. <TocynButton type="button" disabled={ticketSla.isFetching} onClick={() => void ticketSla.refetch()} className="tocyn-ticket-list-alert-action">Retry service levels</TocynButton></p>}
-        {draftIndicators.status === 'partial' && <p role="status" aria-label="Draft indicator status" className="text-sm text-amber-800">Draft indicators are incomplete. Only the first 200 drafts were checked.</p>}
+        {draftIndicators.status === 'partial' && <p role="status" aria-label="Draft indicator status" className="tocyn-ticket-list-status tocyn-ticket-list-status--warning">Draft indicators are incomplete. Only the first 200 drafts were checked.</p>}
         {workspace.status === 'error' && (
           <div role="alert" className="tocyn-ticket-list-alert tocyn-ticket-list-alert--error">
             <p>{workspace.error}</p>
@@ -257,12 +257,12 @@ export function TicketListPage() {
             <TocynButton type="button" onClick={workspace.restoreServerState} className="tocyn-ticket-list-alert-action">Restore server preferences</TocynButton>
           </div>
         )}
-        {clipboardError && <p role="alert" className="text-sm text-red-800">{clipboardError}</p>}
+        {clipboardError && <p role="alert" className="tocyn-ticket-list-status tocyn-ticket-list-status--error">{clipboardError}</p>}
         {(ticketsError || retryingFeed) && (
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div role="alert" className="tocyn-ticket-list-alert tocyn-ticket-list-alert--error">
             <p>{tickets.length ? 'Could not refresh tickets. Showing the last loaded results.' : 'Could not load tickets.'}</p>
             <TocynButton type="button" ref={retryButton} onClick={() => {void retryFeed();}} aria-disabled={isFetching || retryingFeed}
-              className="mt-2 rounded border border-red-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">
+              className="tocyn-ticket-list-alert-action">
               {isFetching ? 'Retrying…' : 'Retry loading tickets'}
             </TocynButton>
           </div>
@@ -463,23 +463,23 @@ export function TicketListPage() {
       <TocynDialog open={isModalOpen} onOpenChange={setIsModalOpen} busy={createTicket.isPending}
           labelledBy="create-ticket-heading" initialFocusEl={() => createSubject.current} finalFocusEl={() => createTrigger.current}
           className="w-full max-w-2xl">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 id="create-ticket-heading" className="text-xl font-bold text-slate-900">Create New Ticket</h2>
-              <TocynButton type="button" aria-disabled={createTicket.isPending} aria-label="Close new ticket" onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }} className="rounded text-slate-600 hover:text-slate-900 focus-visible:outline focus-visible:outline-2">
-                <X className="w-6 h-6" />
+          <div className="tocyn-ticket-create-modal">
+            <div className="tocyn-ticket-create-header">
+              <h2 id="create-ticket-heading" className="tocyn-ticket-create-title">Create New Ticket</h2>
+              <TocynButton type="button" aria-disabled={createTicket.isPending} aria-label="Close new ticket" onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }} className="tocyn-ticket-create-close">
+                <X className="tocyn-ticket-list-icon" />
               </TocynButton>
             </div>
-            <form aria-busy={createTicket.isPending} onSubmit={handleCreateTicket} className="p-6 space-y-4">
-              <p role="status" aria-label="Ticket creation status" className="text-sm text-slate-700">{createTicket.isPending ? "Creating ticket…" : ""}</p>
-              {createError && <p id="create-ticket-error" role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-800">{createError}</p>}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label htmlFor="create-ticket-subject" className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+            <form aria-busy={createTicket.isPending} onSubmit={handleCreateTicket} className="tocyn-ticket-create-form">
+              <p role="status" aria-label="Ticket creation status" className="tocyn-ticket-create-status">{createTicket.isPending ? "Creating ticket…" : ""}</p>
+              {createError && <p id="create-ticket-error" role="alert" className="tocyn-ticket-create-error">{createError}</p>}
+              <div className="tocyn-ticket-create-grid">
+                <div>
+                  <label htmlFor="create-ticket-subject" className="tocyn-ticket-create-label">Subject</label>
                   <TocynInput
                     type="text"
                     required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-subject"
                     ref={createSubject}
                     readOnly={createTicket.isPending}
@@ -489,11 +489,11 @@ export function TicketListPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="create-ticket-customer_email" className="block text-sm font-medium text-slate-700 mb-1">Customer Email</label>
+                  <label htmlFor="create-ticket-customer_email" className="tocyn-ticket-create-label">Customer Email</label>
                   <TocynInput
                     type="email"
                     required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-customer_email"
                     readOnly={createTicket.isPending}
                     aria-describedby={createError ? "create-ticket-error" : undefined}
@@ -502,9 +502,9 @@ export function TicketListPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="create-ticket-priority" className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
+                  <label htmlFor="create-ticket-priority" className="tocyn-ticket-create-label">Priority</label>
                   <TocynSelect
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-priority"
                     aria-disabled={createTicket.isPending}
                     value={formData.priority}
@@ -517,9 +517,9 @@ export function TicketListPage() {
                   </TocynSelect>
                 </div>
                 <div>
-                  <label htmlFor="create-ticket-group_id" className="block text-sm font-medium text-slate-700 mb-1">Group</label>
+                  <label htmlFor="create-ticket-group_id" className="tocyn-ticket-create-label">Group</label>
                   <TocynSelect
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-group_id"
                     aria-disabled={createTicket.isPending}
                     value={formData.group_id}
@@ -532,7 +532,7 @@ export function TicketListPage() {
                   </TocynSelect>
                 </div>
                 <div>
-                  <label htmlFor="create-ticket-assigned_to" className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
+                  <label htmlFor="create-ticket-assigned_to" className="tocyn-ticket-create-label">Assignee</label>
                   <TocynSelect
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                     id="create-ticket-assigned_to"
@@ -548,11 +548,11 @@ export function TicketListPage() {
                 </div>
               </div>
               <div>
-                <label htmlFor="create-ticket-body" className="block text-sm font-medium text-slate-700 mb-1">Initial Message</label>
+                <label htmlFor="create-ticket-body" className="tocyn-ticket-create-label">Initial Message</label>
                 <TocynTextarea
                   required
                   rows={4}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="tocyn-ticket-create-control tocyn-ticket-create-textarea"
                   id="create-ticket-body"
                     readOnly={createTicket.isPending}
                     aria-describedby={createError ? "create-ticket-error" : undefined}
@@ -560,19 +560,19 @@ export function TicketListPage() {
                   onChange={(e) => { if (!createTicket.isPending) setFormData({ ...formData, body: e.target.value }); }}
                 />
               </div>
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="tocyn-ticket-create-actions">
                 <TocynButton
                   type="button"
                   aria-disabled={createTicket.isPending}
                   onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }}
-                  className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors focus-visible:outline focus-visible:outline-2"
+                  className="tocyn-ticket-create-cancel"
                 >
                   Cancel
                 </TocynButton>
                 <TocynButton
                   type="submit"
                   aria-disabled={createTicket.isPending}
-                  className="px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors aria-disabled:bg-brand-700 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="tocyn-ticket-create-submit"
                 >
                   {createTicket.isPending ? 'Creating...' : 'Create Ticket'}
                 </TocynButton>
