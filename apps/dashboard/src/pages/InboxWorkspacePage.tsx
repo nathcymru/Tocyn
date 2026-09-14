@@ -253,38 +253,38 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
           to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} onFocus={()=>setFocusedIndex(index)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();moveFocus(index+1);}if(event.key==='ArrowUp'){event.preventDefault();moveFocus(index-1);}}}
-          className={clsx('block border-l-4 px-4 py-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700',selected?'border-brand-600 bg-brand-50':'border-transparent bg-white hover:bg-slate-50')}>
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{ticket.subject}</p><p className="mt-0.5 truncate text-sm text-slate-600">{ticket.customer_email}</p></div>
-            <time className="shrink-0 text-xs text-slate-500" dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></div>
-          {ticket.snippet&&<p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600">{ticket.snippet}</p>}
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="font-mono font-semibold text-slate-600">{reference}</span>
-            <span className={clsx('rounded-full border px-2 py-0.5 font-semibold capitalize',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span>
-            {queue&&!query.isPlaceholderData&&<span className="rounded bg-brand-50 px-2 py-0.5 font-semibold text-brand-800" aria-label={`Inclusion reason: ${queue}`}>{queueViews[queue].label}</span>}
-            <span className={clsx('inline-flex items-center gap-1 font-semibold capitalize',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{ticket.priority}</span>
-            {drafts.ticketIds.has(ticket.id)&&<span className="rounded bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">Draft</span>}</div>
-          <div className="mt-2">{ticketSla.isLoading?<span className="inline-flex items-center gap-1 text-xs text-slate-500"><Clock className="h-3 w-3" aria-hidden="true" />Loading service level…</span>
+          className={clsx('tocyn-inbox-row',selected&&'tocyn-inbox-row--selected')}>
+          <div className="tocyn-inbox-title-row"><div className="tocyn-inbox-row-copy"><p className="tocyn-inbox-row-subject">{ticket.subject}</p><p className="tocyn-inbox-row-customer">{ticket.customer_email}</p></div>
+            <time className="tocyn-inbox-row-date" dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></div>
+          {ticket.snippet&&<p className="tocyn-inbox-row-preview">{ticket.snippet}</p>}
+          <div className="tocyn-inbox-row-meta"><span className="tocyn-inbox-row-reference">{reference}</span>
+            <span className={clsx('tocyn-inbox-row-status',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span>
+            {queue&&!query.isPlaceholderData&&<span className="tocyn-inbox-row-queue" aria-label={`Inclusion reason: ${queue}`}>{queueViews[queue].label}</span>}
+            <span className={clsx('tocyn-inbox-row-priority',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="tocyn-inbox-priority-icon" aria-hidden="true" />{ticket.priority}</span>
+            {drafts.ticketIds.has(ticket.id)&&<span className="tocyn-inbox-row-draft">Draft</span>}</div>
+          <div className="tocyn-inbox-row-sla">{ticketSla.isLoading?<span className="tocyn-inbox-row-sla-loading"><Clock className="tocyn-inbox-sla-icon" aria-hidden="true" />Loading service level…</span>
             :<ConversationSlaStatus sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id]} />}</div>
         </Link>;
       })}
     </div>
-      {presentation==='table'&&<div className="hidden flex-1 overflow-x-auto sm:block" aria-label="Conversation table">
-        <table className="min-w-[40rem] w-full text-left text-sm"><caption className="sr-only">Tickets in the current view</caption><thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600"><tr>
-          <th scope="col" className="px-4 py-3">Reference</th><th scope="col" className="px-4 py-3">Subject</th><th scope="col" className="px-4 py-3">Status</th><th scope="col" className="px-4 py-3">Priority</th><th scope="col" className="px-4 py-3">Customer</th><th scope="col" className="px-4 py-3">Updated</th>
-        </tr></thead><tbody className="divide-y divide-slate-200">
-        {query.isLoading?<tr><td colSpan={6} className="tocyn-inbox-loading-state">Loading conversations…</td></tr>:emptyPage?<tr><td colSpan={6} className="tocyn-inbox-empty-state">{emptyMessage}</td></tr>:tickets.map(ticket=>{
+      {presentation==='table'&&<div className="tocyn-inbox-table-wrap hidden sm:block" aria-label="Conversation table">
+        <table className="tocyn-inbox-table"><caption className="sr-only">Tickets in the current view</caption><thead className="tocyn-inbox-table-head"><tr>
+          <th scope="col" className="tocyn-inbox-table-cell-nowrap">Reference</th><th scope="col" className="tocyn-inbox-table-cell">Subject</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Status</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Priority</th><th scope="col" className="tocyn-inbox-table-cell">Customer</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Updated</th>
+        </tr></thead><tbody className="tocyn-inbox-table-body">
+        {query.isLoading?<tr><td colSpan={6} className="tocyn-inbox-table-loading">Loading conversations…</td></tr>:emptyPage?<tr><td colSpan={6} className="tocyn-inbox-table-empty">{emptyMessage}</td></tr>:tickets.map(ticket=>{
           const reference=ticketReference(ticket,prefix);const selected=ticket.id===selectedTicketId;
-          return <tr key={ticket.id} aria-selected={selected} className={clsx('hover:bg-slate-50',selected&&'bg-brand-50')}>
-            <td className="whitespace-nowrap px-4 py-3 font-mono font-semibold text-slate-600">{reference}</td>
-            <td className="max-w-[20rem] px-4 py-3"><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} className="font-semibold text-slate-900 underline decoration-transparent hover:text-brand-700 hover:decoration-current focus-visible:outline focus-visible:ring-2 focus-visible:ring-brand-700">{ticket.subject}</Link>{ticket.snippet&&<p className="mt-1 truncate text-xs text-slate-600">{ticket.snippet}</p>}</td>
-            <td className="whitespace-nowrap px-4 py-3"><span className={clsx('rounded-full border px-2 py-0.5 text-xs font-semibold capitalize',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span></td>
-            <td className="whitespace-nowrap px-4 py-3"><span className={clsx('inline-flex items-center gap-1 font-semibold capitalize',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{ticket.priority}</span></td>
-            <td className="max-w-[15rem] truncate px-4 py-3 text-slate-700" title={ticket.customer_email}>{ticket.customer_email}</td><td className="whitespace-nowrap px-4 py-3 text-slate-600"><time dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></td>
+          return <tr key={ticket.id} aria-selected={selected} className={clsx('tocyn-inbox-table-row',selected&&'tocyn-inbox-table-row-selected')}>
+            <td className="tocyn-inbox-table-reference">{reference}</td>
+            <td className="tocyn-inbox-table-subject"><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} className="tocyn-inbox-table-link">{ticket.subject}</Link>{ticket.snippet&&<p className="tocyn-inbox-table-preview">{ticket.snippet}</p>}</td>
+            <td className="tocyn-inbox-table-cell-nowrap"><span className={clsx('tocyn-inbox-row-status',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span></td>
+            <td className="tocyn-inbox-table-cell-nowrap"><span className={clsx('tocyn-inbox-row-priority',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="tocyn-inbox-priority-icon" aria-hidden="true" />{ticket.priority}</span></td>
+            <td className="tocyn-inbox-table-customer" title={ticket.customer_email}>{ticket.customer_email}</td><td className="tocyn-inbox-table-date"><time dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></td>
           </tr>;
         })}
       </tbody></table>
     </div>}
-    {meta.total_pages>1&&<footer className="sticky bottom-0 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3"><span role="status" className="text-xs font-semibold text-slate-600">Page {meta.page} of {meta.total_pages}</span><div className="flex gap-2">
-      <TocynButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||page<=1} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page>1){paging.current=true;workspace.update({listAnchor:pageAnchor(page-1)});}}} className="rounded-lg border border-slate-300 p-2"><ChevronLeft className="h-4 w-4" /></TocynButton>
-      <TocynButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||page>=meta.total_pages} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(page+1)});}}} className="rounded-lg border border-slate-300 p-2"><ChevronRight className="h-4 w-4" /></TocynButton></div></footer>}
+    {meta.total_pages>1&&<footer className="tocyn-inbox-pagination"><span role="status" className="text-xs font-semibold text-slate-600">Page {meta.page} of {meta.total_pages}</span><div className="tocyn-inbox-pagination-actions">
+      <TocynButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||page<=1} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page>1){paging.current=true;workspace.update({listAnchor:pageAnchor(page-1)});}}} className="tocyn-inbox-pagination-button"><ChevronLeft className="tocyn-inbox-pagination-icon" /></TocynButton>
+      <TocynButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||page>=meta.total_pages} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(page+1)});}}} className="tocyn-inbox-pagination-button"><ChevronRight className="tocyn-inbox-pagination-icon" /></TocynButton></div></footer>}
   </div>;
 }
