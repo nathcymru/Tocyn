@@ -20,6 +20,7 @@
   --tocyn-color-brand-strong: #1e293b;
   --tocyn-color-selected: #dbeafe;
   --tocyn-color-critical: #b91c1c;
+  --tocyn-color-success: #15803d;
   --tocyn-color-quiet: #475569;
   --tocyn-target-min: 44px;
   --tocyn-density-comfortable: 1rem;
@@ -422,8 +423,8 @@
     --tocyn-color-focus: #60a5fa; --tocyn-color-selected: #1e3a5f; --tocyn-color-critical: #fca5a5; --tocyn-color-quiet: #94a3b8;
   }
 }
-[data-tocyn-theme-mode="dark"] { --tocyn-color-canvas: #0f1115; --tocyn-color-surface: #1a1d23; --tocyn-color-input: #1e293b; --tocyn-color-surface-panel: #0f1115; --tocyn-color-surface-muted: #1e293b; --tocyn-color-divider: #334155; --tocyn-color-text: #e2e8f0; --tocyn-color-text-muted: #94a3b8; --tocyn-color-accent: #cbd5e1; --tocyn-color-brand: #cbd5e1; --tocyn-color-brand-strong: #e2e8f0; --tocyn-color-focus: #60a5fa; --tocyn-color-selected: #1e3a5f; --tocyn-color-critical: #fca5a5; --tocyn-color-quiet: #94a3b8; }
-[data-tocyn-theme-mode="light"] { --tocyn-color-canvas: #f8fafc; --tocyn-color-surface: #ffffff; --tocyn-color-input: #f1f5f9; --tocyn-color-surface-panel: #f8fafc; --tocyn-color-surface-muted: #f1f5f9; --tocyn-color-divider: #cbd5e1; --tocyn-color-text: #1e293b; --tocyn-color-text-muted: #64748b; --tocyn-color-accent: #334155; --tocyn-color-brand: #334155; --tocyn-color-brand-strong: #1e293b; --tocyn-color-focus: #3b82f6; --tocyn-color-selected: #eff6ff; --tocyn-color-critical: #b91c1c; --tocyn-color-quiet: #64748b; }
+[data-tocyn-theme-mode="dark"] { --tocyn-color-canvas: #0f1115; --tocyn-color-surface: #1a1d23; --tocyn-color-input: #1e293b; --tocyn-color-surface-panel: #0f1115; --tocyn-color-surface-muted: #1e293b; --tocyn-color-divider: #334155; --tocyn-color-text: #e2e8f0; --tocyn-color-text-muted: #94a3b8; --tocyn-color-accent: #cbd5e1; --tocyn-color-brand: #cbd5e1; --tocyn-color-brand-strong: #e2e8f0; --tocyn-color-focus: #60a5fa; --tocyn-color-selected: #1e3a5f; --tocyn-color-critical: #fca5a5; --tocyn-color-success: #4ade80; --tocyn-color-quiet: #94a3b8; }
+[data-tocyn-theme-mode="light"] { --tocyn-color-canvas: #f8fafc; --tocyn-color-surface: #ffffff; --tocyn-color-input: #f1f5f9; --tocyn-color-surface-panel: #f8fafc; --tocyn-color-surface-muted: #f1f5f9; --tocyn-color-divider: #cbd5e1; --tocyn-color-text: #1e293b; --tocyn-color-text-muted: #64748b; --tocyn-color-accent: #334155; --tocyn-color-brand: #334155; --tocyn-color-brand-strong: #1e293b; --tocyn-color-focus: #3b82f6; --tocyn-color-selected: #eff6ff; --tocyn-color-critical: #b91c1c; --tocyn-color-success: #15803d; --tocyn-color-quiet: #64748b; }
 [data-tocyn-theme-mode="light"] { color-scheme: light; }
 [data-tocyn-theme-mode="dark"] { color-scheme: dark; }
 [data-tocyn-theme-mode] :where(button, input, textarea, select, [role="button"], [role="combobox"], [tabindex]:not([tabindex="-1"])):focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
