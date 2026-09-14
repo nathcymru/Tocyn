@@ -286,7 +286,7 @@
 @media (min-width: 1024px) { .tocyn-inbox-detail-panel { padding: 2rem; } }
 @media (max-width: 1023px) {
   .tocyn-inbox-workspace { display: block; overflow: auto; }
-  .tocyn-inbox-list-panel, .tocyn-inbox-detail-panel { width: 100%; min-width: 0; height: auto; min-height: 100%; }
+  .tocyn-inbox-list-panel, .tocyn-inbox-detail-panel { width: 100% !important; min-width: 0; flex: 0 0 100% !important; height: auto; min-height: 100%; }
   .tocyn-inbox-mobile-hidden { display: none; }
   .tocyn-inbox-workspace [data-part="resize-trigger"] { display: none; }
 }
