@@ -1095,7 +1095,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
 
               {!replyCapability ? <div role="status" className="mb-2 text-sm text-slate-700">
                 {replyCapabilities.isLoading ? 'Loading reply options…' : 'Reply options are unavailable.'}
-                {replyCapabilities.isError && <button type="button" className="ml-2 underline" onClick={() => void replyCapabilities.refetch()}>Retry reply options</button>}
+                {replyCapabilities.isError && <TocynButton type="button" className="ml-2 underline" onClick={() => void replyCapabilities.refetch()}>Retry reply options</TocynButton>}
               </div> : <p className="mb-2 text-sm text-slate-600">{replyCapability.channel === 'email'
                 ? `Email reply to ${ticket.customer_email}. Delivery is attempted after saving.`
                 : 'Internal note. No email is sent.'} Up to {replyCapability.attachments.maxCount} attachments, {replyCapability.attachments.maxBytesPerFile / 1024 / 1024} MB each.</p>}
@@ -1116,11 +1116,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </fieldset>}
               <label className="mb-2 block text-sm text-slate-700">
                 Message format
-                <select aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
+                <TocynSelect aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
                   onChange={event => { if (!submission.current && (event.target.value === 'plain' || event.target.value === 'markdown-v1') && replyCapability?.body.acceptedFormats.includes(event.target.value)) updateDraft({ bodyFormat: event.target.value }); }}
                   className="ml-2 rounded border border-slate-300 bg-white p-2 text-slate-900 focus-visible:outline focus-visible:outline-2">
                   <option value="plain" disabled={!replyCapability?.body.acceptedFormats.includes('plain')}>Plain text</option><option value="markdown-v1" disabled={!replyCapability?.body.acceptedFormats.includes('markdown-v1')}>Markdown</option>
-                </select>
+                </TocynSelect>
               </label>
               <RichComposer
                 id="reply-message"

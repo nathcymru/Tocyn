@@ -1,4 +1,5 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
+import { TocynTextarea } from '@luminatick/ui/primitives';
 import MDEditor from '@uiw/react-md-editor';
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
@@ -203,7 +204,7 @@ export function RichComposer({
     className={`rounded-xl border p-2 ${mode === 'internal' ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}>
     {format === 'markdown-v1' && <p className="mb-2 text-xs text-slate-600">Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Markdown toolbar supports headings, emphasis, links, lists and code.</p>}
     <div onClickCapture={event => { if (readOnly) event.stopPropagation(); }} onKeyDownCapture={event => { if (readOnly) event.stopPropagation(); }}>
-      {format === 'plain' ? <textarea id={id} aria-label="Reply message" value={value} readOnly={readOnly}
+      {format === 'plain' ? <TocynTextarea id={id} aria-label="Reply message" value={value} readOnly={readOnly}
         onChange={event => { if (!readOnly) onChange(event.target.value); }}
         className="min-h-44 w-full rounded border border-slate-300 bg-white p-3 text-slate-900 focus-visible:outline focus-visible:outline-2"
       /> : <MDEditor
