@@ -1186,6 +1186,7 @@
 .tocyn-permissions-save:hover { background: var(--tocyn-color-brand-strong, #1d4ed8); }
 .tocyn-permissions-save-icon { inline-size: 1rem; block-size: 1rem; }
 .tocyn-permissions-loading { margin-block-end: 1rem; border: 0; background: transparent; }
+.tocyn-permissions-empty { border: 0; background: transparent; }
 .tocyn-permissions-status { margin-block-end: 1rem; color: var(--tocyn-color-text); font-size: .875rem; }
 .tocyn-permissions-error { display: flex; align-items: center; gap: .75rem; margin-block-end: 1.5rem; border-radius: .5rem; background: #fef2f2; color: #b91c1c; padding: 1rem; }
 .tocyn-permissions-error-icon { inline-size: 1.25rem; block-size: 1.25rem; flex: 0 0 auto; }

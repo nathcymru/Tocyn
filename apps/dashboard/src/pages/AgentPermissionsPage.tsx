@@ -99,7 +99,7 @@ export function AgentPermissionsPage() {
       {error && <div role="alert" className="tocyn-permissions-error"><FaCircleExclamation className="tocyn-permissions-error-icon" /><p className="tocyn-permissions-error-message">{error}</p><ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className="tocyn-permissions-retry">Reload permissions</ParkButton></div>}
 
       <div className="tocyn-permissions-list">
-        {capabilities.length === 0 && !loading ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className="border-0 bg-transparent" /> : capabilities.map(capability => {
+        {capabilities.length === 0 && !loading ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className="tocyn-permissions-empty" /> : capabilities.map(capability => {
           const tenantManaged = capability.key !== capability.capability;
           const available = capability.ownerAllowed && capability.roleAllowed && tenantManaged;
           const checked = policies[capability.key] ?? false;
