@@ -1160,7 +1160,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 format={draft.bodyFormat ?? 'plain'}
                 readOnly={isSubmitting || draft.status === 'loading'}
                 mode={isInternal ? 'internal' : 'public'}
-                onChange={body => { if (!submission.current) updateDraft({ body }); }}
+                onChange={body => {
+                  // Tiptap can emit a synthetic input while mounting or
+                  // synchronising controlled content. Do not turn an
+                  // identical value into an unsaved draft, which would make
+                  // an immediate ticket navigation appear blocked.
+                  if (!submission.current && body !== draftRef.current.body) updateDraft({ body });
+                }}
                 onImageFiles={files => addAttachments(files)}
                 onRejectedImageFiles={count => setNotice(`${count} image${count === 1 ? '' : 's'} was not attached. Use JPEG, PNG, GIF, or WebP images up to 10 MB.`)}
               />
