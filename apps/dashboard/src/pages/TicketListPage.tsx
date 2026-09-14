@@ -268,16 +268,16 @@ export function TicketListPage() {
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
-          <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
-            <div className="max-w-md w-full relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <div className="tocyn-ticket-table-shell">
+          <div className="tocyn-ticket-table-toolbar">
+            <div className="tocyn-global-search-shell">
+              <Search className="tocyn-global-search-icon" aria-hidden="true" />
               <TocynInput
                 type="text"
                 placeholder="Search all authorised tickets..."
                 aria-label="Search all tickets in this list view"
                 aria-describedby="global-ticket-results-scope"
-                className="w-full pl-9 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                className="tocyn-global-search"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -294,17 +294,17 @@ export function TicketListPage() {
                 }}
               />
               <TocynButton type="button" aria-label="Clear list ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
+                className="tocyn-search-clear">Clear</TocynButton>
               <p id="global-ticket-results-scope" className="sr-only">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-700">
+            <div className="tocyn-ticket-table-controls">
+              <label className="tocyn-ticket-sort-label">
                 <span>Sort tickets</span>
                 <TocynSelect
                   aria-label="Sort tickets"
                   value={workspace.sort}
                   onChange={(event) => handleSortChange(event.target.value as WorkspacePreference['sort'])}
-                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="tocyn-form-control tocyn-ticket-sort-select"
                 >
                   <option value="updated_desc">Recently updated</option>
                   <option value="updated_asc">Least recently updated</option>
@@ -315,35 +315,29 @@ export function TicketListPage() {
                   <option value="sla_priority">Earliest SLA deadline</option>
                 </TocynSelect>
               </label>
-              <div className="text-sm text-slate-500 font-medium">
+              <div className="tocyn-ticket-total">
                 Total: {meta.total}
               </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left">
+          <div className="tocyn-ticket-table-scroll">
+            <table className="tocyn-ticket-table">
               <thead>
-                <tr className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                  <th className="px-6 py-4 border-b border-slate-200">ID</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Subject</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Status</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Priority</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Customer</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Last Update</th>
-                  <th className="px-6 py-4 border-b border-slate-200 text-right">Actions</th>
+                <tr className="tocyn-ticket-table-head">
+                  <th>ID</th><th>Subject</th><th>Status</th><th>Priority</th><th>Customer</th><th>Last Update</th><th className="tocyn-ticket-table-actions-heading">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="tocyn-ticket-table-body">
                 {isLoadingTickets ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">Loading tickets...</td>
+                    <td colSpan={7} className="tocyn-ticket-list-state">Loading tickets...</td>
                   </tr>
                 ) : ticketsError && tickets.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-600">Tickets are currently unavailable.</td></tr>
+                  <tr><td colSpan={7} className="tocyn-ticket-list-state">Tickets are currently unavailable.</td></tr>
                 ) : tickets.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">No tickets found.</td>
+                    <td colSpan={7} className="tocyn-ticket-list-state">No tickets found.</td>
                   </tr>
                 ) : (
                   tickets.map((ticket) => (
@@ -438,26 +432,26 @@ export function TicketListPage() {
 
           {/* Pagination Controls */}
           {meta.total_pages > 1 && (
-            <div className="p-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
-              <span role="status" aria-label="Ticket pages" className="text-sm text-slate-700 font-medium">
+            <div className="tocyn-ticket-list-pagination">
+              <span role="status" aria-label="Ticket pages" className="tocyn-ticket-list-status">
                 Showing page {meta.page} of {meta.total_pages}
               </span>
-              <div className="flex gap-2">
+              <div className="tocyn-ticket-table-controls">
                 <TocynButton
                   onClick={() => { if (!isFetching && page > 1) { paging.current = true; workspace.update({ listAnchor: pageAnchor(page - 1) }); } }}
                   aria-disabled={isFetching || page === 1}
-                  className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 hover:bg-white aria-disabled:bg-slate-100 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 flex items-center gap-1 bg-white shadow-sm transition-colors"
+                  className="tocyn-ticket-pagination-button"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="tocyn-ticket-list-icon" />
                   Previous
                 </TocynButton>
                 <TocynButton
                   onClick={() => { if (!isFetching && page < meta.total_pages) { paging.current = true; workspace.update({ listAnchor: pageAnchor(page + 1) }); } }}
                   aria-disabled={isFetching || page >= meta.total_pages}
-                  className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 hover:bg-white aria-disabled:bg-slate-100 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 flex items-center gap-1 bg-white shadow-sm transition-colors"
+                  className="tocyn-ticket-pagination-button"
                 >
                   Next
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="tocyn-ticket-list-icon" />
                 </TocynButton>
               </div>
             </div>
