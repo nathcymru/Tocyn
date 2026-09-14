@@ -77,7 +77,7 @@ export type DraftSaveInput = Readonly<{
 }>;
 export type WorkspaceStateSaveInput = Readonly<{
   expectedRevision: number; view: OperatorWorkspaceView; sort: OperatorWorkspaceSort;
-  filters: OperatorWorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: 'conversation' | 'details'; splitterRatio: number;
+  filters: OperatorWorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: 'conversation' | 'details'; splitterRatio?: number;
 }>;
 export type DraftRebaseInput = Readonly<{
   ticketId: string; expectedGeneration: string; expectedRevision: number; expectedReviewedConversationRevision: number;
@@ -393,6 +393,8 @@ export class OperatorWorkspaceRepository {
 
   async saveWorkspaceState(input: WorkspaceStateSaveInput, commit?: OperatorWorkspaceCommit): Promise<OperatorWorkspaceState | null> {
     const serializedFilters = JSON.stringify(input.filters);
+    // Preserve callers written before splitter persistence was introduced.
+    const splitterRatio = input.splitterRatio ?? 32;
     const statement = this.db.prepare(`INSERT INTO operator_workspace_state
       (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,splitter_ratio,created_at,updated_at)
       SELECT ?,?,1,?,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
@@ -404,7 +406,7 @@ export class OperatorWorkspaceRepository {
       RETURNING ${stateColumns}`)
       .bind(
         this.scope.tenantId, this.scope.actorId, input.view, input.sort, serializedFilters, input.listQuery, input.listAnchor,
-        input.selectedTicketId, input.panel, input.splitterRatio, input.expectedRevision, this.scope.tenantId, this.scope.actorId, input.expectedRevision,
+        input.selectedTicketId, input.panel, splitterRatio, input.expectedRevision, this.scope.tenantId, this.scope.actorId, input.expectedRevision,
       );
     const condition: MutationCondition = {
       sql: `(?=0 AND NOT EXISTS (SELECT 1 FROM operator_workspace_state WHERE tenant_id=? AND user_id=?))
