@@ -1205,7 +1205,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     className="tocyn-composer-attach-button"
                     title="Attach files"
                   >
-                    <Paperclip className="w-4 h-4" />
+                    <Paperclip className="tocyn-ticket-detail-icon-md" />
                   </TocynButton>
                   <TocynButton
                     type="submit"
@@ -1215,7 +1215,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                       isInternal ? "tocyn-composer-submit-internal" : "tocyn-composer-submit-public"
                     )}
                   >
-                    <Send className="w-4 h-4" />
+                    <Send className="tocyn-ticket-detail-icon-md" />
                     {isInternal ? "Add Note" : "Send Reply"}
                   </TocynButton>
                 </div>
@@ -1338,9 +1338,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </div>
 
             {ticketFields && ticketFields.filter(f => f.is_active).length > 0 && (
-              <div className="pt-4 mt-4 border-t border-slate-200">
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Custom Attributes</h4>
-                <div className="space-y-4">
+              <div className="tocyn-ticket-context-custom-section">
+                <h4 className="tocyn-ticket-context-custom-title">Custom Attributes</h4>
+                <div className="tocyn-ticket-context-custom-fields">
                   {ticketFields.filter(f => f.is_active).map((field) => {
                     const value = ticket.custom_fields ? ticket.custom_fields[field.name] : '';
                     const inputId = `${customFieldPrefix}-${field.id}`;
@@ -1357,8 +1357,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     };
 
                     return (
-                      <div key={field.id}>
-                        <label htmlFor={inputId} className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                      <div key={field.id} className="tocyn-form-field">
+                        <label htmlFor={inputId} className="tocyn-ticket-context-settings-label">
                           {field.label}
                         </label>
                         {field.field_type === 'select' && field.options ? (
@@ -1366,7 +1366,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                             id={inputId}
                             value={value || ''}
                             onChange={(e) => handleSave(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+                            className="tocyn-form-control tocyn-ticket-context-settings-control"
                           >
                             <option value="">Select...</option>
                             {field.options.split(',').map(s => s.trim()).filter(Boolean).map((opt) => (
@@ -1374,15 +1374,15 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                             ))}
                           </TocynSelect>
                         ) : field.field_type === 'checkbox' ? (
-                          <div className="flex items-center gap-2">
+                          <div className="tocyn-ticket-context-checkbox-row">
                             <TocynInput
                               id={inputId}
                               type="checkbox"
                               checked={value === true || value === 'true'}
                               onChange={(e) => handleSave(e.target.checked)}
-                              className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                              className="tocyn-ticket-context-checkbox"
                             />
-                            <span className="text-sm font-medium text-slate-700">{field.label}</span>
+                            <span className="tocyn-ticket-context-checkbox-label">{field.label}</span>
                           </div>
                         ) : (
                           <CustomFieldInput
