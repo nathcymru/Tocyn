@@ -981,7 +981,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               {isFetchNextPageError ? 'Could not load more messages. Try again.' : isFetchingNextPage ? 'Loading more messages…' : `Showing ${ticket.articles.length} messages.${hasNextPage ? ' More messages are available.' : ' All messages are loaded.'}`}
             </p>
           </div>}
-          <div className="p-6 border-t border-slate-200 bg-white">
+          <div className="tocyn-ticket-composer-panel">
             {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} {' '}
               {staleReplyReview ? <>
                 {staleReplyReview === 'refreshing'
@@ -1008,17 +1008,17 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="underline">Discard draft</TocynButton>}
               </span>
             </div>}
-            <form onSubmit={handleSubmitReply} className="space-y-4">
+            <form onSubmit={handleSubmitReply} className="tocyn-ticket-composer-form">
               {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()} className="underline">Retry sent-draft cleanup</TocynButton></p>}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+              <div className="tocyn-ticket-composer-mode-row">
+                <div className="tocyn-ticket-composer-mode-group">
                   <TocynButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={!isInternal}
                     onClick={() => { if (!submission.current) updateDraft({ mode: 'public', mentionedUserIds: [] }); }}
                     className={clsx(
-                      "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
-                      !isInternal ? "bg-brand-600 text-white border-brand-700 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
+                      "tocyn-ticket-composer-mode-button",
+                      !isInternal ? "tocyn-ticket-composer-mode-button-public" : "tocyn-ticket-composer-mode-button-inactive"
                     )}
                   >
                     Public Reply
@@ -1028,8 +1028,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     aria-disabled={isSubmitting} aria-pressed={isInternal}
                     onClick={() => { if (!submission.current) updateDraft({ mode: 'internal' }); }}
                     className={clsx(
-                      "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
-                      isInternal ? "bg-amber-700 text-white border-amber-800 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
+                      "tocyn-ticket-composer-mode-button",
+                      isInternal ? "tocyn-ticket-composer-mode-button-internal" : "tocyn-ticket-composer-mode-button-inactive"
                     )}
                   >
                     Internal Note
@@ -1040,7 +1040,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   type="button"
                   onClick={handleGetAiSuggestion}
                   disabled={isGeneratingSuggestion || isSubmitting}
-                  className="flex items-center gap-2 text-xs font-bold text-brand-600 hover:text-brand-700 px-3 py-1.5 bg-brand-50 rounded-lg transition-colors border border-brand-100"
+                  className="tocyn-ticket-composer-suggestion-button"
                 >
                   <Activity className="w-3.5 h-3.5" />
                   {isGeneratingSuggestion ? 'Thinking...' : 'AI Suggestion'}
@@ -1132,9 +1132,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               />
 
               {(draft.attachments.length > 0 || visiblePendingAttachments.length > 0) && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="tocyn-composer-attachments">
                   {draft.attachments.map(attachment => (
-                    <div key={attachment.storageKey} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
+                    <div key={attachment.storageKey} className="tocyn-composer-attachment">
                       <Paperclip className="w-3 h-3 text-slate-500" />
                       <span className="truncate max-w-[150px]">{attachment.filename}</span>
                       <TocynButton
@@ -1153,7 +1153,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     </div>
                   ))}
                   {visiblePendingAttachments.map(attachment => (
-                    <div key={attachment.id} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
+                    <div key={attachment.id} className="tocyn-composer-attachment">
                       <Paperclip className="w-3 h-3 text-slate-500" />
                       <span className="truncate max-w-[150px]">{attachment.file.name}</span>
                       <span role={attachment.status === 'error' ? 'alert' : 'status'} className="text-slate-600">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
@@ -1177,14 +1177,14 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 </div>
               )}
 
-              <div className="flex items-center justify-between">
+              <div className="tocyn-composer-footer">
                 <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
                   <Info className="w-3 h-3" />
                   {isInternal
                     ? "Private note for team coordination."
                     : "Public replies are visible to the customer in this conversation."}
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="tocyn-composer-actions">
                   <TocynInput
                     type="file" aria-label="Reply attachments" disabled={isSubmitting}
                     multiple
@@ -1202,7 +1202,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     ref={attachButtonRef}
                     aria-disabled={!replyCapability || isSubmitting} aria-label="Attach files"
                     onClick={() => { if (!submission.current && replyCapability) fileInputRef.current?.click(); }}
-                    className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                    className="tocyn-composer-attach-button"
                     title="Attach files"
                   >
                     <Paperclip className="w-4 h-4" />
@@ -1211,8 +1211,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     type="submit"
                     aria-disabled={assignmentBlocked || !replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion) || Boolean(staleReplyReview)}
                     className={clsx(
-                      "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
-                      isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"
+                      "tocyn-composer-submit",
+                      isInternal ? "tocyn-composer-submit-internal" : "tocyn-composer-submit-public"
                     )}
                   >
                     <Send className="w-4 h-4" />
