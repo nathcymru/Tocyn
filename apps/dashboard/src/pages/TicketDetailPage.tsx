@@ -38,7 +38,8 @@ import {
   Info,
   Activity,
   X,
-  Paperclip } from 'lucide-react';
+  } from 'lucide-react';
+import { FaFileImage, FaFileLines, FaFilePdf, FaPaperclip } from 'react-icons/fa6';
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
 import { browserDateTimeLocalToInstant, browserInstantToDateTimeLocal } from '../utils/localDateTime';
@@ -50,6 +51,15 @@ type PendingAttachment = Readonly<{
   sessionGeneration: number;
   status: 'uploading' | 'error';
 }>;
+
+function AttachmentIcon({ contentType, filename }: { contentType?: string | null; filename?: string | null }) {
+  const type = contentType?.toLocaleLowerCase() ?? '';
+  const name = filename?.toLocaleLowerCase() ?? '';
+  const Icon = type.startsWith('image/') || /\.(gif|jpe?g|png|webp|svg)$/.test(name) ? FaFileImage
+    : type === 'application/pdf' || name.endsWith('.pdf') ? FaFilePdf
+      : type.startsWith('text/') || /\.(csv|md|txt|json|xml)$/.test(name) ? FaFileLines : FaPaperclip;
+  return <Icon aria-hidden="true" focusable="false" />;
+}
 
 /** A server-derived review revision; retry means that the bracketing reads disagreed. */
 type StaleReplyReview = number | 'refreshing' | 'retry';
@@ -932,7 +942,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                               article.is_internal && "!bg-amber-100/50 !text-amber-900 border border-amber-200/50"
                             )}
                           >
-                            <Paperclip className="w-4 h-4 flex-shrink-0" />
+                            <AttachmentIcon contentType={att.content_type ?? att.contentType} filename={filename} />
                             <span className="truncate flex-1 text-left">{filename}</span>
                             <span className="text-xs opacity-75">
                               {attachmentSize(att.size ?? att.file_size)}
@@ -1149,7 +1159,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 <div className="flex flex-wrap gap-2 mt-2">
                   {draft.attachments.map(attachment => (
                     <div key={attachment.storageKey} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
-                      <Paperclip className="w-3 h-3 text-slate-500" />
+                      <AttachmentIcon contentType={attachment.contentType} filename={attachment.filename} />
                       <span className="truncate max-w-[150px]">{attachment.filename}</span>
                       <TocynButton
                         type="button"
@@ -1168,7 +1178,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   ))}
                   {visiblePendingAttachments.map(attachment => (
                     <div key={attachment.id} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
-                      <Paperclip className="w-3 h-3 text-slate-500" />
+                      <AttachmentIcon contentType={attachment.file.type} filename={attachment.file.name} />
                       <span className="truncate max-w-[150px]">{attachment.file.name}</span>
                       <span role={attachment.status === 'error' ? 'alert' : 'status'} className="text-slate-600">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
                       {attachment.status === 'error' && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} className="underline">Retry upload</TocynButton>}
@@ -1219,7 +1229,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
                     title="Attach files"
                   >
-                    <Paperclip className="w-4 h-4" />
+                    <FaPaperclip aria-hidden="true" focusable="false" />
                   </TocynButton>
                   <TocynButton
                     type="submit"
