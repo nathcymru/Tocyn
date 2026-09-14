@@ -3,6 +3,24 @@ import { useState } from 'react';
 import { expect, it, vi } from 'vitest';
 import { acceptedComposerImages, COMPOSER_MAX_IMAGE_BYTES, insertMarkdownAtCursor, RichComposer, SafeMarkdown } from '../components/RichComposer';
 
+function editorFor(name = 'Reply message') {
+  return screen.getByRole('textbox', { name: name }) as HTMLElement;
+}
+
+/** Drive the real Tiptap contenteditable instead of emulating a textarea value. */
+function setEditorText(editor: HTMLElement, value: string) {
+  editor.focus();
+  // RichComposer exposes a compatibility value setter while the DOM surface
+  // remains a Tiptap contenteditable. It also places the ProseMirror cursor at
+  // the end, which makes the following keyboard interaction deterministic.
+  (editor as HTMLElement & { value?: string }).value = value;
+  fireEvent.change(editor);
+}
+
+function expectEditorText(editor: HTMLElement, value: string) {
+  expect(editor).toHaveTextContent(value);
+}
+
 it('inserts bounded composer content at the selected range', () => {
   expect(insertMarkdownAtCursor('Hello customer', 'team ', 6, 6)).toBe('Hello team customer');
   expect(insertMarkdownAtCursor('Hello customer', 'operator', 6, 14)).toBe('Hello operator');
@@ -51,16 +69,16 @@ it('autocompletes bounded slash commands and emoji with keyboard controls', () =
     return <RichComposer id="rich-composer-test" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />;
   }
   render(<ControlledComposer />);
-  const textarea = screen.getByRole('textbox', { name: 'Reply message' }) as HTMLTextAreaElement;
-  fireEvent.change(textarea, { target: { value: '/g', selectionStart: 2, selectionEnd: 2 } });
+  const editor = editorFor();
+  setEditorText(editor, '/g');
   expect(screen.getByRole('listbox', { name: 'Slash command suggestions' })).toBeInTheDocument();
-  expect(textarea).toHaveAttribute('aria-activedescendant');
-  fireEvent.keyDown(textarea, { key: 'Enter' });
-  expect(textarea).toHaveValue('Hello,\n\n');
-  fireEvent.change(textarea, { target: { value: ':ch', selectionStart: 3, selectionEnd: 3 } });
+  expect(editor).toHaveAttribute('aria-activedescendant');
+  fireEvent.keyDown(editor, { key: 'Enter' });
+  expectEditorText(editor, 'Hello,');
+  setEditorText(editor, ':ch');
   expect(screen.getByRole('listbox', { name: 'Emoji suggestions' })).toBeInTheDocument();
-  fireEvent.keyDown(textarea, { key: 'Enter' });
-  expect(textarea).toHaveValue('✅');
+  fireEvent.keyDown(editor, { key: 'Enter' });
+  expectEditorText(editor, '✅');
 });
 
 it('moves an autocomplete suggestion with arrows and closes it with Escape without losing focus', async () => {
@@ -69,16 +87,15 @@ it('moves an autocomplete suggestion with arrows and closes it with Escape witho
     return <RichComposer id="escape-test" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />;
   }
   render(<ControlledComposer />);
-  const textarea = screen.getByRole('textbox', { name: 'Reply message' }) as HTMLTextAreaElement;
-  textarea.focus();
-  fireEvent.change(textarea, { target: { value: '/', selectionStart: 1, selectionEnd: 1 } });
+  const editor = editorFor();
+  setEditorText(editor, '/');
   await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2));
-  const firstId = textarea.getAttribute('aria-activedescendant');
-  fireEvent.keyDown(textarea, { key: 'ArrowDown' });
-  expect(textarea.getAttribute('aria-activedescendant')).not.toBe(firstId);
-  fireEvent.keyDown(textarea, { key: 'Escape' });
+  const firstId = editor.getAttribute('aria-activedescendant');
+  fireEvent.keyDown(editor, { key: 'ArrowDown' });
+  expect(editor.getAttribute('aria-activedescendant')).not.toBe(firstId);
+  fireEvent.keyDown(editor, { key: 'Escape' });
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-  expect(textarea).toHaveFocus();
+  expect(editor).toHaveFocus();
 });
 
 it('inserts caller-supplied knowledge and saved-response entries and reports their typed callbacks', () => {
@@ -92,14 +109,14 @@ it('inserts caller-supplied knowledge and saved-response entries and reports the
       knowledge={[knowledge]} savedResponses={[savedResponse]} onKnowledgeInserted={onKnowledgeInserted} onSavedResponseInserted={onSavedResponseInserted} />;
   }
   render(<ControlledComposer />);
-  const textarea = screen.getByRole('textbox', { name: 'Reply message' }) as HTMLTextAreaElement;
-  fireEvent.change(textarea, { target: { value: '/reset', selectionStart: 6, selectionEnd: 6 } });
-  fireEvent.keyDown(textarea, { key: 'Enter' });
-  expect(textarea).toHaveValue('Use the reset link.');
+  const editor = editorFor();
+  setEditorText(editor, '/reset');
+  fireEvent.keyDown(editor, { key: 'Enter' });
+  expectEditorText(editor, 'Use the reset link.');
   expect(onKnowledgeInserted).toHaveBeenCalledWith(knowledge);
-  fireEvent.change(textarea, { target: { value: '/hours', selectionStart: 6, selectionEnd: 6 } });
-  fireEvent.keyDown(textarea, { key: 'Enter' });
-  expect(textarea).toHaveValue('We are available Monday to Friday.');
+  setEditorText(editor, '/hours');
+  fireEvent.keyDown(editor, { key: 'Enter' });
+  expectEditorText(editor, 'We are available Monday to Friday.');
   expect(onSavedResponseInserted).toHaveBeenCalledWith(savedResponse);
 });
 
@@ -110,15 +127,15 @@ it('fences editor and already-open insert controls when composition becomes read
     return <><button type="button" onClick={() => setReadOnly(true)}>Lock composer</button><RichComposer id="readonly-test" value="draft" onChange={onChange} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={readOnly} mode="public" /></>;
   }
   render(<ControlledReadOnlyComposer />);
-  const textarea = screen.getByRole('textbox', { name: 'Reply message' });
-  fireEvent.change(textarea, { target: { value: '/', selectionStart: 1, selectionEnd: 1 } });
+  const editor = editorFor();
+  setEditorText(editor, '/');
   expect(screen.getByRole('listbox')).toBeInTheDocument();
   onChange.mockClear();
   fireEvent.click(screen.getByRole('button', { name: 'Lock composer' }));
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Add bold text (ctrl + b)' }));
-  expect(textarea).toHaveValue('draft');
-  fireEvent.change(textarea, { target: { value: 'changed after lock' } });
+  expectEditorText(editor, 'draft');
+  setEditorText(editor, 'changed after lock');
   expect(onChange).not.toHaveBeenCalled();
 });
 
@@ -128,18 +145,18 @@ it('keeps cursor insertion scoped to its own composer instance', () => {
     return <><RichComposer id="first-composer" value={first} onChange={setFirst} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" /><RichComposer id="second-composer" value={second} onChange={setSecond} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" /></>;
   }
   render(<TwoComposers />);
-  const first = screen.getAllByRole('textbox', { name: 'Reply message' })[0] as HTMLTextAreaElement;
-  fireEvent.change(first, { target: { value: ':chfirst', selectionStart: 3, selectionEnd: 3 } });
+  const first = screen.getAllByRole('textbox', { name: 'Reply message' })[0] as HTMLElement;
+  setEditorText(first, ':ch');
   fireEvent.keyDown(first, { key: 'Enter' });
-  expect(first).toHaveValue('✅first');
-  expect(screen.getAllByRole('textbox', { name: 'Reply message' })[1]).toHaveValue('second');
+  expectEditorText(first, '✅');
+  expectEditorText(screen.getAllByRole('textbox', { name: 'Reply message' })[1] as HTMLElement, 'second');
 });
 
 
 it('keeps a declared plain draft literal and offers no Markdown toolbar or autocomplete', () => {
   render(<RichComposer id="plain-draft" value="**literal** /code" format="plain" onChange={() => undefined}
     onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />);
-  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('**literal** /code');
+  expectEditorText(screen.getByRole('textbox', { name: 'Reply message' }), '**literal** /code');
   expect(screen.queryByRole('button', { name: /bold/i })).toBeNull();
   expect(screen.queryByRole('listbox')).toBeNull();
   expect(screen.getByText('**literal** /code', { selector: 'div' }).querySelector('strong')).toBeNull();

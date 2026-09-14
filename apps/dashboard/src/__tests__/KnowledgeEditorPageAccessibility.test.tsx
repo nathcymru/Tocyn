@@ -14,8 +14,11 @@ import { KnowledgeEditorPage } from '../pages/KnowledgeEditorPage';
 
 function setEditorText(value: string) {
   const editor = screen.getByRole('textbox', { name: 'Content (Markdown)' });
-  editor.textContent = value;
-  fireEvent.input(editor, { inputType: 'insertText', data: value });
+  editor.focus();
+  // Tiptap remains the rendered editor. Its value bridge is used only to
+  // seed a controlled test draft, then the ordinary DOM change contract is
+  // dispatched so the page's onChange path is exercised.
+  (editor as HTMLElement & { value?: string }).value = value;
   fireEvent.change(editor);
 }
 
@@ -50,7 +53,7 @@ it('prevents duplicate saves, retains the draft after failure, and retries the s
   expect(screen.getByRole('button', { name: 'Processing...' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Back to knowledge base' })).toBeDisabled();
   expect(screen.getByRole('textbox', { name: 'Title *' })).toBeDisabled();
-  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveAttribute('readonly');
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveAttribute('contenteditable', 'false');
   await act(async () => reject(new Error('synthetic save failure')));
   expect(await screen.findByRole('alert')).toHaveTextContent('synthetic save failure');
   expect(screen.getByRole('textbox', { name: 'Title *' })).toHaveValue('Keep this article');
@@ -90,7 +93,7 @@ it('does not apply a stale article response after the route changes', async () =
     deferred.get('/knowledge/articles/current/content')!.resolve({ content: 'current' });
   });
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title *' })).toHaveValue('Current title'));
-  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('current');
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('current'));
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
 });
 
