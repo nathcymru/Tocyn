@@ -28,76 +28,76 @@ export const UsersPage: React.FC = () => {
 
   return (
     <div className="tocyn-users-page">
-      <div className="flex items-center justify-between mb-8">
+      <div className="tocyn-user-page-header">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
-          <p className="text-slate-500 mt-1">Manage agents, admins, and their access levels.</p>
+          <h1 className="tocyn-user-page-title">Team Management</h1>
+          <p className="tocyn-user-page-description">Manage agents, admins, and their access levels.</p>
         </div>
-        <TocynButton className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm">
+        <TocynButton className="tocyn-user-page-create">
           Invite New User
         </TocynButton>
       </div>
 
       {error && (
-        <div role="alert" className="bg-red-50 text-red-700 p-4 rounded-lg mb-6 border border-red-100">
+        <div role="alert" className="tocyn-user-page-alert">
           {error.message}
-          <TocynButton type="button" disabled={isFetching} onClick={() => void refetch()} className="ml-3 rounded border px-3 py-2">Retry team members</TocynButton>
+          <TocynButton type="button" disabled={isFetching} onClick={() => void refetch()} className="tocyn-user-page-alert-action">Retry team members</TocynButton>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="tocyn-users-grid">
         {users.map((user) => (
-          <div key={user.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 border border-brand-100">
-                <UserIcon className="w-6 h-6" />
+          <div key={user.id} className="tocyn-user-card">
+            <div className="tocyn-user-card-header">
+              <div className="tocyn-user-card-avatar">
+                <UserIcon className="tocyn-user-card-avatar-icon" />
               </div>
-              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                user.role === 'agent' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+              <span className={`tocyn-user-card-role ${
+                user.role === 'admin' ? 'tocyn-user-card-role-admin' :
+                user.role === 'agent' ? 'tocyn-user-card-role-agent' : 'tocyn-user-card-role-default'
               }`}>
                 {user.role}
               </span>
             </div>
 
-            <h3 className="text-lg font-bold text-slate-900">{user.full_name || 'Unnamed User'}</h3>
-            <div className="space-y-2 mt-4">
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Mail className="w-4 h-4" />
+            <h3 className="tocyn-user-card-name">{user.full_name || 'Unnamed User'}</h3>
+            <div className="tocyn-user-card-details">
+              <div className="tocyn-user-card-detail">
+                <Mail className="tocyn-user-card-detail-icon" />
                 {user.email}
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Calendar className="w-4 h-4" />
+              <div className="tocyn-user-card-detail">
+                <Calendar className="tocyn-user-card-detail-icon" />
                 Joined {new Date(user.created_at).toLocaleDateString()}
               </div>
-              <div className="flex items-center gap-2 text-sm">
+              <div className="tocyn-user-card-mfa-row">
                 {user.mfa_enabled ? (
-                  <span className="text-green-600 flex items-center gap-1.5 font-medium">
-                    <ShieldCheck className="w-4 h-4" />
+                  <span className="tocyn-user-card-mfa tocyn-user-card-mfa-enabled">
+                    <ShieldCheck className="tocyn-user-card-mfa-icon" />
                     MFA Enabled
                   </span>
                 ) : (
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <Shield className="w-4 h-4" />
+                  <span className="tocyn-user-card-mfa tocyn-user-card-mfa-disabled">
+                    <Shield className="tocyn-user-card-mfa-icon" />
                     MFA Disabled
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-100 flex items-center gap-3">
+            <div className="tocyn-user-card-actions">
               {administrator&&['admin','agent'].includes(user.role)&&<TocynButton type="button" aria-haspopup="dialog"
                 onClick={event=>{opener.current=event.currentTarget;setCapturedIdentity(selectionIdentity);setSelectedUser(user);setModalType('capacity');}}
-                className="rounded border px-3 py-2 text-xs font-bold">Capacity</TocynButton>}
+                className="tocyn-user-card-action">Capacity</TocynButton>}
               <TocynButton
                 aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('edit'); }}
-                className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
+                className="tocyn-user-card-action"
               >
                 Edit Profile
               </TocynButton>
               <TocynButton
                 aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('activity'); }}
-                className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
+                className="tocyn-user-card-action"
               >
                 View Activity
               </TocynButton>

@@ -813,6 +813,13 @@
 
 /* Panda-authored dashboard users surface. */
 .tocyn-users-grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 1.5rem; }
+.tocyn-user-page-header { display: flex; align-items: center; justify-content: space-between; margin-block-end: 2rem; gap: 1rem; }
+.tocyn-user-page-title { margin: 0; color: var(--tocyn-color-text); font-size: 1.5rem; font-weight: 700; }
+.tocyn-user-page-description { margin-block-start: .25rem; color: var(--tocyn-color-text-muted); }
+.tocyn-user-page-create { border-radius: .5rem; background: var(--tocyn-color-brand); padding: .5rem 1rem; color: white; font-weight: 700; box-shadow: 0 1px 2px rgb(15 23 42 / 8%); }
+.tocyn-user-page-create:hover { background: var(--tocyn-color-brand-strong, #1d4ed8); }
+.tocyn-user-page-alert { margin-block-end: 1.5rem; border: 1px solid #fecaca; border-radius: .5rem; background: #fef2f2; padding: 1rem; color: #b91c1c; }
+.tocyn-user-page-alert-action { margin-inline-start: .75rem; border: 1px solid currentColor; border-radius: .375rem; padding: .5rem .75rem; }
 .tocyn-user-card { border: 1px solid var(--tocyn-color-divider); border-radius: .75rem; background: var(--tocyn-color-surface); padding: 1.5rem; box-shadow: 0 1px 2px rgb(15 23 42 / 6%); transition: box-shadow 180ms ease; }
 .tocyn-user-card:hover { box-shadow: 0 4px 10px rgb(15 23 42 / 10%); }
 .tocyn-user-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-block-end: 1rem; }
