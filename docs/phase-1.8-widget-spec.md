@@ -45,10 +45,16 @@ The widget will fetch its configuration from the backend:
 
 ## Implementation Plan
 
-### 1. Project Setup
-- Install `tailwindcss`, `autoprefixer`, `postcss`.
-- Configure `tailwind.config.js` and `postcss.config.js`.
-- Set up `vite.config.ts` for library mode.
+### 1. Project Setup (historical)
+
+This phase document predates the current Park UI/Panda CSS migration. Its
+Tailwind setup notes are retained as historical context only and are not an
+instruction for the current implementation. Current widget styling must use
+the shared Panda-generated stylesheet and keep the `LUMINA_WIDGET_CSS`
+ShadowRoot compatibility boundary.
+
+- Use the shared Panda CSS contract from `@luminatick/ui`.
+- Keep the existing `vite.config.ts` library-mode boundary.
 
 ### 2. Widget Core
 - Implement `ShadowRoot` wrapper.
