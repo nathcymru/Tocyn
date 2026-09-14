@@ -13,6 +13,10 @@ if (!HTMLElement.prototype.scrollTo) HTMLElement.prototype.scrollTo = () => {};
 if (!HTMLElement.prototype.getClientRects) HTMLElement.prototype.getClientRects = () => [] as unknown as DOMRectList;
 if (typeof Range !== 'undefined' && !Range.prototype.getClientRects) Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 if (!HTMLElement.prototype.getBoundingClientRect) HTMLElement.prototype.getBoundingClientRect = () => new DOMRect();
+if (typeof Text !== 'undefined') {
+  if (!(Text.prototype as any).getClientRects) (Text.prototype as any).getClientRects = () => [];
+  if (!(Text.prototype as any).getBoundingClientRect) (Text.prototype as any).getBoundingClientRect = () => new DOMRect();
+}
 // Tiptap renders a contenteditable instead of a native textarea. Keep legacy
 // test helpers usable while assertions migrate to the editor's text content.
 const htmlValue = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'value');
