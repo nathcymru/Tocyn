@@ -29,5 +29,5 @@ export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your dr
     });
     return () => { current = false; };
   }, [blocker]);
-  return failed ? <p role="alert" className="tocyn-draft-navigation-error">{failureMessage} <ParkButton type="button" className="tocyn-inline-link" onClick={() => { setFailed(false); void flushRef.current().then(saved => { if (!saved) setFailed(true); }, () => setFailed(true)); }}>{retryLabel}</ParkButton></p> : null;
+  return failed ? <p role="alert" className="tocyn-draft-navigation-error"><span>{failureMessage}</span>{' '}<ParkButton type="button" className="tocyn-inline-link" onClick={() => { setFailed(false); void flushRef.current().then(saved => { if (!saved) setFailed(true); }, () => setFailed(true)); }}>{retryLabel}</ParkButton></p> : null;
 }

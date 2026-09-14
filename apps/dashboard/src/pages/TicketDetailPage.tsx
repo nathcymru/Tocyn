@@ -720,7 +720,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
     <>
       <DraftNavigationGuard pending={draftNavigationPending} flush={flushDraftBeforeNavigation}
         failureMessage="Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again."
-        retryLabel="Retry draft" />
+        retryLabel="Retry navigation" />
       <div className="tocyn-ticket-detail-grid">
       <div className="tocyn-ticket-detail-main">
         {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="tocyn-ticket-detail-alert">
