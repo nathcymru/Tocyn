@@ -138,7 +138,7 @@ export function FiltersSettingsPage() {
   };
 
   if (isLoading) {
-    return <div className="tocyn-filters-loading">Loading filters...</div>;
+    return <ParkEmptyState role="status" className="tocyn-filters-loading" title="Loading filters..." headingLevel={false} />;
   }
 
   return (
