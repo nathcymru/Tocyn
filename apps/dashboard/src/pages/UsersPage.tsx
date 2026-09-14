@@ -1,7 +1,7 @@
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { useAuthStore } from '../store/authStore';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton as TocynButton, ParkEmptyState } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
@@ -33,15 +33,15 @@ export const UsersPage: React.FC = () => {
           <h1 className="tocyn-user-page-title">Team Management</h1>
           <p className="tocyn-user-page-description">Manage agents, admins, and their access levels.</p>
         </div>
-        <TocynButton className="tocyn-user-page-create">
+        <ParkButton className="tocyn-user-page-create">
           Invite New User
-        </TocynButton>
+        </ParkButton>
       </div>
 
       {error && (
         <div role="alert" className="tocyn-user-page-alert">
           {error.message}
-          <TocynButton type="button" disabled={isFetching} onClick={() => void refetch()} className="tocyn-user-page-alert-action">Retry team members</TocynButton>
+          <ParkButton type="button" disabled={isFetching} onClick={() => void refetch()} className="tocyn-user-page-alert-action">Retry team members</ParkButton>
         </div>
       )}
 
@@ -86,21 +86,21 @@ export const UsersPage: React.FC = () => {
             </div>
 
             <div className="tocyn-user-card-actions">
-              {administrator&&['admin','agent'].includes(user.role)&&<TocynButton type="button" aria-haspopup="dialog"
+              {administrator&&['admin','agent'].includes(user.role)&&<ParkButton type="button" aria-haspopup="dialog"
                 onClick={event=>{opener.current=event.currentTarget;setCapturedIdentity(selectionIdentity);setSelectedUser(user);setModalType('capacity');}}
-                className="tocyn-user-card-action">Capacity</TocynButton>}
-              <TocynButton
+                className="tocyn-user-card-action">Capacity</ParkButton>}
+              <ParkButton
                 aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('edit'); }}
                 className="tocyn-user-card-action"
               >
                 Edit Profile
-              </TocynButton>
-              <TocynButton
+              </ParkButton>
+              <ParkButton
                 aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('activity'); }}
                 className="tocyn-user-card-action"
               >
                 View Activity
-              </TocynButton>
+              </ParkButton>
             </div>
           </div>
         ))}
@@ -117,9 +117,9 @@ export const UsersPage: React.FC = () => {
               <h2 id={dialogTitleId} className="tocyn-users-dialog-title">
                 {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'Edit User Profile' : 'User Activity Log'}
               </h2>
-              <TocynButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="tocyn-users-dialog-close">
+              <ParkButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="tocyn-users-dialog-close">
                 <X className="tocyn-users-dialog-close-icon" />
-              </TocynButton>
+              </ParkButton>
             </div>
             <div className="tocyn-users-dialog-body">
               <div className="tocyn-users-dialog-identity">
@@ -148,12 +148,12 @@ export const UsersPage: React.FC = () => {
               )}
             </div>
             <div className="tocyn-users-dialog-footer">
-              <TocynButton
+              <ParkButton
                 onClick={closeDialog}
                 className="tocyn-users-dialog-submit"
               >
                 Close
-              </TocynButton>
+              </ParkButton>
             </div>
           </div>
         )}

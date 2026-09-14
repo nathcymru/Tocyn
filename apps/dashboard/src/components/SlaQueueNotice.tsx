@@ -1,4 +1,4 @@
-import { TocynButton } from '@luminatick/ui/primitives';
+import { ParkButton } from '@luminatick/ui/park';
 import { ApiError } from '../api/client';
 
 export function SlaQueueNotice({ asOf, error, busy, restart }: {
@@ -10,8 +10,8 @@ export function SlaQueueNotice({ asOf, error, busy, restart }: {
       : error ? 'SLA ordering is unavailable. No partial order is shown.'
       : asOf ? <>SLA order calculated at <time dateTime={asOf}>{new Date(asOf).toLocaleTimeString()}</time>. Refresh to update deadlines and queue order.</>
       : 'Calculating SLA order for the whole view…'}</p>
-    <TocynButton type="button" disabled={busy} onClick={restart} className="tocyn-sla-queue-action">
+    <ParkButton type="button" disabled={busy} onClick={restart} className="tocyn-sla-queue-action">
       {changed ? 'Restart SLA ordering' : 'Refresh SLA ordering'}
-    </TocynButton>
+    </ParkButton>
   </section>;
 }
