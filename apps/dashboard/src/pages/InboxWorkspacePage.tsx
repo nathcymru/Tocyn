@@ -1,6 +1,6 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { ParkButton as TocynButton, ParkInput as TocynInput, ParkSelect as TocynSelect } from '@luminatick/ui/park';
+import { ParkButton as TocynButton, ParkInput as TocynInput, ParkSelect as TocynSelect, ParkSplitter } from '@luminatick/ui/park';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,LayoutList,Search,Table2 } from 'lucide-react';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
@@ -73,17 +73,21 @@ function InboxWorkspace(){
     <Link to="/inbox/all" replace className="mt-4 inline-flex rounded border border-slate-300 px-4 py-2 font-semibold">Open All tickets</Link>
   </section>;
 
-  return <div className="h-full min-h-0 bg-slate-100 lg:grid lg:grid-cols-3">
+  return <ParkSplitter.Root className="tocyn-inbox-workspace" orientation="horizontal"
+    size={[workspace.splitterRatio, 100 - workspace.splitterRatio]} keyboardResizeBy={2}
+    panels={[{ id: 'inbox-list', minSize: 24, maxSize: 50 }, { id: 'inbox-detail', minSize: 30, maxSize: 76 }]}
+    onResizeEnd={({ size }) => { const ratio = Math.max(24, Math.min(50, Math.round(size[0] ?? workspace.splitterRatio))); workspace.update({ splitterRatio: ratio }); }}>
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
-    <section aria-label="Conversations" className={clsx('h-full min-h-0 overflow-y-auto border-r border-slate-200 bg-white',conversationId&&'hidden lg:block')}>
+    <ParkSplitter.Panel id="inbox-list" role="region" aria-label="Conversations" className={clsx('tocyn-inbox-list-panel',conversationId&&'hidden lg:block')}>
       <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
-    </section>
-    <section aria-label="Active conversation" className={clsx('h-full min-h-0 overflow-y-auto bg-slate-50 p-4 lg:col-span-2 lg:p-8',!conversationId&&'hidden lg:block')}>
+    </ParkSplitter.Panel>
+    <ParkSplitter.Panel id="inbox-detail" role="region" aria-label="Active conversation" className={clsx('tocyn-inbox-detail-panel',!conversationId&&'hidden lg:block')}>
       {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
       {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} onResolved={onResolved} />:<EmptyConversation />}
-    </section>
-  </div>;
+    </ParkSplitter.Panel>
+    <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" />
+  </ParkSplitter.Root>;
 }
 
 function EmptyConversation(){return <div className="flex min-h-full items-center justify-center"><div className="max-w-sm text-center">
