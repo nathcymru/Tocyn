@@ -13,7 +13,7 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  const getStatusCount = (status: string) => 
+  const getStatusCount = (status: string) =>
     stats?.ticketsByStatus.find(s => s.status === status)?.count || 0;
 
   const totalTickets = stats?.ticketsByStatus.reduce((acc, curr) => acc + curr.count, 0) || 0;
@@ -23,25 +23,25 @@ export const DashboardPage: React.FC = () => {
       label: 'Total Tickets',
       value: totalTickets,
       icon: FaTicket,
-      color: 'bg-blue-50 text-blue-600',
+      color: 'tocyn-palette-blue-soft tocyn-palette-blue-text',
     },
     {
       label: 'Open Tickets',
       value: getStatusCount('open'),
       icon: FaCircleExclamation,
-      color: 'bg-emerald-50 text-emerald-600',
+      color: 'tocyn-palette-green-soft tocyn-palette-green-text',
     },
     {
       label: 'Pending Tickets',
       value: getStatusCount('pending'),
       icon: FaClock,
-      color: 'bg-amber-50 text-amber-600',
+      color: 'tocyn-palette-amber-soft tocyn-palette-amber-text',
     },
     {
       label: 'Resolved Tickets',
       value: getStatusCount('resolved') + getStatusCount('closed'),
       icon: FaCircleCheck,
-      color: 'bg-slate-50 text-slate-600',
+      color: 'tocyn-palette-neutral-soft tocyn-palette-neutral-text',
     },
   ];
 
@@ -91,9 +91,9 @@ export const DashboardPage: React.FC = () => {
                   <div className="tocyn-progress-track">
                     <div
                       className={`tocyn-progress-fill ${
-                        priority === 'urgent' ? 'bg-red-500' :
-                        priority === 'high' ? 'bg-orange-500' :
-                        priority === 'normal' ? 'bg-blue-500' : 'bg-slate-400'
+                        priority === 'urgent' ? 'tocyn-palette-red-fill' :
+                        priority === 'high' ? 'tocyn-palette-orange-fill' :
+                        priority === 'normal' ? 'tocyn-palette-blue-fill' : 'tocyn-palette-neutral-fill'
                       }`}
                       style={{ width: `${percentage}%` }}
                     />

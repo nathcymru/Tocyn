@@ -296,9 +296,9 @@ export function UsagePage() {
             limit={LIMITS.d1_reads_writes}
             unit="/ day"
             format={formatNumber}
-            colorClass="text-blue-600"
-            bgClass="bg-blue-50"
-            fillClass="bg-blue-500"
+            colorClass="tocyn-palette-blue-text"
+            bgClass="tocyn-palette-blue-soft"
+            fillClass="tocyn-palette-blue-fill"
           />
 
           <StatCard
@@ -309,9 +309,9 @@ export function UsagePage() {
             limit={LIMITS.r2_class_a}
             unit="/ month"
             format={formatNumber}
-            colorClass="text-indigo-600"
-            bgClass="bg-indigo-50"
-            fillClass="bg-indigo-500"
+            colorClass="tocyn-palette-indigo-text"
+            bgClass="tocyn-palette-indigo-soft"
+            fillClass="tocyn-palette-indigo-fill"
           />
 
           <StatCard
@@ -322,9 +322,9 @@ export function UsagePage() {
             limit={LIMITS.r2_class_b}
             unit="/ month"
             format={formatNumber}
-            colorClass="text-purple-600"
-            bgClass="bg-purple-50"
-            fillClass="bg-purple-500"
+            colorClass="tocyn-palette-purple-text"
+            bgClass="tocyn-palette-purple-soft"
+            fillClass="tocyn-palette-purple-fill"
           />
 
           <StatCard
@@ -335,9 +335,9 @@ export function UsagePage() {
             limit={LIMITS.worker_requests}
             unit="/ day"
             format={formatNumber}
-            colorClass="text-emerald-600"
-            bgClass="bg-emerald-50"
-            fillClass="bg-emerald-500"
+            colorClass="tocyn-palette-green-text"
+            bgClass="tocyn-palette-green-soft"
+            fillClass="tocyn-palette-green-fill"
           />
 
           <StatCard
@@ -348,9 +348,9 @@ export function UsagePage() {
             limit={LIMITS.ai_neurons}
             unit="/ day"
             format={formatNumber}
-            colorClass="text-brand-600"
-            bgClass="bg-brand-50"
-            fillClass="bg-brand-500"
+            colorClass="tocyn-palette-brand-text"
+            bgClass="tocyn-palette-brand-soft"
+            fillClass="tocyn-palette-brand-fill"
           />
 
           <StatCard
@@ -361,9 +361,9 @@ export function UsagePage() {
             limit={LIMITS.do_requests}
             unit="/ day"
             format={formatNumber}
-            colorClass="text-amber-600"
-            bgClass="bg-amber-50"
-            fillClass="bg-amber-500"
+            colorClass="tocyn-palette-amber-text"
+            bgClass="tocyn-palette-amber-soft"
+            fillClass="tocyn-palette-amber-fill"
           />
 
           <StatCard
@@ -374,9 +374,9 @@ export function UsagePage() {
             limit={LIMITS.vectorize_queries}
             unit="/ month"
             format={formatNumber}
-            colorClass="text-pink-600"
-            bgClass="bg-pink-50"
-            fillClass="bg-pink-500"
+            colorClass="tocyn-palette-pink-text"
+            bgClass="tocyn-palette-pink-soft"
+            fillClass="tocyn-palette-pink-fill"
           />
 
           <StatCard
@@ -387,9 +387,9 @@ export function UsagePage() {
             limit={LIMITS.vectorize_writes}
             unit="/ month"
             format={formatNumber}
-            colorClass="text-rose-600"
-            bgClass="bg-rose-50"
-            fillClass="bg-rose-500"
+            colorClass="tocyn-palette-rose-text"
+            bgClass="tocyn-palette-rose-soft"
+            fillClass="tocyn-palette-rose-fill"
           />
         </div>
       )}
@@ -453,7 +453,7 @@ function StatCard({ title, description, icon: Icon, current, limit, unit, format
         <div className="tocyn-progress-track tocyn-progress-track--usage">
           <div
             className={cn("tocyn-progress-fill tocyn-usage-stat-fill",
-              isOverLimit ? "bg-red-500" : isNearLimit ? "bg-orange-500" : fillClass
+              isOverLimit ? "tocyn-palette-red-fill" : isNearLimit ? "tocyn-palette-orange-fill" : fillClass
             )}
             style={{ width: `${percentage}%` }}
           />

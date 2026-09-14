@@ -35,17 +35,17 @@ function cn(...inputs: any[]) {
 }
 
 const statusColors = {
-  open: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  pending: 'bg-amber-100 text-amber-700 border-amber-200',
-  resolved: 'bg-slate-100 text-slate-700 border-slate-200',
-  closed: 'bg-slate-100 text-slate-700 border-slate-200',
+  open: 'tocyn-ticket-status-open',
+  pending: 'tocyn-ticket-status-pending',
+  resolved: 'tocyn-ticket-status-neutral',
+  closed: 'tocyn-ticket-status-neutral',
 };
 
 const priorityColors = {
-  low: 'text-slate-500',
-  normal: 'text-blue-500',
-  high: 'text-orange-500',
-  urgent: 'text-red-500',
+  low: 'tocyn-palette-neutral-text',
+  normal: 'tocyn-palette-blue-text',
+  high: 'tocyn-palette-orange-text',
+  urgent: 'tocyn-palette-red-text',
 };
 
 function pageFromAnchor(anchor: string) {
@@ -295,7 +295,7 @@ export function TicketListPage() {
               />
               <TocynButton type="button" aria-label="Clear list ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
                 className="tocyn-search-clear">Clear</TocynButton>
-              <p id="global-ticket-results-scope" className="sr-only">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
+              <p id="global-ticket-results-scope" className="tocyn-visually-hidden">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
             </div>
             <div className="tocyn-ticket-table-controls">
               <label className="tocyn-ticket-sort-label">
@@ -341,7 +341,7 @@ export function TicketListPage() {
                   </tr>
                 ) : (
                   tickets.map((ticket) => (
-                    <tr key={ticket.id} className="tocyn-ticket-table-row group">
+                    <tr key={ticket.id} className="tocyn-ticket-table-row tocyn-ticket-row-group">
                       <td>
                         <div className="tocyn-ticket-reference">
                           <span className="tocyn-ticket-reference-value" title={ticketReference(ticket, ticketPrefix)}>

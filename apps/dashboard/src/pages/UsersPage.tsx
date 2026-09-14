@@ -136,7 +136,7 @@ export const UsersPage: React.FC = () => {
                 <OperatorCapacityPanel userId={selectedUser.id} editable={administrator}/>
               ) : modalType === 'edit' ? (
                 <div className="tocyn-users-dialog-unavailable">
-                  <Settings className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                  <Settings className="tocyn-users-dialog-unavailable-icon" />
                   <p className="tocyn-users-dialog-message">User profile editing is currently read-only.</p>
                   <p className="tocyn-users-dialog-email tocyn-users-dialog-hint">In this version, users must update their own profiles via the security settings.</p>
                 </div>
