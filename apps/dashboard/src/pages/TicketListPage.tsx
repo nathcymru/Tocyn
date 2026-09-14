@@ -183,22 +183,20 @@ export function TicketListPage() {
         failureMessage="Workspace preferences are not saved. Stay on this list, retry saving, then navigate again." />
       {/* Left Sidebar: Filters */}
       <div className="tocyn-ticket-list-filters">
-        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Filters</h2>
+        <h2 className="tocyn-ticket-list-filter-heading">Filters</h2>
         <TocynButton
           onClick={() => handleFilterClick('')}
           aria-pressed={activeFilterId === ''}
           className={cn(
-            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
-            activeFilterId === ''
-              ? "bg-brand-50 text-brand-700"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            "tocyn-ticket-list-filter-button",
+            activeFilterId === '' && "is-active"
           )}
         >
-          <LayoutList className="w-4 h-4" />
+          <LayoutList className="tocyn-ticket-list-icon" />
           All Tickets
         </TocynButton>
         {isLoadingFilters ? (
-          <div className="px-3 py-2 text-sm text-slate-500">Loading filters...</div>
+          <div className="tocyn-ticket-list-filter-loading">Loading filters...</div>
         ) : (
           filters?.map(filter => (
             <TocynButton
@@ -206,13 +204,11 @@ export function TicketListPage() {
               onClick={() => handleFilterClick(filter.id)}
               aria-pressed={activeFilterId === filter.id}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
-                activeFilterId === filter.id
-                  ? "bg-brand-50 text-brand-700"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                "tocyn-ticket-list-filter-button",
+                activeFilterId === filter.id && "is-active"
               )}
             >
-              <Filter className="w-4 h-4" />
+              <Filter className="tocyn-ticket-list-icon" />
               {filter.name}
             </TocynButton>
           ))
@@ -221,10 +217,10 @@ export function TicketListPage() {
 
       {/* Right Content: Ticket List */}
       <div className="tocyn-ticket-list-content">
-        <div className="flex items-center justify-between">
+        <div className="tocyn-ticket-list-heading">
           <div>
-            <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">{globalSearch ? 'Global ticket results' : 'Tickets'}</h1>
-            <p className="text-slate-500 text-sm">
+            <h1 ref={heading} tabIndex={-1} className="tocyn-ticket-list-heading-title">{globalSearch ? 'Global ticket results' : 'Tickets'}</h1>
+            <p className="tocyn-ticket-list-heading-subtitle">
               {globalSearch ? 'All authorised tickets' : activeFilterId
                 ? filters?.find(f => f.id === activeFilterId)?.name
                 : 'All Tickets'}
@@ -234,31 +230,31 @@ export function TicketListPage() {
             type="button"
             ref={createTrigger}
             onClick={() => {setCreateError(null);setIsModalOpen(true);}}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors shadow-sm text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="tocyn-ticket-list-create"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="tocyn-ticket-list-icon" />
             New Ticket
           </TocynButton>
         </div>
 
-        <p role="status" aria-label="Ticket list status" className="text-sm text-slate-700">{isPlaceholderData ? 'Loading tickets. Previous results remain visible.' : feedStatus}</p>
-        <p role="status" aria-label="Workspace preference status" className="text-sm text-slate-700">
+        <p role="status" aria-label="Ticket list status" className="tocyn-ticket-list-status">{isPlaceholderData ? 'Loading tickets. Previous results remain visible.' : feedStatus}</p>
+        <p role="status" aria-label="Workspace preference status" className="tocyn-ticket-list-status">
           {workspace.status === 'loading' ? 'Restoring workspace preferences…' : workspace.status === 'saving' ? 'Saving workspace preferences…' : workspace.status === 'saved' ? 'Workspace preferences saved.' : ''}
         </p>
         {slaSort && <SlaQueueNotice asOf={paginatedData?.asOf} error={ticketsError} busy={isFetching} restart={restartSlaOrder} />}
-        {tickets.length > 0 && ticketSla.isLoading && <p role="status">Loading service levels…</p>}
-        {tickets.length > 0 && ticketSla.isError && <p role="status">Service levels could not be refreshed. <TocynButton type="button" disabled={ticketSla.isFetching} onClick={() => void ticketSla.refetch()} className="underline">Retry service levels</TocynButton></p>}
+        {tickets.length > 0 && ticketSla.isLoading && <p role="status" className="tocyn-ticket-list-status">Loading service levels…</p>}
+        {tickets.length > 0 && ticketSla.isError && <p role="status" className="tocyn-ticket-list-status">Service levels could not be refreshed. <TocynButton type="button" disabled={ticketSla.isFetching} onClick={() => void ticketSla.refetch()} className="tocyn-ticket-list-alert-action">Retry service levels</TocynButton></p>}
         {draftIndicators.status === 'partial' && <p role="status" aria-label="Draft indicator status" className="text-sm text-amber-800">Draft indicators are incomplete. Only the first 200 drafts were checked.</p>}
         {workspace.status === 'error' && (
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div role="alert" className="tocyn-ticket-list-alert tocyn-ticket-list-alert--error">
             <p>{workspace.error}</p>
-            <TocynButton type="button" onClick={workspace.retrySave} className="mt-2 rounded border border-red-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">Retry workspace preferences</TocynButton>
+            <TocynButton type="button" onClick={workspace.retrySave} className="tocyn-ticket-list-alert-action">Retry workspace preferences</TocynButton>
           </div>
         )}
         {workspace.status === 'conflict' && (
-          <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <div role="alert" className="tocyn-ticket-list-alert tocyn-ticket-list-alert--warning">
             <p>{workspace.error}</p>
-            <TocynButton type="button" onClick={workspace.restoreServerState} className="mt-2 rounded border border-amber-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">Restore server preferences</TocynButton>
+            <TocynButton type="button" onClick={workspace.restoreServerState} className="tocyn-ticket-list-alert-action">Restore server preferences</TocynButton>
           </div>
         )}
         {clipboardError && <p role="alert" className="text-sm text-red-800">{clipboardError}</p>}
