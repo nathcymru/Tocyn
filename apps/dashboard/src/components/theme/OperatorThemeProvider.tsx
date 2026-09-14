@@ -25,10 +25,9 @@ export function OperatorThemeProvider({ children }: { children: React.ReactNode 
   React.useEffect(() => () => { scope.current?.remove(); scope.current = null; }, []);
   const loading = !hasResolved.current && theme.status === 'loading';
   return <ThemeContext.Provider value={theme}>
-    {loading ? <div role="status" aria-live="polite" className="min-h-screen flex items-center justify-center bg-[var(--tocyn-app-surface)] text-[var(--tocyn-app-text)]">Loading appearance…</div> : <>
-      {(theme.status === 'error' || theme.status === 'conflict') && <div role="alert" className="flex items-center justify-center gap-3 border-b border-[var(--tocyn-app-border)] bg-[var(--tocyn-app-surface)] px-4 py-2 text-sm text-[var(--tocyn-app-text)]"><span>{theme.error || 'Appearance could not be restored.'}</span><TocynButton type="button" onClick={theme.retry} className="min-h-11 rounded border border-[var(--tocyn-app-border)] px-3 py-1 text-sm">Retry appearance</TocynButton></div>}
-      <PreferencesContext.Provider value={preferences}>{children}</PreferencesContext.Provider>
-    </>}
+    {loading && <div role="status" aria-live="polite" className="tocyn-theme-loading">Loading appearance…</div>}
+    {(theme.status === 'error' || theme.status === 'conflict') && <div role="alert" className="tocyn-theme-status-banner"><span>{theme.error || 'Appearance could not be restored.'}</span><TocynButton type="button" onClick={theme.retry} className="tocyn-theme-retry">Retry appearance</TocynButton></div>}
+    <PreferencesContext.Provider value={preferences}>{children}</PreferencesContext.Provider>
   </ThemeContext.Provider>;
 }
 

@@ -65,7 +65,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
 
   return (
     <>
-    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} initialFocusEl={() => securityProfile.current} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
+    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} initialFocusEl={() => securityProfile.current} finalFocusEl={() => trigger.current} lazyMount unmountOnExit>
     <div className="relative mt-2">
       <Popover.Trigger asChild>
       <TocynButton
@@ -89,7 +89,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
           <Link
             ref={securityProfile}
             to="/profile/security"
-            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); }}
+            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); setTimeout(() => navigationFocus()?.focus(), 0); }}
             className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
           >
             <Key className="w-4 h-4" />
@@ -312,7 +312,7 @@ function LayoutContent() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
+        <header className="tocyn-shell-header h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
           <TocynButton
             type="button"
             ref={navigationTrigger}
