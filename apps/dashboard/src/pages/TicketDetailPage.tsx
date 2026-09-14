@@ -4,7 +4,7 @@ import { KnowledgeBrowser } from '../components/KnowledgeBrowser';
 import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketActionBar } from '../components/TicketActionBar';
-import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
@@ -861,7 +861,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div id="conversation-messages" className="tocyn-timeline relative p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
-            {ticket.articles.map((article) => (
+            {ticket.articles.length === 0 ? <TocynEmptyState
+              title="No messages yet"
+              description="Messages and internal notes will appear here when this conversation receives activity."
+              className="min-h-40 border-0 bg-transparent"
+            /> : ticket.articles.map((article) => (
               <div
                 key={article.id}
                 className={clsx(
