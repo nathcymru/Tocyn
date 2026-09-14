@@ -84,7 +84,7 @@ function InboxWorkspace(){
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
       <TocynSplitter.Root orientation="horizontal" size={[splitterRatio, 100 - splitterRatio]} onResizeEnd={onSplitterResizeEnd} panels={[{ id: 'inbox', minSize: 24, maxSize: 50 }, { id: 'conversation', minSize: 50, maxSize: 76 }]}>
-        <TocynSplitter.Panel id="inbox" role="region" aria-label="Conversations" className={clsx('tocyn-conversation-list border-r border-slate-200 bg-white',conversationId&&'hidden lg:block')}>
+        <TocynSplitter.Panel id="inbox" role="region" aria-label="Conversations" className={clsx('tocyn-conversation-list overflow-y-auto border-r border-slate-200 bg-white',conversationId&&'hidden lg:block')}>
           <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
         </TocynSplitter.Panel>
         <TocynSplitter.ResizeTrigger id="inbox:conversation" aria-label="Resize inbox and conversation panes" />
@@ -226,7 +226,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         {isLoadingFilters?<span role="status" className="px-2 py-2 text-sm text-slate-500">Loading saved views…</span>:filters?.map(filter=><TocynButton key={filter.id} type="button"
           aria-pressed={activeView===filter.id} onClick={()=>selectView(filter.id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold',
             activeView===filter.id?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}><Filter className="h-3.5 w-3.5" aria-hidden="true" />{filter.name}</TocynButton>)}</nav>
-      <p className="mt-2 text-xs text-slate-500">Queue totals cover standard views before search or custom filters.</p>
+      <p className="sr-only">Queue totals cover standard views before search or custom filters.</p>
       {queueCounts.isFetching?<p role="status" className="mt-1 text-xs text-slate-500">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="mt-1 text-xs text-slate-600">Queue totals unavailable. <TocynButton type="button" onClick={()=>void queueCounts.refetch()} className="underline">Retry queue totals</TocynButton></p>:null}
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4" aria-label="Inbox metrics">
         <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5"><span className="block text-slate-500">View</span><span className="font-semibold text-slate-800">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span></div>
