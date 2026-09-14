@@ -58,7 +58,7 @@ it('records an authorized selected ticket and persists context-panel preference 
   await screen.findByText(/Ticket intake/);
   expect(screen.getByText(/Support staff/)).toBeInTheDocument();
   expect(screen.getByText('Operational context')).toBeInTheDocument();
-  expect(screen.getByText(/No operational source is connected/)).toBeInTheDocument();
+  expect(screen.getByText(/additional operational integrations are not connected/)).toBeInTheDocument();
   expect(screen.getByText('Knowledge')).toBeInTheDocument();
   expect(screen.getByText('Collaboration')).toBeInTheDocument();
   expect(screen.getByText(/No collaborators are viewing/)).toBeInTheDocument();
