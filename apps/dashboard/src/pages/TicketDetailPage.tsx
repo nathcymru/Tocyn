@@ -909,8 +909,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   </details>}
                   {/* Only explicitly versioned new content is interpreted as Markdown. */}
                   {article.body_format === 'markdown-v1'
-                    ? <SafeMarkdown className="break-words text-sm leading-relaxed">{article.body ?? ''}</SafeMarkdown>
-                    : <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{article.body ?? ''}</div>}
+                    ? <SafeMarkdown className="break-words text-sm leading-relaxed">{article.body ?? (article.sender_type === 'system' ? 'System event recorded.' : 'Message body unavailable.')}</SafeMarkdown>
+                    : <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{article.body ?? (article.sender_type === 'system' ? 'System event recorded.' : 'Message body unavailable.')}</div>}
 
                   {/* Attachments */}
                   {article.attachments && article.attachments.length > 0 && (
@@ -1116,7 +1116,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                       <span>{agent.full_name || agent.email}</span>
                     </label>;
                   })}
-                </div> : <p className="text-sm text-slate-700">No colleagues are available to mention.</p>}
+                </div> : <TocynEmptyState
+                  title="No colleagues are available to mention."
+                  description="No colleagues with access to this ticket are available for a private mention."
+                  className="min-h-0 p-4"
+                />}
               </fieldset>}
               <label className="mb-2 block text-sm text-slate-700">
                 Message format
