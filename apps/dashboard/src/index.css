@@ -175,7 +175,9 @@
 .tocyn-ticket-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; max-width: 90rem; margin-inline: auto; }
 .tocyn-ticket-layout :where(h1, p, dd, label) { overflow-wrap: anywhere; }
 .tocyn-conversation-heading { padding-block: .25rem .75rem; border-bottom: 1px solid var(--tocyn-app-border); }
-.tocyn-conversation-heading > div, .tocyn-ticket-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; }
+.tocyn-conversation-heading > div, .tocyn-ticket-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; min-width: 0; }
+.tocyn-conversation-heading > div > div:first-child { min-width: 0; flex: 1 1 18rem; }
+.tocyn-conversation-heading h1 { overflow-wrap: anywhere; }
 .tocyn-conversation-heading h1 { font-size: 1.375rem; line-height: 1.35; }
 .tocyn-ticket-actions > div { flex-wrap: wrap; }
 .tocyn-ticket-context { min-width: 0; }
