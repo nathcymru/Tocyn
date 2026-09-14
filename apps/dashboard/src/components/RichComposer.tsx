@@ -128,7 +128,22 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     },
   });
   useEffect(() => { editor?.setEditable(!readOnly); if (readOnly || format === 'plain') setAutocomplete(null); }, [editor, readOnly, format]);
-  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); const onLegacyChange = () => { if (readOnly) return; const next = legacyValueRef.current; onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); }; dom.addEventListener('change', onLegacyChange); return () => dom.removeEventListener('change', onLegacyChange); } }, [editor, id, readOnly, onChange, hooks]);
+  useEffect(() => {
+    if (!editor) return;
+    // Keep the compatibility attribute used by existing integrations while
+    // Tiptap owns the actual contenteditable state. `setEditable(false)` also
+    // updates contenteditable, and this explicit marker makes the read-only
+    // state discoverable to DOM consumers and assistive technology.
+    const dom = editor.view.dom;
+    if (readOnly) {
+      dom.setAttribute('readonly', '');
+      dom.setAttribute('aria-readonly', 'true');
+    } else {
+      dom.removeAttribute('readonly');
+      dom.removeAttribute('aria-readonly');
+    }
+  }, [editor, readOnly]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { if (readOnly) return; legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); const onLegacyChange = () => { if (readOnly) return; const next = legacyValueRef.current; onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); }; dom.addEventListener('change', onLegacyChange); return () => dom.removeEventListener('change', onLegacyChange); } }, [editor, id, readOnly, onChange, hooks]);
   useEffect(() => {
     if (!editor || editor.getMarkdown() === value) return;
     if (readOnly) legacyValueRef.current = value;

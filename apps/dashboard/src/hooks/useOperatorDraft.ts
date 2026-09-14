@@ -150,7 +150,10 @@ function createController(identity: string | null, ticketId: string | null) {
       // initial read is still in flight; the controller is fenced on unmount,
       // so the late response cannot leak into the next ticket identity. An
       // edit made before restore remains blocked until its CAS base is known.
-      if (!isCurrent(requestEpoch) || deleting || rebasing || state.status === 'conflict' || !withinBounds(state)) return false;
+      // A failed restore is an unresolved authority/read failure even when
+      // there is no local edit. Navigation must keep the caller on this
+      // ticket until the user explicitly retries and obtains a valid base.
+      if (!isCurrent(requestEpoch) || deleting || rebasing || failed() || !withinBounds(state)) return false;
       if (!known || restoring) {
         if (!dirty) return true;
         return false;

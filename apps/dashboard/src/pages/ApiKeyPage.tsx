@@ -55,6 +55,9 @@ export function ApiKeyPage() {
     copyGeneration.current++; copyGuard.current = false; setCopying(false); setCopied(false); setCopyError('');
     return () => { copyGeneration.current++; if (copyTimer.current) clearTimeout(copyTimer.current); };
   }, [createdKey?.id]);
+  useEffect(() => {
+    if (uncertainKey) uncertainHeading.current?.focus();
+  }, [uncertainKey]);
 
   const fetchKeys = async () => {
     try {
