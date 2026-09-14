@@ -269,7 +269,7 @@ export const AutomationPage: React.FC = () => {
                       aria-label="Rule status"
                       aria-pressed={editForm.is_active}
                       onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
-                      className="transition-colors"
+                      className="tocyn-automation-status-toggle"
                     >
                       {editForm.is_active ? <FaToggleOn className="tocyn-automation-status-icon tocyn-automation-status-icon--active" size={40} /> : <FaToggleOff className="tocyn-automation-status-icon tocyn-automation-status-icon--paused" size={40} />}
                     </ParkButton>

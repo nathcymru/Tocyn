@@ -1378,6 +1378,7 @@
 .tocyn-automation-content { display: grid; gap: 1rem; }
 .tocyn-automation-editor-column { display: grid; gap: 1rem; }
 .tocyn-automation-status-control { display: flex; block-size: 2.5rem; align-items: center; gap: .75rem; }
+.tocyn-automation-status-toggle { transition: color 160ms ease; }
 .tocyn-automation-status-icon { inline-size: 2.5rem; block-size: 2.5rem; }
 .tocyn-automation-status-icon--active { color: var(--tocyn-color-brand); }
 .tocyn-automation-status-icon--paused { color: var(--tocyn-color-divider); }
