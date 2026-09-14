@@ -331,7 +331,7 @@ export function EmailChannelPage() {
         ) : emails?.length === 0 ? (
           <ParkEmptyState title="No email channels" description="No addresses are configured here. Receiving email also requires the separately configured inbound provider." className="tocyn-email-channel-state" />
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="tocyn-email-channel-list">
             {emails?.map((email) => (
               <div key={email.id} className="tocyn-email-channel-row">
                 <div className="tocyn-email-channel-identity">

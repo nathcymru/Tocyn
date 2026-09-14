@@ -1409,6 +1409,7 @@
 .tocyn-email-channel-row-delete-icon { inline-size: 1rem; block-size: 1rem; }
 .tocyn-email-channel-identity { display: flex; align-items: center; gap: 1rem; min-width: 0; }
 .tocyn-email-channel-state { margin: 1.5rem; }
+.tocyn-email-channel-list > * + * { border-block-start: 1px solid var(--tocyn-color-divider); }
 .tocyn-email-channel-row-heading { display: flex; align-items: center; gap: .5rem; }
 .tocyn-email-channel-row-address { margin: 0; color: var(--tocyn-color-text); font-weight: 600; }
 .tocyn-email-channel-default-badge { display: inline-flex; align-items: center; gap: .25rem; border-radius: .375rem; background: #dcfce7; padding: .125rem .5rem; color: #15803d; font-size: .75rem; font-weight: 600; }
