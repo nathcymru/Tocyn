@@ -82,27 +82,16 @@ function InboxWorkspace(){
   return <div className="tocyn-inbox-layout h-full min-h-0 bg-slate-100">
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
-    <div className="hidden h-full min-h-0 lg:block">
       <TocynSplitter.Root orientation="horizontal" size={[splitterRatio, 100 - splitterRatio]} onResizeEnd={onSplitterResizeEnd} panels={[{ id: 'inbox', minSize: 24, maxSize: 50 }, { id: 'conversation', minSize: 50, maxSize: 76 }]}>
-        <TocynSplitter.Panel id="inbox" className="tocyn-conversation-list border-r border-slate-200 bg-white">
+        <TocynSplitter.Panel id="inbox" role="region" aria-label="Conversations" className={clsx('tocyn-conversation-list border-r border-slate-200 bg-white',conversationId&&'hidden lg:block')}>
           <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
         </TocynSplitter.Panel>
         <TocynSplitter.ResizeTrigger id="inbox:conversation" aria-label="Resize inbox and conversation panes" />
-        <TocynSplitter.Panel id="conversation" className="tocyn-active-conversation overflow-y-auto bg-slate-50 p-4">
+        <TocynSplitter.Panel id="conversation" role="region" aria-label="Active conversation" className={clsx('tocyn-active-conversation overflow-y-auto bg-slate-50 p-4',!conversationId&&'hidden lg:block')}>
           {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
           {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} onResolved={onResolved} />:<EmptyConversation />}
         </TocynSplitter.Panel>
       </TocynSplitter.Root>
-    </div>
-    <div className="h-full min-h-0 lg:hidden">
-      <section aria-label="Conversations" className={clsx('tocyn-conversation-list h-full min-h-0 overflow-y-auto border-r border-slate-200 bg-white',conversationId&&'hidden')}>
-        <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
-      </section>
-      <section aria-label="Active conversation" className={clsx('tocyn-active-conversation h-full min-h-0 overflow-y-auto bg-slate-50 p-4',!conversationId&&'hidden')}>
-        {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
-        {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} onResolved={onResolved} />:<EmptyConversation />}
-      </section>
-    </div>
   </div>;
 }
 
@@ -248,6 +237,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5"><span className="block text-slate-500">Showing</span><span className="font-semibold text-slate-800">{tickets.length} of {meta.total}</span></div>
         <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5"><span className="block text-slate-500">Sort</span><span className="font-semibold text-slate-800">{workspace.sort.replaceAll('_',' ')}</span></div>
       </div>
+      <p className="sr-only">Current view: <span className="font-semibold">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
       <form className="relative mt-4" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-500" aria-hidden="true" />
         <TocynInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}

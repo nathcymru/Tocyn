@@ -1,11 +1,13 @@
-@import './panda.generated.css';
-
 .tocyn-splitter-root { display: flex; width: 100%; height: 100%; min-height: 0; }
 .tocyn-splitter-root[data-orientation='vertical'] { flex-direction: column; }
 .tocyn-splitter-panel { min-width: 0; min-height: 0; overflow: hidden; }
 .tocyn-splitter-resize-trigger { flex: 0 0 4px; background: var(--tocyn-colors-border-default); cursor: col-resize; touch-action: none; }
 .tocyn-splitter-resize-trigger:focus-visible { outline: 2px solid var(--tocyn-colors-focus-ring); outline-offset: 1px; }
 .tocyn-splitter-root[data-orientation='vertical'] .tocyn-splitter-resize-trigger { cursor: row-resize; }
+@media (max-width: 1023px) {
+  .tocyn-splitter-panel { flex: 1 1 100% !important; width: 100% !important; }
+  .tocyn-splitter-resize-trigger { display: none; }
+}
 
 :root, :host {
   --tocyn-motion-duration-fast: 120ms;
