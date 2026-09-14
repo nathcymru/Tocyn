@@ -1,7 +1,7 @@
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { useAuthStore } from '../store/authStore';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
@@ -105,11 +105,11 @@ export const UsersPage: React.FC = () => {
           </div>
         ))}
         {!error && users.length === 0 && (
-          <div className="col-span-full py-12 text-center bg-white rounded-xl border-2 border-dashed border-slate-200">
-            <UserIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900">No team members found</h3>
-            <p className="text-slate-500 mt-1">Start by inviting your first agent or admin.</p>
-          </div>
+          <TocynEmptyState
+            className="col-span-full"
+            title="No team members found"
+            description="Start by inviting your first agent or admin."
+          />
         )}
       </div>
 

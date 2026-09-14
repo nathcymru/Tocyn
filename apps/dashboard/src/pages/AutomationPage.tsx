@@ -1,5 +1,5 @@
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useEffect, useState } from 'react';
 import { dashboardApi } from '../api/client';
 import { AutomationRule, AutomationCondition, WebhookConfig, RetentionConfig } from '../types';
@@ -395,19 +395,11 @@ export const AutomationPage: React.FC = () => {
         )}
 
         {rules.length === 0 && !isEditing ? (
-          <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-16 text-center">
-            <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Plus className="text-slate-400" size={32} />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">No automation rules yet</h3>
-            <p className="text-slate-500 mb-6">Create rules to automate your ticket workflows, notify external systems, or manage data retention.</p>
-            <TocynButton
-              onClick={startCreate}
-              className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-indigo-700 transition-colors"
-            >
-              Create your first rule
-            </TocynButton>
-          </div>
+          <TocynEmptyState
+            title="No automation rules yet"
+            description="Create rules to automate your ticket workflows, notify external systems, or manage data retention."
+            action={<TocynButton type="button" onClick={startCreate}>Create your first rule</TocynButton>}
+          />
         ) : (
           !isEditing && rules.map(rule => (
             <div key={rule.id} className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-between hover:border-indigo-200 hover:shadow-sm transition-all">

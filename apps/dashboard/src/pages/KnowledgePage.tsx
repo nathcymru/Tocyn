@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput } from '@luminatick/ui/primitives';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -352,9 +352,10 @@ export const KnowledgePage: React.FC = () => {
                 ))}
                 {filteredDocs.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
-                      No articles found in this category.
-                    </td>
+                    <td colSpan={5} className="p-4"><TocynEmptyState
+                      title="No articles found in this category."
+                      description="Create an article or choose another category to view knowledge content."
+                    /></td>
                   </tr>
                 )}
               </tbody>

@@ -1,6 +1,6 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput } from '@luminatick/ui/primitives';
 import React, { useEffect, useState, useRef } from 'react';
-import { AlertCircle, Loader2, Save, Shield } from 'lucide-react';
+import { Loader2, Save, Shield } from 'lucide-react';
 import { dashboardApi } from '../api/client';
 
 type Capability = {
@@ -91,7 +91,12 @@ export function AgentPermissionsPage() {
       </div>
 
       <p role="status" aria-live="polite" className="mb-4 text-sm text-slate-700">{loading ? 'Loading permissions…' : status}</p>
-      {error && <div role="alert" className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-3"><AlertCircle className="w-5 h-5 shrink-0" /><p className="text-sm font-medium">{error}</p><TocynButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className="min-h-11 rounded px-3 underline focus-visible:outline focus-visible:outline-2">Reload permissions</TocynButton></div>}
+      {error && <div role="alert" className="mb-6"><TocynEmptyState
+        title="Agent permissions unavailable."
+        description={error}
+        action={<TocynButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</TocynButton>}
+        className="min-h-0 p-4"
+      /></div>}
 
       <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-200">
         {capabilities.map(capability => {

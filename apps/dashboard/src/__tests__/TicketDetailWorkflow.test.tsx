@@ -146,10 +146,12 @@ it('shows a mounted service-level failure and retries its shared detail query wi
   transport(() => json(ticket), [], undefined, () => failSla ? json({ error: 'Unavailable' }, 503) : json({ ...unavailableSla, resolution: { state: 'on-track', phase: 'running', completedAt: null, dueAt: '2026-09-11T10:00:00.000Z', remainingWorkingMilliseconds: 60000, targetWorkingMilliseconds: 3600000 } }));
   showDetail();
   await screen.findByRole('heading', { name: ticket.subject });
-  expect(await screen.findByText('Service level is unavailable.')).toBeTruthy();
+  expect(await screen.findByText('Service level unavailable')).toBeTruthy();
+  expect(screen.getByRole('heading', { name: ticket.subject }).compareDocumentPosition(screen.getByRole('region', { name: 'Service level' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   failSla = false;
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-  expect((await screen.findAllByText(/^Due /)).length).toBe(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry service level' }));
+  fireEvent.click(await screen.findByText('Service level details'));
+  expect((await screen.findAllByText(/^Due /)).length).toBe(1);
 });
 
 it('persists explicit assignment clearing and exposes pending/rejected state changes without displaying false success',async()=>{
@@ -290,6 +292,10 @@ it('transitions a custom waiting state with its required private facts and retai
   fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
   expect(screen.getByRole('alert')).toHaveTextContent('waiting reason is required');
   fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: 'Waiting for their account number' } });
+  const disclosure = screen.getByText(/Support state and snooze.*Unsaved changes/).closest('details')!;
+  disclosure.open = false; fireEvent(disclosure, new Event('toggle'));
+  disclosure.open = true; fireEvent(disclosure, new Event('toggle'));
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('Waiting for their account number');
   fireEvent.change(screen.getByLabelText('Next action'), { target: { value: 'Follow up tomorrow' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('changed elsewhere');
@@ -386,7 +392,7 @@ it('displays and submits browser-local snooze datetimes across London DST bounda
   // the next valid local time (02:30 BST), preserving the 01:30Z instant.
   fireEvent.change(snooze, { target: { value: '2026-03-29T01:30' } });
   fireEvent.click(screen.getByRole('button', { name: 'Snooze ticket' }));
-  await screen.findByText(/Snoozed until/);
+  await screen.findByText(/Snoozed until/, { selector: 'p[role="status"]' });
   expect(writes[0]).toMatchObject({ definitionId: 'legacy-open', expectedRevision: 4, snoozedUntil: '2026-03-29T01:30:00.000Z' });
   expect(screen.getByRole('button', { name: 'Unsnooze ticket' })).toBeInTheDocument();
   // The autumn transition repeats 01:30. Browser datetime-local parsing uses

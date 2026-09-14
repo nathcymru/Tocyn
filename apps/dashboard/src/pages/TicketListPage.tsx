@@ -3,7 +3,7 @@ import { useTicketSlaBatch } from '../hooks/useTicketSla';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
 import { ticketReference } from '../utils/ticket-reference';
@@ -281,7 +281,7 @@ export function TicketListPage() {
                 placeholder="Search all authorised tickets..."
                 aria-label="Search all tickets in this list view"
                 aria-describedby="global-ticket-results-scope"
-                className="w-full pl-9 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                className="tocyn-search-field w-full pl-9 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -344,10 +344,16 @@ export function TicketListPage() {
                     <td colSpan={7} className="px-6 py-12 text-center text-slate-500">Loading tickets...</td>
                   </tr>
                 ) : ticketsError && tickets.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-600">Tickets are currently unavailable.</td></tr>
+                  <tr><td colSpan={7} className="p-4"><TocynEmptyState
+                    title="Tickets are currently unavailable."
+                    description="Refresh the list to try again."
+                  /></td></tr>
                 ) : tickets.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">No tickets found.</td>
+                    <td colSpan={7} className="p-4"><TocynEmptyState
+                      title="No tickets found."
+                      description={globalSearch ? `No tickets match “${globalSearch}”.` : 'Create a ticket or change the current filters.'}
+                    /></td>
                   </tr>
                 ) : (
                   tickets.map((ticket) => (

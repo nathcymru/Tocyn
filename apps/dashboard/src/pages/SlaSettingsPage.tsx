@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TocynButton, TocynInput, TocynSelect, TocynTextarea } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput, TocynSelect, TocynTextarea } from '@luminatick/ui/primitives';
 import { ApiError } from '../api/client';
 import { useSlaPolicy, useUpdateSlaPolicy, type SlaPolicy } from '../hooks/useSlaPolicy';
 
@@ -18,7 +18,11 @@ export function SlaSettingsPage() {
     setMessage('Saved. This policy applies only to clocks started after this revision.');
   } catch (cause) { setMessage(cause instanceof ApiError && cause.status === 409 ? 'This policy changed elsewhere. Reload before saving again.' : cause instanceof Error ? cause.message : 'Policy could not be saved.'); } };
   if (isLoading) return <p className="p-6" role="status">Loading SLA policy…</p>;
-  if (error || !data) return <div className="p-6" role="alert">SLA policy could not be loaded. <TocynButton type="button" onClick={() => void refetch()}>Retry</TocynButton></div>;
+  if (error || !data) return <div role="alert" className="p-6"><TocynEmptyState
+    title="SLA policy could not be loaded."
+    description="The current service-level policy is unavailable. Retry before changing it."
+    action={<TocynButton type="button" onClick={() => void refetch()}>Retry</TocynButton>}
+  /></div>;
   return <form onSubmit={submit} className="max-w-3xl space-y-6 p-6" aria-label="SLA policy settings">
     <header><h1 className="text-2xl font-bold">Service-level policy</h1><p className="mt-1 text-slate-600">Revision {data.revision}. Blank targets remain unavailable; the 24/7 UTC calendar is the starting policy.</p></header>
     {message ? <p role="status" className="rounded border p-3">{message}</p> : null}

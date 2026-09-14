@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import { TocynButton,TocynInput } from '@luminatick/ui/primitives';
+import { TocynButton,TocynInput,TocynSelect } from '@luminatick/ui/primitives';
 import { useOperatorCapacity,type CapacityInput } from '../../hooks/useOperatorCapacity';
 
 export function OperatorCapacityPanel({userId,editable=false}:{userId:string;editable?:boolean}){
@@ -38,10 +38,10 @@ function CapacityContent({capacity,editable}:{capacity:ReturnType<typeof useOper
     {editable&&<form onSubmit={submit} className="space-y-3 border-t pt-4">
       <p className="text-sm">Changes apply to new assignments. Existing work stays assigned.</p>
       <label htmlFor={`${id}-availability`} className="block text-sm font-medium">Availability for assignments</label>
-      <select id={`${id}-availability`} value={availability} disabled={phase==='saving'} onChange={event=>{setAvailability(event.target.value as CapacityInput['availability']);setDirty(true);}}
+      <TocynSelect id={`${id}-availability`} value={availability} disabled={phase==='saving'} onChange={event=>{setAvailability(event.target.value as CapacityInput['availability']);setDirty(true);}}
         className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900">
         <option value="available">Available</option><option value="unavailable">Unavailable</option>
-      </select>
+      </TocynSelect>
       <label htmlFor={`${id}-ceiling`} className="block text-sm font-medium">Assignment limit (0–1000)</label>
       <TocynInput id={`${id}-ceiling`} type="number" min={0} max={1000} step={1} value={ceiling} disabled={phase==='saving'}
         onChange={event=>{setCeiling(event.target.value);setDirty(true);}} className="w-full rounded border px-3 py-2"/>

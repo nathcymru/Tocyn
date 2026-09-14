@@ -1,0 +1,604 @@
+@layer reset, base, tokens, recipes, utilities;
+
+@layer base{
+  :root {
+    --made-with-panda: '🐼';
+}
+
+  *,::before,::after,::backdrop {
+    --blur: /*-*/ /*-*/;
+    --brightness: /*-*/ /*-*/;
+    --contrast: /*-*/ /*-*/;
+    --grayscale: /*-*/ /*-*/;
+    --hue-rotate: /*-*/ /*-*/;
+    --invert: /*-*/ /*-*/;
+    --saturate: /*-*/ /*-*/;
+    --sepia: /*-*/ /*-*/;
+    --drop-shadow: /*-*/ /*-*/;
+    --backdrop-blur: /*-*/ /*-*/;
+    --backdrop-brightness: /*-*/ /*-*/;
+    --backdrop-contrast: /*-*/ /*-*/;
+    --backdrop-grayscale: /*-*/ /*-*/;
+    --backdrop-hue-rotate: /*-*/ /*-*/;
+    --backdrop-invert: /*-*/ /*-*/;
+    --backdrop-opacity: /*-*/ /*-*/;
+    --backdrop-saturate: /*-*/ /*-*/;
+    --backdrop-sepia: /*-*/ /*-*/;
+    --gradient-from-position: /*-*/ /*-*/;
+    --gradient-to-position: /*-*/ /*-*/;
+    --gradient-via-position: /*-*/ /*-*/;
+    --scroll-snap-strictness: proximity;
+    --border-spacing-x: 0;
+    --border-spacing-y: 0;
+    --translate-x: 0;
+    --translate-y: 0;
+    --rotate: 0;
+    --rotate-x: 0;
+    --rotate-y: 0;
+    --skew-x: 0;
+    --skew-y: 0;
+    --scale-x: 1;
+    --scale-y: 1;
+}
+}
+
+@layer tokens{
+  :where(:root, :host) {
+    --tocyn-aspect-ratios-square: 1 / 1;
+    --tocyn-aspect-ratios-landscape: 4 / 3;
+    --tocyn-aspect-ratios-portrait: 3 / 4;
+    --tocyn-aspect-ratios-wide: 16 / 9;
+    --tocyn-aspect-ratios-ultrawide: 18 / 5;
+    --tocyn-aspect-ratios-golden: 1.618 / 1;
+    --tocyn-borders-none: none;
+    --tocyn-easings-default: cubic-bezier(0.4, 0, 0.2, 1);
+    --tocyn-easings-linear: linear;
+    --tocyn-easings-in: cubic-bezier(0.4, 0, 1, 1);
+    --tocyn-easings-out: cubic-bezier(0, 0, 0.2, 1);
+    --tocyn-easings-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --tocyn-durations-fastest: 50ms;
+    --tocyn-durations-faster: 100ms;
+    --tocyn-durations-fast: 150ms;
+    --tocyn-durations-normal: 200ms;
+    --tocyn-durations-slow: 300ms;
+    --tocyn-durations-slower: 400ms;
+    --tocyn-durations-slowest: 500ms;
+    --tocyn-radii-xs: 0.125rem;
+    --tocyn-radii-sm: 0.25rem;
+    --tocyn-radii-md: 0.375rem;
+    --tocyn-radii-lg: 0.5rem;
+    --tocyn-radii-xl: 0.75rem;
+    --tocyn-radii-2xl: 1rem;
+    --tocyn-radii-3xl: 1.5rem;
+    --tocyn-radii-4xl: 2rem;
+    --tocyn-radii-full: 9999px;
+    --tocyn-font-weights-thin: 100;
+    --tocyn-font-weights-extralight: 200;
+    --tocyn-font-weights-light: 300;
+    --tocyn-font-weights-normal: 400;
+    --tocyn-font-weights-medium: 500;
+    --tocyn-font-weights-semibold: 600;
+    --tocyn-font-weights-bold: 700;
+    --tocyn-font-weights-extrabold: 800;
+    --tocyn-font-weights-black: 900;
+    --tocyn-line-heights-none: 1;
+    --tocyn-line-heights-tight: 1.25;
+    --tocyn-line-heights-snug: 1.375;
+    --tocyn-line-heights-normal: 1.5;
+    --tocyn-line-heights-relaxed: 1.625;
+    --tocyn-line-heights-loose: 2;
+    --tocyn-fonts-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --tocyn-fonts-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    --tocyn-fonts-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --tocyn-letter-spacings-tighter: -0.05em;
+    --tocyn-letter-spacings-tight: -0.025em;
+    --tocyn-letter-spacings-normal: 0em;
+    --tocyn-letter-spacings-wide: 0.025em;
+    --tocyn-letter-spacings-wider: 0.05em;
+    --tocyn-letter-spacings-widest: 0.1em;
+    --tocyn-font-sizes-2xs: 0.5rem;
+    --tocyn-font-sizes-xs: 0.75rem;
+    --tocyn-font-sizes-sm: 0.875rem;
+    --tocyn-font-sizes-md: 1rem;
+    --tocyn-font-sizes-lg: 1.125rem;
+    --tocyn-font-sizes-xl: 1.25rem;
+    --tocyn-font-sizes-2xl: 1.5rem;
+    --tocyn-font-sizes-3xl: 1.875rem;
+    --tocyn-font-sizes-4xl: 2.25rem;
+    --tocyn-font-sizes-5xl: 3rem;
+    --tocyn-font-sizes-6xl: 3.75rem;
+    --tocyn-font-sizes-7xl: 4.5rem;
+    --tocyn-font-sizes-8xl: 6rem;
+    --tocyn-font-sizes-9xl: 8rem;
+    --tocyn-shadows-2xs: 0 1px rgb(0 0 0 / 0.05);
+    --tocyn-shadows-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --tocyn-shadows-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --tocyn-shadows-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --tocyn-shadows-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --tocyn-shadows-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --tocyn-shadows-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    --tocyn-shadows-inset-2xs: inset 0 1px rgb(0 0 0 / 0.05);
+    --tocyn-shadows-inset-xs: inset 0 1px 1px rgb(0 0 0 / 0.05);
+    --tocyn-shadows-inset-sm: inset 0 2px 4px rgb(0 0 0 / 0.05);
+    --tocyn-colors-current: currentColor;
+    --tocyn-colors-black: #000;
+    --tocyn-colors-white: #fff;
+    --tocyn-colors-transparent: rgb(0 0 0 / 0);
+    --tocyn-colors-rose-50: #fff1f2;
+    --tocyn-colors-rose-100: #ffe4e6;
+    --tocyn-colors-rose-200: #fecdd3;
+    --tocyn-colors-rose-300: #fda4af;
+    --tocyn-colors-rose-400: #fb7185;
+    --tocyn-colors-rose-500: #f43f5e;
+    --tocyn-colors-rose-600: #e11d48;
+    --tocyn-colors-rose-700: #be123c;
+    --tocyn-colors-rose-800: #9f1239;
+    --tocyn-colors-rose-900: #881337;
+    --tocyn-colors-rose-950: #4c0519;
+    --tocyn-colors-pink-50: #fdf2f8;
+    --tocyn-colors-pink-100: #fce7f3;
+    --tocyn-colors-pink-200: #fbcfe8;
+    --tocyn-colors-pink-300: #f9a8d4;
+    --tocyn-colors-pink-400: #f472b6;
+    --tocyn-colors-pink-500: #ec4899;
+    --tocyn-colors-pink-600: #db2777;
+    --tocyn-colors-pink-700: #be185d;
+    --tocyn-colors-pink-800: #9d174d;
+    --tocyn-colors-pink-900: #831843;
+    --tocyn-colors-pink-950: #500724;
+    --tocyn-colors-fuchsia-50: #fdf4ff;
+    --tocyn-colors-fuchsia-100: #fae8ff;
+    --tocyn-colors-fuchsia-200: #f5d0fe;
+    --tocyn-colors-fuchsia-300: #f0abfc;
+    --tocyn-colors-fuchsia-400: #e879f9;
+    --tocyn-colors-fuchsia-500: #d946ef;
+    --tocyn-colors-fuchsia-600: #c026d3;
+    --tocyn-colors-fuchsia-700: #a21caf;
+    --tocyn-colors-fuchsia-800: #86198f;
+    --tocyn-colors-fuchsia-900: #701a75;
+    --tocyn-colors-fuchsia-950: #4a044e;
+    --tocyn-colors-purple-50: #faf5ff;
+    --tocyn-colors-purple-100: #f3e8ff;
+    --tocyn-colors-purple-200: #e9d5ff;
+    --tocyn-colors-purple-300: #d8b4fe;
+    --tocyn-colors-purple-400: #c084fc;
+    --tocyn-colors-purple-500: #a855f7;
+    --tocyn-colors-purple-600: #9333ea;
+    --tocyn-colors-purple-700: #7e22ce;
+    --tocyn-colors-purple-800: #6b21a8;
+    --tocyn-colors-purple-900: #581c87;
+    --tocyn-colors-purple-950: #3b0764;
+    --tocyn-colors-violet-50: #f5f3ff;
+    --tocyn-colors-violet-100: #ede9fe;
+    --tocyn-colors-violet-200: #ddd6fe;
+    --tocyn-colors-violet-300: #c4b5fd;
+    --tocyn-colors-violet-400: #a78bfa;
+    --tocyn-colors-violet-500: #8b5cf6;
+    --tocyn-colors-violet-600: #7c3aed;
+    --tocyn-colors-violet-700: #6d28d9;
+    --tocyn-colors-violet-800: #5b21b6;
+    --tocyn-colors-violet-900: #4c1d95;
+    --tocyn-colors-violet-950: #2e1065;
+    --tocyn-colors-indigo-50: #eef2ff;
+    --tocyn-colors-indigo-100: #e0e7ff;
+    --tocyn-colors-indigo-200: #c7d2fe;
+    --tocyn-colors-indigo-300: #a5b4fc;
+    --tocyn-colors-indigo-400: #818cf8;
+    --tocyn-colors-indigo-500: #6366f1;
+    --tocyn-colors-indigo-600: #4f46e5;
+    --tocyn-colors-indigo-700: #4338ca;
+    --tocyn-colors-indigo-800: #3730a3;
+    --tocyn-colors-indigo-900: #312e81;
+    --tocyn-colors-indigo-950: #1e1b4b;
+    --tocyn-colors-blue-50: #eff6ff;
+    --tocyn-colors-blue-100: #dbeafe;
+    --tocyn-colors-blue-200: #bfdbfe;
+    --tocyn-colors-blue-300: #93c5fd;
+    --tocyn-colors-blue-400: #60a5fa;
+    --tocyn-colors-blue-500: #3b82f6;
+    --tocyn-colors-blue-600: #2563eb;
+    --tocyn-colors-blue-700: #1d4ed8;
+    --tocyn-colors-blue-800: #1e40af;
+    --tocyn-colors-blue-900: #1e3a8a;
+    --tocyn-colors-blue-950: #172554;
+    --tocyn-colors-sky-50: #f0f9ff;
+    --tocyn-colors-sky-100: #e0f2fe;
+    --tocyn-colors-sky-200: #bae6fd;
+    --tocyn-colors-sky-300: #7dd3fc;
+    --tocyn-colors-sky-400: #38bdf8;
+    --tocyn-colors-sky-500: #0ea5e9;
+    --tocyn-colors-sky-600: #0284c7;
+    --tocyn-colors-sky-700: #0369a1;
+    --tocyn-colors-sky-800: #075985;
+    --tocyn-colors-sky-900: #0c4a6e;
+    --tocyn-colors-sky-950: #082f49;
+    --tocyn-colors-cyan-50: #ecfeff;
+    --tocyn-colors-cyan-100: #cffafe;
+    --tocyn-colors-cyan-200: #a5f3fc;
+    --tocyn-colors-cyan-300: #67e8f9;
+    --tocyn-colors-cyan-400: #22d3ee;
+    --tocyn-colors-cyan-500: #06b6d4;
+    --tocyn-colors-cyan-600: #0891b2;
+    --tocyn-colors-cyan-700: #0e7490;
+    --tocyn-colors-cyan-800: #155e75;
+    --tocyn-colors-cyan-900: #164e63;
+    --tocyn-colors-cyan-950: #083344;
+    --tocyn-colors-teal-50: #f0fdfa;
+    --tocyn-colors-teal-100: #ccfbf1;
+    --tocyn-colors-teal-200: #99f6e4;
+    --tocyn-colors-teal-300: #5eead4;
+    --tocyn-colors-teal-400: #2dd4bf;
+    --tocyn-colors-teal-500: #14b8a6;
+    --tocyn-colors-teal-600: #0d9488;
+    --tocyn-colors-teal-700: #0f766e;
+    --tocyn-colors-teal-800: #115e59;
+    --tocyn-colors-teal-900: #134e4a;
+    --tocyn-colors-teal-950: #042f2e;
+    --tocyn-colors-emerald-50: #ecfdf5;
+    --tocyn-colors-emerald-100: #d1fae5;
+    --tocyn-colors-emerald-200: #a7f3d0;
+    --tocyn-colors-emerald-300: #6ee7b7;
+    --tocyn-colors-emerald-400: #34d399;
+    --tocyn-colors-emerald-500: #10b981;
+    --tocyn-colors-emerald-600: #059669;
+    --tocyn-colors-emerald-700: #047857;
+    --tocyn-colors-emerald-800: #065f46;
+    --tocyn-colors-emerald-900: #064e3b;
+    --tocyn-colors-emerald-950: #022c22;
+    --tocyn-colors-green-50: #f0fdf4;
+    --tocyn-colors-green-100: #dcfce7;
+    --tocyn-colors-green-200: #bbf7d0;
+    --tocyn-colors-green-300: #86efac;
+    --tocyn-colors-green-400: #4ade80;
+    --tocyn-colors-green-500: #22c55e;
+    --tocyn-colors-green-600: #16a34a;
+    --tocyn-colors-green-700: #15803d;
+    --tocyn-colors-green-800: #166534;
+    --tocyn-colors-green-900: #14532d;
+    --tocyn-colors-green-950: #052e16;
+    --tocyn-colors-lime-50: #f7fee7;
+    --tocyn-colors-lime-100: #ecfccb;
+    --tocyn-colors-lime-200: #d9f99d;
+    --tocyn-colors-lime-300: #bef264;
+    --tocyn-colors-lime-400: #a3e635;
+    --tocyn-colors-lime-500: #84cc16;
+    --tocyn-colors-lime-600: #65a30d;
+    --tocyn-colors-lime-700: #4d7c0f;
+    --tocyn-colors-lime-800: #3f6212;
+    --tocyn-colors-lime-900: #365314;
+    --tocyn-colors-lime-950: #1a2e05;
+    --tocyn-colors-yellow-50: #fefce8;
+    --tocyn-colors-yellow-100: #fef9c3;
+    --tocyn-colors-yellow-200: #fef08a;
+    --tocyn-colors-yellow-300: #fde047;
+    --tocyn-colors-yellow-400: #facc15;
+    --tocyn-colors-yellow-500: #eab308;
+    --tocyn-colors-yellow-600: #ca8a04;
+    --tocyn-colors-yellow-700: #a16207;
+    --tocyn-colors-yellow-800: #854d0e;
+    --tocyn-colors-yellow-900: #713f12;
+    --tocyn-colors-yellow-950: #422006;
+    --tocyn-colors-amber-50: #fffbeb;
+    --tocyn-colors-amber-100: #fef3c7;
+    --tocyn-colors-amber-200: #fde68a;
+    --tocyn-colors-amber-300: #fcd34d;
+    --tocyn-colors-amber-400: #fbbf24;
+    --tocyn-colors-amber-500: #f59e0b;
+    --tocyn-colors-amber-600: #d97706;
+    --tocyn-colors-amber-700: #b45309;
+    --tocyn-colors-amber-800: #92400e;
+    --tocyn-colors-amber-900: #78350f;
+    --tocyn-colors-amber-950: #451a03;
+    --tocyn-colors-orange-50: #fff7ed;
+    --tocyn-colors-orange-100: #ffedd5;
+    --tocyn-colors-orange-200: #fed7aa;
+    --tocyn-colors-orange-300: #fdba74;
+    --tocyn-colors-orange-400: #fb923c;
+    --tocyn-colors-orange-500: #f97316;
+    --tocyn-colors-orange-600: #ea580c;
+    --tocyn-colors-orange-700: #c2410c;
+    --tocyn-colors-orange-800: #9a3412;
+    --tocyn-colors-orange-900: #7c2d12;
+    --tocyn-colors-orange-950: #431407;
+    --tocyn-colors-red-50: #fef2f2;
+    --tocyn-colors-red-100: #fee2e2;
+    --tocyn-colors-red-200: #fecaca;
+    --tocyn-colors-red-300: #fca5a5;
+    --tocyn-colors-red-400: #f87171;
+    --tocyn-colors-red-500: #ef4444;
+    --tocyn-colors-red-600: #dc2626;
+    --tocyn-colors-red-700: #b91c1c;
+    --tocyn-colors-red-800: #991b1b;
+    --tocyn-colors-red-900: #7f1d1d;
+    --tocyn-colors-red-950: #450a0a;
+    --tocyn-colors-neutral-50: #fafafa;
+    --tocyn-colors-neutral-100: #f5f5f5;
+    --tocyn-colors-neutral-200: #e5e5e5;
+    --tocyn-colors-neutral-300: #d4d4d4;
+    --tocyn-colors-neutral-400: #a3a3a3;
+    --tocyn-colors-neutral-500: #737373;
+    --tocyn-colors-neutral-600: #525252;
+    --tocyn-colors-neutral-700: #404040;
+    --tocyn-colors-neutral-800: #262626;
+    --tocyn-colors-neutral-900: #171717;
+    --tocyn-colors-neutral-950: #0a0a0a;
+    --tocyn-colors-stone-50: #fafaf9;
+    --tocyn-colors-stone-100: #f5f5f4;
+    --tocyn-colors-stone-200: #e7e5e4;
+    --tocyn-colors-stone-300: #d6d3d1;
+    --tocyn-colors-stone-400: #a8a29e;
+    --tocyn-colors-stone-500: #78716c;
+    --tocyn-colors-stone-600: #57534e;
+    --tocyn-colors-stone-700: #44403c;
+    --tocyn-colors-stone-800: #292524;
+    --tocyn-colors-stone-900: #1c1917;
+    --tocyn-colors-stone-950: #0c0a09;
+    --tocyn-colors-zinc-50: #fafafa;
+    --tocyn-colors-zinc-100: #f4f4f5;
+    --tocyn-colors-zinc-200: #e4e4e7;
+    --tocyn-colors-zinc-300: #d4d4d8;
+    --tocyn-colors-zinc-400: #a1a1aa;
+    --tocyn-colors-zinc-500: #71717a;
+    --tocyn-colors-zinc-600: #52525b;
+    --tocyn-colors-zinc-700: #3f3f46;
+    --tocyn-colors-zinc-800: #27272a;
+    --tocyn-colors-zinc-900: #18181b;
+    --tocyn-colors-zinc-950: #09090b;
+    --tocyn-colors-gray-50: #f9fafb;
+    --tocyn-colors-gray-100: #f3f4f6;
+    --tocyn-colors-gray-200: #e5e7eb;
+    --tocyn-colors-gray-300: #d1d5db;
+    --tocyn-colors-gray-400: #9ca3af;
+    --tocyn-colors-gray-500: #6b7280;
+    --tocyn-colors-gray-600: #4b5563;
+    --tocyn-colors-gray-700: #374151;
+    --tocyn-colors-gray-800: #1f2937;
+    --tocyn-colors-gray-900: #111827;
+    --tocyn-colors-gray-950: #030712;
+    --tocyn-colors-slate-50: #f8fafc;
+    --tocyn-colors-slate-100: #f1f5f9;
+    --tocyn-colors-slate-200: #e2e8f0;
+    --tocyn-colors-slate-300: #cbd5e1;
+    --tocyn-colors-slate-400: #94a3b8;
+    --tocyn-colors-slate-500: #64748b;
+    --tocyn-colors-slate-600: #475569;
+    --tocyn-colors-slate-700: #334155;
+    --tocyn-colors-slate-800: #1e293b;
+    --tocyn-colors-slate-900: #0f172a;
+    --tocyn-colors-slate-950: #020617;
+    --tocyn-blurs-xs: 4px;
+    --tocyn-blurs-sm: 8px;
+    --tocyn-blurs-md: 12px;
+    --tocyn-blurs-lg: 16px;
+    --tocyn-blurs-xl: 24px;
+    --tocyn-blurs-2xl: 40px;
+    --tocyn-blurs-3xl: 64px;
+    --tocyn-spacing-0: 0rem;
+    --tocyn-spacing-1: 0.25rem;
+    --tocyn-spacing-2: 0.5rem;
+    --tocyn-spacing-3: 0.75rem;
+    --tocyn-spacing-4: 1rem;
+    --tocyn-spacing-5: 1.25rem;
+    --tocyn-spacing-6: 1.5rem;
+    --tocyn-spacing-7: 1.75rem;
+    --tocyn-spacing-8: 2rem;
+    --tocyn-spacing-9: 2.25rem;
+    --tocyn-spacing-10: 2.5rem;
+    --tocyn-spacing-11: 2.75rem;
+    --tocyn-spacing-12: 3rem;
+    --tocyn-spacing-14: 3.5rem;
+    --tocyn-spacing-16: 4rem;
+    --tocyn-spacing-20: 5rem;
+    --tocyn-spacing-24: 6rem;
+    --tocyn-spacing-28: 7rem;
+    --tocyn-spacing-32: 8rem;
+    --tocyn-spacing-36: 9rem;
+    --tocyn-spacing-40: 10rem;
+    --tocyn-spacing-44: 11rem;
+    --tocyn-spacing-48: 12rem;
+    --tocyn-spacing-52: 13rem;
+    --tocyn-spacing-56: 14rem;
+    --tocyn-spacing-60: 15rem;
+    --tocyn-spacing-64: 16rem;
+    --tocyn-spacing-72: 18rem;
+    --tocyn-spacing-80: 20rem;
+    --tocyn-spacing-96: 24rem;
+    --tocyn-spacing-0\.5: 0.125rem;
+    --tocyn-spacing-1\.5: 0.375rem;
+    --tocyn-spacing-2\.5: 0.625rem;
+    --tocyn-spacing-3\.5: 0.875rem;
+    --tocyn-spacing-4\.5: 1.125rem;
+    --tocyn-spacing-5\.5: 1.375rem;
+    --tocyn-sizes-0: 0rem;
+    --tocyn-sizes-1: 0.25rem;
+    --tocyn-sizes-2: 0.5rem;
+    --tocyn-sizes-3: 0.75rem;
+    --tocyn-sizes-4: 1rem;
+    --tocyn-sizes-5: 1.25rem;
+    --tocyn-sizes-6: 1.5rem;
+    --tocyn-sizes-7: 1.75rem;
+    --tocyn-sizes-8: 2rem;
+    --tocyn-sizes-9: 2.25rem;
+    --tocyn-sizes-10: 2.5rem;
+    --tocyn-sizes-11: 2.75rem;
+    --tocyn-sizes-12: 3rem;
+    --tocyn-sizes-14: 3.5rem;
+    --tocyn-sizes-16: 4rem;
+    --tocyn-sizes-20: 5rem;
+    --tocyn-sizes-24: 6rem;
+    --tocyn-sizes-28: 7rem;
+    --tocyn-sizes-32: 8rem;
+    --tocyn-sizes-36: 9rem;
+    --tocyn-sizes-40: 10rem;
+    --tocyn-sizes-44: 11rem;
+    --tocyn-sizes-48: 12rem;
+    --tocyn-sizes-52: 13rem;
+    --tocyn-sizes-56: 14rem;
+    --tocyn-sizes-60: 15rem;
+    --tocyn-sizes-64: 16rem;
+    --tocyn-sizes-72: 18rem;
+    --tocyn-sizes-80: 20rem;
+    --tocyn-sizes-96: 24rem;
+    --tocyn-sizes-0\.5: 0.125rem;
+    --tocyn-sizes-1\.5: 0.375rem;
+    --tocyn-sizes-2\.5: 0.625rem;
+    --tocyn-sizes-3\.5: 0.875rem;
+    --tocyn-sizes-4\.5: 1.125rem;
+    --tocyn-sizes-5\.5: 1.375rem;
+    --tocyn-sizes-xs: 20rem;
+    --tocyn-sizes-sm: 24rem;
+    --tocyn-sizes-md: 28rem;
+    --tocyn-sizes-lg: 32rem;
+    --tocyn-sizes-xl: 36rem;
+    --tocyn-sizes-2xl: 42rem;
+    --tocyn-sizes-3xl: 48rem;
+    --tocyn-sizes-4xl: 56rem;
+    --tocyn-sizes-5xl: 64rem;
+    --tocyn-sizes-6xl: 72rem;
+    --tocyn-sizes-7xl: 80rem;
+    --tocyn-sizes-8xl: 90rem;
+    --tocyn-sizes-prose: 65ch;
+    --tocyn-sizes-full: 100%;
+    --tocyn-sizes-min: min-content;
+    --tocyn-sizes-max: max-content;
+    --tocyn-sizes-fit: fit-content;
+    --tocyn-sizes-breakpoint-sm: 640px;
+    --tocyn-sizes-breakpoint-md: 768px;
+    --tocyn-sizes-breakpoint-lg: 1024px;
+    --tocyn-sizes-breakpoint-xl: 1280px;
+    --tocyn-sizes-breakpoint-2xl: 1536px;
+    --tocyn-animations-spin: spin 1s linear infinite;
+    --tocyn-animations-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+    --tocyn-animations-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    --tocyn-animations-bounce: bounce 1s infinite;
+    --tocyn-breakpoints-sm: 640px;
+    --tocyn-breakpoints-md: 768px;
+    --tocyn-breakpoints-lg: 1024px;
+    --tocyn-breakpoints-xl: 1280px;
+    --tocyn-breakpoints-2xl: 1536px;
+    --tocyn-colors-bg\.canvas: var(--tocyn-color-surface);
+    --tocyn-colors-bg\.panel: var(--tocyn-color-surface-panel);
+    --tocyn-colors-bg\.muted: var(--tocyn-color-surface-muted);
+    --tocyn-colors-bg\.selected: var(--tocyn-color-selected);
+    --tocyn-colors-fg\.default: var(--tocyn-color-text);
+    --tocyn-colors-fg\.muted: var(--tocyn-color-text-muted);
+    --tocyn-colors-fg\.selected: var(--tocyn-color-text);
+    --tocyn-colors-border\.default: var(--tocyn-color-divider);
+    --tocyn-colors-accent\.default: var(--tocyn-color-focus);
+    --tocyn-colors-accent\.contrast: var(--tocyn-color-surface);
+    --tocyn-colors-focus\.ring: var(--tocyn-color-focus);
+    --tocyn-colors-danger\.default: var(--tocyn-color-critical);
+    --tocyn-colors-success\.default: var(--tocyn-color-focus);
+}
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+}
+}
+
+  @keyframes ping {
+    75%,100% {
+      transform: scale(2);
+      opacity: 0;
+}
+}
+
+  @keyframes pulse {
+    50% {
+      opacity: 0.5;
+}
+}
+
+  @keyframes bounce {
+    0%,100% {
+      transform: translateY(-25%);
+      animation-timing-function: cubic-bezier(0.8,0,1,1);
+}
+
+    50% {
+      transform: none;
+      animation-timing-function: cubic-bezier(0,0,0.2,1);
+}
+}
+}
+
+@layer utilities{
+
+  .tocyn-bd_1px_solid_var\(--tocyn-color-divider\) {
+    border: 1px solid var(--tocyn-color-divider);
+}
+
+  .tocyn-bg_var\(--tocyn-color-surface-panel\) {
+    background: var(--tocyn-color-surface-panel);
+}
+
+  .tocyn-bg_var\(--tocyn-color-surface\) {
+    background: var(--tocyn-color-surface);
+}
+
+  .tocyn-bdr_0\.375rem {
+    border-radius: 0.375rem;
+}
+
+  .tocyn-px_0\.875rem {
+    padding-inline: 0.875rem;
+}
+
+  .tocyn-py_0\.5rem {
+    padding-block: 0.5rem;
+}
+
+  .tocyn-px_0\.75rem {
+    padding-inline: 0.75rem;
+}
+
+  .tocyn-bg-p_right_0\.75rem_center {
+    background-position: right 0.75rem center;
+}
+
+  .tocyn-flex_none {
+    flex: none;
+}
+
+  .tocyn-min-h-bs_var\(--tocyn-target-min\) {
+    min-block-size: var(--tocyn-target-min);
+}
+
+  .tocyn-c_var\(--tocyn-color-text\) {
+    color: var(--tocyn-color-text);
+}
+
+  .tocyn-ap_none {
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+  .tocyn-pe_2\.5rem {
+    padding-inline-end: 2.5rem;
+}
+
+  .tocyn-bg-i_url\(\"data\:image\/svg\+xml\,\%3Csvg_xmlns\=\'http\:\/\/www\.w3\.org\/2000\/svg\'_width\=\'12\'_height\=\'8\'_viewBox\=\'0_0_12_8\'\%3E\%3Cpath_fill\=\'none\'_stroke\=\'\%23515f6d\'_stroke-linecap\=\'round\'_stroke-linejoin\=\'round\'_stroke-width\=\'1\.5\'_d\=\'m1_1_5_5_5-5\'\/\%3E\%3C\/svg\%3E\"\) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23515f6d' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m1 1 5 5 5-5'/%3E%3C/svg%3E");
+}
+
+  .tocyn-bg-r_no-repeat {
+    background-repeat: no-repeat;
+}
+
+  .tocyn-bg-s_0\.75rem {
+    background-size: 0.75rem;
+}
+
+  .tocyn-w-is_1\.125rem {
+    inline-size: 1.125rem;
+}
+
+  .tocyn-h-bs_1\.125rem {
+    block-size: 1.125rem;
+}
+
+  .tocyn-ac-c_var\(--tocyn-color-focus\) {
+    accent-color: var(--tocyn-color-focus);
+}
+}

@@ -52,8 +52,8 @@ describe('SLA surfaces', () => {
   it('treats malformed detail data as a query failure and recovers only after an explicit retry', async () => {
     mocks.get.mockResolvedValueOnce({ response: unavailable, handlerName: null }).mockResolvedValueOnce({ response: unavailable, resolution: running, handlerName: null });
     show();
-    expect(await screen.findByText('Service level is unavailable.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Service level unavailable')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry service level' }));
     expect(await screen.findByText(/^Due /)).toBeTruthy();
     expect(mocks.get).toHaveBeenCalledTimes(2);
   });

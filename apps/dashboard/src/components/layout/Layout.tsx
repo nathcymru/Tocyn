@@ -3,7 +3,7 @@ import { OperatorCapacityPanel } from '../capacity/OperatorCapacityPanel';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput } from '@luminatick/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
@@ -295,7 +295,7 @@ function LayoutContent() {
   const visibleActivityItems = activity?.page.items.filter(item => !item.dismissedAt) ?? [];
 
   return (
-    <div className={cn('flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
+    <div className={cn('tocyn-workspace-shell flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
       <aside data-tocyn-inverse="" className={cn('hidden lg:block shrink-0 bg-slate-900 border-r border-slate-800', preferences.navigation === 'labelled' ? 'w-52' : 'w-16')}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
@@ -312,7 +312,7 @@ function LayoutContent() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
+        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center gap-3 px-4 lg:px-8">
           <TocynButton
             type="button"
             ref={navigationTrigger}
@@ -342,7 +342,12 @@ function LayoutContent() {
                 {activityError && <div role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900"><p>{activityError}</p><TocynButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="mt-2 rounded px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2">Retry loading activity</TocynButton></div>}
                 {activityLoading && !activity && <p role="status" className="p-2 text-sm text-slate-600">Loading durable activity…</p>}
                 {activity?.unread.status === 'unavailable' && <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">Unread count is temporarily unavailable. Your activity remains available below.</p>}
-                {activity && visibleActivityItems.length === 0 && <p className="p-2 text-sm text-slate-600">{activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'}</p>}
+                {activity && visibleActivityItems.length === 0 && <TocynEmptyState
+                  title="No current activity."
+                  description={activity.page.next ? 'There is no activity in the loaded items. Load more activity to continue checking.' : 'New ticket and conversation activity will appear here.'}
+                  action={activity.page.next ? <TocynButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading}>Load more activity</TocynButton> : undefined}
+                  className="min-h-24 border-0 bg-transparent p-2"
+                />}
                 <ul aria-label="Durable activity" className="max-h-96 divide-y overflow-y-auto">
                   {visibleActivityItems.map(item => <li key={item.id} className="flex gap-2 py-2">
                     <TocynButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="min-w-0 flex-1 rounded p-1 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2">

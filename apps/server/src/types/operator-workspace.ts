@@ -8,6 +8,8 @@ export type OperatorDraftMode = 'public' | 'internal';
 export type OperatorThemeMode = 'light' | 'dark' | 'system';
 export type OperatorThemePreference = Readonly<{ revision: number; mode: OperatorThemeMode; updatedAt: string | null }>;
 export const OPERATOR_PRESENTATION_PREFERENCES_VERSION = 2 as const;
+export const OPERATOR_TABLE_COLUMNS = ['reference', 'subject', 'status', 'priority', 'customer', 'updated'] as const;
+export type OperatorTableColumn = typeof OPERATOR_TABLE_COLUMNS[number];
 export type OperatorDensity = 'comfortable' | 'compact';
 export type OperatorFontScale = 'normal' | 'large' | 'larger';
 export type OperatorMotion = 'system' | 'reduced' | 'full';
@@ -24,6 +26,7 @@ export type OperatorPresentationPreference = Readonly<{
   shortcutsEnabled: boolean;
   interruptionLevel: 'standard' | 'quiet';
   advanceAfterResolve: boolean;
+  tableColumns?: readonly OperatorTableColumn[];
   updatedAt: string | null;
 }>;
 export type OperatorDraftAttachment = Readonly<{ storageKey: string; filename: string; size: number; contentType: string }>;
@@ -63,6 +66,7 @@ export type OperatorWorkspaceState = Readonly<{
   listAnchor: string;
   selectedTicketId: string | null;
   panel: 'conversation' | 'details';
+  splitterRatio: number;
   updatedAt: string;
 }>;
 import type { ArticleBodyFormat } from '@luminatick/shared';

@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -44,19 +44,11 @@ export function TicketFieldsPage() {
         {isLoading ? (
           <div className="p-8 text-center text-slate-500">Loading fields...</div>
         ) : fields?.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
-              <List className="w-8 h-8" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">No custom fields</h3>
-            <p className="text-slate-500 mb-6">Create fields to collect specific information on tickets.</p>
-            <TocynButton
-              onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
-              className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors"
-            >
-              Create your first field
-            </TocynButton>
-          </div>
+          <TocynEmptyState
+            title="No custom fields"
+            description="Create fields to collect specific information on tickets."
+            action={<TocynButton type="button" onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}>Create your first field</TocynButton>}
+          />
         ) : (
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">

@@ -6,18 +6,21 @@ export const OPERATOR_PREFERENCES_VERSION = 2;
 export type OperatorDensity = 'comfortable' | 'compact';
 export type OperatorFontScale = 'normal' | 'large' | 'larger';
 export type OperatorMotion = 'system' | 'reduced' | 'full';
-export type OperatorPreferences = Readonly<{ version: typeof OPERATOR_PREFERENCES_VERSION; revision: number; density: OperatorDensity; fontScale: OperatorFontScale; focusMode: boolean; motion: OperatorMotion; navigation: 'compact'|'labelled'; contextDefault: 'remember'|'conversation'|'details'; shortcutsEnabled: boolean; interruptionLevel: 'standard'|'quiet'; advanceAfterResolve: boolean; updatedAt: string | null }>;
+export const OPERATOR_TABLE_COLUMNS = ['reference', 'subject', 'status', 'priority', 'customer', 'updated'] as const;
+export type OperatorTableColumn = typeof OPERATOR_TABLE_COLUMNS[number];
+export type OperatorPreferences = Readonly<{ version: typeof OPERATOR_PREFERENCES_VERSION; revision: number; density: OperatorDensity; fontScale: OperatorFontScale; focusMode: boolean; motion: OperatorMotion; navigation: 'compact'|'labelled'; contextDefault: 'remember'|'conversation'|'details'; shortcutsEnabled: boolean; interruptionLevel: 'standard'|'quiet'; advanceAfterResolve: boolean; tableColumns: readonly OperatorTableColumn[]; updatedAt: string | null }>;
 export type OperatorPreferencesStatus = 'idle' | 'loading' | 'restored' | 'unsaved' | 'saving' | 'saved' | 'error' | 'conflict';
 export type OperatorPreferencesSnapshot = Readonly<OperatorPreferences & { status: OperatorPreferencesStatus; error: string | null; schemaUnavailable: boolean }>;
-const DEFAULT: OperatorPreferences = { version: OPERATOR_PREFERENCES_VERSION, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, updatedAt: null };
+const DEFAULT: OperatorPreferences = { version: OPERATOR_PREFERENCES_VERSION, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, tableColumns: OPERATOR_TABLE_COLUMNS, updatedAt: null };
 const valid = (value: unknown): value is OperatorPreferences => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
+  const columns = row.tableColumns === undefined ? OPERATOR_TABLE_COLUMNS : row.tableColumns;
   return row.version === OPERATOR_PREFERENCES_VERSION && Number.isSafeInteger(row.revision) && Number(row.revision) >= 0
     && (row.density === 'comfortable' || row.density === 'compact') && (row.fontScale === 'normal' || row.fontScale === 'large' || row.fontScale === 'larger')
     && typeof row.navigation === 'string' && ['compact','labelled'].includes(row.navigation) && typeof row.contextDefault === 'string' && ['remember','conversation','details'].includes(row.contextDefault)
     && typeof row.shortcutsEnabled === 'boolean' && typeof row.interruptionLevel === 'string' && ['standard','quiet'].includes(row.interruptionLevel) && typeof row.advanceAfterResolve === 'boolean'
-    && typeof row.focusMode === 'boolean' && (row.motion === 'system' || row.motion === 'reduced' || row.motion === 'full') && (row.updatedAt === null || typeof row.updatedAt === 'string');
+    && typeof row.focusMode === 'boolean' && (row.motion === 'system' || row.motion === 'reduced' || row.motion === 'full') && Array.isArray(columns) && columns.length >= 1 && columns.length <= 6 && columns.includes('reference') && new Set(columns).size === columns.length && columns.every(column => OPERATOR_TABLE_COLUMNS.includes(column as OperatorTableColumn)) && (row.updatedAt === null || typeof row.updatedAt === 'string');
 };
 const identityFor = (generation: number, tenantId?: string, userId?: string) => tenantId && userId ? `${generation}:${tenantId}:${userId}` : null;
 function empty(status: OperatorPreferencesStatus = 'idle', error: string | null = null): OperatorPreferencesSnapshot { return { ...DEFAULT, status, error, schemaUnavailable: false }; }
@@ -37,8 +40,9 @@ function createController(identity: string | null) {
       if (!current(requestEpoch)) return;
       if (!valid(response)) { revisionKnown = false; dirty = false; replace({ ...empty('error', 'Workspace preferences response is invalid. Restore before saving.'), schemaUnavailable: true }); return; }
       revisionKnown = true;
+      const normalized = { ...response, tableColumns: response.tableColumns ?? OPERATOR_TABLE_COLUMNS };
       if (preserveLocal) { replace({ ...state, revision: response.revision, updatedAt: response.updatedAt, status: 'unsaved', error: null, schemaUnavailable: false }); return; }
-      dirty = false; replace({ ...response, status: 'restored', error: null, schemaUnavailable: false });
+      dirty = false; replace({ ...normalized, status: 'restored', error: null, schemaUnavailable: false });
     }).catch(error => {
       if (!current(requestEpoch)) return;
       if (error instanceof ApiError && error.status === 403) { clearUnauthorized(); return; }
@@ -59,10 +63,10 @@ function createController(identity: string | null) {
     if (!revisionKnown) return;
     const requestEpoch = epoch; const submitted = state;
     replace({ ...state, status: 'saving', error: null });
-    const flight = dashboardApi.put<unknown>('/workspace/presentation-preference', { version: OPERATOR_PREFERENCES_VERSION, expectedRevision: submitted.revision, density: submitted.density, fontScale: submitted.fontScale, focusMode: submitted.focusMode, motion: submitted.motion, navigation: submitted.navigation, contextDefault: submitted.contextDefault, shortcutsEnabled: submitted.shortcutsEnabled, interruptionLevel: submitted.interruptionLevel, advanceAfterResolve: submitted.advanceAfterResolve }).then(response => {
+    const flight = dashboardApi.put<unknown>('/workspace/presentation-preference', { version: OPERATOR_PREFERENCES_VERSION, expectedRevision: submitted.revision, density: submitted.density, fontScale: submitted.fontScale, focusMode: submitted.focusMode, motion: submitted.motion, navigation: submitted.navigation, contextDefault: submitted.contextDefault, shortcutsEnabled: submitted.shortcutsEnabled, interruptionLevel: submitted.interruptionLevel, advanceAfterResolve: submitted.advanceAfterResolve, tableColumns: submitted.tableColumns }).then(response => {
       if (!current(requestEpoch)) return;
       if (!valid(response) || response.revision <= submitted.revision) throw new Error('Invalid saved preference');
-      revisionKnown = true; dirty = false; replace({ ...response, status: 'saved', error: null, schemaUnavailable: false });
+      revisionKnown = true; dirty = false; replace({ ...response, tableColumns: response.tableColumns ?? OPERATOR_TABLE_COLUMNS, status: 'saved', error: null, schemaUnavailable: false });
     }).catch(error => {
       if (!current(requestEpoch)) return;
       if (error instanceof ApiError && error.status === 403) { clearUnauthorized(); return; }
@@ -83,7 +87,7 @@ function createController(identity: string | null) {
       // Detach obsolete flights so the next start can restore independently.
       restoreFlight = null; saving = null; saveQueued = false;
     }; },
-    update: (changes: Partial<Pick<OperatorPreferences, 'density'|'fontScale'|'focusMode'|'motion'|'navigation'|'contextDefault'|'shortcutsEnabled'|'interruptionLevel'|'advanceAfterResolve'>>) => {
+    update: (changes: Partial<Pick<OperatorPreferences, 'density'|'fontScale'|'focusMode'|'motion'|'navigation'|'contextDefault'|'shortcutsEnabled'|'interruptionLevel'|'advanceAfterResolve'|'tableColumns'>>) => {
       if (!current() || state.schemaUnavailable || state.status === 'conflict') return;
       const next = { ...state, ...changes }; if (!valid(next)) return;
       dirty = true;

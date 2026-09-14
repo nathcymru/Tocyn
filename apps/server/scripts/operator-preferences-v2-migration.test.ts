@@ -35,6 +35,24 @@ function rows(db: Database.Database) {
   return db.prepare(`SELECT * FROM ${table} ORDER BY tenant_id,user_id`).all() as Record<string, unknown>[];
 }
 
+test('table columns upgrade preserves existing v2 rows, keys and scalar preferences', () => {
+  const db = fixture();
+  try {
+    migrate(db);
+    db.prepare(`UPDATE ${table} SET navigation='labelled', context_default='details', shortcuts_enabled=0,
+      interruption_level='quiet', advance_after_resolve=1 WHERE tenant_id='tenant-a'`).run();
+    const before = rows(db);
+    db.transaction(() => db.exec(readFileSync(join(migrations, '0079_operator_table_columns.sql'), 'utf8')))();
+    assert.deepEqual(rows(db), before.map(row => ({ ...row,
+      table_columns: '["reference","subject","status","priority","customer","updated"]' })));
+    assert.deepEqual(db.pragma('foreign_key_check'), []);
+    assert.equal(db.pragma('integrity_check', { simple: true }), 'ok');
+    assert.throws(() => db.prepare(`INSERT INTO ${table} SELECT * FROM ${table} WHERE tenant_id='tenant-a'`).run(), /UNIQUE/);
+    db.prepare("DELETE FROM users WHERE tenant_id='tenant-a' AND id='same-user'").run();
+    assert.deepEqual(rows(db).map(row => row.tenant_id), ['tenant-b']);
+  } finally { db.close(); }
+});
+
 test('v2 migration preserves both tenant-qualified v1 rows and adds only approved defaults', () => {
   const db = fixture();
   try {

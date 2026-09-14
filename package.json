@@ -6,6 +6,7 @@
     "dev:dashboard": "npm run dev --workspace=apps/dashboard",
     "dev:portal": "npm run dev --workspace=apps/portal",
     "build:widget": "npm run build --workspace=apps/widget",
+    "ui:codegen": "panda codegen --config packages/ui/panda.config.ts && panda cssgen --config packages/ui/panda.config.ts --outfile packages/ui/src/styles/panda.generated.css",
     "db:migrate:local": "cd apps/server && npx wrangler d1 migrations apply tocyn-local --local --config wrangler.local.json",
     "setup:prod": "node scripts/setup.js",
     "deploy": "npm run deploy:server && npm run deploy:env && npm run deploy:dashboard && npm run deploy:portal && npm run deploy:widget",
@@ -27,6 +28,7 @@
     "packages/*"
   ],
   "devDependencies": {
+    "@pandacss/dev": "1.12.1",
     "miniflare": "5.20260907.0-alpha",
     "playwright": "1.62.1",
     "tsx": "^4.23.13",
