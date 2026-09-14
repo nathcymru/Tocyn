@@ -1,5 +1,5 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
-import { ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkTextarea } from '@luminatick/ui/park';
 import MDEditor from '@uiw/react-md-editor';
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
@@ -222,11 +222,11 @@ export function RichComposer({
       />}
     </div>
     {autocomplete && <div id={listboxId} role="listbox" aria-label={autocomplete.kind === 'slash' ? 'Slash command suggestions' : 'Emoji suggestions'} className="tocyn-composer-autocomplete">
-      {autocomplete.options.map((option, index) => <button id={`${listboxId}-option-${index}`} key={`${option.kind}-${option.id}`} type="button" role="option" aria-selected={activeIndex === index}
+      {autocomplete.options.map((option, index) => <ParkButton id={`${listboxId}-option-${index}`} key={`${option.kind}-${option.id}`} type="button" role="option" aria-selected={activeIndex === index}
         onMouseDown={event => event.preventDefault()} onClick={() => chooseAutocomplete(option)}
         className={`tocyn-composer-autocomplete-option ${activeIndex === index ? 'tocyn-composer-autocomplete-option-active' : ''}`}>
         {option.displayLabel}
-      </button>)}
+      </ParkButton>)}
     </div>}
     <p className="tocyn-composer-drop-help">Drop or paste a JPEG, PNG, GIF, or WebP image to attach it (10 MB each).</p>
     <details className="tocyn-composer-preview">
