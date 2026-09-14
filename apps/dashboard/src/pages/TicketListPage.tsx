@@ -462,7 +462,7 @@ export function TicketListPage() {
       {/* New Ticket Modal */}
       <TocynDialog open={isModalOpen} onOpenChange={setIsModalOpen} busy={createTicket.isPending}
           labelledBy="create-ticket-heading" initialFocusEl={() => createSubject.current} finalFocusEl={() => createTrigger.current}
-          className="w-full max-w-2xl">
+          className="tocyn-ticket-create-dialog">
           <div className="tocyn-ticket-create-modal">
             <div className="tocyn-ticket-create-header">
               <h2 id="create-ticket-heading" className="tocyn-ticket-create-title">Create New Ticket</h2>
@@ -534,7 +534,7 @@ export function TicketListPage() {
                 <div>
                   <label htmlFor="create-ticket-assigned_to" className="tocyn-ticket-create-label">Assignee</label>
                   <TocynSelect
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-assigned_to"
                     aria-disabled={createTicket.isPending}
                     value={formData.assigned_to}
