@@ -848,7 +848,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                         </div>
                       )}
                     </div>
-                    <span className="sr-only">Viewing this ticket: {viewers.map(viewer => viewer.name).join(', ')}</span>
+                    <span className="tocyn-visually-hidden">Viewing this ticket: {viewers.map(viewer => viewer.name).join(', ')}</span>
                     <span className="tocyn-ticket-detail-live-label">
                       <span className="tocyn-ticket-detail-live-dot" />
                       Live Viewers
@@ -1009,7 +1009,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </span>
             </div>}
             <form onSubmit={handleSubmitReply} className="tocyn-ticket-composer-form">
-              {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()} className="underline">Retry sent-draft cleanup</TocynButton></p>}
+              {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()} className="tocyn-u-underline">Retry sent-draft cleanup</TocynButton></p>}
               <div className="tocyn-ticket-composer-mode-row">
                 <div className="tocyn-ticket-composer-mode-group">
                   <TocynButton
@@ -1189,7 +1189,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     type="file" aria-label="Reply attachments" disabled={isSubmitting}
                     multiple
                     ref={fileInputRef}
-                    className="hidden"
+                    className="tocyn-u-hidden"
                     onChange={(e) => {
                       if (submission.current) return;
                       const selectedFiles = Array.from(e.currentTarget.files ?? []);
@@ -1401,49 +1401,49 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </div>
         </div>
 
-        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
-            <span className="flex items-center gap-2"><Activity className="w-4 h-4 text-slate-400" />Operational context</span>
+        <details open className="tocyn-u-surface tocyn-u-radius-xl tocyn-u-border tocyn-u-shadow tocyn-u-pad-5">
+          <summary className="tocyn-u-clickable tocyn-u-list-none tocyn-u-text-sm tocyn-u-font-bold tocyn-u-fg tocyn-u-focus tocyn-u-focus-2 tocyn-u-focus-brand">
+            <span className="tocyn-u-flex tocyn-u-items-center tocyn-u-gap-2"><Activity className="tocyn-u-icon tocyn-u-fg-muted" />Operational context</span>
           </summary>
-          <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+          <p role="status" className="tocyn-u-margin-top-4 tocyn-u-radius tocyn-u-border tocyn-u-surface-subtle tocyn-u-pad-3 tocyn-u-text-xs tocyn-u-fg-muted">
             No operational source is connected for this ticket. Live SLA and routing details remain unavailable.
           </p>
         </details>
 
-        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
-            <span className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-slate-400" />Knowledge</span>
+        <details open className="tocyn-u-surface tocyn-u-radius-xl tocyn-u-border tocyn-u-shadow tocyn-u-pad-5">
+          <summary className="tocyn-u-clickable tocyn-u-list-none tocyn-u-text-sm tocyn-u-font-bold tocyn-u-fg tocyn-u-focus tocyn-u-focus-2 tocyn-u-focus-brand">
+            <span className="tocyn-u-flex tocyn-u-items-center tocyn-u-gap-2"><MessageSquare className="tocyn-u-icon tocyn-u-fg-muted" />Knowledge</span>
           </summary>
-          <div className="mt-4 space-y-3">
-            <p id="knowledge-insert-help" role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+          <div className="tocyn-u-margin-top-4 tocyn-u-stack-3">
+            <p id="knowledge-insert-help" role="status" className="tocyn-u-radius tocyn-u-border tocyn-u-surface-subtle tocyn-u-pad-3 tocyn-u-text-xs tocyn-u-fg-muted">
               {knowledgeLoading ? 'Loading tenant knowledge…' : knowledgeError ? 'Knowledge is temporarily unavailable. No content was inserted.' : knowledgeArticles.length ? 'Select an article to append its verified content to the reply.' : 'No eligible internal knowledge articles are available.'}
             </p>
-            {knowledgeError && <TocynButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className="text-sm underline">Retry knowledge</TocynButton>}
+            {knowledgeError && <TocynButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className="tocyn-u-text-sm tocyn-u-underline">Retry knowledge</TocynButton>}
             {workspace.panel === 'details' && knowledgeArticles.length > 0 && <KnowledgeBrowser articles={knowledgeArticles} insertingId={knowledgeInserting}
               disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} onInsert={article => void insertKnowledgeArticle(article)} />}
           </div>
         </details>
 
-        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 animate-in slide-in-from-right-4">
-            <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
-              <span className="flex items-center gap-2"><Eye className="w-4 h-4 text-brand-500" />Collaboration</span>
+        <details open className="tocyn-u-surface tocyn-u-radius-xl tocyn-u-border tocyn-u-shadow tocyn-u-pad-5 tocyn-u-motion-in tocyn-u-motion-right">
+            <summary className="tocyn-u-clickable tocyn-u-list-none tocyn-u-text-sm tocyn-u-font-bold tocyn-u-fg tocyn-u-focus tocyn-u-focus-2 tocyn-u-focus-brand">
+              <span className="tocyn-u-flex tocyn-u-items-center tocyn-u-gap-2"><Eye className="tocyn-u-icon tocyn-u-brand" />Collaboration</span>
             </summary>
-            {viewers.length > 0 ? <div className="space-y-3">
+            {viewers.length > 0 ? <div className="tocyn-u-stack-3">
               {viewers.map((viewer, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-700 text-xs font-bold border border-brand-100">
+                <div key={i} className="tocyn-u-flex tocyn-u-items-center tocyn-u-gap-3">
+                  <div className="tocyn-u-avatar tocyn-u-radius-full tocyn-u-brand-bg tocyn-u-flex tocyn-u-items-center tocyn-u-justify-center tocyn-u-brand tocyn-u-text-xs tocyn-u-font-bold tocyn-u-border tocyn-u-brand-border">
                     {viewer.name[0]}
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">{viewer.name}</p>
-                    <p className="text-[10px] tocyn-presence-viewing font-medium flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                    <p className="tocyn-u-text-xs tocyn-u-font-bold tocyn-u-fg">{viewer.name}</p>
+                    <p className="tocyn-u-text-10 tocyn-presence-viewing tocyn-u-font-medium tocyn-u-flex tocyn-u-items-center tocyn-u-gap-1">
+                      <span className="tocyn-u-dot tocyn-u-success tocyn-u-radius-full" />
                       Viewing
                     </p>
                   </div>
                 </div>
               ))}
-            </div> : <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">No collaborators are viewing this ticket.</p>}
+            </div> : <p role="status" className="tocyn-u-margin-top-4 tocyn-u-radius tocyn-u-border tocyn-u-surface-subtle tocyn-u-pad-3 tocyn-u-text-xs tocyn-u-fg-muted">No collaborators are viewing this ticket.</p>}
         </details>
       </aside>
       </div>
@@ -1469,7 +1469,7 @@ function CustomFieldInput({ id, field, value, onSave }: { id: string, field: any
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
-        className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm resize-y"
+        className="tocyn-u-full tocyn-u-surface tocyn-u-border tocyn-u-radius-md tocyn-u-pad-inline-3 tocyn-u-pad-block-1-5 tocyn-u-text-sm tocyn-u-font-medium tocyn-u-focus-ring tocyn-u-focus-ring-brand tocyn-u-outline-none tocyn-u-shadow tocyn-u-resize-y"
         rows={3}
       />
     );
@@ -1482,7 +1482,7 @@ function CustomFieldInput({ id, field, value, onSave }: { id: string, field: any
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
-      className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+      className="tocyn-u-full tocyn-u-surface tocyn-u-border tocyn-u-radius-md tocyn-u-pad-inline-3 tocyn-u-pad-block-1-5 tocyn-u-text-sm tocyn-u-font-medium tocyn-u-focus-ring tocyn-u-focus-ring-brand tocyn-u-outline-none tocyn-u-shadow"
     />
   );
 }
