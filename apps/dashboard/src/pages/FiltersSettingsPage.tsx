@@ -1,5 +1,5 @@
 import { TocynDialog, TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
@@ -169,9 +169,10 @@ export function FiltersSettingsPage() {
           <tbody className="divide-y divide-slate-200">
             {filters?.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-6 py-8 text-center text-slate-500 text-sm">
-                  No filters created yet.
-                </td>
+                <td colSpan={3} className="p-4"><TocynEmptyState
+                  title="No filters created yet."
+                  description="Create a filter to save a reusable ticket view."
+                /></td>
               </tr>
             ) : (
               filters?.map((filter) => (
