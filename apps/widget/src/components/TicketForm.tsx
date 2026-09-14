@@ -1,4 +1,4 @@
-import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
 
@@ -60,12 +60,12 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
         </div>
         <h3 ref={successHeading} tabIndex={-1} className="tocyn-widget-success-title">Ticket Submitted!</h3>
         <p role="status" className="tocyn-widget-success-copy">We've received your request and will get back to you soon.</p>
-        <TocynButton
+        <ParkButton
           onClick={() => { focusNewDraft.current = true; setStatus('idle'); }}
           className="tocyn-widget-success-action"
         >
           Submit another ticket
-        </TocynButton>
+        </ParkButton>
       </div>
     );
   }
@@ -75,7 +75,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       <fieldset disabled={status === 'submitting'} className="tocyn-widget-form">
       <div>
         <label htmlFor={`${formId}-name`} className="tocyn-widget-label">Your Name</label>
-        <TocynInput
+        <ParkInput
           type="text"
           required
           className="tocyn-form-control"
@@ -86,7 +86,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       </div>
       <div>
         <label htmlFor={`${formId}-email`} className="tocyn-widget-label">Email Address</label>
-        <TocynInput
+        <ParkInput
           type="email"
           required
           className="tocyn-form-control"
@@ -97,7 +97,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       </div>
       <div>
         <label htmlFor={`${formId}-subject`} className="tocyn-widget-label">Subject</label>
-        <TocynInput
+        <ParkInput
           type="text"
           required
           className="tocyn-form-control"
@@ -108,7 +108,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       </div>
       <div>
         <label htmlFor={`${formId}-message`} className="tocyn-widget-label">Message</label>
-        <TocynTextarea
+        <ParkTextarea
           required
           rows={3}
           className="tocyn-form-control tocyn-widget-textarea"
@@ -122,14 +122,14 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       {status === 'error' && (
         <p ref={errorMessage} tabIndex={-1} role="alert" className="tocyn-widget-error">Submission could not be confirmed. Your message has been kept; try again.</p>
       )}
-      <TocynButton
+      <ParkButton
         type="submit"
         disabled={status === 'submitting'}
         className="tocyn-widget-submit"
         style={{ backgroundColor: config.primaryColor }}
       >
         {status === 'submitting' ? 'Submitting...' : 'Send Message'}
-      </TocynButton>
+      </ParkButton>
     </form>
   );
 };

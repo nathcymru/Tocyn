@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { TocynButton } from './primitives';
+import { ParkButton } from './park';
 import { Dialog } from '@ark-ui/react/dialog';
 
 export interface TocynDialogProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -47,8 +47,8 @@ export const TocynConfirmDialog = React.forwardRef<HTMLDivElement, TocynConfirmD
       <p id={descriptionId}>{description}</p>
       {error && <p role="alert">{error}</p>}
       <div data-tocyn-confirm-actions="">
-        <TocynButton type="button" ref={cancel} disabled={dialog.busy} onClick={() => dialog.onOpenChange(false)}>{cancelLabel}</TocynButton>
-        <TocynButton type="button" disabled={dialog.busy} onClick={onConfirm}>{confirmLabel}</TocynButton>
+        <ParkButton type="button" ref={cancel} disabled={dialog.busy} onClick={() => dialog.onOpenChange(false)}>{cancelLabel}</ParkButton>
+        <ParkButton type="button" disabled={dialog.busy} onClick={onConfirm}>{confirmLabel}</ParkButton>
       </div>
     </div>
   </TocynDialog>;

@@ -1,4 +1,4 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState, useRef, useEffect } from 'react';
 
@@ -130,7 +130,7 @@ const AiChat: React.FC<Props> = ({ config }) => {
 
       {error && <p role="alert" className="tocyn-widget-ai-error">{error}</p>}
       <form onSubmit={handleSend} aria-label="Ask AI support" aria-busy={isLoading} className="tocyn-widget-ai-composer">
-        <TocynInput
+        <ParkInput
           ref={inputRef}
           aria-label="Your question"
           type="text"
@@ -140,7 +140,7 @@ const AiChat: React.FC<Props> = ({ config }) => {
           className="tocyn-form-control tocyn-widget-chat-input"
           disabled={isLoading}
         />
-        <TocynButton
+        <ParkButton
           aria-label="Send question"
           type="submit"
           disabled={isLoading || !input.trim()}
@@ -150,7 +150,7 @@ const AiChat: React.FC<Props> = ({ config }) => {
           <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="tocyn-widget-ai-send-icon" viewBox="0 0 20 20" fill="currentColor">
             <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
           </svg>
-        </TocynButton>
+        </ParkButton>
       </form>
     </div>
   );

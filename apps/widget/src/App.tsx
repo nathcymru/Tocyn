@@ -1,6 +1,6 @@
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { Tabs } from '@luminatick/ui/ark';
-import { TocynButton } from '@luminatick/ui/primitives';
+import { ParkButton } from '@luminatick/ui/park';
 import React, { useState, useEffect, useRef, useId } from 'react';
 import TicketForm from './components/TicketForm';
 import AiChat from './components/AiChat';
@@ -46,28 +46,28 @@ const App: React.FC = () => {
         <div id={`${widgetId}-panel`} role="region" aria-labelledby={`${widgetId}-title`} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeWidget(); } }} className="tocyn-widget-panel">
           <div className="tocyn-widget-panel-header" style={{ backgroundColor: config.primaryColor }}>
             <h2 id={`${widgetId}-title`} className="tocyn-widget-panel-title">{config.title}</h2>
-            <TocynButton ref={closeButton} aria-label="Close support" onClick={closeWidget} className="tocyn-widget-close">
+            <ParkButton ref={closeButton} aria-label="Close support" onClick={closeWidget} className="tocyn-widget-close">
               <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="tocyn-widget-close-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </TocynButton>
+            </ParkButton>
           </div>
 
           <Tabs.Root activationMode="manual" value={selectedTab ?? null} onValueChange={({value}) => { if (value === 'chat' || value === 'ticket') setActiveTab(value); }} lazyMount={false} unmountOnExit={false}>
           <Tabs.List aria-label="Support options" className="tocyn-widget-tabs">
             {config.features.aiChat && (
-              <Tabs.Trigger value="chat" asChild><TocynButton
+              <Tabs.Trigger value="chat" asChild><ParkButton
                 className={`tocyn-widget-tab ${selectedTab === 'chat' ? 'tocyn-widget-tab--active' : ''}`}
               >
                 AI Chat
-              </TocynButton></Tabs.Trigger>
+              </ParkButton></Tabs.Trigger>
             )}
             {config.features.ticketForm && (
-              <Tabs.Trigger value="ticket" asChild><TocynButton
+              <Tabs.Trigger value="ticket" asChild><ParkButton
                 className={`tocyn-widget-tab ${selectedTab === 'ticket' ? 'tocyn-widget-tab--active' : ''}`}
               >
                 New Ticket
-              </TocynButton></Tabs.Trigger>
+              </ParkButton></Tabs.Trigger>
             )}
           </Tabs.List>
 
@@ -84,7 +84,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <TocynButton
+      <ParkButton
         ref={launcher} aria-label={isOpen ? 'Close support' : 'Open support'} aria-expanded={isOpen} aria-controls={`${widgetId}-panel`}
         onClick={toggleWidget}
         className="tocyn-widget-launcher"
@@ -99,7 +99,7 @@ const App: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
           </svg>
         )}
-      </TocynButton>
+      </ParkButton>
     </div>
   );
 };
