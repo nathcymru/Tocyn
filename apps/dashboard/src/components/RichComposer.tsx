@@ -1,5 +1,5 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
-import { TocynTextarea } from '@luminatick/ui/primitives';
+import { TocynButton, TocynTextarea } from '@luminatick/ui/primitives';
 import MDEditor from '@uiw/react-md-editor';
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
@@ -222,11 +222,11 @@ export function RichComposer({
       />}
     </div>
     {autocomplete && <div id={listboxId} role="listbox" aria-label={autocomplete.kind === 'slash' ? 'Slash command suggestions' : 'Emoji suggestions'} className="mt-1 rounded border border-slate-300 bg-white p-1 shadow">
-      {autocomplete.options.map((option, index) => <button id={`${listboxId}-option-${index}`} key={`${option.kind}-${option.id}`} type="button" role="option" aria-selected={activeIndex === index}
+      {autocomplete.options.map((option, index) => <TocynButton id={`${listboxId}-option-${index}`} key={`${option.kind}-${option.id}`} type="button" role="option" aria-selected={activeIndex === index}
         onMouseDown={event => event.preventDefault()} onClick={() => chooseAutocomplete(option)}
         className={`block w-full rounded px-2 py-1 text-left text-sm focus-visible:outline focus-visible:outline-2 ${activeIndex === index ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>
         {option.displayLabel}
-      </button>)}
+      </TocynButton>)}
     </div>}
     <p className="mt-2 text-xs text-slate-600">Drop or paste a JPEG, PNG, GIF, or WebP image to attach it (10 MB each).</p>
     <details className="mt-2 rounded border border-slate-200 bg-white p-2 text-sm">
