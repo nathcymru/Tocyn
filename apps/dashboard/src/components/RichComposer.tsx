@@ -83,6 +83,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
   const editor = useEditor({
     extensions: [StarterKit, Markdown],
     content: value, contentType: 'markdown', editable: !readOnly,
+    editorProps: { attributes: { id, 'aria-label': 'Content (Markdown)' } },
     onUpdate: ({ editor: instance }) => { if (!readOnly) onChange(instance.getMarkdown()); },
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
