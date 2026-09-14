@@ -1779,6 +1779,30 @@ const tokens = {
     "value": "var(--tocyn-color-accent)",
     "variable": "var(--colors-accent\\.primary)"
   },
+  "colors.icon.primary": {
+    "value": "var(--tocyn-icon-primary)",
+    "variable": "var(--colors-icon\\.primary)"
+  },
+  "colors.icon.muted": {
+    "value": "var(--tocyn-icon-muted)",
+    "variable": "var(--colors-icon\\.muted)"
+  },
+  "colors.icon.disabled": {
+    "value": "var(--tocyn-icon-disabled)",
+    "variable": "var(--colors-icon\\.disabled)"
+  },
+  "colors.icon.selected": {
+    "value": "var(--tocyn-icon-selected)",
+    "variable": "var(--colors-icon\\.selected)"
+  },
+  "colors.icon.critical": {
+    "value": "var(--tocyn-icon-critical)",
+    "variable": "var(--colors-icon\\.critical)"
+  },
+  "colors.icon.inverse": {
+    "value": "var(--tocyn-icon-inverse)",
+    "variable": "var(--colors-icon\\.inverse)"
+  },
   "colors.canvas": {
     "value": "var(--tocyn-color-surface)",
     "variable": "var(--colors-canvas)"

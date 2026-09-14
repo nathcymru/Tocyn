@@ -489,6 +489,12 @@
     --colors-border\.input: var(--tocyn-color-divider);
     --colors-border\.focus: var(--tocyn-color-focus);
     --colors-accent\.primary: var(--tocyn-color-accent);
+    --colors-icon\.primary: var(--tocyn-icon-primary);
+    --colors-icon\.muted: var(--tocyn-icon-muted);
+    --colors-icon\.disabled: var(--tocyn-icon-disabled);
+    --colors-icon\.selected: var(--tocyn-icon-selected);
+    --colors-icon\.critical: var(--tocyn-icon-critical);
+    --colors-icon\.inverse: var(--tocyn-icon-inverse);
     --colors-canvas: var(--tocyn-color-surface);
     --colors-panel: var(--tocyn-color-surface-panel);
     --colors-muted: var(--tocyn-color-surface-muted);
@@ -573,5 +579,29 @@
 
   .c_critical {
     color: var(--colors-critical);
+}
+
+  .c_icon\.primary {
+    color: var(--colors-icon\.primary);
+}
+
+  .c_icon\.muted {
+    color: var(--colors-icon\.muted);
+}
+
+  .c_icon\.disabled {
+    color: var(--colors-icon\.disabled);
+}
+
+  .c_icon\.selected {
+    color: var(--colors-icon\.selected);
+}
+
+  .c_icon\.critical {
+    color: var(--colors-icon\.critical);
+}
+
+  .c_icon\.inverse {
+    color: var(--colors-icon\.inverse);
 }
 }
