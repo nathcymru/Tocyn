@@ -10,6 +10,8 @@ if (!(globalThis as any).IntersectionObserver) {
   };
 }
 if (!HTMLElement.prototype.scrollTo) HTMLElement.prototype.scrollTo = () => {};
+if (!HTMLElement.prototype.getClientRects) HTMLElement.prototype.getClientRects = () => [] as unknown as DOMRectList;
+if (typeof Range !== 'undefined' && !Range.prototype.getClientRects) Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 
 if (!(globalThis as any).localStorage) {
   const localStorageData = new Map<string, string>();
