@@ -84,7 +84,7 @@ export function SafeMarkdown({ children, className = '' }: { children: string; c
     urlTransform={(url, key) => key === 'href' ? safeLink(url) : undefined}
     components={{
       a: ({ href, children: linkChildren }) => href
-        ? <a href={href} target="_blank" rel="noreferrer noopener" className="underline break-words">{linkChildren}</a>
+        ? <a href={href} target="_blank" rel="noreferrer noopener" className="tocyn-u-underline tocyn-u-wrap">{linkChildren}</a>
         : <span>{linkChildren}</span>,
       // Never create a network request from sender-controlled Markdown; attachments
       // use the existing authenticated download path below each conversation article.
