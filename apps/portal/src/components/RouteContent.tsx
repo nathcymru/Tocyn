@@ -1,5 +1,6 @@
 import { Component, createRef, Suspense, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
+import { ParkEmptyState } from '@luminatick/ui/park';
 
 interface RouteLoadBoundaryProps { children: ReactNode; reloadHref: string; }
 class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, { failed: boolean }> {
@@ -21,6 +22,6 @@ class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, { failed: bool
 export function RouteContent({ children }: { children: ReactNode }) {
   const location = useLocation();
   return <RouteLoadBoundary key={location.pathname} reloadHref={location.pathname + location.search}>
-    <Suspense fallback={<p role="status" className="tocyn-portal-route-loading">Loading page…</p>}>{children}</Suspense>
+    <Suspense fallback={<ParkEmptyState role="status" title="Loading page…" headingLevel={false} aria-busy="true" className="tocyn-portal-route-loading" />}>{children}</Suspense>
   </RouteLoadBoundary>;
 }
