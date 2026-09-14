@@ -1,5 +1,5 @@
 import React, { useId, useRef, useState } from 'react';
-import { TocynButton, TocynEmptyState, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton, TocynCheckbox, TocynEmptyState, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import { ApiError } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { type SupportLifecycle, type SupportStateDefinition, useCreateSupportState, useDeactivateSupportState, useSupportStates, useUpdateSupportState } from '../hooks/useSupportStates';
@@ -60,7 +60,7 @@ export function SupportStatesPage() {
         <label className="text-sm font-medium">Internal label<TocynInput id={`${formId}-internal`} required value={form.internalLabel} onChange={event => setForm(current => ({ ...current, internalLabel: event.target.value }))} maxLength={120} className="mt-1 w-full border rounded px-3 py-2" /></label>
         <label className="text-sm font-medium">Customer-visible label<TocynInput required value={form.publicLabel} onChange={event => setForm(current => ({ ...current, publicLabel: event.target.value }))} maxLength={120} className="mt-1 w-full border rounded px-3 py-2" /></label>
       </div>
-      <div className="flex flex-wrap gap-5"><label><input type="checkbox" checked={form.waitingReasonRequired} onChange={event => setForm(current => ({ ...current, waitingReasonRequired: event.target.checked }))} /> Require waiting reason</label><label><input type="checkbox" checked={form.nextActionRequired} onChange={event => setForm(current => ({ ...current, nextActionRequired: event.target.checked }))} /> Require next action</label></div>
+      <div className="flex flex-wrap gap-5"><label><TocynCheckbox checked={form.waitingReasonRequired} onChange={event => setForm(current => ({ ...current, waitingReasonRequired: event.target.checked }))} /> Require waiting reason</label><label><TocynCheckbox checked={form.nextActionRequired} onChange={event => setForm(current => ({ ...current, nextActionRequired: event.target.checked }))} /> Require next action</label></div>
       <div className="flex gap-3"><TocynButton type="submit" aria-disabled={create.isPending || update.isPending} className="rounded bg-brand-600 px-4 py-2 text-white">{editing ? 'Save state' : 'Create state'}</TocynButton>{editing && <TocynButton type="button" onClick={reset} className="underline">Cancel edit</TocynButton>}</div>
     </form>
     {isLoading ? <p role="status">Loading support states…</p> : <>{states.length === 0 && !error ? <TocynEmptyState title="No support states yet." description="Create a support state to define the operator workflow and customer-facing label." /> : <ul className="space-y-3" aria-label="Support state definitions">{states.map(state => <li key={state.id} className="rounded-xl border border-slate-200 bg-white p-4">

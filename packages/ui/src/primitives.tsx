@@ -9,6 +9,7 @@ const selectClass = css({
   backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23515f6d' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m1 1 5 5 5-5'/%3E%3C/svg%3E\")",
   backgroundPosition: 'right 0.75rem center', backgroundRepeat: 'no-repeat', backgroundSize: '0.75rem',
 });
+const choiceClass = css({ inlineSize: '1.125rem', blockSize: '1.125rem', accentColor: 'var(--tocyn-color-focus)', flex: 'none' });
 
 export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, PrimitiveProps, ComposableState<'idle' | 'loading' | 'disabled'> {
   ref?: React.Ref<HTMLButtonElement>;
@@ -71,4 +72,14 @@ export interface TocynSelectProps extends React.SelectHTMLAttributes<HTMLSelectE
 }
 export const TocynSelect = React.forwardRef<HTMLSelectElement, TocynSelectProps>(function TocynSelect(props, ref) {
   return <select {...props} data-tocyn-primitive="select" ref={ref} className={[inputClass, selectClass, props.className].filter(Boolean).join(' ')} />;
+});
+
+export interface TocynCheckboxProps extends React.InputHTMLAttributes<HTMLInputElement>, PrimitiveProps { ref?: React.Ref<HTMLInputElement>; }
+export const TocynCheckbox = React.forwardRef<HTMLInputElement, TocynCheckboxProps>(function TocynCheckbox(props, ref) {
+  return <input {...props} type="checkbox" data-tocyn-primitive="checkbox" ref={ref} className={[choiceClass, props.className].filter(Boolean).join(' ')} />;
+});
+
+export interface TocynRadioProps extends React.InputHTMLAttributes<HTMLInputElement>, PrimitiveProps { ref?: React.Ref<HTMLInputElement>; }
+export const TocynRadio = React.forwardRef<HTMLInputElement, TocynRadioProps>(function TocynRadio(props, ref) {
+  return <input {...props} type="radio" data-tocyn-primitive="radio" ref={ref} className={[choiceClass, props.className].filter(Boolean).join(' ')} />;
 });
