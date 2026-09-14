@@ -706,10 +706,15 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   };
 
   if (isLoading) return <div className="p-8 text-center text-slate-500">Loading ticket...</div>;
-  if (!ticket) return <div className="p-8 space-y-4 text-center text-slate-700">
-    <p role="alert">{error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}</p>
-    <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</TocynButton>
-    <Link to={workspaceBackHref??'/tickets'} className="block underline">{workspaceBackHref?'Back to conversations':'Back to Tickets'}</Link>
+  if (!ticket) return <div role="alert" className="p-8">
+    <TocynEmptyState
+      title={error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}
+      description="The conversation could not be displayed. Retry the ticket request or return to the list."
+      action={<div className="flex flex-wrap items-center justify-center gap-3">
+        <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)}>Retry loading ticket</TocynButton>
+        <Link to={workspaceBackHref??'/tickets'} className="inline-flex rounded border border-slate-400 px-4 py-2 font-semibold underline">{workspaceBackHref?'Back to conversations':'Back to Tickets'}</Link>
+      </div>}
+    />
   </div>;
   const reference = ticketReference(ticket, ticketPrefix);
 

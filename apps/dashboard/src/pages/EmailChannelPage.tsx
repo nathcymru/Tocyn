@@ -1,5 +1,5 @@
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -317,13 +317,16 @@ export function EmailChannelPage() {
         {isLoading ? (
           <div role="status" className="p-8 text-center text-slate-500">Loading emails...</div>
         ) : emailsFailed ? (
-          <div role="alert">Email channels could not be loaded. <TocynButton onClick={() => { void reloadEmails(); }}>Retry channels</TocynButton></div>
+          <div role="alert"><TocynEmptyState
+            title="Email channels could not be loaded."
+            description="The configured addresses are unavailable. Retry before changing channel settings."
+            action={<TocynButton type="button" onClick={() => { void reloadEmails(); }}>Retry channels</TocynButton>}
+          /></div>
         ) : emails?.length === 0 ? (
-          <div className="p-12 text-center">
-            <Mail className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-1">No email channels</h3>
-            <p className="text-slate-500">No addresses are configured here. Receiving email also requires the separately configured inbound provider.</p>
-          </div>
+          <TocynEmptyState
+            title="No email channels"
+            description="No addresses are configured here. Receiving email also requires the separately configured inbound provider."
+          />
         ) : (
           <div className="divide-y divide-slate-100">
             {emails?.map((email) => (
