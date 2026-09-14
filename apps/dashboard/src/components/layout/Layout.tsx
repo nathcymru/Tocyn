@@ -309,14 +309,14 @@ function LayoutContent() {
 
   return (
     <div className={cn('tocyn-shell-root', isInboxRoute ? 'tocyn-shell-root-inbox' : 'tocyn-shell-root-standard')}>
-      <aside data-tocyn-inverse="" className={cn('tocyn-shell-sidebar-desktop', preferences.navigation === 'labelled' ? 'w-52' : 'w-16')}>
+      <aside data-tocyn-inverse="" className={cn('tocyn-shell-sidebar-desktop', preferences.navigation === 'labelled' ? 'tocyn-shell-sidebar-labelled' : 'tocyn-shell-sidebar-compact')}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
         <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
           labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
           finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
           data-tocyn-dialog-edge="" data-tocyn-inverse=""
-          className={cn('tocyn-shell-mobile-dialog', preferences.navigation === 'labelled' ? 'w-56 max-w-[90vw]' : 'w-20')}>
+          className={cn('tocyn-shell-mobile-dialog', preferences.navigation === 'labelled' ? 'tocyn-shell-mobile-labelled' : 'tocyn-shell-mobile-compact')}>
           <h2 id={`${mobileDialogId}-title`} className="tocyn-visually-hidden">Navigation</h2>
           <TocynButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
             className="tocyn-shell-mobile-close"><X aria-hidden="true" /></TocynButton>
@@ -382,15 +382,15 @@ function LayoutContent() {
               aria-expanded={showConnDetails}
               aria-controls={connectionId}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
+                "tocyn-shell-connection-button",
                 isConnected
-                  ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                  : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                  ? "tocyn-shell-connection-connected"
+                  : "tocyn-shell-connection-disconnected"
               )}
             >
               <WifiOff className="tocyn-shell-small-icon" />
               <span>Disconnected</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showConnDetails && "rotate-180")} />
+              <ChevronDown className={cn("tocyn-shell-chevron", showConnDetails && "rotate-180")} />
             </TocynButton></Popover.Trigger>
 
             <Popover.Positioner>
@@ -399,7 +399,7 @@ function LayoutContent() {
                   <h3 className="tocyn-shell-activity-title">Connection Status</h3>
                   <div className={cn(
                     "tocyn-shell-connection-dot",
-                    isConnected ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500"
+                    isConnected ? "tocyn-shell-connection-dot-connected" : "tocyn-palette-red-fill"
                   )} />
                 </div>
 
@@ -425,7 +425,7 @@ function LayoutContent() {
           {connectionRecoveryMessage && <p role="status" aria-live="polite" className="tocyn-visually-hidden">{connectionRecoveryMessage}</p>}
         </header>
 
-        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('flex-1 min-h-0', isInboxRoute ? 'overflow-hidden' : 'overflow-auto', !location.pathname.startsWith('/settings') && !isInboxRoute && 'p-4 lg:p-8')}>
+        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('tocyn-shell-content', isInboxRoute ? 'tocyn-shell-content-inbox' : 'tocyn-shell-content-standard', !location.pathname.startsWith('/settings') && !isInboxRoute && 'tocyn-shell-content-padded')}>
           <Outlet />
         </main>
       </div>
