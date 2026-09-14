@@ -1,7 +1,16 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi, ApiError } from '../api/client';
-import { CreditCard, Database, HardDrive, Cpu, Activity, AlertCircle, ExternalLink, RefreshCw, Zap } from 'lucide-react';
+import {
+  FaCreditCard,
+  FaDatabase,
+  FaHardDrive,
+  FaMicrochip,
+  FaChartLine,
+  FaCircleExclamation,
+  FaArrowUpRightFromSquare,
+  FaBolt
+} from 'react-icons/fa6';
 import { UsageStats } from '@luminatick/shared';
 import { clsx } from 'clsx';
 
@@ -104,36 +113,36 @@ export function UsagePage() {
   }, []);
 
   const renderCredentialsForm = () => (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
-      <div className="p-6 bg-slate-50 border-b border-slate-100 flex gap-4">
-        <AlertCircle className={cn("w-8 h-8 shrink-0", isAuthError ? "text-orange-500" : "text-brand-500")} />
+    <div className="tocyn-usage-credentials">
+      <div className={cn("tocyn-usage-credentials-header", isAuthError ? "tocyn-usage-credentials-header--auth" : "tocyn-usage-credentials-header--update")}>
+        <FaCircleExclamation className="tocyn-usage-credentials-icon" />
         <div>
-          <h3 className={cn("text-lg font-semibold", isAuthError ? "text-orange-800" : "text-brand-800")}>
+          <h3 className="tocyn-usage-credentials-title">
             {isAuthError ? 'Cloudflare Credentials Required' : 'Update Cloudflare Credentials'}
           </h3>
-          <p className={cn("mt-1", isAuthError ? "text-orange-700" : "text-brand-700")}>
+          <p className="tocyn-usage-credentials-copy">
             {isAuthError
               ? 'To view your usage and costs, you need to provide your Cloudflare Account ID and an API Token with Account Analytics permissions.'
               : 'Update your Cloudflare Account ID or Analytics API Token. Leave the token field blank to keep your existing encrypted token.'}
           </p>
-          <p className={cn("mt-2 text-sm font-medium", isAuthError ? "text-orange-700" : "text-brand-700")}>
+          <p className="tocyn-usage-credentials-note">
             Note: Storing these credentials in the database allows anyone with Admin access to view them, but it makes setup easier.
           </p>
         </div>
       </div>
 
-      <div className="p-6 space-y-6 text-slate-600">
+      <div className="tocyn-usage-credentials-body">
         <div>
-          <h4 className="font-medium text-slate-900 mb-2">1. How to get your API Token:</h4>
-          <ol className="list-decimal list-inside space-y-3">
+          <h4 className="tocyn-usage-credentials-step-title">1. How to get your API Token:</h4>
+          <ol className="tocyn-usage-credentials-steps">
             <li>
-              Go to your <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:text-brand-700 hover:underline inline-flex items-center gap-1">Cloudflare API Tokens <ExternalLink className="w-3 h-3" /></a> dashboard.
+              Go to your <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className="tocyn-usage-credentials-link">Cloudflare API Tokens <FaArrowUpRightFromSquare className="tocyn-usage-credentials-link-icon" /></a> dashboard.
             </li>
             <li>Click <strong>Create Token</strong> and choose <strong>Create Custom Token</strong>.</li>
             <li>
               Under Permissions, select:
-              <ul className="list-disc list-inside ml-6 mt-1 text-sm bg-slate-50 p-2 rounded border border-slate-100">
-                <li>Account <span className="mx-2 text-slate-400">→</span> Account Analytics <span className="mx-2 text-slate-400">→</span> Read</li>
+              <ul className="tocyn-usage-credentials-permissions">
+                <li>Account <span className="tocyn-usage-credentials-arrow">→</span> Account Analytics <span className="tocyn-usage-credentials-arrow">→</span> Read</li>
               </ul>
             </li>
             <li>Under Account Resources, select your account.</li>
@@ -142,50 +151,50 @@ export function UsagePage() {
         </div>
 
         <div>
-          <h4 className="font-medium text-slate-900 mb-4">2. Enter your credentials:</h4>
-          <div className="space-y-4">
+          <h4 className="tocyn-usage-credentials-step-title tocyn-usage-credentials-step-title--form">2. Enter your credentials:</h4>
+          <div className="tocyn-usage-credentials-fields">
             <div>
-              <label htmlFor="cloudflare-account-id" className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="cloudflare-account-id" className="tocyn-usage-credentials-label">
                 Cloudflare Account ID
               </label>
-              <TocynInput
+              <ParkInput
                 id="cloudflare-account-id"
                 type="text"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 placeholder="e.g., 1234567890abcdef1234567890abcdef"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono text-sm"
+                className="tocyn-form-control tocyn-usage-credentials-input"
               />
             </div>
             <div>
-              <label htmlFor="cloudflare-api-token" className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="cloudflare-api-token" className="tocyn-usage-credentials-label">
                 Cloudflare API Token
               </label>
-              <TocynInput
+              <ParkInput
                 id="cloudflare-api-token"
                 type="password"
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
                 placeholder={isAuthError ? "Enter your API token" : "•••••••• (Leave blank to keep existing)"}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono text-sm"
+                className="tocyn-form-control tocyn-usage-credentials-input"
               />
             </div>
-            <div className="pt-2 flex gap-3">
-              <TocynButton
+            <div className="tocyn-usage-credentials-actions">
+              <ParkButton
                 onClick={saveCredentials}
                 disabled={savingCredentials}
-                className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
+                className="tocyn-usage-credentials-save"
               >
                 {savingCredentials ? 'Saving...' : 'Save & View Usage'}
-              </TocynButton>
+              </ParkButton>
               {!isAuthError && (
-                <TocynButton
+                <ParkButton
                   onClick={() => setShowCredentialsForm(false)}
                   disabled={savingCredentials}
-                  className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  className="tocyn-usage-credentials-cancel"
                 >
                   Cancel
-                </TocynButton>
+                </ParkButton>
               )}
             </div>
           </div>
@@ -195,42 +204,35 @@ export function UsagePage() {
   );
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex flex-col items-center gap-4 text-slate-500">
-          <RefreshCw className="w-8 h-8 animate-spin" />
-          <p>Loading usage data...</p>
-        </div>
-      </div>
-    );
+    return <ParkEmptyState title="Loading usage data…" headingLevel={false} aria-busy="true" className="tocyn-usage-loading" />;
   }
 
   if (isMasterKeyMissing) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="tocyn-usage-state-page">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-brand-600" />
+          <h1 className="tocyn-usage-state-title">
+            <FaCreditCard className="tocyn-usage-state-icon" />
             Usage & Costs
           </h1>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex gap-4">
-          <AlertCircle className="w-8 h-8 text-red-600 shrink-0" />
+        <div className="tocyn-usage-critical">
+          <FaCircleExclamation className="tocyn-usage-critical-icon" />
           <div>
-            <h3 className="text-lg font-semibold text-red-800">Critical: Missing Encryption Key</h3>
-            <p className="text-red-700 mt-1">
-              Your server is missing the <code className="bg-red-100 px-1 py-0.5 rounded font-mono text-sm">APP_MASTER_KEY</code> environment variable.
+            <h3 className="tocyn-usage-critical-title">Critical: Missing Encryption Key</h3>
+            <p className="tocyn-usage-critical-copy">
+              Your server is missing the <code className="tocyn-usage-critical-code">APP_MASTER_KEY</code> environment variable.
               This 32-character key is required to securely encrypt and decrypt API tokens and other sensitive settings.
             </p>
-            <p className="text-red-700 mt-2 font-medium text-sm">
+            <p className="tocyn-usage-critical-note">
               Please ask your system administrator to add it to your server's environment configuration, then restart the application.
             </p>
-            <TocynButton
+            <ParkButton
               onClick={fetchUsage}
-              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+              className="tocyn-usage-critical-retry"
             >
               Retry
-            </TocynButton>
+            </ParkButton>
           </div>
         </div>
       </div>
@@ -239,57 +241,57 @@ export function UsagePage() {
 
   if (error && !isAuthError) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="tocyn-usage-state-page">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-brand-600" />
+          <h1 className="tocyn-usage-state-title">
+            <FaCreditCard className="tocyn-usage-state-icon" />
             Usage & Costs
           </h1>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700">
-          <p className="font-medium">Error loading usage data</p>
-          <p className="text-sm mt-1">{error}</p>
-          <TocynButton
+        <div className="tocyn-usage-error">
+          <p className="tocyn-usage-error-title">Error loading usage data</p>
+          <p className="tocyn-usage-error-copy">{error}</p>
+          <ParkButton
             onClick={fetchUsage}
-            className="mt-4 px-4 py-2 bg-red-100 text-red-800 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
+            className="tocyn-usage-error-retry"
           >
             Retry
-          </TocynButton>
+          </ParkButton>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
-      <div className="flex items-start justify-between">
+    <div className="tocyn-usage-page">
+      <div className="tocyn-usage-header">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-brand-600" />
+          <h1 className="tocyn-usage-title">
+            <FaCreditCard className="tocyn-usage-title-icon" />
             Usage & Costs
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="tocyn-usage-description">
             Monitor your Cloudflare resource usage against Free Tier limits. Updates may be delayed by a few hours.
           </p>
         </div>
         {!isAuthError && !showCredentialsForm && (
-          <TocynButton
+          <ParkButton
             onClick={() => setShowCredentialsForm(true)}
-            className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+            className="tocyn-usage-update"
           >
             Update Credentials
-          </TocynButton>
+          </ParkButton>
         )}
       </div>
 
       {(isAuthError || showCredentialsForm) && renderCredentialsForm()}
 
       {!isAuthError && !showCredentialsForm && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="tocyn-usage-stat-grid">
           <StatCard
             title="D1 Reads and Writes"
             description="Database row operations"
-            icon={Database}
+            icon={FaDatabase}
             current={(data?.d1?.rowsRead || 0) + (data?.d1?.rowsWritten || 0)}
             limit={LIMITS.d1_reads_writes}
             unit="/ day"
@@ -302,7 +304,7 @@ export function UsagePage() {
           <StatCard
             title="R2 Operations (Class A)"
             description="Writes to storage"
-            icon={HardDrive}
+            icon={FaHardDrive}
             current={data?.r2?.classAOperations || 0}
             limit={LIMITS.r2_class_a}
             unit="/ month"
@@ -315,7 +317,7 @@ export function UsagePage() {
           <StatCard
             title="R2 Operations (Class B)"
             description="Reads from storage"
-            icon={HardDrive}
+            icon={FaHardDrive}
             current={data?.r2?.classBOperations || 0}
             limit={LIMITS.r2_class_b}
             unit="/ month"
@@ -328,7 +330,7 @@ export function UsagePage() {
           <StatCard
             title="Workers Requests"
             description="API calls, widget loads, pages"
-            icon={Activity}
+            icon={FaChartLine}
             current={data?.workers?.requests || 0}
             limit={LIMITS.worker_requests}
             unit="/ day"
@@ -341,7 +343,7 @@ export function UsagePage() {
           <StatCard
             title="Workers AI Neurons"
             description="RAG, embedding, auto-responses"
-            icon={Cpu}
+            icon={FaMicrochip}
             current={data?.workersAi?.neurons || 0}
             limit={LIMITS.ai_neurons}
             unit="/ day"
@@ -354,7 +356,7 @@ export function UsagePage() {
           <StatCard
             title="Durable Objects Requests"
             description="Real-time presence connections"
-            icon={Zap}
+            icon={FaBolt}
             current={data?.durableObjects?.requests || 0}
             limit={LIMITS.do_requests}
             unit="/ day"
@@ -367,7 +369,7 @@ export function UsagePage() {
           <StatCard
             title="Vectorize Queries"
             description="Vector search queries"
-            icon={Database}
+            icon={FaDatabase}
             current={data?.vectorize?.queried || 0}
             limit={LIMITS.vectorize_queries}
             unit="/ month"
@@ -380,7 +382,7 @@ export function UsagePage() {
           <StatCard
             title="Vectorize Writes"
             description="Vector index updates"
-            icon={Database}
+            icon={FaDatabase}
             current={data?.vectorize?.written || 0}
             limit={LIMITS.vectorize_writes}
             unit="/ month"
@@ -417,39 +419,40 @@ function StatCard({ title, description, icon: Icon, current, limit, unit, format
   const displayLimit = format ? format(limit) : limit;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className={cn("p-2 rounded-lg", bgClass, colorClass)}>
-            <Icon className="w-5 h-5" />
+    <div className="tocyn-usage-stat-card">
+      <div className="tocyn-usage-stat-header">
+        <div className="tocyn-usage-stat-heading">
+          <div className={cn("tocyn-usage-stat-icon", bgClass, colorClass)}>
+            <Icon className="tocyn-usage-stat-icon-glyph" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-900">{title}</h3>
-            <p className="text-xs text-slate-500">{description}</p>
+            <h3 className="tocyn-usage-stat-title">{title}</h3>
+            <p className="tocyn-usage-stat-description">{description}</p>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-slate-900">
+        <div className="tocyn-usage-stat-value">
+          <div className="tocyn-usage-stat-current">
             {displayCurrent}
           </div>
-          <div className="text-xs text-slate-500 font-medium">
+          <div className="tocyn-usage-stat-limit">
             of {displayLimit} {unit}
           </div>
         </div>
       </div>
 
-      <div className="mt-auto pt-4">
-        <div className="flex justify-between text-xs font-medium mb-2">
+      <div className="tocyn-usage-stat-progress">
+        <div className="tocyn-usage-stat-progress-label">
           <span className={cn(
-            isOverLimit ? "text-red-600" : isNearLimit ? "text-orange-600" : "text-slate-600"
+            "tocyn-usage-stat-percentage",
+            isOverLimit ? "tocyn-usage-stat-percentage--over" : isNearLimit ? "tocyn-usage-stat-percentage--near" : "tocyn-usage-stat-percentage--normal"
           )}>
             {percentage.toFixed(1)}% Used
           </span>
-          <span className="text-slate-500">Free Tier Limit</span>
+          <span className="tocyn-usage-stat-free-tier">Free Tier Limit</span>
         </div>
-        <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+        <div className="tocyn-progress-track tocyn-progress-track--usage">
           <div
-            className={cn("h-full transition-all duration-500 rounded-full",
+            className={cn("tocyn-progress-fill tocyn-usage-stat-fill",
               isOverLimit ? "bg-red-500" : isNearLimit ? "bg-orange-500" : fillClass
             )}
             style={{ width: `${percentage}%` }}

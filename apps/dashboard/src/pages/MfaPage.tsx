@@ -1,11 +1,11 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkPinInput, ParkPinInputSlot } from '@luminatick/ui/park';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../store/authStore';
 import { dashboardApi } from '../api/client';
 import { AuthResponse } from '../types';
-import { Shield, KeyRound, AlertTriangle } from 'lucide-react';
+import { FaShieldHalved, FaKey, FaTriangleExclamation } from 'react-icons/fa6';
 
 interface SetupResponse {
   provisioning_uri: string;
@@ -19,7 +19,7 @@ export function MfaPage() {
   const [setupStatus, setSetupStatus] = useState('');
   const setupPromise = React.useRef<Promise<SetupResponse> | null>(null);
   const retryingSetup = React.useRef(false);
-  const codeInput = React.useRef<HTMLInputElement>(null);
+  const codeInput = React.useRef<HTMLDivElement>(null);
   const [setupData, setSetupData] = useState<SetupResponse | null>(null);
 
   const navigate = useNavigate();
@@ -50,7 +50,7 @@ export function MfaPage() {
   useEffect(() => {
     if (!setupData || !retryingSetup.current) return;
     // Focus only after React has committed the retry-created input.
-    codeInput.current?.focus();
+    codeInput.current?.querySelector<HTMLInputElement>('[data-scope="pin-input"][data-part="input"]')?.focus();
     retryingSetup.current = false;
   }, [setupData]);
 
@@ -95,20 +95,20 @@ export function MfaPage() {
   const isSetupMode = !user.mfa_enabled;
 
   return (
-    <div className="w-full">
-      <div className="w-full">
-        <div className="text-center mb-8">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 mb-4">
+    <div className="tocyn-auth-page">
+      <div className="tocyn-auth-card">
+        <div className="tocyn-auth-heading">
+          <div className="tocyn-mfa-icon-wrap">
             {isSetupMode ? (
-              <KeyRound className="h-6 w-6 text-indigo-600" />
+              <FaKey className="tocyn-mfa-icon" />
             ) : (
-              <Shield className="h-6 w-6 text-indigo-600" />
+              <FaShieldHalved className="tocyn-mfa-icon" />
             )}
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="tocyn-mfa-title">
             {isSetupMode ? 'Set up Two-Factor Authentication' : 'Two-Factor Authentication'}
           </h1>
-          <p id="mfa-instructions" className="text-slate-600 mt-2">
+          <p id="mfa-instructions" className="tocyn-mfa-instructions">
             {isSetupMode
               ? 'Your account requires an additional layer of security. Please scan the QR code with your authenticator app.'
               : 'Enter the 6-digit code from your authenticator app'}
@@ -116,72 +116,73 @@ export function MfaPage() {
         </div>
 
         {error && (
-          <div id="mfa-error" role="alert" aria-atomic="true" className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 text-red-700 text-sm rounded-r-md flex items-start">
-            <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
+          <div id="mfa-error" role="alert" aria-atomic="true" className="tocyn-auth-alert tocyn-mfa-alert">
+            <FaTriangleExclamation className="tocyn-mfa-alert-icon" />
             <p>{error}</p>
           </div>
         )}
 
         {isSetupMode && !setupData && error && (
-          <TocynButton type="button" aria-disabled={loading}
+          <ParkButton type="button" aria-disabled={loading}
             onClick={() => {
               if (loading) return;
               setLoading(true);
               retryingSetup.current = true;
               setupPromise.current = null;
               setSetupAttempt(previous => previous + 1);
-            }} className="mb-4 rounded border border-slate-500 px-3 py-2 text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+            }} className="tocyn-mfa-retry">
             Retry authenticator setup
-          </TocynButton>
+          </ParkButton>
         )}
 
         {isSetupMode && setupData && (
-          <div className="mb-6 text-center">
-            <div className="bg-white p-4 rounded-lg inline-block shadow-sm border border-gray-100 mb-4">
+          <div className="tocyn-mfa-setup">
+            <div className="tocyn-mfa-qr">
               <QRCodeSVG role="img" aria-label="Authenticator setup QR code; a text key follows" value={setupData.provisioning_uri} size={180} />
             </div>
-            <p className="text-xs text-gray-700 max-w-[250px] mx-auto">
+            <p className="tocyn-mfa-secret-help">
               If you can't scan the QR code, manually enter this secret key:<br/>
-              <code className="bg-gray-100 px-2 py-1 rounded mt-2 inline-block font-mono text-sm break-all">
+              <code className="tocyn-mfa-secret">
                 {getSecretFromUri(setupData.provisioning_uri)}
               </code>
             </p>
           </div>
         )}
 
-        <form aria-busy={loading} onSubmit={handleSubmit} className="space-y-4">
+        <form aria-busy={loading} onSubmit={handleSubmit} className="tocyn-auth-form">
           <div>
-            <label htmlFor="mfa-code" className="block text-sm font-medium text-slate-700 mb-2 text-center">
-              Authentication Code
-            </label>
-            <TocynInput
+            <ParkPinInput
               id="mfa-code"
               ref={codeInput}
+              defaultValue={Array.from({ length: 6 }, () => '')}
+              onValueChange={(details) => { const value = details?.value ?? []; if (!loading) setCode(value.join('').replace(/\D/g, '').slice(0, 6)); }}
+              disabled={loading}
               readOnly={loading}
-              name="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              aria-describedby={error ? "mfa-instructions mfa-error" : "mfa-instructions"}
-              type="text"
-              required
-              maxLength={6}
-              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 text-center text-3xl tracking-[0.5em] font-mono h-14"
-              placeholder="000000"
-              value={code}
-              onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
+              invalid={Boolean(error)}
               autoFocus
-            />
+              aria-describedby={error ? "mfa-instructions mfa-error" : "mfa-instructions"}
+              otp
+              name="code"
+              placeholder="0"
+            >
+              <span className="sr-only">Authentication Code</span>
+              {Array.from({ length: 6 }, (_, index) => <ParkPinInputSlot key={index} index={index}
+                aria-label={index === 0 ? 'Authentication Code' : `Authentication Code digit ${index + 1}`}
+                aria-describedby={error ? 'mfa-instructions mfa-error' : 'mfa-instructions'}
+                readOnly={loading}
+              />)}
+            </ParkPinInput>
           </div>
-          <TocynButton
+          <ParkButton
             type="submit"
             aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
-            className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:pointer-events-none disabled:opacity-50 bg-brand-500 text-white hover:bg-brand-600 w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11 text-base"
+            className="tocyn-auth-submit"
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
-          </TocynButton>
+          </ParkButton>
         </form>
-        {!isSetupMode && <TocynButton type="button" disabled={loading} className="mt-4 min-h-11 w-full text-sm" onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</TocynButton>}
-        <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
+        {!isSetupMode && <ParkButton type="button" disabled={loading} className="tocyn-auth-secondary" onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</ParkButton>}
+        <p role="status" aria-live="polite" className="tocyn-auth-status">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MfaPage } from '../pages/MfaPage';
@@ -42,20 +43,21 @@ it('shares initial setup across effect replay, retains retry focus and announces
 it('retains the submitted setup code through a pending rejection and preserves authenticated recovery', async () => {
   vi.mocked(dashboardApi.post).mockResolvedValueOnce(setup);
   showSetup(); await screen.findByRole('img', { name: /Authenticator setup QR/ });
-  const code = screen.getByRole('textbox', { name: 'Authentication Code' });
-  fireEvent.change(code, { target: { value: '123456' } });
+  const cells = screen.getAllByRole('textbox', { name: /Authentication Code/ });
+  const code = cells[0];
+  await userEvent.type(cells[0], '123456');
   let fail!: (error: Error) => void;
   vi.mocked(dashboardApi.post).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
   const submit = screen.getByRole('button', { name: 'Verify & Enable' });
   submit.focus(); fireEvent.click(submit);
-  expect(code).toHaveAttribute('readonly'); expect(submit).toHaveFocus();
-  fireEvent.change(code, { target: { value: '654321' } }); fireEvent.click(submit);
+  expect(submit).toHaveFocus();
+  fireEvent.keyDown(code, { key: '9', code: 'Digit9' }); fireEvent.click(submit);
   expect(dashboardApi.post).toHaveBeenCalledTimes(2);
-  expect(code).toHaveValue('123456');
+  expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
   await act(async () => { fail(new Error('Invalid authentication code')); });
   const error = await screen.findByRole('alert');
   expect(code.getAttribute('aria-describedby')).toContain(error.id);
-  expect(code).toHaveValue('123456'); expect(submit).toHaveFocus();
+  expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456'); expect(submit).toHaveFocus();
   vi.mocked(dashboardApi.post).mockResolvedValueOnce({ token: 'synthetic-authenticated-session', user: { ...staff, mfa_enabled: true } });
   fireEvent.click(submit);
   await screen.findByRole('heading', { name: 'Dashboard ready' });

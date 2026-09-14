@@ -1,9 +1,11 @@
 import { ProductLogo } from '@luminatick/ui/brand';
-import { TocynButton } from '@luminatick/ui/primitives';
+import { ParkButton } from '@luminatick/ui/park';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { portalApi } from '../api/client';
-import { LogOut } from 'lucide-react';
+import {
+  FaArrowRightFromBracket
+} from 'react-icons/fa6';
 
 export function Layout() {
   const { user, logout } = useAuthStore();
@@ -23,33 +25,33 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link to="/tickets" className="flex items-center gap-2">
-              <ProductLogo className="block w-32" />
-              <span className="font-semibold text-xl text-gray-900">Portal</span>
+    <div className="tocyn-portal-layout">
+      <header className="tocyn-portal-header">
+        <div className="tocyn-portal-nav-inner">
+          <div className="tocyn-portal-nav-row">
+            <Link to="/tickets" className="tocyn-portal-brand">
+              <ProductLogo className="tocyn-portal-brand-logo" />
+              <span className="tocyn-portal-brand-name">Portal</span>
             </Link>
 
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">
+            <div className="tocyn-portal-user">
+              <span className="tocyn-portal-user-label">
                 {user?.name} ({user?.email})
               </span>
-              <TocynButton
+              <ParkButton
                 onClick={handleLogout}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                className="tocyn-portal-logout"
                 title="Sign out of all sessions"
                 aria-label="Sign out of all sessions"
               >
-                <LogOut className="w-5 h-5" />
-              </TocynButton>
+                <FaArrowRightFromBracket className="tocyn-portal-logout-icon" />
+              </ParkButton>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="tocyn-portal-main">
         <Outlet />
       </main>
     </div>

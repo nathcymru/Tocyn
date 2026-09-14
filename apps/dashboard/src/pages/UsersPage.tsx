@@ -1,7 +1,7 @@
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { useAuthStore } from '../store/authStore';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton } from '@luminatick/ui/primitives';
+import { ParkButton as TocynButton } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
@@ -27,7 +27,7 @@ export const UsersPage: React.FC = () => {
   if (isLoading) return <div className="p-8 text-center text-slate-500 italic">Loading team members...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
+    <div className="tocyn-users-page">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>

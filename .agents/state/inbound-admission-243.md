@@ -1,0 +1,78 @@
+# #243 inbound admission — partial implementation
+
+Owner: coordinator `/root`; branch `codex/243-inbound-admission`, based on accepted
+`e4ce508589d14a00337c20df2505172da87af727`. Work resumed 13 September 2026.
+
+Implemented, not yet connected to the inbound handler:
+
+- Tenant-qualified permanent deduplication identities, bounded to 4,096 per tenant;
+  no automatic expiry that would replay old mail.
+- At most three attempts, each requiring grant authority; exact expired-attempt takeover and stale-worker
+  rejection. Current mailbox and budget policy fences share the native D1 batch
+  with the grant link, attempt state and eventual relational effects.
+- Per-attempt raw-content preparation binds the receipt digest before commit;
+  recovery must verify its own bytes against the same digest. Native regressions
+  reject commit-before-prepare and substituted recovery content.
+- A bounded raw reader (2 MiB and 32,768 chunks), including cancellation and
+  truncated/oversized source handling. These limits are preparation defaults to
+  reconcile with the final resource envelope before handler integration.
+
+The native D1 tests seed synthetic grant authority; they prove transaction fences,
+not real BudgetCoordinator reservation, envelope sizing, MIME parsing, R2 recovery
+or complete #243 acceptance. Existing inbound behavior is unchanged.
+
+Remaining: trusted stable source identity, admission before raw reads, system
+principal integration, canonical customer/ticket/article transaction, durable
+attachment manifests and uncertain-R2 recovery, precise charging/settlement,
+handler failure behavior, full native two-tenant and attachment-boundary evidence.
+Do not close #243/#64 or issue Beta.2 from this partial primitive.
+
+Routing: coordinator retains transaction/security decisions. Cloud gpt-oss:120b
+proposed a raw reader; coordinator corrected missing cancellation/error handling,
+removed retained chunk buffers and added a work bound. Local Granite inference
+passed after cache purge earlier in this task; after reboot available RAM was
+5.7 GiB, below the unchanged 6 GiB cold-start guard, so no further local load was
+forced. One execution-capable agent owns independent #138 browser evidence.
+
+Executed checks: native D1 receipt suite (8 tests), bounded raw reader Vitest
+suite (11 tests), server TypeScript and the dedicated native-suite TypeScript
+configuration all passed. Both full and production-only npm audits reported zero
+vulnerabilities. PR #260 subsequently merged the independent utility fix at
+`c09647796a73f7e0440f8006d66230c43532e1d3`; this branch fast-forwarded to that
+accepted revision without changing the tested server files.
+
+Graphify queried accepted main and returned the exact revision above. Bounded
+source reads resolved insufficient semantic matches. No measured token savings
+or separate native-agent allowance is claimed.
+
+13 September routing update: maintainer requests three useful GPT subagents, local
+Ollama for substantial low-impact proposals, free cloud for medium-impact proposals,
+and scarce Spark only for bounded high-impact work. Three native agents own #132
+preferences delivery, #138 integrated browser evidence and #137 legacy owner-writer
+work. Coordinator owns #243/integration. Observed regular weekly allowance: 95%
+remaining; separately reported Spark weekly allowance: 2% remaining. No separate
+Work allowance is established. Local RAM: 5.54 GiB available, below unchanged 6 GiB
+cold guard. Cloud attachment-case proposal was truncated and contradicted the
+verified receipt lifecycle; rejected, not accepted evidence or completed tests.
+
+Attachment-manifest increment: each prepared attempt must explicitly persist its
+bounded manifest (including an empty manifest) before committing. Up to ten
+artifacts and 2 MiB total are allowed. Attempt-qualified object IDs prevent a late
+write from overwriting a recovery object's key. Provider acknowledgement must
+match exact persisted metadata and current authority; unacknowledged historical
+artifacts remain planned and auditable. These are native D1 primitives, not yet
+R2 execution or cleanup/settlement integration. Native suite now 9 passing tests;
+an initial synthetic source-ID collision between two tests was corrected.
+
+Raw reader suite now 14 passing tests: exact byte ceiling, invalid chunk and
+producer-buffer reuse added. Free cloud supplied a bounded proposal after a
+verified source packet; coordinator corrected the proposed buffer timing, reduced
+assertion cost and ran the tests. No worker test execution is claimed. Local RAM
+was 4.8 GiB after browser/build work, so local inference remained guarded.
+
+Maintainer's detailed routing guide is applied: Granite small repetitive batches
+within4096context, free cloud larger contained proposals within8192context,
+GPT owns consequential decisions and real execution/acceptance. Three native
+agents progress #132/#137/#138. The30-minute task heartbeat reports acceptance
+progress and an evidence-based testing ETA, explicitly distinguishing the preview
+from accepted Beta.2. No reliable overall ETA established yet.

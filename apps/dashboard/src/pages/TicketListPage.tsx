@@ -3,7 +3,7 @@ import { useTicketSlaBatch } from '../hooks/useTicketSla';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton as TocynButton, ParkInput as TocynInput, ParkTextarea as TocynTextarea, ParkSelect as TocynSelect } from '@luminatick/ui/park';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
 import { ticketReference } from '../utils/ticket-reference';
@@ -178,11 +178,11 @@ export function TicketListPage() {
   };
 
   return (
-    <div className="flex h-full gap-6">
+    <div className="tocyn-ticket-list-layout">
       <DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
         failureMessage="Workspace preferences are not saved. Stay on this list, retry saving, then navigate again." />
       {/* Left Sidebar: Filters */}
-      <div className="w-64 flex flex-col gap-2 shrink-0">
+      <div className="tocyn-ticket-list-filters">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Filters</h2>
         <TocynButton
           onClick={() => handleFilterClick('')}
@@ -220,7 +220,7 @@ export function TicketListPage() {
       </div>
 
       {/* Right Content: Ticket List */}
-      <div className="flex-1 flex flex-col min-w-0 space-y-4">
+      <div className="tocyn-ticket-list-content">
         <div className="flex items-center justify-between">
           <div>
             <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">{globalSearch ? 'Global ticket results' : 'Tickets'}</h1>

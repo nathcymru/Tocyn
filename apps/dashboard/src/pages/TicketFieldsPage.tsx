@@ -1,9 +1,17 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput, ParkSelect } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
-import { Plus, X, List, CheckSquare, AlignLeft, Type, ToggleLeft } from 'lucide-react';
+import {
+  FaPlus,
+  FaXmark,
+  FaList,
+  FaSquareCheck,
+  FaAlignLeft,
+  FaFont,
+  FaToggleOff
+} from 'react-icons/fa6';
 import { clsx } from 'clsx';
 import { useTicketFields } from '../hooks/useTicketFields';
 
@@ -16,78 +24,76 @@ export function TicketFieldsPage() {
 
   const getIconForType = (type: string) => {
     switch (type) {
-      case 'text': return <Type className="w-4 h-4" />;
-      case 'textarea': return <AlignLeft className="w-4 h-4" />;
-      case 'select': return <List className="w-4 h-4" />;
-      case 'checkbox': return <CheckSquare className="w-4 h-4" />;
-      default: return <Type className="w-4 h-4" />;
+      case 'text': return <FaFont className="tocyn-ticket-field-type-icon" />;
+      case 'textarea': return <FaAlignLeft className="tocyn-ticket-field-type-icon" />;
+      case 'select': return <FaList className="tocyn-ticket-field-type-icon" />;
+      case 'checkbox': return <FaSquareCheck className="tocyn-ticket-field-type-icon" />;
+      default: return <FaFont className="tocyn-ticket-field-type-icon" />;
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="tocyn-ticket-fields-page">
+      <div className="tocyn-ticket-fields-header">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Custom Ticket Fields</h1>
-          <p className="text-slate-500 mt-1">Manage extra attributes for your tickets.</p>
+          <h1 className="tocyn-ticket-fields-title">Custom Ticket Fields</h1>
+          <p className="tocyn-ticket-fields-description">Manage extra attributes for your tickets.</p>
         </div>
-        <TocynButton
+        <ParkButton
           onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
-          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm shadow-brand-500/20 hover:bg-brand-700 transition-colors"
+          className="tocyn-ticket-fields-create"
         >
-          <Plus className="w-4 h-4" />
+          <FaPlus className="tocyn-ticket-fields-create-icon" />
           Create Field
-        </TocynButton>
+        </ParkButton>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="tocyn-ticket-fields-table-shell">
         {isLoading ? (
-          <div className="p-8 text-center text-slate-500">Loading fields...</div>
+          <ParkEmptyState title="Loading fields..." headingLevel={false} aria-busy="true" className="tocyn-ticket-fields-loading" />
         ) : fields?.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
-              <List className="w-8 h-8" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">No custom fields</h3>
-            <p className="text-slate-500 mb-6">Create fields to collect specific information on tickets.</p>
-            <TocynButton
+          <ParkEmptyState
+            title="No custom fields"
+            description="Create fields to collect specific information on tickets."
+            className="tocyn-ticket-fields-empty"
+            action={<ParkButton
               onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
-              className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors"
+              className="tocyn-ticket-fields-empty-action"
             >
               Create your first field
-            </TocynButton>
-          </div>
+            </ParkButton>}
+          />
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
+          <table className="tocyn-ticket-fields-table">
+            <thead className="tocyn-ticket-fields-table-head">
               <tr>
-                <th className="px-6 py-4">Label</th>
-                <th className="px-6 py-4">Key Name</th>
-                <th className="px-6 py-4">Type</th>
-                <th className="px-6 py-4">Options</th>
-                <th className="px-6 py-4">Status</th>
+                <th>Label</th>
+                <th>Key Name</th>
+                <th>Type</th>
+                <th>Options</th>
+                <th>Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="tocyn-ticket-fields-table-body">
               {fields?.map((field) => (
-                <tr key={field.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900">{field.label}</td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{field.name}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-slate-600">
+                <tr key={field.id} className="tocyn-ticket-fields-table-row">
+                  <td className="tocyn-ticket-field-label">{field.label}</td>
+                  <td className="tocyn-ticket-field-name">{field.name}</td>
+                  <td>
+                    <div className="tocyn-ticket-field-type">
                       {getIconForType(field.field_type)}
                       <span className="capitalize">{field.field_type}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-500 max-w-xs truncate">
+                  <td className="tocyn-ticket-field-options">
                     {field.options || '-'}
                   </td>
-                  <td className="px-6 py-4">
+                  <td>
                     <span className={clsx(
-                      "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
+                      "tocyn-ticket-field-status",
                       field.is_active
-                        ? "bg-green-50 text-green-700 border border-green-200"
-                        : "bg-slate-100 text-slate-500 border border-slate-200"
+                        ? "tocyn-ticket-field-status-active"
+                        : "tocyn-ticket-field-status-inactive"
                     )}>
                       {field.is_active ? 'Active' : 'Inactive'}
                     </span>
@@ -162,90 +168,90 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
   return (
     <TocynDialog open={open} busy={mutation.isPending} onOpenChange={next => { if (!next) close(); }}
       labelledBy={titleId} initialFocusEl={() => initialFocus.current} finalFocusEl={finalFocusEl}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 id={titleId} className="text-lg font-bold text-slate-900">Create Ticket Field</h2>
-          <TocynButton type="button" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close} className="text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
-          </TocynButton>
+      <div className="tocyn-ticket-field-dialog">
+        <div className="tocyn-ticket-field-dialog-header">
+          <h2 id={titleId} className="tocyn-ticket-field-dialog-title">Create Ticket Field</h2>
+          <ParkButton type="button" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close} className="tocyn-ticket-field-dialog-close">
+            <FaXmark className="tocyn-ticket-field-dialog-close-icon" />
+          </ParkButton>
         </div>
 
-        <form onSubmit={handleSubmit} aria-labelledby={titleId} className="p-6">
-          {saveError && <p role="alert" className="mb-4 text-red-700">{saveError}</p>}
-          <fieldset disabled={mutation.isPending} className="space-y-5">
+        <form onSubmit={handleSubmit} aria-labelledby={titleId} className="tocyn-ticket-field-dialog-form">
+          {saveError && <p role="alert" className="tocyn-ticket-field-dialog-error">{saveError}</p>}
+          <fieldset disabled={mutation.isPending} className="tocyn-ticket-field-dialog-fields">
           <div>
-            <label htmlFor={`${titleId}-label`} className="block text-sm font-bold text-slate-700 mb-1">Display Label</label>
-            <TocynInput
+            <label htmlFor={`${titleId}-label`} className="tocyn-ticket-field-dialog-label">Display Label</label>
+            <ParkInput
               required
               type="text"
               id={`${titleId}-label`} ref={initialFocus} value={formData.label}
               onChange={handleLabelChange}
               placeholder="e.g., Device Model"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+              className="tocyn-form-control tocyn-ticket-field-dialog-control"
             />
           </div>
 
           <div>
-            <label htmlFor={`${titleId}-name`} className="block text-sm font-bold text-slate-700 mb-1">Key Name</label>
-            <TocynInput
+            <label htmlFor={`${titleId}-name`} className="tocyn-ticket-field-dialog-label">Key Name</label>
+            <ParkInput
               required
               type="text"
               id={`${titleId}-name`} value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., device_model"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none font-mono"
+              className="tocyn-form-control tocyn-ticket-field-dialog-control tocyn-ticket-field-dialog-control--mono"
             />
-            <p className="text-[10px] text-slate-500 mt-1">The JSON key used internally and via API.</p>
+            <p className="tocyn-ticket-field-dialog-help">The JSON key used internally and via API.</p>
           </div>
 
           <div>
-            <label htmlFor={`${titleId}-type`} className="block text-sm font-bold text-slate-700 mb-1">Field Type</label>
-            <TocynSelect
+            <label htmlFor={`${titleId}-type`} className="tocyn-ticket-field-dialog-label">Field Type</label>
+            <ParkSelect
               id={`${titleId}-type`} value={formData.field_type}
               onChange={(e) => setFormData({ ...formData, field_type: e.target.value })}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+              className="tocyn-form-control tocyn-ticket-field-dialog-control"
             >
               <option value="text">Text (Single line)</option>
               <option value="textarea">Textarea (Multi-line)</option>
               <option value="select">Dropdown (Select)</option>
               <option value="checkbox">Checkbox</option>
-            </TocynSelect>
+            </ParkSelect>
           </div>
 
           {formData.field_type === 'select' && (
-            <div className="animate-in slide-in-from-top-2">
-              <label htmlFor={`${titleId}-options`} className="block text-sm font-bold text-slate-700 mb-1">Options</label>
-              <TocynInput
+            <div className="tocyn-ticket-field-options-reveal">
+              <label htmlFor={`${titleId}-options`} className="tocyn-ticket-field-dialog-label">Options</label>
+              <ParkInput
                 required
                 type="text"
                 id={`${titleId}-options`} value={formData.options}
                 onChange={(e) => setFormData({ ...formData, options: e.target.value })}
                 placeholder="Comma-separated (e.g. Option 1, Option 2)"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                className="tocyn-form-control tocyn-ticket-field-dialog-control"
               />
             </div>
           )}
 
-          <label className="flex min-h-11 items-center gap-3 pt-2 text-sm font-medium text-slate-700">
-            <TocynInput type="checkbox" checked={formData.is_active} onChange={e => setFormData({...formData,is_active:e.target.checked})} className="h-5 w-5" />
+          <label className="tocyn-ticket-field-dialog-checkbox">
+            <ParkInput type="checkbox" checked={formData.is_active} onChange={e => setFormData({...formData,is_active:e.target.checked})} />
             Active
           </label>
 
-          <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-            <TocynButton
+          <div className="tocyn-ticket-field-dialog-actions">
+            <ParkButton
               type="button"
               onClick={close}
-              className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 border border-transparent rounded-lg transition-colors"
+              className="tocyn-ticket-field-dialog-cancel"
             >
               Cancel
-            </TocynButton>
-            <TocynButton
+            </ParkButton>
+            <ParkButton
               type="submit"
               disabled={mutation.isPending}
-              className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-50"
+              className="tocyn-ticket-field-dialog-submit"
             >
               {mutation.isPending ? 'Creating...' : 'Create Field'}
-            </TocynButton>
+            </ParkButton>
           </div>
           </fieldset>
         </form>

@@ -43,17 +43,17 @@ test('guarded local profile: explicit policy, real invited credentials, exact ca
     const mutations = async () => (await f.db.prepare("SELECT mutations FROM local_beta_runs WHERE run_id='guarded-fixture'").first<{mutations:number}>())!.mutations;
     assert.equal(await mutations(),0);
     const savedState=await f.request('/api/workspace/state',{method:'PUT',token:staff.token,body:{
-      expectedRevision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',
+      expectedRevision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',splitterRatio:32,
     }});
     assert.equal(savedState.status,200);
     const state=await savedState.json<{revision:number}>();assert.equal(state.revision,1);assert.equal(await mutations(),1);
     const sameContentState=await f.request('/api/workspace/state',{method:'PUT',token:staff.token,body:{
-      expectedRevision:state.revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',
+      expectedRevision:state.revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',splitterRatio:32,
     }});
     assert.equal(sameContentState.status,200);
     const currentState=await sameContentState.json<{revision:number}>();assert.equal(currentState.revision,2);assert.equal(await mutations(),2,'revision-changing state saves consume mutation capacity');
     const staleState=await f.request('/api/workspace/state',{method:'PUT',token:staff.token,body:{
-      expectedRevision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:2',selectedTicketId:null,panel:'conversation',
+      expectedRevision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:2',selectedTicketId:null,panel:'conversation',splitterRatio:32,
     }});
     assert.equal(staleState.status,409);assert.equal(await mutations(),2,'stale workspace CAS does not consume mutation capacity');
     const savedDraft=await f.request('/api/workspace/drafts/fixture-ticket',{method:'PUT',token:staff.token,body:{
@@ -102,7 +102,7 @@ test('guarded local profile: explicit policy, real invited credentials, exact ca
     assert.equal((await f.request('/api/tickets',{method:'POST',token:staff.token,body:{body:'x'.repeat(65536)}})).status,413);
     await f.db.prepare("UPDATE local_beta_policy SET state='writes_stopped',revision=revision+1 WHERE singleton=1").run();
     const stoppedWorkspaceWrite=await f.request('/api/workspace/state',{method:'PUT',token:staff.token,body:{
-      expectedRevision:currentState.revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',
+      expectedRevision:currentState.revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'conversation',splitterRatio:32,
     }});
     assert.equal(stoppedWorkspaceWrite.status,503);assert.equal((await stoppedWorkspaceWrite.json<{code:string}>()).code,'beta_intake_stopped');
     assert.equal(await mutations(),4,'a stopped workspace write rolls back without charging capacity');

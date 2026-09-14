@@ -1,6 +1,6 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { TocynButton,TocynInput,TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton as TocynButton, ParkInput as TocynInput, ParkSelect as TocynSelect } from '@luminatick/ui/park';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,LayoutList,Search,Table2 } from 'lucide-react';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';

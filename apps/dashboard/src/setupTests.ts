@@ -1,5 +1,16 @@
 import '@testing-library/jest-dom';
 
+if (!(globalThis as any).ResizeObserver) {
+  (globalThis as any).ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+}
+if (!(globalThis as any).IntersectionObserver) {
+  (globalThis as any).IntersectionObserver = class {
+    readonly root = null; readonly rootMargin = ''; readonly thresholds: number[] = [];
+    observe() {} unobserve() {} disconnect() {} takeRecords() { return []; }
+  };
+}
+if (!HTMLElement.prototype.scrollTo) HTMLElement.prototype.scrollTo = () => {};
+
 if (!(globalThis as any).localStorage) {
   const localStorageData = new Map<string, string>();
   const localStorageMock: Storage = {

@@ -1,4 +1,5 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
+import { ParkTextarea } from '@luminatick/ui/park';
 import MDEditor from '@uiw/react-md-editor';
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
@@ -200,12 +201,12 @@ export function RichComposer({
   };
 
   return <section ref={rootRef} aria-label="Rich message composer" onDragOver={event => { if (!readOnly && event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={receiveDrop} onPaste={receivePaste}
-    className={`rounded-xl border p-2 ${mode === 'internal' ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}>
-    {format === 'markdown-v1' && <p className="mb-2 text-xs text-slate-600">Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Markdown toolbar supports headings, emphasis, links, lists and code.</p>}
+    className={`tocyn-composer-shell ${mode === 'internal' ? 'tocyn-composer-shell--internal' : 'tocyn-composer-shell--public'}`}>
+    {format === 'markdown-v1' && <p className="tocyn-composer-format-help">Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Markdown toolbar supports headings, emphasis, links, lists and code.</p>}
     <div onClickCapture={event => { if (readOnly) event.stopPropagation(); }} onKeyDownCapture={event => { if (readOnly) event.stopPropagation(); }}>
-      {format === 'plain' ? <textarea id={id} aria-label="Reply message" value={value} readOnly={readOnly}
+      {format === 'plain' ? <ParkTextarea id={id} aria-label="Reply message" value={value} readOnly={readOnly}
         onChange={event => { if (!readOnly) onChange(event.target.value); }}
-        className="min-h-44 w-full rounded border border-slate-300 bg-white p-3 text-slate-900 focus-visible:outline focus-visible:outline-2"
+        className="tocyn-composer-input"
       /> : <MDEditor
         value={value}
         onChange={(next, event) => updateFromEditor(next ?? '', event?.currentTarget)}
@@ -217,20 +218,20 @@ export function RichComposer({
         commandsFilter={command => command.name === 'preview' || command.name === 'fullscreen' ? false : command}
         textareaProps={{ id, 'aria-label': 'Reply message', 'aria-autocomplete': 'list', 'aria-controls': autocomplete ? listboxId : undefined, 'aria-activedescendant': autocomplete ? `${listboxId}-option-${activeIndex}` : undefined, 'aria-busy': readOnly, readOnly, onSelect: event => captureSelection(event.currentTarget), onClick: event => captureSelection(event.currentTarget), onKeyUp: event => captureSelection(event.currentTarget) }}
         data-color-mode="light"
-        className="overflow-hidden rounded border border-slate-300 bg-white"
+        className="tocyn-composer-markdown-editor"
       />}
     </div>
-    {autocomplete && <div id={listboxId} role="listbox" aria-label={autocomplete.kind === 'slash' ? 'Slash command suggestions' : 'Emoji suggestions'} className="mt-1 rounded border border-slate-300 bg-white p-1 shadow">
+    {autocomplete && <div id={listboxId} role="listbox" aria-label={autocomplete.kind === 'slash' ? 'Slash command suggestions' : 'Emoji suggestions'} className="tocyn-composer-autocomplete">
       {autocomplete.options.map((option, index) => <button id={`${listboxId}-option-${index}`} key={`${option.kind}-${option.id}`} type="button" role="option" aria-selected={activeIndex === index}
         onMouseDown={event => event.preventDefault()} onClick={() => chooseAutocomplete(option)}
-        className={`block w-full rounded px-2 py-1 text-left text-sm focus-visible:outline focus-visible:outline-2 ${activeIndex === index ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>
+        className={`tocyn-composer-autocomplete-option ${activeIndex === index ? 'tocyn-composer-autocomplete-option-active' : ''}`}>
         {option.displayLabel}
       </button>)}
     </div>}
-    <p className="mt-2 text-xs text-slate-600">Drop or paste a JPEG, PNG, GIF, or WebP image to attach it (10 MB each).</p>
-    <details className="mt-2 rounded border border-slate-200 bg-white p-2 text-sm">
-      <summary className="cursor-pointer font-medium">Safe preview</summary>
-      {format === 'plain' ? <div className="mt-2 whitespace-pre-wrap break-words">{value}</div> : <SafeMarkdown className="mt-2">{value}</SafeMarkdown>}
+    <p className="tocyn-composer-drop-help">Drop or paste a JPEG, PNG, GIF, or WebP image to attach it (10 MB each).</p>
+    <details className="tocyn-composer-preview">
+      <summary className="tocyn-composer-preview-summary">Safe preview</summary>
+      {format === 'plain' ? <div className="tocyn-composer-preview-body">{value}</div> : <SafeMarkdown className="tocyn-composer-preview-body">{value}</SafeMarkdown>}
     </details>
   </section>;
 }

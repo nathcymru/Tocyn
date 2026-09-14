@@ -113,7 +113,7 @@ test('workspace routes spend independently and preserve exact CAS, rebase and re
     let response=await request(f,'/api/workspace/theme-preference');assert.equal(response.status,200,await response.clone().text());
     response=await request(f,'/api/workspace/theme-preference','PUT',{expectedRevision:0,mode:'dark'});assert.equal(response.status,200);
     response=await request(f,'/api/workspace/theme-preference','PUT',{expectedRevision:0,mode:'light'});assert.equal(response.status,409);
-    const state={expectedRevision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'',selectedTicketId:'draft-ticket',panel:'conversation'};
+    const state={expectedRevision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'',selectedTicketId:'draft-ticket',panel:'conversation',splitterRatio:32};
     response=await request(f,'/api/workspace/state','PUT',state);assert.equal(response.status,200,await response.clone().text());
     response=await request(f,'/api/workspace/state','PUT',state);assert.equal(response.status,409);
     const beforeDraft=await control(f);

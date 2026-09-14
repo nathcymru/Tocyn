@@ -12,14 +12,26 @@
     "./ark": "./src/ark.ts",
     "./dialog": "./src/dialog.tsx",
     "./brand": "./src/brand.tsx",
-    "./auth-layout": "./src/auth-layout.tsx"
+    "./auth-layout": "./src/auth-layout.tsx",
+    "./park": "./src/park.tsx",
+    "./styled-system/jsx": {
+      "types": "./src/styles/generated/jsx/index.d.ts",
+      "import": "./src/styles/generated/jsx/index.mjs"
+    },
+    "./styled-system/css": {
+      "types": "./src/styles/generated/css/index.d.ts",
+      "import": "./src/styles/generated/css/index.mjs"
+    }
   },
   "sideEffects": [
-    "./src/styles/tocyn.css"
+    "./src/styles/tocyn.css",
+    "./src/styles/panda.css"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "panda:codegen": "panda codegen --config ./panda.config.ts",
+    "panda:cssgen": "panda cssgen --config ./panda.config.ts --outfile ./src/styles/panda.css"
   },
   "peerDependencies": {
     "react": ">=18.2.0",
@@ -29,6 +41,7 @@
     "@ark-ui/react": "^5.26.0"
   },
   "devDependencies": {
+    "@pandacss/dev": "^1.12.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

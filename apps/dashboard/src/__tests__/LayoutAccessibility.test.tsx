@@ -91,7 +91,7 @@ it('constrains the inbox shell to the viewport while keeping the shared header v
   expect(shell).toHaveClass('h-dvh', 'min-h-0', 'overflow-hidden');
   expect(main).toHaveClass('flex-1', 'min-h-0', 'overflow-hidden');
   expect(main).not.toHaveClass('h-[calc(100dvh-4rem)]');
-  expect(main.previousElementSibling).toHaveClass('h-16', 'shrink-0');
+  expect(main.previousElementSibling).toHaveClass('tocyn-shell-header');
 });
 
 it('names account/connection disclosures and restores focus when their child actions close', async () => {

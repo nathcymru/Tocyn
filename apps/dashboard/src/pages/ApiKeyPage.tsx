@@ -1,8 +1,16 @@
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useEffect, useState } from 'react';
-import { Key, Plus, Trash2, Copy, Check, ShieldAlert, Clock } from 'lucide-react';
+import {
+  FaKey,
+  FaPlus,
+  FaTrash,
+  FaCopy,
+  FaCheck,
+  FaShieldHalved,
+  FaClock
+} from 'react-icons/fa6';
 import { dashboardApi } from '../api/client';
 import { ApiKey, ApiKeyCreatedResponse } from '@luminatick/shared';
 
@@ -130,58 +138,58 @@ export function ApiKeyPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="tocyn-api-key-page">
+      <div className="tocyn-api-key-header">
         <div>
-          <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">API Keys</h1>
-          <p className="text-slate-500 text-sm">Manage external access to the {PRODUCT_BRAND.name} API.</p>
+          <h1 ref={heading} tabIndex={-1} className="tocyn-api-key-title">API Keys</h1>
+          <p className="tocyn-api-key-description">Manage external access to the {PRODUCT_BRAND.name} API.</p>
         </div>
-        <TocynButton
+        <ParkButton
           disabled={Boolean(uncertainKey)}
           ref={createOpener} onClick={() => {
             createSucceeded.current = false; setCreateError(''); setCreatedKey(null);
             setIsCreating(true);
           }}
-          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
+          className="tocyn-api-key-create-button"
         >
-          <Plus className="w-4 h-4" />
+          <FaPlus className="tocyn-api-key-create-icon" />
           Create New Key
-        </TocynButton>
+        </ParkButton>
       </div>
 
       <TocynDialog open={isCreating} busy={creating} labelledBy={createTitleId} initialFocusEl={() => createUnresolved ? retryCreateButton.current : keyNameInput.current}
         finalFocusEl={() => uncertainHeading.current ?? (createSucceeded.current ? createdHeading.current : createOpener.current)} onOpenChange={next => { if (!next) closeCreate(); }}>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-4">
-          <h2 id={createTitleId} className="text-lg font-semibold mb-4">Create New API Key</h2>
+        <div className="tocyn-api-key-create-card">
+          <h2 id={createTitleId} className="tocyn-api-key-create-title">Create New API Key</h2>
           <form onSubmit={handleCreate} aria-labelledby={createTitleId}>
-            {createError && <p role="alert" className="mb-4 text-red-700">{createError}</p>}
-            <fieldset disabled={creating} className="space-y-4">
-            <div>
-              <label htmlFor={`${createTitleId}-name`} className="block text-sm font-medium text-slate-700 mb-1">
+            {createError && <p role="alert" className="tocyn-api-key-create-error">{createError}</p>}
+            <fieldset disabled={creating} className="tocyn-api-key-create-fields">
+            <div className="tocyn-form-field">
+              <label htmlFor={`${createTitleId}-name`} className="tocyn-api-key-create-label">
                 Key Name
               </label>
-              <TocynInput
+              <ParkInput
                 type="text" required maxLength={120} disabled={createUnresolved} id={`${createTitleId}-name`} ref={keyNameInput}
                 placeholder="e.g. CRM Integration"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                className="tocyn-form-control"
                 value={newKeyName}
                 onChange={(e) => setNewKeyName(e.target.value)}
               />
             </div>
-            <div className="flex gap-3">
-              <TocynButton
+            <div className="tocyn-api-key-create-actions">
+              <ParkButton
                 type="submit" ref={retryCreateButton}
-                className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
+                className="tocyn-api-key-create-submit"
               >
                 {creating ? 'Generating...' : createUnresolved ? 'Retry creation' : 'Generate Key'}
-              </TocynButton>
-              <TocynButton
+              </ParkButton>
+              <ParkButton
                 type="button"
                 onClick={closeCreate}
-                className="text-slate-600 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className="tocyn-api-key-create-cancel"
               >
                 Cancel
-              </TocynButton>
+              </ParkButton>
             </div>
             </fieldset>
           </form>
@@ -189,97 +197,111 @@ export function ApiKeyPage() {
       </TocynDialog>
 
       {createdKey && (
-        <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl animate-in fade-in zoom-in">
-          <div className="flex items-start gap-3 mb-4">
-            <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0" />
+        <div className="tocyn-api-key-created">
+          <div className="tocyn-api-key-created-header">
+            <FaShieldHalved className="tocyn-api-key-created-icon" />
             <div>
-              <h3 ref={createdHeading} tabIndex={-1} className="font-semibold text-amber-900 text-lg">New API Key Generated</h3>
-              <p className="text-amber-700 text-sm">
+              <h3 ref={createdHeading} tabIndex={-1} className="tocyn-api-key-created-title">New API Key Generated</h3>
+              <p className="tocyn-api-key-created-help">
                 Copy this key now. For security reasons, it will <strong>never</strong> be shown again.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-white p-3 rounded-lg border border-amber-300 font-mono text-sm break-all">
-            <span className="flex-1">{createdKey.apiKey}</span>
-            <TocynButton
+          <div className="tocyn-api-key-created-value">
+            <span className="tocyn-api-key-created-token">{createdKey.apiKey}</span>
+            <ParkButton
               disabled={copying} aria-label="Copy API key" onClick={() => copyToClipboard(createdKey.apiKey)}
-              className="p-2 hover:bg-slate-100 rounded-md transition-colors shrink-0"
+              className="tocyn-api-key-copy"
               title="Copy to clipboard"
             >
-              {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
-            </TocynButton>
+              {copied ? <FaCheck className="tocyn-api-key-copy-icon" /> : <FaCopy className="tocyn-api-key-copy-icon" />}
+            </ParkButton>
           </div>
 
           {copyError && <p role="alert">{copyError}</p>}
           {copied && <p role="status">API key copied.</p>}
-          <TocynButton
+          <ParkButton
             onClick={() => { setCreatedKey(null); createOpener.current?.focus(); }}
-            className="mt-4 text-amber-800 text-sm font-medium hover:underline"
+            className="tocyn-api-key-created-dismiss"
           >
             I've saved my key
-          </TocynButton>
+          </ParkButton>
         </div>
       )}
 
       {uncertainKey && (
-        <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl" role="alert">
-          <h2 ref={uncertainHeading} tabIndex={-1} className="font-semibold text-amber-900">API key created; plaintext unavailable</h2>
-          <p className="mt-1 text-sm text-amber-800">
+        <div className="tocyn-api-key-uncertain" role="alert">
+          <h2 ref={uncertainHeading} tabIndex={-1} className="tocyn-api-key-uncertain-title">API key created; plaintext unavailable</h2>
+          <p className="tocyn-api-key-uncertain-copy">
             The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
             but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.
           </p>
-          <TocynButton className="mt-4 text-red-700 underline" onClick={event => {
+          <ParkButton className="tocyn-api-key-uncertain-revoke" onClick={event => {
             revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(uncertainKey);
             setRevokeError(''); setRevokeOpen(true);
-          }}>Revoke unavailable key</TocynButton>
+          }}>Revoke unavailable key</ParkButton>
         </div>
       )}
 
       {listError && <p role="alert">{listError}</p>}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+      <div className="tocyn-api-key-table-shell">
+        <div className="tocyn-api-key-table-scroll">
+          <table className="tocyn-api-key-table">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <th className="px-6 py-4">Name</th>
-                <th className="px-6 py-4">Prefix</th>
-                <th className="px-6 py-4">Created</th>
-                <th className="px-6 py-4">Last Used</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+              <tr className="tocyn-api-key-table-head">
+                <th>Name</th>
+                <th>Prefix</th>
+                <th>Created</th>
+                <th>Last Used</th>
+                <th className="tocyn-api-key-table-actions-heading">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="tocyn-api-key-table-body">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">Loading keys...</td>
+                  <td colSpan={5} className="tocyn-api-key-empty-cell">
+                    <ParkEmptyState
+                      title="Loading keys..."
+                      headingLevel={false}
+                      aria-busy="true"
+                      className="tocyn-api-key-empty-state"
+                    />
+                  </td>
                 </tr>
               ) : keys.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">{listError ? 'API key list unavailable.' : 'No API keys found.'}</td>
+                  <td colSpan={5} className="tocyn-api-key-empty-cell">
+                    <ParkEmptyState
+                      title={listError ? 'API key list unavailable.' : 'No API keys found.'}
+                      description={listError ? 'Reload this page before relying on the list.' : 'Create a key when an integration requires external API access.'}
+                      headingLevel={false}
+                      className="tocyn-api-key-empty-state"
+                    />
+                  </td>
                 </tr>
               ) : (
                 keys.map((key) => (
-                  <tr key={key.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-slate-900">{key.name}</td>
-                    <td className="px-6 py-4 font-mono text-sm text-slate-500">{key.prefix}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
+                  <tr key={key.id} className="tocyn-api-key-table-row">
+                    <td className="tocyn-api-key-name">{key.name}</td>
+                    <td className="tocyn-api-key-prefix">{key.prefix}</td>
+                    <td className="tocyn-api-key-date">
                       {new Date(key.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-4 h-4 text-slate-400" />
+                    <td className="tocyn-api-key-date">
+                      <div className="tocyn-api-key-last-used">
+                        <FaClock className="tocyn-api-key-clock" />
                         {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <TocynButton
+                    <td className="tocyn-api-key-actions">
+                      <ParkButton
                         aria-label={`Revoke ${key.name}`} onClick={event => { revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(key); setRevokeError(''); setRevokeOpen(true); }}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        className="tocyn-api-key-revoke"
                         title="Revoke Key"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </TocynButton>
+                        <FaTrash className="tocyn-api-key-revoke-icon" />
+                      </ParkButton>
                     </td>
                   </tr>
                 ))

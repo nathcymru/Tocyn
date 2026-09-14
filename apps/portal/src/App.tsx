@@ -1,4 +1,5 @@
 import { AuthLayout } from '@luminatick/ui/auth-layout';
+import { ParkEmptyState } from '@luminatick/ui/park';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
@@ -17,7 +18,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore();
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return <ParkEmptyState role="status" title="Loading portal…" headingLevel={false} aria-busy="true" className="tocyn-portal-app-loading" />;
   }
 
   if (!isAuthenticated) {
@@ -53,7 +54,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {LocalAuthCapturePage && <Route path="/__local/auth-capture" element={<Suspense fallback={<p>Loading local capture…</p>}><LocalAuthCapturePage /></Suspense>} />}
+        {LocalAuthCapturePage && <Route path="/__local/auth-capture" element={<Suspense fallback={<ParkEmptyState role="status" title="Loading local capture…" headingLevel={false} aria-busy="true" className="tocyn-portal-route-loading" />}><LocalAuthCapturePage /></Suspense>} />}
         <Route path="/login" element={<AuthLayout><LoginPage /></AuthLayout>} />
         <Route path="/verify" element={<AuthLayout><VerifyPage /></AuthLayout>} />
         

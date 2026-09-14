@@ -1,8 +1,13 @@
 import { TocynDialog, TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput, ParkSelect } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
-import { Plus, Edit2, Trash2, X } from 'lucide-react';
+import {
+  FaPlus,
+  FaPenToSquare,
+  FaTrash,
+  FaXmark
+} from 'react-icons/fa6';
 import { TicketFilter, FilterCondition } from '@luminatick/shared';
 
 const FIELDS = [
@@ -133,23 +138,23 @@ export function FiltersSettingsPage() {
   };
 
   if (isLoading) {
-    return <div className="p-8 text-slate-500">Loading filters...</div>;
+    return <div className="tocyn-filters-loading">Loading filters...</div>;
   }
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="tocyn-filters-page">
+      <div className="tocyn-filters-header">
         <div>
-          <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Custom Filters</h1>
-          <p className="text-slate-500 text-sm">Create and manage ticket filters for your team.</p>
+          <h1 ref={heading} tabIndex={-1} className="tocyn-filters-title">Custom Filters</h1>
+          <p className="tocyn-filters-description">Create and manage ticket filters for your team.</p>
         </div>
-        <TocynButton
+        <ParkButton
           onClick={event => handleOpenModal(undefined, event.currentTarget)}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors text-sm"
+          className="tocyn-filters-create"
         >
-          <Plus className="w-4 h-4" />
+          <FaPlus className="tocyn-filters-create-icon" />
           Create Filter
-        </TocynButton>
+        </ParkButton>
       </div>
 
       {deleteStatus && <p role="status">{deleteStatus}</p>}
@@ -157,52 +162,52 @@ export function FiltersSettingsPage() {
         description="Delete this filter? This action cannot be undone." confirmLabel={deleting ? 'Deleting...' : 'Delete filter'} error={deleteError}
         onConfirm={handleDelete} onOpenChange={next => { if (!next && !deletionGuard.current) setDeleteOpen(false); }}
         finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} />
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left">
+      <div className="tocyn-filters-table-shell">
+        <table className="tocyn-filters-table">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+            <tr className="tocyn-filters-table-head">
+              <th className="tocyn-filters-table-heading">Name</th>
+              <th className="tocyn-filters-table-heading">System</th>
+              <th className="tocyn-filters-table-heading tocyn-filters-table-heading-actions">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="tocyn-filters-table-body">
             {filters?.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-6 py-8 text-center text-slate-500 text-sm">
+                <td colSpan={3} className="tocyn-filters-empty">
                   No filters created yet.
                 </td>
               </tr>
             ) : (
               filters?.map((filter) => (
-                <tr key={filter.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-slate-900">{filter.name}</div>
+                <tr key={filter.id} className="tocyn-filters-table-row">
+                  <td className="tocyn-filters-table-cell">
+                    <div className="tocyn-filters-name">{filter.name}</div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="tocyn-filters-table-cell">
                     {filter.is_system ? (
-                      <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-full font-medium">System</span>
+                      <span className="tocyn-filter-kind tocyn-filter-kind-system">System</span>
                     ) : (
-                      <span className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded-full font-medium">Custom</span>
+                      <span className="tocyn-filter-kind tocyn-filter-kind-custom">Custom</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <TocynButton
+                  <td className="tocyn-filters-table-actions-cell">
+                    <div className="tocyn-filters-table-actions">
+                      <ParkButton
                         onClick={event => handleOpenModal(filter, event.currentTarget)}
-                        className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                        className="tocyn-filter-action tocyn-filter-action-edit"
                         title="Edit Filter"
                       >
-                        <Edit2 className="w-4 h-4" />
-                      </TocynButton>
+                        <FaPenToSquare className="tocyn-filter-action-icon" />
+                      </ParkButton>
                       {!filter.is_system && (
-                        <TocynButton
+                        <ParkButton
                           aria-label={`Delete ${filter.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(filter); setDeleteError(''); setDeleteOpen(true); }}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="tocyn-filter-action tocyn-filter-action-delete"
                           title="Delete Filter"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </TocynButton>
+                          <FaTrash className="tocyn-filter-action-icon" />
+                        </ParkButton>
                       )}
                     </div>
                   </td>
@@ -215,24 +220,24 @@ export function FiltersSettingsPage() {
 
       <TocynDialog open={isModalOpen} busy={saving} onOpenChange={open => { if (!open) handleCloseModal(); }}
         labelledBy={titleId} initialFocusEl={() => nameInput.current} finalFocusEl={() => opener.current}>
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 id={titleId} className="text-xl font-bold text-slate-900">
+          <div className="tocyn-filter-dialog">
+            <div className="tocyn-filter-dialog-header">
+              <h2 id={titleId} className="tocyn-filter-dialog-title">
                 {editingFilter ? 'Edit Filter' : 'Create Filter'}
               </h2>
-              <TocynButton type="button" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </TocynButton>
+              <ParkButton type="button" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal} className="tocyn-filter-dialog-close">
+                <FaXmark className="tocyn-filter-dialog-close-icon" />
+              </ParkButton>
             </div>
-            <form onSubmit={handleSubmit} aria-labelledby={titleId} className="p-6">
-              {saveError && <p role="alert" className="mb-4 text-red-700">{saveError}</p>}
-              <fieldset disabled={saving} className="space-y-6">
-              <div>
-                <label htmlFor={nameId} className="block text-sm font-medium text-slate-700 mb-1">Filter Name</label>
-                <TocynInput id={nameId} ref={nameInput}
+            <form onSubmit={handleSubmit} aria-labelledby={titleId} className="tocyn-filter-dialog-form">
+              {saveError && <p role="alert" className="tocyn-filter-dialog-error">{saveError}</p>}
+              <fieldset disabled={saving} className="tocyn-filter-dialog-fields">
+              <div className="tocyn-form-field">
+                <label htmlFor={nameId}>Filter Name</label>
+                <ParkInput id={nameId} ref={nameInput}
                   type="text"
                   required
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm"
+                  className="tocyn-filter-name-input"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., My Open Tickets"
@@ -240,74 +245,74 @@ export function FiltersSettingsPage() {
               </div>
 
               <div>
-                <div className="flex justify-between items-center mb-3">
-                  <label className="block text-sm font-medium text-slate-700">Conditions</label>
-                  <TocynButton
+                <div className="tocyn-filter-conditions-header">
+                  <label className="tocyn-filter-conditions-label">Conditions</label>
+                  <ParkButton
                     type="button"
                     onClick={addCondition}
-                    className="text-sm text-brand-600 font-medium flex items-center gap-1 hover:underline"
+                    className="tocyn-filter-add-condition"
                   >
-                    <Plus className="w-4 h-4" /> Add Condition
-                  </TocynButton>
+                    <FaPlus className="tocyn-filter-action-icon" /> Add Condition
+                  </ParkButton>
                 </div>
 
-                <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                <div className="tocyn-filter-condition-list">
                   {formData.conditions.map((cond, idx) => (
-                    <div key={idx} className="flex gap-3 items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <TocynSelect
-                        className="flex-1 px-3 py-1.5 border border-slate-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    <div key={idx} className="tocyn-filter-condition-row">
+                      <ParkSelect
+                        className="tocyn-filter-condition-field"
                         aria-label={`Condition ${idx + 1} field`} value={cond.field}
                         onChange={e => changeCondition(idx, 'field', e.target.value)}
                       >
                         {FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                      </TocynSelect>
-                      <TocynSelect
-                        className="w-40 px-3 py-1.5 border border-slate-200 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      </ParkSelect>
+                      <ParkSelect
+                        className="tocyn-filter-condition-operator"
                         aria-label={`Condition ${idx + 1} operator`} value={cond.operator}
                         onChange={e => changeCondition(idx, 'operator', e.target.value)}
                       >
                         {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </TocynSelect>
-                      <TocynInput
+                      </ParkSelect>
+                      <ParkInput
                         type="text"
-                        className="flex-[2] px-3 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="tocyn-filter-condition-value"
                         placeholder="Value..."
                         aria-label={`Condition ${idx + 1} value`} value={cond.value}
                         onChange={e => changeCondition(idx, 'value', e.target.value)}
                       />
-                      <TocynButton
+                      <ParkButton
                         type="button"
                         aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}
-                        className="text-slate-400 hover:text-red-500 p-1"
+                        className="tocyn-filter-condition-remove"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </TocynButton>
+                        <FaTrash className="tocyn-filter-action-icon" />
+                      </ParkButton>
                     </div>
                   ))}
 
                   {formData.conditions.length === 0 && (
-                    <p className="text-sm text-slate-500 italic bg-slate-50 p-4 rounded-lg border border-dashed border-slate-300 text-center">
+                    <p className="tocyn-filter-no-conditions">
                       No conditions. This filter will match all tickets.
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <TocynButton
+              <div className="tocyn-filter-dialog-actions">
+                <ParkButton
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                  className="tocyn-filter-dialog-cancel"
                 >
                   Cancel
-                </TocynButton>
-                <TocynButton
+                </ParkButton>
+                <ParkButton
                   type="submit"
                   disabled={saving || createFilter.isPending || updateFilter.isPending}
-                  className="px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50"
+                  className="tocyn-filter-dialog-submit"
                 >
                   {editingFilter ? 'Save Changes' : 'Create Filter'}
-                </TocynButton>
+                </ParkButton>
               </div>
               </fieldset>
             </form>

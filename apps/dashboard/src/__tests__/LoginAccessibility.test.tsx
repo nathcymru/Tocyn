@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
 import { MfaPage } from '../pages/MfaPage';
@@ -56,16 +57,18 @@ describe('staff login accessibility', () => {
     vi.mocked(dashboardApi.post).mockRejectedValue(new Error('Invalid authentication code'));
     mount(MfaPage);
     const code = screen.getByLabelText('Authentication Code');
+    const cells = screen.getAllByRole('textbox', { name: /Authentication Code/ });
+    expect(cells).toHaveLength(6);
     expect(code.getAttribute('inputmode')).toBe('numeric');
     expect(code.getAttribute('autocomplete')).toBe('one-time-code');
     const button = screen.getByRole('button', { name: 'Verify Code' });
     fireEvent.click(button); expect(dashboardApi.post).not.toHaveBeenCalled();
-    fireEvent.change(code, { target: { value: '123456' } });
+    await userEvent.type(cells[0], '123456');
     button.focus(); fireEvent.click(button);
     expect(screen.getByRole('status').textContent).toContain('Verifying code');
     const alert = await screen.findByRole('alert');
     expect(code.getAttribute('aria-describedby')).toContain(alert.id);
-    expect((code as HTMLInputElement).value).toBe('123456');
+    expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
     expect(document.activeElement).toBe(button);
     expect(dashboardApi.post).toHaveBeenCalledWith('/auth/mfa/verify', { code: '123456' });
   });

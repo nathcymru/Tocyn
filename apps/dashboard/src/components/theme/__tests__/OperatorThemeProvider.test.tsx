@@ -20,11 +20,12 @@ const theme = (status: string, overrides: Record<string, unknown> = {}) => ({
 describe('OperatorThemeProvider', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it('holds the workspace behind an accessible restore gate, then resolves it', () => {
+  it('keeps the workspace usable behind an accessible restore banner, then resolves it', () => {
     const hook = vi.mocked(useOperatorTheme);
     hook.mockReturnValueOnce(theme('loading')).mockReturnValueOnce(theme('restored')).mockReturnValue(theme('loading'));
     const view = render(<OperatorThemeProvider><input aria-label="composer" /></OperatorThemeProvider>);
     expect(screen.getByRole('status')).toHaveTextContent('Loading appearance');
+    expect(screen.getByRole('textbox', { name: 'composer' })).toBeInTheDocument();
     act(() => view.rerender(<OperatorThemeProvider><input aria-label="composer" /></OperatorThemeProvider>));
     const composer = screen.getByRole('textbox', { name: 'composer' });
     expect(composer).toBeInTheDocument();

@@ -31,8 +31,8 @@ it('keeps the inbox current-view query out of global results, marks body-free dr
   const workspaceWrites: unknown[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
     if (url === '/api/ticket-sla/projections') return json({ [ticket.id]: unavailableSla });
-    if (url === '/api/workspace/state' && options.method === 'PUT') { workspaceWrites.push(JSON.parse(String(options.body))); return json({ revision: 5, view: 'custom', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'private search text', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' }); }
-    if (url === '/api/workspace/state') return json({ revision: 4, view: 'custom', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'server query', listAnchor: 'page:2', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
+    if (url === '/api/workspace/state' && options.method === 'PUT') { workspaceWrites.push(JSON.parse(String(options.body))); return json({ revision: 5, view: 'custom', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'private search text', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z' }); }
+    if (url === '/api/workspace/state') return json({ revision: 4, view: 'custom', sort: 'updated_desc', filters: { filterId: 'open-filter' }, listQuery: 'server query', listAnchor: 'page:2', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z' });
     if (url === '/api/workspace/drafts?limit=50') return json({ items: [{ ticketId: ticket.id, updatedAt: '2026-09-11T00:00:00Z' }], next: null });
     if (url.startsWith('/api/tickets?')) { ticketQueries.push(new URL(url, 'http://localhost').searchParams); return json({ data: [ticket], meta: { page: Number(ticketQueries.at(-1)?.get('page')), limit: 1, total: 2, total_pages: 2 } }); }
     if (url === '/api/settings/filters') return json([{ id: 'open-filter', name: 'Awaiting response' }]);
@@ -78,7 +78,7 @@ it('restores sort, sends it with the server-paginated query, and saves custom an
       revision += 1;
       return json({ revision, ...saved, updatedAt: '2026-09-11T00:00:00Z' });
     }
-    if (url === '/api/workspace/state') return json({ revision, view: 'all', sort: 'priority_asc', filters: {}, listQuery: '', listAnchor: 'page:3', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
+    if (url === '/api/workspace/state') return json({ revision, view: 'all', sort: 'priority_asc', filters: {}, listQuery: '', listAnchor: 'page:3', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z' });
     if (url === '/api/workspace/drafts?limit=50') return json({ items: [], next: null });
     if (url.startsWith('/api/tickets?')) { ticketQueries.push(new URL(url, 'http://localhost').searchParams); return json({ data: [ticket], meta: { page: Number(ticketQueries.at(-1)?.get('page')), limit: 1, total: 3, total_pages: 3 } }); }
     if (url === '/api/settings/filters') return json([{ id: 'priority-filter', name: 'Priority follow-up' }]);
@@ -110,8 +110,8 @@ it('applies a legacy search URL once without restoring it over a later operator 
   const ticketQueries: URLSearchParams[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
     if (url === '/api/ticket-sla/projections') return json({ [ticket.id]: unavailableSla });
-    if (url === '/api/workspace/state' && options.method === 'PUT') return json({ revision: 5, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'later query', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
-    if (url === '/api/workspace/state') return json({ revision: 4, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'server query', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
+    if (url === '/api/workspace/state' && options.method === 'PUT') return json({ revision: 5, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'later query', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z' });
+    if (url === '/api/workspace/state') return json({ revision: 4, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'server query', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z' });
     if (url === '/api/workspace/drafts?limit=50') return json({ items: [], next: null });
     if (url.startsWith('/api/tickets?')) { ticketQueries.push(new URL(url, 'http://localhost').searchParams); return json({ data: [ticket], meta: { page: 1, limit: 1, total: 1, total_pages: 1 } }); }
     if (url === '/api/settings') return json({ TICKET_PREFIX: '#' });
@@ -151,7 +151,7 @@ it('keeps navigation on the list after an autosave has already failed', async ()
 
 it('renders malformed batch data as unavailable instead of treating a ticket response as an SLA projection', async () => {
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
-    if (url === '/api/workspace/state') return options.method === 'PUT' ? json({ revision: 2, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' }) : json({ revision: 1, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' });
+    if (url === '/api/workspace/state') return options.method === 'PUT' ? json({ revision: 2, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z' }) : json({ revision: 1, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z' });
     if (url.startsWith('/api/workspace/drafts')) return json({ items: [], next: null });
     if (url.startsWith('/api/tickets?')) return json({ data: [ticket], meta: { page: 1, limit: 20, total: 1, total_pages: 1 } });
     if (url === '/api/ticket-sla/projections') return json({ [ticket.id]: ticket });

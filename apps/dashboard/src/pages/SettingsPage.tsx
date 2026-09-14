@@ -1,7 +1,17 @@
-import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
-import { Building2, Settings as SettingsIcon, Mail, Save, Loader2, Cloud, AlertCircle, Shield, Activity } from 'lucide-react';
+import {
+  FaBuilding,
+  FaGear,
+  FaEnvelope,
+  FaFloppyDisk,
+  FaSpinner,
+  FaCloud,
+  FaCircleExclamation,
+  FaShieldHalved,
+  FaChartLine
+} from 'react-icons/fa6';
 import { ApiError } from '../api/client';
 
 export const SettingsPage: React.FC = () => {
@@ -98,88 +108,84 @@ export const SettingsPage: React.FC = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
-      </div>
-    );
+    return <ParkEmptyState title="Loading settings…" headingLevel={false} aria-busy="true" className="tocyn-settings-loading" />;
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
+    <div className="tocyn-settings-page">
+      <div className="tocyn-settings-header">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">General Settings</h1>
-          <p className="text-slate-500 mt-0.5">Manage your organization and system defaults.</p>
+          <h1 className="tocyn-settings-title">General Settings</h1>
+          <p className="tocyn-settings-description">Manage your organization and system defaults.</p>
         </div>
-        <TocynButton
+        <ParkButton
           onClick={handleSubmit}
           disabled={updateSettings.isPending || !!masterKeyError}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 font-medium cursor-pointer"
+          className="tocyn-settings-save"
         >
           {updateSettings.isPending ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <FaSpinner className="tocyn-settings-save-icon tocyn-settings-save-icon--busy" />
           ) : (
-            <Save className="w-5 h-5" />
+            <FaFloppyDisk className="tocyn-settings-save-icon" />
           )}
           Save Changes
-        </TocynButton>
+        </ParkButton>
       </div>
 
       {masterKeyError && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-6 flex gap-4">
-          <AlertCircle className="w-8 h-8 text-red-600 shrink-0" />
+        <div className="tocyn-settings-master-key-error">
+          <FaCircleExclamation className="tocyn-settings-master-key-icon" />
           <div>
-            <h3 className="text-lg font-semibold text-red-800">Critical: Missing Encryption Key</h3>
-            <p className="text-red-700 mt-1">
-              Your server is missing the <code className="bg-red-100 px-1 py-0.5 rounded font-mono text-sm">APP_MASTER_KEY</code> environment variable.
+            <h3 className="tocyn-settings-master-key-title">Critical: Missing Encryption Key</h3>
+            <p className="tocyn-settings-master-key-copy">
+              Your server is missing the <code className="tocyn-settings-master-key-code">APP_MASTER_KEY</code> environment variable.
               This 32-character key is required to securely encrypt and decrypt API tokens and other sensitive settings.
             </p>
-            <p className="text-red-700 mt-2 font-medium text-sm">
+            <p className="tocyn-settings-master-key-copy tocyn-settings-master-key-copy--secondary">
               Please ask your system administrator to add it to your server's environment configuration, then restart the application.
             </p>
-            <p className="text-red-700 mt-2 font-medium text-xs opacity-80">
+            <p className="tocyn-settings-master-key-details">
               Details: {masterKeyError}
             </p>
           </div>
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="tocyn-settings-sections">
         {/* Organization Profile */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <Building2 className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">Organization Profile</h2>
+        <section className="tocyn-settings-card">
+          <div className="tocyn-settings-card-header">
+            <FaBuilding className="tocyn-settings-card-icon" />
+            <h2>Organization Profile</h2>
           </div>
-          <div className="p-6 space-y-4">
-            <div>
-              <label htmlFor="COMPANY_NAME" className="block text-sm font-medium text-slate-700 mb-1">
+          <div className="tocyn-settings-card-body">
+            <div className="tocyn-settings-field">
+              <label htmlFor="COMPANY_NAME" className="tocyn-settings-label">
                 Company Name
               </label>
-              <TocynInput
+              <ParkInput
                 type="text"
                 id="COMPANY_NAME"
                 name="COMPANY_NAME"
                 value={formData.COMPANY_NAME}
                 onChange={handleChange}
                 maxLength={100}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="tocyn-settings-control"
                 placeholder="e.g. Acme Corp"
               />
             </div>
-            <div>
-              <label htmlFor="PORTAL_URL" className="block text-sm font-medium text-slate-700 mb-1">
+            <div className="tocyn-settings-field">
+              <label htmlFor="PORTAL_URL" className="tocyn-settings-label">
                 Portal URL
               </label>
-              <TocynInput
+              <ParkInput
                 type="url"
                 id="PORTAL_URL"
                 name="PORTAL_URL"
                 value={formData.PORTAL_URL}
                 onChange={handleChange}
                 maxLength={200}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="tocyn-settings-control"
                 placeholder="e.g. https://support.acme.com"
               />
             </div>
@@ -187,22 +193,22 @@ export const SettingsPage: React.FC = () => {
         </section>
 
         {/* System Defaults */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <SettingsIcon className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">System Defaults</h2>
+        <section className="tocyn-settings-card">
+          <div className="tocyn-settings-card-header">
+            <FaGear className="tocyn-settings-card-icon" />
+            <h2>System Defaults</h2>
           </div>
-          <div className="p-6 space-y-4">
-            <div>
-              <label htmlFor="SYSTEM_TIMEZONE" className="block text-sm font-medium text-slate-700 mb-1">
+          <div className="tocyn-settings-card-body">
+            <div className="tocyn-settings-field">
+              <label htmlFor="SYSTEM_TIMEZONE" className="tocyn-settings-label">
                 System Timezone
               </label>
-              <TocynSelect
+              <ParkSelect
                 id="SYSTEM_TIMEZONE"
                 name="SYSTEM_TIMEZONE"
                 value={formData.SYSTEM_TIMEZONE}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                className="tocyn-settings-control"
               >
                 <option value="UTC">UTC</option>
                 <option value="America/New_York">Eastern Time (ET)</option>
@@ -213,24 +219,24 @@ export const SettingsPage: React.FC = () => {
                 <option value="Europe/Paris">Central Europe (CET)</option>
                 <option value="Asia/Tokyo">Tokyo (JST)</option>
                 <option value="Australia/Sydney">Sydney (AEST)</option>
-              </TocynSelect>
+              </ParkSelect>
             </div>
 
-            <div>
-              <label htmlFor="TICKET_PREFIX" className="block text-sm font-medium text-slate-700 mb-1">
+            <div className="tocyn-settings-field">
+              <label htmlFor="TICKET_PREFIX" className="tocyn-settings-label">
                 Ticket Prefix
               </label>
-              <TocynInput
+              <ParkInput
                 type="text"
                 id="TICKET_PREFIX"
                 name="TICKET_PREFIX"
                 value={formData.TICKET_PREFIX}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 uppercase"
+                className="tocyn-settings-control tocyn-settings-control-uppercase"
                 placeholder="e.g. TKT"
                 maxLength={10}
               />
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="tocyn-settings-help">
                 Tickets will be numbered as {formData.TICKET_PREFIX || 'TKT'}-1001.
               </p>
             </div>
@@ -238,27 +244,27 @@ export const SettingsPage: React.FC = () => {
         </section>
 
         {/* Agent Communication */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <Mail className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">Agent Communication</h2>
+        <section className="tocyn-settings-card">
+          <div className="tocyn-settings-card-header">
+            <FaEnvelope className="tocyn-settings-card-icon" />
+            <h2>Agent Communication</h2>
           </div>
-          <div className="p-6">
+          <div className="tocyn-settings-card-body">
             <div>
-              <label htmlFor="DEFAULT_EMAIL_SIGNATURE" className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="DEFAULT_EMAIL_SIGNATURE" className="tocyn-settings-label">
                 Default Email Signature
               </label>
-              <TocynTextarea
+              <ParkTextarea
                 id="DEFAULT_EMAIL_SIGNATURE"
                 name="DEFAULT_EMAIL_SIGNATURE"
                 value={formData.DEFAULT_EMAIL_SIGNATURE}
                 onChange={handleChange}
                 rows={4}
                 maxLength={5000}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                className="tocyn-settings-control tocyn-settings-control-resize"
                 placeholder="e.g. --&#10;Thank you,&#10;The Support Team"
               />
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="tocyn-settings-help tocyn-settings-help--signature">
                 This signature will be appended to agent replies if they haven't set a personal one.
               </p>
             </div>
@@ -266,43 +272,43 @@ export const SettingsPage: React.FC = () => {
         </section>
 
         {/* Cloudflare Integration */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <Cloud className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">Cloudflare API Credentials</h2>
+        <section className="tocyn-settings-card">
+          <div className="tocyn-settings-card-header">
+            <FaCloud className="tocyn-settings-card-icon" />
+            <h2>Cloudflare API Credentials</h2>
           </div>
-          <div className="p-6 space-y-4">
-            <p className="text-sm text-slate-500 mb-4">
+          <div className="tocyn-settings-card-body">
+            <p className="tocyn-settings-intro">
               Configure your Cloudflare credentials to monitor usage and costs directly from the dashboard.
             </p>
             <div>
-              <label htmlFor="CLOUDFLARE_ACCOUNT_ID" className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="CLOUDFLARE_ACCOUNT_ID" className="tocyn-settings-label">
                 Cloudflare Account ID
               </label>
-              <TocynInput
+              <ParkInput
                 type="text"
                 id="CLOUDFLARE_ACCOUNT_ID"
                 name="CLOUDFLARE_ACCOUNT_ID"
                 value={formData.CLOUDFLARE_ACCOUNT_ID}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+                className="tocyn-settings-control tocyn-settings-control-mono"
                 placeholder="e.g. 1234567890abcdef1234567890abcdef"
               />
             </div>
             <div>
-              <label htmlFor="CLOUDFLARE_API_TOKEN" className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="CLOUDFLARE_API_TOKEN" className="tocyn-settings-label">
                 Cloudflare API Token
               </label>
-              <TocynInput
+              <ParkInput
                 type="password"
                 id="CLOUDFLARE_API_TOKEN"
                 name="CLOUDFLARE_API_TOKEN"
                 value={formData.CLOUDFLARE_API_TOKEN}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+                className="tocyn-settings-control tocyn-settings-control-mono"
                 placeholder="Enter your API token"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="tocyn-settings-help tocyn-settings-help--compact">
                 Requires <strong>Account Analytics: Read</strong> permissions. For security, this value is masked. Provide a new token only if you wish to overwrite the existing one.
               </p>
             </div>
@@ -310,43 +316,43 @@ export const SettingsPage: React.FC = () => {
         </section>
 
         {/* Security & Authentication */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <Shield className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">Security & Authentication</h2>
+        <section className="tocyn-settings-card">
+          <div className="tocyn-settings-card-header">
+            <FaShieldHalved className="tocyn-settings-card-icon" />
+            <h2>Security & Authentication</h2>
           </div>
-          <div className="p-6 space-y-4">
-            <p className="text-sm text-slate-500 mb-4">
+          <div className="tocyn-settings-card-body">
+            <p className="tocyn-settings-intro">
               Configure Cloudflare Turnstile to protect your Customer Portal from spam and bots.
             </p>
             <div>
-              <label htmlFor="TURNSTILE_SITE_KEY" className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="TURNSTILE_SITE_KEY" className="tocyn-settings-label">
                 Turnstile Site Key
               </label>
-              <TocynInput
+              <ParkInput
                 type="text"
                 id="TURNSTILE_SITE_KEY"
                 name="TURNSTILE_SITE_KEY"
                 value={formData.TURNSTILE_SITE_KEY}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+                className="tocyn-settings-control tocyn-settings-control-mono"
                 placeholder="e.g. 1x00000000000000000000AA"
               />
             </div>
             <div>
-              <label htmlFor="TURNSTILE_SECRET_KEY" className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="TURNSTILE_SECRET_KEY" className="tocyn-settings-label">
                 Turnstile Secret Key
               </label>
-              <TocynInput
+              <ParkInput
                 type="password"
                 id="TURNSTILE_SECRET_KEY"
                 name="TURNSTILE_SECRET_KEY"
                 value={formData.TURNSTILE_SECRET_KEY}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+                className="tocyn-settings-control tocyn-settings-control-mono"
                 placeholder="Enter your Turnstile secret key"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="tocyn-settings-help tocyn-settings-help--compact">
                 For security, this value is masked. Provide a new key only if you wish to overwrite the existing one.
               </p>
             </div>

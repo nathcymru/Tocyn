@@ -1,4 +1,4 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi } from '../api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -67,58 +67,58 @@ export function WidgetChannelPage() {
 <!-- Requires a widget build configured for your API and customer sign-in. -->`;
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Widget Channel</h1>
-        <p className="text-slate-500 mt-1">Configure your embeddable customer support widget.</p>
+    <div className="tocyn-widget-channel-page">
+      <div className="tocyn-widget-channel-header">
+        <h1 className="tocyn-widget-channel-title">Widget Channel</h1>
+        <p className="tocyn-widget-channel-description">Configure your embeddable customer support widget.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-          <h2 className="text-lg font-semibold border-b pb-2 text-slate-900">Features</h2>
+      <div className="tocyn-widget-settings-layout">
+        <div className="tocyn-widget-settings-card">
+          <h2 className="tocyn-widget-features-title">Features</h2>
 
-          {isError && <p role="alert">Widget settings could not be loaded. Reload this page before saving.</p>}
-          {saveError && <p role="alert">{saveError}</p>}
-          {saveStatus && <p role="status">{saveStatus}</p>}
+          {isError && <p role="alert" className="tocyn-widget-status tocyn-widget-status--error">Widget settings could not be loaded. Reload this page before saving.</p>}
+          {saveError && <p role="alert" className="tocyn-widget-status tocyn-widget-status--error">{saveError}</p>}
+          {saveStatus && <p role="status" className="tocyn-widget-status tocyn-widget-status--success">{saveStatus}</p>}
           {isLoading ? (
-            <div className="text-slate-500">Loading settings...</div>
+            <ParkEmptyState title="Loading widget settings…" headingLevel={false} aria-busy="true" className="tocyn-widget-settings-loading" />
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="relative flex items-center">
-                  <TocynInput
+            <div className="tocyn-widget-feature-list">
+              <div className="tocyn-widget-feature-row">
+                <div className="tocyn-widget-checkbox-wrap">
+                  <ParkInput
                     type="checkbox"
                     id={chatId} aria-describedby={`${chatId}-help`} disabled={isSaving || isError || !config}
                     checked={chatEnabled}
                     onChange={(e) => { dirty.current = true; setSaveStatus(''); setChatEnabled(e.target.checked); }}
-                    className="w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
+                    className="tocyn-widget-checkbox"
                   />
                 </div>
-                <div className="flex-1">
-                  <label htmlFor={chatId} className="inline-flex min-h-11 items-center text-sm font-medium text-slate-900">
+                <div className="tocyn-widget-feature-content">
+                  <label htmlFor={chatId} className="tocyn-widget-feature-label">
                     Chat Enabled
                   </label>
-                  <p id={`${chatId}-help`} className="text-xs text-slate-500">
+                  <p id={`${chatId}-help`} className="tocyn-widget-feature-help">
                     Allow customers to chat with the AI support agent.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="relative flex items-center">
-                  <TocynInput
+              <div className="tocyn-widget-feature-row">
+                <div className="tocyn-widget-checkbox-wrap">
+                  <ParkInput
                     type="checkbox"
                     id={formId} aria-describedby={`${formId}-help`} disabled={isSaving || isError || !config}
                     checked={formEnabled}
                     onChange={(e) => { dirty.current = true; setSaveStatus(''); setFormEnabled(e.target.checked); }}
-                    className="w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
+                    className="tocyn-widget-checkbox"
                   />
                 </div>
-                <div className="flex-1">
-                  <label htmlFor={formId} className="inline-flex min-h-11 items-center text-sm font-medium text-slate-900">
+                <div className="tocyn-widget-feature-content">
+                  <label htmlFor={formId} className="tocyn-widget-feature-label">
                     Web Form Enabled
                   </label>
-                  <p id={`${formId}-help`} className="text-xs text-slate-500">
+                  <p id={`${formId}-help`} className="tocyn-widget-feature-help">
                     Allow customers to submit a ticket via a form.
                   </p>
                 </div>
@@ -126,37 +126,37 @@ export function WidgetChannelPage() {
             </div>
           )}
 
-          <TocynButton
+          <ParkButton
             onClick={handleSave}
             disabled={isSaving || isLoading || isError || !config}
-            className="w-full bg-brand-600 text-white py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
+            className="tocyn-widget-save"
           >
             {isSaving ? 'Saving...' : 'Save Changes'}
-          </TocynButton>
+          </ParkButton>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-slate-900 text-white p-6 rounded-xl shadow-sm border border-slate-800">
-            <h2 className="text-lg font-semibold mb-4 text-indigo-400">Embed Snippet</h2>
-            <p className="text-sm text-slate-400 mb-4">
+        <div className="tocyn-widget-aside">
+          <div className="tocyn-widget-snippet">
+            <h2 className="tocyn-widget-snippet-title">Embed Snippet</h2>
+            <p className="tocyn-widget-snippet-copy">
               Integration example: replace the public widget key and host the widget build configured for your API. Customer sign-in must be configured separately. Place the script before the closing <code>&lt;/body&gt;</code> tag.
             </p>
-            <pre className="bg-black/50 p-4 rounded-lg text-xs overflow-x-auto text-emerald-400 border border-white/10 whitespace-pre">
+            <pre className="tocyn-widget-snippet-code">
               {snippet}
             </pre>
-            <TocynButton
+            <ParkButton
               disabled={copying} onClick={copySnippet}
-              className="mt-4 w-full bg-white/10 hover:bg-white/20 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+              className="tocyn-widget-copy-button"
             >
               {copying ? 'Copying...' : 'Copy Snippet'}
-            </TocynButton>
+            </ParkButton>
             {copyError && <p role="alert">{copyError}</p>}
             {copyStatus && <p role="status">{copyStatus}</p>}
           </div>
 
-          <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-xl">
-            <h2 className="text-lg font-semibold text-indigo-900 mb-2">Shadow DOM</h2>
-            <p className="text-sm text-indigo-800">
+          <div className="tocyn-widget-shadow-note">
+            <h2 className="tocyn-widget-shadow-title">Shadow DOM</h2>
+            <p className="tocyn-widget-shadow-copy">
               The widget uses Shadow DOM to limit accidental styling conflicts. Test it with your website’s styles; the host page still controls its placement, visibility and scripts.
             </p>
           </div>

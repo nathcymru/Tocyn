@@ -1,10 +1,15 @@
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { Shield, ShieldOff, KeyRound, AlertTriangle } from 'lucide-react';
+import {
+  FaShieldHalved,
+  FaShield,
+  FaKey,
+  FaTriangleExclamation
+} from 'react-icons/fa6';
 
 interface SetupResponse {
   provisioning_uri: string;
@@ -98,142 +103,142 @@ export function SecurityProfilePage() {
   if (!user) return null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="tocyn-security-page">
       <TocynConfirmDialog open={disableOpen} onOpenChange={setDisableOpen} busy={isLoading}
         title="Disable two-factor authentication?" description="This will make your account less secure and sign you out. You will need to sign in again."
         confirmLabel="Disable 2FA" error={error ?? undefined} onConfirm={() => { void disableMfa(); }}
         finalFocusEl={() => user.mfa_enabled ? disableButton.current : heading.current} />
       <div>
-        <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Security Profile</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 ref={heading} tabIndex={-1} className="tocyn-security-page-title">Security Profile</h1>
+        <p className="tocyn-security-page-description">
           Manage your account security and two-factor authentication settings.
         </p>
       </div>
 
       {successMessage && (
-        <div role="status" className="bg-green-50 border-l-4 border-green-400 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <Shield className="h-5 w-5 text-green-400" />
+        <div role="status" className="tocyn-security-status tocyn-security-status--success">
+          <div className="tocyn-security-status-inner">
+            <div className="tocyn-security-status-icon-wrap">
+              <FaShieldHalved className="tocyn-security-status-icon" />
             </div>
-            <div className="ml-3">
-              <p className="text-sm text-green-700">{successMessage}</p>
+            <div className="tocyn-security-status-copy">
+              <p>{successMessage}</p>
             </div>
           </div>
         </div>
       )}
 
       {error && !disableOpen && (
-        <div role="alert" className="bg-red-50 border-l-4 border-red-400 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <AlertTriangle className="h-5 w-5 text-red-400" />
+        <div role="alert" className="tocyn-security-status tocyn-security-status--error">
+          <div className="tocyn-security-status-inner">
+            <div className="tocyn-security-status-icon-wrap">
+              <FaTriangleExclamation className="tocyn-security-status-icon" />
             </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="tocyn-security-status-copy">
+              <p>{error}</p>
             </div>
           </div>
         </div>
       )}
 
-      <div className="bg-white shadow sm:rounded-lg">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg font-medium leading-6 text-gray-900 flex items-center gap-2">
-            <Shield className="h-5 w-5 text-indigo-500" />
+      <div className="tocyn-security-card">
+        <div className="tocyn-security-card-body">
+          <h3 className="tocyn-security-card-title">
+            <FaShieldHalved className="tocyn-security-heading-icon" />
             Two-Factor Authentication (2FA)
           </h3>
-          <div className="mt-2 max-w-xl text-sm text-gray-500">
+          <div className="tocyn-security-card-description">
             <p>
               Add an additional layer of security to your account by requiring more than just a password to sign in.
             </p>
           </div>
 
-          <div className="mt-5">
+          <div className="tocyn-security-card-content">
             {user.mfa_enabled ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-green-700 font-medium">
-                  <Shield className="h-5 w-5" />
+              <div className="tocyn-security-status-stack">
+                <div className="tocyn-security-status-enabled">
+                  <FaShieldHalved className="tocyn-security-status-icon" />
                   2FA is currently enabled
                 </div>
                 {(user.role === 'admin' || user.role === 'agent') ? (
-                  <p className="text-sm text-gray-500">
+                  <p className="tocyn-security-role-note">
                     Two-Factor Authentication is mandatory for your role and cannot be disabled.
                   </p>
                 ) : (
-                  <TocynButton
+                  <ParkButton
                     type="button"
                     ref={disableButton}
                     onClick={() => { setError(null); setDisableOpen(true); }}
                     disabled={isLoading}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                    className="tocyn-security-action tocyn-security-action-danger"
                   >
-                    <ShieldOff className="h-4 w-4 mr-2" />
+                    <FaShield className="tocyn-security-action-icon" />
                     Disable 2FA
-                  </TocynButton>
+                  </ParkButton>
                 )}
               </div>
             ) : (
               <div>
                 {!setupData ? (
-                  <TocynButton
+                  <ParkButton
                     type="button"
                     ref={setupButton}
                     onClick={startSetup}
                     disabled={isLoading}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    className="tocyn-security-action tocyn-security-action-primary"
                   >
-                    <KeyRound className="h-4 w-4 mr-2" />
+                    <FaKey className="tocyn-security-action-icon" />
                     Set up 2FA
-                  </TocynButton>
+                  </ParkButton>
                 ) : (
-                  <div className="bg-gray-50 rounded-lg p-6 space-y-6 border border-gray-200">
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900">Step 1: Scan QR Code</h4>
-                      <p className="text-sm text-gray-600">
+                  <div className="tocyn-security-setup">
+                    <div className="tocyn-security-setup-step">
+                      <h4 className="tocyn-security-setup-title">Step 1: Scan QR Code</h4>
+                      <p className="tocyn-security-setup-copy">
                         Scan the QR code below with your authenticator app (like Google Authenticator, Authy, or Microsoft Authenticator).
                       </p>
-                      <div className="bg-white p-4 rounded-lg inline-block shadow-sm">
+                      <div className="tocyn-security-qr">
                         <QRCodeSVG value={setupData.provisioning_uri} size={200} />
                       </div>
-                      <p className="text-xs text-gray-500">
+                      <p className="tocyn-security-setup-note">
                         If you can't scan the QR code, you can manually enter this secret key:<br/>
-                        <code className="bg-gray-100 px-2 py-1 rounded mt-1 inline-block font-mono text-sm">{getSecretFromUri(setupData.provisioning_uri)}</code>
+                        <code className="tocyn-security-secret">{getSecretFromUri(setupData.provisioning_uri)}</code>
                       </p>
                     </div>
 
-                    <div className="border-t border-gray-200 pt-6">
-                      <h4 className="font-medium text-gray-900 mb-4">Step 2: Verify Code</h4>
-                      <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className="flex gap-4 items-end">
-                        <div className="flex-1 max-w-xs">
-                          <label htmlFor="code" className="block text-sm font-medium text-gray-700">
+                    <div className="tocyn-security-verify-section">
+                      <h4 className="tocyn-security-verify-title">Step 2: Verify Code</h4>
+                      <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className="tocyn-security-verify-form">
+                        <div className="tocyn-security-code-field">
+                          <label htmlFor="code" className="tocyn-security-code-label">
                             Authentication Code
                           </label>
-                          <TocynInput
+                          <ParkInput
                             type="text"
                             id="code" ref={codeInput} inputMode="numeric" autoComplete="one-time-code" disabled={isLoading}
                             value={code}
                             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            className="tocyn-form-control tocyn-form-control--code mt-1 sm:text-sm"
                             placeholder="000000"
                             maxLength={6}
                             required
                           />
                         </div>
-                        <TocynButton
+                        <ParkButton
                           type="submit"
                           disabled={isLoading || code.length !== 6}
-                          className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                          className="tocyn-security-verify-submit"
                         >
                           Verify & Enable
-                        </TocynButton>
-                        <TocynButton
+                        </ParkButton>
+                        <ParkButton
                           type="button"
                           onClick={() => { setSetupData(null); setCode(''); setError(null); requestAnimationFrame(() => setupButton.current?.focus()); }}
                           disabled={isLoading}
-                          className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          className="tocyn-security-verify-cancel"
                         >
                           Cancel
-                        </TocynButton>
+                        </ParkButton>
                       </form>
                     </div>
                   </div>
