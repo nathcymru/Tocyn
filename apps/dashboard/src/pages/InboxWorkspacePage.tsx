@@ -209,9 +209,9 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
 
   return <div className="flex min-h-full flex-col">
     <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-brand-700">Workspace</p>
-        <h1 ref={heading} tabIndex={-1} className="mt-1 text-2xl font-bold text-slate-900">Inbox</h1></div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{meta.total} conversations</span></div>
+      <div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold text-brand-700">Workspace</p>
+        <h1 ref={heading} tabIndex={-1} className="mt-1 truncate text-2xl font-bold text-slate-900">Inbox</h1></div>
+        <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{meta.total} conversations</span></div>
       <nav aria-label="Work views" className="mt-4 flex gap-2 overflow-x-auto pb-1">
         {(['mine','unassigned','mentions','drafts','snoozed','actionable','all'] as const).map(view=>{
           const label=view==='all'?'All tickets':queueViews[view].label;
