@@ -44,3 +44,14 @@ test('shared Phosphor boundary enforces duotone icons', () => {
   assert.match(content, /weight="duotone"/);
   assert.match(content, /aria-hidden=\{props\['aria-label'\] \? undefined : true\}/);
 });
+
+test('direct Phosphor JSX icons declare duotone weight', () => {
+  const offenders = sourceFiles.flatMap((path) => {
+    const content = readFileSync(join(root, path), 'utf8');
+    if (!content.includes("from '@phosphor-icons/react'")) return [];
+    const imported = content.match(/import\s*\{([^}]*)\}\s*from\s*'@phosphor-icons\/react'/)?.[1] ?? '';
+    const names = imported.split(',').map((part) => part.trim().split(/\s+as\s+/).pop()).filter(Boolean);
+    return names.filter((name) => new RegExp(`<${name}\\b(?![^>]*\\bweight=\\\"duotone\\\")`).test(content)).map(() => path);
+  });
+  assert.deepEqual(offenders, [], `direct Phosphor icons without weight="duotone" found in: ${offenders.join(', ')}`);
+});
