@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createTocynThemeScope } from '@luminatick/ui';
-import { TocynButton } from '@luminatick/ui/primitives';
+import { TocynButton, TocynSelect } from '@luminatick/ui/primitives';
 import { useOperatorTheme, type OperatorThemeMode } from '../../hooks/useOperatorTheme';
 import { useOperatorPreferences, OPERATOR_TABLE_COLUMNS, type OperatorDensity, type OperatorFontScale, type OperatorMotion } from '../../hooks/useOperatorPreferences';
 
@@ -90,14 +90,14 @@ export function OperatorPreferencesControl() {
   const busy = preferences.status === 'loading' || preferences.status === 'saving' || preferences.schemaUnavailable || preferences.status === 'conflict';
   return <section aria-labelledby="workspace-preferences-title" data-tocyn-appearance data-tocyn-preferences>
     <h3 id="workspace-preferences-title">Workspace preferences</h3>
-    <fieldset disabled={busy}><label>Density<select aria-label="Workspace density" value={preferences.density} onChange={event => preferences.update({ density: event.target.value as OperatorDensity })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
-    <label>Text size<select aria-label="Workspace text size" value={preferences.fontScale} onChange={event => preferences.update({ fontScale: event.target.value as OperatorFontScale })}><option value="normal">Standard</option><option value="large">Large</option><option value="larger">Largest</option></select></label>
+    <fieldset disabled={busy}><label>Density<TocynSelect aria-label="Workspace density" value={preferences.density} onChange={event => preferences.update({ density: event.target.value as OperatorDensity })}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></TocynSelect></label>
+    <label>Text size<TocynSelect aria-label="Workspace text size" value={preferences.fontScale} onChange={event => preferences.update({ fontScale: event.target.value as OperatorFontScale })}><option value="normal">Standard</option><option value="large">Large</option><option value="larger">Largest</option></TocynSelect></label>
     <label><input type="checkbox" checked={preferences.focusMode} onChange={event => preferences.update({ focusMode: event.target.checked })} /> Focus mode</label>
-    <label>Motion<select aria-label="Workspace motion" value={preferences.motion} onChange={event => preferences.update({ motion: event.target.value as OperatorMotion })}><option value="system">Use system setting</option><option value="reduced">Reduce motion</option><option value="full">Allow motion</option></select></label>
-    <label>Navigation<select aria-label="Navigation labels" value={preferences.navigation} onChange={event => preferences.update({ navigation: event.target.value as 'compact'|'labelled' })}><option value="compact">Compact</option><option value="labelled">Labelled</option></select></label>
-    <label>Context panel on opening<select aria-label="Context panel default" value={preferences.contextDefault} onChange={event => preferences.update({ contextDefault: event.target.value as 'remember'|'conversation'|'details' })}><option value="remember">Remember previous panel</option><option value="conversation">Conversation</option><option value="details">Details</option></select></label>
+    <label>Motion<TocynSelect aria-label="Workspace motion" value={preferences.motion} onChange={event => preferences.update({ motion: event.target.value as OperatorMotion })}><option value="system">Use system setting</option><option value="reduced">Reduce motion</option><option value="full">Allow motion</option></TocynSelect></label>
+    <label>Navigation<TocynSelect aria-label="Navigation labels" value={preferences.navigation} onChange={event => preferences.update({ navigation: event.target.value as 'compact'|'labelled' })}><option value="compact">Compact</option><option value="labelled">Labelled</option></TocynSelect></label>
+    <label>Context panel on opening<TocynSelect aria-label="Context panel default" value={preferences.contextDefault} onChange={event => preferences.update({ contextDefault: event.target.value as 'remember'|'conversation'|'details' })}><option value="remember">Remember previous panel</option><option value="conversation">Conversation</option><option value="details">Details</option></TocynSelect></label>
     <label><input type="checkbox" checked={preferences.shortcutsEnabled} onChange={event => preferences.update({ shortcutsEnabled: event.target.checked })} /> Enable search shortcut</label>
-    <label>Activity updates<select aria-label="Activity interruption level" value={preferences.interruptionLevel} onChange={event => preferences.update({ interruptionLevel: event.target.value as 'standard'|'quiet' })}><option value="standard">Standard</option><option value="quiet">Quiet — refresh activity manually</option></select></label>
+    <label>Activity updates<TocynSelect aria-label="Activity interruption level" value={preferences.interruptionLevel} onChange={event => preferences.update({ interruptionLevel: event.target.value as 'standard'|'quiet' })}><option value="standard">Standard</option><option value="quiet">Quiet — refresh activity manually</option></TocynSelect></label>
     <label><input type="checkbox" checked={preferences.advanceAfterResolve} onChange={event => preferences.update({ advanceAfterResolve: event.target.checked })} /> Advance after resolving a conversation</label>
     <TableColumnsControl preferences={preferences} />
     </fieldset>

@@ -4,6 +4,11 @@ import { css } from '../styled-system/css';
 
 const buttonClass = css({ minBlockSize: 'var(--tocyn-target-min)', borderRadius: '0.375rem', border: '1px solid var(--tocyn-color-divider)', paddingInline: '0.875rem', paddingBlock: '0.5rem', color: 'var(--tocyn-color-text)', background: 'var(--tocyn-color-surface-panel)' });
 const inputClass = css({ minBlockSize: 'var(--tocyn-target-min)', borderRadius: '0.375rem', border: '1px solid var(--tocyn-color-divider)', paddingInline: '0.75rem', paddingBlock: '0.5rem', color: 'var(--tocyn-color-text)', background: 'var(--tocyn-color-surface)' });
+const selectClass = css({
+  appearance: 'none', paddingInlineEnd: '2.5rem',
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23515f6d' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m1 1 5 5 5-5'/%3E%3C/svg%3E\")",
+  backgroundPosition: 'right 0.75rem center', backgroundRepeat: 'no-repeat', backgroundSize: '0.75rem',
+});
 
 export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, PrimitiveProps, ComposableState<'idle' | 'loading' | 'disabled'> {
   ref?: React.Ref<HTMLButtonElement>;
@@ -65,5 +70,5 @@ export interface TocynSelectProps extends React.SelectHTMLAttributes<HTMLSelectE
   ref?: React.Ref<HTMLSelectElement>;
 }
 export const TocynSelect = React.forwardRef<HTMLSelectElement, TocynSelectProps>(function TocynSelect(props, ref) {
-  return <select {...props} data-tocyn-primitive="select" ref={ref} className={[inputClass, props.className].filter(Boolean).join(' ')} />;
+  return <select {...props} data-tocyn-primitive="select" ref={ref} className={[inputClass, selectClass, props.className].filter(Boolean).join(' ')} />;
 });
