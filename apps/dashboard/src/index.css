@@ -161,3 +161,35 @@
 /* Presence status keeps normal-text contrast in both selected theme modes. */
 .tocyn-presence-viewing { color: #15803d; }
 [data-tocyn-theme-mode="dark"] .tocyn-presence-viewing { color: #16a34a; }
+
+/* Workspace layout uses the allocated conversation pane. */
+.tocyn-workspace-shell { min-width: 0; }
+.tocyn-workspace-shell > div, .tocyn-workspace-shell main,
+.tocyn-inbox-layout > section, .tocyn-ticket-layout > * { min-width: 0; }
+.tocyn-inbox-layout { display: block; overflow: hidden; }
+.tocyn-active-conversation { container: conversation / inline-size; }
+.tocyn-timeline { isolation: isolate; }
+.tocyn-timeline::before { content: ''; position: absolute; inset-block: 1.5rem; inset-inline-start: 2.65rem; width: 2px; background: var(--tocyn-app-border); z-index: -1; }
+.tocyn-timeline-row > :first-child { position: relative; z-index: 1; }
+.tocyn-timeline-row > :first-child::after { content: ''; position: absolute; inset: -0.2rem; border-radius: 999px; background: inherit; z-index: -1; }
+.tocyn-ticket-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; max-width: 90rem; margin-inline: auto; }
+.tocyn-ticket-layout :where(h1, p, dd, label) { overflow-wrap: anywhere; }
+.tocyn-conversation-heading { padding-block: .25rem .75rem; border-bottom: 1px solid var(--tocyn-app-border); }
+.tocyn-conversation-heading > div, .tocyn-ticket-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; }
+.tocyn-conversation-heading h1 { font-size: 1.375rem; line-height: 1.35; }
+.tocyn-ticket-actions > div { flex-wrap: wrap; }
+.tocyn-ticket-context { min-width: 0; }
+.tocyn-support-editor, .tocyn-sla-details { border-radius: .5rem; }
+.tocyn-support-editor > summary, .tocyn-sla-details > summary { cursor: pointer; padding: .625rem 0; font-weight: 600; font-size: .875rem; }
+.tocyn-support-editor > summary { padding-inline: .75rem; border: 1px solid var(--tocyn-app-border); border-radius: .5rem; }
+.tocyn-sla-summary { margin-top: .25rem; font-size: .875rem; }
+.tocyn-workspace-shell :where(button, select, input:not([type="checkbox"]):not([type="radio"]):not([type="file"])) { min-height: 2.25rem; font: inherit; font-size: .875rem; line-height: 1.4; }
+.tocyn-workspace-shell :where(button) { padding: .375rem .625rem; }
+.tocyn-workspace-shell :where(select, input:not([type="checkbox"]):not([type="radio"]):not([type="file"])) { max-width: 100%; padding: .5rem .625rem; }
+.tocyn-workspace-shell :where(button, select, input, textarea, summary, a):focus-visible { outline: 2px solid var(--tocyn-app-text); outline-offset: 2px; }
+.tocyn-workspace-shell :where(button, select, input, textarea):is(:disabled, [aria-disabled="true"]) { cursor: not-allowed; }
+/* The desktop inbox split is owned by Ark Splitter. Keep the host neutral so
+   percentage panel sizes cannot be overridden by the former CSS grid. */
+@container conversation (min-width: 64rem) {
+  .tocyn-ticket-layout[data-context-open="true"] { grid-template-columns: minmax(0, 3fr) minmax(16rem, 1fr); }
+}

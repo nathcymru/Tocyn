@@ -42,7 +42,7 @@ import {
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
 import { browserDateTimeLocalToInstant, browserInstantToDateTimeLocal } from '../utils/localDateTime';
-import type { KnowledgeDoc } from '../types';
+import type { Article, KnowledgeDoc } from '../types';
 
 type PendingAttachment = Readonly<{
   id: string;
@@ -860,12 +860,12 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         </form></details>}
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div id="conversation-messages" className="p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
+          <div id="conversation-messages" className="tocyn-timeline relative p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
             {ticket.articles.map((article) => (
               <div
                 key={article.id}
                 className={clsx(
-                  "flex gap-4 group",
+                  "tocyn-timeline-row relative flex gap-4 group",
                   article.sender_type === 'agent' ? "flex-row-reverse" : "flex-row"
                 )}
               >
@@ -891,7 +891,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  {(ticket.source === 'email' || article.raw_email_id) && !article.is_internal && <details className="mb-3 rounded border border-slate-200/70 bg-white/60 px-2 py-1 text-xs text-slate-700">
+                  {(ticket.source === 'email' || (article as typeof article & { intake_source?: string | null }).intake_source === 'email' || article.raw_email_id) && !article.is_internal && <div className="mb-3 rounded border border-slate-200/70 bg-white/60 px-2 py-2 text-xs text-slate-700">
+                    <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-3"><div><dt className="font-semibold">Email</dt><dd className="truncate">{ticket.subject || 'Subject unavailable'}</dd></div><div><dt className="font-semibold">From</dt><dd className="truncate">{ticket.customer_email || 'Sender unavailable'}</dd></div><div><dt className="font-semibold">Received</dt><dd>{utcTimestamp((article as typeof article & { received_at?: string | null }).received_at || article.created_at).toLocaleString()}</dd></div></dl>
+                  </div>}
+                  {(ticket.source === 'email' || (article as typeof article & { intake_source?: string | null }).intake_source === 'email' || article.raw_email_id) && !article.is_internal && <details className="mb-3 rounded border border-slate-200/70 bg-white/60 px-2 py-1 text-xs text-slate-700">
                     <summary className="cursor-pointer font-semibold">Show full email</summary>
                     <dl className="mt-2 grid gap-1 sm:grid-cols-2">
                       <div><dt className="font-medium">Subject</dt><dd>{ticket.subject || 'Subject unavailable'}</dd></div>
