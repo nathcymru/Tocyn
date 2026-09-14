@@ -4,7 +4,7 @@ import { KnowledgeBrowser } from '../components/KnowledgeBrowser';
 import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketActionBar } from '../components/TicketActionBar';
-import { TocynButton, TocynEmptyState, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton, TocynCheckbox, TocynEmptyState, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
@@ -1109,7 +1109,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   {mentionCandidates.map(agent => {
                     const checked = mentionedUserIds.includes(agent.id);
                     return <label key={agent.id} className="flex min-h-11 items-center gap-2 text-sm text-slate-900">
-                      <input type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
+                      <TocynCheckbox aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
                         onChange={() => updateDraft({ mentionedUserIds: checked ? mentionedUserIds.filter(id => id !== agent.id)
                           : mentionedUserIds.length < (replyCapabilities.data?.internalMentions?.maxRecipients ?? 0) ? [...mentionedUserIds, agent.id] : mentionedUserIds })} />
                       <span>{agent.full_name || agent.email}</span>
