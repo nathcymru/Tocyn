@@ -34,6 +34,14 @@ export const TocynPanel = React.forwardRef<HTMLElement, TocynPanelProps>(functio
   return <section {...props} data-tocyn-primitive="panel" ref={ref} className={className} data-state={state}>{children}</section>;
 });
 
+export function TocynEmptyState({ title, description, action, className }: { title: string; description?: string; action?: React.ReactNode; className?: string }) {
+  return <section aria-label={title} data-tocyn-primitive="empty-state" className={['flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center', className].filter(Boolean).join(' ')}>
+    <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+    {description && <p className="max-w-prose text-sm leading-6 text-slate-600">{description}</p>}
+    {action}
+  </section>;
+}
+
 export interface WorkspaceRegionProps extends React.HTMLAttributes<HTMLElement> {
   ref?: React.Ref<HTMLElement>;
   label: string;

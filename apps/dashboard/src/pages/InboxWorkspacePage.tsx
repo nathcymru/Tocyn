@@ -1,6 +1,6 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { TocynButton,TocynInput,TocynSelect } from '@luminatick/ui/primitives';
+import { TocynButton,TocynEmptyState,TocynInput,TocynSelect } from '@luminatick/ui/primitives';
 import { TocynSplitter } from '../../../../packages/ui/src/splitter';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,LayoutList,Search,Table2 } from 'lucide-react';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
@@ -95,11 +95,7 @@ function InboxWorkspace(){
   </div>;
 }
 
-function EmptyConversation(){return <div className="flex min-h-full items-center justify-center"><div className="max-w-sm text-center">
-  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700"><Inbox aria-hidden="true" /></span>
-  <h1 className="mt-4 text-xl font-bold text-slate-900">Choose a conversation</h1>
-  <p className="mt-2 text-sm leading-6 text-slate-600">The selected view and your place in the list stay here while you read and reply.</p>
-  </div></div>;}
+function EmptyConversation(){return <div className="flex min-h-full items-center justify-center"><TocynEmptyState title="Choose a conversation" description="The selected view and your place in the list stay here while you read and reply." /></div>;}
 
 function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onAdvanceNotice}:{activeView:string;selectedTicketId:string|null;routeReady:boolean;advanceRef:React.MutableRefObject<((id:string)=>void)|null>;onAdvanceNotice:(message:string)=>void}){
   const navigate=useNavigate();
@@ -264,7 +260,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     {drafts.status==='partial'&&<p role="status" className="mx-4 mt-3 text-xs text-amber-900">Some draft indicators are still loading.</p>}
     {presentation==='table'&&<p role="status" className="mx-4 mt-3 text-xs text-slate-600 sm:hidden">Table view uses the compact conversation list on small screens.</p>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx('flex-1 divide-y divide-slate-200',presentation==='table'&&'sm:hidden')}>
-      {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:emptyPage?<div className="p-8 text-center"><p className="font-semibold text-slate-800">{emptyMessage}</p><p className="mt-1 text-sm text-slate-600">{queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'}</p></div>:tickets.map((ticket,index)=>{
+      {query.isLoading?<p role="status" className="p-6 text-center text-sm text-slate-600">Loading conversations…</p>:emptyPage?<TocynEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'} className="m-4" />:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
           to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} onFocus={()=>setFocusedIndex(index)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();moveFocus(index+1);}if(event.key==='ArrowUp'){event.preventDefault();moveFocus(index-1);}}}
