@@ -214,7 +214,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
           return <TocynButton key={view} type="button" aria-label={label} aria-pressed={activeView===view}
             aria-describedby={total===undefined?undefined:`queue-total-${view}`} onClick={()=>selectView(view)}
             className={clsx('tocyn-inbox-view-button',activeView===view?'tocyn-inbox-view-button-active':'tocyn-inbox-view-button-inactive')}>
-            {label}{total!==undefined&&<><span aria-hidden="true" className="ml-1.5">{total}</span><span id={`queue-total-${view}`} className="sr-only">{total} conversations in this standard queue</span></>}
+            {label}{total!==undefined&&<><span aria-hidden="true" className="tocyn-inbox-queue-total">{total}</span><span id={`queue-total-${view}`} className="sr-only">{total} conversations in this standard queue</span></>}
           </TocynButton>;
         })}
         {isLoadingFilters?<span role="status" className="tocyn-inbox-loading-label">Loading saved views…</span>:filters?.map(filter=><TocynButton key={filter.id} type="button"
@@ -236,8 +236,8 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
           className="tocyn-form-control tocyn-inbox-select-control"><option value="updated_desc">Recently updated</option><option value="updated_asc">Least recently updated</option>
           <option value="created_desc">Newest</option><option value="created_asc">Oldest</option><option value="priority_desc">Highest priority</option><option value="priority_asc">Lowest priority</option><option value="sla_priority">Earliest SLA deadline</option></TocynSelect></label>
         <div role="group" aria-label="Conversation presentation" className="tocyn-inbox-presentation-toggle">
-          <TocynButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('tocyn-inbox-presentation-button',presentation==='list'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><LayoutList className="h-4 w-4" aria-hidden="true" /></TocynButton>
-          <TocynButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('tocyn-inbox-presentation-button',presentation==='table'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><Table2 className="h-4 w-4" aria-hidden="true" /></TocynButton>
+          <TocynButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('tocyn-inbox-presentation-button',presentation==='list'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><LayoutList className="tocyn-inbox-presentation-icon" aria-hidden="true" /></TocynButton>
+          <TocynButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('tocyn-inbox-presentation-button',presentation==='table'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><Table2 className="tocyn-inbox-presentation-icon" aria-hidden="true" /></TocynButton>
         </div></div>
         <p role="status" aria-label="Inbox status" className="tocyn-inbox-status">{recoveringPage?'Loading the first page after the conversation list changed…':query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p></div>
     </header>

@@ -1571,6 +1571,8 @@
 .tocyn-inbox-sort-trigger { display: inline-flex; min-inline-size: 10rem; align-items: center; justify-content: space-between; gap: .5rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .375rem .5rem; color: var(--tocyn-color-text); font-size: .875rem; }
 .tocyn-inbox-presentation-toggle { display: inline-flex; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .125rem; }
 .tocyn-inbox-presentation-button { border-radius: .375rem; padding: .375rem; }
+.tocyn-inbox-presentation-icon, .tocyn-inbox-queue-total { inline-size: 1rem; block-size: 1rem; }
+.tocyn-inbox-queue-total { display: inline-block; margin-inline-start: .375rem; text-align: center; }
 .tocyn-inbox-presentation-active { background: color-mix(in srgb, var(--tocyn-color-brand) 10%, transparent); color: var(--tocyn-color-brand); }
 .tocyn-inbox-presentation-inactive { color: var(--tocyn-color-text-muted); }
 .tocyn-inbox-status { margin: 0; color: var(--tocyn-color-text-muted); font-size: .75rem; }
