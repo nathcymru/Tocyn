@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import type { SlaTargetProjection, TicketSlaProjection } from '../types';
-import { ParkButton } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
 
 type ReadState = Readonly<{
   status: 'loading' | 'ready' | 'failed';
@@ -87,15 +87,14 @@ export function TicketSlaStatus({ ticketId }: { ticketId: string }) {
   if (read.status === 'loading' && !read.projection) {
     return <section aria-labelledby="ticket-sla-heading" className="tocyn-portal-sla-card">
       <h2 id="ticket-sla-heading" className="tocyn-portal-sla-heading">Service status</h2>
-      <p role="status" className="tocyn-portal-sla-status">Loading service status…</p>
+      <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading service status…" className="tocyn-portal-sla-state" />
     </section>;
   }
 
   if (read.status === 'failed' || !read.projection) {
     return <section aria-labelledby="ticket-sla-heading" className="tocyn-portal-sla-card">
       <h2 id="ticket-sla-heading" className="tocyn-portal-sla-heading">Service status</h2>
-      <p role="status" aria-live="polite" className="tocyn-portal-sla-status">Service status is unavailable. Try again.</p>
-      <ParkButton type="button" onClick={retry} className="tocyn-portal-sla-retry">Retry service status</ParkButton>
+      <ParkEmptyState role="alert" headingLevel={false} title="Service status is unavailable. Try again." className="tocyn-portal-sla-state" action={<ParkButton type="button" onClick={retry} className="tocyn-portal-sla-retry">Retry service status</ParkButton>} />
     </section>;
   }
 

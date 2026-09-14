@@ -183,8 +183,8 @@ export function EmailChannelPage() {
           </div>
         </div>
 
-        {settingsLoading && <p role="status">Loading configuration…</p>}
-        {settingsFailed && <div role="alert">Configuration could not be loaded. <ParkButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton></div>}
+        {settingsLoading && <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading configuration…" className="tocyn-email-channel-state" />}
+        {settingsFailed && <ParkEmptyState role="alert" headingLevel={false} title="Configuration could not be loaded." action={<ParkButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton>} className="tocyn-email-channel-state" />}
         {providerError && <p role="alert">{providerError}</p>}
         <div className="tocyn-email-channel-config-fields">
           <div className="tocyn-form-field">
