@@ -1,6 +1,6 @@
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput } from '@luminatick/ui/primitives';
 import React, { useEffect, useState } from 'react';
 import { Key, Plus, Trash2, Copy, Check, ShieldAlert, Clock } from 'lucide-react';
 import { dashboardApi } from '../api/client';
@@ -236,7 +236,10 @@ export function ApiKeyPage() {
         </div>
       )}
 
-      {listError && <p role="alert">{listError}</p>}
+      {listError && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+        <p>{listError}</p>
+        <TocynButton type="button" className="mt-3" onClick={() => { setIsLoading(true); void fetchKeys(); }}>Retry loading API keys</TocynButton>
+      </div>}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -256,7 +259,10 @@ export function ApiKeyPage() {
                 </tr>
               ) : keys.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">{listError ? 'API key list unavailable.' : 'No API keys found.'}</td>
+                  <td colSpan={5} className="p-4"><TocynEmptyState
+                    title={listError ? 'API key list unavailable.' : 'No API keys found.'}
+                    description={listError ? 'The list could not be confirmed. Retry before relying on it.' : 'Create an API key when an integration needs authenticated access.'}
+                  /></td>
                 </tr>
               ) : (
                 keys.map((key) => (
