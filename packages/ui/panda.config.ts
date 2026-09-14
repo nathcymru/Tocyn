@@ -12,6 +12,14 @@ export default {
     extend: {
       semanticTokens: {
         colors: {
+          'bg.canvas': { value: 'var(--tocyn-color-canvas)' },
+          'bg.surface': { value: 'var(--tocyn-color-surface)' },
+          'bg.input': { value: 'var(--tocyn-color-input)' },
+          'text.primary': { value: 'var(--tocyn-color-text)' },
+          'text.muted': { value: 'var(--tocyn-color-text-muted)' },
+          'border.input': { value: 'var(--tocyn-color-divider)' },
+          'border.focus': { value: 'var(--tocyn-color-focus)' },
+          'accent.primary': { value: 'var(--tocyn-color-accent)' },
           canvas: { value: 'var(--tocyn-color-surface)' },
           panel: { value: 'var(--tocyn-color-surface-panel)' },
           muted: { value: 'var(--tocyn-color-surface-muted)' },
@@ -21,7 +29,6 @@ export default {
           selected: { value: 'var(--tocyn-color-selected)' },
           divider: { value: 'var(--tocyn-color-divider)' },
           critical: { value: 'var(--tocyn-color-critical)' },
-          'bg.canvas': { value: 'var(--tocyn-color-surface)' },
           'bg.default': { value: 'var(--tocyn-color-surface-panel)' },
           'bg.subtle': { value: 'var(--tocyn-color-surface-muted)' },
           'fg.default': { value: 'var(--tocyn-color-text)' },
@@ -30,8 +37,16 @@ export default {
         },
       },
       tokens: {
+        fonts: {
+          primary: { value: "'Atkinson Hyperlegible', sans-serif" },
+          tabular: { value: "'Inter', sans-serif" },
+        },
         radii: { control: { value: '0.5rem' }, panel: { value: '0.75rem' } },
         sizes: { target: { value: 'var(--tocyn-target-min)' } },
+      },
+      textStyles: {
+        body: { value: { fontFamily: 'fonts.primary', fontSize: '1rem', lineHeight: '1.5' } },
+        tabular: { value: { fontFamily: 'fonts.tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', lineHeight: '1.4' } },
       },
     },
   },

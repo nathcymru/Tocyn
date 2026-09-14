@@ -26,9 +26,9 @@ describe('Tocyn theme contract', () => {
   it('resolves fallback, tenant, then instance values with a version', () => {
     const theme = resolveTocynTheme({ mode: 'dark', tenant: { targetMin: '48px' }, instance: { targetMin: '52px' } });
     expect(theme.version).toBe(TOCYN_THEME_CONTRACT_VERSION);
-    expect(theme.tokens.colorSelected).toBe('#1e3a8a');
-    expect(theme.tokens.colorText).toBe('#f8fafc');
-    expect(theme.variables['--tocyn-color-selected']).toBe('#1e3a8a');
+    expect(theme.tokens.colorSelected).toBe('#1e3a5f');
+    expect(theme.tokens.colorText).toBe('#e2e8f0');
+    expect(theme.variables['--tocyn-color-selected']).toBe('#1e3a5f');
     expect(theme.tokens.targetMin).toBe('52px');
     expect(resolveTocynTheme({ tenant: { targetMin: '48px' } }).tokens.targetMin).toBe('48px');
     expect(resolveTocynTheme().tokens.targetMin).toBe('44px');

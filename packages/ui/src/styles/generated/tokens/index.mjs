@@ -135,18 +135,6 @@ const tokens = {
     "value": "2",
     "variable": "var(--line-heights-loose)"
   },
-  "fonts.sans": {
-    "value": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
-    "variable": "var(--fonts-sans)"
-  },
-  "fonts.serif": {
-    "value": "ui-serif, Georgia, Cambria, \"Times New Roman\", Times, serif",
-    "variable": "var(--fonts-serif)"
-  },
-  "fonts.mono": {
-    "value": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
-    "variable": "var(--fonts-mono)"
-  },
   "letterSpacings.tighter": {
     "value": "-0.05em",
     "variable": "var(--letter-spacings-tighter)"
@@ -1439,6 +1427,26 @@ const tokens = {
     "value": "bounce 1s infinite",
     "variable": "var(--animations-bounce)"
   },
+  "fonts.sans": {
+    "value": "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+    "variable": "var(--fonts-sans)"
+  },
+  "fonts.serif": {
+    "value": "ui-serif, Georgia, Cambria, \"Times New Roman\", Times, serif",
+    "variable": "var(--fonts-serif)"
+  },
+  "fonts.mono": {
+    "value": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
+    "variable": "var(--fonts-mono)"
+  },
+  "fonts.primary": {
+    "value": "'Atkinson Hyperlegible', sans-serif",
+    "variable": "var(--fonts-primary)"
+  },
+  "fonts.tabular": {
+    "value": "'Inter', sans-serif",
+    "variable": "var(--fonts-tabular)"
+  },
   "radii.xs": {
     "value": "0.125rem",
     "variable": "var(--radii-xs)"
@@ -1739,6 +1747,38 @@ const tokens = {
     "value": "1536px",
     "variable": "var(--breakpoints-2xl)"
   },
+  "colors.bg.canvas": {
+    "value": "var(--tocyn-color-canvas)",
+    "variable": "var(--colors-bg\\.canvas)"
+  },
+  "colors.bg.surface": {
+    "value": "var(--tocyn-color-surface)",
+    "variable": "var(--colors-bg\\.surface)"
+  },
+  "colors.bg.input": {
+    "value": "var(--tocyn-color-input)",
+    "variable": "var(--colors-bg\\.input)"
+  },
+  "colors.text.primary": {
+    "value": "var(--tocyn-color-text)",
+    "variable": "var(--colors-text\\.primary)"
+  },
+  "colors.text.muted": {
+    "value": "var(--tocyn-color-text-muted)",
+    "variable": "var(--colors-text\\.muted)"
+  },
+  "colors.border.input": {
+    "value": "var(--tocyn-color-divider)",
+    "variable": "var(--colors-border\\.input)"
+  },
+  "colors.border.focus": {
+    "value": "var(--tocyn-color-focus)",
+    "variable": "var(--colors-border\\.focus)"
+  },
+  "colors.accent.primary": {
+    "value": "var(--tocyn-color-accent)",
+    "variable": "var(--colors-accent\\.primary)"
+  },
   "colors.canvas": {
     "value": "var(--tocyn-color-surface)",
     "variable": "var(--colors-canvas)"
@@ -1774,10 +1814,6 @@ const tokens = {
   "colors.critical": {
     "value": "var(--tocyn-color-critical)",
     "variable": "var(--colors-critical)"
-  },
-  "colors.bg.canvas": {
-    "value": "var(--tocyn-color-surface)",
-    "variable": "var(--colors-bg\\.canvas)"
   },
   "colors.bg.default": {
     "value": "var(--tocyn-color-surface-panel)",

@@ -37,7 +37,7 @@ import widgetStyles from './index.css?inline';
       bottom: 20px;
       right: 20px;
       z-index: 999999;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+      font-family: var(--tocyn-font-primary, 'Atkinson Hyperlegible', ui-sans-serif, system-ui, sans-serif);
     }
   `;
   shadow.appendChild(styles);

@@ -1,22 +1,22 @@
 @layer base {
   :root {
     --tocyn-app-surface: var(--tocyn-color-surface, #ffffff);
-    --tocyn-app-surface-panel: var(--tocyn-color-surface-panel, #f8fafc);
-    --tocyn-app-surface-muted: var(--tocyn-color-surface-muted, #f1f5f9);
-    --tocyn-app-text: var(--tocyn-color-text, #0f172a);
-    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #475569);
+    --tocyn-app-surface-panel: var(--tocyn-color-canvas, #f8fafc);
+    --tocyn-app-surface-muted: var(--tocyn-color-input, #f1f5f9);
+    --tocyn-app-text: var(--tocyn-color-text, #1e293b);
+    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #64748b);
     --tocyn-app-border: var(--tocyn-color-divider, #cbd5e1);
     --tocyn-sla-breach-text: #b91c1c;
     --tocyn-sla-on-track-text: #047857;
     color-scheme: light;
   }
   [data-tocyn-theme-mode="dark"] {
-    --tocyn-app-surface: var(--tocyn-color-surface, #0f172a);
-    --tocyn-app-surface-panel: var(--tocyn-color-surface-panel, #1e293b);
-    --tocyn-app-surface-muted: var(--tocyn-color-surface-muted, #334155);
-    --tocyn-app-text: var(--tocyn-color-text, #f8fafc);
-    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #cbd5e1);
-    --tocyn-app-border: var(--tocyn-color-divider, #475569);
+    --tocyn-app-surface: var(--tocyn-color-surface, #1a1d23);
+    --tocyn-app-surface-panel: var(--tocyn-color-canvas, #0f1115);
+    --tocyn-app-surface-muted: var(--tocyn-color-input, #1e293b);
+    --tocyn-app-text: var(--tocyn-color-text, #e2e8f0);
+    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #94a3b8);
+    --tocyn-app-border: var(--tocyn-color-divider, #334155);
     --tocyn-sla-breach-text: #fca5a5;
     --tocyn-sla-on-track-text: #6ee7b7;
     color-scheme: dark;
@@ -37,9 +37,9 @@
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--tocyn-app-surface);
+    background: var(--tocyn-app-surface-panel);
     color: var(--tocyn-app-text);
+    font-family: var(--tocyn-font-primary, 'Atkinson Hyperlegible', ui-sans-serif, system-ui, sans-serif);
   }
 }
 
