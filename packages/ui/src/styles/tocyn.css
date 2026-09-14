@@ -1897,3 +1897,4 @@
 
 .tocyn-groups-member-icon-md { inline-size: .875rem; block-size: .875rem; }
 .tocyn-ticket-table-actions-heading { text-align: right; }
+.tocyn-inbox-table-state { min-block-size: 8rem; border: 0; background: transparent; }
