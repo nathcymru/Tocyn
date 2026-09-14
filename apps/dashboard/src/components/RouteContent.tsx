@@ -31,6 +31,6 @@ function RouteSkeleton() {
     <span className="tocyn-route-skeleton-bar" />
     <span className="tocyn-route-skeleton-bar tocyn-route-skeleton-wide" />
     <span className="tocyn-route-skeleton-bar" />
-    <span className="sr-only">Loading page</span>
+    <span className="tocyn-visually-hidden">Loading page</span>
   </section>;
 }

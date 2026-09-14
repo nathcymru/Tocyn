@@ -32,9 +32,9 @@ export const TocynPanel = React.forwardRef<HTMLElement, TocynPanelProps>(functio
 
 /** A stable, labelled surface for no-data and recoverable empty views. */
 export function TocynEmptyState({ title, description, action, className }: { title: string; description?: string; action?: React.ReactNode; className?: string }) {
-  return <section aria-label={title} data-tocyn-primitive="empty-state" className={['flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center', className].filter(Boolean).join(' ')}>
-    <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-    {description && <p className="max-w-prose text-sm leading-6 text-slate-600">{description}</p>}
+  return <section aria-label={title} data-tocyn-primitive="empty-state" className={['tocyn-empty-state', className].filter(Boolean).join(' ')}>
+    <h2 className="tocyn-empty-state-title">{title}</h2>
+    {description && <p className="tocyn-empty-state-description">{description}</p>}
     {action}
   </section>;
 }

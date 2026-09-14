@@ -112,8 +112,8 @@ export function AgentPermissionsPage() {
                 {!available && <p className="tocyn-permission-unavailable">Managed by the deployment owner; this tenant cannot enable it.</p>}
               </div>
               <label className={`tocyn-permission-toggle ${available ? 'tocyn-permission-toggle--available' : 'tocyn-permission-toggle--disabled'}`}>
-                <span className="sr-only">Allow agents to use {capability.label}</span>
-                <ParkInput type="checkbox" className="sr-only peer" checked={checked} disabled={!available} aria-disabled={!available || saving || loading || revision === null} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
+                <span className="tocyn-visually-hidden">Allow agents to use {capability.label}</span>
+                <ParkInput type="checkbox" className="tocyn-visually-hidden tocyn-toggle-input" checked={checked} disabled={!available} aria-disabled={!available || saving || loading || revision === null} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
                 <span aria-hidden="true" className="tocyn-permission-switch" />
               </label>
             </div>

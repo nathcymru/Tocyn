@@ -40,7 +40,7 @@ export function OperatorThemeControl() {
   const theme = useOperatorThemeContext(); const busy = theme.status === 'loading' || theme.status === 'saving';
   return <section aria-labelledby="appearance-title" data-tocyn-appearance>
     <h3 id="appearance-title">Appearance</h3>
-    <fieldset disabled={busy}><legend className="sr-only">Theme mode</legend>
+    <fieldset disabled={busy}><legend className="tocyn-visually-hidden">Theme mode</legend>
       {(['system', 'light', 'dark'] as const).map(mode => <label key={mode}><ParkInput type="radio" name="operator-theme-mode" value={mode} checked={theme.mode === mode} onChange={() => theme.updateMode(mode as OperatorThemeMode)} />{mode === 'system' ? 'Use system setting' : mode === 'light' ? 'Light' : 'Dark'}</label>)}
     </fieldset>
     <div><ParkButton type="button" disabled={busy || theme.status !== 'unsaved'} onClick={() => void theme.save()}>Save appearance</ParkButton>{(theme.status === 'error' || theme.status === 'conflict') && <ParkButton type="button" onClick={theme.retry}>Retry appearance</ParkButton>}{theme.status === 'conflict' && <ParkButton type="button" onClick={theme.restore}>Restore server appearance</ParkButton>}</div>

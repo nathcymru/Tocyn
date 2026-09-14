@@ -165,7 +165,7 @@ export function MfaPage() {
               name="code"
               placeholder="0"
             >
-              <span className="sr-only">Authentication Code</span>
+              <span className="tocyn-visually-hidden">Authentication Code</span>
               {Array.from({ length: 6 }, (_, index) => <ParkPinInputSlot key={index} index={index}
                 aria-label={index === 0 ? 'Authentication Code' : `Authentication Code digit ${index + 1}`}
                 aria-describedby={error ? 'mfa-instructions mfa-error' : 'mfa-instructions'}
