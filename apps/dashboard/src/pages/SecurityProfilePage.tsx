@@ -218,7 +218,7 @@ export function SecurityProfilePage() {
                             id="code" ref={codeInput} inputMode="numeric" autoComplete="one-time-code" disabled={isLoading}
                             value={code}
                             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            className="tocyn-form-control tocyn-form-control--code mt-1 sm:text-sm"
+                            className="tocyn-form-control tocyn-form-control--code tocyn-security-code-input"
                             placeholder="000000"
                             maxLength={6}
                             required
