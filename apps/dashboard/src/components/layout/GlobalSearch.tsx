@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkSelect } from '@luminatick/ui/park';
 import { dashboardApi } from '../../api/client';
 import { assignmentIdentity } from '../../hooks/useTicketAssignment';
 import { useAuthStore } from '../../store/authStore';
@@ -87,7 +88,7 @@ function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
     finally { if (current()) setBusy(false); }
   };
   return <div className="max-w-md w-full relative" onKeyDown={event => { if (event.key === 'Escape' && event.target !== input.current) { event.preventDefault(); invalidate(); input.current?.focus(); } }}>
-    <label className="text-xs font-medium">Search result type <select aria-label="Search result type" value={type} onChange={event => { invalidate(); setType(event.target.value); }} className="rounded border border-slate-300 bg-white text-slate-900"><option value="tickets">Tickets</option><option value="knowledge">Knowledge</option><option value="customers">Customers</option></select></label>
+    <label className="text-xs font-medium">Search result type <ParkSelect aria-label="Search result type" value={type} onChange={event => { invalidate(); setType(event.target.value); }} className="tocyn-form-control"><option value="tickets">Tickets</option><option value="knowledge">Knowledge</option><option value="customers">Customers</option></ParkSelect></label>
     <div className="relative"><TocynInput ref={input} type="text" maxLength={256} value={query} aria-label={type === 'tickets' ? 'Search all tickets (global shell)' : `Search ${type} (global shell)`} aria-describedby="global-ticket-search-scope" aria-keyshortcuts={shortcutsEnabled ? 'Control+K Meta+K' : undefined} placeholder={type === 'tickets' ? 'Search all authorised tickets...' : type === 'knowledge' ? 'Search authorised knowledge titles...' : 'Customer search unavailable'} onChange={event => { invalidate(); setQuery(event.target.value); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void search(); } if (event.key === 'Escape') { event.preventDefault(); clear(); } }} className="w-full pr-20 py-2 rounded border border-slate-300" />
     <TocynButton type="button" aria-label={type === 'tickets' ? 'Clear global ticket search' : 'Clear global search'} disabled={!query && !message} onClick={clear} className="absolute right-2 top-1 rounded px-2 py-1 text-xs underline">Clear</TocynButton>
     {shortcutsEnabled && <span data-tocyn-focus-decoration="" aria-hidden="true" className="pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 text-[10px] font-semibold text-slate-500 sm:inline">⌘/Ctrl K</span>}</div>
