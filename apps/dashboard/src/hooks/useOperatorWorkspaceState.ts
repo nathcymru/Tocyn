@@ -10,14 +10,14 @@ export type WorkspacePreference = Readonly<{
   revision: number; view: 'all' | 'mine' | 'unassigned' | 'mentions' | 'drafts' | 'snoozed' | 'needs_action' | 'team' | 'custom';
   sort: 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc' | 'priority_desc' | 'priority_asc' | 'sla_priority';
   filters: WorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null;
-  panel: 'conversation' | 'details'; updatedAt: string;
+  panel: 'conversation' | 'details'; splitterRatio: number; updatedAt: string;
 }>;
 export type WorkspacePreferencePatch = Readonly<Partial<Omit<WorkspacePreference, 'revision' | 'updatedAt'>>>;
 export type WorkspacePreferenceStatus = 'idle' | 'loading' | 'restored' | 'unsaved' | 'saving' | 'saved' | 'error' | 'conflict';
 type Snapshot = WorkspacePreference & Readonly<{ status: WorkspacePreferenceStatus; error: string | null }>;
 type DraftIndex = Readonly<{ items: readonly Readonly<{ ticketId: string; updatedAt: string }>[]; next: string | null }>;
 
-const DEFAULT: WorkspacePreference = Object.freeze({ revision: 0, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '' });
+const DEFAULT: WorkspacePreference = Object.freeze({ revision: 0, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '' });
 function empty(status: WorkspacePreferenceStatus): Snapshot { return { ...DEFAULT, filters: {}, status, error: null }; }
 function identityFor(sessionGeneration: number, tenantId: string | undefined, userId: string | undefined) {
   return tenantId && userId ? JSON.stringify([sessionGeneration, tenantId, userId]) : null;
@@ -33,7 +33,7 @@ function mergePatch(base: WorkspacePreferencePatch, patch: WorkspacePreferencePa
 }
 function saveInput(value: WorkspacePreference) {
   return { expectedRevision: value.revision, view: value.view, sort: value.sort, filters: value.filters,
-    listQuery: value.listQuery, listAnchor: value.listAnchor, selectedTicketId: value.selectedTicketId, panel: value.panel };
+    listQuery: value.listQuery, listAnchor: value.listAnchor, selectedTicketId: value.selectedTicketId, panel: value.panel, splitterRatio: value.splitterRatio };
 }
 
 /** One authenticated operator owns a restore gate and one serialized preference-save lane. */
@@ -159,7 +159,7 @@ function createController(identity: string | null) {
     hasUnsavedChanges: () => dirty,
     start: () => { active = true; epoch++; void restore(); return () => { active = false; epoch++; cancel(); }; },
     update, saveNow, flushBeforeNavigation,
-    retrySave: () => { if (known) void saveNow(); else void restore(); },
+    retrySave: () => { if (!known) void restore(); else if (state.status === 'conflict') void restore(true); else void saveNow(); },
     retryRestore: () => { if (!known) void restore(); },
     restoreServerState: () => { void restore(true); },
   };

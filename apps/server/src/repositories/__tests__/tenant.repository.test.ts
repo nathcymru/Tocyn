@@ -227,12 +227,12 @@ describe('Tenant-Scoped Repositories (Integration)', () => {
       .run('tenant-A', 'user-A', 'workspace-a@example.test', 'agent', 1);
     const first = await reposA.operatorWorkspace.saveWorkspaceState({
       expectedRevision: 0, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'one',
-      selectedTicketId: 'gone-ticket', panel: 'conversation',
+      selectedTicketId: 'gone-ticket', panel: 'conversation', splitterRatio: 32,
     });
     expect(first?.revision).toBe(1);
     const concurrent = await reposA.operatorWorkspace.saveWorkspaceState({
       expectedRevision: 1, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'two',
-      selectedTicketId: null, panel: 'conversation',
+      selectedTicketId: null, panel: 'conversation', splitterRatio: 32,
     });
     expect(concurrent?.revision).toBe(2);
     expect(await reposA.operatorWorkspace.clearSelectedTicketIfVersion('gone-ticket', 1)).toBeNull();

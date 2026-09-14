@@ -1,10 +1,17 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory, KnowledgeDoc } from '../types';
-import { Plus, Folder, FileText, Trash2, ChevronRight, ChevronDown } from 'lucide-react';
+import {
+  IconPlus,
+  IconFolder,
+  IconFileLines,
+  IconTrash,
+  IconChevronRight,
+  IconChevronDown
+} from '@luminatick/ui/icons';
 
 interface CategoryNode extends KnowledgeCategory {
   children: CategoryNode[];
@@ -149,66 +156,66 @@ export const KnowledgePage: React.FC = () => {
     const isSelected = selectedCategoryId === node.id;
 
     return (
-      <div key={node.id} className="w-full">
+      <div key={node.id} className="tocyn-knowledge-category-node">
         <div
-          className={`flex items-center justify-between py-1.5 px-2 rounded-md cursor-pointer group ${
-            isSelected ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'
+          className={`tocyn-knowledge-category-row ${
+            isSelected ? 'tocyn-knowledge-category-row-selected' : 'tocyn-knowledge-category-row-inactive'
           }`}
           style={{ paddingLeft: `${depth * 1.5 + 0.5}rem` }}
         >
-          <div className="flex items-center space-x-2 flex-1 min-w-0">
+          <div className="tocyn-knowledge-category-main">
             {node.children.length > 0 ? (
-              <TocynButton
+              <ParkButton
                 aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`} aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
-                className="p-0.5 hover:bg-gray-200 rounded text-gray-400"
+                className="tocyn-knowledge-category-toggle"
               >
-                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </TocynButton>
+                {isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+              </ParkButton>
             ) : (
-              <span className="w-[18px]"></span>
+              <span className="tocyn-knowledge-category-spacer"></span>
             )}
-            <TocynButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className="flex flex-1 min-w-0 items-center gap-2 text-left">
-            <Folder size={14} className={isSelected ? 'text-indigo-500' : 'text-gray-400'} />
-            <span className="truncate text-sm">{node.name}</span>
-            </TocynButton>
+            <ParkButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className="tocyn-knowledge-category-select">
+            <IconFolder size={14} className={isSelected ? 'tocyn-knowledge-category-icon-selected' : 'tocyn-knowledge-category-icon'} />
+            <span className="tocyn-knowledge-category-name">{node.name}</span>
+            </ParkButton>
           </div>
-          <div className="flex items-center space-x-1">
-            <TocynButton
+          <div className="tocyn-knowledge-category-actions">
+            <ParkButton
               onClick={(e) => {
                 e.stopPropagation();
                 setIsAddingCategory({ parentId: node.id });
                 setExpandedCategories(prev => new Set(prev).add(node.id));
               }}
-              className="p-1 hover:bg-gray-200 rounded text-gray-500"
+              className="tocyn-knowledge-category-add"
               title="Add Subcategory" aria-label={`Add subcategory to ${node.name}`}
             >
-              <Plus size={14} />
-            </TocynButton>
-            <TocynButton
+              <IconPlus size={14} />
+            </ParkButton>
+            <ParkButton
               onClick={(e) => {
                 e.stopPropagation();
                 confirmDeleteCategory(node.id, node.name, e.currentTarget);
               }}
-              className="p-1 hover:bg-red-100 rounded text-red-500"
+              className="tocyn-knowledge-category-delete"
               title="Delete Category" aria-label={`Delete category ${node.name}`}
             >
-              <Trash2 size={14} />
-            </TocynButton>
+              <IconTrash size={14} />
+            </ParkButton>
           </div>
         </div>
 
         {isExpanded && node.children.length > 0 && (
-          <div className="mt-1">
+          <div className="tocyn-knowledge-category-children">
             {node.children.map(child => renderCategoryNode(child, depth + 1))}
           </div>
         )}
 
         {isAddingCategory?.parentId === node.id && (
           <div
-            className="flex items-center py-1.5 px-2 mt-1"
+            className="tocyn-knowledge-category-add-row"
             style={{ paddingLeft: `${(depth + 1) * 1.5 + 0.5}rem` }}
           >
-            <TocynInput
+            <ParkInput
               aria-label={`New subcategory name for ${node.name}`}
               autoFocus
               type="text"
@@ -219,7 +226,7 @@ export const KnowledgePage: React.FC = () => {
                 if (e.key === 'Escape') setIsAddingCategory(null);
               }}
               onBlur={() => handleAddCategory(node.id)}
-              className="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2 w-full"
+              className="tocyn-form-control"
               placeholder="New category..."
             />
           </div>
@@ -233,55 +240,55 @@ export const KnowledgePage: React.FC = () => {
   );
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col bg-gray-50">
-      <div className="flex-none px-6 py-4 bg-white border-b border-gray-200 flex justify-between items-center">
-        <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Knowledge Base</h1>
-        <TocynButton
+    <div className="tocyn-knowledge-page">
+      <div className="tocyn-knowledge-header">
+        <h1 ref={heading} tabIndex={-1} className="tocyn-knowledge-title">Knowledge Base</h1>
+        <ParkButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+          className="tocyn-knowledge-new-button"
         >
-          <Plus size={16} className="mr-2" />
+          <IconPlus size={16} className="tocyn-knowledge-new-icon" />
           New Article
-        </TocynButton>
+        </ParkButton>
       </div>
 
       {error && (
-        <div className="m-4 bg-red-50 text-red-700 p-4 rounded-md flex-none">
+        <div className="tocyn-knowledge-error" role="alert">
           {error}
         </div>
       )}
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="tocyn-knowledge-workspace">
         {/* Sidebar */}
-        <div className="w-72 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
-          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Categories</h2>
-            <TocynButton
+        <div className="tocyn-knowledge-sidebar">
+          <div className="tocyn-knowledge-sidebar-header">
+            <h2 className="tocyn-knowledge-sidebar-title">Categories</h2>
+            <ParkButton
               onClick={() => setIsAddingCategory({ parentId: null })}
-              className="p-1 hover:bg-gray-100 rounded-md text-gray-500"
+              className="tocyn-knowledge-add-category"
               title="Add Root Category"
             >
-              <Plus size={16} />
-            </TocynButton>
+              <IconPlus size={16} />
+            </ParkButton>
           </div>
 
-          <div className="p-2">
-            <TocynButton aria-pressed={selectedCategoryId === null}
-              className={`flex w-full items-center py-1.5 px-2 rounded-md cursor-pointer mb-2 ${
-                selectedCategoryId === null ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'
+          <div className="tocyn-knowledge-sidebar-body">
+            <ParkButton aria-pressed={selectedCategoryId === null}
+              className={`tocyn-knowledge-all-articles ${
+                selectedCategoryId === null ? 'tocyn-knowledge-all-articles--active' : ''
               }`}
               onClick={() => setSelectedCategoryId(null)}
             >
-              <FileText size={16} className="mr-2 text-gray-400" />
-              <span className="text-sm font-medium">All Articles</span>
-            </TocynButton>
+              <IconFileLines size={16} className="tocyn-knowledge-all-icon" />
+              <span>All Articles</span>
+            </ParkButton>
 
-            <div className="space-y-1">
+            <div className="tocyn-knowledge-category-list">
               {categories.map(root => renderCategoryNode(root))}
 
               {isAddingCategory?.parentId === null && (
-                <div className="flex items-center py-1.5 px-2 pl-6 mt-1">
-                  <TocynInput
+                <div className="tocyn-knowledge-category-add-row-root">
+                  <ParkInput
                     aria-label="New root category name"
                     autoFocus
                     type="text"
@@ -292,7 +299,7 @@ export const KnowledgePage: React.FC = () => {
                       if (e.key === 'Escape') setIsAddingCategory(null);
                     }}
                     onBlur={() => handleAddCategory(null)}
-                    className="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2 w-full"
+                    className="tocyn-knowledge-category-add-input"
                     placeholder="New category..."
                   />
                 </div>
@@ -302,58 +309,54 @@ export const KnowledgePage: React.FC = () => {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+        <div className="tocyn-knowledge-content">
+          <div className="tocyn-knowledge-table-shell">
+            <table className="tocyn-knowledge-table">
+              <thead className="tocyn-knowledge-table-head">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tier</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th>Title</th><th>Status</th><th>Tier</th><th>Created</th><th className="tocyn-knowledge-table-actions-heading">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="tocyn-knowledge-table-body">
                 {filteredDocs.map((doc) => (
                   <tr
                     key={doc.id}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className="tocyn-knowledge-table-row"
                     onClick={() => navigate(`/knowledge/edit/${doc.id}`)}
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">{doc.title}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        doc.status === 'active' ? 'bg-green-100 text-green-800' :
-                        doc.status === 'processing' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                    <td className="tocyn-knowledge-cell-title">{doc.title}</td>
+                    <td className="tocyn-knowledge-cell-muted">
+                      <span className={`tocyn-knowledge-status-badge ${
+                        doc.status === 'active' ? 'tocyn-knowledge-status-active' :
+                        doc.status === 'processing' ? 'tocyn-knowledge-status-processing' : 'tocyn-knowledge-status-error'
                       }`}>
                         {doc.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        doc.tier === 'sop' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                    <td className="tocyn-knowledge-cell-muted">
+                      <span className={`tocyn-knowledge-status-badge ${
+                        doc.tier === 'sop' ? 'tocyn-knowledge-tier-sop' : 'tocyn-knowledge-tier-answer'
                       }`}>
                         {doc.tier === 'sop' ? 'SOP' : 'Answer'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="tocyn-knowledge-cell-muted">
                       {new Date(doc.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <TocynButton
+                    <td className="tocyn-knowledge-cell-actions">
+                      <ParkButton
                         onClick={(e) => confirmDeleteDoc(doc.id, doc.title, e)}
-                        className="text-red-600 hover:text-red-900"
+                        className="tocyn-knowledge-delete"
                       >
                         Delete
-                      </TocynButton>
+                      </ParkButton>
                     </td>
                   </tr>
                 ))}
                 {filteredDocs.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
-                      No articles found in this category.
+                    <td colSpan={5}>
+                      <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false} className="tocyn-knowledge-empty-state" />
                     </td>
                   </tr>
                 )}
@@ -366,23 +369,23 @@ export const KnowledgePage: React.FC = () => {
       {deleteStatus && <p role="status">{deleteStatus}</p>}
       <TocynDialog open={deleteConfirm.isOpen} busy={deleting} labelledBy={deleteTitleId} initialFocusEl={() => deleteCancel.current}
         finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} onOpenChange={next => { if (!next) closeDelete(); }}>
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl">
-            <h3 id={deleteTitleId} className="text-lg font-medium text-gray-900 mb-4">Confirm Deletion</h3>
-            <p className="text-sm text-gray-500 mb-6">{deleteConfirm.title}</p>
-            {deleteError && <p role="alert" className="mb-4 text-red-700">{deleteError}</p>}
-            <div className="flex justify-end space-x-3">
-              <TocynButton
+          <div className="tocyn-knowledge-delete-dialog">
+            <h3 id={deleteTitleId} className="tocyn-knowledge-delete-title">Confirm Deletion</h3>
+            <p className="tocyn-knowledge-delete-copy">{deleteConfirm.title}</p>
+            {deleteError && <p role="alert" className="tocyn-knowledge-delete-error">{deleteError}</p>}
+            <div className="tocyn-knowledge-delete-actions">
+              <ParkButton
                 ref={deleteCancel} disabled={deleting} onClick={closeDelete}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="tocyn-knowledge-delete-cancel"
               >
                 Cancel
-              </TocynButton>
-              <TocynButton
+              </ParkButton>
+              <ParkButton
                 disabled={deleting} onClick={executeDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                className="tocyn-knowledge-delete-confirm"
               >
                 Delete
-              </TocynButton>
+              </ParkButton>
             </div>
           </div>
       </TocynDialog>

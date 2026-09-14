@@ -1,5 +1,6 @@
 import { Component, createRef, Suspense, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
+import { ParkEmptyState } from '@luminatick/ui/park';
 
 interface RouteLoadBoundaryProps { children: ReactNode; reloadHref: string; }
 class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, { failed: boolean }> {
@@ -8,10 +9,10 @@ class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, { failed: bool
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidCatch() { this.heading.current?.focus(); }
   render() {
-    if (this.state.failed) return <section role="alert" className="p-6 space-y-3">
-      <h1 ref={this.heading} tabIndex={-1} className="text-lg font-semibold">This page could not be loaded</h1>
+    if (this.state.failed) return <section role="alert" className="tocyn-portal-route-error">
+      <h1 ref={this.heading} tabIndex={-1} className="tocyn-portal-route-error-title">This page could not be loaded</h1>
       <p>Your sign-in has not been changed. Reload the page to try again.</p>
-      <a href={this.props.reloadHref} className="inline-flex min-h-11 items-center px-3 py-2 underline focus-visible:outline focus-visible:outline-2">Reload this page</a>
+      <a href={this.props.reloadHref} className="tocyn-portal-route-reload">Reload this page</a>
     </section>;
     return this.props.children;
   }
@@ -21,6 +22,6 @@ class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, { failed: bool
 export function RouteContent({ children }: { children: ReactNode }) {
   const location = useLocation();
   return <RouteLoadBoundary key={location.pathname} reloadHref={location.pathname + location.search}>
-    <Suspense fallback={<p role="status" className="p-6">Loading page…</p>}>{children}</Suspense>
+    <Suspense fallback={<ParkEmptyState role="status" title="Loading page…" headingLevel={false} aria-busy="true" className="tocyn-portal-route-loading" />}>{children}</Suspense>
   </RouteLoadBoundary>;
 }

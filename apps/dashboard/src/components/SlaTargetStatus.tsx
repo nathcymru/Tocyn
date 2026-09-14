@@ -23,5 +23,5 @@ export function slaTargetLabel(target: SlaTarget) {
 }
 
 export function SlaTargetStatus({ target }: { target: SlaTarget }) {
-  return <span className={target.state === 'breached' ? 'text-[var(--tocyn-sla-breach-text)]' : 'text-slate-600'}>{slaTargetLabel(target)}</span>;
+  return <span className={target.state === 'breached' ? 'tocyn-sla-target-breached' : 'tocyn-sla-target-on-track'}>{slaTargetLabel(target)}</span>;
 }

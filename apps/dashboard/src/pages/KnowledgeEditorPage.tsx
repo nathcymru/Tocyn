@@ -1,11 +1,10 @@
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput, ParkSelect } from '@luminatick/ui/park';
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory } from '../types';
-import MDEditor from '@uiw/react-md-editor';
-import rehypeSanitize from 'rehype-sanitize';
-import { ArrowLeft, Save } from 'lucide-react';
+import { TiptapMarkdownField } from '../components/RichComposer';
+import { ArrowLeft, FloppyDisk, SpinnerGap } from '@phosphor-icons/react';
 
 export const KnowledgeEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -148,108 +147,100 @@ export const KnowledgeEditorPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="tocyn-knowledge-editor">
       {/* Header */}
-      <div className="flex-none px-6 py-4 bg-white border-b border-gray-200 flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <TocynButton
+      <div className="tocyn-knowledge-editor-header">
+        <div className="tocyn-knowledge-editor-heading">
+          <ParkButton
             onClick={() => navigate('/knowledge')}
             aria-label="Back to knowledge base"
             disabled={isSaving || !editorReady}
-            className="text-gray-500 hover:text-gray-700"
+            className="tocyn-knowledge-editor-back"
           >
-            <ArrowLeft size={20} />
-          </TocynButton>
-          <h1 className="text-xl font-bold text-gray-900">
+            <ArrowLeft size={20} weight="duotone" aria-hidden="true" />
+          </ParkButton>
+          <h1 className="tocyn-knowledge-editor-title">
             {id ? 'Edit Article' : 'New Article'}
           </h1>
         </div>
 
-        <TocynButton
+        <ParkButton
           onClick={handleSave}
           disabled={isSaving || !editorReady}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+          className="tocyn-knowledge-editor-save"
         >
           {isSaving ? (
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <SpinnerGap className="tocyn-knowledge-editor-spinner" size={18} weight="duotone" aria-hidden="true" />
           ) : (
-            <Save size={16} className="mr-2" />
+            <FloppyDisk size={16} weight="duotone" aria-hidden="true" className="tocyn-knowledge-editor-save-icon" />
           )}
           {isSaving ? 'Processing...' : 'Save Article'}
-        </TocynButton>
+        </ParkButton>
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <div className="tocyn-knowledge-editor-content">
+        <div className="tocyn-knowledge-editor-stack">
           {error && (
-            <div id={errorId} role="alert" className="bg-red-50 text-red-700 p-4 rounded-md">
-              {error}
-            </div>
+            <ParkEmptyState
+              id={errorId}
+              role="alert"
+              title="Article editor unavailable."
+              description={error}
+              headingLevel={false}
+              className="tocyn-knowledge-editor-error"
+            />
           )}
 
-          <div className="bg-white shadow rounded-lg p-6 border border-gray-200 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label htmlFor={titleId} className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                <TocynInput
+          <div className="tocyn-knowledge-editor-card">
+            <div className="tocyn-knowledge-editor-fields">
+              <div className="tocyn-knowledge-editor-title-field tocyn-form-field">
+                <label htmlFor={titleId}>Title *</label>
+                <ParkInput
                   id={titleId}
                   type="text"
                   value={title}
                   disabled={isSaving || !editorReady}
                   onChange={e => setTitle(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="tocyn-form-control tocyn-knowledge-editor-control"
                   placeholder="e.g., How to reset your password"
                   required
                 />
               </div>
 
-              <div>
-                <label htmlFor={categoryIdInput} className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <TocynSelect
+              <div className="tocyn-form-field">
+                <label htmlFor={categoryIdInput}>Category</label>
+                <ParkSelect
                   id={categoryIdInput}
                   value={categoryId}
                   disabled={isSaving || !editorReady}
                   onChange={e => setCategoryId(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="tocyn-form-control tocyn-knowledge-editor-control"
                 >
                   <option value="">No Category (Root)</option>
                   {renderCategoryOptions(categories)}
-                </TocynSelect>
+                </ParkSelect>
               </div>
 
-              <div>
-                <label htmlFor={tierId} className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
-                <TocynSelect
+              <div className="tocyn-form-field">
+                <label htmlFor={tierId}>Tier</label>
+                <ParkSelect
                   id={tierId}
                   value={tier}
                   disabled={isSaving || !editorReady}
                   onChange={e => setTier(e.target.value as 'answer' | 'sop')}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="tocyn-form-control tocyn-knowledge-editor-control"
                 >
                   <option value="answer">Customer Facing Answer</option>
                   <option value="sop">Internal SOP (Standard Operating Procedure)</option>
-                </TocynSelect>
+                </ParkSelect>
               </div>
             </div>
 
-            <div>
-              <label htmlFor={contentId} className="block text-sm font-medium text-gray-700 mb-1">Content (Markdown)</label>
-              <div data-color-mode="light" aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
-                <MDEditor
-                  value={content}
-                  onChange={val => { if (!savingRef.current && editorReady) setContent(val || ''); }}
-                  height={500}
-                  preview="edit"
-                  className="w-full"
-                  textareaProps={{ id: contentId, readOnly: isSaving || !editorReady, 'aria-describedby': error ? errorId : undefined }}
-                  previewOptions={{
-                    rehypePlugins: [[rehypeSanitize]]
-                  }}
-                />
+            <div className="tocyn-form-field">
+              <label htmlFor={contentId}>Content (Markdown)</label>
+              <div aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
+                <TiptapMarkdownField key={`${routeKey}-${editorReady ? 'ready' : 'loading'}`} id={contentId} value={content} readOnly={isSaving || !editorReady} ariaDescribedBy={error ? errorId : undefined} onChange={value => { if (!savingRef.current && editorReady) setContent(value); }} />
               </div>
             </div>
           </div>

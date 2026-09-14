@@ -1,6 +1,11 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useEffect, useState, useRef } from 'react';
-import { AlertCircle, Loader2, Save, Shield } from 'lucide-react';
+import {
+  IconCircleExclamation,
+  IconSpinner,
+  IconFloppyDisk,
+  IconShieldHalved
+} from '@luminatick/ui/icons';
 import { dashboardApi } from '../api/client';
 
 type Capability = {
@@ -79,37 +84,37 @@ export function AgentPermissionsPage() {
 
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8 flex items-center justify-between gap-4">
+    <div className="tocyn-permissions-page">
+      <div className="tocyn-permissions-header">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><Shield className="w-6 h-6 text-brand-600" /> Agent permissions</h1>
-          <p className="text-slate-500 mt-1">Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
+          <h1 className="tocyn-permissions-title"><IconShieldHalved className="tocyn-permissions-title-icon" /> Agent permissions</h1>
+          <p className="tocyn-permissions-description">Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
         </div>
-        <TocynButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className="min-h-11 flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save changes
-        </TocynButton>
+        <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className="tocyn-permissions-save">
+          {saving ? <IconSpinner className="tocyn-permissions-save-icon" /> : <IconFloppyDisk className="tocyn-permissions-save-icon" />} Save changes
+        </ParkButton>
       </div>
 
-      <p role="status" aria-live="polite" className="mb-4 text-sm text-slate-700">{loading ? 'Loading permissions…' : status}</p>
-      {error && <div role="alert" className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-3"><AlertCircle className="w-5 h-5 shrink-0" /><p className="text-sm font-medium">{error}</p><TocynButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className="min-h-11 rounded px-3 underline focus-visible:outline focus-visible:outline-2">Reload permissions</TocynButton></div>}
+      {loading ? <ParkEmptyState title="Loading permissions…" headingLevel={false} aria-busy="true" className="tocyn-permissions-loading" /> : <p role="status" aria-live="polite" className="tocyn-permissions-status">{status}</p>}
+      {error && <div role="alert" className="tocyn-permissions-error"><IconCircleExclamation className="tocyn-permissions-error-icon" /><p className="tocyn-permissions-error-message">{error}</p><ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className="tocyn-permissions-retry">Reload permissions</ParkButton></div>}
 
-      <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-200">
-        {capabilities.map(capability => {
+      <div className="tocyn-permissions-list">
+        {capabilities.length === 0 && !loading ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className="tocyn-permissions-empty" /> : capabilities.map(capability => {
           const tenantManaged = capability.key !== capability.capability;
           const available = capability.ownerAllowed && capability.roleAllowed && tenantManaged;
           const checked = policies[capability.key] ?? false;
           const descriptionId = `capability-${capability.capability}-description`;
           return (
-            <div key={capability.capability} className="p-6 flex items-center justify-between gap-6">
-              <div>
-                <h2 className="text-sm font-medium text-slate-900">{capability.label}</h2>
-                <p id={descriptionId} className="text-sm text-slate-500 mt-1">{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
-                {!available && <p className="text-sm text-slate-600 mt-1">Managed by the deployment owner; this tenant cannot enable it.</p>}
+            <div key={capability.capability} className="tocyn-permission-row">
+              <div className="tocyn-permission-content">
+                <h2 className="tocyn-permission-label">{capability.label}</h2>
+                <p id={descriptionId} className="tocyn-permission-description">{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
+                {!available && <p className="tocyn-permission-unavailable">Managed by the deployment owner; this tenant cannot enable it.</p>}
               </div>
-              <label className={`relative inline-flex min-h-11 min-w-11 items-center ${available ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
-                <span className="sr-only">Allow agents to use {capability.label}</span>
-                <TocynInput type="checkbox" className="sr-only peer" checked={checked} disabled={!available} aria-disabled={!available || saving || loading || revision === null} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
-                <span aria-hidden="true" className="relative block w-11 h-6 bg-slate-500 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-blue-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
+              <label className={`tocyn-permission-toggle ${available ? 'tocyn-permission-toggle--available' : 'tocyn-permission-toggle--disabled'}`}>
+                <span className="tocyn-visually-hidden">Allow agents to use {capability.label}</span>
+                <ParkInput type="checkbox" className="tocyn-visually-hidden tocyn-toggle-input" checked={checked} disabled={!available} aria-disabled={!available || saving || loading || revision === null} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
+                <span aria-hidden="true" className="tocyn-permission-switch" />
               </label>
             </div>
           );

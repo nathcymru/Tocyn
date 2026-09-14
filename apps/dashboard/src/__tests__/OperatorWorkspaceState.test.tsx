@@ -8,7 +8,7 @@ const user = (id = 'operator', tenant_id = 'tenant-a') => ({ id, tenant_id, emai
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 const stored = (revision = 7, listQuery = 'saved query'): WorkspacePreference => ({
-  revision, view: 'mine', sort: 'created_asc', filters: { status: 'pending', groupId: 'group-a' }, listQuery, listAnchor: 'page:3', selectedTicketId: null, panel: 'details', updatedAt: '2026-09-11T00:00:00Z',
+  revision, view: 'mine', sort: 'created_asc', filters: { status: 'pending', groupId: 'group-a' }, listQuery, listAnchor: 'page:3', selectedTicketId: null, panel: 'details', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z',
 });
 let workspace!: ReturnType<typeof useOperatorWorkspaceState>;
 function Harness() {
@@ -39,7 +39,7 @@ it('restores server preferences, preserves unmodified fields, and serializes lat
   const saving = workspace.saveNow();
   await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2));
   expect(JSON.parse(String((vi.mocked(fetch).mock.calls[1]?.[1] as RequestInit).body))).toEqual({
-    expectedRevision: 7, view: 'mine', sort: 'created_asc', filters: { status: 'pending', groupId: 'group-a' }, listQuery: 'updated query', listAnchor: 'page:4', selectedTicketId: null, panel: 'details',
+    expectedRevision: 7, view: 'mine', sort: 'created_asc', filters: { status: 'pending', groupId: 'group-a' }, listQuery: 'updated query', listAnchor: 'page:4', selectedTicketId: null, panel: 'details', splitterRatio: 32,
   });
   act(() => workspace.update({ filters: { status: 'pending', groupId: 'group-a', filterId: 'filter-a' } }));
   await act(async () => { firstSave.resolve(json(first)); await saving; });
@@ -72,8 +72,8 @@ it('keeps local state on CAS conflict until an explicit server restore', async (
 });
 
 it('retains selected ticket and list state across workspace conflict until explicit restore', async() => {
-  const localRestore = { revision: 6, view: 'mine', sort: 'created_desc', filters: { status: 'pending' }, listQuery: 'shared query', listAnchor: 'page:2', selectedTicketId: 'ticket-7', panel: 'conversation', updatedAt: '2026-09-11T00:00:00Z' };
-  const remoteRestore = { revision: 11, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'restored query', listAnchor: 'page:1', selectedTicketId: 'ticket-20', panel: 'conversation', updatedAt: '2026-09-11T00:02:00Z' };
+  const localRestore = { revision: 6, view: 'mine', sort: 'created_desc', filters: { status: 'pending' }, listQuery: 'shared query', listAnchor: 'page:2', selectedTicketId: 'ticket-7', panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z' };
+  const remoteRestore = { revision: 11, view: 'all', sort: 'updated_desc', filters: {}, listQuery: 'restored query', listAnchor: 'page:1', selectedTicketId: 'ticket-20', panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-11T00:02:00Z' };
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(localRestore)).mockResolvedValueOnce(json({ error: 'Conflict' }, 409)).mockResolvedValueOnce(json(remoteRestore)));
   render(<Harness />);
   await waitFor(() => expect(current().status).toBe('restored'));

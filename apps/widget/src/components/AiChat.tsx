@@ -1,4 +1,4 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState, useRef, useEffect } from 'react';
 
@@ -96,18 +96,18 @@ const AiChat: React.FC<Props> = ({ config }) => {
   };
 
   return (
-    <div className="flex flex-col h-[400px]">
-      <div role="log" aria-label="AI conversation" aria-relevant="additions" className="flex-1 overflow-y-auto space-y-4 mb-4 pr-1 scrollbar-thin scrollbar-thumb-gray-200">
+    <div className="tocyn-widget-ai-chat">
+      <div role="log" aria-label="AI conversation" aria-relevant="additions" className="tocyn-widget-ai-messages">
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`tocyn-widget-ai-message-row ${msg.role === 'user' ? 'tocyn-widget-ai-message-row--user' : ''}`}
           >
             <div
-              className={`max-w-[85%] px-3 py-2 rounded-lg text-sm break-words whitespace-pre-wrap ${
+              className={`tocyn-widget-ai-message ${
                 msg.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                  ? 'tocyn-widget-ai-message--user'
+                  : 'tocyn-widget-ai-message--assistant'
               }`}
             >
               {msg.content}
@@ -115,12 +115,12 @@ const AiChat: React.FC<Props> = ({ config }) => {
           </div>
         ))}
         {isLoading && (
-          <div role="status" aria-label="Waiting for AI response" className="flex justify-start">
-            <div className="bg-gray-100 px-3 py-2 rounded-lg rounded-bl-none">
-              <div aria-hidden="true" className="flex space-x-1">
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animationDelay: '300ms' }}></div>
+          <div role="status" aria-label="Waiting for AI response" className="tocyn-widget-ai-waiting">
+            <div className="tocyn-widget-ai-waiting-bubble">
+              <div aria-hidden="true" className="tocyn-widget-ai-dots">
+                <div className="tocyn-widget-ai-dot" style={{ animationDelay: '0ms' }}></div>
+                <div className="tocyn-widget-ai-dot" style={{ animationDelay: '150ms' }}></div>
+                <div className="tocyn-widget-ai-dot" style={{ animationDelay: '300ms' }}></div>
               </div>
             </div>
           </div>
@@ -128,29 +128,29 @@ const AiChat: React.FC<Props> = ({ config }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {error && <p role="alert" className="text-red-700 text-sm mb-2">{error}</p>}
-      <form onSubmit={handleSend} aria-label="Ask AI support" aria-busy={isLoading} className="flex gap-2">
-        <TocynInput
+      {error && <p role="alert" className="tocyn-widget-ai-error">{error}</p>}
+      <form onSubmit={handleSend} aria-label="Ask AI support" aria-busy={isLoading} className="tocyn-widget-ai-composer">
+        <ParkInput
           ref={inputRef}
           aria-label="Your question"
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your question..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
+          className="tocyn-form-control tocyn-widget-chat-input"
           disabled={isLoading}
         />
-        <TocynButton
+        <ParkButton
           aria-label="Send question"
           type="submit"
           disabled={isLoading || !input.trim()}
-          className="p-2 rounded text-white flex items-center justify-center disabled:opacity-50 transition-colors"
+          className="tocyn-widget-ai-send"
           style={{ backgroundColor: config.primaryColor }}
         >
-          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="tocyn-widget-ai-send-icon" viewBox="0 0 20 20" fill="currentColor">
             <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
           </svg>
-        </TocynButton>
+        </ParkButton>
       </form>
     </div>
   );

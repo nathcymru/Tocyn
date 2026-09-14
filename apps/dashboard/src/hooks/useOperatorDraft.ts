@@ -146,7 +146,18 @@ function createController(identity: string | null, ticketId: string | null) {
     const requestEpoch = epoch;
     const failed = () => state.status === 'error' || state.status === 'conflict';
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (!isCurrent(requestEpoch) || !known || restoring || deleting || rebasing || state.status === 'conflict' || !withinBounds(state)) return false;
+      // A pristine draft has nothing to flush. Allow navigation while its
+      // initial read is still in flight; the controller is fenced on unmount,
+      // so the late response cannot leak into the next ticket identity. An
+      // edit made before restore remains blocked until its CAS base is known.
+      // A failed restore is an unresolved authority/read failure even when
+      // there is no local edit. Navigation must keep the caller on this
+      // ticket until the user explicitly retries and obtains a valid base.
+      if (!isCurrent(requestEpoch) || deleting || rebasing || failed() || !withinBounds(state)) return false;
+      if (!known || restoring) {
+        if (!dirty) return true;
+        return false;
+      }
       if (!dirty && !saving) return true;
       await saveNow();
       if (!isCurrent(requestEpoch) || failed()) return false;

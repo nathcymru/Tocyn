@@ -3,7 +3,7 @@ import { OperatorCapacityPanel } from '../capacity/OperatorCapacityPanel';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
@@ -22,7 +22,7 @@ import {
   Bell,
   ChevronDown,
   RefreshCw,
-} from 'lucide-react';
+} from '../icons';
 import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
@@ -52,6 +52,19 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
   const [capacityOpen,setCapacityOpen]=useState(false);
   const capacityClose=useRef<HTMLButtonElement>(null);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      restoreAccountFocus.current = true;
+      setIsOpen(false);
+      requestAnimationFrame(() => trigger.current?.focus());
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen]);
+
   const handleLogout = async () => {
     if (loggingOut.current) return;
     loggingOut.current = true;
@@ -65,45 +78,45 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
 
   return (
     <>
-    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} initialFocusEl={() => securityProfile.current} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
-    <div className="relative mt-2">
+    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} initialFocusEl={() => securityProfile.current} finalFocusEl={() => trigger.current} lazyMount unmountOnExit>
+    <div className="tocyn-shell-account-wrapper">
       <Popover.Trigger asChild>
-      <TocynButton
+      <ParkButton
         type="button"
         ref={trigger}
         aria-label="Account options"
         aria-expanded={isOpen}
         aria-controls={disclosureId}
         title={user?.full_name || 'User'}
-        className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold border border-slate-600 hover:ring-2 hover:ring-brand-500 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className="tocyn-shell-account-trigger"
       >
         {user?.full_name?.[0] || 'A'}
-      </TocynButton></Popover.Trigger>
+      </ParkButton></Popover.Trigger>
 
       <Popover.Positioner>
-        <Popover.Content aria-label="Account options" data-tocyn-inverse="" className="w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
-          <div className="px-4 py-2 border-b border-slate-700">
-            <p className="text-sm font-medium text-white truncate">{user?.full_name}</p>
-            <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+        <Popover.Content aria-label="Account options" data-tocyn-inverse="" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); restoreAccountFocus.current = true; setIsOpen(false); requestAnimationFrame(() => trigger.current?.focus()); } }} className="tocyn-shell-account-popover">
+          <div className="tocyn-shell-account-summary">
+            <p className="tocyn-shell-account-name">{user?.full_name}</p>
+            <p className="tocyn-shell-account-email">{user?.email}</p>
           </div>
           <Link
             ref={securityProfile}
             to="/profile/security"
-            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); }}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); setTimeout(() => navigationFocus()?.focus(), 50); }}
+            className="tocyn-shell-account-action"
           >
-            <Key className="w-4 h-4" />
+            <Key className="tocyn-shell-small-icon" />
             Security Profile
           </Link>
-          <TocynButton
+          <ParkButton
             onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+            className="tocyn-shell-account-action tocyn-shell-account-action-full"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="tocyn-shell-small-icon" />
             Sign out of all sessions
-          </TocynButton>
-          <TocynButton type="button" aria-haspopup="dialog" onClick={()=>{restoreAccountFocus.current=false;setIsOpen(false);setCapacityOpen(true);}}
-            className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Current work</TocynButton>
+          </ParkButton>
+          <ParkButton type="button" aria-haspopup="dialog" onClick={()=>{restoreAccountFocus.current=false;setIsOpen(false);setCapacityOpen(true);}}
+            className="tocyn-shell-account-action tocyn-shell-account-action-left">Current work</ParkButton>
           <OperatorThemeControl />
           <OperatorPreferencesControl />
         </Popover.Content>
@@ -112,10 +125,10 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
     </Popover.Root>
     <TocynDialog open={capacityOpen} onOpenChange={setCapacityOpen} labelledBy={capacityTitleId}
       initialFocusEl={()=>capacityClose.current} finalFocusEl={()=>trigger.current}>
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border bg-white p-6 text-slate-900 shadow-xl">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 id={capacityTitleId} className="text-xl font-bold">Current work</h2>
-          <TocynButton ref={capacityClose} type="button" onClick={()=>setCapacityOpen(false)} className="rounded border px-3 py-2">Close current work</TocynButton>
+      <div className="tocyn-shell-capacity-dialog">
+        <div className="tocyn-shell-dialog-header">
+          <h2 id={capacityTitleId} className="tocyn-shell-dialog-title">Current work</h2>
+          <ParkButton ref={capacityClose} type="button" onClick={()=>setCapacityOpen(false)} className="tocyn-shell-dialog-close">Close current work</ParkButton>
         </div>
         {capacityOpen&&user?.id&&<OperatorCapacityPanel userId={user.id}/>}
       </div>
@@ -128,12 +141,12 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   const location = useLocation();
   const labelled = useOperatorPreferencesContext().navigation === 'labelled';
   return (
-        <div className="flex flex-col h-full items-center py-4">
-          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="w-11 h-11 rounded-xl flex items-center justify-center mb-8 hover:bg-slate-700 transition-colors">
-            <ProductLogo compact decorative className="w-10 h-10 object-contain" />
+        <div className="tocyn-shell-sidebar">
+          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="tocyn-shell-logo-link">
+            <ProductLogo compact decorative className="tocyn-shell-logo" />
           </Link>
 
-          <nav aria-label="Workspace navigation" className="flex-1 w-full px-2 space-y-2">
+          <nav aria-label="Workspace navigation" className="tocyn-shell-navigation">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
               return (
@@ -145,32 +158,32 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
                   aria-current={isActive ? "page" : undefined}
                   onClick={onNavigate}
                   className={cn(
-                    labelled ? "flex min-h-11 items-center gap-3 w-full rounded-xl px-3 py-2 text-sm" : "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
+                    labelled ? "tocyn-shell-navigation-link-labelled" : "tocyn-shell-navigation-link-icon",
                     isActive
-                      ? "bg-slate-800 text-white shadow-inner"
-                      : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+                      ? "tocyn-shell-navigation-link-active"
+                      : "tocyn-shell-navigation-link-inactive"
                   )}
                 >
-                  <item.icon aria-hidden="true" className="w-6 h-6 shrink-0" />{labelled && <span>{item.name}</span>}
+                  <item.icon aria-hidden="true" className="tocyn-shell-navigation-icon" />{labelled && <span>{item.name}</span>}
                 </Link>
               );
             })}
           </nav>
 
-          <div className="w-full px-2 space-y-2 mt-auto pb-4 border-t border-slate-800/50 pt-4 flex flex-col items-center relative">
+          <div className="tocyn-shell-sidebar-footer">
             <Link
-              to="/settings"
+              to="/settings/general"
               title="Settings"
               aria-label="Settings"
               onClick={onNavigate}
               className={cn(
-                labelled ? "flex min-h-11 items-center gap-3 w-full rounded-xl px-3 py-2 text-sm" : "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
+                labelled ? "tocyn-shell-navigation-link-labelled" : "tocyn-shell-navigation-link-icon",
                 location.pathname.startsWith('/settings')
-                  ? "bg-slate-800 text-white shadow-inner"
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+                  ? "tocyn-shell-navigation-link-active"
+                  : "tocyn-shell-navigation-link-inactive"
               )}
             >
-              <Settings aria-hidden="true" className="w-6 h-6 shrink-0" />{labelled && <span>Settings</span>}
+              <Settings aria-hidden="true" className="tocyn-shell-navigation-icon" />{labelled && <span>Settings</span>}
             </Link>
 
             <UserMenu onNavigate={onNavigate} navigationFocus={navigationFocus} />
@@ -295,124 +308,124 @@ function LayoutContent() {
   const visibleActivityItems = activity?.page.items.filter(item => !item.dismissedAt) ?? [];
 
   return (
-    <div className={cn('flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
-      <aside data-tocyn-inverse="" className={cn('hidden lg:block shrink-0 bg-slate-900 border-r border-slate-800', preferences.navigation === 'labelled' ? 'w-52' : 'w-16')}>
+    <div className={cn('tocyn-shell-root', isInboxRoute ? 'tocyn-shell-root-inbox' : 'tocyn-shell-root-standard')}>
+      <aside data-tocyn-inverse="" className={cn('tocyn-shell-sidebar-desktop', preferences.navigation === 'labelled' ? 'tocyn-shell-sidebar-labelled' : 'tocyn-shell-sidebar-compact')}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
         <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
           labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
           finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
           data-tocyn-dialog-edge="" data-tocyn-inverse=""
-          className={cn('fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none overflow-y-auto border-0 bg-slate-900 text-white p-2 backdrop:bg-slate-900/50', preferences.navigation === 'labelled' ? 'w-56 max-w-[90vw]' : 'w-20')}>
-          <h2 id={`${mobileDialogId}-title`} className="sr-only">Navigation</h2>
-          <TocynButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
-            className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X aria-hidden="true" /></TocynButton>
-          <div className="h-[calc(100dvh-4rem)]"><SidebarContent navigationFocus={() => main.current} onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
+          className={cn('tocyn-shell-mobile-dialog', preferences.navigation === 'labelled' ? 'tocyn-shell-mobile-labelled' : 'tocyn-shell-mobile-compact')}>
+          <h2 id={`${mobileDialogId}-title`} className="tocyn-visually-hidden">Navigation</h2>
+          <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
+            className="tocyn-shell-mobile-close"><X aria-hidden="true" /></ParkButton>
+          <div className="tocyn-shell-mobile-content"><SidebarContent navigationFocus={() => main.current} onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
         </TocynDialog>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
-          <TocynButton
+      <div className="tocyn-shell-main">
+        <header className="tocyn-shell-header tocyn-shell-header">
+          <ParkButton
             type="button"
             ref={navigationTrigger}
             aria-label="Open navigation"
             aria-haspopup="dialog"
             aria-expanded={isSidebarOpen}
             aria-controls={mobileDialogId}
-            className="lg:hidden rounded p-2 text-slate-600 focus-visible:outline focus-visible:outline-2"
+            className="tocyn-shell-mobile-trigger"
             onClick={() => { restoreNavigationFocus.current = true; setIsSidebarOpen(true); }}
           >
-            <Menu className="w-6 h-6" />
-          </TocynButton>
+            <Menu className="tocyn-shell-menu-icon" />
+          </ParkButton>
 
           <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
 
           <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
             <Popover.Trigger asChild>
-              <TocynButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className="relative rounded p-2 text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2">
-                <Bell className="w-5 h-5" />
-                {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className="absolute right-0 top-0 min-w-4 rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white">{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
-              </TocynButton>
+              <ParkButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className="tocyn-shell-activity-trigger">
+                <Bell className="tocyn-shell-icon" />
+                {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className="tocyn-shell-activity-badge">{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
+              </ParkButton>
             </Popover.Trigger>
             <Popover.Positioner>
-              <Popover.Content aria-label="Activity" className="w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-                <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-bold text-slate-900">Activity</h2><TocynButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2">Refresh</TocynButton></div>
-                {activityUpdatesAvailable && <p role="status" className="p-2 text-sm">Updates available. Refresh to load current activity.</p>}
-                {activityError && <div role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900"><p>{activityError}</p><TocynButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="mt-2 rounded px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2">Retry loading activity</TocynButton></div>}
-                {activityLoading && !activity && <p role="status" className="p-2 text-sm text-slate-600">Loading durable activity…</p>}
-                {activity?.unread.status === 'unavailable' && <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">Unread count is temporarily unavailable. Your activity remains available below.</p>}
-                {activity && visibleActivityItems.length === 0 && <p className="p-2 text-sm text-slate-600">{activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'}</p>}
-                <ul aria-label="Durable activity" className="max-h-96 divide-y overflow-y-auto">
-                  {visibleActivityItems.map(item => <li key={item.id} className="flex gap-2 py-2">
-                    <TocynButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="min-w-0 flex-1 rounded p-1 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2">
-                      <p className="text-sm font-semibold text-slate-900">{item.kind.replace(/_/g, ' ')}</p>
-                      <p className="truncate text-xs font-medium text-slate-700">{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
-                      <p className="text-xs text-slate-600">Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
-                    </TocynButton>
-                    <TocynButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className="rounded p-1 text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2"><X className="h-4 w-4" /></TocynButton>
+              <Popover.Content aria-label="Activity" className="tocyn-shell-activity-popover">
+                <div className="tocyn-shell-activity-header"><h2 className="tocyn-shell-activity-title">Activity</h2><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className="tocyn-shell-activity-refresh">Refresh</ParkButton></div>
+                {activityUpdatesAvailable && <p role="status" className="tocyn-shell-activity-message">Updates available. Refresh to load current activity.</p>}
+                {activityError && <div role="alert" className="tocyn-shell-activity-warning"><p>{activityError}</p><ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="tocyn-shell-activity-retry">Retry loading activity</ParkButton></div>}
+                {activityLoading && !activity && <p role="status" className="tocyn-shell-activity-message tocyn-shell-activity-muted">Loading durable activity…</p>}
+                {activity?.unread.status === 'unavailable' && <p role="status" className="tocyn-shell-activity-warning">Unread count is temporarily unavailable. Your activity remains available below.</p>}
+                {activity && visibleActivityItems.length === 0 && <p className="tocyn-shell-activity-message tocyn-shell-activity-muted">{activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'}</p>}
+                <ul aria-label="Durable activity" className="tocyn-shell-activity-list">
+                  {visibleActivityItems.map(item => <li key={item.id} className="tocyn-shell-activity-row">
+                    <ParkButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="tocyn-shell-activity-item">
+                      <p className="tocyn-shell-activity-item-kind">{item.kind.replace(/_/g, ' ')}</p>
+                      <p className="tocyn-shell-activity-subject">{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
+                      <p className="tocyn-shell-activity-meta">Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
+                    </ParkButton>
+                    <ParkButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className="tocyn-shell-activity-dismiss"><X className="tocyn-shell-dismiss-icon" /></ParkButton>
                   </li>)}
                 </ul>
-                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="mt-2 text-sm text-slate-600">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
-                {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className="mt-2"><TocynButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className="w-full rounded px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2">{activityLoading ? 'Loading more activity…' : 'Load more activity'}</TocynButton></div>}
-                {activity && !activityLoading && visibleActivityItems.length > 0 && <p role="status" className="sr-only">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</p>}
+                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="tocyn-shell-activity-limit">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
+                {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className="tocyn-shell-activity-more-wrap"><ParkButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className="tocyn-shell-activity-more">{activityLoading ? 'Loading more activity…' : 'Load more activity'}</ParkButton></div>}
+                {activity && !activityLoading && visibleActivityItems.length > 0 && <p role="status" className="tocyn-visually-hidden">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</p>}
               </Popover.Content>
             </Popover.Positioner>
           </Popover.Root>
 
           {!isConnected && <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
-          <div className="flex items-center gap-4 relative">
+          <div className="tocyn-shell-connection-wrap">
             <Popover.Trigger asChild>
-            <TocynButton
+            <ParkButton
               type="button"
               ref={connectionTrigger}
               aria-expanded={showConnDetails}
               aria-controls={connectionId}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
+                "tocyn-shell-connection-button",
                 isConnected
-                  ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                  : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                  ? "tocyn-shell-connection-connected"
+                  : "tocyn-shell-connection-disconnected"
               )}
             >
-              <WifiOff className="w-3.5 h-3.5" />
+              <WifiOff className="tocyn-shell-small-icon" />
               <span>Disconnected</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showConnDetails && "rotate-180")} />
-            </TocynButton></Popover.Trigger>
+              <ChevronDown className={cn("tocyn-shell-chevron", showConnDetails && "rotate-180")} />
+            </ParkButton></Popover.Trigger>
 
             <Popover.Positioner>
-              <Popover.Content aria-label="Connection Status" className=" w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-slate-900">Connection Status</h3>
+              <Popover.Content aria-label="Connection Status" className="tocyn-shell-connection-popover">
+                <div className="tocyn-shell-connection-header">
+                  <h3 className="tocyn-shell-activity-title">Connection Status</h3>
                   <div className={cn(
-                    "w-2 h-2 rounded-full",
-                    isConnected ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500"
+                    "tocyn-shell-connection-dot",
+                    isConnected ? "tocyn-shell-connection-dot-connected" : "tocyn-palette-red-fill"
                   )} />
                 </div>
 
-                <p role="status" className="text-sm text-slate-600">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
+                <p role="status" className="tocyn-shell-connection-copy">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
 
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <TocynButton
+                <div className="tocyn-shell-reconnect-divider">
+                  <ParkButton
                     onClick={() => {
                       manualReconnect();
                       setShowConnDetails(false);
                       connectionTrigger.current?.focus();
                     }}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                    className="tocyn-shell-reconnect-button"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" />
+                    <RefreshCw className="tocyn-shell-small-icon" />
                     Force Reconnect
-                  </TocynButton>
+                  </ParkButton>
                 </div>
               </Popover.Content>
             </Popover.Positioner>
           </div>
           </Popover.Root>}
-          {connectionRecoveryMessage && <p role="status" aria-live="polite" className="sr-only">{connectionRecoveryMessage}</p>}
+          {connectionRecoveryMessage && <p role="status" aria-live="polite" className="tocyn-visually-hidden">{connectionRecoveryMessage}</p>}
         </header>
 
-        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('flex-1 min-h-0', isInboxRoute ? 'overflow-hidden' : 'overflow-auto', !location.pathname.startsWith('/settings') && !isInboxRoute && 'p-4 lg:p-8')}>
+        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('tocyn-shell-content', isInboxRoute ? 'tocyn-shell-content-inbox' : 'tocyn-shell-content-standard', !location.pathname.startsWith('/settings') && !isInboxRoute && 'tocyn-shell-content-padded')}>
           <Outlet />
         </main>
       </div>

@@ -300,6 +300,7 @@ export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION
     rows.push(`INSERT INTO tenant_config (tenant_id, key, value) VALUES (${sqlLiteral(tenantId)}, 'widget.public_key', ${sqlLiteral(fixtureWidgetKeys[tenantId])});`);
     rows.push(`INSERT INTO tenant_config (tenant_id, key, value) VALUES (${sqlLiteral(tenantId)}, 'PORTAL_URL', ${sqlLiteral('http://localhost:5174')});`);
   }
+  appendBeta2FixtureSql(rows, principals);
   return Object.freeze({
     sql: rows.join('\n'),
     credentials: Object.freeze(principalNames.map(name => {
@@ -312,6 +313,39 @@ export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION
       });
     })),
   });
+}
+
+function appendBeta2FixtureSql(rows: string[], principals: Record<PrincipalName, PrivatePrincipal>): void {
+  const literal = (value: string | number | null) => value === null ? 'NULL' : sqlLiteral(String(value));
+  const tickets = [
+    ['fixture-tenant-a', 'beta2-open-assigned', 'Beta 2 open assigned', 'open', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'web', null],
+    ['fixture-tenant-a', 'beta2-pending-unassigned', 'Beta 2 pending unassigned', 'pending', 'fixture-customer', principals.customerA.email, null, 'portal', null],
+    ['fixture-tenant-a', 'beta2-snoozed-assigned', 'Beta 2 snoozed assigned', 'open', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'web', null],
+    ['fixture-tenant-a', 'beta2-resolved', 'Beta 2 resolved', 'resolved', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'web', null],
+    ['fixture-tenant-a', 'beta2-email', 'Beta 2 email intake', 'open', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'email', 'support@synthetic.example.test'],
+    ['fixture-tenant-a', 'beta2-internal-attachment', 'Beta 2 internal note with attachment', 'open', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'web', null],
+    ['fixture-tenant-b', 'beta2-b-open-unassigned', 'Beta 2 tenant B open', 'open', 'fixture-customer', principals.customerB.email, null, 'portal', null],
+    ['fixture-tenant-b', 'beta2-b-email', 'Beta 2 tenant B email', 'pending', 'fixture-customer', principals.customerB.email, 'fixture-operator', 'email', 'billing@synthetic.example.test'],
+  ] as const;
+  for (const [tenantId, id, subject, status, customerId, customerEmail, assignedTo, source, sourceEmail] of tickets) {
+    rows.push(`INSERT INTO tickets (tenant_id,id,subject,status,customer_id,customer_email,assigned_to,source,source_email,created_at,updated_at) VALUES (${[tenantId,id,subject,status,customerId,customerEmail,assignedTo,source,sourceEmail,'2026-09-10T09:00:00.000Z','2026-09-10T09:30:00.000Z'].map(literal).join(',')});`);
+  }
+  const articles = [
+    ['fixture-tenant-a', 'beta2-article-open', 'beta2-open-assigned', 'fixture-customer', 'customer', 'I need help with my synthetic order.', 'plain', 0, 'web', null],
+    ['fixture-tenant-a', 'beta2-article-pending', 'beta2-pending-unassigned', 'fixture-customer', 'customer', 'Please confirm the next step.', 'plain', 0, 'portal', null],
+    ['fixture-tenant-a', 'beta2-article-snoozed', 'beta2-snoozed-assigned', 'fixture-operator', 'agent', 'Follow up requested after the customer review.', 'plain', 0, 'web', null],
+    ['fixture-tenant-a', 'beta2-article-resolved', 'beta2-resolved', 'fixture-operator', 'agent', 'Resolved with a synthetic replacement.', 'plain', 0, 'web', null],
+    ['fixture-tenant-a', 'beta2-article-email', 'beta2-email', 'fixture-customer', 'customer', 'Email body\n\nThank you for checking this.', 'plain', 0, 'email', 'beta2-email-raw'],
+    ['fixture-tenant-a', 'beta2-article-internal', 'beta2-internal-attachment', 'fixture-operator', 'agent', 'Internal handoff note for the synthetic case.', 'plain', 1, 'dashboard', null],
+    ['fixture-tenant-b', 'beta2-article-b-open', 'beta2-b-open-unassigned', 'fixture-customer', 'customer', 'Tenant B synthetic request.', 'plain', 0, 'portal', null],
+    ['fixture-tenant-b', 'beta2-article-b-email', 'beta2-b-email', 'fixture-customer', 'customer', 'Tenant B email body.', 'plain', 0, 'email', 'beta2-b-email-raw'],
+  ] as const;
+  for (const [tenantId,id,ticketId,senderId,senderType,body,bodyFormat,isInternal,intakeSource,rawEmailId] of articles) {
+    rows.push(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,body_format,is_internal,intake_source,raw_email_id,created_at) VALUES (${[tenantId,id,ticketId,senderId,senderType,body,bodyFormat,isInternal,intakeSource,rawEmailId,'2026-09-10T09:15:00.000Z'].map(literal).join(',')});`);
+  }
+  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-a','beta2-attachment-pdf','beta2-article-internal','order-summary.pdf',24576,'application/pdf','fixture-tenant-a/beta2-internal-attachment/order-summary.pdf','2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
+  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-b','beta2-attachment-image','beta2-article-b-email','invoice.png',8192,'image/png','fixture-tenant-b/beta2-b-email/invoice.png','2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
+  rows.push(`UPDATE ticket_support_state SET snoozed_until='2099-01-01T12:00:00.000Z',resurface_reason='manual' WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-snoozed-assigned';`);
 }
 
 async function seedPrincipals(db: D1Database, env: Env, principals: Record<PrincipalName, PrivatePrincipal>): Promise<void> {
@@ -347,6 +381,60 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
     await db.prepare('INSERT INTO tickets (tenant_id, id, subject, customer_id, customer_email, source) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(tenantId, id, subject, customerId, customerEmail, 'fixture').run();
   }
+
+  // Stable local-beta coverage data. Every row is synthetic and remains inside
+  // its tenant scope so the dashboard can exercise queue and timeline states.
+  const betaRows = [
+    ['fixture-tenant-a', 'beta2-open-assigned', 'Beta 2 open assigned', 'open', principals.customerA.localId, principals.customerA.email, principals.operatorA.localId, 'web', null],
+    ['fixture-tenant-a', 'beta2-pending-unassigned', 'Beta 2 pending unassigned', 'pending', principals.customerA.localId, principals.customerA.email, null, 'portal', null],
+    ['fixture-tenant-a', 'beta2-snoozed-assigned', 'Beta 2 snoozed assigned', 'open', principals.customerA.localId, principals.customerA.email, principals.operatorA.localId, 'web', null],
+    ['fixture-tenant-a', 'beta2-resolved', 'Beta 2 resolved', 'resolved', principals.customerA.localId, principals.customerA.email, principals.operatorA.localId, 'web', null],
+    ['fixture-tenant-a', 'beta2-email', 'Beta 2 email intake', 'open', principals.customerA.localId, principals.customerA.email, principals.operatorA.localId, 'email', 'support@synthetic.example.test'],
+    ['fixture-tenant-a', 'beta2-internal-attachment', 'Beta 2 internal note with attachment', 'open', principals.customerA.localId, principals.customerA.email, principals.operatorA.localId, 'web', null],
+    ['fixture-tenant-b', 'beta2-b-open-unassigned', 'Beta 2 tenant B open', 'open', principals.customerB.localId, principals.customerB.email, null, 'portal', null],
+    ['fixture-tenant-b', 'beta2-b-email', 'Beta 2 tenant B email', 'pending', principals.customerB.localId, principals.customerB.email, principals.operatorB.localId, 'email', 'billing@synthetic.example.test'],
+  ] as const;
+  for (const [tenantId, id, subject, status, customerId, customerEmail, assignedTo, source, sourceEmail] of betaRows) {
+    await db.prepare(`INSERT INTO tickets
+      (tenant_id, id, subject, status, customer_id, customer_email, assigned_to, source, source_email, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(tenantId, id, subject, status, customerId, customerEmail, assignedTo, source, sourceEmail,
+        '2026-09-10T09:00:00.000Z', '2026-09-10T09:30:00.000Z').run();
+  }
+
+  const articles = [
+    ['fixture-tenant-a', 'beta2-article-open', 'beta2-open-assigned', principals.customerA.localId, 'customer', 'I need help with my synthetic order.', 'plain', 0, 'web', null],
+    ['fixture-tenant-a', 'beta2-article-pending', 'beta2-pending-unassigned', principals.customerA.localId, 'customer', 'Please confirm the next step.', 'plain', 0, 'portal', null],
+    ['fixture-tenant-a', 'beta2-article-snoozed', 'beta2-snoozed-assigned', principals.operatorA.localId, 'agent', 'Follow up requested after the customer review.', 'plain', 0, 'web', null],
+    ['fixture-tenant-a', 'beta2-article-resolved', 'beta2-resolved', principals.operatorA.localId, 'agent', 'Resolved with a synthetic replacement.', 'plain', 0, 'web', null],
+    ['fixture-tenant-a', 'beta2-article-email', 'beta2-email', principals.customerA.localId, 'customer', 'Email body\n\nThank you for checking this.', 'plain', 0, 'email', 'beta2-email-raw'],
+    ['fixture-tenant-a', 'beta2-article-internal', 'beta2-internal-attachment', principals.operatorA.localId, 'agent', 'Internal handoff note for the synthetic case.', 'plain', 1, 'dashboard', null],
+    ['fixture-tenant-b', 'beta2-article-b-open', 'beta2-b-open-unassigned', principals.customerB.localId, 'customer', 'Tenant B synthetic request.', 'plain', 0, 'portal', null],
+    ['fixture-tenant-b', 'beta2-article-b-email', 'beta2-b-email', principals.customerB.localId, 'customer', 'Tenant B email body.', 'plain', 0, 'email', 'beta2-b-email-raw'],
+  ] as const;
+  for (const [tenantId, id, ticketId, senderId, senderType, body, bodyFormat, isInternal, intakeSource, rawEmailId] of articles) {
+    await db.prepare(`INSERT INTO articles
+      (tenant_id, id, ticket_id, sender_id, sender_type, body, body_format, is_internal, intake_source, raw_email_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(tenantId, id, ticketId, senderId, senderType, body, bodyFormat, isInternal, intakeSource, rawEmailId,
+        '2026-09-10T09:15:00.000Z').run();
+  }
+
+  await db.prepare(`INSERT INTO attachments
+    (tenant_id, id, article_id, file_name, file_size, content_type, r2_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind('fixture-tenant-a', 'beta2-attachment-pdf', 'beta2-article-internal', 'order-summary.pdf', 24576,
+      'application/pdf', 'fixture-tenant-a/beta2-internal-attachment/order-summary.pdf', '2026-09-10T09:20:00.000Z').run();
+  await db.prepare(`INSERT INTO attachments
+    (tenant_id, id, article_id, file_name, file_size, content_type, r2_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind('fixture-tenant-b', 'beta2-attachment-image', 'beta2-article-b-email', 'invoice.png', 8192,
+      'image/png', 'fixture-tenant-b/beta2-b-email/invoice.png', '2026-09-10T09:20:00.000Z').run();
+
+  await db.prepare(`UPDATE ticket_support_state
+    SET snoozed_until = ?, resurface_reason = ?
+    WHERE tenant_id = ? AND ticket_id = ?`)
+    .bind('2099-01-01T12:00:00.000Z', 'manual', 'fixture-tenant-a', 'beta2-snoozed-assigned').run();
 }
 
 function countedR2Bucket(bucket: R2Bucket): FixtureR2 {

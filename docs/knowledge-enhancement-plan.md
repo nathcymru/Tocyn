@@ -53,7 +53,7 @@ ALTER TABLE knowledge_docs ADD COLUMN category_id TEXT REFERENCES knowledge_cate
 ## 3. Frontend Component Breakdown
 
 ### Dependencies
-- Install a markdown editor, e.g., `@uiw/react-md-editor` or `react-simplemde-editor`, to support robust markdown authoring.
+- Use the shared Tiptap Markdown editor to support robust markdown authoring without a second editor runtime.
 
 ### `apps/dashboard/src/pages/KnowledgePage.tsx`
 Redesign the current layout into a split-pane view (Sidebar + Main Content).

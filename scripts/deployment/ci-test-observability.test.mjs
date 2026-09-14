@@ -63,13 +63,16 @@ test('bounded CI helper terminates a stalled command and retains its named log',
   }
 });
 
-test('required CI keeps named bounded diagnostics and every current admission runtime', () => {
-  assert.match(workflow, /timeout-minutes: \$\{\{ matrix\.check == 'test' && 90 \|\| 20 \}\}/);
-  assert.match(workflow, /Verify bounded general test suite/);
-  assert.match(workflow, /Verify bounded budget admission and durable recovery/);
-  assert.match(workflow, /run-bounded-command\.sh "\$name" 360 "\$diagnostics\/\$name\.log"/);
-  assert.match(workflow, /budget-admission-runtime\.test\.ts/);
-  assert.match(workflow, /if: always\(\) && matrix\.check == 'test'/);
-  assert.match(workflow, /tocyn-test-diagnostics/);
-  assert.match(workflow, /tocyn-budget-admission/);
+test('routine CI keeps the required bounded validation matrix', () => {
+  // Specialist browser/runtime and long admission diagnostics are deliberately
+  // outside routine PR CI; they run through their explicitly scoped workflows.
+  assert.match(workflow, /timeout-minutes: 20/);
+  assert.match(workflow, /check: lint/);
+  assert.match(workflow, /check: typecheck/);
+  assert.match(workflow, /check: build/);
+  assert.match(workflow, /check: test/);
+  assert.match(workflow, /npm run test --workspace=apps\/dashboard/);
+  assert.match(workflow, /npm run test --workspace=apps\/server/);
+  assert.doesNotMatch(workflow, /Verify bounded budget admission and durable recovery/);
+  assert.doesNotMatch(workflow, /tocyn-test-diagnostics/);
 });

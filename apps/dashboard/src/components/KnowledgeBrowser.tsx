@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import { dashboardApi } from '../api/client';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import type { KnowledgeDoc } from '../types';
@@ -32,25 +32,25 @@ export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: 
     } catch { if (current()) setPreview({ article, status: 'error' }); }
   };
   const close = () => { generation.current++; setPreview(null); if (trigger.current?.isConnected) trigger.current.focus(); };
-  return <div className="space-y-3">
+  return <div className="tocyn-knowledge-browser">
     {inserting && <p role="status">Loading {inserting.title} for insertion…</p>}
-    <form onSubmit={event => { event.preventDefault(); setQuery(input.trim()); setSearched(true); }} className="space-y-2">
-      <label className="block text-sm">Search knowledge titles<TocynInput value={input} onChange={event => setInput(event.target.value)} className="mt-1 w-full rounded border p-2" /></label>
-      <p className="text-xs text-slate-600">Searches titles of the available internal knowledge articles.</p>
-      <TocynButton type="submit">Search titles</TocynButton>{searched && <TocynButton type="button" onClick={() => { setInput(''); setQuery(''); setSearched(true); }}>Clear knowledge search</TocynButton>}
+    <form onSubmit={event => { event.preventDefault(); setQuery(input.trim()); setSearched(true); }} className="tocyn-knowledge-search-form">
+      <label className="tocyn-knowledge-search-label">Search knowledge titles<ParkInput value={input} onChange={event => setInput(event.target.value)} className="tocyn-knowledge-search-input" /></label>
+      <p className="tocyn-knowledge-search-help">Searches titles of the available internal knowledge articles.</p>
+      <ParkButton type="submit">Search titles</ParkButton>{searched && <ParkButton type="button" onClick={() => { setInput(''); setQuery(''); setSearched(true); }}>Clear knowledge search</ParkButton>}
     </form>
     {searched && <p role="status">{visible.length} matching knowledge article{visible.length === 1 ? '' : 's'}.</p>}
     {visible.length === 0 && <p>No knowledge titles match this search.</p>}
-    <ul className="space-y-2">{visible.map(article => <li key={article.id} className="space-x-2">
-      <TocynButton type="button" onClick={event => { trigger.current = event.currentTarget; void load(article); }} aria-label={`Preview ${article.title}`}>Preview {article.title}</TocynButton>
-      <TocynButton type="button" disabled={disabled} onClick={() => onInsert(article)} aria-label={`Insert ${article.title} into reply`}>Insert {article.title}</TocynButton>
+    <ul className="tocyn-knowledge-search-form">{visible.map(article => <li key={article.id} className="tocyn-knowledge-result">
+      <ParkButton type="button" onClick={event => { trigger.current = event.currentTarget; void load(article); }} aria-label={`Preview ${article.title}`}>Preview {article.title}</ParkButton>
+      <ParkButton type="button" disabled={disabled} onClick={() => onInsert(article)} aria-label={`Insert ${article.title} into reply`}>Insert {article.title}</ParkButton>
     </li>)}</ul>
-    {preview && <section aria-label="Knowledge preview" className="space-y-2 rounded border border-slate-300 p-3">
-      <h4 ref={heading} tabIndex={-1} className="font-semibold">Preview: {preview.article.title}</h4>
+    {preview && <section aria-label="Knowledge preview" className="tocyn-knowledge-search-form tocyn-knowledge-preview">
+      <h4 ref={heading} tabIndex={-1} className="tocyn-knowledge-preview-title">Preview: {preview.article.title}</h4>
       {preview.status === 'loading' && <p role="status">Loading knowledge preview…</p>}
-      {preview.status === 'error' && <><p role="alert">Knowledge preview could not be loaded. Your draft is unchanged.</p><TocynButton type="button" onClick={() => void load(preview.article)}>Retry preview</TocynButton></>}
-      {preview.status === 'ready' && <><p className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words">{preview.text || 'This article has no preview content.'}</p>{preview.truncated && <p>Preview shows the first 4,000 characters. Insertion requests the article again.</p>}</>}
-      <TocynButton type="button" onClick={close}>Close preview</TocynButton>
+      {preview.status === 'error' && <><p role="alert">Knowledge preview could not be loaded. Your draft is unchanged.</p><ParkButton type="button" onClick={() => void load(preview.article)}>Retry preview</ParkButton></>}
+      {preview.status === 'ready' && <><p className="tocyn-knowledge-preview-body">{preview.text || 'This article has no preview content.'}</p>{preview.truncated && <p>Preview shows the first 4,000 characters. Insertion requests the article again.</p>}</>}
+      <ParkButton type="button" onClick={close}>Close preview</ParkButton>
     </section>}
   </div>;
 }

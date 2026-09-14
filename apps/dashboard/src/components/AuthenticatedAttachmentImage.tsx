@@ -1,4 +1,4 @@
-import { TocynButton } from '@luminatick/ui/primitives';
+import { ParkButton } from '@luminatick/ui/park';
 import { useEffect, useRef, useState } from 'react';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -126,11 +126,11 @@ export function AuthenticatedAttachmentImage({
     }
   };
 
-  return <div className="mt-2 space-y-2">
-    <TocynButton type="button" onClick={() => status === 'ready' ? hidePreview() : void preview()} aria-label={status === 'ready' ? `Hide image preview ${label}` : `Preview image ${label}`} aria-busy={status === 'loading'} disabled={status === 'loading'} className="min-h-11 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100 disabled:cursor-wait">
+  return <div className="tocyn-attachment-preview">
+    <ParkButton type="button" onClick={() => status === 'ready' ? hidePreview() : void preview()} aria-label={status === 'ready' ? `Hide image preview ${label}` : `Preview image ${label}`} aria-busy={status === 'loading'} disabled={status === 'loading'} className="tocyn-attachment-preview-button">
       {status === 'ready' ? 'Hide image preview' : status === 'loading' ? 'Loading image preview…' : 'Preview image'}
-    </TocynButton>
-    {status === 'error' && <p role="alert" className="text-sm text-red-700">Image preview could not be loaded. <TocynButton type="button" onClick={() => void preview()} aria-label={`Retry image preview ${label}`} className="underline">Retry preview</TocynButton></p>}
-    {previewUrl && <img src={previewUrl} alt={`Preview of ${label}`} onError={previewError} className="max-h-80 max-w-full rounded border border-slate-200 object-contain" />}
+    </ParkButton>
+    {status === 'error' && <p role="alert" className="tocyn-attachment-preview-error">Image preview could not be loaded. <ParkButton type="button" onClick={() => void preview()} aria-label={`Retry image preview ${label}`} className="tocyn-inline-link">Retry preview</ParkButton></p>}
+    {previewUrl && <img src={previewUrl} alt={`Preview of ${label}`} onError={previewError} className="tocyn-attachment-preview-image" />}
   </div>;
 }

@@ -5,7 +5,7 @@ import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
-import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput, ParkSelect, ParkTextarea } from '@luminatick/ui/park';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
@@ -35,11 +35,12 @@ import {
   ShieldCheck,
   Clock,
   MessageSquare,
+  Mail,
   Eye,
   Info,
   Activity,
   X,
-  Paperclip } from 'lucide-react';
+  Paperclip } from '../components/icons';
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
 import { browserDateTimeLocalToInstant, browserInstantToDateTimeLocal } from '../utils/localDateTime';
@@ -403,9 +404,18 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
       setNotice(`Inserted knowledge: ${article.title}`);
       requestAnimationFrame(() => {
         if (!current()) return;
-        const editor = document.getElementById('reply-message') as HTMLTextAreaElement | null;
+        const editor = document.getElementById('reply-message') as (HTMLElement & { setSelectionRange?: (start: number, end: number) => void }) | null;
         editor?.focus();
-        editor?.setSelectionRange(nextBody.length, nextBody.length);
+        if (editor && typeof editor.setSelectionRange === 'function') {
+          editor.setSelectionRange(nextBody.length, nextBody.length);
+        } else if (editor) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
       });
     } catch (error) {
       if (!current()) return;
@@ -706,52 +716,54 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
     }
   };
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500">Loading ticket...</div>;
-  if (!ticket) return <div className="p-8 space-y-4 text-center text-slate-700">
-    <p role="alert">{error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}</p>
-    <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="rounded border border-slate-400 px-4 py-2 focus-visible:outline focus-visible:outline-2">Retry loading ticket</TocynButton>
-    <Link to={workspaceBackHref??'/tickets'} className="block underline">{workspaceBackHref?'Back to conversations':'Back to Tickets'}</Link>
-  </div>;
+  if (isLoading) return <div role="status" className="tocyn-ticket-detail-loading">Loading ticket...</div>;
+  if (!ticket) return <ParkEmptyState
+    role="alert" className="tocyn-ticket-detail-unavailable" title={error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}
+    description="The conversation could not be displayed. Retry loading it or return to the list."
+    action={<div><ParkButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="tocyn-ticket-detail-retry">Retry loading ticket</ParkButton>
+      <Link to={workspaceBackHref??'/tickets'} className="tocyn-ticket-detail-back">{workspaceBackHref?'Back to conversations':'Back to Tickets'}</Link></div>}
+  />;
   const reference = ticketReference(ticket, ticketPrefix);
 
   return (
     <>
       <DraftNavigationGuard pending={draftNavigationPending} flush={flushDraftBeforeNavigation}
-        failureMessage="Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again." />
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-      <div className="lg:col-span-3 xl:col-span-4 space-y-6">
-        {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="rounded border border-red-300 bg-red-50 p-3 text-red-900">
+        failureMessage="Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again."
+        retryLabel="Retry navigation" />
+      <div className="tocyn-ticket-detail-grid">
+      <div className="tocyn-ticket-detail-main">
+        {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="tocyn-ticket-detail-alert">
           {error ? 'Could not refresh this ticket. Showing the last confirmed details. ' : 'Confirm the saved ticket details before making another change. '}
-          <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</TocynButton>
+          <ParkButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="tocyn-ticket-detail-inline-action">Retry loading ticket</ParkButton>
         </div>}
-        {changeError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{changeError}</p>}
-        {supportStateError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{supportStateError} <TocynButton type="button" onClick={() => void refreshSupportState()} className="underline">Refresh current support state</TocynButton></p>}
-        {notice && <p role="status" className="text-slate-700">{notice}</p>}
-        {supportStateNotice && <p role="status" className="text-slate-700">{supportStateNotice}</p>}
-        {advanceConfirmationRequired && <TocynButton type="button" disabled={isConfirmingTicketSelect} onClick={event => void retryTicketDetail(event.currentTarget)}>Confirm resolved ticket</TocynButton>}
-        {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="text-sm text-slate-700">
+        {changeError && <p role="alert" className="tocyn-ticket-detail-alert">{changeError}</p>}
+        {supportStateError && <p role="alert" className="tocyn-ticket-detail-alert">{supportStateError} <ParkButton type="button" onClick={() => void refreshSupportState()} className="tocyn-ticket-detail-inline-action">Refresh current support state</ParkButton></p>}
+        {notice && <p role="status" className="tocyn-ticket-detail-notice">{notice}</p>}
+        {supportStateNotice && <p role="status" className="tocyn-ticket-detail-notice">{supportStateNotice}</p>}
+        {advanceConfirmationRequired && <ParkButton type="button" disabled={isConfirmingTicketSelect} onClick={event => void retryTicketDetail(event.currentTarget)}>Confirm resolved ticket</ParkButton>}
+        {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="tocyn-ticket-detail-status">
           {workspace.status === 'saving' && 'Saving workspace preference…'}
           {workspace.status === 'saved' && 'Workspace preference saved.'}
-          {workspace.status === 'error' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.retrySave()} className="underline">Retry workspace preference</TocynButton></>}
-          {workspace.status === 'conflict' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.restoreServerState()} className="underline">Restore server preferences</TocynButton></>}
+          {workspace.status === 'error' && <>{workspace.error} <ParkButton type="button" onClick={() => workspace.retrySave()} className="tocyn-ticket-detail-inline-action">Retry workspace preference</ParkButton></>}
+          {workspace.status === 'conflict' && <>{workspace.error} <ParkButton type="button" onClick={() => workspace.restoreServerState()} className="tocyn-ticket-detail-inline-action">Restore server preferences</ParkButton></>}
         </p>}
-        <div className="flex items-center justify-between">
-          <Link to={workspaceBackHref??'/tickets'} className={clsx("flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors",workspaceBackHref&&"lg:hidden")}>
-            <ArrowLeft className="w-4 h-4" />
+        <div className="tocyn-ticket-detail-toolbar">
+          <Link to={workspaceBackHref??'/tickets'} className={clsx("tocyn-ticket-detail-back",workspaceBackHref&&"tocyn-ticket-detail-back--mobile-only")}>
+            <ArrowLeft className="tocyn-ticket-detail-icon-md" />
             {workspaceBackHref?'Back to conversations':'Back to Tickets'}
           </Link>
-          <div className="flex items-center gap-2">
-            <TocynButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
+          <div className="tocyn-ticket-detail-controls">
+            <ParkButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
               onClick={() => {
                 contextApplied.current = true;
                 const opening = workspace.panel !== 'details';
                 if (opening) setFocusContext(true);
                 else contextTriggerRef.current?.focus();
                 workspace.update({ panel: opening ? 'details' : 'conversation' });
-              }} className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium">
+              }} className="tocyn-ticket-detail-context-button">
               {workspace.panel === 'details' ? 'Hide ticket context' : 'Show ticket context'}
-            </TocynButton>
-            <TocynSelect
+            </ParkButton>
+            <ParkSelect
               key={`ticket-status-${ticketSelectVersions.status}`}
               ref={node => { ticketSelectRefs.current.status = node; }}
               aria-label="Status" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -760,13 +772,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
                 void handleTicketChange({ status: e.target.value as TicketChanges['status'] }, 'status');
               }}
-              className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+              className="tocyn-ticket-detail-select"
             >
               <option value="open">Open</option>
               <option value="pending">Pending</option>
               <option value="resolved">Resolved</option>
               <option value="closed">Closed</option>
-            </TocynSelect>
+            </ParkSelect>
           </div>
         </div>
 
@@ -774,87 +786,87 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           error={utilityActions.isError} retry={() => void utilityActions.refetch()} />
         <TicketSlaActionBar ticketId={ticket.id} />
         <TicketSlaPanel ticketId={ticket.id} />
-        {!showSupportState && <TocynButton type="button" onClick={() => setShowSupportState(true)} className="rounded border border-slate-300 px-3 py-2 text-sm">Manage support state</TocynButton>}
-        {showSupportState && supportState.isLoading && <p role="status">Loading current support state…</p>}
-        {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Support state">
-          <div><h2 className="font-semibold text-slate-900">Support state</h2><p className="text-sm text-slate-600">Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
-          <label className="block text-sm font-medium text-slate-700">State
-            <TocynSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} aria-disabled={isSupportStateSubmitting || isLoadingSupportStates} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+        {!showSupportState && <ParkButton type="button" onClick={() => setShowSupportState(true)} className="tocyn-ticket-detail-secondary-action">Manage support state</ParkButton>}
+        {showSupportState && supportState.isLoading && <p role="status" className="tocyn-support-state-loading">Loading current support state…</p>}
+        {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className="tocyn-support-state-form" aria-label="Support state">
+          <div className="tocyn-support-state-header"><h2 className="tocyn-support-state-form-title">Support state</h2><p className="tocyn-support-state-description">Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
+          <label className="tocyn-form-field">State
+            <ParkSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} aria-disabled={isSupportStateSubmitting || isLoadingSupportStates} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="tocyn-ticket-detail-select">
               {!selectedSupportStateDefinition && supportState.data?.definition_id === supportStateDraft.definitionId && <option value={supportStateDraft.definitionId}>{supportState.data.internal_label} ({supportState.data.lifecycle}) — state details loading</option>}
               {supportStates.map(state => <option key={state.id} value={state.id}>{state.internal_label} ({state.legacy_status})</option>)}
-            </TocynSelect>
+            </ParkSelect>
           </label>
-          {isLoadingSupportStates && <p role="status" className="text-sm text-slate-700">Loading support-state definitions…</p>}
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
-            <label className="text-sm font-medium text-slate-700">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
+          {isLoadingSupportStates && <p role="status" className="tocyn-ticket-detail-status">Loading support-state definitions…</p>}
+          <div className="tocyn-support-state-fields">
+            <label className="tocyn-form-field">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="tocyn-ticket-detail-select" /></label>
+            <label className="tocyn-form-field">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="tocyn-ticket-detail-select" /></label>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <label className="block text-sm font-medium text-slate-700">Snooze until (your local time)
-              <TocynInput type="datetime-local" aria-label="Snooze until (your local time)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2" />
+          <div className="tocyn-support-state-snooze">
+            <label className="tocyn-form-field">Snooze until (your local time)
+              <ParkInput type="datetime-local" aria-label="Snooze until (your local time)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className="tocyn-ticket-detail-datetime" />
             </label>
-            <p className="mt-1 text-xs text-slate-600">The shared queue will resurface this ticket at the selected local time.</p>
-            <div className="mt-2 flex flex-wrap gap-3">
-              <TocynButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
-              {supportState.data.snoozed_until && <TocynButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="rounded border border-slate-400 px-3 py-2 text-sm font-semibold text-slate-700">Unsnooze ticket</TocynButton>}
+            <p className="tocyn-ticket-detail-help">The shared queue will resurface this ticket at the selected local time.</p>
+            <div className="tocyn-support-state-actions">
+              <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className="tocyn-ticket-detail-primary-outline">Snooze ticket</ParkButton>
+              {supportState.data.snoozed_until && <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="tocyn-ticket-detail-secondary-action">Unsnooze ticket</ParkButton>}
             </div>
-            {supportState.data.snoozed_until && <p role="status" className="mt-2 text-sm text-slate-700">Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
+            {supportState.data.snoozed_until && <p role="status" className="tocyn-ticket-detail-status">Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
           </div>
-          {selectedSupportStateNeedsDetails && <p role="status" className="text-sm text-slate-700">Load the current support-state definition before saving.</p>}
-          <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
-          {hasMoreSupportStates && <TocynButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className="underline">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</TocynButton>}
-          {isLoadMoreSupportStatesError && <p role="alert" className="text-sm text-red-800">Could not load more support states. Try again.</p>}
+          {selectedSupportStateNeedsDetails && <p role="status" className="tocyn-ticket-detail-status">Load the current support-state definition before saving.</p>}
+          <div className="tocyn-support-state-actions"><ParkButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className="tocyn-support-state-submit">Save support state</ParkButton><ParkButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="tocyn-ticket-detail-inline-action">Refresh current state</ParkButton>{supportStateDraftDirty.current && <ParkButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="tocyn-ticket-detail-inline-action">Discard local changes</ParkButton>}</div>
+          {hasMoreSupportStates && <ParkButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className="tocyn-ticket-detail-inline-action">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</ParkButton>}
+          {isLoadMoreSupportStatesError && <p role="alert" className="tocyn-ticket-detail-load-more-error">Could not load more support states. Try again.</p>}
         </form>}
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-200 bg-white">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center px-3 py-1 bg-slate-900 text-white rounded-lg text-sm font-mono font-bold shadow-sm" title={reference}>{reference}</span>
-                  <h1 ref={conversationHeadingRef} tabIndex={-1} className="text-2xl font-bold text-slate-900 leading-tight focus:outline-none">{ticket.subject}</h1>
+        <div className="tocyn-ticket-detail-card">
+          <div className="tocyn-ticket-detail-header">
+            <div className="tocyn-ticket-detail-heading">
+              <div className="tocyn-ticket-detail-title-stack">
+                <div className="tocyn-ticket-detail-title-row">
+                  <span className="tocyn-ticket-detail-reference" title={reference}>{reference}</span>
+                  <h1 ref={conversationHeadingRef} tabIndex={-1} className="tocyn-ticket-detail-title">{ticket.subject}</h1>
                 </div>
-                <div className="flex items-center gap-4 text-sm text-slate-500">
-                  <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100">
-                    <User className="w-3.5 h-3.5" />
+                <div className="tocyn-ticket-detail-meta">
+                  <span className="tocyn-ticket-detail-customer">
+                    <User className="tocyn-ticket-detail-icon-xs" />
                     {ticket.customer_email}
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
+                  <span className="tocyn-ticket-detail-opened">
+                    <Clock className="tocyn-ticket-detail-icon-xs" />
                     Opened {utcTimestamp(ticket.created_at).toLocaleDateString()}
                   </span>
                 </div>
               </div>
 
               {/* Presence Indicator */}
-              <div className="flex flex-col items-end gap-2">
+              <div className="tocyn-ticket-detail-presence">
                 {!workspaceBackHref && viewers.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <div aria-hidden="true" className="flex items-center -space-x-2">
+                  <div className="tocyn-ticket-detail-viewers">
+                    <div aria-hidden="true" className="tocyn-ticket-detail-avatars">
                       {viewers.slice(0, 3).map((viewer, i) => (
                         <div
                           key={i}
-                          className="w-8 h-8 rounded-full bg-brand-500 border-2 border-white flex items-center justify-center text-white text-[10px] font-bold shadow-sm"
+                          className="tocyn-ticket-detail-avatar"
                           title={`${viewer.name} is viewing this ticket`}
                         >
                           {viewer.name[0]}
                         </div>
                       ))}
                       {viewers.length > 3 && (
-                        <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-slate-600 text-[10px] font-bold shadow-sm">
+                        <div className="tocyn-ticket-detail-avatar tocyn-ticket-detail-avatar-more">
                           +{viewers.length - 3}
                         </div>
                       )}
                     </div>
-                    <span className="sr-only">Viewing this ticket: {viewers.map(viewer => viewer.name).join(', ')}</span>
-                    <span className="text-[10px] font-bold text-brand-600 uppercase tracking-tighter flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-brand-500 rounded-full" />
+                    <span className="tocyn-visually-hidden">Viewing this ticket: {viewers.map(viewer => viewer.name).join(', ')}</span>
+                    <span className="tocyn-ticket-detail-live-label">
+                      <span className="tocyn-ticket-detail-live-dot" />
                       Live Viewers
                     </span>
                   </div>
                 )}
                 {typing.length > 0 && (
-                  <p className="text-xs text-slate-600">
+                  <p className="tocyn-ticket-detail-typing">
                     {typing.map(candidate => candidate.actor.name).join(', ')} {typing.length === 1 ? 'is' : 'are'} typing…
                   </p>
                 )}
@@ -862,64 +874,88 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </div>
           </div>
 
-          <div id="conversation-messages" className="p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
+          <div id="conversation-messages" className="tocyn-ticket-detail-messages">
             {ticket.articles.map((article) => (
               <div
                 key={article.id}
                 className={clsx(
-                  "flex gap-4 group",
-                  article.sender_type === 'agent' ? "flex-row-reverse" : "flex-row"
+                  "tocyn-timeline-row",
+                  article.sender_type === 'agent' && "is-agent"
                 )}
               >
                 <div className={clsx(
-                  "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-bold shadow-sm transition-transform group-hover:scale-105",
-                  article.sender_type === 'agent' ? "bg-brand-600 text-white" : "bg-white text-slate-600 border border-slate-200",
-                  article.is_internal && "bg-amber-100 text-amber-700 ring-2 ring-amber-200"
+                  "tocyn-timeline-avatar",
+                  article.sender_type === 'agent' ? "tocyn-timeline-avatar-agent" : "tocyn-timeline-avatar-customer",
+                  article.is_internal && "tocyn-timeline-avatar-internal"
                 )}>
                   {article.sender_type === 'agent' ? 'A' : article.sender_type === 'system' ? 'S' : 'C'}
                 </div>
                 <div className={clsx(
-                  "max-w-[80%] rounded-2xl p-4 shadow-sm border transition-all",
+                  "tocyn-timeline-bubble",
                   article.sender_type === 'agent'
-                    ? "bg-brand-600 text-white border-brand-700"
-                    : "bg-white text-slate-900 border-slate-200",
-                  article.is_internal && "!bg-amber-50 !border-amber-200 !text-amber-900 shadow-amber-100/50"
+                    ? "tocyn-timeline-bubble-agent"
+                    : "tocyn-timeline-bubble-customer",
+                  article.is_internal && "tocyn-timeline-bubble-internal"
                 )}>
-                  <div className="flex items-center justify-between gap-4 mb-2">
-                    <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest">
+                  <div className="tocyn-timeline-meta">
+                    <span className="tocyn-timeline-label">
                       {article.sender_type} {article.is_internal && '• Internal Note'}
                     </span>
-                    <span className="text-[10px] opacity-70">
+                    <span className="tocyn-timeline-time">
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
+                  {(ticket.source === 'email' || article.raw_email_id) && article.sender_type === 'customer' && (
+                    <div className="tocyn-email-presentation">
+                      <div className="tocyn-email-summary">
+                        <Mail className="tocyn-email-summary-icon" aria-hidden="true" />
+                        <span className="tocyn-email-summary-label">Email</span>
+                        <span className="tocyn-email-summary-time">{utcTimestamp(article.created_at).toLocaleString()}</span>
+                      </div>
+                      <dl className="tocyn-email-summary-fields">
+                        <div><dt>From</dt><dd>{ticket.customer_email}</dd></div>
+                        <div><dt>To</dt><dd>Support queue</dd></div>
+                        <div><dt>Subject</dt><dd>{ticket.subject}</dd></div>
+                      </dl>
+                    </div>
+                  )}
                   {/* Only explicitly versioned new content is interpreted as Markdown. */}
                   {article.body_format === 'markdown-v1'
-                    ? <SafeMarkdown className="break-words text-sm leading-relaxed">{article.body ?? ''}</SafeMarkdown>
-                    : <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{article.body ?? ''}</div>}
+                    ? <SafeMarkdown className="tocyn-timeline-body">{article.body ?? ''}</SafeMarkdown>
+                    : <div className="tocyn-timeline-body tocyn-timeline-body-plain">{article.body ?? ''}</div>}
+                  {(ticket.source === 'email' || article.raw_email_id) && article.sender_type === 'customer' && (
+                    <details className="tocyn-email-full-disclosure">
+                      <summary>Show full email</summary>
+                      <div className="tocyn-email-full-copy">
+                        <p>Structured headers and quoted history are unavailable for this stored message.</p>
+                        <p>Complete stored body is shown above.</p>
+                        {article.raw_email_id && <p>Raw email reference: {article.raw_email_id}</p>}
+                      </div>
+                    </details>
+                  )}
 
                   {/* Attachments */}
                   {article.attachments && article.attachments.length > 0 && (
-                    <div className="mt-3 space-y-2">
+                    <div className="tocyn-timeline-attachments">
                       {article.attachments.map((att: any) => {
                         const filename = att.filename || att.file_name || 'Attachment';
                         return <div key={att.id}>
-                          <TocynButton
+                          <ParkButton
                             onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, filename); }}
                             className={clsx(
-                              "flex w-full cursor-pointer hover:opacity-80 items-center gap-2 p-2 rounded-lg text-sm",
+                              "tocyn-timeline-attachment-link",
                               article.sender_type === 'agent'
-                                ? "bg-brand-700/50 text-white"
-                                : "bg-gray-50 text-gray-700 border border-gray-100",
-                              article.is_internal && "!bg-amber-100/50 !text-amber-900 border border-amber-200/50"
+                                ? "tocyn-timeline-attachment-link-agent"
+                                : "tocyn-timeline-attachment-link-customer",
+                              article.is_internal && "tocyn-timeline-attachment-link-internal"
                             )}
                           >
-                            <Paperclip className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate flex-1 text-left">{filename}</span>
-                            <span className="text-xs opacity-75">
+                            <Paperclip className="tocyn-timeline-attachment-icon" />
+                            <span className="tocyn-timeline-attachment-name">{filename}</span>
+                            <span className="tocyn-timeline-attachment-size">
                               {attachmentSize(att.size ?? att.file_size)}
                             </span>
-                          </TocynButton>
+                          </ParkButton>
                           <AuthenticatedAttachmentImage
                             ticketId={id}
                             attachmentId={att.id}
@@ -932,34 +968,34 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     </div>
                   )}
 
-                  {article.qa_type === 'question' && <p className="text-sm text-slate-700 bg-white p-2">Legacy Question marker retained. Compatibility review is required before changing this marker.</p>}
+                  {article.qa_type === 'question' && <p className="tocyn-timeline-legacy-marker">Legacy Question marker retained. Compatibility review is required before changing this marker.</p>}
                   {/* QA Toggle Buttons */}
-                  <div className="mt-3 p-2 rounded bg-white text-slate-900 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <TocynButton
+                  <div className="tocyn-timeline-qa">
+                    <div className="tocyn-timeline-qa-actions">
+                      <ParkButton
                         aria-label="Mark as SOP (internal procedure)" aria-pressed={article.qa_type === 'sop'} disabled={qaPending || article.qa_type === 'question'}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'sop' ? null : 'sop')}
                         className={clsx(
-                          "min-h-11 text-xs font-semibold px-3 py-2 rounded border transition-colors",
-                          article.qa_type === 'sop' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 border-slate-400 hover:bg-slate-100"
+                          "tocyn-timeline-qa-button",
+                          article.qa_type === 'sop' ? "tocyn-timeline-qa-button-active" : "tocyn-timeline-qa-button-inactive"
                         )}
                       >
                         {article.qa_type === 'sop' ? '✓ SOP (internal)' : 'Mark as SOP (internal)'}
-                      </TocynButton>
-                      <TocynButton
+                      </ParkButton>
+                      <ParkButton
                         aria-label="Mark as answer" aria-pressed={article.qa_type === 'answer'} disabled={qaPending || article.qa_type === 'question'}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'answer' ? null : 'answer')}
                         className={clsx(
-                          "min-h-11 text-xs font-semibold px-3 py-2 rounded border transition-colors",
-                          article.qa_type === 'answer' ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 border-slate-400 hover:bg-slate-100"
+                          "tocyn-timeline-qa-button",
+                          article.qa_type === 'answer' ? "tocyn-timeline-qa-button-active" : "tocyn-timeline-qa-button-inactive"
                         )}
                       >
                         {article.qa_type === 'answer' ? '✓ Answer' : 'Mark as Answer'}
-                      </TocynButton>
+                      </ParkButton>
                     </div>
                     {article.qa_type && (
-                      <span className="flex items-center gap-1 text-xs font-semibold text-slate-700 px-2 py-1">
-                        <ShieldCheck className="w-3 h-3" />
+                      <span className="tocyn-timeline-qa-marked">
+                        <ShieldCheck className="tocyn-timeline-qa-marked-icon" />
                         QA marked
                       </span>
                     )}
@@ -969,29 +1005,29 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             ))}
           </div>
 
-          {ticket.pagination && <div className="border-t border-slate-200 bg-white p-4 space-y-2">
-            <TocynButton type="button" onClick={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage({ cancelRefetch: false }); }} aria-disabled={!hasNextPage || isFetchingNextPage}
+          {ticket.pagination && <div className="tocyn-ticket-pagination">
+            <ParkButton type="button" onClick={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage({ cancelRefetch: false }); }} aria-disabled={!hasNextPage || isFetchingNextPage}
               aria-controls="conversation-messages" aria-busy={isFetchingNextPage}
-              className="rounded-md border border-slate-400 bg-white px-4 py-2 text-sm font-medium text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
+              className="tocyn-ticket-pagination-button">
               {isFetchingNextPage ? 'Loading messages…' : hasNextPage ? 'Load more messages' : 'All messages loaded'}
-            </TocynButton>
-            <p role="status" aria-live="polite" className="text-sm text-slate-700">
+            </ParkButton>
+            <p role="status" aria-live="polite" className="tocyn-ticket-detail-status">
               {isFetchNextPageError ? 'Could not load more messages. Try again.' : isFetchingNextPage ? 'Loading more messages…' : `Showing ${ticket.articles.length} messages.${hasNextPage ? ' More messages are available.' : ' All messages are loaded.'}`}
             </p>
           </div>}
-          <div className="p-6 border-t border-slate-200 bg-white">
-            {replyError && <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-red-900">{replyError} {' '}
+          <div className="tocyn-ticket-composer-panel">
+            {replyError && <p role="alert" className="tocyn-ticket-composer-alert">{replyError} {' '}
               {staleReplyReview ? <>
                 {staleReplyReview === 'refreshing'
                   ? <span role="status">Refreshing the latest conversation…</span>
                   : typeof staleReplyReview !== 'number'
-                    ? <TocynButton type="button" onClick={() => void refreshConversationForStaleReply()} className="underline">Refresh and review conversation</TocynButton>
-                    : <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="underline">Rebase saved draft</TocynButton>}
-              </> : <TocynButton type="button" onClick={() => void refetch()} className="underline">Refresh conversation</TocynButton>}
+                    ? <ParkButton type="button" onClick={() => void refreshConversationForStaleReply()} className="tocyn-ticket-detail-inline-action">Refresh and review conversation</ParkButton>
+                    : <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="tocyn-ticket-detail-inline-action">Rebase saved draft</ParkButton>}
+              </> : <ParkButton type="button" onClick={() => void refetch()} className="tocyn-ticket-detail-inline-action">Refresh conversation</ParkButton>}
             </p>}
             {(draft.status !== 'idle' && draft.status !== 'discarded') && <div role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} className={clsx(
-              'mb-4 flex flex-wrap items-center justify-between gap-3 rounded border p-3 text-sm',
-              draft.status === 'error' || draft.status === 'conflict' ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50 text-slate-700'
+              'tocyn-ticket-composer-draft-status',
+              draft.status === 'error' || draft.status === 'conflict' ? 'tocyn-ticket-composer-draft-status-error' : 'tocyn-ticket-composer-draft-status-neutral'
             )}>
               <span>
                 {draft.status === 'loading' && 'Restoring your saved draft…'}
@@ -1001,116 +1037,122 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 {draft.status === 'error' && (draft.error ?? 'Draft could not be saved.')}
                 {draft.status === 'conflict' && (draft.error ?? 'Draft changed in another session. Review before discarding it.')}
               </span>
-              <span className="flex items-center gap-3">
-                {draft.status === 'error' && <TocynButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className="underline">Retry draft</TocynButton>}
-                {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="underline">Discard draft</TocynButton>}
+              <span className="tocyn-ticket-composer-draft-actions">
+                {draft.status === 'error' && <ParkButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className="tocyn-ticket-detail-inline-action">Retry draft</ParkButton>}
+                {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="tocyn-ticket-detail-inline-action">Discard draft</ParkButton>}
               </span>
             </div>}
-            <form onSubmit={handleSubmitReply} className="space-y-4">
-              {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()} className="underline">Retry sent-draft cleanup</TocynButton></p>}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <TocynButton
+            <form onSubmit={handleSubmitReply} className="tocyn-ticket-composer-form">
+              {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()} className="tocyn-u-underline">Retry sent-draft cleanup</ParkButton></p>}
+              <div className="tocyn-ticket-composer-mode-row">
+                <div className="tocyn-ticket-composer-mode-group">
+                  <ParkButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={!isInternal}
                     onClick={() => { if (!submission.current) updateDraft({ mode: 'public', mentionedUserIds: [] }); }}
                     className={clsx(
-                      "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
-                      !isInternal ? "bg-brand-600 text-white border-brand-700 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
+                      "tocyn-ticket-composer-mode-button",
+                      !isInternal ? "tocyn-ticket-composer-mode-button-public" : "tocyn-ticket-composer-mode-button-inactive"
                     )}
                   >
                     Public Reply
-                  </TocynButton>
-                  <TocynButton
+                  </ParkButton>
+                  <ParkButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={isInternal}
                     onClick={() => { if (!submission.current) updateDraft({ mode: 'internal' }); }}
                     className={clsx(
-                      "text-xs font-bold px-4 py-1.5 rounded-full transition-all border",
-                      isInternal ? "bg-amber-700 text-white border-amber-800 shadow-sm" : "text-slate-500 hover:bg-slate-100 border-transparent"
+                      "tocyn-ticket-composer-mode-button",
+                      isInternal ? "tocyn-ticket-composer-mode-button-internal" : "tocyn-ticket-composer-mode-button-inactive"
                     )}
                   >
                     Internal Note
-                  </TocynButton>
+                  </ParkButton>
                 </div>
 
-                <TocynButton
+                <ParkButton
                   type="button"
                   onClick={handleGetAiSuggestion}
                   disabled={isGeneratingSuggestion || isSubmitting}
-                  className="flex items-center gap-2 text-xs font-bold text-brand-600 hover:text-brand-700 px-3 py-1.5 bg-brand-50 rounded-lg transition-colors border border-brand-100"
+                  className="tocyn-ticket-composer-suggestion-button"
                 >
-                  <Activity className="w-3.5 h-3.5" />
+                  <Activity className="tocyn-ticket-detail-icon-sm" />
                   {isGeneratingSuggestion ? 'Thinking...' : 'AI Suggestion'}
-                </TocynButton>
+                </ParkButton>
               </div>
 
               {suggestion && (
-                <div className="bg-slate-50 border border-brand-100 rounded-xl p-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5" />
+                <div className="tocyn-ticket-composer-suggestion">
+                  <div className="tocyn-ticket-composer-suggestion-header">
+                    <span className="tocyn-ticket-composer-suggestion-label">
+                      <ShieldCheck className="tocyn-ticket-detail-icon-sm" />
                       AI Auto-Draft
                     </span>
-                    <div className="flex items-center gap-3">
-                      <TocynButton
+                    <div className="tocyn-ticket-composer-suggestion-actions">
+                      <ParkButton
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => updateDraft({ body: suggestion })}
-                        className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
+                        className="tocyn-ticket-composer-suggestion-action"
                       >
                         Replace All
-                      </TocynButton>
-                      <TocynButton
+                      </ParkButton>
+                      <ParkButton
                         type="button"
                         disabled={isSubmitting}
                         onClick={() => updateDraft({ body: reply ? `${reply}\n\n${suggestion}` : suggestion })}
-                        className="text-[10px] font-bold text-brand-600 hover:bg-brand-100 px-2 py-1 rounded transition-colors"
+                        className="tocyn-ticket-composer-suggestion-action"
                       >
                         Append
-                      </TocynButton>
-                      <TocynButton
+                      </ParkButton>
+                      <ParkButton
                         type="button"
                         aria-label="Dismiss suggested reply"
                         onClick={() => setSuggestion(null)}
-                        className="text-slate-400 hover:text-slate-600"
+                        className="tocyn-ticket-composer-suggestion-dismiss"
                       >
-                        <X className="w-3.5 h-3.5" />
-                      </TocynButton>
+                        <X className="tocyn-ticket-detail-icon-sm" />
+                      </ParkButton>
                     </div>
                   </div>
-                  <p className="text-sm text-slate-700 italic leading-relaxed">"{suggestion}"</p>
+                  <p className="tocyn-ticket-composer-suggestion-copy">"{suggestion}"</p>
                 </div>
               )}
 
-              {!replyCapability ? <div role="status" className="mb-2 text-sm text-slate-700">
+              {!replyCapability ? <div role="status" className="tocyn-ticket-reply-capability">
                 {replyCapabilities.isLoading ? 'Loading reply options…' : 'Reply options are unavailable.'}
-                {replyCapabilities.isError && <button type="button" className="ml-2 underline" onClick={() => void replyCapabilities.refetch()}>Retry reply options</button>}
-              </div> : <p className="mb-2 text-sm text-slate-600">{replyCapability.channel === 'email'
+                {replyCapabilities.isError && <ParkButton
+                  type="button"
+                  className="tocyn-ticket-detail-inline-action tocyn-ticket-detail-inline-action--spaced"
+                  onClick={() => void replyCapabilities.refetch()}
+                >
+                  Retry reply options
+                </ParkButton>}
+              </div> : <p className="tocyn-ticket-reply-capability tocyn-ticket-reply-capability-ready">{replyCapability.channel === 'email'
                 ? `Email reply to ${ticket.customer_email}. Delivery is attempted after saving.`
                 : 'Internal note. No email is sent.'} Up to {replyCapability.attachments.maxCount} attachments, {replyCapability.attachments.maxBytesPerFile / 1024 / 1024} MB each.</p>}
-              {isInternal && replyCapabilities.data?.internalMentions && <fieldset className="mb-3 rounded border border-amber-200 bg-amber-50 p-3">
-                <legend className="px-1 text-sm font-semibold text-amber-950">Mention colleagues</legend>
-                <p id="mention-help" className="mb-2 text-sm text-amber-900">Mentioned colleagues with current ticket access receive a private activity after this note is saved. Up to 16.</p>
-                {mentionCandidates.length ? <div className="grid gap-2 sm:grid-cols-2">
+              {isInternal && replyCapabilities.data?.internalMentions && <fieldset className="tocyn-composer-mentions">
+                <legend className="tocyn-composer-mentions-title">Mention colleagues</legend>
+                <p id="mention-help" className="tocyn-composer-mentions-help">Mentioned colleagues with current ticket access receive a private activity after this note is saved. Up to 16.</p>
+                {mentionCandidates.length ? <div className="tocyn-composer-mentions-list">
                   {mentionCandidates.map(agent => {
                     const checked = mentionedUserIds.includes(agent.id);
-                    return <label key={agent.id} className="flex min-h-11 items-center gap-2 text-sm text-slate-900">
-                      <input type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
+                    return <label key={agent.id} className="tocyn-composer-mention-option">
+                      <ParkInput type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
                         onChange={() => updateDraft({ mentionedUserIds: checked ? mentionedUserIds.filter(id => id !== agent.id)
                           : mentionedUserIds.length < (replyCapabilities.data?.internalMentions?.maxRecipients ?? 0) ? [...mentionedUserIds, agent.id] : mentionedUserIds })} />
                       <span>{agent.full_name || agent.email}</span>
                     </label>;
                   })}
-                </div> : <p className="text-sm text-slate-700">No colleagues are available to mention.</p>}
+                </div> : <p className="tocyn-ticket-detail-status">No colleagues are available to mention.</p>}
               </fieldset>}
-              <label className="mb-2 block text-sm text-slate-700">
+              <label className="tocyn-ticket-composer-format-label">
                 Message format
-                <select aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
+                <ParkSelect aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
                   onChange={event => { if (!submission.current && (event.target.value === 'plain' || event.target.value === 'markdown-v1') && replyCapability?.body.acceptedFormats.includes(event.target.value)) updateDraft({ bodyFormat: event.target.value }); }}
-                  className="ml-2 rounded border border-slate-300 bg-white p-2 text-slate-900 focus-visible:outline focus-visible:outline-2">
+                  className="tocyn-form-control tocyn-ticket-detail-message-format">
                   <option value="plain" disabled={!replyCapability?.body.acceptedFormats.includes('plain')}>Plain text</option><option value="markdown-v1" disabled={!replyCapability?.body.acceptedFormats.includes('markdown-v1')}>Markdown</option>
-                </select>
+                </ParkSelect>
               </label>
               <RichComposer
                 id="reply-message"
@@ -1118,18 +1160,24 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 format={draft.bodyFormat ?? 'plain'}
                 readOnly={isSubmitting || draft.status === 'loading'}
                 mode={isInternal ? 'internal' : 'public'}
-                onChange={body => { if (!submission.current) updateDraft({ body }); }}
+                onChange={body => {
+                  // Tiptap can emit a synthetic input while mounting or
+                  // synchronising controlled content. Do not turn an
+                  // identical value into an unsaved draft, which would make
+                  // an immediate ticket navigation appear blocked.
+                  if (!submission.current && body !== draftRef.current.body) updateDraft({ body });
+                }}
                 onImageFiles={files => addAttachments(files)}
                 onRejectedImageFiles={count => setNotice(`${count} image${count === 1 ? '' : 's'} was not attached. Use JPEG, PNG, GIF, or WebP images up to 10 MB.`)}
               />
 
               {(draft.attachments.length > 0 || visiblePendingAttachments.length > 0) && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="tocyn-composer-attachments">
                   {draft.attachments.map(attachment => (
-                    <div key={attachment.storageKey} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
-                      <Paperclip className="w-3 h-3 text-slate-500" />
-                      <span className="truncate max-w-[150px]">{attachment.filename}</span>
-                      <TocynButton
+                    <div key={attachment.storageKey} className="tocyn-composer-attachment">
+                      <Paperclip className="tocyn-composer-attachment-icon" />
+                      <span className="tocyn-composer-attachment-name">{attachment.filename}</span>
+                      <ParkButton
                         type="button"
                         aria-disabled={isSubmitting} aria-label={`Remove ${attachment.filename}`}
                         onClick={() => {
@@ -1138,19 +1186,19 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                           setNotice('Attachment removed.');
                           attachButtonRef.current?.focus();
                         }}
-                        className="text-slate-600 hover:text-red-700"
+                        className="tocyn-composer-attachment-remove"
                       >
-                        <X className="w-3 h-3" />
-                      </TocynButton>
+                        <X className="tocyn-composer-attachment-remove-icon" />
+                      </ParkButton>
                     </div>
                   ))}
                   {visiblePendingAttachments.map(attachment => (
-                    <div key={attachment.id} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
-                      <Paperclip className="w-3 h-3 text-slate-500" />
-                      <span className="truncate max-w-[150px]">{attachment.file.name}</span>
-                      <span role={attachment.status === 'error' ? 'alert' : 'status'} className="text-slate-600">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
-                      {attachment.status === 'error' && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} className="underline">Retry upload</TocynButton>}
-                      <TocynButton
+                    <div key={attachment.id} className="tocyn-composer-attachment">
+                      <Paperclip className="tocyn-composer-attachment-icon" />
+                      <span className="tocyn-composer-attachment-name">{attachment.file.name}</span>
+                      <span role={attachment.status === 'error' ? 'alert' : 'status'} className="tocyn-composer-attachment-status">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
+                      {attachment.status === 'error' && <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} className="tocyn-ticket-detail-inline-action">Retry upload</ParkButton>}
+                      <ParkButton
                         type="button"
                         aria-disabled={isSubmitting} aria-label={`Remove ${attachment.file.name}`}
                         onClick={() => {
@@ -1160,28 +1208,28 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                           setNotice('Attachment removed.');
                           attachButtonRef.current?.focus();
                         }}
-                        className="text-slate-600 hover:text-red-700"
+                        className="tocyn-composer-attachment-remove"
                       >
-                        <X className="w-3 h-3" />
-                      </TocynButton>
+                        <X className="tocyn-composer-attachment-remove-icon" />
+                      </ParkButton>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
-                  <Info className="w-3 h-3" />
+              <div className="tocyn-composer-footer">
+                <p className="tocyn-composer-note">
+                  <Info className="tocyn-ticket-detail-icon-xs" />
                   {isInternal
                     ? "Private note for team coordination."
                     : "Public replies are visible to the customer in this conversation."}
                 </p>
-                <div className="flex items-center gap-2">
-                  <TocynInput
+                <div className="tocyn-composer-actions">
+                  <ParkInput
                     type="file" aria-label="Reply attachments" disabled={isSubmitting}
                     multiple
                     ref={fileInputRef}
-                    className="hidden"
+                    className="tocyn-u-hidden"
                     onChange={(e) => {
                       if (submission.current) return;
                       const selectedFiles = Array.from(e.currentTarget.files ?? []);
@@ -1189,27 +1237,27 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                       if (fileInputRef.current) fileInputRef.current.value = '';
                     }}
                   />
-                  <TocynButton
+                  <ParkButton
                     type="button"
                     ref={attachButtonRef}
                     aria-disabled={!replyCapability || isSubmitting} aria-label="Attach files"
                     onClick={() => { if (!submission.current && replyCapability) fileInputRef.current?.click(); }}
-                    className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                    className="tocyn-composer-attach-button"
                     title="Attach files"
                   >
-                    <Paperclip className="w-4 h-4" />
-                  </TocynButton>
-                  <TocynButton
+                    <Paperclip className="tocyn-ticket-detail-icon-md" />
+                  </ParkButton>
+                  <ParkButton
                     type="submit"
                     aria-disabled={assignmentBlocked || !replyCapability || !replyCapability.body.acceptedFormats.includes(draft.bodyFormat) || !reply.trim() || isSubmitting || visiblePendingAttachments.length > 0 || Boolean(sentDraftVersion) || Boolean(staleReplyReview)}
                     className={clsx(
-                      "flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95 aria-disabled:opacity-60 aria-disabled:cursor-default",
-                      isInternal ? "bg-amber-700 text-white hover:bg-amber-800" : "bg-brand-600 text-white hover:bg-brand-700"
+                      "tocyn-composer-submit",
+                      isInternal ? "tocyn-composer-submit-internal" : "tocyn-composer-submit-public"
                     )}
                   >
-                    <Send className="w-4 h-4" />
+                    <Send className="tocyn-ticket-detail-icon-md" />
                     {isInternal ? "Add Note" : "Send Reply"}
-                  </TocynButton>
+                  </ParkButton>
                 </div>
               </div>
             </form>
@@ -1217,35 +1265,35 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         </div>
       </div>
 
-      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="space-y-6">
-        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
-            <span className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" />Customer</span>
+      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="tocyn-ticket-context-panel">
+        <details open className="tocyn-ticket-context-card">
+          <summary className="tocyn-ticket-context-summary">
+            <span className="tocyn-ticket-context-summary-label"><User className="tocyn-ticket-context-user-icon" />Customer</span>
           </summary>
-          <div className="mt-4 space-y-3 text-sm">
+          <div className="tocyn-ticket-context-body">
             <div>
-              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Verified identity</p>
-              <p className="mt-1 font-medium text-slate-900">{ticket.customer_email}</p>
-              <p className="mt-1 text-xs text-slate-600">Loaded from this tenant-scoped conversation.</p>
+              <p className="tocyn-ticket-context-eyebrow">Verified identity</p>
+              <p className="tocyn-ticket-context-value">{ticket.customer_email}</p>
+              <p className="tocyn-ticket-context-help">Loaded from this tenant-scoped conversation.</p>
             </div>
             {customerHistory.isLoading ? (
-              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p role="status" className="tocyn-ticket-context-notice">
                 Loading customer history...
               </p>
             ) : customerHistory.isError ? (
-              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p role="status" className="tocyn-ticket-context-notice">
                 Customer history is unavailable for this conversation. {customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'}
               </p>
             ) : customerHistoryEvents.length === 0 ? (
-              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p role="status" className="tocyn-ticket-context-notice">
                 Customer history is unavailable for this conversation. No cross-channel identity match was made.
               </p>
             ) : (
-              <ul className="space-y-3">
+              <ul className="tocyn-ticket-context-history">
                 {customerHistoryEvents.map((historyEvent) => (
-                  <li key={historyEvent.id} className="rounded border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs font-bold text-slate-900">{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
-                    <p className="mt-1 text-[10px] text-slate-500 uppercase tracking-wider">
+                  <li key={historyEvent.id} className="tocyn-ticket-context-history-item">
+                    <p className="tocyn-ticket-context-history-title">{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
+                    <p className="tocyn-ticket-context-history-meta">
                       {historyEvent.visibility} {historyEvent.source}
                     </p>
                   </li>
@@ -1255,16 +1303,16 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </div>
         </details>
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <h3 ref={contextHeadingRef} tabIndex={-1} className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Info className="w-4 h-4 text-slate-400" />
+        <div className="tocyn-ticket-context-settings-card">
+          <h3 ref={contextHeadingRef} tabIndex={-1} className="tocyn-ticket-context-settings-heading">
+            <Info className="tocyn-ticket-context-settings-icon" />
             Ticket Details
           </h3>
-          <div className="space-y-4">
+          <div className="tocyn-ticket-context-settings-fields">
             <div>
-              <label htmlFor="ticket-priority" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Priority</label>
-              <div className="mt-1">
-                <TocynSelect
+              <label htmlFor="ticket-priority" className="tocyn-ticket-context-settings-label">Priority</label>
+              <div className="tocyn-ticket-context-settings-field-control">
+                <ParkSelect
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   ref={node => { ticketSelectRefs.current.priority = node; }}
                   id="ticket-priority" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -1273,19 +1321,19 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.priority; return; }
                     void handleTicketChange({ priority: e.target.value as TicketChanges['priority'] }, 'priority');
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+                  className="tocyn-form-control tocyn-ticket-context-settings-control"
                 >
                   <option value="low">Low</option>
                   <option value="normal">Normal</option>
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
-                </TocynSelect>
+                </ParkSelect>
               </div>
             </div>
             <div>
-              <label htmlFor="ticket-assigned_to" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Assigned To</label>
-              <div className="mt-1">
-                <TocynSelect
+              <label htmlFor="ticket-assigned_to" className="tocyn-ticket-context-settings-label">Assigned To</label>
+              <div className="tocyn-ticket-context-settings-field-control">
+                <ParkSelect
                   key={`ticket-assigned_to-${ticketSelectVersions.assigned_to}`}
                   ref={node => { ticketSelectRefs.current.assigned_to = node; }}
                   id="ticket-assigned_to" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -1294,13 +1342,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.assigned_to || ''; return; }
                     void handleTicketChange({ assigned_to: e.target.value || null }, 'assigned_to');
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+                  className="tocyn-form-control tocyn-ticket-context-settings-control"
                 >
                   <option value="">Unassigned</option>
                   {agents?.map(agent => (
                     <option key={agent.id} value={agent.id}>{agent.full_name || agent.email}</option>
                   ))}
-                </TocynSelect>
+                </ParkSelect>
                 <TicketAssignmentActions ticketId={id} ownerId={ticket.assigned_to ?? null}
                   agents={agents ?? []} fresh={isFetchedAfterMount && !isFetching && !error}
                   disabled={updateTicket.isPending || assignResponsibleOwner.isPending || isSupportStateSubmitting || isSubmitting || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -1308,9 +1356,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
             </div>
             <div>
-              <label htmlFor="ticket-group_id" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Group</label>
-              <div className="mt-1">
-                <TocynSelect
+              <label htmlFor="ticket-group_id" className="tocyn-ticket-context-settings-label">Group</label>
+              <div className="tocyn-ticket-context-settings-field-control">
+                <ParkSelect
                   key={`ticket-group_id-${ticketSelectVersions.group_id}`}
                   ref={node => { ticketSelectRefs.current.group_id = node; }}
                   id="ticket-group_id" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
@@ -1319,20 +1367,20 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.group_id || ''; return; }
                     void handleTicketChange({ group_id: e.target.value || null }, 'group_id');
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+                  className="tocyn-form-control tocyn-ticket-context-settings-control"
                 >
                   <option value="">No Group</option>
                   {groups?.map(group => (
                     <option key={group.id} value={group.id}>{group.name}</option>
                   ))}
-                </TocynSelect>
+                </ParkSelect>
               </div>
             </div>
 
             {ticketFields && ticketFields.filter(f => f.is_active).length > 0 && (
-              <div className="pt-4 mt-4 border-t border-slate-200">
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Custom Attributes</h4>
-                <div className="space-y-4">
+              <div className="tocyn-ticket-context-custom-section">
+                <h4 className="tocyn-ticket-context-custom-title">Custom Attributes</h4>
+                <div className="tocyn-ticket-context-custom-fields">
                   {ticketFields.filter(f => f.is_active).map((field) => {
                     const value = ticket.custom_fields ? ticket.custom_fields[field.name] : '';
                     const inputId = `${customFieldPrefix}-${field.id}`;
@@ -1349,32 +1397,32 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     };
 
                     return (
-                      <div key={field.id}>
-                        <label htmlFor={inputId} className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                      <div key={field.id} className="tocyn-form-field">
+                        <label htmlFor={inputId} className="tocyn-ticket-context-settings-label">
                           {field.label}
                         </label>
                         {field.field_type === 'select' && field.options ? (
-                          <TocynSelect
+                          <ParkSelect
                             id={inputId}
                             value={value || ''}
                             onChange={(e) => handleSave(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+                            className="tocyn-form-control tocyn-ticket-context-settings-control"
                           >
                             <option value="">Select...</option>
                             {field.options.split(',').map(s => s.trim()).filter(Boolean).map((opt) => (
                               <option key={opt} value={opt}>{opt}</option>
                             ))}
-                          </TocynSelect>
+                          </ParkSelect>
                         ) : field.field_type === 'checkbox' ? (
-                          <div className="flex items-center gap-2">
-                            <TocynInput
+                          <div className="tocyn-ticket-context-checkbox-row">
+                            <ParkInput
                               id={inputId}
                               type="checkbox"
                               checked={value === true || value === 'true'}
                               onChange={(e) => handleSave(e.target.checked)}
-                              className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                              className="tocyn-ticket-context-checkbox"
                             />
-                            <span className="text-sm font-medium text-slate-700">{field.label}</span>
+                            <span className="tocyn-ticket-context-checkbox-label">{field.label}</span>
                           </div>
                         ) : (
                           <CustomFieldInput
@@ -1393,49 +1441,49 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </div>
         </div>
 
-        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
-            <span className="flex items-center gap-2"><Activity className="w-4 h-4 text-slate-400" />Operational context</span>
+        <details open className="tocyn-u-surface tocyn-u-radius-xl tocyn-u-border tocyn-u-shadow tocyn-u-pad-5">
+          <summary className="tocyn-u-clickable tocyn-u-list-none tocyn-u-text-sm tocyn-u-font-bold tocyn-u-fg tocyn-u-focus tocyn-u-focus-2 tocyn-u-focus-brand">
+            <span className="tocyn-u-flex tocyn-u-items-center tocyn-u-gap-2"><Activity className="tocyn-u-icon tocyn-u-fg-muted" />Operational context</span>
           </summary>
-          <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+          <p role="status" className="tocyn-u-margin-top-4 tocyn-u-radius tocyn-u-border tocyn-u-surface-subtle tocyn-u-pad-3 tocyn-u-text-xs tocyn-u-fg-muted">
             No operational source is connected for this ticket. Live SLA and routing details remain unavailable.
           </p>
         </details>
 
-        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
-            <span className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-slate-400" />Knowledge</span>
+        <details open className="tocyn-u-surface tocyn-u-radius-xl tocyn-u-border tocyn-u-shadow tocyn-u-pad-5">
+          <summary className="tocyn-u-clickable tocyn-u-list-none tocyn-u-text-sm tocyn-u-font-bold tocyn-u-fg tocyn-u-focus tocyn-u-focus-2 tocyn-u-focus-brand">
+            <span className="tocyn-u-flex tocyn-u-items-center tocyn-u-gap-2"><MessageSquare className="tocyn-u-icon tocyn-u-fg-muted" />Knowledge</span>
           </summary>
-          <div className="mt-4 space-y-3">
-            <p id="knowledge-insert-help" role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+          <div className="tocyn-u-margin-top-4 tocyn-u-stack-3">
+            <p id="knowledge-insert-help" role="status" className="tocyn-u-radius tocyn-u-border tocyn-u-surface-subtle tocyn-u-pad-3 tocyn-u-text-xs tocyn-u-fg-muted">
               {knowledgeLoading ? 'Loading tenant knowledge…' : knowledgeError ? 'Knowledge is temporarily unavailable. No content was inserted.' : knowledgeArticles.length ? 'Select an article to append its verified content to the reply.' : 'No eligible internal knowledge articles are available.'}
             </p>
-            {knowledgeError && <TocynButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className="text-sm underline">Retry knowledge</TocynButton>}
+            {knowledgeError && <ParkButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className="tocyn-u-text-sm tocyn-u-underline">Retry knowledge</ParkButton>}
             {workspace.panel === 'details' && knowledgeArticles.length > 0 && <KnowledgeBrowser articles={knowledgeArticles} insertingId={knowledgeInserting}
               disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} onInsert={article => void insertKnowledgeArticle(article)} />}
           </div>
         </details>
 
-        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 animate-in slide-in-from-right-4">
-            <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
-              <span className="flex items-center gap-2"><Eye className="w-4 h-4 text-brand-500" />Collaboration</span>
+        <details open className="tocyn-u-surface tocyn-u-radius-xl tocyn-u-border tocyn-u-shadow tocyn-u-pad-5 tocyn-u-motion-in tocyn-u-motion-right">
+            <summary className="tocyn-u-clickable tocyn-u-list-none tocyn-u-text-sm tocyn-u-font-bold tocyn-u-fg tocyn-u-focus tocyn-u-focus-2 tocyn-u-focus-brand">
+              <span className="tocyn-u-flex tocyn-u-items-center tocyn-u-gap-2"><Eye className="tocyn-u-icon tocyn-u-brand" />Collaboration</span>
             </summary>
-            {viewers.length > 0 ? <div className="space-y-3">
+            {viewers.length > 0 ? <div className="tocyn-u-stack-3">
               {viewers.map((viewer, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-700 text-xs font-bold border border-brand-100">
+                <div key={i} className="tocyn-u-flex tocyn-u-items-center tocyn-u-gap-3">
+                  <div className="tocyn-u-avatar tocyn-u-radius-full tocyn-u-brand-bg tocyn-u-flex tocyn-u-items-center tocyn-u-justify-center tocyn-u-brand tocyn-u-text-xs tocyn-u-font-bold tocyn-u-border tocyn-u-brand-border">
                     {viewer.name[0]}
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">{viewer.name}</p>
-                    <p className="text-[10px] tocyn-presence-viewing font-medium flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                    <p className="tocyn-u-text-xs tocyn-u-font-bold tocyn-u-fg">{viewer.name}</p>
+                    <p className="tocyn-u-text-10 tocyn-presence-viewing tocyn-u-font-medium tocyn-u-flex tocyn-u-items-center tocyn-u-gap-1">
+                      <span className="tocyn-u-dot tocyn-u-success tocyn-u-radius-full" />
                       Viewing
                     </p>
                   </div>
                 </div>
               ))}
-            </div> : <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">No collaborators are viewing this ticket.</p>}
+            </div> : <p role="status" className="tocyn-u-margin-top-4 tocyn-u-radius tocyn-u-border tocyn-u-surface-subtle tocyn-u-pad-3 tocyn-u-text-xs tocyn-u-fg-muted">No collaborators are viewing this ticket.</p>}
         </details>
       </aside>
       </div>
@@ -1456,25 +1504,25 @@ function CustomFieldInput({ id, field, value, onSave }: { id: string, field: any
 
   if (field.field_type === 'textarea') {
     return (
-      <TocynTextarea
+      <ParkTextarea
         id={id}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
-        className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm resize-y"
+        className="tocyn-u-full tocyn-u-surface tocyn-u-border tocyn-u-radius-md tocyn-u-pad-inline-3 tocyn-u-pad-block-1-5 tocyn-u-text-sm tocyn-u-font-medium tocyn-u-focus-ring tocyn-u-focus-ring-brand tocyn-u-outline-none tocyn-u-shadow tocyn-u-resize-y"
         rows={3}
       />
     );
   }
 
   return (
-    <TocynInput
+    <ParkInput
       id={id}
       type="text"
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
-      className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+      className="tocyn-u-full tocyn-u-surface tocyn-u-border tocyn-u-radius-md tocyn-u-pad-inline-3 tocyn-u-pad-block-1-5 tocyn-u-text-sm tocyn-u-font-medium tocyn-u-focus-ring tocyn-u-focus-ring-brand tocyn-u-outline-none tocyn-u-shadow"
     />
   );
 }

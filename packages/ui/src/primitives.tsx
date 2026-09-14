@@ -30,6 +30,15 @@ export const TocynPanel = React.forwardRef<HTMLElement, TocynPanelProps>(functio
   return <section {...props} data-tocyn-primitive="panel" ref={ref} className={className} data-state={state}>{children}</section>;
 });
 
+/** A stable, labelled surface for no-data and recoverable empty views. */
+export function TocynEmptyState({ title, description, action, className }: { title: string; description?: string; action?: React.ReactNode; className?: string }) {
+  return <section aria-label={title} data-tocyn-primitive="empty-state" className={['tocyn-empty-state', className].filter(Boolean).join(' ')}>
+    <h2 className="tocyn-empty-state-title">{title}</h2>
+    {description && <p className="tocyn-empty-state-description">{description}</p>}
+    {action}
+  </section>;
+}
+
 export interface WorkspaceRegionProps extends React.HTMLAttributes<HTMLElement> {
   ref?: React.Ref<HTMLElement>;
   label: string;

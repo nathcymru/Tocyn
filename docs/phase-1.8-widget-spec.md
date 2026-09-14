@@ -10,14 +10,14 @@ Luminatick provides a embeddable web widget that can be integrated into any webs
 ### Shadow DOM Encapsulation
 To prevent CSS conflicts with the host website, the widget will be encapsulated using the Shadow DOM.
 - The widget will create a shadow root on a host element.
-- All styles (including Tailwind CSS) will be injected into the shadow root.
+- All shared Panda CSS and widget styles will be injected into the shadow root.
 - React will be rendered inside the shadow root.
 
 ### Library Mode Build
 The widget will be built using Vite's "Library Mode".
 - **Input**: `apps/widget/src/main.tsx`
 - **Output**: A single JavaScript file `lumina-widget.js` in `apps/widget/dist`.
-- **CSS**: Tailwind CSS will be processed and bundled. Since we are using Shadow DOM, we need a way to inject the CSS into the shadow root. We can use a Vite plugin or a custom script to embed the CSS as a string in the JS bundle.
+- **CSS**: Panda CSS is bundled with the widget and injected into the ShadowRoot alongside the documented `LUMINA_WIDGET_CSS` compatibility boundary.
 
 ### Widget Configuration
 The widget will fetch its configuration from the backend:
@@ -45,10 +45,16 @@ The widget will fetch its configuration from the backend:
 
 ## Implementation Plan
 
-### 1. Project Setup
-- Install `tailwindcss`, `autoprefixer`, `postcss`.
-- Configure `tailwind.config.js` and `postcss.config.js`.
-- Set up `vite.config.ts` for library mode.
+### 1. Project Setup (historical)
+
+This phase document predates the current Park UI/Panda CSS migration. Its
+Tailwind setup notes are retained as historical context only and are not an
+instruction for the current implementation. Current widget styling must use
+the shared Panda-generated stylesheet and keep the `LUMINA_WIDGET_CSS`
+ShadowRoot compatibility boundary.
+
+- Use the shared Panda CSS contract from `@luminatick/ui`.
+- Keep the existing `vite.config.ts` library-mode boundary.
 
 ### 2. Widget Core
 - Implement `ShadowRoot` wrapper.

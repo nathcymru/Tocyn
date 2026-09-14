@@ -1,11 +1,14 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { portalApi } from '../api/client';
 import type { Ticket, PaginatedResponse } from '../types';
-import { Loader2, Plus, MessageSquare } from 'lucide-react';
+import {
+  IconSpinner,
+  IconPlus
+} from '@luminatick/ui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { ticketReference } from '../utils/ticket-reference';
@@ -104,49 +107,46 @@ export function TicketListPage() {
   };
 
   const statusColors = {
-    open: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    resolved: 'bg-gray-100 text-gray-800',
-    closed: 'bg-gray-100 text-gray-800',
+    open: 'tocyn-status-open',
+    pending: 'tocyn-status-pending',
+    resolved: 'tocyn-status-resolved',
+    closed: 'tocyn-status-closed',
   };
 
   if (loading) {
-    return <div role="status" className="flex justify-center py-12"><Loader2 aria-hidden="true" className="w-8 h-8 animate-spin text-brand-600" /><span className="sr-only">Loading tickets…</span></div>;
+    return <ParkEmptyState role="status" title="Loading tickets…" headingLevel={false} aria-busy="true" className="tocyn-portal-ticket-loading" />;
   }
 
   if (error) {
-    return <div className="bg-red-50 text-red-700 p-4 rounded-lg">
-      <p role="alert">{error}</p>
-      <TocynButton type="button" onClick={retryTickets} className="mt-3 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Retry loading tickets</TocynButton>
-    </div>;
+    return <ParkEmptyState role="alert" title="Tickets could not be loaded." description={error} headingLevel={false} className="tocyn-portal-ticket-error" action={<ParkButton type="button" onClick={retryTickets} className="tocyn-portal-ticket-retry">Retry loading tickets</ParkButton>} />;
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 ref={listHeading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Your Tickets</h1>
-        <TocynButton
+    <div className="tocyn-portal-ticket-list">
+      <div className="tocyn-portal-ticket-list-header">
+        <h1 ref={listHeading} tabIndex={-1} className="tocyn-portal-ticket-list-title">Your Tickets</h1>
+        <ParkButton
           ref={createButton}
           type="button"
           onClick={() => { setCreateError(null); setIsCreating(true); }}
-          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className="tocyn-portal-ticket-list-create"
         >
-          <Plus className="w-5 h-5" />
+          <IconPlus className="tocyn-portal-ticket-list-icon" />
           New Ticket
-        </TocynButton>
+        </ParkButton>
       </div>
 
-      <p role="status" aria-live="polite" className="text-sm text-gray-700">{createStatus}</p>
+      <p role="status" aria-live="polite" className="tocyn-portal-ticket-list-status">{createStatus}</p>
       <TocynDialog open={isCreating} onOpenChange={setIsCreating} busy={creatingTicket}
           labelledBy="create-ticket-heading" initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
-          className="w-full max-w-lg rounded-lg border border-gray-300 bg-white p-6 shadow-xl backdrop:bg-gray-900/40">
-          <h2 id="create-ticket-heading" className="text-lg font-semibold mb-4">Create New Ticket</h2>
-          {createError && <p id="create-ticket-error" role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">{createError}</p>}
-          <p role="status" aria-live="polite" className="mb-3 text-sm text-gray-700">{creatingTicket ? 'Creating ticket…' : ''}</p>
-          <form aria-busy={creatingTicket} onSubmit={handleCreate} className="space-y-4">
-            <div>
-              <label htmlFor="create-ticket-subject" className="block text-sm font-medium text-gray-700">Subject</label>
-              <TocynInput
+          className="tocyn-portal-ticket-dialog">
+          <h2 id="create-ticket-heading" className="tocyn-portal-ticket-dialog-title">Create New Ticket</h2>
+          {createError && <p id="create-ticket-error" role="alert" className="tocyn-portal-ticket-dialog-error">{createError}</p>}
+          <p role="status" aria-live="polite" className="tocyn-portal-ticket-dialog-status">{creatingTicket ? 'Creating ticket…' : ''}</p>
+          <form aria-busy={creatingTicket} onSubmit={handleCreate} className="tocyn-portal-ticket-form">
+            <div className="tocyn-portal-ticket-field">
+              <label htmlFor="create-ticket-subject" className="tocyn-portal-ticket-field-label">Subject</label>
+              <ParkInput
                 id="create-ticket-subject"
                 ref={subjectInput}
                 readOnly={creatingTicket}
@@ -155,13 +155,13 @@ export function TicketListPage() {
                 required
                 value={newSubject}
                 onChange={(e) => { if (!creatingTicket) setNewSubject(e.target.value); }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm"
+                className="tocyn-portal-ticket-field-input"
                 placeholder="What do you need help with?"
               />
             </div>
-            <div>
-              <label htmlFor="create-ticket-message" className="block text-sm font-medium text-gray-700">Message</label>
-              <TocynTextarea
+            <div className="tocyn-portal-ticket-field">
+              <label htmlFor="create-ticket-message" className="tocyn-portal-ticket-field-label">Message</label>
+              <ParkTextarea
                 id="create-ticket-message"
                 readOnly={creatingTicket}
                 aria-describedby={createError ? "create-ticket-error" : undefined}
@@ -169,11 +169,11 @@ export function TicketListPage() {
                 rows={4}
                 value={newMessage}
                 onChange={(e) => { if (!creatingTicket) setNewMessage(e.target.value); }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm"
+                className="tocyn-portal-ticket-field-input"
                 placeholder="Describe your issue in detail..."
               />
             </div>
-            <div className="flex justify-end gap-3">
+            <div className="tocyn-portal-ticket-actions">
               {turnstileSiteKey && (
                 <Turnstile
                   ref={turnstileRef}
@@ -187,50 +187,47 @@ export function TicketListPage() {
                   }}
                 />
               )}
-              <TocynButton
+              <ParkButton
                 type="button"
                 aria-disabled={creatingTicket}
                 onClick={() => { if (!creatingTicket) setIsCreating(false); }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                className="tocyn-portal-ticket-cancel"
               >
                 Cancel
-              </TocynButton>
-              <TocynButton
+              </ParkButton>
+              <ParkButton
                 type="submit"
                 aria-disabled={creatingTicket}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-md aria-disabled:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                className="tocyn-portal-ticket-submit"
               >
-                {creatingTicket && <Loader2 className="w-4 h-4 animate-spin" />}
+                {creatingTicket && <IconSpinner className="tocyn-portal-ticket-spinner" />}
                 Create Ticket
-              </TocynButton>
+              </ParkButton>
             </div>
           </form>
       </TocynDialog>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="tocyn-portal-surface">
         {tickets.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg">You haven't created any tickets yet.</p>
-          </div>
+          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} className="tocyn-portal-ticket-empty-create"> <IconPlus className="tocyn-portal-ticket-list-icon" /> New Ticket</ParkButton>} className="tocyn-portal-ticket-empty" />
         ) : (
-          <ul className="divide-y divide-gray-200">
+          <ul className="tocyn-portal-ticket-list-items">
             {tickets.map((ticket) => (
-              <li key={ticket.id} className="hover:bg-gray-50 transition-colors">
-                <Link to={`/tickets/${ticket.id}`} className="block p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-gray-500 font-mono">{ticketReference(ticket, ticketPrefix)}</span>
-                      <h3 className="text-lg font-medium text-gray-900">{ticket.subject}</h3>
+              <li key={ticket.id} className="tocyn-portal-ticket-list-item">
+                <Link to={`/tickets/${ticket.id}`} className="tocyn-portal-ticket-list-link">
+                  <div className="tocyn-portal-ticket-list-row">
+                    <div className="tocyn-portal-ticket-row-main">
+                      <span className="tocyn-portal-ticket-reference">{ticketReference(ticket, ticketPrefix)}</span>
+                      <h3 className="tocyn-portal-ticket-subject">{ticket.subject}</h3>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[ticket.status]}`}>
+                    <span className={`tocyn-portal-ticket-status ${statusColors[ticket.status]}`}>
                       {ticket.status}
                     </span>
                   </div>
-                  <div className="mt-2 text-sm text-gray-500 flex items-center gap-4">
+                  <div className="tocyn-portal-ticket-list-meta">
                     <span>Created {formatDistanceToNow(utcTimestamp(ticket.created_at), { addSuffix: true })}</span>
                     <span>•</span>
-                    <span className="capitalize text-gray-700 font-medium">Priority: {ticket.priority}</span>
+                    <span className="tocyn-portal-ticket-priority">Priority: {ticket.priority}</span>
                   </div>
                 </Link>
               </li>

@@ -1,28 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ParkEmptyState } from '@luminatick/ui/park';
 import { useStats } from '../hooks/useStats';
-import { 
-  BarChart3, 
-  Users, 
-  Ticket, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle,
-  Users2
-} from 'lucide-react';
+import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
 
 export const DashboardPage: React.FC = () => {
   const { data: stats, isLoading } = useStats();
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-500 font-medium italic">
-        Loading dashboard metrics...
-      </div>
+      <ParkEmptyState title="Loading dashboard metrics…" headingLevel={false} aria-busy="true" className="tocyn-dashboard-loading" />
     );
   }
 
-  const getStatusCount = (status: string) => 
+  const getStatusCount = (status: string) =>
     stats?.ticketsByStatus.find(s => s.status === status)?.count || 0;
 
   const totalTickets = stats?.ticketsByStatus.reduce((acc, curr) => acc + curr.count, 0) || 0;
@@ -31,78 +22,78 @@ export const DashboardPage: React.FC = () => {
     {
       label: 'Total Tickets',
       value: totalTickets,
-      icon: Ticket,
-      color: 'bg-blue-50 text-blue-600',
+      icon: IconTicket,
+      color: 'tocyn-palette-blue-soft tocyn-palette-blue-text',
     },
     {
       label: 'Open Tickets',
       value: getStatusCount('open'),
-      icon: AlertCircle,
-      color: 'bg-emerald-50 text-emerald-600',
+      icon: IconCircleExclamation,
+      color: 'tocyn-palette-green-soft tocyn-palette-green-text',
     },
     {
       label: 'Pending Tickets',
       value: getStatusCount('pending'),
-      icon: Clock,
-      color: 'bg-amber-50 text-amber-600',
+      icon: IconClock,
+      color: 'tocyn-palette-amber-soft tocyn-palette-amber-text',
     },
     {
       label: 'Resolved Tickets',
       value: getStatusCount('resolved') + getStatusCount('closed'),
-      icon: CheckCircle2,
-      color: 'bg-slate-50 text-slate-600',
+      icon: IconCircleCheck,
+      color: 'tocyn-palette-neutral-soft tocyn-palette-neutral-text',
     },
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="tocyn-dashboard-page">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 text-sm">A quick overview of the support workload.</p>
-        <Link to="/inbox" className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Open Inbox</Link>
+        <h1 className="tocyn-dashboard-page-title">Dashboard</h1>
+        <p className="tocyn-dashboard-page-description">A quick overview of the support workload.</p>
+        <Link to="/inbox" className="tocyn-dashboard-open-inbox">Open Inbox</Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="tocyn-metric-strip">
         {cards.map((card, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`p-2 rounded-lg ${card.color}`}>
-                <card.icon className="w-5 h-5" />
+          <div key={idx} className="tocyn-metric-card">
+            <div className="tocyn-metric-card-header">
+              <div className={`tocyn-metric-card-icon ${card.color}`}>
+                <card.icon className="tocyn-metric-card-icon-glyph" />
               </div>
-              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Metrics</span>
+              <span className="tocyn-metric-card-kicker">Metrics</span>
             </div>
-            <div className="flex items-end justify-between">
+            <div className="tocyn-metric-card-content">
               <div>
-                <p className="text-sm font-medium text-slate-500">{card.label}</p>
-                <h3 className="text-3xl font-bold text-slate-900 mt-1">{card.value}</h3>
+                <p className="tocyn-metric-card-label">{card.label}</p>
+                <h3 className="tocyn-metric-card-value">{card.value}</h3>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-6">
-            <BarChart3 className="w-5 h-5 text-slate-400" />
-            <h3 className="font-bold text-slate-900">Tickets by Priority</h3>
+      <div className="tocyn-dashboard-panels">
+        <div className="tocyn-surface-card">
+          <div className="tocyn-dashboard-card-heading">
+            <IconChartBar className="tocyn-dashboard-panel-icon" />
+            <h3 className="tocyn-dashboard-panel-title">Tickets by Priority</h3>
           </div>
-          <div className="space-y-4">
+          <div className="tocyn-priority-list">
             {['urgent', 'high', 'normal', 'low'].map((priority) => {
               const count = stats?.ticketsByPriority.find(p => p.priority === priority)?.count || 0;
               const percentage = totalTickets > 0 ? (count / totalTickets) * 100 : 0;
               return (
-                <div key={priority} className="space-y-1.5">
-                  <div className="flex justify-between text-sm">
-                    <span className="capitalize text-slate-600 font-medium">{priority}</span>
-                    <span className="text-slate-900 font-bold">{count}</span>
+                <div key={priority} className="tocyn-priority-row">
+                  <div className="tocyn-priority-label-row">
+                    <span className="tocyn-priority-name">{priority}</span>
+                    <span className="tocyn-priority-count">{count}</span>
                   </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${
-                        priority === 'urgent' ? 'bg-red-500' :
-                        priority === 'high' ? 'bg-orange-500' :
-                        priority === 'normal' ? 'bg-blue-500' : 'bg-slate-400'
+                  <div className="tocyn-progress-track">
+                    <div
+                      className={`tocyn-progress-fill ${
+                        priority === 'urgent' ? 'tocyn-palette-red-fill' :
+                        priority === 'high' ? 'tocyn-palette-orange-fill' :
+                        priority === 'normal' ? 'tocyn-palette-blue-fill' : 'tocyn-palette-neutral-fill'
                       }`}
                       style={{ width: `${percentage}%` }}
                     />
@@ -113,28 +104,28 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-6">
-            <Users2 className="w-5 h-5 text-slate-400" />
-            <h3 className="font-bold text-slate-900">System Overview</h3>
+        <div className="tocyn-surface-card">
+          <div className="tocyn-dashboard-card-heading">
+            <IconUsers className="tocyn-dashboard-panel-icon" />
+            <h3 className="tocyn-dashboard-panel-title">System Overview</h3>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="w-4 h-4 text-brand-600" />
-                <span className="text-sm font-medium text-slate-600">Total Users</span>
+          <div className="tocyn-overview-grid">
+            <div className="tocyn-overview-card">
+              <div className="tocyn-overview-card-heading">
+                <IconUsers className="tocyn-overview-icon" />
+                <span className="tocyn-overview-label">Total Users</span>
               </div>
-              <p className="text-2xl font-bold text-slate-900">{stats?.totalUsers || 0}</p>
+              <p className="tocyn-overview-value">{stats?.totalUsers || 0}</p>
             </div>
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-              <div className="flex items-center gap-3 mb-2">
-                <Users2 className="w-4 h-4 text-brand-600" />
-                <span className="text-sm font-medium text-slate-600">Active Groups</span>
+            <div className="tocyn-overview-card">
+              <div className="tocyn-overview-card-heading">
+                <IconUsers className="tocyn-overview-icon" />
+                <span className="tocyn-overview-label">Active Groups</span>
               </div>
-              <p className="text-2xl font-bold text-slate-900">{stats?.totalGroups || 0}</p>
+              <p className="tocyn-overview-value">{stats?.totalGroups || 0}</p>
             </div>
           </div>
-          <p className="mt-8 border-t border-slate-100 pt-6 text-sm text-slate-600">Use Inbox to keep the conversation list in place while reviewing and replying.</p>
+          <p className="tocyn-overview-footer">Use Inbox to keep the conversation list in place while reviewing and replying.</p>
         </div>
       </div>
     </div>

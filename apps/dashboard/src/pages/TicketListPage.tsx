@@ -3,7 +3,7 @@ import { useTicketSlaBatch } from '../hooks/useTicketSla';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
 import { ticketReference } from '../utils/ticket-reference';
@@ -27,7 +27,7 @@ import {
   LayoutList,
   Copy,
   Check
-} from 'lucide-react';
+} from '../components/icons';
 import { clsx } from 'clsx';
 
 function cn(...inputs: any[]) {
@@ -35,17 +35,17 @@ function cn(...inputs: any[]) {
 }
 
 const statusColors = {
-  open: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  pending: 'bg-amber-100 text-amber-700 border-amber-200',
-  resolved: 'bg-slate-100 text-slate-700 border-slate-200',
-  closed: 'bg-slate-100 text-slate-700 border-slate-200',
+  open: 'tocyn-ticket-status-open',
+  pending: 'tocyn-ticket-status-pending',
+  resolved: 'tocyn-ticket-status-neutral',
+  closed: 'tocyn-ticket-status-neutral',
 };
 
 const priorityColors = {
-  low: 'text-slate-500',
-  normal: 'text-blue-500',
-  high: 'text-orange-500',
-  urgent: 'text-red-500',
+  low: 'tocyn-palette-neutral-text',
+  normal: 'tocyn-palette-blue-text',
+  high: 'tocyn-palette-orange-text',
+  urgent: 'tocyn-palette-red-text',
 };
 
 function pageFromAnchor(anchor: string) {
@@ -178,110 +178,106 @@ export function TicketListPage() {
   };
 
   return (
-    <div className="flex h-full gap-6">
+    <div className="tocyn-ticket-list-layout">
       <DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
         failureMessage="Workspace preferences are not saved. Stay on this list, retry saving, then navigate again." />
       {/* Left Sidebar: Filters */}
-      <div className="w-64 flex flex-col gap-2 shrink-0">
-        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Filters</h2>
-        <TocynButton
+      <div className="tocyn-ticket-list-filters">
+        <h2 className="tocyn-ticket-list-filter-heading">Filters</h2>
+        <ParkButton
           onClick={() => handleFilterClick('')}
           aria-pressed={activeFilterId === ''}
           className={cn(
-            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
-            activeFilterId === ''
-              ? "bg-brand-50 text-brand-700"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            "tocyn-ticket-list-filter-button",
+            activeFilterId === '' && "is-active"
           )}
         >
-          <LayoutList className="w-4 h-4" />
+          <LayoutList className="tocyn-ticket-list-icon" />
           All Tickets
-        </TocynButton>
+        </ParkButton>
         {isLoadingFilters ? (
-          <div className="px-3 py-2 text-sm text-slate-500">Loading filters...</div>
+          <div className="tocyn-ticket-list-filter-loading">Loading filters...</div>
         ) : (
           filters?.map(filter => (
-            <TocynButton
+            <ParkButton
               key={filter.id}
               onClick={() => handleFilterClick(filter.id)}
               aria-pressed={activeFilterId === filter.id}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
-                activeFilterId === filter.id
-                  ? "bg-brand-50 text-brand-700"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                "tocyn-ticket-list-filter-button",
+                activeFilterId === filter.id && "is-active"
               )}
             >
-              <Filter className="w-4 h-4" />
+              <Filter className="tocyn-ticket-list-icon" />
               {filter.name}
-            </TocynButton>
+            </ParkButton>
           ))
         )}
       </div>
 
       {/* Right Content: Ticket List */}
-      <div className="flex-1 flex flex-col min-w-0 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="tocyn-ticket-list-content">
+        <div className="tocyn-ticket-list-heading">
           <div>
-            <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">{globalSearch ? 'Global ticket results' : 'Tickets'}</h1>
-            <p className="text-slate-500 text-sm">
+            <h1 ref={heading} tabIndex={-1} className="tocyn-ticket-list-heading-title">{globalSearch ? 'Global ticket results' : 'Tickets'}</h1>
+            <p className="tocyn-ticket-list-heading-subtitle">
               {globalSearch ? 'All authorised tickets' : activeFilterId
                 ? filters?.find(f => f.id === activeFilterId)?.name
                 : 'All Tickets'}
             </p>
           </div>
-          <TocynButton
+          <ParkButton
             type="button"
             ref={createTrigger}
             onClick={() => {setCreateError(null);setIsModalOpen(true);}}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors shadow-sm text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="tocyn-ticket-list-create"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="tocyn-ticket-list-icon" />
             New Ticket
-          </TocynButton>
+          </ParkButton>
         </div>
 
-        <p role="status" aria-label="Ticket list status" className="text-sm text-slate-700">{isPlaceholderData ? 'Loading tickets. Previous results remain visible.' : feedStatus}</p>
-        <p role="status" aria-label="Workspace preference status" className="text-sm text-slate-700">
+        <p role="status" aria-label="Ticket list status" className="tocyn-ticket-list-status">{isPlaceholderData ? 'Loading tickets. Previous results remain visible.' : feedStatus}</p>
+        <p role="status" aria-label="Workspace preference status" className="tocyn-ticket-list-status">
           {workspace.status === 'loading' ? 'Restoring workspace preferences…' : workspace.status === 'saving' ? 'Saving workspace preferences…' : workspace.status === 'saved' ? 'Workspace preferences saved.' : ''}
         </p>
         {slaSort && <SlaQueueNotice asOf={paginatedData?.asOf} error={ticketsError} busy={isFetching} restart={restartSlaOrder} />}
-        {tickets.length > 0 && ticketSla.isLoading && <p role="status">Loading service levels…</p>}
-        {tickets.length > 0 && ticketSla.isError && <p role="status">Service levels could not be refreshed. <TocynButton type="button" disabled={ticketSla.isFetching} onClick={() => void ticketSla.refetch()} className="underline">Retry service levels</TocynButton></p>}
-        {draftIndicators.status === 'partial' && <p role="status" aria-label="Draft indicator status" className="text-sm text-amber-800">Draft indicators are incomplete. Only the first 200 drafts were checked.</p>}
+        {tickets.length > 0 && ticketSla.isLoading && <p role="status" className="tocyn-ticket-list-status">Loading service levels…</p>}
+        {tickets.length > 0 && ticketSla.isError && <p role="status" className="tocyn-ticket-list-status">Service levels could not be refreshed. <ParkButton type="button" disabled={ticketSla.isFetching} onClick={() => void ticketSla.refetch()} className="tocyn-ticket-list-alert-action">Retry service levels</ParkButton></p>}
+        {draftIndicators.status === 'partial' && <p role="status" aria-label="Draft indicator status" className="tocyn-ticket-list-status tocyn-ticket-list-status--warning">Draft indicators are incomplete. Only the first 200 drafts were checked.</p>}
         {workspace.status === 'error' && (
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div role="alert" className="tocyn-ticket-list-alert tocyn-ticket-list-alert--error">
             <p>{workspace.error}</p>
-            <TocynButton type="button" onClick={workspace.retrySave} className="mt-2 rounded border border-red-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">Retry workspace preferences</TocynButton>
+            <ParkButton type="button" onClick={workspace.retrySave} className="tocyn-ticket-list-alert-action">Retry workspace preferences</ParkButton>
           </div>
         )}
         {workspace.status === 'conflict' && (
-          <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <div role="alert" className="tocyn-ticket-list-alert tocyn-ticket-list-alert--warning">
             <p>{workspace.error}</p>
-            <TocynButton type="button" onClick={workspace.restoreServerState} className="mt-2 rounded border border-amber-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">Restore server preferences</TocynButton>
+            <ParkButton type="button" onClick={workspace.restoreServerState} className="tocyn-ticket-list-alert-action">Restore server preferences</ParkButton>
           </div>
         )}
-        {clipboardError && <p role="alert" className="text-sm text-red-800">{clipboardError}</p>}
+        {clipboardError && <p role="alert" className="tocyn-ticket-list-status tocyn-ticket-list-status--error">{clipboardError}</p>}
         {(ticketsError || retryingFeed) && (
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div role="alert" className="tocyn-ticket-list-alert tocyn-ticket-list-alert--error">
             <p>{tickets.length ? 'Could not refresh tickets. Showing the last loaded results.' : 'Could not load tickets.'}</p>
-            <TocynButton type="button" ref={retryButton} onClick={() => {void retryFeed();}} aria-disabled={isFetching || retryingFeed}
-              className="mt-2 rounded border border-red-300 px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2">
+            <ParkButton type="button" ref={retryButton} onClick={() => {void retryFeed();}} aria-disabled={isFetching || retryingFeed}
+              className="tocyn-ticket-list-alert-action">
               {isFetching ? 'Retrying…' : 'Retry loading tickets'}
-            </TocynButton>
+            </ParkButton>
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
-          <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
-            <div className="max-w-md w-full relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <TocynInput
+        <div className="tocyn-ticket-table-shell">
+          <div className="tocyn-ticket-table-toolbar">
+            <div className="tocyn-global-search-shell">
+              <Search className="tocyn-global-search-icon" aria-hidden="true" />
+              <ParkInput
                 type="text"
                 placeholder="Search all authorised tickets..."
                 aria-label="Search all tickets in this list view"
                 aria-describedby="global-ticket-results-scope"
-                className="w-full pl-9 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                className="tocyn-global-search"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -297,18 +293,18 @@ export function TicketListPage() {
                     }
                 }}
               />
-              <TocynButton type="button" aria-label="Clear list ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs font-semibold text-slate-700 underline disabled:no-underline disabled:opacity-50">Clear</TocynButton>
-              <p id="global-ticket-results-scope" className="sr-only">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
+              <ParkButton type="button" aria-label="Clear list ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
+                className="tocyn-search-clear">Clear</ParkButton>
+              <p id="global-ticket-results-scope" className="tocyn-visually-hidden">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-700">
+            <div className="tocyn-ticket-table-controls">
+              <label className="tocyn-ticket-sort-label">
                 <span>Sort tickets</span>
-                <TocynSelect
+                <ParkSelect
                   aria-label="Sort tickets"
                   value={workspace.sort}
                   onChange={(event) => handleSortChange(event.target.value as WorkspacePreference['sort'])}
-                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="tocyn-form-control tocyn-ticket-sort-select"
                 >
                   <option value="updated_desc">Recently updated</option>
                   <option value="updated_asc">Least recently updated</option>
@@ -317,47 +313,41 @@ export function TicketListPage() {
                   <option value="priority_desc">Highest priority</option>
                   <option value="priority_asc">Lowest priority</option>
                   <option value="sla_priority">Earliest SLA deadline</option>
-                </TocynSelect>
+                </ParkSelect>
               </label>
-              <div className="text-sm text-slate-500 font-medium">
+              <div className="tocyn-ticket-total">
                 Total: {meta.total}
               </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left">
+          <div className="tocyn-ticket-table-scroll">
+            <table className="tocyn-ticket-table">
               <thead>
-                <tr className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                  <th className="px-6 py-4 border-b border-slate-200">ID</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Subject</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Status</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Priority</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Customer</th>
-                  <th className="px-6 py-4 border-b border-slate-200">Last Update</th>
-                  <th className="px-6 py-4 border-b border-slate-200 text-right">Actions</th>
+                <tr className="tocyn-ticket-table-head">
+                  <th>ID</th><th>Subject</th><th>Status</th><th>Priority</th><th>Customer</th><th>Last Update</th><th className="tocyn-ticket-table-actions-heading">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="tocyn-ticket-table-body">
                 {isLoadingTickets ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">Loading tickets...</td>
+                    <td colSpan={7} className="tocyn-ticket-list-state">Loading tickets...</td>
                   </tr>
                 ) : ticketsError && tickets.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-600">Tickets are currently unavailable.</td></tr>
+                  <tr><td colSpan={7} className="tocyn-ticket-list-state">Tickets are currently unavailable.</td></tr>
                 ) : tickets.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">No tickets found.</td>
+                    <td colSpan={7} className="tocyn-ticket-list-state">No tickets found.</td>
                   </tr>
                 ) : (
                   tickets.map((ticket) => (
-                    <tr key={ticket.id} className="hover:bg-slate-50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-1.5 group/copy">
-                          <span className="font-mono text-xs font-bold text-slate-600 max-w-[12rem] truncate" title={ticketReference(ticket, ticketPrefix)}>
+                    <tr key={ticket.id} className="tocyn-ticket-table-row tocyn-ticket-row-group">
+                      <td>
+                        <div className="tocyn-ticket-reference">
+                          <span className="tocyn-ticket-reference-value" title={ticketReference(ticket, ticketPrefix)}>
                             {ticketReference(ticket, ticketPrefix)}
                           </span>
-                          <TocynButton
+                          <ParkButton
                             onClick={async (e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -371,62 +361,62 @@ export function TicketListPage() {
                                 setClipboardError('Could not copy the ticket reference. Select and copy the visible reference instead.');
                               }
                             }}
-                            className="p-1 rounded-md hover:bg-slate-100 text-slate-600 transition-colors opacity-0 group-hover/copy:opacity-100 focus:opacity-100"
+                            className="tocyn-ticket-copy"
                             title="Copy ticket reference"
                             aria-label="Copy ticket reference"
                           >
-                            {copiedId === ticket.id ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                          </TocynButton>
+                            {copiedId === ticket.id ? <Check className="tocyn-ticket-copy-icon tocyn-ticket-copy-icon--success" /> : <Copy className="tocyn-ticket-copy-icon" />}
+                          </ParkButton>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <Link to={`/tickets/${ticket.id}`} className="block font-medium text-slate-900 hover:text-brand-600">
+                      <td>
+                        <Link to={`/tickets/${ticket.id}`} className="tocyn-ticket-subject">
                           {ticket.subject}
                         </Link>
                         {!ticketSla.isLoading && <ConversationSlaStatus sla={ticketSla.isError || isPlaceholderData ? undefined : ticketSla.data?.[ticket.id]} />}
-                        {draftIndicators.ticketIds.has(ticket.id) && <span className="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" aria-label="Draft available">Draft</span>}
+                        {draftIndicators.ticketIds.has(ticket.id) && <span className="tocyn-ticket-draft" aria-label="Draft available">Draft</span>}
                         {ticket.snippet && (
-                          <div className="text-xs text-slate-500 truncate max-w-sm mt-1" title={ticket.snippet}>
+                          <div className="tocyn-ticket-snippet" title={ticket.snippet}>
                             {ticket.snippet}
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td>
                         <span className={clsx(
-                          "px-2.5 py-0.5 rounded-full text-xs font-medium border",
+                          "tocyn-ticket-status-badge",
                           statusColors[ticket.status as keyof typeof statusColors] || statusColors.open
                         )}>
                           {ticket.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <AlertCircle className={clsx("w-4 h-4", priorityColors[ticket.priority as keyof typeof priorityColors] || priorityColors.normal)} />
-                          <span className="capitalize">{ticket.priority}</span>
+                      <td>
+                        <div className="tocyn-ticket-priority">
+                          <AlertCircle className={clsx("tocyn-ticket-priority-icon", priorityColors[ticket.priority as keyof typeof priorityColors] || priorityColors.normal)} />
+                          <span className="tocyn-ticket-priority-label">{ticket.priority}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm">
-                          <p className="text-slate-900 truncate max-w-[150px]">{ticket.customer_email.split('@')[0]}</p>
-                          <p className="text-slate-500 text-xs truncate max-w-[150px]" title={ticket.customer_email}>{ticket.customer_email}</p>
+                      <td>
+                        <div className="tocyn-ticket-customer">
+                          <p className="tocyn-ticket-customer-name">{ticket.customer_email.split('@')[0]}</p>
+                          <p className="tocyn-ticket-customer-email" title={ticket.customer_email}>{ticket.customer_email}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-1.5 text-slate-500 text-sm">
-                          <Clock className="w-4 h-4" />
+                      <td>
+                        <div className="tocyn-ticket-updated">
+                          <Clock className="tocyn-ticket-updated-icon" />
                           {utcTimestamp(ticket.updated_at).toLocaleDateString()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right relative">
+                      <td className="tocyn-ticket-actions-cell">
                         <Popover.Root open={openMenuId === ticket.id} onOpenChange={({open}) => setOpenMenuId(current => open ? ticket.id : current === ticket.id ? null : current)} positioning={{placement:'bottom-end',strategy:'fixed'}} lazyMount unmountOnExit>
                           <Popover.Trigger asChild>
-                            <TocynButton type="button" aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="p-1 text-slate-600 hover:text-slate-900 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-700">
-                              <MoreVertical className="w-5 h-5" />
-                            </TocynButton>
+                            <ParkButton type="button" aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="tocyn-ticket-row-menu">
+                              <MoreVertical className="tocyn-ticket-row-menu-icon" />
+                            </ParkButton>
                           </Popover.Trigger>
-                          <Popover.Positioner className="z-20">
-                            <Popover.Content aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1 overflow-hidden">
-                              <Link to={`/tickets/${ticket.id}`} onClick={() => setOpenMenuId(null)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 text-left w-full">
+                          <Popover.Positioner>
+                            <Popover.Content aria-label={`Actions for ${ticketReference(ticket, ticketPrefix)}`} className="tocyn-ticket-row-menu-popover">
+                              <Link to={`/tickets/${ticket.id}`} onClick={() => setOpenMenuId(null)} className="tocyn-ticket-row-menu-link">
                                 View Ticket
                               </Link>
                             </Popover.Content>
@@ -442,27 +432,27 @@ export function TicketListPage() {
 
           {/* Pagination Controls */}
           {meta.total_pages > 1 && (
-            <div className="p-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
-              <span role="status" aria-label="Ticket pages" className="text-sm text-slate-700 font-medium">
+            <div className="tocyn-ticket-list-pagination">
+              <span role="status" aria-label="Ticket pages" className="tocyn-ticket-list-status">
                 Showing page {meta.page} of {meta.total_pages}
               </span>
-              <div className="flex gap-2">
-                <TocynButton
+              <div className="tocyn-ticket-table-controls">
+                <ParkButton
                   onClick={() => { if (!isFetching && page > 1) { paging.current = true; workspace.update({ listAnchor: pageAnchor(page - 1) }); } }}
                   aria-disabled={isFetching || page === 1}
-                  className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 hover:bg-white aria-disabled:bg-slate-100 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 flex items-center gap-1 bg-white shadow-sm transition-colors"
+                  className="tocyn-ticket-pagination-button"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="tocyn-ticket-list-icon" />
                   Previous
-                </TocynButton>
-                <TocynButton
+                </ParkButton>
+                <ParkButton
                   onClick={() => { if (!isFetching && page < meta.total_pages) { paging.current = true; workspace.update({ listAnchor: pageAnchor(page + 1) }); } }}
                   aria-disabled={isFetching || page >= meta.total_pages}
-                  className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 hover:bg-white aria-disabled:bg-slate-100 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 flex items-center gap-1 bg-white shadow-sm transition-colors"
+                  className="tocyn-ticket-pagination-button"
                 >
                   Next
-                  <ChevronRight className="w-4 h-4" />
-                </TocynButton>
+                  <ChevronRight className="tocyn-ticket-list-icon" />
+                </ParkButton>
               </div>
             </div>
           )}
@@ -472,24 +462,24 @@ export function TicketListPage() {
       {/* New Ticket Modal */}
       <TocynDialog open={isModalOpen} onOpenChange={setIsModalOpen} busy={createTicket.isPending}
           labelledBy="create-ticket-heading" initialFocusEl={() => createSubject.current} finalFocusEl={() => createTrigger.current}
-          className="w-full max-w-2xl">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 id="create-ticket-heading" className="text-xl font-bold text-slate-900">Create New Ticket</h2>
-              <TocynButton type="button" aria-disabled={createTicket.isPending} aria-label="Close new ticket" onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }} className="rounded text-slate-600 hover:text-slate-900 focus-visible:outline focus-visible:outline-2">
-                <X className="w-6 h-6" />
-              </TocynButton>
+          className="tocyn-ticket-create-dialog">
+          <div className="tocyn-ticket-create-modal">
+            <div className="tocyn-ticket-create-header">
+              <h2 id="create-ticket-heading" className="tocyn-ticket-create-title">Create New Ticket</h2>
+              <ParkButton type="button" aria-disabled={createTicket.isPending} aria-label="Close new ticket" onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }} className="tocyn-ticket-create-close">
+                <X className="tocyn-ticket-list-icon" />
+              </ParkButton>
             </div>
-            <form aria-busy={createTicket.isPending} onSubmit={handleCreateTicket} className="p-6 space-y-4">
-              <p role="status" aria-label="Ticket creation status" className="text-sm text-slate-700">{createTicket.isPending ? "Creating ticket…" : ""}</p>
-              {createError && <p id="create-ticket-error" role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-red-800">{createError}</p>}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label htmlFor="create-ticket-subject" className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
-                  <TocynInput
+            <form aria-busy={createTicket.isPending} onSubmit={handleCreateTicket} className="tocyn-ticket-create-form">
+              <p role="status" aria-label="Ticket creation status" className="tocyn-ticket-create-status">{createTicket.isPending ? "Creating ticket…" : ""}</p>
+              {createError && <p id="create-ticket-error" role="alert" className="tocyn-ticket-create-error">{createError}</p>}
+              <div className="tocyn-ticket-create-grid">
+                <div>
+                  <label htmlFor="create-ticket-subject" className="tocyn-ticket-create-label">Subject</label>
+                  <ParkInput
                     type="text"
                     required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-subject"
                     ref={createSubject}
                     readOnly={createTicket.isPending}
@@ -499,11 +489,11 @@ export function TicketListPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="create-ticket-customer_email" className="block text-sm font-medium text-slate-700 mb-1">Customer Email</label>
-                  <TocynInput
+                  <label htmlFor="create-ticket-customer_email" className="tocyn-ticket-create-label">Customer Email</label>
+                  <ParkInput
                     type="email"
                     required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-customer_email"
                     readOnly={createTicket.isPending}
                     aria-describedby={createError ? "create-ticket-error" : undefined}
@@ -512,9 +502,9 @@ export function TicketListPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="create-ticket-priority" className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
-                  <TocynSelect
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  <label htmlFor="create-ticket-priority" className="tocyn-ticket-create-label">Priority</label>
+                  <ParkSelect
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-priority"
                     aria-disabled={createTicket.isPending}
                     value={formData.priority}
@@ -524,12 +514,12 @@ export function TicketListPage() {
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
                     <option value="urgent">Urgent</option>
-                  </TocynSelect>
+                  </ParkSelect>
                 </div>
                 <div>
-                  <label htmlFor="create-ticket-group_id" className="block text-sm font-medium text-slate-700 mb-1">Group</label>
-                  <TocynSelect
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  <label htmlFor="create-ticket-group_id" className="tocyn-ticket-create-label">Group</label>
+                  <ParkSelect
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-group_id"
                     aria-disabled={createTicket.isPending}
                     value={formData.group_id}
@@ -539,12 +529,12 @@ export function TicketListPage() {
                     {groups?.map((group) => (
                       <option key={group.id} value={group.id}>{group.name}</option>
                     ))}
-                  </TocynSelect>
+                  </ParkSelect>
                 </div>
                 <div>
-                  <label htmlFor="create-ticket-assigned_to" className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
-                  <TocynSelect
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  <label htmlFor="create-ticket-assigned_to" className="tocyn-ticket-create-label">Assignee</label>
+                  <ParkSelect
+                    className="tocyn-ticket-create-control"
                     id="create-ticket-assigned_to"
                     aria-disabled={createTicket.isPending}
                     value={formData.assigned_to}
@@ -554,15 +544,15 @@ export function TicketListPage() {
                     {agents?.map((agent) => (
                       <option key={agent.id} value={agent.id}>{agent.full_name || agent.email}</option>
                     ))}
-                  </TocynSelect>
+                  </ParkSelect>
                 </div>
               </div>
               <div>
-                <label htmlFor="create-ticket-body" className="block text-sm font-medium text-slate-700 mb-1">Initial Message</label>
-                <TocynTextarea
+                <label htmlFor="create-ticket-body" className="tocyn-ticket-create-label">Initial Message</label>
+                <ParkTextarea
                   required
                   rows={4}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="tocyn-ticket-create-control tocyn-ticket-create-textarea"
                   id="create-ticket-body"
                     readOnly={createTicket.isPending}
                     aria-describedby={createError ? "create-ticket-error" : undefined}
@@ -570,22 +560,22 @@ export function TicketListPage() {
                   onChange={(e) => { if (!createTicket.isPending) setFormData({ ...formData, body: e.target.value }); }}
                 />
               </div>
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <TocynButton
+              <div className="tocyn-ticket-create-actions">
+                <ParkButton
                   type="button"
                   aria-disabled={createTicket.isPending}
                   onClick={() => { if (!createTicket.isPending) setIsModalOpen(false); }}
-                  className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors focus-visible:outline focus-visible:outline-2"
+                  className="tocyn-ticket-create-cancel"
                 >
                   Cancel
-                </TocynButton>
-                <TocynButton
+                </ParkButton>
+                <ParkButton
                   type="submit"
                   aria-disabled={createTicket.isPending}
-                  className="px-4 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors aria-disabled:bg-brand-700 aria-disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="tocyn-ticket-create-submit"
                 >
                   {createTicket.isPending ? 'Creating...' : 'Create Ticket'}
-                </TocynButton>
+                </ParkButton>
               </div>
             </form>
           </div>

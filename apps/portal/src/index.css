@@ -1,9 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 font-sans antialiased;
+    background: var(--tocyn-color-canvas, #f8fafc);
+    color: var(--tocyn-color-text, #1e293b);
+    font-family: var(--tocyn-font-primary, 'Atkinson Hyperlegible', ui-sans-serif, system-ui, sans-serif);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }

@@ -31,6 +31,16 @@ function localSecret(): string {
 
 const localBeta = process.argv.includes('--local-beta');
 
+const ansi = {
+  reset: '\u001b[0m',
+  green: '\u001b[32m',
+  cyan: '\u001b[36m',
+  yellow: '\u001b[33m',
+  red: '\u001b[31m',
+};
+const divider = `${ansi.cyan}${'='.repeat(72)}${ansi.reset}`;
+const section = (title: string) => `\n${divider}\n${ansi.green}${title}${ansi.reset}\n${divider}\n`;
+
 function interactiveAllowed(): boolean {
   return process.argv.slice(2).join(' ') === (localBeta ? '--interactive-credentials --local-beta' : '--interactive-credentials')
     && process.stdin.isTTY === true
@@ -182,8 +192,14 @@ async function main(): Promise<void> {
     draftCleanupTimer = setInterval(purgeDrafts, 60_000);
     draftCleanupTimer.unref();
   }
-  process.stdout.write('\nSynthetic local fixture is ready at http://localhost:8787 (bound to 127.0.0.1).\n');
-  process.stdout.write('Passwords and operator enrollment URIs appear once below. They are synthetic, terminal-only values.\n\n');
+  process.stdout.write(section('STATUS'));
+  process.stdout.write(`${ansi.green}READY${ansi.reset}  Synthetic local fixture is running.\n`);
+  process.stdout.write(`${ansi.yellow}Synthetic credentials are printed once below for this terminal session only.${ansi.reset}\n`);
+  process.stdout.write(section('LOCAL ACCESS'));
+  process.stdout.write(`${ansi.cyan}Dashboard: http://127.0.0.1:5173/login${ansi.reset}\n`);
+  process.stdout.write(`${ansi.cyan}API:       http://127.0.0.1:8787${ansi.reset}\n`);
+  process.stdout.write(`${ansi.cyan}Health:    http://127.0.0.1:8787/health${ansi.reset}\n`);
+  process.stdout.write(section('OPERATOR CREDENTIALS'));
   for (const credential of bootstrap.credentials) {
     process.stdout.write(`Email: ${credential.email}\nPassword: ${credential.password}\n`);
     if (credential.portalLoginUrl) process.stdout.write(`Portal login URL: ${credential.portalLoginUrl}\n`);
@@ -191,13 +207,14 @@ async function main(): Promise<void> {
     process.stdout.write('\n');
   }
   if (localBeta) {
-    process.stdout.write('Guarded local beta is enabled with exactly two tenants and explicit invitations.\n');
-    process.stdout.write('Unsent drafts expire48hours after the last saved edit. Bounded local cleanup runs every minute while this command is running.\n');
-    process.stdout.write(`Local operator state: ${state}\n`);
+    process.stdout.write(`${ansi.green}DEMO DATA${ansi.reset}  Eight deterministic synthetic tickets are loaded for review.\n`);
+    process.stdout.write(`${ansi.yellow}Guarded local beta uses two tenants and explicit invitations. Draft cleanup runs every minute.${ansi.reset}\n`);
     for (const key of betaApiKeys) process.stdout.write(`Synthetic local API key (${key.tenantId}): ${key.apiKey}\n`);
     betaApiKeys = [];
   }
-  process.stdout.write('Use the existing API/portal/dashboard routes. Stop this command to erase its run-owned state.\n');
+  process.stdout.write(section('NEXT STEPS'));
+  process.stdout.write('Open the dashboard URL, sign in, and review the Park/Panda controls and demo inbox.\n');
+  process.stdout.write(`${ansi.yellow}STOP${ansi.reset}  Press Ctrl+C to stop the server and erase its run-owned state.\n`);
   await once(child, 'exit');
 }
 

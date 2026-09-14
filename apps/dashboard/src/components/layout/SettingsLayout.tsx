@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Settings, Users, Shield, Zap, Key, LayoutTemplate, FormInput, Mail, CreditCard, Workflow, Clock } from 'lucide-react';
+import { IconGear, IconUsers, IconShieldHalved, IconBolt, IconKey, IconTableColumns, IconWpforms, IconEnvelope, IconCreditCard, IconDiagramProject, IconClock } from '@luminatick/ui/icons';
 import { clsx } from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { dashboardApi } from '../../api/client';
@@ -10,21 +10,21 @@ function cn(...inputs: any[]) {
 }
 
 const settingsNavigation = [
-  { name: 'General', href: '/settings/general', icon: Settings, permissionKey: 'general' },
-  { name: 'Support States', href: '/settings/support-states', icon: Workflow, permissionKey: 'support_states' },
-  { name: 'Service Levels', href: '/settings/sla', icon: Clock, permissionKey: 'general' },
-  { name: 'Users', href: '/settings/users', icon: Users, permissionKey: 'users' },
-  { name: 'Groups', href: '/settings/groups', icon: Shield, permissionKey: 'groups' },
-  { name: 'Ticket Fields', href: '/settings/ticket-fields', icon: FormInput, permissionKey: 'ticket_fields' },
-  { name: 'Filters', href: '/settings/filters', icon: LayoutTemplate, permissionKey: 'filters' },
-  { name: 'Automations', href: '/settings/automations', icon: Zap, permissionKey: 'automations' },
-  { name: 'API Keys', href: '/settings/api-keys', icon: Key, permissionKey: 'api_keys' },
-  { name: 'Usage & Costs', href: '/settings/usage', icon: CreditCard, permissionKey: 'usage' },
+  { name: 'General', href: '/settings/general', icon: IconGear, permissionKey: 'general' },
+  { name: 'Support States', href: '/settings/support-states', icon: IconDiagramProject, permissionKey: 'support_states' },
+  { name: 'Service Levels', href: '/settings/sla', icon: IconClock, permissionKey: 'general' },
+  { name: 'Users', href: '/settings/users', icon: IconUsers, permissionKey: 'users' },
+  { name: 'Groups', href: '/settings/groups', icon: IconShieldHalved, permissionKey: 'groups' },
+  { name: 'Ticket Fields', href: '/settings/ticket-fields', icon: IconWpforms, permissionKey: 'ticket_fields' },
+  { name: 'Filters', href: '/settings/filters', icon: IconTableColumns, permissionKey: 'filters' },
+  { name: 'Automations', href: '/settings/automations', icon: IconBolt, permissionKey: 'automations' },
+  { name: 'API Keys', href: '/settings/api-keys', icon: IconKey, permissionKey: 'api_keys' },
+  { name: 'Usage & Costs', href: '/settings/usage', icon: IconCreditCard, permissionKey: 'usage' },
 ];
 
 const channelsNavigation = [
-  { name: 'Email', href: '/settings/channels/email', icon: Mail, permissionKey: 'channels_email' },
-  { name: 'Widget', href: '/settings/channels/widget', icon: LayoutTemplate, permissionKey: 'channels_widget' },
+  { name: 'Email', href: '/settings/channels/email', icon: IconEnvelope, permissionKey: 'channels_email' },
+  { name: 'Widget', href: '/settings/channels/widget', icon: IconTableColumns, permissionKey: 'channels_widget' },
 ];
 
 export function SettingsLayout() {
@@ -46,26 +46,26 @@ export function SettingsLayout() {
   const filteredChannelsNav = channelsNavigation.filter(item => hasPermission(item.permissionKey));
 
   return (
-    <div className="flex h-full">
+    <div className="tocyn-settings-layout">
       {/* Sub-sidebar */}
-      <div className="w-64 bg-white border-r border-slate-200 h-full overflow-y-auto shrink-0 hidden md:block">
-        <div className="p-4">
-          <h2 className="text-lg font-bold text-slate-900 mb-4 px-2">Settings</h2>
-          <nav className="space-y-1">
+      <div className="tocyn-settings-sidebar">
+        <div className="tocyn-settings-sidebar-inner">
+          <h2 className="tocyn-settings-sidebar-title">Settings</h2>
+          <nav className="tocyn-settings-nav-list">
             {filteredSettingsNav.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.href}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    "tocyn-settings-nav-link",
                     isActive
-                      ? "bg-brand-50 text-brand-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      ? "tocyn-settings-nav-link--active"
+                      : "tocyn-settings-nav-link--inactive"
                   )
                 }
               >
-                <item.icon className="w-4 h-4" />
+                <item.icon className="tocyn-settings-nav-icon" />
                 {item.name}
               </NavLink>
             ))}
@@ -75,14 +75,14 @@ export function SettingsLayout() {
                 to="/settings/agent-permissions"
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mt-4",
+                    "tocyn-settings-nav-link tocyn-settings-nav-link--permissions",
                     isActive
-                      ? "bg-brand-100 text-brand-800 ring-1 ring-brand-300"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      ? "tocyn-settings-nav-link--permissions-active"
+                      : "tocyn-settings-nav-link--permissions-inactive"
                   )
                 }
               >
-                <Shield className="w-4 h-4" />
+                <IconShieldHalved className="tocyn-settings-nav-icon" />
                 Agent Permissions
               </NavLink>
             )}
@@ -90,24 +90,24 @@ export function SettingsLayout() {
 
           {filteredChannelsNav.length > 0 && (
             <>
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-3 px-2">
+              <h3 className="tocyn-settings-nav-section-title">
                 Channels
               </h3>
-              <nav className="space-y-1">
+              <nav className="tocyn-settings-nav-list">
                 {filteredChannelsNav.map((item) => (
                   <NavLink
                     key={item.name}
                     to={item.href}
                     className={({ isActive }) =>
                       cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                        "tocyn-settings-nav-link",
                         isActive
-                          ? "bg-brand-50 text-brand-700"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          ? "tocyn-settings-nav-link--active"
+                          : "tocyn-settings-nav-link--inactive"
                       )
                     }
                   >
-                    <item.icon className="w-4 h-4" />
+                    <item.icon className="tocyn-settings-nav-icon" />
                     {item.name}
                   </NavLink>
                 ))}
@@ -118,8 +118,8 @@ export function SettingsLayout() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 min-w-0 overflow-y-auto bg-slate-50">
-        <div className="p-4 lg:p-8 w-full max-w-6xl mx-auto">
+      <div className="tocyn-settings-main">
+        <div className="tocyn-settings-content">
           <Outlet />
         </div>
       </div>

@@ -25,8 +25,8 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
     if(path==='/api/workspace/state') {
-      if(options.method==='PUT') return json({revision:1,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:'workflow-ticket',panel:'details',updatedAt:'2026-09-11T00:00:00Z'});
-      return json({revision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'details',updatedAt:'2026-09-11T00:00:00Z'});
+      if(options.method==='PUT') return json({revision:1,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:'workflow-ticket',panel:'details',splitterRatio:32,updatedAt:'2026-09-11T00:00:00Z'});
+      return json({revision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'details',splitterRatio:32,updatedAt:'2026-09-11T00:00:00Z'});
     }
     if(path.startsWith('/api/workspace/drafts')) {
       const override = workspace?.(options); if (override) return override;

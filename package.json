@@ -6,6 +6,7 @@
     "dev:dashboard": "npm run dev --workspace=apps/dashboard",
     "dev:portal": "npm run dev --workspace=apps/portal",
     "build:widget": "npm run build --workspace=apps/widget",
+    "test:icon-regression": "node --test scripts/icon-regression.test.mjs",
     "db:migrate:local": "cd apps/server && npx wrangler d1 migrations apply tocyn-local --local --config wrangler.local.json",
     "setup:prod": "node scripts/setup.js",
     "deploy": "npm run deploy:server && npm run deploy:env && npm run deploy:dashboard && npm run deploy:portal && npm run deploy:widget",

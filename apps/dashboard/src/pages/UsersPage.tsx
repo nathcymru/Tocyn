@@ -1,11 +1,11 @@
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { useAuthStore } from '../store/authStore';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
-import { User as UserIcon, Shield, Mail, Calendar, ShieldCheck, X, Settings } from 'lucide-react';
+import { User as UserIcon, Shield, Mail, Calendar, ShieldCheck, X, Settings } from '../components/icons';
 
 export const UsersPage: React.FC = () => {
   const { data: users = [], isLoading, error, refetch, isFetching } = useUsers();
@@ -24,140 +24,136 @@ export const UsersPage: React.FC = () => {
   const opener = React.useRef<HTMLButtonElement | null>(null);
   const closeDialog = () => { setSelectedUser(null); setModalType(null); };
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500 italic">Loading team members...</div>;
+  if (isLoading) return <ParkEmptyState role="status" className="tocyn-users-loading" title="Loading team members…" headingLevel={false} />;
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
+    <div className="tocyn-users-page">
+      <div className="tocyn-user-page-header">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
-          <p className="text-slate-500 mt-1">Manage agents, admins, and their access levels.</p>
+          <h1 className="tocyn-user-page-title">Team Management</h1>
+          <p className="tocyn-user-page-description">Manage agents, admins, and their access levels.</p>
         </div>
-        <TocynButton className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm">
+        <ParkButton className="tocyn-user-page-create">
           Invite New User
-        </TocynButton>
+        </ParkButton>
       </div>
 
       {error && (
-        <div role="alert" className="bg-red-50 text-red-700 p-4 rounded-lg mb-6 border border-red-100">
+        <div role="alert" className="tocyn-user-page-alert">
           {error.message}
-          <TocynButton type="button" disabled={isFetching} onClick={() => void refetch()} className="ml-3 rounded border px-3 py-2">Retry team members</TocynButton>
+          <ParkButton type="button" disabled={isFetching} onClick={() => void refetch()} className="tocyn-user-page-alert-action">Retry team members</ParkButton>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="tocyn-users-grid">
         {users.map((user) => (
-          <div key={user.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 border border-brand-100">
-                <UserIcon className="w-6 h-6" />
+          <div key={user.id} className="tocyn-user-card">
+            <div className="tocyn-user-card-header">
+              <div className="tocyn-user-card-avatar">
+                <UserIcon className="tocyn-user-card-avatar-icon" />
               </div>
-              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                user.role === 'agent' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+              <span className={`tocyn-user-card-role ${
+                user.role === 'admin' ? 'tocyn-user-card-role-admin' :
+                user.role === 'agent' ? 'tocyn-user-card-role-agent' : 'tocyn-user-card-role-default'
               }`}>
                 {user.role}
               </span>
             </div>
 
-            <h3 className="text-lg font-bold text-slate-900">{user.full_name || 'Unnamed User'}</h3>
-            <div className="space-y-2 mt-4">
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Mail className="w-4 h-4" />
+            <h3 className="tocyn-user-card-name">{user.full_name || 'Unnamed User'}</h3>
+            <div className="tocyn-user-card-details">
+              <div className="tocyn-user-card-detail">
+                <Mail className="tocyn-user-card-detail-icon" />
                 {user.email}
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Calendar className="w-4 h-4" />
+              <div className="tocyn-user-card-detail">
+                <Calendar className="tocyn-user-card-detail-icon" />
                 Joined {new Date(user.created_at).toLocaleDateString()}
               </div>
-              <div className="flex items-center gap-2 text-sm">
+              <div className="tocyn-user-card-mfa-row">
                 {user.mfa_enabled ? (
-                  <span className="text-green-600 flex items-center gap-1.5 font-medium">
-                    <ShieldCheck className="w-4 h-4" />
+                  <span className="tocyn-user-card-mfa tocyn-user-card-mfa-enabled">
+                    <ShieldCheck className="tocyn-user-card-mfa-icon" />
                     MFA Enabled
                   </span>
                 ) : (
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <Shield className="w-4 h-4" />
+                  <span className="tocyn-user-card-mfa tocyn-user-card-mfa-disabled">
+                    <Shield className="tocyn-user-card-mfa-icon" />
                     MFA Disabled
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-100 flex items-center gap-3">
-              {administrator&&['admin','agent'].includes(user.role)&&<TocynButton type="button" aria-haspopup="dialog"
+            <div className="tocyn-user-card-actions">
+              {administrator&&['admin','agent'].includes(user.role)&&<ParkButton type="button" aria-haspopup="dialog"
                 onClick={event=>{opener.current=event.currentTarget;setCapturedIdentity(selectionIdentity);setSelectedUser(user);setModalType('capacity');}}
-                className="rounded border px-3 py-2 text-xs font-bold">Capacity</TocynButton>}
-              <TocynButton
+                className="tocyn-user-card-action">Capacity</ParkButton>}
+              <ParkButton
                 aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('edit'); }}
-                className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
+                className="tocyn-user-card-action"
               >
                 Edit Profile
-              </TocynButton>
-              <TocynButton
+              </ParkButton>
+              <ParkButton
                 aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('activity'); }}
-                className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
+                className="tocyn-user-card-action"
               >
                 View Activity
-              </TocynButton>
+              </ParkButton>
             </div>
           </div>
         ))}
         {!error && users.length === 0 && (
-          <div className="col-span-full py-12 text-center bg-white rounded-xl border-2 border-dashed border-slate-200">
-            <UserIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900">No team members found</h3>
-            <p className="text-slate-500 mt-1">Start by inviting your first agent or admin.</p>
-          </div>
+          <ParkEmptyState className="tocyn-users-empty" title="No team members found" description="Start by inviting your first agent or admin." />
         )}
       </div>
 
       <TocynDialog open={Boolean(selectedUser && modalType)} onOpenChange={open => { if (!open) closeDialog(); }}
         labelledBy={dialogTitleId} initialFocusEl={() => closeControl.current} finalFocusEl={() => opener.current}>
         {selectedUser && (
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 id={dialogTitleId} className="text-xl font-bold text-slate-900">
+          <div className="tocyn-users-dialog">
+            <div className="tocyn-users-dialog-header">
+              <h2 id={dialogTitleId} className="tocyn-users-dialog-title">
                 {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'Edit User Profile' : 'User Activity Log'}
               </h2>
-              <TocynButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="text-slate-400 hover:text-slate-600">
-                <X className="w-6 h-6" />
-              </TocynButton>
+              <ParkButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="tocyn-users-dialog-close">
+                <X className="tocyn-users-dialog-close-icon" />
+              </ParkButton>
             </div>
-            <div className="p-8">
-              <div className="flex items-center gap-4 mb-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
-                <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">
+            <div className="tocyn-users-dialog-body">
+              <div className="tocyn-users-dialog-identity">
+                <div className="tocyn-users-dialog-avatar">
                   {(selectedUser.full_name || selectedUser.email).charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900">{selectedUser.full_name || 'Unnamed User'}</h3>
-                  <p className="text-sm text-slate-500">{selectedUser.email}</p>
+                  <h3 className="tocyn-users-dialog-name">{selectedUser.full_name || 'Unnamed User'}</h3>
+                  <p className="tocyn-users-dialog-email">{selectedUser.email}</p>
                 </div>
               </div>
 
               {modalType === 'capacity' ? (
                 <OperatorCapacityPanel userId={selectedUser.id} editable={administrator}/>
               ) : modalType === 'edit' ? (
-                <div className="text-center py-6">
-                  <Settings className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-600 font-medium">User profile editing is currently read-only.</p>
-                  <p className="text-sm text-slate-500 mt-1">In this version, users must update their own profiles via the security settings.</p>
+                <div className="tocyn-users-dialog-unavailable">
+                  <Settings className="tocyn-users-dialog-unavailable-icon" />
+                  <p className="tocyn-users-dialog-message">User profile editing is currently read-only.</p>
+                  <p className="tocyn-users-dialog-email tocyn-users-dialog-hint">In this version, users must update their own profiles via the security settings.</p>
                 </div>
               ) : (
-                <div className="text-center py-6">
-                  <p className="text-slate-600 font-medium">User activity is not available in this view yet.</p>
-                  <p className="text-sm text-slate-500 mt-1">No activity records have been loaded.</p>
+                <div className="tocyn-users-dialog-unavailable">
+                  <p className="tocyn-users-dialog-message">User activity is not available in this view yet.</p>
+                  <p className="tocyn-users-dialog-email tocyn-users-dialog-hint">No activity records have been loaded.</p>
                 </div>
               )}
             </div>
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <TocynButton
+            <div className="tocyn-users-dialog-footer">
+              <ParkButton
                 onClick={closeDialog}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                className="tocyn-users-dialog-submit"
               >
                 Close
-              </TocynButton>
+              </ParkButton>
             </div>
           </div>
         )}

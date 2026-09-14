@@ -1,10 +1,13 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { User } from '../types';
 import { portalApi, getWidgetKey } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { Loader2, CheckCircle } from 'lucide-react';
+import {
+  IconSpinner,
+  IconCircleCheck
+} from '@luminatick/ui/icons';
 
 export function VerifyPage({ challenge, onBack }: { challenge?: { email: string; challengeId?: string }; onBack?: () => void } = {}) {
   const [searchParams] = useSearchParams();
@@ -75,22 +78,22 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
   // If we're verifying a magic link from URL, show a loading state
   if (tokenParam && !error) {
     return (
-      <div className="w-full">
-        <div role="status" aria-live="polite" className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-          <Loader2 className="mx-auto w-12 h-12 text-brand-600 animate-spin mb-4" />
-          <h2 className="text-2xl font-extrabold text-gray-900">Verifying your login...</h2>
+      <div className="tocyn-portal-auth-shell">
+        <div role="status" aria-live="polite" className="tocyn-portal-auth-heading tocyn-portal-verify-loading">
+          <IconSpinner className="tocyn-portal-verify-spinner" />
+          <h2 className="tocyn-portal-verify-loading-title">Verifying your login...</h2>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+    <div className="tocyn-portal-auth-shell">
+      <div className="tocyn-portal-auth-heading tocyn-portal-verify-heading">
+        <h2 className="tocyn-portal-verify-title">
           Enter Verification Code
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className="tocyn-portal-verify-copy">
           {initialEmail ? (
             <>We sent a 6-digit code to <strong>{initialEmail}</strong></>
           ) : (
@@ -99,21 +102,21 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="py-8">
+      <div className="tocyn-portal-auth-card">
+        <div className="tocyn-portal-auth-card-body">
           {error && (
-            <div id="portal-verify-error" role="alert" aria-atomic="true" className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md">
+            <div id="portal-verify-error" role="alert" aria-atomic="true" className="tocyn-portal-auth-error">
               {error}
             </div>
           )}
 
-          <form aria-busy={loading} className="space-y-6" onSubmit={handleSubmit}>
+          <form aria-busy={loading} className="tocyn-portal-auth-form" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="code" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="code" className="tocyn-portal-auth-label">
                 Authentication Code
               </label>
-              <div className="mt-1">
-                <TocynInput
+              <div className="tocyn-portal-verify-input">
+                <ParkInput
                   id="code"
                   ref={codeInput}
                   name="code"
@@ -123,7 +126,7 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
                   required
                   value={code}
                   onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-brand-500 focus:border-brand-500 text-center text-2xl tracking-widest uppercase font-mono"
+                  className="tocyn-form-control tocyn-form-control--code"
                   placeholder="123456"
                   maxLength={6}
                   disabled={loading}
@@ -133,26 +136,26 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
             </div>
 
             <div>
-              <TocynButton
+              <ParkButton
                 type="submit"
                 aria-disabled={loading || code.length !== 6}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 aria-disabled:bg-brand-700 aria-disabled:cursor-default items-center gap-2"
+                className="tocyn-portal-auth-submit"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                {loading ? <IconSpinner className="tocyn-portal-auth-spinner" /> : <IconCircleCheck className="tocyn-portal-auth-icon" />}
                 {loading ? 'Verifying...' : 'Verify Code'}
-              </TocynButton>
+              </ParkButton>
             </div>
           </form>
-          <p role="status" aria-live="polite" className="mt-3 text-sm text-gray-700">{loading ? 'Verifying code…' : ''}</p>
+          <p role="status" aria-live="polite" className="tocyn-portal-auth-status">{loading ? 'Verifying code…' : ''}</p>
 
-          <div className="mt-6 text-center">
-            <TocynButton
+          <div className="tocyn-portal-verify-back">
+            <ParkButton
               onClick={() => { if (!loading) { if (onBack) onBack(); else { const key = getWidgetKey(); navigate('/login' + (key ? '?key=' + encodeURIComponent(key) : '')); } } }}
               disabled={loading}
-              className="text-sm text-brand-600 hover:text-brand-500 font-medium"
+              className="tocyn-portal-verify-request"
             >
               Request a new code
-            </TocynButton>
+            </ParkButton>
           </div>
         </div>
       </div>

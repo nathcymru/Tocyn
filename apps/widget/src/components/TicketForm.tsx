@@ -1,4 +1,4 @@
-import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
+import { ParkButton, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
 
@@ -52,66 +52,66 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
 
   if (status === 'success') {
     return (
-      <div className="text-center py-8">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="tocyn-widget-success">
+        <div className="tocyn-widget-success-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" className="tocyn-widget-success-mark" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h3 ref={successHeading} tabIndex={-1} className="text-lg font-bold text-gray-900 mb-2">Ticket Submitted!</h3>
-        <p role="status" className="text-gray-600 mb-6">We've received your request and will get back to you soon.</p>
-        <TocynButton
+        <h3 ref={successHeading} tabIndex={-1} className="tocyn-widget-success-title">Ticket Submitted!</h3>
+        <p role="status" className="tocyn-widget-success-copy">We've received your request and will get back to you soon.</p>
+        <ParkButton
           onClick={() => { focusNewDraft.current = true; setStatus('idle'); }}
-          className="text-blue-600 font-medium hover:underline"
+          className="tocyn-widget-success-action"
         >
           Submit another ticket
-        </TocynButton>
+        </ParkButton>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} aria-label="Submit a support ticket" aria-busy={status === 'submitting'} className="space-y-4">
-      <fieldset disabled={status === 'submitting'} className="space-y-4">
+    <form onSubmit={handleSubmit} aria-label="Submit a support ticket" aria-busy={status === 'submitting'} className="tocyn-widget-form">
+      <fieldset disabled={status === 'submitting'} className="tocyn-widget-form">
       <div>
-        <label htmlFor={`${formId}-name`} className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Your Name</label>
-        <TocynInput
+        <label htmlFor={`${formId}-name`} className="tocyn-widget-label">Your Name</label>
+        <ParkInput
           type="text"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className="tocyn-form-control"
           placeholder="John Doe"
           id={`${formId}-name`} ref={nameInput} value={formData.name}
           onChange={e => setFormData({ ...formData, name: e.target.value })}
         />
       </div>
       <div>
-        <label htmlFor={`${formId}-email`} className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email Address</label>
-        <TocynInput
+        <label htmlFor={`${formId}-email`} className="tocyn-widget-label">Email Address</label>
+        <ParkInput
           type="email"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className="tocyn-form-control"
           placeholder="john@example.com"
           id={`${formId}-email`} value={formData.email}
           readOnly
         />
       </div>
       <div>
-        <label htmlFor={`${formId}-subject`} className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Subject</label>
-        <TocynInput
+        <label htmlFor={`${formId}-subject`} className="tocyn-widget-label">Subject</label>
+        <ParkInput
           type="text"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className="tocyn-form-control"
           placeholder="How can we help?"
           id={`${formId}-subject`} value={formData.subject}
           onChange={e => setFormData({ ...formData, subject: e.target.value })}
         />
       </div>
       <div>
-        <label htmlFor={`${formId}-message`} className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Message</label>
-        <TocynTextarea
+        <label htmlFor={`${formId}-message`} className="tocyn-widget-label">Message</label>
+        <ParkTextarea
           required
           rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 resize-none"
+          className="tocyn-form-control tocyn-widget-textarea"
           placeholder="Tell us more about your issue..."
           id={`${formId}-message`} value={formData.message}
           onChange={e => setFormData({ ...formData, message: e.target.value })}
@@ -120,16 +120,16 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       </fieldset>
       {status === 'submitting' && <p role="status">Submitting your ticket...</p>}
       {status === 'error' && (
-        <p ref={errorMessage} tabIndex={-1} role="alert" className="text-red-700 text-sm">Submission could not be confirmed. Your message has been kept; try again.</p>
+        <p ref={errorMessage} tabIndex={-1} role="alert" className="tocyn-widget-error">Submission could not be confirmed. Your message has been kept; try again.</p>
       )}
-      <TocynButton
+      <ParkButton
         type="submit"
         disabled={status === 'submitting'}
-        className="w-full py-2 px-4 rounded font-bold text-white transition-opacity disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+        className="tocyn-widget-submit"
         style={{ backgroundColor: config.primaryColor }}
       >
         {status === 'submitting' ? 'Submitting...' : 'Send Message'}
-      </TocynButton>
+      </ParkButton>
     </form>
   );
 };

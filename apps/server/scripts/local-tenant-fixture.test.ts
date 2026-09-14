@@ -47,3 +47,44 @@ test('fixture exposes its callback-local R2 binding and named session revocation
     assert.equal(denied.status, 401);
   });
 });
+
+test('local beta seeds the deterministic eight-ticket queue and timeline matrix', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const tickets = await fixture.db.prepare(`SELECT tenant_id, id, status, assigned_to, source, source_email
+      FROM tickets WHERE id LIKE 'beta2-%' ORDER BY id`).all<{
+      tenant_id: string; id: string; status: string; assigned_to: string | null; source: string; source_email: string | null;
+    }>();
+    assert.equal(tickets.results.length, 8);
+    assert.deepEqual(tickets.results.map(ticket => ticket.id), [
+      'beta2-b-email', 'beta2-b-open-unassigned', 'beta2-email', 'beta2-internal-attachment',
+      'beta2-open-assigned', 'beta2-pending-unassigned', 'beta2-resolved', 'beta2-snoozed-assigned',
+    ]);
+    assert.equal(tickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').length, 6);
+    assert.equal(tickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-b').length, 2);
+    assert.equal(tickets.results.find(ticket => ticket.id === 'beta2-open-assigned')?.assigned_to, 'fixture-operator');
+    assert.equal(tickets.results.find(ticket => ticket.id === 'beta2-pending-unassigned')?.assigned_to, null);
+    assert.equal(tickets.results.find(ticket => ticket.id === 'beta2-email')?.source_email, 'support@synthetic.example.test');
+
+    const articles = await fixture.db.prepare(`SELECT tenant_id, ticket_id, sender_type, is_internal, intake_source, raw_email_id
+      FROM articles WHERE id LIKE 'beta2-%' ORDER BY id`).all<{
+      tenant_id: string; ticket_id: string; sender_type: string; is_internal: number; intake_source: string; raw_email_id: string | null;
+    }>();
+    assert.equal(articles.results.length, 8);
+    assert.deepEqual(articles.results.filter(article => article.is_internal === 1).map(article => article.ticket_id), ['beta2-internal-attachment']);
+    assert.equal(articles.results.filter(article => article.intake_source === 'email').length, 2);
+    assert.equal(articles.results.find(article => article.ticket_id === 'beta2-email')?.raw_email_id, 'beta2-email-raw');
+
+    const attachments = await fixture.db.prepare(`SELECT tenant_id, article_id, file_name, content_type, r2_key
+      FROM attachments WHERE id LIKE 'beta2-%' ORDER BY id`).all<{
+      tenant_id: string; article_id: string; file_name: string; content_type: string; r2_key: string;
+    }>();
+    assert.deepEqual(attachments.results, [
+      { tenant_id: 'fixture-tenant-b', article_id: 'beta2-article-b-email', file_name: 'invoice.png', content_type: 'image/png', r2_key: 'fixture-tenant-b/beta2-b-email/invoice.png' },
+      { tenant_id: 'fixture-tenant-a', article_id: 'beta2-article-internal', file_name: 'order-summary.pdf', content_type: 'application/pdf', r2_key: 'fixture-tenant-a/beta2-internal-attachment/order-summary.pdf' },
+    ]);
+
+    const snooze = await fixture.db.prepare(`SELECT snoozed_until, resurface_reason FROM ticket_support_state
+      WHERE tenant_id = 'fixture-tenant-a' AND ticket_id = 'beta2-snoozed-assigned'`).first<{ snoozed_until: string; resurface_reason: string }>();
+    assert.deepEqual(snooze, { snoozed_until: '2099-01-01T12:00:00.000Z', resurface_reason: 'manual' });
+  });
+});
