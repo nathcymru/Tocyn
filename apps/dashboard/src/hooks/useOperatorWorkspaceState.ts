@@ -159,7 +159,7 @@ function createController(identity: string | null) {
     hasUnsavedChanges: () => dirty,
     start: () => { active = true; epoch++; void restore(); return () => { active = false; epoch++; cancel(); }; },
     update, saveNow, flushBeforeNavigation,
-    retrySave: () => { if (known) void saveNow(); else void restore(); },
+    retrySave: () => { if (!known) void restore(); else if (state.status === 'conflict') void restore(true); else void saveNow(); },
     retryRestore: () => { if (!known) void restore(); },
     restoreServerState: () => { void restore(true); },
   };
