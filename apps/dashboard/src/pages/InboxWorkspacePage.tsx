@@ -222,7 +222,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
             activeView===filter.id?'tocyn-inbox-view-button-active':'tocyn-inbox-view-button-inactive')}><Filter className="tocyn-inbox-filter-icon" aria-hidden="true" />{filter.name}</TocynButton>)}</nav>
       <p className="tocyn-inbox-status">Queue totals cover standard views before search or custom filters.</p>
       {queueCounts.isFetching?<p role="status" className="tocyn-inbox-status">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="tocyn-inbox-status">Queue totals unavailable. <TocynButton type="button" onClick={()=>void queueCounts.refetch()} className="tocyn-inbox-inline-retry">Retry queue totals</TocynButton></p>:null}
-      <p className="tocyn-inbox-status">Current view: <span className="font-semibold">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
+      <p className="tocyn-inbox-status">Current view: <span className="tocyn-inbox-current-view-name">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
       <form className="tocyn-inbox-search-shell" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="tocyn-inbox-search-icon" aria-hidden="true" />
         <TocynInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}

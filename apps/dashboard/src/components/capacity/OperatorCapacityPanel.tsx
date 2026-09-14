@@ -26,18 +26,18 @@ function CapacityContent({capacity,editable}:{capacity:ReturnType<typeof useOper
         <dt>Assignment limit</dt><dd>{data.assignmentCeiling===null?'Not configured':data.assignmentCeiling}</dd>
       </dl>
       {data.revision===0&&<p className="tocyn-capacity-copy">No capacity policy is configured. Existing manual assignment behavior applies.</p>}
-      {data.status==='unavailable'&&<p className="text-sm">The exact count is unavailable. No partial total is shown.</p>}
-      {data.currentWork!==null&&data.assignmentCeiling!==null&&data.currentWork>data.assignmentCeiling&&<p className="text-sm">Existing work remains assigned above the limit. Further normal assignments are blocked.</p>}
+      {data.status==='unavailable'&&<p className="tocyn-capacity-copy">The exact count is unavailable. No partial total is shown.</p>}
+      {data.currentWork!==null&&data.assignmentCeiling!==null&&data.currentWork>data.assignmentCeiling&&<p className="tocyn-capacity-copy">Existing work remains assigned above the limit. Further normal assignments are blocked.</p>}
       <p className="tocyn-capacity-confirmed">Confirmed at <time dateTime={data.asOf}>{new Date(data.asOf).toLocaleString()}</time>.</p>
     </>}
-    <p role={phase==='error'||phase==='conflict'?'alert':'status'} aria-live="polite" className="text-sm">
+    <p role={phase==='error'||phase==='conflict'?'alert':'status'} aria-live="polite" className="tocyn-capacity-copy">
       {message??(phase==='loading'?'Loading current work…':phase==='idle'?'Current work is unavailable for this session.':'')}
     </p>
     <TocynButton type="button" disabled={busy} onClick={()=>void capacity.reload()} className="tocyn-capacity-refresh">
       {phase==='error'?'Retry':needsReload&&data?'Reload current policy':'Refresh current work'}
     </TocynButton>
     {editable&&<form onSubmit={submit} className="tocyn-capacity-form">
-      <p className="text-sm">Changes apply to new assignments. Existing work stays assigned.</p>
+      <p className="tocyn-capacity-copy">Changes apply to new assignments. Existing work stays assigned.</p>
       <label htmlFor={`${id}-availability`} className="tocyn-capacity-label">Availability for assignments</label>
       <ParkSelect id={`${id}-availability`} value={availability} disabled={phase==='saving'} onChange={event=>{setAvailability(event.target.value as CapacityInput['availability']);setDirty(true);}}
         className="tocyn-form-control">
@@ -46,7 +46,7 @@ function CapacityContent({capacity,editable}:{capacity:ReturnType<typeof useOper
       <label htmlFor={`${id}-ceiling`} className="tocyn-capacity-label">Assignment limit (0–1000)</label>
       <TocynInput id={`${id}-ceiling`} type="number" min={0} max={1000} step={1} value={ceiling} disabled={phase==='saving'}
         onChange={event=>{setCeiling(event.target.value);setDirty(true);}} className="tocyn-capacity-input"/>
-      {data&&dirty&&<p className="text-sm">Current saved policy: {data.availability??'not configured'}, limit {data.assignmentCeiling??'not configured'}. Your entered values are separate until saved.</p>}
+      {data&&dirty&&<p className="tocyn-capacity-copy">Current saved policy: {data.availability??'not configured'}, limit {data.assignmentCeiling??'not configured'}. Your entered values are separate until saved.</p>}
       <TocynButton type="submit" disabled={busy||needsReload||!data||!valid||data.revision>=Number.MAX_SAFE_INTEGER} className="tocyn-capacity-save">Save capacity</TocynButton>
     </form>}
   </div>;
