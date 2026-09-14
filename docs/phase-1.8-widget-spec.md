@@ -10,14 +10,14 @@ Luminatick provides a embeddable web widget that can be integrated into any webs
 ### Shadow DOM Encapsulation
 To prevent CSS conflicts with the host website, the widget will be encapsulated using the Shadow DOM.
 - The widget will create a shadow root on a host element.
-- All styles (including Tailwind CSS) will be injected into the shadow root.
+- All shared Panda CSS and widget styles will be injected into the shadow root.
 - React will be rendered inside the shadow root.
 
 ### Library Mode Build
 The widget will be built using Vite's "Library Mode".
 - **Input**: `apps/widget/src/main.tsx`
 - **Output**: A single JavaScript file `lumina-widget.js` in `apps/widget/dist`.
-- **CSS**: Tailwind CSS will be processed and bundled. Since we are using Shadow DOM, we need a way to inject the CSS into the shadow root. We can use a Vite plugin or a custom script to embed the CSS as a string in the JS bundle.
+- **CSS**: Panda CSS is bundled with the widget and injected into the ShadowRoot alongside the documented `LUMINA_WIDGET_CSS` compatibility boundary.
 
 ### Widget Configuration
 The widget will fetch its configuration from the backend:

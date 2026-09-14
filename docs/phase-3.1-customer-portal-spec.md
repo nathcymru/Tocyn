@@ -16,7 +16,7 @@ The Customer Portal will be built as a **new standalone Vite + React app** locat
 1. **Separation of Concerns:** `apps/dashboard` is heavily optimized for internal agent workflows, administrative settings, and enforces strict security policies (like mandatory MFA). Mixing customer logic and routing into the agent dashboard increases the risk of privilege escalation bugs.
 2. **Payload Size:** Customers do not need the heavy dependencies required by the agent dashboard (e.g., complex chart libraries, admin data tables, automation builders).
 3. **Deployment:** A dedicated `apps/portal` can be easily deployed to its own Cloudflare Pages project (e.g., mapped to `support.yourdomain.com`), allowing independent scaling, caching, and custom branding.
-4. **Tech Stack:** React + Vite + Tailwind CSS + React Router, sharing UI components and types from `packages/shared`.
+4. **Tech Stack:** React + Vite + Ark UI + Panda CSS + React Router, sharing UI components and types from `packages/shared` and `@luminatick/ui`.
 
 ---
 
@@ -111,7 +111,7 @@ Protected by `CustomerAuthMiddleware` which validates the JWT from the cookie an
 4. **Polling (Real-time Feel):** The portal uses the same `document.visibilityState` optimized HTTP polling as the Agent Dashboard to fetch instant message delivery without exhausting free-tier Worker limits.
 
 ## 7. Next Steps / Implementation Plan
-1. Scaffold `apps/portal` using Vite + React + Tailwind.
+1. Scaffold `apps/portal` using Vite + React + Ark UI + Panda CSS.
 2. Add the `0008_customer_portal_auth.sql` migration.
 3. Implement `/api/v1/customer/auth/*` routes and Resend email templates for Magic Links.
 4. Implement Customer JWT Middleware.

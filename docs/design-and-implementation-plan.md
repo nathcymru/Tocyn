@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS knowledge_docs (
 
 ## 6. Dashboard Implementation
 
-The Admin Dashboard is built with React, Vite, and Tailwind CSS, providing a high-performance internal portal for agents and admins.
+The Admin Dashboard is built with React, Vite, Ark UI, and Panda CSS, providing a high-performance internal portal for agents and admins.
 
 ### A. Structure & Layout
 - **Global Layout:** A persistent main sidebar for core navigation (Dashboard, Filters, Knowledge Base). The user profile at the bottom left is an icon-only representation to save space.

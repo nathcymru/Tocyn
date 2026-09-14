@@ -37,7 +37,7 @@
 - [x] Comprehensive test suite available in `apps/server/src/services/email/__tests__/`.
 
 ## Phase 1.3: Admin Dashboard (Core)
-- [x] Initialize React + Vite + Tailwind CSS dashboard.
+- [x] Initialize React + Vite + Panda CSS dashboard.
 - [x] Implement JWT-based authentication on the Worker backend.
 - [x] **MFA Implementation:**
     - [x] Generate TOTP secrets for users.
