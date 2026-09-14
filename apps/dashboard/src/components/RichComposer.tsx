@@ -89,7 +89,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
   useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); if (ariaDescribedBy) dom.setAttribute('aria-describedby', ariaDescribedBy); else dom.removeAttribute('aria-describedby'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); } }, [editor, id, ariaDescribedBy]);
-  useEffect(() => { legacyValueRef.current = value; if (editor && editor.getMarkdown() !== value) editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
+  useEffect(() => { legacyValueRef.current = value; if (editor) editor.commands.setContent(value || '', { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
   if (!editor) return <div id={id} className="tocyn-knowledge-editor-tiptap" aria-busy="true" aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} />;
   return <div className="tocyn-knowledge-editor-tiptap" aria-disabled={readOnly}>
     <div className="tocyn-composer-toolbar" role="toolbar" aria-label="Formatting controls">
