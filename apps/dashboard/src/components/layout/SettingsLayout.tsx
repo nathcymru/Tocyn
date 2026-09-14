@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { FaGear, FaUsers, FaShieldHalved, FaBolt, FaKey, FaTableColumns, FaWpforms, FaEnvelope, FaCreditCard, FaDiagramProject, FaClock } from 'react-icons/fa6';
+import { FaGear, FaUsers, FaShieldHalved, FaBolt, FaKey, FaTableColumns, FaWpforms, FaEnvelope, FaCreditCard, FaDiagramProject, FaClock } from '@luminatick/ui/icons';
 import { clsx } from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { dashboardApi } from '../../api/client';

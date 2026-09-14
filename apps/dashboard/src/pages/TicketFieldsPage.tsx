@@ -11,7 +11,7 @@ import {
   FaAlignLeft,
   FaFont,
   FaToggleOff
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 import { clsx } from 'clsx';
 import { useTicketFields } from '../hooks/useTicketFields';
 

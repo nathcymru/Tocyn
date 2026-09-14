@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../store/authStore';
 import { dashboardApi } from '../api/client';
 import { AuthResponse } from '../types';
-import { FaShieldHalved, FaKey, FaTriangleExclamation } from 'react-icons/fa6';
+import { FaShieldHalved, FaKey, FaTriangleExclamation } from '@luminatick/ui/icons';
 
 interface SetupResponse {
   provisioning_uri: string;

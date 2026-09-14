@@ -7,7 +7,7 @@ import {
   FaEnvelope,
   FaSpinner,
   FaArrowRight
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 import { Turnstile } from '@marsidev/react-turnstile';
 
 export function LoginPage() {

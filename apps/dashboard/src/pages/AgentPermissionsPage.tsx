@@ -5,7 +5,7 @@ import {
   FaSpinner,
   FaFloppyDisk,
   FaShieldHalved
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 import { dashboardApi } from '../api/client';
 
 type Capability = {

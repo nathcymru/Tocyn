@@ -7,7 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import {
   FaSpinner,
   FaCircleCheck
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 
 export function VerifyPage({ challenge, onBack }: { challenge?: { email: string; challengeId?: string }; onBack?: () => void } = {}) {
   const [searchParams] = useSearchParams();

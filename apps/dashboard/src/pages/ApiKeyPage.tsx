@@ -10,7 +10,7 @@ import {
   FaCheck,
   FaShieldHalved,
   FaClock
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 import { dashboardApi } from '../api/client';
 import { ApiKey, ApiKeyCreatedResponse } from '@luminatick/shared';
 

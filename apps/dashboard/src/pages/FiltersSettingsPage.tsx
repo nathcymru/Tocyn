@@ -7,7 +7,7 @@ import {
   FaPenToSquare,
   FaTrash,
   FaXmark
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 import { TicketFilter, FilterCondition } from '@luminatick/shared';
 
 const FIELDS = [

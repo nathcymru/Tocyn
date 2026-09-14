@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { portalApi } from '../api/client';
 import {
   FaArrowRightFromBracket
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 
 export function Layout() {
   const { user, logout } = useAuthStore();

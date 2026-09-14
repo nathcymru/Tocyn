@@ -5,3 +5,4 @@ export * from './ark';
 export * from './theme';
 export * from './theme-scope';
 export * from './park';
+export * from './icons';

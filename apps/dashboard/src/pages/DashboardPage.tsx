@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ParkEmptyState } from '@luminatick/ui/park';
 import { useStats } from '../hooks/useStats';
-import { FaChartBar, FaUsers, FaTicket, FaCircleCheck, FaClock, FaCircleExclamation } from 'react-icons/fa6';
+import { FaChartBar, FaUsers, FaTicket, FaCircleCheck, FaClock, FaCircleExclamation } from '@luminatick/ui/icons';
 
 export const DashboardPage: React.FC = () => {
   const { data: stats, isLoading } = useStats();

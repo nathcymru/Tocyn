@@ -9,7 +9,7 @@ import {
   FaShield,
   FaKey,
   FaTriangleExclamation
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 
 interface SetupResponse {
   provisioning_uri: string;

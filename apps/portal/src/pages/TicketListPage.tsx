@@ -8,7 +8,7 @@ import type { Ticket, PaginatedResponse } from '../types';
 import {
   FaSpinner,
   FaPlus
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { ticketReference } from '../utils/ticket-reference';

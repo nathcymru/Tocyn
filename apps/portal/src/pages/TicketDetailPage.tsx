@@ -10,7 +10,7 @@ import {
   FaPaperclip,
   FaPaperPlane,
   FaXmark
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 import { formatDistanceToNow, format } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { ticketReference } from '../utils/ticket-reference';

@@ -11,13 +11,13 @@ import {
   FaTrash,
   FaCheck,
   FaCircleExclamation
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 import { clsx } from 'clsx';
 
 import {
   FaGear,
   FaFloppyDisk
-} from 'react-icons/fa6';
+} from '@luminatick/ui/icons';
 
 
 interface SupportEmail {

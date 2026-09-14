@@ -21,6 +21,10 @@
     "./styled-system/css": {
       "types": "./src/styles/generated/css/index.d.ts",
       "import": "./src/styles/generated/css/index.mjs"
+    },
+    "./icons": {
+      "types": "./src/icons.tsx",
+      "import": "./src/icons.tsx"
     }
   },
   "sideEffects": [
@@ -38,7 +42,8 @@
     "react-dom": ">=18.2.0"
   },
   "dependencies": {
-    "@ark-ui/react": "^5.26.0"
+    "@ark-ui/react": "^5.26.0",
+    "@phosphor-icons/react": "^2.1.10"
   },
   "devDependencies": {
     "@pandacss/dev": "^1.12.1",
