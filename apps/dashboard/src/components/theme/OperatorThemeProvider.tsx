@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createTocynThemeScope } from '@luminatick/ui';
-import { ParkButton as TocynButton, ParkInput, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkInput, ParkSelect } from '@luminatick/ui/park';
 import { useOperatorTheme, type OperatorThemeMode } from '../../hooks/useOperatorTheme';
 import { useOperatorPreferences, type OperatorDensity, type OperatorFontScale, type OperatorMotion } from '../../hooks/useOperatorPreferences';
 
@@ -26,7 +26,7 @@ export function OperatorThemeProvider({ children }: { children: React.ReactNode 
   const loading = !hasResolved.current && theme.status === 'loading';
   return <ThemeContext.Provider value={theme}>
     {loading && <div role="status" aria-live="polite" className="tocyn-theme-loading">Loading appearance…</div>}
-    {(theme.status === 'error' || theme.status === 'conflict') && <div role="alert" className="tocyn-theme-status-banner"><span>{theme.error || 'Appearance could not be restored.'}</span><TocynButton type="button" onClick={theme.retry} className="tocyn-theme-retry">Retry appearance</TocynButton></div>}
+    {(theme.status === 'error' || theme.status === 'conflict') && <div role="alert" className="tocyn-theme-status-banner"><span>{theme.error || 'Appearance could not be restored.'}</span><ParkButton type="button" onClick={theme.retry} className="tocyn-theme-retry">Retry appearance</ParkButton></div>}
     <PreferencesContext.Provider value={preferences}>{children}</PreferencesContext.Provider>
   </ThemeContext.Provider>;
 }
@@ -43,7 +43,7 @@ export function OperatorThemeControl() {
     <fieldset disabled={busy}><legend className="sr-only">Theme mode</legend>
       {(['system', 'light', 'dark'] as const).map(mode => <label key={mode}><ParkInput type="radio" name="operator-theme-mode" value={mode} checked={theme.mode === mode} onChange={() => theme.updateMode(mode as OperatorThemeMode)} />{mode === 'system' ? 'Use system setting' : mode === 'light' ? 'Light' : 'Dark'}</label>)}
     </fieldset>
-    <div><TocynButton type="button" disabled={busy || theme.status !== 'unsaved'} onClick={() => void theme.save()}>Save appearance</TocynButton>{(theme.status === 'error' || theme.status === 'conflict') && <TocynButton type="button" onClick={theme.retry}>Retry appearance</TocynButton>}{theme.status === 'conflict' && <TocynButton type="button" onClick={theme.restore}>Restore server appearance</TocynButton>}</div>
+    <div><ParkButton type="button" disabled={busy || theme.status !== 'unsaved'} onClick={() => void theme.save()}>Save appearance</ParkButton>{(theme.status === 'error' || theme.status === 'conflict') && <ParkButton type="button" onClick={theme.retry}>Retry appearance</ParkButton>}{theme.status === 'conflict' && <ParkButton type="button" onClick={theme.restore}>Restore server appearance</ParkButton>}</div>
     <p role="status" aria-live="polite">{theme.error || (theme.status === 'saved' ? 'Appearance saved.' : theme.status === 'saving' ? 'Saving appearance…' : theme.status === 'unsaved' ? 'Unsaved appearance choice.' : '')}</p>
   </section>;
 }
@@ -63,7 +63,7 @@ export function OperatorPreferencesControl() {
     <label>Activity updates<ParkSelect aria-label="Activity interruption level" value={preferences.interruptionLevel} onChange={event => preferences.update({ interruptionLevel: event.target.value as 'standard'|'quiet' })}><option value="standard">Standard</option><option value="quiet">Quiet — refresh activity manually</option></ParkSelect></label>
     <label><ParkInput type="checkbox" checked={preferences.advanceAfterResolve} onChange={event => preferences.update({ advanceAfterResolve: event.target.checked })} /> Advance after resolving a conversation</label>
     </fieldset>
-    <div><TocynButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</TocynButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <TocynButton type="button" onClick={preferences.retry}>Retry workspace preferences</TocynButton>}{preferences.status === 'conflict' && <TocynButton type="button" onClick={preferences.restore}>Restore server preferences</TocynButton>}</div>
+    <div><ParkButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</ParkButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <ParkButton type="button" onClick={preferences.retry}>Retry workspace preferences</ParkButton>}{preferences.status === 'conflict' && <ParkButton type="button" onClick={preferences.restore}>Restore server preferences</ParkButton>}</div>
     <p role="status" aria-live="polite">{preferences.error || (preferences.status === 'saved' ? 'Workspace preferences saved.' : preferences.status === 'saving' ? 'Saving workspace preferences…' : preferences.status === 'unsaved' ? 'Unsaved workspace preferences.' : preferences.status === 'loading' ? 'Restoring workspace preferences…' : '')}</p>
   </section>;
 }
