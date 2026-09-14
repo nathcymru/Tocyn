@@ -420,7 +420,10 @@ it('renders labelled navigation and disables only the app search accelerator', a
   expect(account).toHaveFocus();
   expect(search).not.toHaveAttribute('aria-keyshortcuts');
   await userEvent.keyboard('{Enter}');
-  await screen.findByRole('link', { name: 'Security Profile' });
+  const security = await screen.findByRole('link', { name: 'Security Profile' });
+  // Popover focus is scheduled after the content mounts; wait for the actual
+  // focus handoff before sending Escape so this test exercises the user path.
+  await waitFor(() => expect(security).toHaveFocus());
   await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(account).toHaveFocus());
 });
