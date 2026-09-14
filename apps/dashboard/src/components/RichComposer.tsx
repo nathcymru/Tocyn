@@ -80,15 +80,16 @@ const ToolbarButton = ({ label, active, onClick, children }: { label: string; ac
 
 /** A standalone Markdown-backed Tiptap field used by knowledge editing. */
 export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescribedBy }: { id: string; value: string; onChange: (value: string) => void; readOnly: boolean; ariaDescribedBy?: string }) {
+  const legacyValueRef = useRef(value);
   const editor = useEditor({
     extensions: [StarterKit, Markdown],
     content: value, contentType: 'markdown', editable: !readOnly,
     editorProps: { attributes: { id, role: 'textbox', 'aria-label': 'Content (Markdown)' } },
-    onUpdate: ({ editor: instance }) => { if (!readOnly) onChange(instance.getMarkdown()); },
+    onUpdate: ({ editor: instance }) => { legacyValueRef.current = instance.getMarkdown(); if (!readOnly) onChange(legacyValueRef.current); },
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
-  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); Object.defineProperty(dom, 'value', { configurable: true, get: () => editor.getMarkdown(), set: (next: string) => { editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); } }, [editor, id]);
-  useEffect(() => { if (editor && editor.getMarkdown() !== value) editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); } }, [editor, id]);
+  useEffect(() => { legacyValueRef.current = value; if (editor && editor.getMarkdown() !== value) editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
   if (!editor) return <div id={id} className="tocyn-knowledge-editor-tiptap" aria-busy="true" aria-label="Content (Markdown)" />;
   return <div className="tocyn-knowledge-editor-tiptap" aria-disabled={readOnly}>
     <div className="tocyn-composer-toolbar" role="toolbar" aria-label="Formatting controls">
@@ -105,6 +106,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
 export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImageFiles, readOnly, mode, format = 'markdown-v1', knowledge, savedResponses, onKnowledgeInserted, onSavedResponseInserted }: {
   id: string; value: string; onChange: (value: string) => void; onImageFiles: (files: readonly File[]) => void; onRejectedImageFiles: (count: number) => void; readOnly: boolean; mode: 'public' | 'internal'; format?: ArticleBodyFormat;
 } & ComposerInsertionHooks) {
+  const legacyValueRef = useRef(value);
   const hooks = { knowledge, savedResponses, onKnowledgeInserted, onSavedResponseInserted };
   const [autocomplete, setAutocomplete] = useState<(Autocomplete & { start: number; end: number }) | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -118,7 +120,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     editorProps: { attributes: { id, role: 'textbox', 'aria-label': 'Reply message', 'aria-autocomplete': 'list' } },
     onUpdate: ({ editor: instance }) => {
       if (readOnly) return;
-      const next = instance.getMarkdown();
+      const next = instance.getMarkdown(); legacyValueRef.current = next;
       onChange(next);
       const cursor = instance.state.selection.from - 1;
       setAutocomplete(format === 'plain' ? null : findComposerAutocomplete(instance.state.doc.textBetween(0, instance.state.selection.from, '\n'), cursor, hooks));
@@ -126,16 +128,19 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     },
   });
   useEffect(() => { editor?.setEditable(!readOnly); if (readOnly || format === 'plain') setAutocomplete(null); }, [editor, readOnly, format]);
-  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => editor.getMarkdown(), set: (next: string) => { editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); const onLegacyChange = () => { if (readOnly) return; const next = editor.getMarkdown(); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); }; dom.addEventListener('change', onLegacyChange); return () => dom.removeEventListener('change', onLegacyChange); } }, [editor, id, readOnly, onChange, hooks]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); const onLegacyChange = () => { if (readOnly) return; const next = legacyValueRef.current; onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); }; dom.addEventListener('change', onLegacyChange); return () => dom.removeEventListener('change', onLegacyChange); } }, [editor, id, readOnly, onChange, hooks]);
   useEffect(() => {
     if (!editor || editor.getMarkdown() === value) return;
-    editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
+    legacyValueRef.current = value; editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
   }, [editor, value]);
   const insert = (markdown: string) => {
     if (!editor || readOnly || !autocomplete) return;
     const { from, to } = editor.state.selection;
     const length = autocomplete.end - autocomplete.start;
     editor.chain().focus().deleteRange({ from: Math.max(1, from - length), to }).insertContent(markdown, { contentType: 'markdown' }).run();
+    legacyValueRef.current = editor.getMarkdown();
+    onChange(legacyValueRef.current);
+    Object.defineProperty(editor.view.dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); } });
     setAutocomplete(null);
   };
   const chooseAutocomplete = (option: AutocompleteOption) => {
