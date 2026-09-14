@@ -440,7 +440,7 @@
 .tocyn-inbox-current-view-name { font-weight: 600; }
 .tocyn-inbox-list-rows { display: flex; flex: 1; border-block-end: 1px solid var(--tocyn-app-border); }
 .tocyn-inbox-mobile-hidden { display: none; } @media (min-width: 1024px) { .tocyn-inbox-mobile-hidden { display: block; } }
-.tocyn-shell-sidebar-labelled { inline-size: 13rem; } .tocyn-shell-sidebar-compact { inline-size: 4rem; }
+.tocyn-shell-sidebar-labelled { inline-size: 16rem; } .tocyn-shell-sidebar-compact { inline-size: 4rem; }
 .tocyn-shell-mobile-labelled { inline-size: 14rem; max-inline-size: 90vw; } .tocyn-shell-mobile-compact { inline-size: 5rem; }
 .tocyn-users-dialog-unavailable-icon { display: block; inline-size: 3rem; block-size: 3rem; margin-inline: auto; margin-block-end: 1rem; color: #cbd5e1; }
 .tocyn-shell-workspace-main { flex: 1; min-block-size: 0; }
