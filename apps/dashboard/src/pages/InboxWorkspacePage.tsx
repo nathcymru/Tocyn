@@ -84,7 +84,7 @@ function InboxWorkspace(){
       <ConversationList activeView={activeView} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
     </ParkSplitter.Panel>
     <ParkSplitter.Panel id="inbox-detail" role="region" aria-label="Active conversation" className={clsx('tocyn-inbox-detail-panel',!conversationId&&'hidden lg:block')}>
-      {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
+      {advanceNotice && <p role="status" className="tocyn-inbox-status">{advanceNotice}</p>}
       {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${activeView}`} onResolved={onResolved} />:<EmptyConversation />}
     </ParkSplitter.Panel>
     <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" />
@@ -218,11 +218,11 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
           </TocynButton>;
         })}
         {isLoadingFilters?<span role="status" className="tocyn-inbox-loading-label">Loading saved views…</span>:filters?.map(filter=><TocynButton key={filter.id} type="button"
-          aria-pressed={activeView===filter.id} onClick={()=>selectView(filter.id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold',
-            activeView===filter.id?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}><Filter className="h-3.5 w-3.5" aria-hidden="true" />{filter.name}</TocynButton>)}</nav>
+          aria-pressed={activeView===filter.id} onClick={()=>selectView(filter.id)} className={clsx('tocyn-inbox-view-button tocyn-inbox-view-button-with-icon',
+            activeView===filter.id?'tocyn-inbox-view-button-active':'tocyn-inbox-view-button-inactive')}><Filter className="tocyn-inbox-filter-icon" aria-hidden="true" />{filter.name}</TocynButton>)}</nav>
       <p className="tocyn-inbox-status">Queue totals cover standard views before search or custom filters.</p>
       {queueCounts.isFetching?<p role="status" className="tocyn-inbox-status">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="tocyn-inbox-status">Queue totals unavailable. <TocynButton type="button" onClick={()=>void queueCounts.refetch()} className="tocyn-inbox-inline-retry">Retry queue totals</TocynButton></p>:null}
-      <p className="mt-3 text-xs text-slate-600">Current view: <span className="font-semibold text-slate-800">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
+      <p className="tocyn-inbox-status">Current view: <span className="font-semibold">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
       <form className="tocyn-inbox-search-shell" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="tocyn-inbox-search-icon" aria-hidden="true" />
         <TocynInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
@@ -246,8 +246,8 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       <TocynButton type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()} className="tocyn-inbox-retry">Retry conversations</TocynButton></div>}
     {workspace.status==='error'||workspace.status==='conflict'?<div role="alert" className="tocyn-inbox-preference-error">{workspace.error}
       <TocynButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave} className="tocyn-inbox-inline-retry">{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</TocynButton></div>:null}
-    {drafts.status==='partial'&&<p role="status" className="mx-4 mt-3 text-xs text-amber-900">Some draft indicators are still loading.</p>}
-    {presentation==='table'&&<p role="status" className="mx-4 mt-3 text-xs text-slate-600 sm:hidden">Table view uses the compact conversation list on small screens.</p>}
+    {drafts.status==='partial'&&<p role="status" className="tocyn-inbox-draft-loading">Some draft indicators are still loading.</p>}
+    {presentation==='table'&&<p role="status" className="tocyn-inbox-mobile-note sm:hidden">Table view uses the compact conversation list on small screens.</p>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx('flex-1 divide-y divide-slate-200',presentation==='table'&&'sm:hidden')}>
       {query.isLoading?<p role="status" className="tocyn-inbox-loading-state">Loading conversations…</p>:emptyPage?<ParkEmptyState className="tocyn-inbox-empty-state" title={emptyMessage} description={queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'} />:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
@@ -283,7 +283,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         })}
       </tbody></table>
     </div>}
-    {meta.total_pages>1&&<footer className="tocyn-inbox-pagination"><span role="status" className="text-xs font-semibold text-slate-600">Page {meta.page} of {meta.total_pages}</span><div className="tocyn-inbox-pagination-actions">
+    {meta.total_pages>1&&<footer className="tocyn-inbox-pagination"><span role="status" className="tocyn-inbox-status">Page {meta.page} of {meta.total_pages}</span><div className="tocyn-inbox-pagination-actions">
       <TocynButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||page<=1} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page>1){paging.current=true;workspace.update({listAnchor:pageAnchor(page-1)});}}} className="tocyn-inbox-pagination-button"><ChevronLeft className="tocyn-inbox-pagination-icon" /></TocynButton>
       <TocynButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||page>=meta.total_pages} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(page+1)});}}} className="tocyn-inbox-pagination-button"><ChevronRight className="tocyn-inbox-pagination-icon" /></TocynButton></div></footer>}
   </div>;
