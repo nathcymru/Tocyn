@@ -3,7 +3,6 @@ import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { KnowledgeBrowser } from '../components/KnowledgeBrowser';
 import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
-import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
 import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
 import { attachmentSize } from '../utils/attachment-size';
@@ -718,8 +717,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
     <>
       <DraftNavigationGuard pending={draftNavigationPending} flush={flushDraftBeforeNavigation}
         failureMessage="Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again." />
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-      <div className="lg:col-span-3 xl:col-span-4 space-y-6">
+      <div className="tocyn-ticket-layout" data-context-open={workspace.panel === 'details'}>
+      <div className="tocyn-conversation-primary space-y-4">
         {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="rounded border border-red-300 bg-red-50 p-3 text-red-900">
           {error ? 'Could not refresh this ticket. Showing the last confirmed details. ' : 'Confirm the saved ticket details before making another change. '}
           <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</TocynButton>
@@ -735,86 +734,14 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           {workspace.status === 'error' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.retrySave()} className="underline">Retry workspace preference</TocynButton></>}
           {workspace.status === 'conflict' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.restoreServerState()} className="underline">Restore server preferences</TocynButton></>}
         </p>}
-        <div className="flex items-center justify-between">
-          <Link to={workspaceBackHref??'/tickets'} className={clsx("flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors",workspaceBackHref&&"lg:hidden")}>
-            <ArrowLeft className="w-4 h-4" />
-            {workspaceBackHref?'Back to conversations':'Back to Tickets'}
-          </Link>
-          <div className="flex items-center gap-2">
-            <TocynButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
-              onClick={() => {
-                contextApplied.current = true;
-                const opening = workspace.panel !== 'details';
-                if (opening) setFocusContext(true);
-                else contextTriggerRef.current?.focus();
-                workspace.update({ panel: opening ? 'details' : 'conversation' });
-              }} className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium">
-              {workspace.panel === 'details' ? 'Hide ticket context' : 'Show ticket context'}
-            </TocynButton>
-            <TocynSelect
-              key={`ticket-status-${ticketSelectVersions.status}`}
-              ref={node => { ticketSelectRefs.current.status = node; }}
-              aria-label="Status" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
-              value={ticket.status}
-              onChange={(e) => {
-                if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
-                void handleTicketChange({ status: e.target.value as TicketChanges['status'] }, 'status');
-              }}
-              className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
-            >
-              <option value="open">Open</option>
-              <option value="pending">Pending</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
-            </TocynSelect>
-          </div>
-        </div>
-
-        <TicketActionBar reference={reference} actions={utilityActions.data?.actions ?? []} loading={utilityActions.isLoading}
-          error={utilityActions.isError} retry={() => void utilityActions.refetch()} />
-        <TicketSlaActionBar ticketId={ticket.id} />
-        <TicketSlaPanel ticketId={ticket.id} />
-        {!showSupportState && <TocynButton type="button" onClick={() => setShowSupportState(true)} className="rounded border border-slate-300 px-3 py-2 text-sm">Manage support state</TocynButton>}
-        {showSupportState && supportState.isLoading && <p role="status">Loading current support state…</p>}
-        {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Support state">
-          <div><h2 className="font-semibold text-slate-900">Support state</h2><p className="text-sm text-slate-600">Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
-          <label className="block text-sm font-medium text-slate-700">State
-            <TocynSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} aria-disabled={isSupportStateSubmitting || isLoadingSupportStates} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="mt-1 w-full rounded border border-slate-300 px-3 py-2">
-              {!selectedSupportStateDefinition && supportState.data?.definition_id === supportStateDraft.definitionId && <option value={supportStateDraft.definitionId}>{supportState.data.internal_label} ({supportState.data.lifecycle}) — state details loading</option>}
-              {supportStates.map(state => <option key={state.id} value={state.id}>{state.internal_label} ({state.legacy_status})</option>)}
-            </TocynSelect>
-          </label>
-          {isLoadingSupportStates && <p role="status" className="text-sm text-slate-700">Loading support-state definitions…</p>}
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
-            <label className="text-sm font-medium text-slate-700">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <label className="block text-sm font-medium text-slate-700">Snooze until (your local time)
-              <TocynInput type="datetime-local" aria-label="Snooze until (your local time)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2" />
-            </label>
-            <p className="mt-1 text-xs text-slate-600">The shared queue will resurface this ticket at the selected local time.</p>
-            <div className="mt-2 flex flex-wrap gap-3">
-              <TocynButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
-              {supportState.data.snoozed_until && <TocynButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="rounded border border-slate-400 px-3 py-2 text-sm font-semibold text-slate-700">Unsnooze ticket</TocynButton>}
-            </div>
-            {supportState.data.snoozed_until && <p role="status" className="mt-2 text-sm text-slate-700">Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
-          </div>
-          {selectedSupportStateNeedsDetails && <p role="status" className="text-sm text-slate-700">Load the current support-state definition before saving.</p>}
-          <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
-          {hasMoreSupportStates && <TocynButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className="underline">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</TocynButton>}
-          {isLoadMoreSupportStatesError && <p role="alert" className="text-sm text-red-800">Could not load more support states. Try again.</p>}
-        </form>}
-
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-200 bg-white">
+          <div className="tocyn-conversation-heading">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <span className="flex items-center px-3 py-1 bg-slate-900 text-white rounded-lg text-sm font-mono font-bold shadow-sm" title={reference}>{reference}</span>
                   <h1 ref={conversationHeadingRef} tabIndex={-1} className="text-2xl font-bold text-slate-900 leading-tight focus:outline-none">{ticket.subject}</h1>
                 </div>
-                <div className="flex items-center gap-4 text-sm text-slate-500">
+                <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
                   <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100">
                     <User className="w-3.5 h-3.5" />
                     {ticket.customer_email}
@@ -862,6 +789,77 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </div>
           </div>
 
+        <div className="tocyn-ticket-actions" role="group" aria-label="Ticket actions">
+          <Link to={workspaceBackHref??'/tickets'} className={clsx("flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors",workspaceBackHref&&"lg:hidden")}>
+            <ArrowLeft className="w-4 h-4" />
+            {workspaceBackHref?'Back to conversations':'Back to Tickets'}
+          </Link>
+          <div className="flex items-center gap-2">
+            <TocynButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
+              onClick={() => {
+                contextApplied.current = true;
+                const opening = workspace.panel !== 'details';
+                if (opening) setFocusContext(true);
+                else contextTriggerRef.current?.focus();
+                workspace.update({ panel: opening ? 'details' : 'conversation' });
+              }} className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium">
+              {workspace.panel === 'details' ? 'Hide ticket context' : 'Show ticket context'}
+            </TocynButton>
+            <TocynSelect
+              key={`ticket-status-${ticketSelectVersions.status}`}
+              ref={node => { ticketSelectRefs.current.status = node; }}
+              aria-label="Status" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+              value={ticket.status}
+              onChange={(e) => {
+                if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
+                void handleTicketChange({ status: e.target.value as TicketChanges['status'] }, 'status');
+              }}
+              className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+            >
+              <option value="open">Open</option>
+              <option value="pending">Pending</option>
+              <option value="resolved">Resolved</option>
+              <option value="closed">Closed</option>
+            </TocynSelect>
+          </div>
+        </div>
+
+        <TicketActionBar reference={reference} actions={utilityActions.data?.actions ?? []} loading={utilityActions.isLoading}
+          error={utilityActions.isError} retry={() => void utilityActions.refetch()} />
+        <TicketSlaPanel ticketId={ticket.id} />
+        {!showSupportState && <TocynButton type="button" onClick={() => setShowSupportState(true)} className="rounded border border-slate-300 px-3 py-2 text-sm">Manage support state</TocynButton>}
+        {showSupportState && supportState.isLoading && <p role="status">Loading current support state…</p>}
+        {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <details open={!workspaceBackHref} className="tocyn-support-editor"><summary>Support state and snooze · {supportState.data.internal_label}{supportState.data.snoozed_until ? ` · Snoozed until ${new Date(supportState.data.snoozed_until).toLocaleString()}` : ''}{supportStateDraftDirty.current ? ' · Unsaved changes' : ''}</summary><form onSubmit={submitSupportState} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-label="Support state">
+          <div><h2 className="font-semibold text-slate-900">Support state</h2><p className="text-sm text-slate-600">Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
+          <label className="block text-sm font-medium text-slate-700">State
+            <TocynSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} aria-disabled={isSupportStateSubmitting || isLoadingSupportStates} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+              {!selectedSupportStateDefinition && supportState.data?.definition_id === supportStateDraft.definitionId && <option value={supportStateDraft.definitionId}>{supportState.data.internal_label} ({supportState.data.lifecycle}) — state details loading</option>}
+              {supportStates.map(state => <option key={state.id} value={state.id}>{state.internal_label} ({state.legacy_status})</option>)}
+            </TocynSelect>
+          </label>
+          {isLoadingSupportStates && <p role="status" className="text-sm text-slate-700">Loading support-state definitions…</p>}
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<TocynInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="mt-1 w-full rounded border border-slate-300 px-3 py-2" /></label>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <label className="block text-sm font-medium text-slate-700">Snooze until (your local time)
+              <TocynInput type="datetime-local" aria-label="Snooze until (your local time)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2" />
+            </label>
+            <p className="mt-1 text-xs text-slate-600">The shared queue will resurface this ticket at the selected local time.</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <TocynButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className="rounded border border-brand-600 px-3 py-2 text-sm font-semibold text-brand-700">Snooze ticket</TocynButton>
+              {supportState.data.snoozed_until && <TocynButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="rounded border border-slate-400 px-3 py-2 text-sm font-semibold text-slate-700">Unsnooze ticket</TocynButton>}
+            </div>
+            {supportState.data.snoozed_until && <p role="status" className="mt-2 text-sm text-slate-700">Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
+          </div>
+          {selectedSupportStateNeedsDetails && <p role="status" className="text-sm text-slate-700">Load the current support-state definition before saving.</p>}
+          <div className="flex flex-wrap gap-3"><TocynButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className="rounded bg-brand-600 px-4 py-2 text-white">Save support state</TocynButton><TocynButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="underline">Refresh current state</TocynButton>{supportStateDraftDirty.current && <TocynButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="underline">Discard local changes</TocynButton>}</div>
+          {hasMoreSupportStates && <TocynButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className="underline">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</TocynButton>}
+          {isLoadMoreSupportStatesError && <p role="alert" className="text-sm text-red-800">Could not load more support states. Try again.</p>}
+        </form></details>}
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div id="conversation-messages" className="p-6 space-y-8 bg-slate-50/50 max-h-[600px] min-h-[400px] overflow-y-auto">
             {ticket.articles.map((article) => (
               <div
@@ -887,12 +885,21 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 )}>
                   <div className="flex items-center justify-between gap-4 mb-2">
                     <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest">
-                      {article.sender_type} {article.is_internal && '• Internal Note'}
+                      {ticket.source === 'email' || article.raw_email_id ? 'Email' : article.sender_type} {article.is_internal && '• Internal Note'}
                     </span>
                     <span className="text-[10px] opacity-70">
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
+                  {(ticket.source === 'email' || article.raw_email_id) && !article.is_internal && <details className="mb-3 rounded border border-slate-200/70 bg-white/60 px-2 py-1 text-xs text-slate-700">
+                    <summary className="cursor-pointer font-semibold">Show full email</summary>
+                    <dl className="mt-2 grid gap-1 sm:grid-cols-2">
+                      <div><dt className="font-medium">Subject</dt><dd>{ticket.subject || 'Subject unavailable'}</dd></div>
+                      <div><dt className="font-medium">From</dt><dd>{ticket.customer_email || 'Sender unavailable'}</dd></div>
+                      <div><dt className="font-medium">Received</dt><dd>{utcTimestamp(article.created_at).toLocaleString()}</dd></div>
+                      <div><dt className="font-medium">Headers</dt><dd>{article.raw_email_id ? 'Raw email reference available' : 'Structured headers unavailable'}</dd></div>
+                    </dl>
+                  </details>}
                   {/* Only explicitly versioned new content is interpreted as Markdown. */}
                   {article.body_format === 'markdown-v1'
                     ? <SafeMarkdown className="break-words text-sm leading-relaxed">{article.body ?? ''}</SafeMarkdown>
@@ -1217,7 +1224,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         </div>
       </div>
 
-      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="space-y-6">
+      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="tocyn-ticket-context space-y-4">
         <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
             <span className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" />Customer</span>
@@ -1398,7 +1405,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             <span className="flex items-center gap-2"><Activity className="w-4 h-4 text-slate-400" />Operational context</span>
           </summary>
           <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-            No operational source is connected for this ticket. Live SLA and routing details remain unavailable.
+            Service level appears above the conversation. Assignment and group controls are in Ticket Details; additional operational integrations are not connected.
           </p>
         </details>
 

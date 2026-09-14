@@ -8,7 +8,7 @@ const user = (id = 'operator', tenant_id = 'tenant-a') => ({ id, tenant_id, emai
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 const stored = (revision = 7, listQuery = 'saved query'): WorkspacePreference => ({
-  revision, view: 'mine', sort: 'created_asc', filters: { status: 'pending', groupId: 'group-a' }, listQuery, listAnchor: 'page:3', selectedTicketId: null, panel: 'details', updatedAt: '2026-09-11T00:00:00Z',
+  revision, view: 'mine', sort: 'created_asc', filters: { status: 'pending', groupId: 'group-a' }, listQuery, listAnchor: 'page:3', selectedTicketId: null, panel: 'details', splitterRatio: 32, updatedAt: '2026-09-11T00:00:00Z',
 });
 let workspace!: ReturnType<typeof useOperatorWorkspaceState>;
 function Harness() {
@@ -39,7 +39,7 @@ it('restores server preferences, preserves unmodified fields, and serializes lat
   const saving = workspace.saveNow();
   await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2));
   expect(JSON.parse(String((vi.mocked(fetch).mock.calls[1]?.[1] as RequestInit).body))).toEqual({
-    expectedRevision: 7, view: 'mine', sort: 'created_asc', filters: { status: 'pending', groupId: 'group-a' }, listQuery: 'updated query', listAnchor: 'page:4', selectedTicketId: null, panel: 'details',
+    expectedRevision: 7, view: 'mine', sort: 'created_asc', filters: { status: 'pending', groupId: 'group-a' }, listQuery: 'updated query', listAnchor: 'page:4', selectedTicketId: null, panel: 'details', splitterRatio: 32,
   });
   act(() => workspace.update({ filters: { status: 'pending', groupId: 'group-a', filterId: 'filter-a' } }));
   await act(async () => { firstSave.resolve(json(first)); await saving; });

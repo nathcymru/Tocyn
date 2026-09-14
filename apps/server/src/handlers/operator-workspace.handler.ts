@@ -38,7 +38,7 @@ const filters = z.object({
 }).strict();
 const stateInput = z.object({
   expectedRevision: revision, view: z.enum(OPERATOR_WORKSPACE_VIEWS), sort: z.enum(OPERATOR_WORKSPACE_SORTS), filters,
-  listQuery: boundedText(512, 512), listAnchor: boundedText(512, 512), selectedTicketId: ticketId.nullable(), panel: z.enum(['conversation', 'details']),
+  listQuery: boundedText(512, 512), listAnchor: boundedText(512, 512), selectedTicketId: ticketId.nullable(), panel: z.enum(['conversation', 'details']), splitterRatio: z.number().int().min(24).max(50),
 }).strict();
 
 const workspace = new Hono<{ Bindings: Env; Variables: AppVariables }>();

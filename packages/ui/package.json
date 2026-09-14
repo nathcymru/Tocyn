@@ -12,7 +12,12 @@
     "./ark": "./src/ark.ts",
     "./dialog": "./src/dialog.tsx",
     "./brand": "./src/brand.tsx",
-    "./auth-layout": "./src/auth-layout.tsx"
+    "./auth-layout": "./src/auth-layout.tsx",
+    "./splitter": "./src/splitter.tsx",
+    "./recipes": "./src/recipes.ts",
+    "./css": "./styled-system/css/index.mjs",
+    "./tokens": "./styled-system/tokens/index.mjs",
+    "./generated-recipes": "./styled-system/recipes/index.mjs"
   },
   "sideEffects": [
     "./src/styles/tocyn.css"

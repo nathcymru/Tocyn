@@ -1,6 +1,7 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { TocynButton,TocynInput,TocynSelect } from '@luminatick/ui/primitives';
+import { TocynSplitter } from '../../../../packages/ui/src/splitter';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,Inbox,LayoutList,Search,Table2 } from 'lucide-react';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
@@ -35,6 +36,11 @@ function InboxWorkspace(){
   const [viewId,conversationId]=inboxPath?.split('/')??[];
   const navigate=useNavigate();
   const workspace=useOperatorWorkspaceState();
+  const splitterRatio = Math.min(50, Math.max(24, Math.round(workspace.splitterRatio ?? 32)));
+  const onSplitterResizeEnd = useCallback((details: { size: number[] }) => {
+    const next = Math.min(50, Math.max(24, Math.round(details.size[0] ?? splitterRatio)));
+    if (next !== splitterRatio) workspace.update({ splitterRatio: next });
+  }, [splitterRatio, workspace]);
   const advance = useRef<((id:string)=>void)|null>(null);
   const [advanceNotice,setAdvanceNotice] = useState('');
   const {data:filters,isLoading:isLoadingFilters}=useFilters();
@@ -73,16 +79,30 @@ function InboxWorkspace(){
     <Link to="/inbox/all" replace className="mt-4 inline-flex rounded border border-slate-300 px-4 py-2 font-semibold">Open All tickets</Link>
   </section>;
 
-  return <div className="h-full min-h-0 bg-slate-100 lg:grid lg:grid-cols-3">
+  return <div className="tocyn-inbox-layout h-full min-h-0 bg-slate-100">
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
-    <section aria-label="Conversations" className={clsx('h-full min-h-0 overflow-y-auto border-r border-slate-200 bg-white',conversationId&&'hidden lg:block')}>
-      <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
-    </section>
-    <section aria-label="Active conversation" className={clsx('h-full min-h-0 overflow-y-auto bg-slate-50 p-4 lg:col-span-2 lg:p-8',!conversationId&&'hidden lg:block')}>
-      {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
-      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} onResolved={onResolved} />:<EmptyConversation />}
-    </section>
+    <div className="hidden h-full min-h-0 lg:block">
+      <TocynSplitter.Root orientation="horizontal" size={[splitterRatio, 100 - splitterRatio]} onResizeEnd={onSplitterResizeEnd} panels={[{ id: 'inbox', minSize: 24, maxSize: 50 }, { id: 'conversation', minSize: 50, maxSize: 76 }]}>
+        <TocynSplitter.Panel id="inbox" className="tocyn-conversation-list border-r border-slate-200 bg-white">
+          <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
+        </TocynSplitter.Panel>
+        <TocynSplitter.ResizeTrigger id="inbox:conversation" aria-label="Resize inbox and conversation panes" />
+        <TocynSplitter.Panel id="conversation" className="tocyn-active-conversation overflow-y-auto bg-slate-50 p-4">
+          {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
+          {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} onResolved={onResolved} />:<EmptyConversation />}
+        </TocynSplitter.Panel>
+      </TocynSplitter.Root>
+    </div>
+    <div className="h-full min-h-0 lg:hidden">
+      <section aria-label="Conversations" className={clsx('tocyn-conversation-list h-full min-h-0 overflow-y-auto border-r border-slate-200 bg-white',conversationId&&'hidden')}>
+        <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
+      </section>
+      <section aria-label="Active conversation" className={clsx('tocyn-active-conversation h-full min-h-0 overflow-y-auto bg-slate-50 p-4',!conversationId&&'hidden')}>
+        {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
+        {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} onResolved={onResolved} />:<EmptyConversation />}
+      </section>
+    </div>
   </div>;
 }
 
@@ -222,7 +242,12 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
             activeView===filter.id?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}><Filter className="h-3.5 w-3.5" aria-hidden="true" />{filter.name}</TocynButton>)}</nav>
       <p className="mt-2 text-xs text-slate-500">Queue totals cover standard views before search or custom filters.</p>
       {queueCounts.isFetching?<p role="status" className="mt-1 text-xs text-slate-500">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="mt-1 text-xs text-slate-600">Queue totals unavailable. <TocynButton type="button" onClick={()=>void queueCounts.refetch()} className="underline">Retry queue totals</TocynButton></p>:null}
-      <p className="mt-3 text-xs text-slate-600">Current view: <span className="font-semibold text-slate-800">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4" aria-label="Inbox metrics">
+        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5"><span className="block text-slate-500">View</span><span className="font-semibold text-slate-800">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span></div>
+        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5"><span className="block text-slate-500">Open</span><span className="font-semibold text-slate-800">{queueCounts.data?.all ?? meta.total}</span></div>
+        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5"><span className="block text-slate-500">Showing</span><span className="font-semibold text-slate-800">{tickets.length} of {meta.total}</span></div>
+        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5"><span className="block text-slate-500">Sort</span><span className="font-semibold text-slate-800">{workspace.sort.replaceAll('_',' ')}</span></div>
+      </div>
       <form className="relative mt-4" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-500" aria-hidden="true" />
         <TocynInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
