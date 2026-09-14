@@ -9,12 +9,15 @@ vi.mock('react-router-dom', () => ({
   useSearchParams: () => [new URLSearchParams()],
 }));
 vi.mock('../api/client', () => ({ dashboardApi: { get: mocks.get, post: mocks.post, put: mocks.put } }));
-vi.mock('@uiw/react-md-editor', () => ({
-  default: ({ value, onChange, textareaProps }: { value?: string; onChange: (value?: string) => void; textareaProps?: React.TextareaHTMLAttributes<HTMLTextAreaElement> }) => (
-    <textarea {...textareaProps} value={value ?? ''} onChange={event => onChange(event.target.value)} />
-  ),
-}));
+
 import { KnowledgeEditorPage } from '../pages/KnowledgeEditorPage';
+
+function setEditorText(value: string) {
+  const editor = screen.getByRole('textbox', { name: 'Content (Markdown)' });
+  editor.textContent = value;
+  fireEvent.input(editor, { inputType: 'insertText', data: value });
+  fireEvent.change(editor);
+}
 
 beforeEach(() => {
   mocks.route.id = undefined;
@@ -40,7 +43,7 @@ it('prevents duplicate saves, retains the draft after failure, and retries the s
   mocks.post.mockImplementationOnce(() => new Promise((_resolve, rejectSave) => { reject = rejectSave; })).mockResolvedValueOnce({});
   render(<React.StrictMode><KnowledgeEditorPage /></React.StrictMode>);
   fireEvent.change(screen.getByRole('textbox', { name: 'Title *' }), { target: { value: 'Keep this article' } });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Content (Markdown)' }), { target: { value: 'Retained content' } });
+  setEditorText('Retained content');
   const save = screen.getByRole('button', { name: 'Save Article' });
   fireEvent.click(save); fireEvent.click(save);
   await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));
@@ -51,7 +54,7 @@ it('prevents duplicate saves, retains the draft after failure, and retries the s
   await act(async () => reject(new Error('synthetic save failure')));
   expect(await screen.findByRole('alert')).toHaveTextContent('synthetic save failure');
   expect(screen.getByRole('textbox', { name: 'Title *' })).toHaveValue('Keep this article');
-  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveValue('Retained content');
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Retained content');
   fireEvent.click(screen.getByRole('button', { name: 'Save Article' }));
   await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(2));
   expect(mocks.post.mock.calls[1]).toEqual(['/knowledge/articles', { title: 'Keep this article', category_id: null, content: 'Retained content', tier: 'answer' }]);
@@ -87,7 +90,7 @@ it('does not apply a stale article response after the route changes', async () =
     deferred.get('/knowledge/articles/current/content')!.resolve({ content: 'current' });
   });
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title *' })).toHaveValue('Current title'));
-  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveValue('current');
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('current');
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
 });
 
