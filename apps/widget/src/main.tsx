@@ -44,9 +44,9 @@ import widgetStyles from './index.css?inline';
 
   // Retain optional legacy shadow-scoped additions for existing embedders.
   if ((window as any).LUMINA_WIDGET_CSS) {
-    const tailwindStyles = document.createElement('style');
-    tailwindStyles.textContent = (window as any).LUMINA_WIDGET_CSS;
-    shadow.appendChild(tailwindStyles);
+    const legacyWidgetStyles = document.createElement('style');
+    legacyWidgetStyles.textContent = (window as any).LUMINA_WIDGET_CSS;
+    shadow.appendChild(legacyWidgetStyles);
   }
 
   ReactDOM.createRoot(root).render(
