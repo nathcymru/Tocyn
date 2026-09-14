@@ -260,3 +260,19 @@
 .tocyn-sla-queue-action { font-weight: 600; text-decoration: underline; justify-self: start; }
 .tocyn-sla-target-breached { color: var(--tocyn-sla-breach-text); }
 .tocyn-sla-target-on-track { color: var(--tocyn-sla-on-track-text); }
+
+.tocyn-visually-hidden { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tocyn-global-search-type-label { display: grid; gap: .25rem; color: var(--tocyn-app-text-muted); font-size: .75rem; font-weight: 500; }
+.tocyn-global-search-input-shell { position: relative; min-inline-size: 0; }
+.tocyn-global-search-popover { position: absolute; inset-block-start: 100%; inset-inline-start: 0; z-index: 50; max-block-size: min(24rem,60vh); inline-size: 100%; overflow-y: auto; border: 1px solid var(--tocyn-app-border); border-radius: .5rem; background: var(--tocyn-app-surface); padding: .75rem; box-shadow: 0 10px 24px rgb(15 23 42 / 18%); }
+.tocyn-global-search-status { font-size: .875rem; }
+.tocyn-global-search-results { max-block-size: 16rem; overflow: auto; border: 1px solid var(--tocyn-app-border); background: var(--tocyn-app-surface); }
+.tocyn-global-search-result-link, .tocyn-global-search-result-button { display: block; inline-size: 100%; padding: .5rem; text-align: start; text-decoration: underline; }
+.tocyn-global-search-preview { border: 1px solid var(--tocyn-app-border); background: var(--tocyn-app-surface); padding: .5rem; }
+.tocyn-global-search-preview-title { font-weight: 600; }
+.tocyn-assignment-panel { display: grid; gap: .5rem; margin-block-start: .75rem; color: var(--tocyn-app-text); font-size: .875rem; }
+.tocyn-assignment-action { border: 1px solid var(--tocyn-app-border); border-radius: .375rem; padding: .5rem .75rem; font-weight: 500; }
+.tocyn-assignment-dialog { inline-size: 100%; max-inline-size: 32rem; border: 1px solid var(--tocyn-app-border); border-radius: .75rem; background: var(--tocyn-app-surface); color: var(--tocyn-app-text); padding: 1.5rem; box-shadow: 0 20px 40px rgb(15 23 42 / 20%); }
+.tocyn-assignment-dialog-title { font-size: 1.25rem; font-weight: 700; }
+.tocyn-assignment-dialog-copy { margin-block: .75rem; }
+.tocyn-assignment-select, .tocyn-assignment-reason { display: block; inline-size: 100%; border: 1px solid var(--tocyn-app-border); border-radius: .375rem; padding: .5rem .75rem; }
