@@ -172,7 +172,7 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
 
           <div className="tocyn-shell-sidebar-footer">
             <Link
-              to="/settings"
+              to="/settings/general"
               title="Settings"
               aria-label="Settings"
               onClick={onNavigate}
