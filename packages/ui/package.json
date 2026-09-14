@@ -24,7 +24,10 @@
     },
     "./icons": {
       "types": "./src/icons.tsx",
-      "import": "./src/icons.tsx"
+      "import": "./src/icons.tsx",
+      "browser": "./src/icons.tsx",
+      "module": "./src/icons.tsx",
+      "default": "./src/icons.tsx"
     }
   },
   "sideEffects": [
