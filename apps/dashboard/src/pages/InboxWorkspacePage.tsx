@@ -217,11 +217,11 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
             {label}{total!==undefined&&<><span aria-hidden="true" className="ml-1.5">{total}</span><span id={`queue-total-${view}`} className="sr-only">{total} conversations in this standard queue</span></>}
           </TocynButton>;
         })}
-        {isLoadingFilters?<span role="status" className="px-2 py-2 text-sm text-slate-500">Loading saved views…</span>:filters?.map(filter=><TocynButton key={filter.id} type="button"
+        {isLoadingFilters?<span role="status" className="tocyn-inbox-loading-label">Loading saved views…</span>:filters?.map(filter=><TocynButton key={filter.id} type="button"
           aria-pressed={activeView===filter.id} onClick={()=>selectView(filter.id)} className={clsx('inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold',
             activeView===filter.id?'border-brand-600 bg-brand-50 text-brand-800':'border-slate-300 text-slate-700')}><Filter className="h-3.5 w-3.5" aria-hidden="true" />{filter.name}</TocynButton>)}</nav>
-      <p className="mt-2 text-xs text-slate-500">Queue totals cover standard views before search or custom filters.</p>
-      {queueCounts.isFetching?<p role="status" className="mt-1 text-xs text-slate-500">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="mt-1 text-xs text-slate-600">Queue totals unavailable. <TocynButton type="button" onClick={()=>void queueCounts.refetch()} className="underline">Retry queue totals</TocynButton></p>:null}
+      <p className="tocyn-inbox-status">Queue totals cover standard views before search or custom filters.</p>
+      {queueCounts.isFetching?<p role="status" className="tocyn-inbox-status">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="tocyn-inbox-status">Queue totals unavailable. <TocynButton type="button" onClick={()=>void queueCounts.refetch()} className="tocyn-inbox-inline-retry">Retry queue totals</TocynButton></p>:null}
       <p className="mt-3 text-xs text-slate-600">Current view: <span className="font-semibold text-slate-800">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</p>
       <form className="tocyn-inbox-search-shell" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="tocyn-inbox-search-icon" aria-hidden="true" />
@@ -231,21 +231,21 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         <TocynButton type="button" aria-label="Clear current-view filter" disabled={!filterInput} onClick={()=>{setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}
           className="tocyn-inbox-clear-button">Clear</TocynButton>
       </form>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><label className="text-xs font-semibold text-slate-600">Sort
+      <div className="tocyn-inbox-toolbar"><div className="tocyn-inbox-toolbar-group"><label className="tocyn-inbox-control-label">Sort
         <TocynSelect aria-label="Sort conversations" value={workspace.sort} onChange={event=>{if(event.target.value==='sla_priority')query.restartSla();workspace.update({sort:event.target.value as WorkspacePreference['sort'],listAnchor:'page:1'});}}
-          className="ml-2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"><option value="updated_desc">Recently updated</option><option value="updated_asc">Least recently updated</option>
+          className="tocyn-form-control tocyn-inbox-select-control"><option value="updated_desc">Recently updated</option><option value="updated_asc">Least recently updated</option>
           <option value="created_desc">Newest</option><option value="created_asc">Oldest</option><option value="priority_desc">Highest priority</option><option value="priority_asc">Lowest priority</option><option value="sla_priority">Earliest SLA deadline</option></TocynSelect></label>
-        <div role="group" aria-label="Conversation presentation" className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
-          <TocynButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('rounded-md p-1.5',presentation==='list'?'bg-brand-50 text-brand-800':'text-slate-600')}><LayoutList className="h-4 w-4" aria-hidden="true" /></TocynButton>
-          <TocynButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('rounded-md p-1.5',presentation==='table'?'bg-brand-50 text-brand-800':'text-slate-600')}><Table2 className="h-4 w-4" aria-hidden="true" /></TocynButton>
+        <div role="group" aria-label="Conversation presentation" className="tocyn-inbox-presentation-toggle">
+          <TocynButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('tocyn-inbox-presentation-button',presentation==='list'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><LayoutList className="h-4 w-4" aria-hidden="true" /></TocynButton>
+          <TocynButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('tocyn-inbox-presentation-button',presentation==='table'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><Table2 className="h-4 w-4" aria-hidden="true" /></TocynButton>
         </div></div>
-        <p role="status" aria-label="Inbox status" className="text-xs text-slate-600">{recoveringPage?'Loading the first page after the conversation list changed…':query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p></div>
+        <p role="status" aria-label="Inbox status" className="tocyn-inbox-status">{recoveringPage?'Loading the first page after the conversation list changed…':query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p></div>
     </header>
     {slaSort&&<SlaQueueNotice asOf={query.data?.asOf} error={query.error} busy={query.isFetching} restart={restartSla} />}
-    {query.error&&<div role="alert" className="m-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900"><p>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</p>
-      <TocynButton type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()} className="mt-2 font-semibold underline">Retry conversations</TocynButton></div>}
-    {workspace.status==='error'||workspace.status==='conflict'?<div role="alert" className="mx-4 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{workspace.error}
-      <TocynButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave} className="ml-2 font-semibold underline">{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</TocynButton></div>:null}
+    {query.error&&<div role="alert" className="tocyn-inbox-error"><p>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</p>
+      <TocynButton type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()} className="tocyn-inbox-retry">Retry conversations</TocynButton></div>}
+    {workspace.status==='error'||workspace.status==='conflict'?<div role="alert" className="tocyn-inbox-preference-error">{workspace.error}
+      <TocynButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave} className="tocyn-inbox-inline-retry">{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</TocynButton></div>:null}
     {drafts.status==='partial'&&<p role="status" className="mx-4 mt-3 text-xs text-amber-900">Some draft indicators are still loading.</p>}
     {presentation==='table'&&<p role="status" className="mx-4 mt-3 text-xs text-slate-600 sm:hidden">Table view uses the compact conversation list on small screens.</p>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx('flex-1 divide-y divide-slate-200',presentation==='table'&&'sm:hidden')}>
