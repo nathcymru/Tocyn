@@ -77,7 +77,13 @@ function InboxWorkspace(){
   return <ParkSplitter.Root className="tocyn-inbox-workspace" orientation="horizontal"
     size={[workspace.splitterRatio, 100 - workspace.splitterRatio]} keyboardResizeBy={2}
     panels={[{ id: 'inbox-list', minSize: 24, maxSize: 50 }, { id: 'inbox-detail', minSize: 30, maxSize: 76 }]}
-    onResizeEnd={({ size }) => { const ratio = Math.max(24, Math.min(50, Math.round(size[0] ?? workspace.splitterRatio))); workspace.update({ splitterRatio: ratio }); }}>
+    onResizeEnd={({ size }) => {
+      const ratio = Math.max(24, Math.min(50, Math.round(size[0] ?? workspace.splitterRatio)));
+      workspace.update({ splitterRatio: ratio });
+      // Resize events can arrive after the controller's debounce was cancelled by
+      // navigation. Flush this user action on the next tick so a reload restores it.
+      window.setTimeout(() => { void workspace.saveNow(); }, 0);
+    }}>
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
     <ParkSplitter.Panel id="inbox-list" role="region" aria-label="Conversations" className={clsx('tocyn-inbox-list-panel',conversationId&&'tocyn-inbox-mobile-hidden')}>
