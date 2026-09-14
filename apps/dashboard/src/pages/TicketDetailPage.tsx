@@ -1225,35 +1225,35 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         </div>
       </div>
 
-      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="space-y-6">
-        <details open className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <summary className="cursor-pointer list-none text-sm font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500">
-            <span className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" />Customer</span>
+      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="tocyn-ticket-context-panel">
+        <details open className="tocyn-ticket-context-card">
+          <summary className="tocyn-ticket-context-summary">
+            <span className="tocyn-ticket-context-summary-label"><User className="tocyn-ticket-context-user-icon" />Customer</span>
           </summary>
-          <div className="mt-4 space-y-3 text-sm">
+          <div className="tocyn-ticket-context-body">
             <div>
-              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Verified identity</p>
-              <p className="mt-1 font-medium text-slate-900">{ticket.customer_email}</p>
-              <p className="mt-1 text-xs text-slate-600">Loaded from this tenant-scoped conversation.</p>
+              <p className="tocyn-ticket-context-eyebrow">Verified identity</p>
+              <p className="tocyn-ticket-context-value">{ticket.customer_email}</p>
+              <p className="tocyn-ticket-context-help">Loaded from this tenant-scoped conversation.</p>
             </div>
             {customerHistory.isLoading ? (
-              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p role="status" className="tocyn-ticket-context-notice">
                 Loading customer history...
               </p>
             ) : customerHistory.isError ? (
-              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p role="status" className="tocyn-ticket-context-notice">
                 Customer history is unavailable for this conversation. {customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'}
               </p>
             ) : customerHistoryEvents.length === 0 ? (
-              <p role="status" className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p role="status" className="tocyn-ticket-context-notice">
                 Customer history is unavailable for this conversation. No cross-channel identity match was made.
               </p>
             ) : (
-              <ul className="space-y-3">
+              <ul className="tocyn-ticket-context-history">
                 {customerHistoryEvents.map((historyEvent) => (
-                  <li key={historyEvent.id} className="rounded border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs font-bold text-slate-900">{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
-                    <p className="mt-1 text-[10px] text-slate-500 uppercase tracking-wider">
+                  <li key={historyEvent.id} className="tocyn-ticket-context-history-item">
+                    <p className="tocyn-ticket-context-history-title">{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
+                    <p className="tocyn-ticket-context-history-meta">
                       {historyEvent.visibility} {historyEvent.source}
                     </p>
                   </li>
@@ -1263,15 +1263,15 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </div>
         </details>
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <h3 ref={contextHeadingRef} tabIndex={-1} className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Info className="w-4 h-4 text-slate-400" />
+        <div className="tocyn-ticket-context-settings-card">
+          <h3 ref={contextHeadingRef} tabIndex={-1} className="tocyn-ticket-context-settings-heading">
+            <Info className="tocyn-ticket-context-settings-icon" />
             Ticket Details
           </h3>
-          <div className="space-y-4">
+          <div className="tocyn-ticket-context-settings-fields">
             <div>
-              <label htmlFor="ticket-priority" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Priority</label>
-              <div className="mt-1">
+              <label htmlFor="ticket-priority" className="tocyn-ticket-context-settings-label">Priority</label>
+              <div className="tocyn-ticket-context-settings-field-control">
                 <TocynSelect
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   ref={node => { ticketSelectRefs.current.priority = node; }}
@@ -1281,7 +1281,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.priority; return; }
                     void handleTicketChange({ priority: e.target.value as TicketChanges['priority'] }, 'priority');
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+                  className="tocyn-form-control tocyn-ticket-context-settings-control"
                 >
                   <option value="low">Low</option>
                   <option value="normal">Normal</option>
@@ -1291,8 +1291,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
             </div>
             <div>
-              <label htmlFor="ticket-assigned_to" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Assigned To</label>
-              <div className="mt-1">
+              <label htmlFor="ticket-assigned_to" className="tocyn-ticket-context-settings-label">Assigned To</label>
+              <div className="tocyn-ticket-context-settings-field-control">
                 <TocynSelect
                   key={`ticket-assigned_to-${ticketSelectVersions.assigned_to}`}
                   ref={node => { ticketSelectRefs.current.assigned_to = node; }}
@@ -1302,7 +1302,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.assigned_to || ''; return; }
                     void handleTicketChange({ assigned_to: e.target.value || null }, 'assigned_to');
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+                  className="tocyn-form-control tocyn-ticket-context-settings-control"
                 >
                   <option value="">Unassigned</option>
                   {agents?.map(agent => (
@@ -1316,8 +1316,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
             </div>
             <div>
-              <label htmlFor="ticket-group_id" className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Group</label>
-              <div className="mt-1">
+              <label htmlFor="ticket-group_id" className="tocyn-ticket-context-settings-label">Group</label>
+              <div className="tocyn-ticket-context-settings-field-control">
                 <TocynSelect
                   key={`ticket-group_id-${ticketSelectVersions.group_id}`}
                   ref={node => { ticketSelectRefs.current.group_id = node; }}
@@ -1327,7 +1327,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.group_id || ''; return; }
                     void handleTicketChange({ group_id: e.target.value || null }, 'group_id');
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+                  className="tocyn-form-control tocyn-ticket-context-settings-control"
                 >
                   <option value="">No Group</option>
                   {groups?.map(group => (
