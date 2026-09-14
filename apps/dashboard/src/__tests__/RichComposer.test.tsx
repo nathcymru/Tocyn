@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { expect, it, vi } from 'vitest';
-import { acceptedComposerImages, COMPOSER_MAX_IMAGE_BYTES, insertMarkdownAtCursor, RichComposer, SafeMarkdown } from '../components/RichComposer';
+import { acceptedComposerImages, COMPOSER_MAX_IMAGE_BYTES, insertMarkdownAtCursor, RichComposer, SafeMarkdown, TIPTAP_MARKDOWN_CONTRACT } from '../components/RichComposer';
+import StarterKit from '@tiptap/starter-kit';
+import { MarkdownManager } from '@tiptap/markdown';
 
 function editorFor(name = 'Reply message') {
   return screen.getByRole('textbox', { name: name }) as HTMLElement;
@@ -41,6 +43,22 @@ it('renders Markdown without executing HTML, unsafe links, or remote images', ()
   expect(screen.queryByRole('link', { name: 'unsafe' })).not.toBeInTheDocument();
   expect(screen.getByText('[Image omitted: remote]')).toBeInTheDocument();
   expect(document.querySelector('pre code')).toHaveTextContent('const safe = true;');
+});
+
+it('round-trips the supported markdown-v1 nodes and marks without changing meaning', () => {
+  expect(TIPTAP_MARKDOWN_CONTRACT.nodes).toContain('taskList');
+  expect(TIPTAP_MARKDOWN_CONTRACT.marks).toEqual(['bold', 'italic', 'strike', 'code', 'link']);
+  const markdown = '# Title\n\n**bold** and *italic* ~~strike~~ with `code`\n\n- one\n- two\n\n> quote\n\n```\nconst value = true\n```';
+  const manager = new MarkdownManager({ extensions: [StarterKit] });
+  const roundTrip = manager.serialize(manager.parse(markdown));
+  expect(roundTrip).toContain('# Title');
+  expect(roundTrip).toContain('**bold**');
+  expect(roundTrip).toContain('*italic*');
+  expect(roundTrip).toContain('~~strike~~');
+  expect(roundTrip).toContain('`code`');
+  expect(roundTrip).toContain('- one');
+  expect(roundTrip).toContain('> quote');
+  expect(roundTrip).toContain('const value = true');
 });
 
 it('highlights supported fenced code after sanitization and leaves code HTML as text', () => {

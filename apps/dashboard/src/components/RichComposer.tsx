@@ -21,6 +21,14 @@ export const COMPOSER_EMOJI = [
 ] as const;
 export const COMPOSER_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
 export const COMPOSER_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+/** The deliberately bounded markdown-v1 surface; see docs/architecture/tiptap-markdown-contract.md. */
+export const TIPTAP_MARKDOWN_CONTRACT = Object.freeze({
+  nodes: ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'listItem', 'taskList', 'taskItem', 'codeBlock', 'horizontalRule', 'hardBreak', 'image'] as const,
+  marks: ['bold', 'italic', 'strike', 'code', 'link'] as const,
+  unsafe: ['rawHtml', 'unsafeUrl', 'remoteImage', 'unsafeAttribute'] as const,
+  imageMimeTypes: COMPOSER_IMAGE_MIME_TYPES,
+  maxImageBytes: COMPOSER_MAX_IMAGE_BYTES,
+});
 const AUTOCOMPLETE_LIMIT = 6;
 
 type InsertionKind = 'command' | 'emoji' | 'knowledge' | 'saved-response';
