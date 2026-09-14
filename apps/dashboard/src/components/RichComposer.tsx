@@ -83,7 +83,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
   const editor = useEditor({
     extensions: [StarterKit, Markdown],
     content: value, contentType: 'markdown', editable: !readOnly,
-    editorProps: { attributes: { id, 'aria-label': 'Content (Markdown)' } },
+    editorProps: { attributes: { id, role: 'textbox', 'aria-label': 'Content (Markdown)' } },
     onUpdate: ({ editor: instance }) => { if (!readOnly) onChange(instance.getMarkdown()); },
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
@@ -115,7 +115,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     content: value,
     contentType: 'markdown',
     editable: !readOnly,
-    editorProps: { attributes: { id, 'aria-label': 'Reply message', 'aria-autocomplete': 'list' } },
+    editorProps: { attributes: { id, role: 'textbox', 'aria-label': 'Reply message', 'aria-autocomplete': 'list' } },
     onUpdate: ({ editor: instance }) => {
       if (readOnly) return;
       const next = instance.getMarkdown();
