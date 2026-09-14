@@ -52,6 +52,19 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
   const [capacityOpen,setCapacityOpen]=useState(false);
   const capacityClose=useRef<HTMLButtonElement>(null);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      restoreAccountFocus.current = true;
+      setIsOpen(false);
+      requestAnimationFrame(() => trigger.current?.focus());
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen]);
+
   const handleLogout = async () => {
     if (loggingOut.current) return;
     loggingOut.current = true;
@@ -81,7 +94,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
       </TocynButton></Popover.Trigger>
 
       <Popover.Positioner>
-        <Popover.Content aria-label="Account options" data-tocyn-inverse="" className="w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
+        <Popover.Content aria-label="Account options" data-tocyn-inverse="" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); restoreAccountFocus.current = true; setIsOpen(false); requestAnimationFrame(() => trigger.current?.focus()); } }} className="w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
           <div className="px-4 py-2 border-b border-slate-700">
             <p className="text-sm font-medium text-white truncate">{user?.full_name}</p>
             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
@@ -89,7 +102,7 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
           <Link
             ref={securityProfile}
             to="/profile/security"
-            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); setTimeout(() => navigationFocus()?.focus(), 0); }}
+            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); setTimeout(() => navigationFocus()?.focus(), 50); }}
             className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
           >
             <Key className="w-4 h-4" />
