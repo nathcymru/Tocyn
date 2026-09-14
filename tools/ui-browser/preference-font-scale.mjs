@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import postcss from 'postcss';
-import tailwindcss from 'tailwindcss';
 import { chromium } from 'playwright';
 
 // Deliberately separate from routine CI: local browser evidence for #132.
@@ -11,8 +9,10 @@ const paths = ['apps/dashboard/src/index.css', 'packages/ui/src/styles/tocyn.css
 const sources = paths.map(path => readFileSync(path, 'utf8'));
 const hint = sources[2].match(/<span data-tocyn-focus-decoration[^>]*>[^<]*<\/span>/)?.[0].replace('className=', 'class=');
 assert.ok(hint, 'Use the actual marked Layout shortcut hint');
-const content = `${hint}<section data-tocyn-appearance><h3>Workspace preferences</h3><fieldset><label>Text size<select><option>Standard</option></select></label></fieldset><div><button>Save preferences</button></div></section><p class="text-sm">Workspace state</p>`;
-const css = await postcss([tailwindcss({ content: [{ raw: content, extension: 'html' }] })]).process(sources[0], { from: paths[0] });
+const content = `${hint}<section data-tocyn-appearance><h3>Workspace preferences</h3><fieldset><label>Text size<select><option>Standard</option></select></label></fieldset><div><button>Save preferences</button></div></section><p>Workspace state</p>`;
+// The evidence check consumes the same authored Panda/static CSS as the app.
+// It must not compile a second styling system just to measure representative markup.
+const css = { css: sources[0] };
 const expectedFactors = { normal: 1, large: 1.125, larger: 1.25 };
 const results = [];
 for (const browserBase of [16, 20]) {
