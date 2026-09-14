@@ -48,6 +48,9 @@ export interface Article {
   // Legacy question is read-compatible only; new writes use answer/sop/null.
   qa_type?: 'question' | 'answer' | 'sop' | null;
   is_internal: boolean;
+  /** Inbound channel metadata is optional for legacy timeline rows. */
+  intake_source?: Ticket['source'] | null;
+  received_at?: string | null;
   attachments?: Attachment[];
   created_at: string;
 }

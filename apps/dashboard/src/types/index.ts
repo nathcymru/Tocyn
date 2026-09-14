@@ -24,6 +24,9 @@ export interface Article {
   // Legacy question values remain readable; new writes use answer/sop/null.
   qa_type?: 'question' | 'answer' | 'sop' | null;
   is_internal: boolean;
+  /** Optional inbound metadata; legacy rows may omit it. */
+  intake_source?: Ticket['source'] | null;
+  received_at?: string | null;
   attachments?: Attachment[];
   created_at: string;
 }

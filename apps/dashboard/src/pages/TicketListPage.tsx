@@ -281,7 +281,7 @@ export function TicketListPage() {
                 placeholder="Search all authorised tickets..."
                 aria-label="Search all tickets in this list view"
                 aria-describedby="global-ticket-results-scope"
-                className="w-full pl-9 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                className="tocyn-search-field w-full pl-9 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
