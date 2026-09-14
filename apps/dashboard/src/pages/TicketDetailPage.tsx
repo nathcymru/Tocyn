@@ -35,6 +35,7 @@ import {
   ShieldCheck,
   Clock,
   MessageSquare,
+  Mail,
   Eye,
   Info,
   Activity,
@@ -894,10 +895,34 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
+                  {(ticket.source === 'email' || article.raw_email_id) && article.sender_type === 'customer' && (
+                    <div className="tocyn-email-presentation">
+                      <div className="tocyn-email-summary">
+                        <Mail className="tocyn-email-summary-icon" aria-hidden="true" />
+                        <span className="tocyn-email-summary-label">Email</span>
+                        <span className="tocyn-email-summary-time">{utcTimestamp(article.created_at).toLocaleString()}</span>
+                      </div>
+                      <dl className="tocyn-email-summary-fields">
+                        <div><dt>From</dt><dd>{ticket.customer_email}</dd></div>
+                        <div><dt>To</dt><dd>Support queue</dd></div>
+                        <div><dt>Subject</dt><dd>{ticket.subject}</dd></div>
+                      </dl>
+                    </div>
+                  )}
                   {/* Only explicitly versioned new content is interpreted as Markdown. */}
                   {article.body_format === 'markdown-v1'
                     ? <SafeMarkdown className="tocyn-timeline-body">{article.body ?? ''}</SafeMarkdown>
                     : <div className="tocyn-timeline-body tocyn-timeline-body-plain">{article.body ?? ''}</div>}
+                  {(ticket.source === 'email' || article.raw_email_id) && article.sender_type === 'customer' && (
+                    <details className="tocyn-email-full-disclosure">
+                      <summary>Show full email</summary>
+                      <div className="tocyn-email-full-copy">
+                        <p>Structured headers and quoted history are unavailable for this stored message.</p>
+                        <p>Complete stored body is shown above.</p>
+                        {article.raw_email_id && <p>Raw email reference: {article.raw_email_id}</p>}
+                      </div>
+                    </details>
+                  )}
 
                   {/* Attachments */}
                   {article.attachments && article.attachments.length > 0 && (
