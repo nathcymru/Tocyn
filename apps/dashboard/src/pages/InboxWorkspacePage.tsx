@@ -33,6 +33,7 @@ export function InboxWorkspacePage(){
 function InboxWorkspace(){
   const {'*':inboxPath}=useParams<'*'>();
   const [viewId,conversationId]=inboxPath?.split('/')??[];
+  const activeView = viewId || 'all';
   const navigate=useNavigate();
   const workspace=useOperatorWorkspaceState();
   const advance = useRef<((id:string)=>void)|null>(null);
@@ -80,11 +81,11 @@ function InboxWorkspace(){
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
     <ParkSplitter.Panel id="inbox-list" role="region" aria-label="Conversations" className={clsx('tocyn-inbox-list-panel',conversationId&&'hidden lg:block')}>
-      <ConversationList activeView={viewId??'all'} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
+      <ConversationList activeView={activeView} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
     </ParkSplitter.Panel>
     <ParkSplitter.Panel id="inbox-detail" role="region" aria-label="Active conversation" className={clsx('tocyn-inbox-detail-panel',!conversationId&&'hidden lg:block')}>
       {advanceNotice && <p role="status" className="mb-3 text-sm text-slate-700">{advanceNotice}</p>}
-      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${viewId??'all'}`} onResolved={onResolved} />:<EmptyConversation />}
+      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${activeView}`} onResolved={onResolved} />:<EmptyConversation />}
     </ParkSplitter.Panel>
     <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" />
   </ParkSplitter.Root>;
