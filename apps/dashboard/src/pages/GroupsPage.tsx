@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
+import { TocynButton, TocynEmptyState, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
 import React, { useState } from 'react';
 import {
   Users,
@@ -197,9 +197,10 @@ export const GroupsPage: React.FC = () => {
           <tbody className="divide-y divide-slate-200">
             {groups?.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-slate-500 italic">
-                  No groups found. Create one to start organizing your team.
-                </td>
+                <td colSpan={4} className="p-4"><TocynEmptyState
+                  title="No groups found."
+                  description="Create a group to start organizing your team."
+                /></td>
               </tr>
             ) : (
               groups?.map((group) => (
@@ -320,9 +321,10 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
               {isLoadingMembers ? (
                 <div className="text-center py-4 text-slate-400 italic">Loading members...</div>
               ) : members?.length === 0 ? (
-                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-6 text-center text-slate-500 italic">
-                  No members assigned yet.
-                </div>
+                <TocynEmptyState
+                  title="No members assigned yet."
+                  description="Add an agent to this group to share its ticket workload."
+                />
               ) : (
                 members?.map(member => (
                   <div key={member.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:border-brand-200 transition-colors group">
