@@ -808,55 +808,55 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           {isLoadMoreSupportStatesError && <p role="alert" className="tocyn-ticket-detail-load-more-error">Could not load more support states. Try again.</p>}
         </form>}
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-200 bg-white">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center px-3 py-1 bg-slate-900 text-white rounded-lg text-sm font-mono font-bold shadow-sm" title={reference}>{reference}</span>
-                  <h1 ref={conversationHeadingRef} tabIndex={-1} className="text-2xl font-bold text-slate-900 leading-tight focus:outline-none">{ticket.subject}</h1>
+        <div className="tocyn-ticket-detail-card">
+          <div className="tocyn-ticket-detail-header">
+            <div className="tocyn-ticket-detail-heading">
+              <div className="tocyn-ticket-detail-title-stack">
+                <div className="tocyn-ticket-detail-title-row">
+                  <span className="tocyn-ticket-detail-reference" title={reference}>{reference}</span>
+                  <h1 ref={conversationHeadingRef} tabIndex={-1} className="tocyn-ticket-detail-title">{ticket.subject}</h1>
                 </div>
-                <div className="flex items-center gap-4 text-sm text-slate-500">
-                  <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 rounded-md border border-slate-100">
-                    <User className="w-3.5 h-3.5" />
+                <div className="tocyn-ticket-detail-meta">
+                  <span className="tocyn-ticket-detail-customer">
+                    <User className="tocyn-ticket-detail-icon-xs" />
                     {ticket.customer_email}
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
+                  <span className="tocyn-ticket-detail-opened">
+                    <Clock className="tocyn-ticket-detail-icon-xs" />
                     Opened {utcTimestamp(ticket.created_at).toLocaleDateString()}
                   </span>
                 </div>
               </div>
 
               {/* Presence Indicator */}
-              <div className="flex flex-col items-end gap-2">
+              <div className="tocyn-ticket-detail-presence">
                 {!workspaceBackHref && viewers.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <div aria-hidden="true" className="flex items-center -space-x-2">
+                  <div className="tocyn-ticket-detail-viewers">
+                    <div aria-hidden="true" className="tocyn-ticket-detail-avatars">
                       {viewers.slice(0, 3).map((viewer, i) => (
                         <div
                           key={i}
-                          className="w-8 h-8 rounded-full bg-brand-500 border-2 border-white flex items-center justify-center text-white text-[10px] font-bold shadow-sm"
+                          className="tocyn-ticket-detail-avatar"
                           title={`${viewer.name} is viewing this ticket`}
                         >
                           {viewer.name[0]}
                         </div>
                       ))}
                       {viewers.length > 3 && (
-                        <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-slate-600 text-[10px] font-bold shadow-sm">
+                        <div className="tocyn-ticket-detail-avatar tocyn-ticket-detail-avatar-more">
                           +{viewers.length - 3}
                         </div>
                       )}
                     </div>
                     <span className="sr-only">Viewing this ticket: {viewers.map(viewer => viewer.name).join(', ')}</span>
-                    <span className="text-[10px] font-bold text-brand-600 uppercase tracking-tighter flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-brand-500 rounded-full" />
+                    <span className="tocyn-ticket-detail-live-label">
+                      <span className="tocyn-ticket-detail-live-dot" />
                       Live Viewers
                     </span>
                   </div>
                 )}
                 {typing.length > 0 && (
-                  <p className="text-xs text-slate-600">
+                  <p className="tocyn-ticket-detail-typing">
                     {typing.map(candidate => candidate.actor.name).join(', ')} {typing.length === 1 ? 'is' : 'are'} typing…
                   </p>
                 )}
@@ -971,13 +971,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             ))}
           </div>
 
-          {ticket.pagination && <div className="border-t border-slate-200 bg-white p-4 space-y-2">
+          {ticket.pagination && <div className="tocyn-ticket-pagination">
             <TocynButton type="button" onClick={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage({ cancelRefetch: false }); }} aria-disabled={!hasNextPage || isFetchingNextPage}
               aria-controls="conversation-messages" aria-busy={isFetchingNextPage}
-              className="rounded-md border border-slate-400 bg-white px-4 py-2 text-sm font-medium text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 aria-disabled:cursor-default">
+              className="tocyn-ticket-pagination-button">
               {isFetchingNextPage ? 'Loading messages…' : hasNextPage ? 'Load more messages' : 'All messages loaded'}
             </TocynButton>
-            <p role="status" aria-live="polite" className="text-sm text-slate-700">
+            <p role="status" aria-live="polite" className="tocyn-ticket-detail-status">
               {isFetchNextPageError ? 'Could not load more messages. Try again.' : isFetchingNextPage ? 'Loading more messages…' : `Showing ${ticket.articles.length} messages.${hasNextPage ? ' More messages are available.' : ' All messages are loaded.'}`}
             </p>
           </div>}
