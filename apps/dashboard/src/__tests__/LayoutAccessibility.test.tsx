@@ -54,7 +54,7 @@ it('names global search, makes its authorised scope available to assistive techn
   await renderReady();
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
-  expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveClass('sr-only');
+  expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveClass('tocyn-visually-hidden');
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
   expect(screen.getByRole('heading').textContent).toBe('Route /tickets');
   const clear = screen.getByRole('button', { name: 'Clear global ticket search' });
@@ -79,7 +79,7 @@ it('provides discoverable command navigation to global search and restores its c
   fireEvent.keyDown(window, { key: 'k', metaKey: true });
   expect(search).toHaveFocus();
   expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
-  expect(screen.getByText(/Press Command or Control K to focus this search/)).toHaveClass('sr-only');
+  expect(screen.getByText(/Press Command or Control K to focus this search/)).toHaveClass('tocyn-visually-hidden');
   fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
   expect(search).toHaveFocus();
 });
@@ -88,8 +88,8 @@ it('constrains the inbox shell to the viewport while keeping the shared header v
   render(tree('/inbox/all/synthetic-ticket'));
   const main = await screen.findByRole('main', { name: 'Workspace' });
   const shell = main.parentElement?.parentElement;
-  expect(shell).toHaveClass('h-dvh', 'min-h-0', 'overflow-hidden');
-  expect(main).toHaveClass('flex-1', 'min-h-0', 'overflow-hidden');
+  expect(shell).toHaveClass('tocyn-shell-root', 'tocyn-shell-root-inbox');
+  expect(main).toHaveClass('tocyn-shell-content', 'tocyn-shell-content-inbox');
   expect(main).not.toHaveClass('h-[calc(100dvh-4rem)]');
   expect(main.previousElementSibling).toHaveClass('tocyn-shell-header');
 });
