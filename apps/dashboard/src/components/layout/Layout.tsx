@@ -295,7 +295,7 @@ function LayoutContent() {
   const visibleActivityItems = activity?.page.items.filter(item => !item.dismissedAt) ?? [];
 
   return (
-    <div className={cn('flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
+    <div className={cn('tocyn-workspace-shell flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
       <aside data-tocyn-inverse="" className={cn('hidden lg:block shrink-0 bg-slate-900 border-r border-slate-800', preferences.navigation === 'labelled' ? 'w-52' : 'w-16')}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
@@ -312,7 +312,7 @@ function LayoutContent() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
+        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center gap-3 px-4 lg:px-8">
           <TocynButton
             type="button"
             ref={navigationTrigger}
