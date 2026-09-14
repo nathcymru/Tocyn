@@ -87,7 +87,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
     onUpdate: ({ editor: instance }) => { if (!readOnly) onChange(instance.getMarkdown()); },
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
-  useLayoutEffect(() => { if (editor) { editor.view.dom.id = id; editor.view.dom.setAttribute('aria-label', 'Content (Markdown)'); } }, [editor, id]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); Object.defineProperty(dom, 'value', { configurable: true, get: () => editor.getMarkdown(), set: (next: string) => editor.commands.setContent(next, { contentType: 'markdown' }) }); } }, [editor, id]);
   useEffect(() => { if (editor && editor.getMarkdown() !== value) editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
   if (!editor) return <div id={id} className="tocyn-knowledge-editor-tiptap" aria-busy="true" aria-label="Content (Markdown)" />;
   return <div className="tocyn-knowledge-editor-tiptap" aria-disabled={readOnly}>
@@ -98,7 +98,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
       <ToolbarButton label="Add bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}><ListBullets weight="duotone" aria-hidden="true" /></ToolbarButton>
       <ToolbarButton label="Add code block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><CodeBlock weight="duotone" aria-hidden="true" /></ToolbarButton>
     </div>
-    <EditorContent editor={editor} id={id} aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} onKeyDown={event => { if (readOnly) event.preventDefault(); }} />
+    <EditorContent editor={editor} id={id} aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} onChange={event => { if (!readOnly) onChange((event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown()); }} onKeyDown={event => { if (readOnly) event.preventDefault(); }} />
   </div>;
 }
 
@@ -126,7 +126,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     },
   });
   useEffect(() => { editor?.setEditable(!readOnly); if (readOnly || format === 'plain') setAutocomplete(null); }, [editor, readOnly, format]);
-  useLayoutEffect(() => { if (editor) { editor.view.dom.id = id; editor.view.dom.setAttribute('aria-label', 'Reply message'); editor.view.dom.setAttribute('aria-autocomplete', 'list'); } }, [editor, id]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => editor.getMarkdown(), set: (next: string) => editor.commands.setContent(next, { contentType: 'markdown' }) }); } }, [editor, id]);
   useEffect(() => {
     if (!editor || editor.getMarkdown() === value) return;
     editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
@@ -171,7 +171,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
       ) : (
         <div className="tocyn-composer-markdown-editor" aria-busy={readOnly}>
           {editorToolbar}
-          <EditorContent editor={editor} id={id} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onKeyDown={handleEditorKeyDown} />
+        <EditorContent editor={editor} id={id} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onChange={event => { if (!readOnly) onChange((event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown()); }} onKeyDown={handleEditorKeyDown} />
         </div>
       )}
     </div>
