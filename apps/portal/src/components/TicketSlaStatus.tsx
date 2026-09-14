@@ -94,7 +94,7 @@ export function TicketSlaStatus({ ticketId }: { ticketId: string }) {
   if (read.status === 'failed' || !read.projection) {
     return <section aria-labelledby="ticket-sla-heading" className="tocyn-portal-sla-card">
       <h2 id="ticket-sla-heading" className="tocyn-portal-sla-heading">Service status</h2>
-      <ParkEmptyState role="alert" headingLevel={false} title="Service status is unavailable. Try again." className="tocyn-portal-sla-state" action={<ParkButton type="button" onClick={retry} className="tocyn-portal-sla-retry">Retry service status</ParkButton>} />
+      <ParkEmptyState role="status" aria-live="polite" headingLevel={false} title="Service status is unavailable. Try again." className="tocyn-portal-sla-state" action={<ParkButton type="button" onClick={retry} className="tocyn-portal-sla-retry">Retry service status</ParkButton>} />
     </section>;
   }
 
