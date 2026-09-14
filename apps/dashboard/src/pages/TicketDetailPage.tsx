@@ -1042,7 +1042,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   disabled={isGeneratingSuggestion || isSubmitting}
                   className="tocyn-ticket-composer-suggestion-button"
                 >
-                  <Activity className="w-3.5 h-3.5" />
+                  <Activity className="tocyn-ticket-detail-icon-sm" />
                   {isGeneratingSuggestion ? 'Thinking...' : 'AI Suggestion'}
                 </TocynButton>
               </div>
@@ -1077,7 +1077,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                         onClick={() => setSuggestion(null)}
                         className="text-slate-400 hover:text-slate-600"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="tocyn-ticket-detail-icon-sm" />
                       </TocynButton>
                     </div>
                   </div>
@@ -1135,8 +1135,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 <div className="tocyn-composer-attachments">
                   {draft.attachments.map(attachment => (
                     <div key={attachment.storageKey} className="tocyn-composer-attachment">
-                      <Paperclip className="w-3 h-3 text-slate-500" />
-                      <span className="truncate max-w-[150px]">{attachment.filename}</span>
+                      <Paperclip className="tocyn-composer-attachment-icon" />
+                      <span className="tocyn-composer-attachment-name">{attachment.filename}</span>
                       <TocynButton
                         type="button"
                         aria-disabled={isSubmitting} aria-label={`Remove ${attachment.filename}`}
@@ -1146,18 +1146,18 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                           setNotice('Attachment removed.');
                           attachButtonRef.current?.focus();
                         }}
-                        className="text-slate-600 hover:text-red-700"
+                        className="tocyn-composer-attachment-remove"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="tocyn-composer-attachment-remove-icon" />
                       </TocynButton>
                     </div>
                   ))}
                   {visiblePendingAttachments.map(attachment => (
                     <div key={attachment.id} className="tocyn-composer-attachment">
-                      <Paperclip className="w-3 h-3 text-slate-500" />
-                      <span className="truncate max-w-[150px]">{attachment.file.name}</span>
-                      <span role={attachment.status === 'error' ? 'alert' : 'status'} className="text-slate-600">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
-                      {attachment.status === 'error' && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} className="underline">Retry upload</TocynButton>}
+                      <Paperclip className="tocyn-composer-attachment-icon" />
+                      <span className="tocyn-composer-attachment-name">{attachment.file.name}</span>
+                      <span role={attachment.status === 'error' ? 'alert' : 'status'} className="tocyn-composer-attachment-status">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
+                      {attachment.status === 'error' && <TocynButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} className="tocyn-ticket-detail-inline-action">Retry upload</TocynButton>}
                       <TocynButton
                         type="button"
                         aria-disabled={isSubmitting} aria-label={`Remove ${attachment.file.name}`}
@@ -1168,9 +1168,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                           setNotice('Attachment removed.');
                           attachButtonRef.current?.focus();
                         }}
-                        className="text-slate-600 hover:text-red-700"
+                        className="tocyn-composer-attachment-remove"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="tocyn-composer-attachment-remove-icon" />
                       </TocynButton>
                     </div>
                   ))}
@@ -1178,8 +1178,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               )}
 
               <div className="tocyn-composer-footer">
-                <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
-                  <Info className="w-3 h-3" />
+                <p className="tocyn-composer-note">
+                  <Info className="tocyn-ticket-detail-icon-xs" />
                   {isInternal
                     ? "Private note for team coordination."
                     : "Public replies are visible to the customer in this conversation."}
