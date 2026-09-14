@@ -28,6 +28,7 @@ describe('shared stylesheet entry boundaries', () => {
     expect(widgetMain).toContain('shadow.appendChild(primitiveStyleElement)');
     expect(widgetMain).toContain('shadow.appendChild(widgetStyleElement)');
     expect(widgetMain).toContain('shadow.appendChild(legacyWidgetStyles)');
+    expect(widgetMain.toLowerCase()).not.toContain('tailwind');
     expect(widgetMain).not.toContain('document.head.appendChild');
   });
 });
