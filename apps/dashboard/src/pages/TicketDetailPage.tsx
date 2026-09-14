@@ -1085,7 +1085,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
 
               {!replyCapability ? <div role="status" className="mb-2 text-sm text-slate-700">
                 {replyCapabilities.isLoading ? 'Loading reply options…' : 'Reply options are unavailable.'}
-                {replyCapabilities.isError && <button type="button" className="ml-2 underline" onClick={() => void replyCapabilities.refetch()}>Retry reply options</button>}
+                {replyCapabilities.isError && <TocynButton
+                  type="button"
+                  className="tocyn-ticket-detail-inline-action tocyn-ticket-detail-inline-action--spaced"
+                  onClick={() => void replyCapabilities.refetch()}
+                >
+                  Retry reply options
+                </TocynButton>}
               </div> : <p className="mb-2 text-sm text-slate-600">{replyCapability.channel === 'email'
                 ? `Email reply to ${ticket.customer_email}. Delivery is attempted after saving.`
                 : 'Internal note. No email is sent.'} Up to {replyCapability.attachments.maxCount} attachments, {replyCapability.attachments.maxBytesPerFile / 1024 / 1024} MB each.</p>}
