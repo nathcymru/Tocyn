@@ -138,7 +138,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     const { from, to } = editor.state.selection;
     const length = autocomplete.end - autocomplete.start;
     editor.chain().focus().deleteRange({ from: Math.max(1, from - length), to }).insertContent(markdown, { contentType: 'markdown' }).run();
-    legacyValueRef.current = editor.getMarkdown();
+    legacyValueRef.current = insertMarkdownAtCursor(value, markdown, autocomplete.start, autocomplete.end);
     onChange(legacyValueRef.current);
     Object.defineProperty(editor.view.dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); } });
     setAutocomplete(null);
