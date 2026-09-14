@@ -720,29 +720,29 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
     <>
       <DraftNavigationGuard pending={draftNavigationPending} flush={flushDraftBeforeNavigation}
         failureMessage="Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again." />
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-      <div className="lg:col-span-3 xl:col-span-4 space-y-6">
-        {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="rounded border border-red-300 bg-red-50 p-3 text-red-900">
+      <div className="tocyn-ticket-detail-grid">
+      <div className="tocyn-ticket-detail-main">
+        {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="tocyn-ticket-detail-alert">
           {error ? 'Could not refresh this ticket. Showing the last confirmed details. ' : 'Confirm the saved ticket details before making another change. '}
-          <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="underline">Retry loading ticket</TocynButton>
+          <TocynButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="tocyn-ticket-detail-inline-action">Retry loading ticket</TocynButton>
         </div>}
-        {changeError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{changeError}</p>}
-        {supportStateError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-900">{supportStateError} <TocynButton type="button" onClick={() => void refreshSupportState()} className="underline">Refresh current support state</TocynButton></p>}
-        {notice && <p role="status" className="text-slate-700">{notice}</p>}
-        {supportStateNotice && <p role="status" className="text-slate-700">{supportStateNotice}</p>}
+        {changeError && <p role="alert" className="tocyn-ticket-detail-alert">{changeError}</p>}
+        {supportStateError && <p role="alert" className="tocyn-ticket-detail-alert">{supportStateError} <TocynButton type="button" onClick={() => void refreshSupportState()} className="tocyn-ticket-detail-inline-action">Refresh current support state</TocynButton></p>}
+        {notice && <p role="status" className="tocyn-ticket-detail-notice">{notice}</p>}
+        {supportStateNotice && <p role="status" className="tocyn-ticket-detail-notice">{supportStateNotice}</p>}
         {advanceConfirmationRequired && <TocynButton type="button" disabled={isConfirmingTicketSelect} onClick={event => void retryTicketDetail(event.currentTarget)}>Confirm resolved ticket</TocynButton>}
-        {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="text-sm text-slate-700">
+        {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="tocyn-ticket-detail-status">
           {workspace.status === 'saving' && 'Saving workspace preference…'}
           {workspace.status === 'saved' && 'Workspace preference saved.'}
-          {workspace.status === 'error' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.retrySave()} className="underline">Retry workspace preference</TocynButton></>}
-          {workspace.status === 'conflict' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.restoreServerState()} className="underline">Restore server preferences</TocynButton></>}
+          {workspace.status === 'error' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.retrySave()} className="tocyn-ticket-detail-inline-action">Retry workspace preference</TocynButton></>}
+          {workspace.status === 'conflict' && <>{workspace.error} <TocynButton type="button" onClick={() => workspace.restoreServerState()} className="tocyn-ticket-detail-inline-action">Restore server preferences</TocynButton></>}
         </p>}
-        <div className="flex items-center justify-between">
-          <Link to={workspaceBackHref??'/tickets'} className={clsx("flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors",workspaceBackHref&&"lg:hidden")}>
-            <ArrowLeft className="w-4 h-4" />
+        <div className="tocyn-ticket-detail-toolbar">
+          <Link to={workspaceBackHref??'/tickets'} className={clsx("tocyn-ticket-detail-back",workspaceBackHref&&"tocyn-ticket-detail-back--mobile-only")}>
+            <ArrowLeft className="tocyn-ticket-detail-icon-md" />
             {workspaceBackHref?'Back to conversations':'Back to Tickets'}
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="tocyn-ticket-detail-controls">
             <TocynButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
               onClick={() => {
                 contextApplied.current = true;
@@ -750,7 +750,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 if (opening) setFocusContext(true);
                 else contextTriggerRef.current?.focus();
                 workspace.update({ panel: opening ? 'details' : 'conversation' });
-              }} className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium">
+              }} className="tocyn-ticket-detail-context-button">
               {workspace.panel === 'details' ? 'Hide ticket context' : 'Show ticket context'}
             </TocynButton>
             <TocynSelect
@@ -762,7 +762,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
                 void handleTicketChange({ status: e.target.value as TicketChanges['status'] }, 'status');
               }}
-              className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none shadow-sm"
+              className="tocyn-ticket-detail-select"
             >
               <option value="open">Open</option>
               <option value="pending">Pending</option>
