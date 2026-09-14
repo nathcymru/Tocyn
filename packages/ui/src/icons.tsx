@@ -5,13 +5,13 @@ import {
   Clock as ClockGlyph, Cloud, Columns, Copy as CopyGlyph, Cpu, CreditCard, Database, DotsThreeVertical, Envelope,
   Eye as EyeGlyph, FileText, FloppyDisk, Folder, Funnel, Gear, HardDrive, Info as InfoGlyph, Key as KeyGlyph, Lightning,
   List, ListBullets, MagnifyingGlass, Paperclip as PaperclipGlyph, PaperPlaneTilt, PencilSimple, Plus as PlusGlyph,
-  Shield as ShieldGlyph, ShieldCheck as ShieldCheckGlyph, SignOut, TextAlignLeft, TextT, Textbox, Ticket as TicketGlyph, TreeStructure,
-  Trash, Triangle, ToggleLeft, ToggleRight, User as UserGlyph, UserPlus, Users as UsersGlyph, Warning, WarningCircle,
+  Shield as ShieldGlyph, ShieldCheck as ShieldCheckGlyph, SignOut, TextT, Textbox, Ticket as TicketGlyph, TreeStructure,
+  Trash, ToggleLeft, ToggleRight, User as UserGlyph, UserPlus, Users as UsersGlyph, Warning, WarningCircle,
   WifiHigh, X as XGlyph, type IconProps,
 } from '@phosphor-icons/react';
 
 /** Shared icon boundary: application icons are duotone and inherit semantic colour. */
-function duotone(Icon: React.ComponentType<any>) {
+function duotone(Icon: any) {
   return React.forwardRef<SVGSVGElement, any>((props, ref) => (
     <Icon {...props} ref={ref} weight="duotone" aria-hidden={props['aria-label'] ? undefined : true} />
   ));
