@@ -62,6 +62,10 @@ function UserMenu({ onNavigate }: SidebarProps) {
     </ParkMenu.Trigger>
     <ParkMenu.Positioner>
       <ParkMenu.Content aria-label="Account menu" className="tocyn-shell-account-menu" data-tocyn-inverse="">
+        <div className="tocyn-shell-account-summary">
+          <strong className="tocyn-shell-account-summary-name">{user?.full_name || 'Operator'}</strong>
+          <span className="tocyn-shell-account-summary-email">{user?.email || 'No email available'}</span>
+        </div>
         <ParkMenu.Item value="account" onClick={() => handleNavigate('/settings/account')} className="tocyn-shell-account-menu-item">Account</ParkMenu.Item>
         <ParkMenu.Item value="settings" onClick={() => handleNavigate('/settings/general')} className="tocyn-shell-account-menu-item">Settings</ParkMenu.Item>
         <ParkMenu.Separator className="tocyn-shell-account-menu-separator" />
@@ -274,8 +278,6 @@ function LayoutContent() {
 
           <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
 
-          <UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} navigationFocus={() => main.current} />
-
           <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
             <Popover.Trigger asChild>
               <ParkButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className="tocyn-shell-activity-trigger">
@@ -307,6 +309,8 @@ function LayoutContent() {
               </Popover.Content>
             </Popover.Positioner>
           </Popover.Root>
+
+          <UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} navigationFocus={() => main.current} />
 
           {!isConnected && <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
           <div className="tocyn-shell-connection-wrap">
