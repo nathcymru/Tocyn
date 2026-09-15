@@ -1,8 +1,8 @@
-import '@luminatick/ui/styles.css';
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import '@luminatick/ui/styles.css'
 import { AuthQueryBoundary } from './components/auth/AuthQueryBoundary'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

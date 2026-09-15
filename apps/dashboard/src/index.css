@@ -54,7 +54,6 @@
   border: 0;
   padding: 0.25rem 0;
 }
-[data-tocyn-preferences] select { inline-size: 100%; min-block-size: 2.5rem; margin-block-start: .25rem; border: 1px solid color-mix(in srgb, var(--tocyn-app-border) 72%, transparent); border-radius: .5rem; background: var(--tocyn-app-surface-panel); color: var(--tocyn-app-text); padding: .5rem .75rem; }
 /* Root percentages retain the browser's initial font size and scale rem controls. */
 :root[data-tocyn-font-scale="large"] { font-size: 112.5%; }
 :root[data-tocyn-font-scale="larger"] { font-size: 125%; }
