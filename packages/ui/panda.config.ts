@@ -77,6 +77,26 @@ export default {
         tabular: { value: { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', lineHeight: '1.4' } },
       },
       slotRecipes: {
+        tabs: {
+          className: 'tabs', slots: ['root', 'list', 'trigger', 'content', 'indicator'],
+          base: { root: { display: 'flex', flexDirection: 'column', minWidth: '0' }, list: { display: 'flex', alignItems: 'center', gap: '0.25rem', borderBottom: '1px solid', borderColor: 'border.default' }, trigger: { minHeight: '2.5rem', border: '0', borderBottom: '2px solid transparent', background: 'transparent', color: 'fg.muted', padding: '0.5rem 0.75rem', fontFamily: 'primary', cursor: 'pointer', _hover: { color: 'fg.default' }, _selected: { color: 'fg.default', borderColor: 'accent.primary' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } }, content: { minWidth: '0', paddingBlock: '1rem' }, indicator: { display: 'none' } },
+        },
+        splitter: {
+          className: 'splitter', slots: ['root', 'panel', 'resizeTrigger'],
+          base: { root: { display: 'flex', minWidth: '0', minHeight: '0', width: '100%', height: '100%' }, panel: { minWidth: '0', minHeight: '0', overflow: 'auto' }, resizeTrigger: { flex: '0 0 0.25rem', width: '0.25rem', cursor: 'col-resize', background: 'border.default', transition: 'background 150ms ease', _hover: { background: 'border.focus' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } } },
+        },
+        scrollArea: {
+          className: 'scrollArea', slots: ['root', 'viewport', 'content', 'scrollbar', 'thumb'],
+          base: { root: { position: 'relative', overflow: 'hidden' }, viewport: { width: '100%', height: '100%', overflow: 'auto' }, content: { minWidth: '0' }, scrollbar: { display: 'flex', width: '0.5rem', padding: '0.125rem', background: 'bg.subtle' }, thumb: { flex: '1', borderRadius: 'full', background: 'border.default' } },
+        },
+        avatar: {
+          className: 'avatar', slots: ['root', 'image', 'fallback'],
+          base: { root: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', width: '2.5rem', height: '2.5rem', borderRadius: 'l2', background: 'bg.subtle', color: 'fg.default', fontFamily: 'primary', fontWeight: '600' }, image: { width: '100%', height: '100%', objectFit: 'cover' }, fallback: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' } },
+        },
+        emptyState: {
+          className: 'emptyState', slots: ['root', 'title', 'description', 'action'],
+          base: { root: { display: 'flex', minHeight: '10rem', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', border: '1px dashed', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.subtle', color: 'fg.default', padding: '1.5rem', textAlign: 'center' }, title: { margin: '0', fontFamily: 'primary', fontWeight: '600' }, description: { margin: '0', color: 'fg.muted', fontFamily: 'primary' }, action: { display: 'flex', marginTop: '0.5rem' } },
+        },
         select: {
           className: 'select',
           slots: ['root', 'label', 'control', 'trigger', 'valueText', 'indicatorGroup', 'indicator', 'positioner', 'content', 'list', 'item', 'itemText', 'itemIndicator'],

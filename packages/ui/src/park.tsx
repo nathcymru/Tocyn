@@ -6,12 +6,17 @@ import { Splitter as ArkSplitter } from '@ark-ui/react/splitter';
 import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
 import { Menu as ArkMenu } from '@ark-ui/react/menu';
 import { IconChevronDown, IconCheck } from './icons';
-import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe } from './styles/generated/recipes';
+import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe } from './styles/generated/recipes';
 
 const selectStyles = selectRecipe();
 const buttonClass = buttonRecipe();
 const inputClass = inputRecipe();
 const textareaClass = textareaRecipe();
+const tabsStyles = tabsRecipe();
+const splitterStyles = splitterRecipe();
+const scrollAreaStyles = scrollAreaRecipe();
+const avatarStyles = avatarRecipe();
+const emptyStateStyles = emptyStateRecipe();
 
 /** Shared Park recipes. Stateless controls intentionally use their semantic HTML
  * element (as Park does); stateful controls below use Ark state machines. Every
@@ -95,23 +100,23 @@ export const ParkSelect = Object.assign(ParkSelectCompat, {
   HiddenSelect: ParkSelectHiddenSelect,
 });
 
-export const ParkTabsRoot = (props: React.ComponentProps<typeof ArkTabs.Root>) => <ArkTabs.Root {...props} data-park="tabs-root" className={parkPart('tabs-root', props.className)} />;
-export const ParkTabsList = (props: React.ComponentProps<typeof ArkTabs.List>) => <ArkTabs.List {...props} data-park="tabs-list" className={parkPart('tabs-list', props.className)} />;
-export const ParkTabsTrigger = (props: React.ComponentProps<typeof ArkTabs.Trigger>) => <ArkTabs.Trigger {...props} data-park="tabs-trigger" className={parkPart('tabs-trigger', props.className)} />;
-export const ParkTabsContent = (props: React.ComponentProps<typeof ArkTabs.Content>) => <ArkTabs.Content {...props} data-park="tabs-content" className={parkPart('tabs-content', props.className)} />;
-export const ParkTabsIndicator = (props: React.ComponentProps<typeof ArkTabs.Indicator>) => <ArkTabs.Indicator {...props} data-park="tabs-indicator" className={parkPart('tabs-indicator', props.className)} />;
+export const ParkTabsRoot = (props: React.ComponentProps<typeof ArkTabs.Root>) => <ArkTabs.Root {...props} data-park="tabs-root" className={[tabsStyles.root, parkPart('tabs-root', props.className)].join(' ')} />;
+export const ParkTabsList = (props: React.ComponentProps<typeof ArkTabs.List>) => <ArkTabs.List {...props} data-park="tabs-list" className={[tabsStyles.list, parkPart('tabs-list', props.className)].join(' ')} />;
+export const ParkTabsTrigger = (props: React.ComponentProps<typeof ArkTabs.Trigger>) => <ArkTabs.Trigger {...props} data-park="tabs-trigger" className={[tabsStyles.trigger, parkPart('tabs-trigger', props.className)].join(' ')} />;
+export const ParkTabsContent = (props: React.ComponentProps<typeof ArkTabs.Content>) => <ArkTabs.Content {...props} data-park="tabs-content" className={[tabsStyles.content, parkPart('tabs-content', props.className)].join(' ')} />;
+export const ParkTabsIndicator = (props: React.ComponentProps<typeof ArkTabs.Indicator>) => <ArkTabs.Indicator {...props} data-park="tabs-indicator" className={[tabsStyles.indicator, parkPart('tabs-indicator', props.className)].join(' ')} />;
 export const ParkTabs = { Root: ParkTabsRoot, List: ParkTabsList, Trigger: ParkTabsTrigger, Content: ParkTabsContent, Indicator: ParkTabsIndicator };
 
-export const ParkScrollAreaRoot = (props: React.ComponentProps<typeof ArkScrollArea.Root>) => <ArkScrollArea.Root {...props} data-park="scroll-area-root" className={parkPart('scroll-area-root', props.className)} />;
+export const ParkScrollAreaRoot = (props: React.ComponentProps<typeof ArkScrollArea.Root>) => <ArkScrollArea.Root {...props} data-park="scroll-area-root" className={[scrollAreaStyles.root, parkPart('scroll-area-root', props.className)].join(' ')} />;
 export const ParkScrollAreaViewport = (props: React.ComponentProps<typeof ArkScrollArea.Viewport>) => <ArkScrollArea.Viewport {...props} data-park="scroll-area-viewport" className={parkPart('scroll-area-viewport', props.className)} />;
 export const ParkScrollAreaContent = (props: React.ComponentProps<typeof ArkScrollArea.Content>) => <ArkScrollArea.Content {...props} data-park="scroll-area-content" className={parkPart('scroll-area-content', props.className)} />;
 export const ParkScrollAreaScrollbar = (props: React.ComponentProps<typeof ArkScrollArea.Scrollbar>) => <ArkScrollArea.Scrollbar {...props} data-park="scroll-area-scrollbar" className={parkPart('scroll-area-scrollbar', props.className)} />;
 export const ParkScrollAreaThumb = (props: React.ComponentProps<typeof ArkScrollArea.Thumb>) => <ArkScrollArea.Thumb {...props} data-park="scroll-area-thumb" className={parkPart('scroll-area-thumb', props.className)} />;
 export const ParkScrollArea = { Root: ParkScrollAreaRoot, Viewport: ParkScrollAreaViewport, Content: ParkScrollAreaContent, Scrollbar: ParkScrollAreaScrollbar, Thumb: ParkScrollAreaThumb };
 
-export const ParkSplitterRoot = (props: React.ComponentProps<typeof ArkSplitter.Root>) => <ArkSplitter.Root {...props} data-park="splitter-root" className={parkPart('splitter-root', props.className)} />;
-export const ParkSplitterPanel = (props: React.ComponentProps<typeof ArkSplitter.Panel>) => <ArkSplitter.Panel {...props} data-park="splitter-panel" className={parkPart('splitter-panel', props.className)} />;
-export const ParkSplitterResizeTrigger = (props: React.ComponentProps<typeof ArkSplitter.ResizeTrigger>) => <ArkSplitter.ResizeTrigger {...props} data-park="splitter-resize-trigger" className={parkPart('splitter-resize-trigger', props.className)} />;
+export const ParkSplitterRoot = (props: React.ComponentProps<typeof ArkSplitter.Root>) => <ArkSplitter.Root {...props} data-park="splitter-root" className={[splitterStyles.root, parkPart('splitter-root', props.className)].join(' ')} />;
+export const ParkSplitterPanel = (props: React.ComponentProps<typeof ArkSplitter.Panel>) => <ArkSplitter.Panel {...props} data-park="splitter-panel" className={[splitterStyles.panel, parkPart('splitter-panel', props.className)].join(' ')} />;
+export const ParkSplitterResizeTrigger = (props: React.ComponentProps<typeof ArkSplitter.ResizeTrigger>) => <ArkSplitter.ResizeTrigger {...props} data-park="splitter-resize-trigger" className={[splitterStyles.resizeTrigger, parkPart('splitter-resize-trigger', props.className)].join(' ')} />;
 export const ParkSplitter = { Root: ParkSplitterRoot, Panel: ParkSplitterPanel, ResizeTrigger: ParkSplitterResizeTrigger };
 
 export interface ParkFieldProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -133,7 +138,7 @@ export function ParkField({ label, description, error, required, children, class
 
 export const ParkAvatar = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<typeof Avatar.Root>>(
   function ParkAvatar({ className, children, ...props }, ref) {
-    return <Avatar.Root {...props} ref={ref} data-park="avatar" className={['tocyn-avatar', className].filter(Boolean).join(' ')}>{children}</Avatar.Root>;
+    return <Avatar.Root {...props} ref={ref} data-park="avatar" className={[avatarStyles.root, 'tocyn-avatar', className].filter(Boolean).join(' ')}>{children}</Avatar.Root>;
   },
 );
 
@@ -183,7 +188,7 @@ export interface ParkEmptyStateProps extends Omit<React.HTMLAttributes<HTMLEleme
 
 export function ParkEmptyState({ title, description, action, headingLevel = 2, className, ...props }: ParkEmptyStateProps) {
   const Heading = headingLevel === false ? 'p' : `h${headingLevel}` as keyof JSX.IntrinsicElements;
-  return <section {...props} aria-label={typeof title === 'string' ? title : undefined} data-tocyn-primitive="empty-state" data-park="empty-state" data-scope="empty-state" data-part="root" className={['tocyn-empty-state', 'tocyn-park-empty-state', className].filter(Boolean).join(' ')}>
+  return <section {...props} aria-label={typeof title === 'string' ? title : undefined} data-tocyn-primitive="empty-state" data-park="empty-state" data-scope="empty-state" data-part="root" className={[emptyStateStyles.root, 'tocyn-empty-state', 'tocyn-park-empty-state', className].filter(Boolean).join(' ')}>
     <Heading data-part="title">{title}</Heading>
     {description !== undefined && <p data-part="description">{description}</p>}
     {action !== undefined && <div data-part="action">{action}</div>}
