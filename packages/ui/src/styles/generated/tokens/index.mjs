@@ -1815,6 +1815,14 @@ const tokens = {
     "value": "var(--colors-icon\\.inverse)",
     "variable": "var(--colors-icon\\.inverse)"
   },
+  "colors.gray.surface.bg": {
+    "value": "var(--colors-gray\\.surface\\.bg)",
+    "variable": "var(--colors-gray\\.surface\\.bg)"
+  },
+  "colors.gray.subtle.bg": {
+    "value": "var(--colors-gray\\.subtle\\.bg)",
+    "variable": "var(--colors-gray\\.subtle\\.bg)"
+  },
   "colors.canvas": {
     "value": "var(--tocyn-color-surface)",
     "variable": "var(--colors-canvas)"

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState } from '@luminatick/ui/park';
 import { useStats } from '../hooks/useStats';
 import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
 
@@ -56,30 +56,30 @@ export const DashboardPage: React.FC = () => {
 
       <div className="tocyn-metric-strip">
         {cards.map((card, idx) => (
-          <div key={idx} className="tocyn-metric-card">
-            <div className="tocyn-metric-card-header">
+          <ParkCard.Root key={idx} variant="outline" className="tocyn-metric-card">
+            <ParkCard.Header className="tocyn-metric-card-header">
               <div className={`tocyn-metric-card-icon ${card.color}`}>
                 <card.icon className="tocyn-metric-card-icon-glyph" />
               </div>
               <span className="tocyn-metric-card-kicker">Metrics</span>
-            </div>
-            <div className="tocyn-metric-card-content">
+            </ParkCard.Header>
+            <ParkCard.Body className="tocyn-metric-card-content">
               <div>
-                <p className="tocyn-metric-card-label">{card.label}</p>
-                <h3 className="tocyn-metric-card-value">{card.value}</h3>
+                <ParkCard.Description className="tocyn-metric-card-label">{card.label}</ParkCard.Description>
+                <ParkCard.Title data-tabular className="tocyn-metric-card-value">{card.value}</ParkCard.Title>
               </div>
-            </div>
-          </div>
+            </ParkCard.Body>
+          </ParkCard.Root>
         ))}
       </div>
 
       <div className="tocyn-dashboard-panels">
-        <div className="tocyn-surface-card">
-          <div className="tocyn-dashboard-card-heading">
+        <ParkCard.Root variant="outline" className="tocyn-surface-card">
+          <ParkCard.Header className="tocyn-dashboard-card-heading">
             <IconChartBar className="tocyn-dashboard-panel-icon" />
             <h3 className="tocyn-dashboard-panel-title">Tickets by Priority</h3>
-          </div>
-          <div className="tocyn-priority-list">
+          </ParkCard.Header>
+          <ParkCard.Body className="tocyn-priority-list">
             {['urgent', 'high', 'normal', 'low'].map((priority) => {
               const count = stats?.ticketsByPriority.find(p => p.priority === priority)?.count || 0;
               const percentage = totalTickets > 0 ? (count / totalTickets) * 100 : 0;
@@ -102,32 +102,34 @@ export const DashboardPage: React.FC = () => {
                 </div>
               );
             })}
-          </div>
-        </div>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
-        <div className="tocyn-surface-card">
-          <div className="tocyn-dashboard-card-heading">
+        <ParkCard.Root variant="outline" className="tocyn-surface-card">
+          <ParkCard.Header className="tocyn-dashboard-card-heading">
             <IconUsers className="tocyn-dashboard-panel-icon" />
             <h3 className="tocyn-dashboard-panel-title">System Overview</h3>
-          </div>
+          </ParkCard.Header>
+          <ParkCard.Body>
           <div className="tocyn-overview-grid">
-            <div className="tocyn-overview-card">
+            <ParkCard.Root variant="subtle" className="tocyn-overview-card">
               <div className="tocyn-overview-card-heading">
                 <IconUsers className="tocyn-overview-icon" />
                 <span className="tocyn-overview-label">Total Users</span>
               </div>
               <p className="tocyn-overview-value">{stats?.totalUsers || 0}</p>
-            </div>
-            <div className="tocyn-overview-card">
+            </ParkCard.Root>
+            <ParkCard.Root variant="subtle" className="tocyn-overview-card">
               <div className="tocyn-overview-card-heading">
                 <IconUsers className="tocyn-overview-icon" />
                 <span className="tocyn-overview-label">Active Groups</span>
               </div>
               <p className="tocyn-overview-value">{stats?.totalGroups || 0}</p>
-            </div>
+            </ParkCard.Root>
           </div>
           <p className="tocyn-overview-footer">Use Inbox to keep the conversation list in place while reviewing and replying.</p>
-        </div>
+          </ParkCard.Body>
+        </ParkCard.Root>
       </div>
     </div>
   );

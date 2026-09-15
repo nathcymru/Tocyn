@@ -3,15 +3,7 @@ import type { ConditionalValue } from '../types/index';
 import type { DistributiveOmit, Pretty } from '../types/system-types';
 
 interface TabsVariant {
-  /**
- * @default "md"
- */
-size: "xs" | "sm" | "md" | "lg"
-/**
- * @default "line"
- */
-variant: "line" | "subtle" | "enclosed"
-fitted: boolean
+  
 }
 
 type TabsVariantMap = {

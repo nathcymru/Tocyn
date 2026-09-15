@@ -1,10 +1,7 @@
 import { compact, getSlotCompoundVariant, memo, splitProps } from '../helpers.mjs';
 import { createRecipe } from './create-recipe.mjs';
 
-const tabsDefaultVariants = {
-  "size": "md",
-  "variant": "line"
-}
+const tabsDefaultVariants = {}
 const tabsCompoundVariants = []
 
 const tabsSlotNames = [
@@ -35,11 +32,7 @@ const tabsFn = memo((props = {}) => {
   return Object.fromEntries(tabsSlotFns.map(([slotName, slotFn]) => [slotName, slotFn.recipeFn(props)]))
 })
 
-const tabsVariantKeys = [
-  "size",
-  "variant",
-  "fitted"
-]
+const tabsVariantKeys = []
 const getVariantProps = (variants) => ({ ...tabsDefaultVariants, ...compact(variants) })
 
 export const tabs = /* @__PURE__ */ Object.assign(tabsFn, {
@@ -48,22 +41,7 @@ export const tabs = /* @__PURE__ */ Object.assign(tabsFn, {
   raw: (props) => props,
   classNameMap: {},
   variantKeys: tabsVariantKeys,
-  variantMap: {
-  "size": [
-    "xs",
-    "sm",
-    "md",
-    "lg"
-  ],
-  "variant": [
-    "line",
-    "subtle",
-    "enclosed"
-  ],
-  "fitted": [
-    "true"
-  ]
-},
+  variantMap: {},
   splitVariantProps(props) {
     return splitProps(props, tabsVariantKeys)
   },

@@ -11,6 +11,10 @@ const parkRegistrySlotRecipes = { accordion: accordion, alert: alert, avatar: av
 export default {
   preflight: false,
   jsxFramework: 'react',
+  globalCss: {
+    'html, body, #root': { fontFamily: 'primary', color: 'text.primary', background: 'bg.canvas' },
+    '[data-tabular]': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' },
+  },
   include: ['./src/**/*.{ts,tsx}'],
   outdir: './src/styles/generated',
   theme: {
@@ -31,6 +35,8 @@ export default {
           'icon.selected': { value: { base: '#3b82f6', _dark: '#60a5fa' } },
           'icon.critical': { value: { base: '#b91c1c', _dark: '#fca5a5' } },
           'icon.inverse': { value: { base: '#f8fafc', _dark: '#0f1115' } },
+          'gray.surface.bg': { value: { base: '#ffffff', _dark: '#1a1d23' } },
+          'gray.subtle.bg': { value: { base: '#f1f5f9', _dark: '#1e293b' } },
           canvas: { value: 'var(--tocyn-color-surface)' },
           panel: { value: 'var(--tocyn-color-surface-panel)' },
           muted: { value: 'var(--tocyn-color-surface-muted)' },
@@ -135,7 +141,6 @@ export default {
             itemIndicator: { color: 'accent.primary', display: 'inline-flex', alignItems: 'center' },
           },
         },
-        ...parkRegistrySlotRecipes,
       },
       recipes: {
         ...parkRegistryRecipes,

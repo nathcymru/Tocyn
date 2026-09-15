@@ -46,6 +46,8 @@
   },
   "dependencies": {
     "@ark-ui/react": "^5.26.0",
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10"
   },
   "devDependencies": {

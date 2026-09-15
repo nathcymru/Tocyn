@@ -1,32 +1,49 @@
 import { compact, getSlotCompoundVariant, memo, splitProps } from '../helpers.mjs';
 import { createRecipe } from './create-recipe.mjs';
 
-const selectDefaultVariants = {
-  "size": "md",
-  "variant": "outline"
-}
+const selectDefaultVariants = {}
 const selectCompoundVariants = []
 
 const selectSlotNames = [
+  [
+    "root",
+    "select__root"
+  ],
   [
     "label",
     "select__label"
   ],
   [
-    "positioner",
-    "select__positioner"
+    "control",
+    "select__control"
   ],
   [
     "trigger",
     "select__trigger"
   ],
   [
+    "valueText",
+    "select__valueText"
+  ],
+  [
+    "indicatorGroup",
+    "select__indicatorGroup"
+  ],
+  [
     "indicator",
     "select__indicator"
   ],
   [
-    "clearTrigger",
-    "select__clearTrigger"
+    "positioner",
+    "select__positioner"
+  ],
+  [
+    "content",
+    "select__content"
+  ],
+  [
+    "list",
+    "select__list"
   ],
   [
     "item",
@@ -39,38 +56,6 @@ const selectSlotNames = [
   [
     "itemIndicator",
     "select__itemIndicator"
-  ],
-  [
-    "itemGroup",
-    "select__itemGroup"
-  ],
-  [
-    "itemGroupLabel",
-    "select__itemGroupLabel"
-  ],
-  [
-    "list",
-    "select__list"
-  ],
-  [
-    "content",
-    "select__content"
-  ],
-  [
-    "root",
-    "select__root"
-  ],
-  [
-    "control",
-    "select__control"
-  ],
-  [
-    "valueText",
-    "select__valueText"
-  ],
-  [
-    "indicatorGroup",
-    "select__indicatorGroup"
   ]
 ]
 const selectSlotFns = /* @__PURE__ */ selectSlotNames.map(([slotName, slotKey]) => [slotName, createRecipe(slotKey, selectDefaultVariants, getSlotCompoundVariant(selectCompoundVariants, slotName))])
@@ -79,10 +64,7 @@ const selectFn = memo((props = {}) => {
   return Object.fromEntries(selectSlotFns.map(([slotName, slotFn]) => [slotName, slotFn.recipeFn(props)]))
 })
 
-const selectVariantKeys = [
-  "variant",
-  "size"
-]
+const selectVariantKeys = []
 const getVariantProps = (variants) => ({ ...selectDefaultVariants, ...compact(variants) })
 
 export const select = /* @__PURE__ */ Object.assign(selectFn, {
@@ -91,19 +73,7 @@ export const select = /* @__PURE__ */ Object.assign(selectFn, {
   raw: (props) => props,
   classNameMap: {},
   variantKeys: selectVariantKeys,
-  variantMap: {
-  "variant": [
-    "outline",
-    "surface"
-  ],
-  "size": [
-    "xs",
-    "sm",
-    "md",
-    "lg",
-    "xl"
-  ]
-},
+  variantMap: {},
   splitVariantProps(props) {
     return splitProps(props, selectVariantKeys)
   },

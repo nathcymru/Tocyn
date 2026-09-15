@@ -1,4 +1,9 @@
 import primitiveStyles from '@luminatick/ui/styles.css?inline';
+import '@fontsource/atkinson-hyperlegible/400.css';
+import '@fontsource/atkinson-hyperlegible/700.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
 import { EnvironmentProvider } from '@luminatick/ui/ark';
 import React from 'react';
 import ReactDOM from 'react-dom/client';

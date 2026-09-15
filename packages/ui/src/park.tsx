@@ -6,12 +6,13 @@ import { Splitter as ArkSplitter } from '@ark-ui/react/splitter';
 import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
 import { Menu as ArkMenu } from '@ark-ui/react/menu';
 import { IconChevronDown, IconCheck } from './icons';
-import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, shell as shellRecipe } from './styles/generated/recipes';
+import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, shell as shellRecipe, card as cardRecipe } from './styles/generated/recipes';
 
 const selectStyles = selectRecipe();
 const buttonClass = buttonRecipe();
 const inputClass = inputRecipe();
 const textareaClass = textareaRecipe();
+const cardStyles = cardRecipe();
 const tabsStyles = tabsRecipe();
 const splitterStyles = splitterRecipe();
 const scrollAreaStyles = scrollAreaRecipe();
@@ -197,3 +198,15 @@ export function ParkEmptyState({ title, description, action, headingLevel = 2, c
 
 /** Panda slot recipe for the application shell layout. */
 export const ParkShell = shellRecipe;
+
+export const ParkCard = {
+  Root: (props: React.HTMLAttributes<HTMLDivElement> & { variant?: 'elevated' | 'outline' | 'subtle' }) => {
+    const { variant: _variant, className, ...rest } = props;
+    return <div {...rest} data-park="card" data-part="root" className={[cardStyles.root, className].filter(Boolean).join(' ')} />;
+  },
+  Header: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} data-part="header" className={[cardStyles.header, props.className].filter(Boolean).join(' ')} />,
+  Body: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} data-part="body" className={[cardStyles.body, props.className].filter(Boolean).join(' ')} />,
+  Footer: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} data-part="footer" className={[cardStyles.footer, props.className].filter(Boolean).join(' ')} />,
+  Title: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h3 {...props} data-part="title" className={[cardStyles.title, props.className].filter(Boolean).join(' ')} />,
+  Description: (props: React.HTMLAttributes<HTMLParagraphElement>) => <p {...props} data-part="description" className={[cardStyles.description, props.className].filter(Boolean).join(' ')} />,
+};
