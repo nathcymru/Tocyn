@@ -3,7 +3,18 @@ import type { ConditionalValue } from '../types/index';
 import type { DistributiveOmit, Pretty } from '../types/system-types';
 
 interface AvatarVariant {
-  
+  /**
+ * @default "md"
+ */
+size: "full" | "2xs" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl"
+/**
+ * @default "subtle"
+ */
+variant: "solid" | "surface" | "subtle" | "outline"
+/**
+ * @default "full"
+ */
+shape: "square" | "rounded" | "full"
 }
 
 type AvatarVariantMap = {

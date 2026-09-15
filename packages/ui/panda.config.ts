@@ -135,6 +135,7 @@ export default {
             itemIndicator: { color: 'accent.primary', display: 'inline-flex', alignItems: 'center' },
           },
         },
+        ...parkRegistrySlotRecipes,
       },
       recipes: {
         ...parkRegistryRecipes,

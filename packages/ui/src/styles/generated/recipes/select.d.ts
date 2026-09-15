@@ -3,14 +3,21 @@ import type { ConditionalValue } from '../types/index';
 import type { DistributiveOmit, Pretty } from '../types/system-types';
 
 interface SelectVariant {
-  
+  /**
+ * @default "outline"
+ */
+variant: "outline" | "surface"
+/**
+ * @default "md"
+ */
+size: "xs" | "sm" | "md" | "lg" | "xl"
 }
 
 type SelectVariantMap = {
   [key in keyof SelectVariant]: Array<SelectVariant[key]>
 }
 
-type SelectSlot = "root" | "label" | "control" | "trigger" | "valueText" | "indicatorGroup" | "indicator" | "positioner" | "content" | "list" | "item" | "itemText" | "itemIndicator"
+type SelectSlot = "label" | "positioner" | "trigger" | "indicator" | "clearTrigger" | "item" | "itemText" | "itemIndicator" | "itemGroup" | "itemGroupLabel" | "list" | "content" | "root" | "control" | "valueText" | "indicatorGroup"
 
 export type SelectVariantProps = {
   [key in keyof SelectVariant]?: ConditionalValue<SelectVariant[key]> | undefined
