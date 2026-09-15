@@ -1295,13 +1295,19 @@
 }
 
     .page__inboxHeader {
-      padding: 0.875rem;
+      padding: 0.75rem;
       background: var(--colors-bg\.surface);
       gap: 0.75rem;
       border-bottom: 1px solid;
       border-color: var(--colors-border\.default);
       display: grid;
       flex-shrink: 0;
+}
+
+    .page__inboxHeader > p {
+      margin: var(--spacing-0);
+      color: var(--colors-text\.muted);
+      font-size: 0.8125rem;
 }
 
     .page__inboxControls {
@@ -1327,6 +1333,17 @@
       gap: 0.5rem;
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+    .page__inboxMetrics [data-part="body"] {
+      padding: 0.625rem 0.75rem;
+      min-width: var(--sizes-0);
+}
+
+    .page__inboxMetrics strong {
+      display: block;
+      font-size: 1.25rem;
+      margin-top: 0.125rem;
 }
 
     .page__inboxSearch {
@@ -1376,6 +1393,16 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      min-width: var(--sizes-0);
+}
+
+    .page__inboxToolbar p {
+      margin: var(--spacing-0);
+      overflow: hidden;
+      color: var(--colors-text\.muted);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.8125rem;
       min-width: var(--sizes-0);
 }
 
@@ -1542,6 +1569,30 @@
       align-items: flex-start;
       justify-content: space-between;
       min-width: var(--sizes-0);
+}
+
+    .page__inboxTitleRow p {
+      margin: var(--spacing-0);
+      color: var(--colors-text\.muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+}
+
+    .page__inboxTitleRow h1 {
+      margin: 0.125rem 0 0;
+      color: var(--colors-text\.primary);
+      font-size: 1.5rem;
+      line-height: 1.1;
+}
+
+    .page__inboxTitleRow > span {
+      flex-shrink: 0;
+      color: var(--colors-text\.muted);
+      font-family: var(--fonts-tabular);
+      font-size: 0.8125rem;
+      padding-top: 0.125rem;
 }
 
     .page__inboxRowCopy {
@@ -2966,13 +3017,10 @@
 
     .shell__root {
       background: var(--colors-bg\.canvas);
+      display: flex;
       color: var(--colors-text\.primary);
       font-family: var(--fonts-primary);
       width: 100%;
-}
-
-    .shell__root,.shell__sidebar {
-      display: flex;
       min-height: 100dvh;
 }
 
@@ -2981,10 +3029,14 @@
       padding: 1rem 0.5rem;
       border-right: 1px solid;
       border-color: var(--colors-border\.default);
+      display: flex;
+      box-sizing: border-box;
       flex-direction: column;
       flex-shrink: 0;
       color: var(--colors-icon\.inverse);
+      height: 100%;
       width: 4rem;
+      min-height: 100%;
 }
 
     .shell__main {
@@ -4048,7 +4100,7 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
 }
       .page__inboxHeader {
-        padding: 1rem 1.25rem 0.875rem;
+        padding: 0.875rem 1rem 0.75rem;
 }
       .page__inboxTableMobileHidden {
         display: none;

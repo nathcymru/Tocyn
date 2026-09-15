@@ -216,8 +216,9 @@ export const ParkVisuallyHidden = React.forwardRef<HTMLSpanElement, React.HTMLAt
 
 export const ParkCard = {
   Root: (props: React.HTMLAttributes<HTMLDivElement> & { variant?: 'elevated' | 'outline' | 'subtle' }) => {
-    const { variant: _variant, className, ...rest } = props;
-    return <div {...rest} data-park="card" data-part="root" className={[cardStyles.root, className].filter(Boolean).join(' ')} />;
+    const { variant, className, ...rest } = props;
+    const styles = cardRecipe({ variant });
+    return <div {...rest} data-park="card" data-part="root" className={[styles.root, className].filter(Boolean).join(' ')} />;
   },
   Header: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} data-part="header" className={[cardStyles.header, props.className].filter(Boolean).join(' ')} />,
   Body: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} data-part="body" className={[cardStyles.body, props.className].filter(Boolean).join(' ')} />,
