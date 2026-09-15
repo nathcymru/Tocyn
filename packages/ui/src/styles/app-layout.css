@@ -1,5 +1,8 @@
 @import './panda.css';
 @import './auth-splash.css';
+
+/* tocyn-legacy-layer-start */
+@layer tocyn-legacy {
 :root, :host {
   --tocyn-font-primary: 'Atkinson Hyperlegible', ui-sans-serif, system-ui, sans-serif;
   --tocyn-font-tabular: 'Inter', ui-sans-serif, system-ui, sans-serif;
@@ -2087,3 +2090,6 @@ textarea.tocyn-park-textarea:focus-visible { outline: 2px solid var(--colors-bor
 @media (max-width: 639px) { .tocyn-inbox-metric-strip { gap: .5rem; } .tocyn-inbox-metric-card { padding: .625rem; } }
 @media (max-width: 639px) { .tocyn-inbox-control-strip { grid-template-columns: 1fr; } .tocyn-inbox-control-cell + .tocyn-inbox-control-cell { border-block-start: 1px solid var(--tocyn-color-divider); border-inline-start: 0; } }
 @media (max-width: 639px) { .tocyn-inbox-metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+}
+/* tocyn-legacy-layer-end */

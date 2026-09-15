@@ -1,3 +1,5 @@
+/* tocyn-legacy-layer-start */
+@layer tocyn-legacy {
 @layer base {
   html, body, #root {
     width: 100%;
@@ -461,3 +463,6 @@
 .tocyn-shell-chevron { inline-size: .875rem; block-size: .875rem; transition: transform 180ms ease; }
 .tocyn-shell-connection-dot-connected { inline-size: .5rem; block-size: .5rem; border-radius: 999px; background: var(--tocyn-palette-22c55e); }
 .tocyn-inbox-list-mobile-hidden { display: block; } @media (min-width: 640px) { .tocyn-inbox-list-mobile-hidden { display: none; } }
+
+}
+/* tocyn-legacy-layer-end */
