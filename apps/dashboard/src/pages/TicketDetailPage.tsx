@@ -1043,7 +1043,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </span>
             </div>}
             <form onSubmit={handleSubmitReply} className="tocyn-ticket-composer-form">
-              {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()} className="tocyn-u-underline">Retry sent-draft cleanup</ParkButton></p>}
+              {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()}>Retry sent-draft cleanup</ParkButton></p>}
               <div className="tocyn-ticket-composer-mode-row">
                 <div className="tocyn-ticket-composer-mode-group">
                   <ParkButton
@@ -1458,7 +1458,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             <p id="knowledge-insert-help" role="status" className="tocyn-u-radius tocyn-u-border tocyn-u-surface-subtle tocyn-u-pad-3 tocyn-u-text-xs tocyn-u-fg-muted">
               {knowledgeLoading ? 'Loading tenant knowledge…' : knowledgeError ? 'Knowledge is temporarily unavailable. No content was inserted.' : knowledgeArticles.length ? 'Select an article to append its verified content to the reply.' : 'No eligible internal knowledge articles are available.'}
             </p>
-            {knowledgeError && <ParkButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className="tocyn-u-text-sm tocyn-u-underline">Retry knowledge</ParkButton>}
+            {knowledgeError && <ParkButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className="tocyn-u-text-sm">Retry knowledge</ParkButton>}
             {workspace.panel === 'details' && knowledgeArticles.length > 0 && <KnowledgeBrowser articles={knowledgeArticles} insertingId={knowledgeInserting}
               disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} onInsert={article => void insertKnowledgeArticle(article)} />}
           </div>

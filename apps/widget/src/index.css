@@ -55,7 +55,7 @@
 #lumina-widget-root .tocyn-widget-success-title { margin-block: 0 .5rem; color: #111827; font-size: 1.125rem; font-weight: 700; }
 #lumina-widget-root .tocyn-widget-success-copy { margin-block: 0 1.5rem; color: #4b5563; }
 #lumina-widget-root .tocyn-widget-success-action { color: #2563eb; font-weight: 500; }
-#lumina-widget-root .tocyn-widget-success-action:hover { text-decoration: underline; }
+#lumina-widget-root .tocyn-widget-success-action:hover { text-decoration: none; }
 #lumina-widget-root .tocyn-widget-attribution { border-block-start: 1px solid #f3f4f6; padding: .5rem; text-align: center; color: #4b5563; font-size: .625rem; }
 #lumina-widget-root .tocyn-widget-launcher { display: flex; min-block-size: 3.5rem; min-inline-size: 3.5rem; align-items: center; justify-content: center; border-radius: 999px; color: #fff; box-shadow: 0 10px 15px rgb(0 0 0 / 12%); transition: transform 180ms ease; }
 #lumina-widget-root .tocyn-widget-launcher:hover { transform: scale(1.05); }

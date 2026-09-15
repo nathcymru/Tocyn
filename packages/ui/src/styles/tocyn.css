@@ -450,6 +450,20 @@
 [data-tocyn-theme-mode] :where(button, input, textarea, select, [role="button"], [role="combobox"], [tabindex]:not([tabindex="-1"])):focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
 [data-tocyn-inverse] .tocyn-button { border-color: #475569; background: #334155; color: #f8fafc; }
 [data-tocyn-inverse] .tocyn-button:hover:not(:disabled) { background: #475569; }
+
+/* Action controls use button treatment; underlines remain reserved for genuine text/navigation links. */
+[data-tocyn-primitive="button"],
+button[data-tocyn-primitive="button"],
+button.tocyn-table-search-clear,
+button.tocyn-inbox-clear-button,
+button.tocyn-permissions-retry,
+button.tocyn-inbox-retry,
+button.tocyn-inbox-inline-retry,
+button.tocyn-ticket-context-retry,
+button.tocyn-api-key-uncertain-revoke,
+button.tocyn-u-underline { text-decoration: none; }
+button[data-tocyn-primitive="button"]:hover,
+button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 :where(.tocyn-tabular, [data-tocyn-tabular], .tocyn-metric-card-value, .tocyn-ticket-reference-value, .tocyn-inbox-row-sla, .tocyn-sla-countdown, time) { font-family: var(--tocyn-font-tabular); font-feature-settings: "tnum" 1, "cv01" 1; font-variant-numeric: tabular-nums; }
 
 /* Keep interaction timing predictable for operators who request reduced motion. */

@@ -65,7 +65,7 @@ export function TicketActionBar({ reference, actions, loading, error, retry }: T
 
   return <section aria-label="Ticket actions" className="tocyn-ticket-actions">
     {loading && <p role="status" className="tocyn-ticket-action-status">Loading ticket actions…</p>}
-    {error && <p role="alert" className="tocyn-ticket-action-status">Ticket actions are unavailable. <ParkButton type="button" onClick={retry} className="tocyn-u-underline">Retry ticket actions</ParkButton></p>}
+    {error && <p role="alert" className="tocyn-ticket-action-status">Ticket actions are unavailable. <ParkButton type="button" onClick={retry}>Retry ticket actions</ParkButton></p>}
     {!loading && !error && copy && renderAction(copy)}
     {!loading && !error && more.length > 0 && <details>
       <summary className={`${buttonClass} tocyn-ticket-action-summary`}>More ticket actions</summary>
