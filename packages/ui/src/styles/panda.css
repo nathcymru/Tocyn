@@ -2322,6 +2322,20 @@
       min-width: var(--sizes-0);
 }
 
+    .globalSearch__clear {
+      background: var(--colors-transparent);
+      padding-inline: 0.5rem;
+      position: absolute;
+      inset-inline-end: 0.375rem;
+      color: var(--colors-text\.muted);
+      min-height: 2rem;
+}
+
+    .globalSearch__clear:is(:hover, [data-hover]) {
+      background: var(--colors-bg\.subtle);
+      color: var(--colors-text\.primary);
+}
+
     .globalSearch__popover {
       border: 1px solid;
       background: var(--colors-bg\.surface);

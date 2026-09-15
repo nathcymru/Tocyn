@@ -121,12 +121,6 @@
 .tocyn-sla-queue-notice { margin: 1rem; display: grid; gap: .5rem; padding: .75rem; }
 .tocyn-sla-queue-action { justify-self: start; min-block-size: 2.5rem; }
 .tocyn-visually-hidden { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.tocyn-global-search-type-label { display: flex; align-items: center; gap: .375rem; white-space: nowrap; }
-.tocyn-global-search-input-shell { position: relative; min-inline-size: 0; }
-.tocyn-global-search-popover { position: absolute; inset-block-start: 100%; inset-inline-start: 0; z-index: 50; max-block-size: min(24rem,60vh); inline-size: 100%; overflow-y: auto; padding: .75rem; }
-.tocyn-global-search-results { max-block-size: 16rem; overflow: auto; }
-.tocyn-global-search-result-link, .tocyn-global-search-result-button { display: flex; inline-size: 100%; min-block-size: 2.5rem; align-items: center; padding: .5rem .75rem; }
-.tocyn-global-search-preview { padding: .5rem; }
 .tocyn-assignment-panel { display: grid; gap: .5rem; margin-block-start: .75rem; }
 .tocyn-assignment-action { padding: .5rem .75rem; }
 .tocyn-assignment-dialog { inline-size: 100%; max-inline-size: 32rem; padding: 1.5rem; }

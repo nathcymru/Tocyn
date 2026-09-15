@@ -34,6 +34,10 @@ const globalSearchSlotNames = [
     "globalSearch__scope"
   ],
   [
+    "clear",
+    "globalSearch__clear"
+  ],
+  [
     "popover",
     "globalSearch__popover"
   ],

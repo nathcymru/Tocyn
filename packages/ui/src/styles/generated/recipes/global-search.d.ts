@@ -10,7 +10,7 @@ type GlobalSearchVariantMap = {
   [key in keyof GlobalSearchVariant]: Array<GlobalSearchVariant[key]>
 }
 
-type GlobalSearchSlot = "root" | "inputShell" | "icon" | "input" | "shortcut" | "divider" | "scope" | "popover" | "status" | "results" | "result" | "preview"
+type GlobalSearchSlot = "root" | "inputShell" | "icon" | "input" | "shortcut" | "divider" | "scope" | "clear" | "popover" | "status" | "results" | "result" | "preview"
 
 export type GlobalSearchVariantProps = {
   [key in keyof GlobalSearchVariant]?: ConditionalValue<GlobalSearchVariant[key]> | undefined

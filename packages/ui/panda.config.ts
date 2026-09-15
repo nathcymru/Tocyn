@@ -190,7 +190,7 @@ export default {
         },
         globalSearch: {
           className: 'globalSearch',
-          slots: ['root', 'inputShell', 'icon', 'input', 'shortcut', 'divider', 'scope', 'popover', 'status', 'results', 'result', 'preview'],
+          slots: ['root', 'inputShell', 'icon', 'input', 'shortcut', 'divider', 'scope', 'clear', 'popover', 'status', 'results', 'result', 'preview'],
           base: {
             root: { position: 'relative', display: 'flex', flex: '1', minWidth: '0', width: '100%', maxWidth: '32rem', marginInline: 'auto', alignItems: 'center', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.input', color: 'text.primary' },
             inputShell: { position: 'relative', display: 'flex', flex: '1', minWidth: '0', alignItems: 'center' },
@@ -199,6 +199,7 @@ export default {
             shortcut: { position: 'absolute', insetInlineEnd: '0.75rem', color: 'text.muted', fontSize: '0.75rem', pointerEvents: 'none', whiteSpace: 'nowrap' },
             divider: { width: '1px', height: '1.5rem', flexShrink: '0', background: 'border.input' },
             scope: { display: 'flex', flexShrink: '0', width: '5.25rem', minWidth: '0', alignItems: 'stretch' },
+            clear: { position: 'absolute', insetInlineEnd: '0.375rem', minHeight: '2rem', paddingInline: '0.5rem', color: 'text.muted', background: 'transparent', _hover: { background: 'bg.subtle', color: 'text.primary' } },
             popover: { position: 'absolute', insetBlockStart: 'calc(100% + 0.5rem)', insetInline: '0', zIndex: '50', maxHeight: 'min(24rem, 60vh)', overflowY: 'auto', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', color: 'text.primary', padding: '0.75rem', boxShadow: 'sm' },
             status: { color: 'text.muted', fontSize: '0.875rem' },
             results: { maxHeight: '16rem', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '0.125rem' },

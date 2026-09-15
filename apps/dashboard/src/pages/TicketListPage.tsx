@@ -3,7 +3,7 @@ import { useTicketSlaBatch } from '../hooks/useTicketSla';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkInput, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkGlobalSearch, ParkInput, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
 import { ticketReference } from '../utils/ticket-reference';
@@ -56,6 +56,7 @@ function pageFromAnchor(anchor: string) {
 function pageAnchor(page: number) { return `page:${Math.max(1, Math.floor(page))}`; }
 
 export function TicketListPage() {
+  const searchStyles = ParkGlobalSearch();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const workspace = useOperatorWorkspaceState();
@@ -270,14 +271,15 @@ export function TicketListPage() {
 
         <div className="tocyn-ticket-table-shell">
           <div className="tocyn-ticket-table-toolbar">
-            <div className="tocyn-global-search-shell">
-              <Search className="tocyn-global-search-icon" aria-hidden="true" />
+            <div className={searchStyles.root}>
+              <div className={searchStyles.inputShell}>
+                <Search className={searchStyles.icon} aria-hidden="true" />
               <ParkInput
                 type="text"
                 placeholder="Search all authorised tickets..."
                 aria-label="Search all tickets in this list view"
                 aria-describedby="global-ticket-results-scope"
-                className="tocyn-global-search"
+                className={searchStyles.input}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -294,7 +296,8 @@ export function TicketListPage() {
                 }}
               />
               <ParkButton type="button" aria-label="Clear list ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
-                className="tocyn-search-clear">Clear</ParkButton>
+                className={searchStyles.clear}>Clear</ParkButton>
+              </div>
               <p id="global-ticket-results-scope" className="tocyn-visually-hidden">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
             </div>
             <div className="tocyn-ticket-table-controls">
