@@ -1822,8 +1822,9 @@
 .tocyn-mfa-icon { inline-size: 1.5rem; block-size: 1.5rem; color: var(--tocyn-color-brand); }
 .tocyn-mfa-title { margin: 0; color: var(--tocyn-color-text); font-size: 1.5rem; font-weight: 700; }
 .tocyn-mfa-instructions { margin: .5rem 0 0; color: var(--tocyn-color-text-muted); }
-.tocyn-mfa-alert { display: flex; align-items: flex-start; }
-.tocyn-mfa-alert-icon { inline-size: 1.25rem; block-size: 1.25rem; flex: 0 0 auto; margin-inline-end: .5rem; }
+.tocyn-mfa-alert { display: flex; align-items: flex-start; gap: .625rem; }
+.tocyn-mfa-alert-icon { inline-size: 1.25rem; block-size: 1.25rem; flex: 0 0 auto; margin-block-start: .125rem; }
+.tocyn-mfa-alert > p { min-inline-size: 0; margin: 0; line-height: 1.5; }
 .tocyn-mfa-retry { margin-block-end: 1rem; border: 1px solid var(--tocyn-color-divider); border-radius: .375rem; padding: .5rem .75rem; color: var(--tocyn-color-text); }
 .tocyn-mfa-setup { margin-block-end: 1.5rem; text-align: center; }
 .tocyn-mfa-qr { display: inline-block; margin-block-end: 1rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: 1rem; box-shadow: 0 1px 2px rgb(15 23 42 / 6%); }
