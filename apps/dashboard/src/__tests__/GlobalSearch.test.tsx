@@ -10,7 +10,8 @@ const row = (id: string) => ({ id, title: `Guide ${id}`, status: 'ready', catego
 const response = (rows: unknown) => ({ blob: new Blob([JSON.stringify(rows)]), contentType: 'application/json' });
 function Location() { const location = useLocation(); return <output aria-label="Current route">{location.pathname}{location.search}</output>; }
 function mount(path='/inbox/mine?priority=urgent') { render(<MemoryRouter initialEntries={[path]}><GlobalSearch shortcutsEnabled /><Location /></MemoryRouter>); }
-async function knowledge(query='Guide') { await userEvent.selectOptions(screen.getByRole('combobox'), 'knowledge'); const input=screen.getByRole('textbox'); await userEvent.type(input,query); await userEvent.keyboard('{Enter}'); }
+async function selectScope(value: 'all' | 'tickets' | 'customers' | 'knowledge') { const label = value === 'knowledge' ? 'Wiki' : value[0].toUpperCase() + value.slice(1); await userEvent.click(screen.getByRole('combobox', { name: 'Search scope filter' })); await userEvent.click(await screen.findByRole('option', { name: label })); await userEvent.click(screen.getByRole('textbox')); }
+async function knowledge(query='Guide') { await selectScope('knowledge'); const input=screen.getByRole('textbox'); await userEvent.type(input,query); await userEvent.keyboard('{Enter}'); }
 beforeEach(()=>{ vi.clearAllMocks(); useAuthStore.setState({token:'synthetic-a',sessionGeneration:1,user:{id:'actor-a',tenant_id:'tenant-a',role:'admin',email:'synthetic@example.test',full_name:'Synthetic',mfa_enabled:true}}); });
 afterEach(cleanup);
 it('searches complete metadata, shows first20 with exact total, and previews without editor navigation',async()=>{
@@ -24,7 +25,7 @@ it('searches complete metadata, shows first20 with exact total, and previews wit
 });
 it('searches authorised customers from ticket identities and clear/type switching retain current work view and focus',async()=>{
  vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response({data:[{id:'ticket-1',subject:'Synthetic',status:'open',customer_email:'someone@example.test'}],meta:{total:1,page:1,limit:20,total_pages:1}}));
- mount(); await userEvent.selectOptions(screen.getByRole('combobox'),'customers');
+ mount(); await selectScope('customers');
  await userEvent.type(screen.getByRole('textbox'),'someone{Enter}'); expect(await screen.findByText('1 matching authorised customers. Showing 1.')).toBeVisible();
  expect(screen.getByRole('list',{name:'Customer search results'})).toBeVisible();
  expect(dashboardApi.boundedBlob).toHaveBeenCalledWith('/tickets?search=someone&limit=20&page=1',1048576,['application/json'],expect.anything());
@@ -49,7 +50,7 @@ for(const variant of ['query','type','identity'] as const)it(`discards delayed m
  let release!:(value:ReturnType<typeof response>)=>void;vi.mocked(dashboardApi.boundedBlob).mockReturnValue(new Promise(resolve=>{release=resolve;}));
  mount();await knowledge();const signal=vi.mocked(dashboardApi.boundedBlob).mock.calls[0][3]!.signal!;
  if(variant==='query')await userEvent.type(screen.getByRole('textbox'),'changed');
- if(variant==='type')await userEvent.selectOptions(screen.getByRole('combobox'),'customers');
+ if(variant==='type')await selectScope('customers');
  if(variant==='identity')act(()=>useAuthStore.setState({token:'synthetic-b',sessionGeneration:2}));
  expect(signal.aborted).toBe(true);await act(async()=>release(response([row('late')])));expect(screen.queryByText('Guide late')).not.toBeInTheDocument();
 });

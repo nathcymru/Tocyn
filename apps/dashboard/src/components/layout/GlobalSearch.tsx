@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ParkButton, ParkInput } from '@luminatick/ui/park';
-import { ParkSelect } from '@luminatick/ui/park';
+import { createListCollection } from '@ark-ui/react';
+import { ParkButton, ParkInput, ParkSelect } from '@luminatick/ui/park';
 import { dashboardApi } from '../../api/client';
 import { assignmentIdentity } from '../../hooks/useTicketAssignment';
 import { useAuthStore } from '../../store/authStore';
@@ -9,6 +9,12 @@ import { MagnifyingGlassIcon } from '../icons';
 
 type Result = { id: string; title: string; status: string; category_id: string | null; kind: 'ticket' | 'knowledge' | 'customer'; customer_email?: string };
 const validText = (value: unknown, maximum: number): value is string => typeof value === 'string' && value.length <= maximum && !/[\u0000-\u001f\u007f]/.test(value);
+const searchScopeOptions = createListCollection({ items: [
+  { label: 'All', value: 'all' },
+  { label: 'Tickets', value: 'tickets' },
+  { label: 'Customers', value: 'customers' },
+  { label: 'Wiki', value: 'knowledge' },
+] });
 function metadata(value: unknown): Result[] {
   if (!Array.isArray(value) || value.length > 1000) throw new Error('Unavailable');
   const ids = new Set<string>();
@@ -49,6 +55,7 @@ function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
   const input = useRef<HTMLInputElement>(null), request = useRef<AbortController | null>(null), epoch = useRef(0);
   const previewOpener = useRef<HTMLButtonElement | null>(null), previewHeading = useRef<HTMLHeadingElement>(null);
   const [type, setType] = useState('all'), [query, setQuery] = useState('');
+  const [scopeOpen, setScopeOpen] = useState(false);
   const [results, setResults] = useState<Result[]>([]), [selected, setSelected] = useState<Result | null>(null);
   const [message, setMessage] = useState(''), [busy, setBusy] = useState(false);
   useEffect(() => { if (selected) previewHeading.current?.focus(); }, [selected]);
@@ -103,7 +110,12 @@ function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
     <div className="tocyn-global-search-input-shell"><MagnifyingGlassIcon aria-hidden="true" className="tocyn-global-search-icon" /><ParkInput ref={input} type="text" maxLength={256} value={query} aria-label={type === 'all' || type === 'tickets' ? 'Search all tickets (global shell)' : `Search authorised ${type} (global shell)`} aria-describedby="global-ticket-search-scope" aria-keyshortcuts={shortcutsEnabled ? 'Control+K Meta+K' : undefined} placeholder={type === 'all' || type === 'tickets' ? 'Search...' : type === 'knowledge' ? 'Search authorised knowledge titles...' : 'Search authorised customers...'} onChange={event => { invalidate(); setQuery(event.target.value); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void search(); } if (event.key === 'Escape') { event.preventDefault(); clear(); } }} className="tocyn-global-search" />
     {shortcutsEnabled && <span data-tocyn-focus-decoration="" aria-hidden="true" className="tocyn-search-shortcut">⌘K</span>}</div>
     <span className="tocyn-search-divider" aria-hidden="true" />
-    <label className="tocyn-global-search-scope"><span className="tocyn-visually-hidden">Search scope filter</span><ParkSelect aria-label="Search scope filter" value={type} onChange={event => { invalidate(); setType(event.target.value); }} className="tocyn-form-control"><option value="all">All</option><option value="tickets">Tickets</option><option value="customers">Customers</option><option value="knowledge">Wiki</option></ParkSelect></label>
+    <div className="tocyn-global-search-scope"><span className="tocyn-visually-hidden" id="global-search-scope-label">Search scope filter</span><ParkSelect.Root collection={searchScopeOptions as never} value={[type]} open={scopeOpen} onOpenChange={({ open }) => setScopeOpen(open)} onValueChange={({ value }) => { const next = value[0]; if (!next) return; setScopeOpen(false); invalidate(); setType(next); }} positioning={{ placement: 'bottom-end' }}>
+      <ParkSelect.Label className="tocyn-visually-hidden">Search scope filter</ParkSelect.Label>
+      <ParkSelect.Control><ParkSelect.Trigger aria-labelledby="global-search-scope-label"><ParkSelect.ValueText placeholder="All" /></ParkSelect.Trigger><ParkSelect.Indicator aria-hidden="true">⌄</ParkSelect.Indicator></ParkSelect.Control>
+      <ParkSelect.HiddenSelect />
+      <ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{searchScopeOptions.items.map(item => { const option = item as { label: string; value: string }; return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator>✓</ParkSelect.ItemIndicator></ParkSelect.Item>; })}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
+    </ParkSelect.Root></div>
     <p id="global-ticket-search-scope" className="tocyn-visually-hidden">{type === 'all' || type === 'tickets' ? 'Searches all tickets you are authorised to access.' : type === 'knowledge' ? 'Searches titles in the complete authorised knowledge list.' : 'Searches customer identities attached to tickets you are authorised to access.'} {shortcutsEnabled ? 'Press Command or Control K to focus this search.' : ''} Filter this view is available in the Inbox.</p>
     {(type === 'customers' || busy || message || selected) && <div className="tocyn-global-search-popover">
     {(busy || message) && <p role="status" className="tocyn-global-search-status">{busy ? 'Searching authorised results…' : message}</p>}
