@@ -108,10 +108,10 @@ export const ParkTabsIndicator = (props: React.ComponentProps<typeof ArkTabs.Ind
 export const ParkTabs = { Root: ParkTabsRoot, List: ParkTabsList, Trigger: ParkTabsTrigger, Content: ParkTabsContent, Indicator: ParkTabsIndicator };
 
 export const ParkScrollAreaRoot = (props: React.ComponentProps<typeof ArkScrollArea.Root>) => <ArkScrollArea.Root {...props} data-park="scroll-area-root" className={[scrollAreaStyles.root, parkPart('scroll-area-root', props.className)].join(' ')} />;
-export const ParkScrollAreaViewport = (props: React.ComponentProps<typeof ArkScrollArea.Viewport>) => <ArkScrollArea.Viewport {...props} data-park="scroll-area-viewport" className={parkPart('scroll-area-viewport', props.className)} />;
-export const ParkScrollAreaContent = (props: React.ComponentProps<typeof ArkScrollArea.Content>) => <ArkScrollArea.Content {...props} data-park="scroll-area-content" className={parkPart('scroll-area-content', props.className)} />;
-export const ParkScrollAreaScrollbar = (props: React.ComponentProps<typeof ArkScrollArea.Scrollbar>) => <ArkScrollArea.Scrollbar {...props} data-park="scroll-area-scrollbar" className={parkPart('scroll-area-scrollbar', props.className)} />;
-export const ParkScrollAreaThumb = (props: React.ComponentProps<typeof ArkScrollArea.Thumb>) => <ArkScrollArea.Thumb {...props} data-park="scroll-area-thumb" className={parkPart('scroll-area-thumb', props.className)} />;
+export const ParkScrollAreaViewport = (props: React.ComponentProps<typeof ArkScrollArea.Viewport>) => <ArkScrollArea.Viewport {...props} data-park="scroll-area-viewport" className={[scrollAreaStyles.viewport, parkPart('scroll-area-viewport', props.className)].join(' ')} />;
+export const ParkScrollAreaContent = (props: React.ComponentProps<typeof ArkScrollArea.Content>) => <ArkScrollArea.Content {...props} data-park="scroll-area-content" className={[scrollAreaStyles.content, parkPart('scroll-area-content', props.className)].join(' ')} />;
+export const ParkScrollAreaScrollbar = (props: React.ComponentProps<typeof ArkScrollArea.Scrollbar>) => <ArkScrollArea.Scrollbar {...props} data-park="scroll-area-scrollbar" className={[scrollAreaStyles.scrollbar, parkPart('scroll-area-scrollbar', props.className)].join(' ')} />;
+export const ParkScrollAreaThumb = (props: React.ComponentProps<typeof ArkScrollArea.Thumb>) => <ArkScrollArea.Thumb {...props} data-park="scroll-area-thumb" className={[scrollAreaStyles.thumb, parkPart('scroll-area-thumb', props.className)].join(' ')} />;
 export const ParkScrollArea = { Root: ParkScrollAreaRoot, Viewport: ParkScrollAreaViewport, Content: ParkScrollAreaContent, Scrollbar: ParkScrollAreaScrollbar, Thumb: ParkScrollAreaThumb };
 
 export const ParkSplitterRoot = (props: React.ComponentProps<typeof ArkSplitter.Root>) => <ArkSplitter.Root {...props} data-park="splitter-root" className={[splitterStyles.root, parkPart('splitter-root', props.className)].join(' ')} />;
@@ -142,8 +142,8 @@ export const ParkAvatar = React.forwardRef<HTMLDivElement, React.ComponentPropsW
   },
 );
 
-export const ParkAvatarImage = Avatar.Image;
-export const ParkAvatarFallback = Avatar.Fallback;
+export const ParkAvatarImage = (props: React.ComponentProps<typeof Avatar.Image>) => <Avatar.Image {...props} data-part="image" className={[avatarStyles.image, props.className].filter(Boolean).join(' ')} />;
+export const ParkAvatarFallback = (props: React.ComponentProps<typeof Avatar.Fallback>) => <Avatar.Fallback {...props} data-part="fallback" className={[avatarStyles.fallback, props.className].filter(Boolean).join(' ')} />;
 
 export const ParkMenuRoot = (props: React.ComponentProps<typeof ArkMenu.Root>) => <ArkMenu.Root {...props} data-park="menu-root" />;
 export const ParkMenuTrigger = (props: React.ComponentProps<typeof ArkMenu.Trigger>) => <ArkMenu.Trigger {...props} data-park="menu-trigger" className={parkPart('menu-trigger', props.className)} />;
