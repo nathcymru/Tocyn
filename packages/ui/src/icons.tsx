@@ -1,4 +1,5 @@
 import React from 'react';
+import { icon as iconRecipe } from './styles/generated/recipes';
 import {
   AlignLeft, ArrowLeft as ArrowLeftGlyph, ArrowRight, ArrowSquareOut, ArrowsClockwise, Bell as BellGlyph, BookOpen,
   Buildings, Calendar as CalendarGlyph, ChartBar, ChartLine, Check as CheckGlyph, CheckCircle, CheckSquare, CircleNotch, ChatCircle, CaretDown, CaretLeft, CaretRight, House, Books,
@@ -10,10 +11,15 @@ import {
   WifiHigh, X as XGlyph, type IconProps,
 } from '@phosphor-icons/react';
 
+/** Park Icon contract for custom SVGs and library icons. */
+export function ParkIcon({ children, className, size = 20, ...props }: React.SVGProps<SVGSVGElement> & { size?: number; children?: React.ReactNode }) {
+  return <svg {...props} width={size} height={size} viewBox="0 0 24 24" className={[iconRecipe(), 'tocyn-park-icon', className].filter(Boolean).join(' ')} data-park="icon" data-scope="icon" data-part="root" aria-hidden={props['aria-label'] ? undefined : true}>{children}</svg>;
+}
+
 /** Shared icon boundary: application icons are duotone and inherit semantic colour. */
 function duotone(Icon: any) {
   return React.forwardRef<SVGSVGElement, any>((props, ref) => (
-    <Icon {...props} ref={ref} weight="duotone" aria-hidden={props['aria-label'] ? undefined : true} />
+    <Icon {...props} ref={ref} weight="duotone" className={[iconRecipe(), 'tocyn-park-icon', props.className].filter(Boolean).join(' ')} data-park="icon" data-scope="icon" data-part="root" aria-hidden={props['aria-label'] ? undefined : true} />
   ));
 }
 

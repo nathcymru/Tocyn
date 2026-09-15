@@ -130,6 +130,10 @@ export default {
           className: 'textarea',
           base: { boxSizing: 'border-box', width: '100%', minHeight: '6rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'primary', resize: 'vertical', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
         },
+        icon: {
+          className: 'icon',
+          base: { display: 'inline-block', flexShrink: '0', width: '1.25rem', height: '1.25rem', color: 'icon.primary', verticalAlign: 'middle' },
+        },
       },
     },
   },

@@ -557,6 +557,18 @@
 @layer recipes{
   @layer _base{
 
+    .icon {
+      display: inline-block;
+      color: var(--colors-icon\.primary);
+      width: 1.25rem;
+      height: 1.25rem;
+}
+
+    .icon,.button {
+      flex-shrink: 0;
+      vertical-align: middle;
+}
+
     .button {
       border: 1px solid;
       background: var(--colors-bg\.surface);
@@ -571,10 +583,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      flex-shrink: 0;
       isolation: isolate;
       position: relative;
-      vertical-align: middle;
       white-space: nowrap;
       color: var(--colors-text\.primary);
       font-family: var(--fonts-primary);

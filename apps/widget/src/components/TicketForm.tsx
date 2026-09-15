@@ -1,4 +1,5 @@
 import { ParkButton, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { IconCircleCheck } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
 
@@ -54,9 +55,7 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
     return (
       <div className="tocyn-widget-success">
         <div className="tocyn-widget-success-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" className="tocyn-widget-success-mark" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
+          <IconCircleCheck className="tocyn-widget-success-mark" aria-hidden="true" />
         </div>
         <h3 ref={successHeading} tabIndex={-1} className="tocyn-widget-success-title">Ticket Submitted!</h3>
         <p role="status" className="tocyn-widget-success-copy">We've received your request and will get back to you soon.</p>

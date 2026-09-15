@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useId } from 'react';
 import TicketForm from './components/TicketForm';
 import AiChat from './components/AiChat';
 import { BASE_URL, widgetHeaders, getWidgetSession } from './api';
+import { IconXmark, IconChevronDown, IconMessage } from '@luminatick/ui/icons';
 
 const App: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -47,9 +48,7 @@ const App: React.FC = () => {
           <div className="tocyn-widget-panel-header" style={{ backgroundColor: config.primaryColor }}>
             <h2 id={`${widgetId}-title`} className="tocyn-widget-panel-title">{config.title}</h2>
             <ParkButton ref={closeButton} aria-label="Close support" onClick={closeWidget} className="tocyn-widget-close">
-              <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="tocyn-widget-close-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <IconXmark className="tocyn-widget-close-icon" aria-hidden="true" />
             </ParkButton>
           </div>
 
@@ -91,13 +90,9 @@ const App: React.FC = () => {
         style={{ backgroundColor: config.primaryColor }}
       >
         {isOpen ? (
-          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="tocyn-widget-launcher-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          <IconChevronDown className="tocyn-widget-launcher-icon" aria-hidden="true" />
         ) : (
-          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="tocyn-widget-launcher-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
+          <IconMessage className="tocyn-widget-launcher-icon" aria-hidden="true" />
         )}
       </ParkButton>
     </div>
