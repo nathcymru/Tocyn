@@ -1,8 +1,8 @@
 @import './panda.css';
 @import './auth-splash.css';
 
-/* tocyn-legacy-layer-start */
-@layer tocyn-legacy {
+/* tocyn-structure-layer-start */
+@layer tocyn-structure {
 :root, :host {
   --tocyn-font-primary: 'Atkinson Hyperlegible', ui-sans-serif, system-ui, sans-serif;
   --tocyn-font-tabular: 'Inter', ui-sans-serif, system-ui, sans-serif;
@@ -1332,8 +1332,8 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-usage-error-copy { margin-block-start: .25rem; font-size: .875rem; }
 .tocyn-usage-error-retry { background: var(--tocyn-palette-fee2e2); color: var(--tocyn-color-danger-text); }
 .tocyn-usage-error-retry:hover { background: var(--tocyn-color-critical-border); }
-.tocyn-legacy-tickets-state { max-width: 32rem; margin-inline: auto; border: 0; background: transparent; padding: 2rem; text-align: center; }
-.tocyn-legacy-tickets-retry { margin-block-start: 1rem; border: 1px solid var(--tocyn-color-divider); border-radius: .375rem; padding: .5rem 1rem; font-weight: 600; }
+.tocyn-redirect-state { max-width: 32rem; margin-inline: auto; border: 0; background: transparent; padding: 2rem; text-align: center; }
+.tocyn-redirect-retry { margin-block-start: 1rem; border: 1px solid var(--tocyn-color-divider); border-radius: .375rem; padding: .5rem 1rem; font-weight: 600; }
 @media (max-width: 767px) { .tocyn-ticket-fields-table-head th, .tocyn-ticket-fields-table-body td { padding-inline: .75rem; } }
 
 
@@ -2092,4 +2092,4 @@ textarea.tocyn-park-textarea:focus-visible { outline: 2px solid var(--colors-bor
 @media (max-width: 639px) { .tocyn-inbox-metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 }
-/* tocyn-legacy-layer-end */
+/* tocyn-structure-layer-end */

@@ -1,7 +1,7 @@
 /* Park/Panda layers are authoritative; compatibility route styles stay first. */
-@layer tocyn-legacy, reset, base, tokens, recipes, utilities;
-/* tocyn-legacy-layer-start */
-@layer tocyn-legacy {
+@layer tocyn-structure, reset, base, tokens, recipes, utilities;
+/* tocyn-structure-layer-start */
+@layer tocyn-structure {
 @layer base {
   html, body, #root {
     width: 100%;
@@ -467,4 +467,4 @@
 .tocyn-inbox-list-mobile-hidden { display: block; } @media (min-width: 640px) { .tocyn-inbox-list-mobile-hidden { display: none; } }
 
 }
-/* tocyn-legacy-layer-end */
+/* tocyn-structure-layer-end */

@@ -24,5 +24,5 @@ function Redirect(){
     navigate('/inbox/all',{replace:true});
   };
   useEffect(()=>{void run();},[workspace.status]);
-  return <ParkEmptyState title="Opening Inbox" description={failed?'Your saved list could not be confirmed. Retry without losing the filter.':'Restoring your conversation view…'} headingLevel={1} className="tocyn-legacy-tickets-state" role={failed?'alert':'status'} action={failed&&<ParkButton type="button" onClick={()=>void run()} className="tocyn-legacy-tickets-retry">Retry Inbox</ParkButton>} />;
+  return <ParkEmptyState title="Opening Inbox" description={failed?'Your saved list could not be confirmed. Retry without losing the filter.':'Restoring your conversation view…'} headingLevel={1} className="tocyn-redirect-state" role={failed?'alert':'status'} action={failed&&<ParkButton type="button" onClick={()=>void run()} className="tocyn-redirect-retry">Retry Inbox</ParkButton>} />;
 }
