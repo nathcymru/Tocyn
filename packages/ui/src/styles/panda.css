@@ -1933,6 +1933,10 @@
       color: var(--colors-icon\.selected);
 }
 
+    .shell__navigationLink[aria-current="page"] svg {
+      color: var(--colors-icon\.selected);
+}
+
     .shell__navigationLink:is(:focus-visible, [data-focus-visible]) {
       outline: 2px solid;
       outline-color: var(--colors-border\.focus);
@@ -1941,7 +1945,7 @@
 
     .shell__navigationLink:is(:hover, [data-hover]) {
       background: var(--colors-bg\.subtle);
-      color: var(--colors-icon\.primary);
+      color: var(--colors-icon\.inverse);
 }
 
     .shell__navigationLinkLabelled {
@@ -1959,6 +1963,7 @@
 
     .shell__navigationIcon {
       flex-shrink: 0;
+      color: var(--colors-icon\.inverse);
       width: 2.5rem;
       height: 2.5rem;
 }
