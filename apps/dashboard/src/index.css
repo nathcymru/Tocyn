@@ -466,7 +466,7 @@
 .tocyn-ticket-status-open, .tocyn-ticket-status-pending, .tocyn-ticket-status-neutral { border: 1px solid var(--tocyn-app-border); }
 .tocyn-ticket-status-open { background: #d1fae5; color: #047857; } .tocyn-ticket-status-pending { background: #fef3c7; color: #b45309; } .tocyn-ticket-status-neutral { background: var(--tocyn-app-surface-muted); color: var(--tocyn-app-text-muted); }
 .tocyn-inbox-current-view-name { font-weight: 600; }
-.tocyn-inbox-list-rows { display: flex; flex: 1; border-block-end: 1px solid var(--tocyn-app-border); }
+.tocyn-inbox-list-rows { display: flex; flex: 1; flex-direction: column; border-block-end: 1px solid var(--tocyn-app-border); }
 .tocyn-inbox-mobile-hidden { display: none; } @media (min-width: 1024px) { .tocyn-inbox-mobile-hidden { display: block; } }
 .tocyn-shell-sidebar-labelled { inline-size: 16rem; } .tocyn-shell-sidebar-compact { inline-size: 4rem; }
 .tocyn-shell-mobile-labelled { inline-size: 14rem; max-inline-size: 90vw; } .tocyn-shell-mobile-compact { inline-size: 5rem; }
