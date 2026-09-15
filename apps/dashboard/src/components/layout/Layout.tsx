@@ -371,7 +371,7 @@ function LayoutContent() {
           {connectionRecoveryMessage && <p role="status" aria-live="polite" className="tocyn-visually-hidden">{connectionRecoveryMessage}</p>}
         </header>
 
-        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('tocyn-shell-content', isInboxRoute ? 'tocyn-shell-content-inbox' : 'tocyn-shell-content-standard', !location.pathname.startsWith('/settings') && !isInboxRoute && 'tocyn-shell-content-padded')}>
+        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('tocyn-shell-content', isInboxRoute ? 'tocyn-shell-content-inbox' : 'tocyn-shell-content-standard', !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && 'tocyn-shell-content-padded')}>
           <Outlet />
         </main>
       </div>
