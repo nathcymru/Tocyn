@@ -51,7 +51,7 @@ export const DashboardPage: React.FC = () => {
       <div>
         <h1 className="tocyn-dashboard-page-title">Dashboard</h1>
         <p className="tocyn-dashboard-page-description">A quick overview of the support workload.</p>
-        <ParkButton type="button" onClick={() => navigate('/inbox')} className="tocyn-dashboard-open-inbox">Open Inbox</ParkButton>
+        <ParkButton type="button" variant="solid" onClick={() => navigate('/inbox')} className="tocyn-dashboard-open-inbox">Open Inbox</ParkButton>
       </div>
 
       <div className="tocyn-metric-strip">

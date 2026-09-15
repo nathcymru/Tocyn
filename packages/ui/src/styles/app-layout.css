@@ -135,8 +135,7 @@
 .tocyn-overview-card-heading { display: flex; align-items: center; gap: 0.75rem; margin-block-end: 0.5rem; }
 .tocyn-overview-footer { margin-block-start: 2rem; border-block-start: 1px solid var(--tocyn-color-divider-subtle, var(--tocyn-color-divider)); padding-block-start: 1.5rem; color: var(--tocyn-color-text-muted); font-size: 0.875rem; }
 .tocyn-dashboard-card-heading { display: flex; align-items: center; gap: 0.5rem; margin-block-end: 1.5rem; }
-.tocyn-dashboard-open-inbox { display: inline-flex; align-items: center; margin-block-start: 1rem; border-radius: .5rem; background: var(--tocyn-color-brand); padding: .5rem 1rem; color: white; font-size: .875rem; font-weight: 700; }
-.tocyn-dashboard-open-inbox:hover { background: var(--tocyn-color-brand-strong, #1d4ed8); }
+.tocyn-dashboard-open-inbox { margin-block-start: 1rem; font-weight: 700; }
 .tocyn-dashboard-panel-icon { inline-size: 1.25rem; block-size: 1.25rem; color: var(--tocyn-color-text-muted); }
 .tocyn-dashboard-panel-title { margin: 0; color: var(--tocyn-color-text); font-weight: 700; }
 .tocyn-priority-label-row { display: flex; justify-content: space-between; font-size: .875rem; }
@@ -153,18 +152,6 @@
 .tocyn-priority-row { display: flex; flex-direction: column; gap: 0.375rem; }
 .tocyn-shell-header { display: flex; align-items: center; gap: 0.75rem; min-width: 0; min-height: 4rem; flex-shrink: 0; border-bottom: 1px solid var(--tocyn-color-divider); background: var(--tocyn-color-surface); padding-block: .5rem; padding-inline: 1rem; }
 .tocyn-account-menu { position: relative; margin-block-start: .5rem; }
-.tocyn-account-trigger { display: flex; inline-size: 2.5rem; block-size: 2.5rem; align-items: center; justify-content: center; border: 1px solid #475569; border-radius: 999px; background: #334155; color: white; font-weight: 700; transition: box-shadow 160ms ease; }
-.tocyn-account-trigger:hover { box-shadow: 0 0 0 2px var(--tocyn-color-brand); }
-.tocyn-account-trigger:focus-visible { outline: 2px solid white; outline-offset: 2px; }
-.tocyn-account-popover { z-index: 50; width: 20rem; border: 1px solid #334155; border-radius: .5rem; background: #1e293b; padding-block: .25rem; box-shadow: 0 10px 25px rgb(15 23 42 / 25%); animation: tocyn-popover-in 160ms ease-out; }
-.tocyn-account-identity { border-block-end: 1px solid #334155; padding: .5rem 1rem; }
-.tocyn-account-name, .tocyn-account-email { overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; }
-.tocyn-account-name { color: white; font-size: .875rem; font-weight: 500; }
-.tocyn-account-email { color: #94a3b8; font-size: .75rem; }
-.tocyn-account-action { display: flex; align-items: center; gap: .5rem; width: auto; padding: .5rem 1rem; color: #cbd5e1; font-size: .875rem; transition: background-color 160ms ease, color 160ms ease; }
-.tocyn-account-action-full { width: 100%; }
-.tocyn-account-action:hover { background: #334155; color: white; }
-.tocyn-account-action-icon { inline-size: 1rem; block-size: 1rem; }
 @keyframes tocyn-popover-in { from { opacity: 0; transform: translateY(.25rem); } to { opacity: 1; transform: translateY(0); } }
 .tocyn-main-shell { display: flex; min-width: 0; flex: 1 1 0%; flex-direction: column; }
 .tocyn-app-shell { display: flex; min-width: 0; background: var(--tocyn-color-surface-panel); }
@@ -753,8 +740,7 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-portal-ticket-list { display: grid; gap: 1.5rem; }
 .tocyn-portal-ticket-list-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .tocyn-portal-ticket-list-title { color: var(--tocyn-color-text); font-size: 1.5rem; font-weight: 700; }
-.tocyn-portal-ticket-list-create { display: inline-flex; align-items: center; gap: .5rem; border-radius: .5rem; background: #2563eb; color: #fff; padding: .5rem 1rem; }
-.tocyn-portal-ticket-list-create:hover, .tocyn-portal-ticket-submit:hover { background: #1d4ed8; }
+.tocyn-portal-ticket-list-create { gap: .5rem; }
 .tocyn-portal-ticket-list-status, .tocyn-portal-ticket-dialog-status { color: var(--tocyn-color-text); font-size: .875rem; }
 .tocyn-portal-ticket-dialog-title { margin-block-end: 1rem; color: var(--tocyn-color-text); font-size: 1.125rem; font-weight: 600; }
 .tocyn-portal-ticket-dialog-error { margin-block-end: 1rem; border: 1px solid #fecaca; border-radius: .375rem; background: #fef2f2; color: #b91c1c; padding: .75rem; }
@@ -762,7 +748,7 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-portal-ticket-field-input { margin-block-start: .25rem; width: 100%; border: 1px solid var(--tocyn-color-divider); border-radius: .375rem; padding: .5rem .75rem; }
 .tocyn-portal-ticket-field-input:focus { border-color: var(--tocyn-color-focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tocyn-color-focus) 24%, transparent); outline: none; }
 .tocyn-portal-ticket-cancel { border: 1px solid var(--tocyn-color-divider); border-radius: .375rem; padding: .5rem 1rem; color: var(--tocyn-color-text); }
-.tocyn-portal-ticket-submit { display: inline-flex; align-items: center; gap: .5rem; border-radius: .375rem; background: #2563eb; color: #fff; padding: .5rem 1rem; }
+.tocyn-portal-ticket-submit { gap: .5rem; }
 .tocyn-portal-ticket-row-main { display: flex; align-items: center; gap: 1rem; }
 .tocyn-portal-ticket-reference { color: var(--tocyn-color-text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .875rem; }
 .tocyn-portal-ticket-subject { color: var(--tocyn-color-text); font-size: 1.125rem; font-weight: 500; }
@@ -824,7 +810,7 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-portal-ticket-empty, .tocyn-portal-ticket-loading { border: 0; background: transparent; padding: 3rem; }
 .tocyn-portal-ticket-error { background: #fef2f2; color: #b91c1c; }
 .tocyn-portal-ticket-retry { margin-block-start: .75rem; border: 1px solid #b91c1c; border-radius: .375rem; padding: .5rem .75rem; }
-.tocyn-portal-ticket-empty-create { display: inline-flex; align-items: center; gap: .5rem; margin-block-start: .75rem; border-radius: .375rem; background: #2563eb; padding: .5rem 1rem; color: #fff; }
+.tocyn-portal-ticket-empty-create { gap: .5rem; margin-block-start: .75rem; }
 .tocyn-local-capture-refresh, .tocyn-local-capture-clear { border-radius: .375rem; padding: .5rem 1rem; }
 .tocyn-local-capture-refresh { background: #2563eb; color: #fff; }
 .tocyn-local-capture-clear { border: 1px solid var(--tocyn-color-text-muted); }
@@ -1819,14 +1805,14 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 /* Panda-authored account popover controls. */
 .tocyn-account-trigger { display: flex; inline-size: 2.5rem; block-size: 2.5rem; align-items: center; justify-content: center; border: 1px solid #475569; border-radius: 999px; background: #334155; color: white; font-weight: 700; transition: box-shadow 160ms ease; }
 .tocyn-account-trigger:hover { box-shadow: 0 0 0 2px var(--tocyn-color-brand); }
-.tocyn-account-popover { z-index: 50; inline-size: 20rem; overflow: hidden; border: 1px solid #334155; border-radius: .5rem; background: #1e293b; padding-block: .25rem; box-shadow: 0 .75rem 1.5rem rgb(15 23 42 / 25%); }
-.tocyn-account-summary { border-block-end: 1px solid #334155; padding: .5rem 1rem; }
+.tocyn-account-popover { z-index: 50; inline-size: 20rem; overflow: hidden; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-canvas); padding-block: .25rem; box-shadow: 0 .75rem 1.5rem rgb(15 23 42 / 12%); }
+.tocyn-account-summary { border-block-end: 1px solid var(--tocyn-color-divider); padding: .5rem 1rem; }
 .tocyn-account-name, .tocyn-account-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tocyn-account-name { margin: 0; color: white; font-size: .875rem; font-weight: 500; }
-.tocyn-account-email { margin: 0; color: #94a3b8; font-size: .75rem; }
-.tocyn-account-action { display: flex; align-items: center; gap: .5rem; padding: .5rem 1rem; color: #cbd5e1; font-size: .875rem; transition: background-color 160ms ease, color 160ms ease; }
+.tocyn-account-name { margin: 0; color: var(--tocyn-color-text); font-size: .875rem; font-weight: 500; }
+.tocyn-account-email { margin: 0; color: var(--tocyn-color-text-muted); font-size: .75rem; }
+.tocyn-account-action { display: flex; align-items: center; gap: .5rem; padding: .5rem 1rem; color: var(--tocyn-color-text); font-size: .875rem; transition: background-color 160ms ease, color 160ms ease; }
 .tocyn-account-action-full { inline-size: 100%; text-align: left; }
-.tocyn-account-action:hover { background: #334155; color: white; }
+.tocyn-account-action:hover { background: var(--tocyn-color-surface-muted); color: var(--tocyn-color-text); }
 .tocyn-account-action-icon { inline-size: 1rem; block-size: 1rem; }
 
 /* Panda-authored security setup verification surface. */
