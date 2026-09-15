@@ -2,7 +2,7 @@ import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkMenu } from '@luminatick/ui/park';
+import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkMenu, ParkShell } from '@luminatick/ui/park';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
@@ -102,13 +102,14 @@ function UserMenu({ onNavigate }: SidebarProps) {
 function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   const location = useLocation();
   const labelled = useOperatorPreferencesContext().navigation === 'labelled';
+  const shellStyles = ParkShell();
   return (
-        <div className="tocyn-shell-sidebar">
+        <div className={cn('tocyn-shell-sidebar', shellStyles.sidebar)}>
           <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="tocyn-shell-logo-link">
             <ProductLogo compact decorative className="tocyn-shell-logo" />
           </Link>
 
-          <nav aria-label="Workspace navigation" className="tocyn-shell-navigation">
+          <nav aria-label="Workspace navigation" className={cn('tocyn-shell-navigation', shellStyles.navigation)}>
             {navigation.map((item) => {
               const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
               return (
@@ -119,7 +120,7 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
                   aria-label={item.name}
                   aria-current={isActive ? "page" : undefined}
                   onClick={onNavigate}
-                  className={cn(
+                  className={cn(shellStyles.navigationLink,
                     labelled ? "tocyn-shell-navigation-link-labelled" : "tocyn-shell-navigation-link-icon",
                     isActive
                       ? "tocyn-shell-navigation-link-active"
@@ -164,6 +165,7 @@ function LayoutContent() {
   const restoreNavigationFocus = useRef(true);
   const main = useRef<HTMLElement>(null);
   const isInboxRoute = location.pathname.startsWith('/inbox');
+  const shellStyles = ParkShell();
 
   useEffect(() => { main.current?.focus(); }, [location.pathname]);
   const loadActivity = React.useCallback(async () => {
@@ -252,7 +254,7 @@ function LayoutContent() {
   const visibleActivityItems = activity?.page.items.filter(item => !item.dismissedAt) ?? [];
 
   return (
-    <div className={cn('tocyn-shell-root', isInboxRoute ? 'tocyn-shell-root-inbox' : 'tocyn-shell-root-standard')}>
+    <div className={cn(shellStyles.root, 'tocyn-shell-root', isInboxRoute ? 'tocyn-shell-root-inbox' : 'tocyn-shell-root-standard')}>
       <aside data-tocyn-inverse="" className={cn('tocyn-shell-sidebar-desktop', preferences.navigation === 'labelled' ? 'tocyn-shell-sidebar-labelled' : 'tocyn-shell-sidebar-compact')}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
@@ -268,8 +270,8 @@ function LayoutContent() {
         </TocynDialog>
 
       {/* Main content */}
-      <div className="tocyn-shell-main">
-        <header className="tocyn-shell-header tocyn-shell-header">
+      <div className={cn(shellStyles.main, 'tocyn-shell-main')}>
+        <header className={cn(shellStyles.header, 'tocyn-shell-header')}>
           <ParkButton
             type="button"
             ref={navigationTrigger}
@@ -371,7 +373,7 @@ function LayoutContent() {
           {connectionRecoveryMessage && <p role="status" aria-live="polite" className="tocyn-visually-hidden">{connectionRecoveryMessage}</p>}
         </header>
 
-        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('tocyn-shell-content', isInboxRoute ? 'tocyn-shell-content-inbox' : 'tocyn-shell-content-standard', !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && 'tocyn-shell-content-padded')}>
+        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn(shellStyles.content, 'tocyn-shell-content', isInboxRoute ? 'tocyn-shell-content-inbox' : 'tocyn-shell-content-standard', !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && 'tocyn-shell-content-padded')}>
           <Outlet />
         </main>
       </div>

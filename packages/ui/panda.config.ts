@@ -83,6 +83,19 @@ export default {
       },
       slotRecipes: {
         ...parkRegistrySlotRecipes,
+        shell: {
+          className: 'shell',
+          slots: ['root', 'sidebar', 'main', 'header', 'content', 'navigation', 'navigationLink'],
+          base: {
+            root: { display: 'flex', width: '100%', minHeight: '100dvh', background: 'bg.canvas', color: 'text.primary', fontFamily: 'primary' },
+            sidebar: { display: 'flex', flexDirection: 'column', flexShrink: '0', width: '4rem', minHeight: '100dvh', background: 'bg.surface', borderRight: '1px solid', borderColor: 'border.default', padding: '1rem 0.5rem' },
+            main: { display: 'flex', flex: '1', minWidth: '0', minHeight: '100dvh', flexDirection: 'column', background: 'bg.canvas' },
+            header: { display: 'flex', flexShrink: '0', minHeight: '4rem', alignItems: 'center', gap: '1rem', borderBottom: '1px solid', borderColor: 'border.default', background: 'bg.surface', padding: '0.5rem 1rem' },
+            content: { display: 'flex', flex: '1', minWidth: '0', minHeight: '0', flexDirection: 'column' },
+            navigation: { display: 'flex', flex: '1', width: '100%', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem' },
+            navigationLink: { display: 'inline-flex', minWidth: '2.75rem', minHeight: '2.75rem', alignItems: 'center', justifyContent: 'center', borderRadius: 'l2', color: 'icon.muted', padding: '0.5rem', transition: 'colors', _hover: { background: 'bg.subtle', color: 'icon.primary' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } },
+          },
+        },
         tabs: {
           className: 'tabs', slots: ['root', 'list', 'trigger', 'content', 'indicator'],
           base: { root: { display: 'flex', flexDirection: 'column', minWidth: '0' }, list: { display: 'flex', alignItems: 'center', gap: '0.25rem', borderBottom: '1px solid', borderColor: 'border.default' }, trigger: { minHeight: '2.5rem', border: '0', borderBottom: '2px solid transparent', background: 'transparent', color: 'fg.muted', padding: '0.5rem 0.75rem', fontFamily: 'primary', cursor: 'pointer', _hover: { color: 'fg.default' }, _selected: { color: 'fg.default', borderColor: 'accent.primary' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } }, content: { minWidth: '0', paddingBlock: '1rem' }, indicator: { display: 'none' } },

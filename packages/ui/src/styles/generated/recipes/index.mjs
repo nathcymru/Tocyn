@@ -54,4 +54,5 @@ export * from './tags-input.mjs';
 export * from './toast.mjs';
 export * from './toggle-group.mjs';
 export * from './tooltip.mjs';
+export * from './shell.mjs';
 export * from './empty-state.mjs';

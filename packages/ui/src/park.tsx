@@ -6,7 +6,7 @@ import { Splitter as ArkSplitter } from '@ark-ui/react/splitter';
 import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
 import { Menu as ArkMenu } from '@ark-ui/react/menu';
 import { IconChevronDown, IconCheck } from './icons';
-import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe } from './styles/generated/recipes';
+import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, shell as shellRecipe } from './styles/generated/recipes';
 
 const selectStyles = selectRecipe();
 const buttonClass = buttonRecipe();
@@ -194,3 +194,6 @@ export function ParkEmptyState({ title, description, action, headingLevel = 2, c
     {action !== undefined && <div data-part="action">{action}</div>}
   </section>;
 }
+
+/** Panda slot recipe for the application shell layout. */
+export const ParkShell = shellRecipe;

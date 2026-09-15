@@ -55,4 +55,5 @@ export * from './tags-input';
 export * from './toast';
 export * from './toggle-group';
 export * from './tooltip';
+export * from './shell';
 export * from './empty-state';

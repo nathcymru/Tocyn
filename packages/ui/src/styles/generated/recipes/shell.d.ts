@@ -1,0 +1,31 @@
+/* eslint-disable */
+import type { ConditionalValue } from '../types/index';
+import type { DistributiveOmit, Pretty } from '../types/system-types';
+
+interface ShellVariant {
+  
+}
+
+type ShellVariantMap = {
+  [key in keyof ShellVariant]: Array<ShellVariant[key]>
+}
+
+type ShellSlot = "root" | "sidebar" | "main" | "header" | "content" | "navigation" | "navigationLink"
+
+export type ShellVariantProps = {
+  [key in keyof ShellVariant]?: ConditionalValue<ShellVariant[key]> | undefined
+}
+
+export interface ShellRecipe {
+  __slot: ShellSlot
+  __type: ShellVariantProps
+  (props?: ShellVariantProps): Pretty<Record<ShellSlot, string>>
+  raw: (props?: ShellVariantProps) => ShellVariantProps
+  variantMap: ShellVariantMap
+  variantKeys: Array<keyof ShellVariant>
+  splitVariantProps<Props extends ShellVariantProps>(props: Props): [ShellVariantProps, Pretty<DistributiveOmit<Props, keyof ShellVariantProps>>]
+  getVariantProps: (props?: ShellVariantProps) => ShellVariantProps
+}
+
+
+export declare const shell: ShellRecipe
