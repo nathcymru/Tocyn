@@ -16,12 +16,13 @@ const textareaClass = textareaRecipe();
 /** Shared Park recipes. Stateless controls intentionally use their semantic HTML
  * element (as Park does); stateful controls below use Ark state machines. Every
  * visible control carries the same Park scope/part contract and package recipe. */
-export type ParkButtonVariant = 'solid' | 'ghost' | 'destructive';
-export interface ParkButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> { variant?: ParkButtonVariant; }
+export type ParkButtonVariant = 'solid' | 'subtle' | 'surface' | 'outline' | 'plain' | 'ghost' | 'destructive';
+export type ParkButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+export interface ParkButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> { variant?: ParkButtonVariant; size?: ParkButtonSize; }
 export const ParkButton = React.forwardRef<HTMLButtonElement, ParkButtonProps>(
   function ParkButton({ className, ...props }, ref) {
-    const { variant, ...buttonProps } = props;
-    const recipeClass = buttonRecipe(variant ? { variant } : undefined);
+    const { variant, size, ...buttonProps } = props;
+    const recipeClass = buttonRecipe(variant || size ? { variant, size } : undefined);
     return <button {...buttonProps} ref={ref} data-tocyn-primitive="button" data-park="button" data-scope="button" data-part="root" className={[recipeClass || buttonClass, 'tocyn-button', 'tocyn-park-button', className].filter(Boolean).join(' ')}>{buttonProps.children}</button>;
   },
 );

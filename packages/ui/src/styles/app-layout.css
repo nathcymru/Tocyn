@@ -29,7 +29,7 @@
   --tocyn-icon-selected: var(--tocyn-color-focus);
   --tocyn-icon-critical: var(--tocyn-color-critical);
   --tocyn-icon-inverse: #f8fafc;
-  --tocyn-target-min: 44px;
+  --tocyn-target-min: 40px;
   --tocyn-density-comfortable: 1rem;
   --tocyn-type-scale-body: 1rem;
   --tocyn-type-line-height-body: 1.5;
@@ -58,8 +58,7 @@
 }
 .tocyn-button { text-decoration: none; }
 .tocyn-park-button[data-scope="button"] { font-family: var(--tocyn-font-primary); }
-.tocyn-park-button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--tocyn-color-focus) 34%, var(--tocyn-color-divider)); background: var(--tocyn-color-surface-muted); }
-.tocyn-park-button[data-state="active"], .tocyn-park-button[aria-pressed="true"] { border-color: var(--tocyn-color-focus); background: color-mix(in srgb, var(--tocyn-color-focus) 12%, var(--tocyn-color-surface)); }
+.tocyn-park-button[data-state="active"], .tocyn-park-button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--tocyn-color-focus); }
 .tocyn-button:disabled { cursor: not-allowed; opacity: .6; }
 .tocyn-button.tocyn-auth-submit { width: 100%; font-weight: 700; }
 .tocyn-button.tocyn-auth-secondary { width: 100%; margin-block-start: .75rem; }

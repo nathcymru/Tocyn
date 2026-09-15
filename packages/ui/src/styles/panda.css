@@ -98,16 +98,6 @@
     --font-sizes-7xl: 4.5rem;
     --font-sizes-8xl: 6rem;
     --font-sizes-9xl: 8rem;
-    --shadows-2xs: 0 1px rgb(0 0 0 / 0.05);
-    --shadows-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadows-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    --shadows-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadows-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    --shadows-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-    --shadows-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-    --shadows-inset-2xs: inset 0 1px rgb(0 0 0 / 0.05);
-    --shadows-inset-xs: inset 0 1px 1px rgb(0 0 0 / 0.05);
-    --shadows-inset-sm: inset 0 2px 4px rgb(0 0 0 / 0.05);
     --colors-current: currentColor;
     --colors-black: #000;
     --colors-white: #fff;
@@ -415,8 +405,21 @@
     --radii-3xl: 1.5rem;
     --radii-4xl: 2rem;
     --radii-full: 9999px;
-    --radii-control: 0.5rem;
-    --radii-panel: 0.75rem;
+    --radii-l1: 0.25rem;
+    --radii-l2: 0.5rem;
+    --radii-l3: 0.75rem;
+    --radii-control: var(--radii-l2);
+    --radii-panel: var(--radii-l3);
+    --shadows-2xs: 0 1px rgb(0 0 0 / 0.05);
+    --shadows-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --shadows-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    --shadows-inset-2xs: inset 0 1px rgb(0 0 0 / 0.05);
+    --shadows-inset-xs: inset 0 1px 1px rgb(0 0 0 / 0.05);
+    --shadows-inset-sm: inset 0 2px 4px rgb(0 0 0 / 0.05);
+    --shadows-xs: 0 1px 2px rgb(15 23 42 / 6%);
+    --shadows-sm: 0 2px 6px rgb(15 23 42 / 8%);
+    --shadows-md: 0 8px 20px rgb(15 23 42 / 10%);
+    --shadows-lg: 0 16px 32px rgb(15 23 42 / 12%);
     --sizes-0: 0rem;
     --sizes-1: 0.25rem;
     --sizes-2: 0.5rem;
@@ -628,15 +631,21 @@
 }
 }
 
-  .button--variant_solid {
-    background: var(--colors-accent\.primary);
-    border-color: var(--colors-accent\.primary);
-    color: var(--colors-bg\.surface);
+  .button--variant_surface {
+    background: var(--colors-bg\.surface);
+    border-color: var(--colors-border\.input);
+    color: var(--colors-text\.primary);
 }
 
-  .button--variant_solid:is(:hover, [data-hover]) {
-    background: var(--colors-text\.primary);
-    border-color: var(--colors-text\.primary);
+  .button--variant_surface:is(:hover, [data-hover]) {
+    background: var(--colors-bg\.subtle);
+}
+
+  .button--size_md {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.9375rem;
+    min-height: 2.5rem;
+    min-width: 2.5rem;
 }
 }
 

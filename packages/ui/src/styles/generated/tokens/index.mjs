@@ -215,46 +215,6 @@ const tokens = {
     "value": "8rem",
     "variable": "var(--font-sizes-9xl)"
   },
-  "shadows.2xs": {
-    "value": "0 1px rgb(0 0 0 / 0.05)",
-    "variable": "var(--shadows-2xs)"
-  },
-  "shadows.xs": {
-    "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-    "variable": "var(--shadows-xs)"
-  },
-  "shadows.sm": {
-    "value": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
-    "variable": "var(--shadows-sm)"
-  },
-  "shadows.md": {
-    "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-    "variable": "var(--shadows-md)"
-  },
-  "shadows.lg": {
-    "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
-    "variable": "var(--shadows-lg)"
-  },
-  "shadows.xl": {
-    "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
-    "variable": "var(--shadows-xl)"
-  },
-  "shadows.2xl": {
-    "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
-    "variable": "var(--shadows-2xl)"
-  },
-  "shadows.inset-2xs": {
-    "value": "inset 0 1px rgb(0 0 0 / 0.05)",
-    "variable": "var(--shadows-inset-2xs)"
-  },
-  "shadows.inset-xs": {
-    "value": "inset 0 1px 1px rgb(0 0 0 / 0.05)",
-    "variable": "var(--shadows-inset-xs)"
-  },
-  "shadows.inset-sm": {
-    "value": "inset 0 2px 4px rgb(0 0 0 / 0.05)",
-    "variable": "var(--shadows-inset-sm)"
-  },
   "colors.current": {
     "value": "currentColor",
     "variable": "var(--colors-current)"
@@ -1483,13 +1443,65 @@ const tokens = {
     "value": "9999px",
     "variable": "var(--radii-full)"
   },
-  "radii.control": {
+  "radii.l1": {
+    "value": "0.25rem",
+    "variable": "var(--radii-l1)"
+  },
+  "radii.l2": {
     "value": "0.5rem",
+    "variable": "var(--radii-l2)"
+  },
+  "radii.l3": {
+    "value": "0.75rem",
+    "variable": "var(--radii-l3)"
+  },
+  "radii.control": {
+    "value": "var(--radii-l2)",
     "variable": "var(--radii-control)"
   },
   "radii.panel": {
-    "value": "0.75rem",
+    "value": "var(--radii-l3)",
     "variable": "var(--radii-panel)"
+  },
+  "shadows.2xs": {
+    "value": "0 1px rgb(0 0 0 / 0.05)",
+    "variable": "var(--shadows-2xs)"
+  },
+  "shadows.xl": {
+    "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+    "variable": "var(--shadows-xl)"
+  },
+  "shadows.2xl": {
+    "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
+    "variable": "var(--shadows-2xl)"
+  },
+  "shadows.inset-2xs": {
+    "value": "inset 0 1px rgb(0 0 0 / 0.05)",
+    "variable": "var(--shadows-inset-2xs)"
+  },
+  "shadows.inset-xs": {
+    "value": "inset 0 1px 1px rgb(0 0 0 / 0.05)",
+    "variable": "var(--shadows-inset-xs)"
+  },
+  "shadows.inset-sm": {
+    "value": "inset 0 2px 4px rgb(0 0 0 / 0.05)",
+    "variable": "var(--shadows-inset-sm)"
+  },
+  "shadows.xs": {
+    "value": "0 1px 2px rgb(15 23 42 / 6%)",
+    "variable": "var(--shadows-xs)"
+  },
+  "shadows.sm": {
+    "value": "0 2px 6px rgb(15 23 42 / 8%)",
+    "variable": "var(--shadows-sm)"
+  },
+  "shadows.md": {
+    "value": "0 8px 20px rgb(15 23 42 / 10%)",
+    "variable": "var(--shadows-md)"
+  },
+  "shadows.lg": {
+    "value": "0 16px 32px rgb(15 23 42 / 12%)",
+    "variable": "var(--shadows-lg)"
   },
   "sizes.0": {
     "value": "0rem",

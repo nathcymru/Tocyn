@@ -47,7 +47,19 @@ export default {
           primary: { value: "'Atkinson Hyperlegible', sans-serif" },
           tabular: { value: "'Inter', sans-serif" },
         },
-        radii: { control: { value: '0.5rem' }, panel: { value: '0.75rem' } },
+        radii: {
+          l1: { value: '0.25rem' },
+          l2: { value: '0.5rem' },
+          l3: { value: '0.75rem' },
+          control: { value: '{radii.l2}' },
+          panel: { value: '{radii.l3}' },
+        },
+        shadows: {
+          xs: { value: '0 1px 2px rgb(15 23 42 / 6%)' },
+          sm: { value: '0 2px 6px rgb(15 23 42 / 8%)' },
+          md: { value: '0 8px 20px rgb(15 23 42 / 10%)' },
+          lg: { value: '0 16px 32px rgb(15 23 42 / 12%)' },
+        },
         sizes: { target: { value: 'var(--tocyn-target-min)' } },
       },
       textStyles: {
@@ -82,11 +94,23 @@ export default {
           variants: {
             variant: {
               solid: { background: 'accent.primary', borderColor: 'accent.primary', color: 'bg.surface', _hover: { background: 'text.primary', borderColor: 'text.primary' } },
+              subtle: { background: 'bg.subtle', borderColor: 'border.default', color: 'text.primary', _hover: { background: 'bg.input' } },
+              surface: { background: 'bg.surface', borderColor: 'border.input', color: 'text.primary', _hover: { background: 'bg.subtle' } },
+              outline: { background: 'transparent', borderColor: 'border.input', color: 'text.primary', _hover: { background: 'bg.subtle' } },
+              plain: { background: 'transparent', borderColor: 'transparent', color: 'text.primary', _hover: { background: 'bg.subtle', borderColor: 'transparent' } },
               ghost: { background: 'transparent', borderColor: 'transparent', color: 'text.primary', _hover: { background: 'bg.subtle', borderColor: 'border.input' } },
               destructive: { background: 'critical', borderColor: 'critical', color: 'bg.surface', _hover: { filter: 'brightness(0.92)' } },
             },
+            size: {
+              xs: { minHeight: '2rem', minWidth: '2rem', padding: '0.375rem 0.625rem', fontSize: '0.75rem' },
+              sm: { minHeight: '2.25rem', minWidth: '2.25rem', padding: '0.5rem 0.75rem', fontSize: '0.875rem' },
+              md: { minHeight: '2.5rem', minWidth: '2.5rem', padding: '0.5rem 0.875rem', fontSize: '0.9375rem' },
+              lg: { minHeight: '2.75rem', minWidth: '2.75rem', padding: '0.625rem 1rem', fontSize: '1rem' },
+              xl: { minHeight: '3rem', minWidth: '3rem', padding: '0.75rem 1.125rem', fontSize: '1.125rem' },
+              '2xl': { minHeight: '4rem', minWidth: '4rem', padding: '1rem 1.5rem', fontSize: '1.25rem' },
+            },
           },
-          defaultVariants: { variant: 'solid' },
+          defaultVariants: { variant: 'surface', size: 'md' },
         },
         input: {
           className: 'input',
