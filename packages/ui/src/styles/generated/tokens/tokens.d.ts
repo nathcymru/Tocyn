@@ -31,7 +31,7 @@ export type FontToken = "sans" | "serif" | "mono" | "primary" | "tabular"
 
 export type RadiusToken = "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "full" | "l1" | "l2" | "l3" | "control" | "panel"
 
-export type ShadowToken = "2xs" | "xl" | "2xl" | "inset-2xs" | "inset-xs" | "inset-sm" | "xs" | "sm" | "md" | "lg"
+export type ShadowToken = "2xs" | "inset-2xs" | "inset-xs" | "inset-sm" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl"
 
 export type SizeToken = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "14" | "16" | "20" | "24" | "28" | "32" | "36" | "40" | "44" | "48" | "52" | "56" | "60" | "64" | "72" | "80" | "96" | "0.5" | "1.5" | "2.5" | "3.5" | "4.5" | "5.5" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl" | "7xl" | "8xl" | "prose" | "full" | "min" | "max" | "fit" | "target" | "breakpoint-sm" | "breakpoint-md" | "breakpoint-lg" | "breakpoint-xl" | "breakpoint-2xl"
 

@@ -1467,14 +1467,6 @@ const tokens = {
     "value": "0 1px rgb(0 0 0 / 0.05)",
     "variable": "var(--shadows-2xs)"
   },
-  "shadows.xl": {
-    "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
-    "variable": "var(--shadows-xl)"
-  },
-  "shadows.2xl": {
-    "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
-    "variable": "var(--shadows-2xl)"
-  },
   "shadows.inset-2xs": {
     "value": "inset 0 1px rgb(0 0 0 / 0.05)",
     "variable": "var(--shadows-inset-2xs)"
@@ -1502,6 +1494,14 @@ const tokens = {
   "shadows.lg": {
     "value": "0 16px 32px rgb(15 23 42 / 12%)",
     "variable": "var(--shadows-lg)"
+  },
+  "shadows.xl": {
+    "value": "0 20px 40px rgb(15 23 42 / 14%)",
+    "variable": "var(--shadows-xl)"
+  },
+  "shadows.2xl": {
+    "value": "0 24px 48px rgb(15 23 42 / 16%)",
+    "variable": "var(--shadows-2xl)"
   },
   "sizes.0": {
     "value": "0rem",

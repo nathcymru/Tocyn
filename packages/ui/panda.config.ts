@@ -67,6 +67,8 @@ export default {
           sm: { value: '0 2px 6px rgb(15 23 42 / 8%)' },
           md: { value: '0 8px 20px rgb(15 23 42 / 10%)' },
           lg: { value: '0 16px 32px rgb(15 23 42 / 12%)' },
+          xl: { value: '0 20px 40px rgb(15 23 42 / 14%)' },
+          '2xl': { value: '0 24px 48px rgb(15 23 42 / 16%)' },
         },
         sizes: { target: { value: 'var(--tocyn-target-min)' } },
       },
@@ -98,7 +100,7 @@ export default {
       recipes: {
         button: {
           className: 'button',
-          base: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '2.75rem', minWidth: '2.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.surface', color: 'text.primary', padding: '0.5rem 0.875rem', fontFamily: 'fonts.primary', cursor: 'pointer', userSelect: 'none', _hover: { background: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
+          base: { appearance: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '2.75rem', minWidth: '2.75rem', flexShrink: '0', isolation: 'isolate', position: 'relative', verticalAlign: 'middle', whiteSpace: 'nowrap', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', color: 'text.primary', padding: '0.5rem 0.875rem', fontFamily: 'fonts.primary', fontWeight: '600', cursor: 'pointer', userSelect: 'none', outline: '0', transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease', _hover: { background: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' }, '& svg': { flexShrink: '0' } },
           variants: {
             variant: {
               solid: { background: 'accent.primary', borderColor: 'accent.primary', color: 'bg.surface', _hover: { background: 'text.primary', borderColor: 'text.primary' } },
