@@ -18,6 +18,7 @@ export function createTocynThemeScope(element: HTMLElement, input: TocynThemeInp
   const original = new Map(names.map(name => [name, { value: element.style.getPropertyValue(name), priority: element.style.getPropertyPriority(name) }]));
   const originalMode = element.hasAttribute(MANAGED_ATTRIBUTE) ? element.getAttribute(MANAGED_ATTRIBUTE) : null;
   const hadMode = element.hasAttribute(MANAGED_ATTRIBUTE);
+  const hadDarkClass = element.classList.contains('dark');
   let current = resolveTocynTheme(input);
   let active = false;
   let disposed = false;
@@ -28,6 +29,7 @@ export function createTocynThemeScope(element: HTMLElement, input: TocynThemeInp
     const next = resolveTocynTheme(nextInput);
     for (const [name, value] of Object.entries(next.variables)) element.style.setProperty(name, value);
     element.setAttribute(MANAGED_ATTRIBUTE, next.mode);
+    element.classList.toggle('dark', next.mode === 'dark');
     current = next;
     active = true;
     return next;
@@ -47,6 +49,7 @@ export function createTocynThemeScope(element: HTMLElement, input: TocynThemeInp
       }
       if (hadMode) element.setAttribute(MANAGED_ATTRIBUTE, originalMode!);
       else element.removeAttribute(MANAGED_ATTRIBUTE);
+      element.classList.toggle('dark', hadDarkClass);
       active = false;
       disposed = true;
       ownedElements.delete(element);

@@ -484,20 +484,20 @@
     --breakpoints-lg: 1024px;
     --breakpoints-xl: 1280px;
     --breakpoints-2xl: 1536px;
-    --colors-bg\.canvas: var(--tocyn-color-canvas);
-    --colors-bg\.surface: var(--tocyn-color-surface);
-    --colors-bg\.input: var(--tocyn-color-input);
-    --colors-text\.primary: var(--tocyn-color-text);
-    --colors-text\.muted: var(--tocyn-color-text-muted);
-    --colors-border\.input: var(--tocyn-color-divider);
-    --colors-border\.focus: var(--tocyn-color-focus);
-    --colors-accent\.primary: var(--tocyn-color-accent);
-    --colors-icon\.primary: var(--tocyn-icon-primary);
-    --colors-icon\.muted: var(--tocyn-icon-muted);
-    --colors-icon\.disabled: var(--tocyn-icon-disabled);
-    --colors-icon\.selected: var(--tocyn-icon-selected);
-    --colors-icon\.critical: var(--tocyn-icon-critical);
-    --colors-icon\.inverse: var(--tocyn-icon-inverse);
+    --colors-bg\.canvas: #f8fafc;
+    --colors-bg\.surface: #ffffff;
+    --colors-bg\.input: #f1f5f9;
+    --colors-text\.primary: #1e293b;
+    --colors-text\.muted: #64748b;
+    --colors-border\.input: #cbd5e1;
+    --colors-border\.focus: #3b82f6;
+    --colors-accent\.primary: #334155;
+    --colors-icon\.primary: #1e293b;
+    --colors-icon\.muted: #64748b;
+    --colors-icon\.disabled: #94a3b8;
+    --colors-icon\.selected: #3b82f6;
+    --colors-icon\.critical: #b91c1c;
+    --colors-icon\.inverse: #f8fafc;
     --colors-canvas: var(--tocyn-color-surface);
     --colors-panel: var(--tocyn-color-surface-panel);
     --colors-muted: var(--tocyn-color-surface-muted);
@@ -520,6 +520,23 @@
     --colors-fg\.default: var(--tocyn-color-text);
     --colors-fg\.muted: var(--tocyn-color-text-muted);
     --colors-border\.default: var(--tocyn-color-divider);
+}
+
+  .dark {
+    --colors-bg\.canvas: #0f1115;
+    --colors-bg\.surface: #1a1d23;
+    --colors-bg\.input: #1e293b;
+    --colors-text\.primary: #e2e8f0;
+    --colors-text\.muted: #94a3b8;
+    --colors-border\.input: #334155;
+    --colors-border\.focus: #60a5fa;
+    --colors-accent\.primary: #cbd5e1;
+    --colors-icon\.primary: #e2e8f0;
+    --colors-icon\.muted: #94a3b8;
+    --colors-icon\.disabled: #475569;
+    --colors-icon\.selected: #60a5fa;
+    --colors-icon\.critical: #fca5a5;
+    --colors-icon\.inverse: #0f1115
 }
 
   @keyframes spin {

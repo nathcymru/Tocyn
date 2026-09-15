@@ -1760,59 +1760,59 @@ const tokens = {
     "variable": "var(--breakpoints-2xl)"
   },
   "colors.bg.canvas": {
-    "value": "var(--tocyn-color-canvas)",
+    "value": "var(--colors-bg\\.canvas)",
     "variable": "var(--colors-bg\\.canvas)"
   },
   "colors.bg.surface": {
-    "value": "var(--tocyn-color-surface)",
+    "value": "var(--colors-bg\\.surface)",
     "variable": "var(--colors-bg\\.surface)"
   },
   "colors.bg.input": {
-    "value": "var(--tocyn-color-input)",
+    "value": "var(--colors-bg\\.input)",
     "variable": "var(--colors-bg\\.input)"
   },
   "colors.text.primary": {
-    "value": "var(--tocyn-color-text)",
+    "value": "var(--colors-text\\.primary)",
     "variable": "var(--colors-text\\.primary)"
   },
   "colors.text.muted": {
-    "value": "var(--tocyn-color-text-muted)",
+    "value": "var(--colors-text\\.muted)",
     "variable": "var(--colors-text\\.muted)"
   },
   "colors.border.input": {
-    "value": "var(--tocyn-color-divider)",
+    "value": "var(--colors-border\\.input)",
     "variable": "var(--colors-border\\.input)"
   },
   "colors.border.focus": {
-    "value": "var(--tocyn-color-focus)",
+    "value": "var(--colors-border\\.focus)",
     "variable": "var(--colors-border\\.focus)"
   },
   "colors.accent.primary": {
-    "value": "var(--tocyn-color-accent)",
+    "value": "var(--colors-accent\\.primary)",
     "variable": "var(--colors-accent\\.primary)"
   },
   "colors.icon.primary": {
-    "value": "var(--tocyn-icon-primary)",
+    "value": "var(--colors-icon\\.primary)",
     "variable": "var(--colors-icon\\.primary)"
   },
   "colors.icon.muted": {
-    "value": "var(--tocyn-icon-muted)",
+    "value": "var(--colors-icon\\.muted)",
     "variable": "var(--colors-icon\\.muted)"
   },
   "colors.icon.disabled": {
-    "value": "var(--tocyn-icon-disabled)",
+    "value": "var(--colors-icon\\.disabled)",
     "variable": "var(--colors-icon\\.disabled)"
   },
   "colors.icon.selected": {
-    "value": "var(--tocyn-icon-selected)",
+    "value": "var(--colors-icon\\.selected)",
     "variable": "var(--colors-icon\\.selected)"
   },
   "colors.icon.critical": {
-    "value": "var(--tocyn-icon-critical)",
+    "value": "var(--colors-icon\\.critical)",
     "variable": "var(--colors-icon\\.critical)"
   },
   "colors.icon.inverse": {
-    "value": "var(--tocyn-icon-inverse)",
+    "value": "var(--colors-icon\\.inverse)",
     "variable": "var(--colors-icon\\.inverse)"
   },
   "colors.canvas": {
