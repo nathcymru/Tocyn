@@ -1430,9 +1430,9 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-dashboard-page,
 .tocyn-knowledge-page,
 .tocyn-settings-layout { box-sizing: border-box; inline-size: 100%; max-inline-size: none; margin: 0; }
-.tocyn-dashboard-page { min-block-size: 100%; }
-.tocyn-knowledge-page { block-size: 100%; min-block-size: 0; }
-.tocyn-settings-layout { block-size: 100%; }
+.tocyn-dashboard-page { min-block-size: 0; }
+.tocyn-knowledge-page { block-size: auto; min-block-size: 0; }
+.tocyn-settings-layout { block-size: auto; min-block-size: 0; }
 .tocyn-knowledge-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 1rem; border-block-end: 1px solid var(--tocyn-color-divider); background: var(--tocyn-color-surface); padding: 1rem 1.5rem; }
 .tocyn-knowledge-title { margin: 0; color: var(--tocyn-color-text); font-size: 1.5rem; font-weight: 700; }
 .tocyn-knowledge-new-button { gap: .5rem; font-size: .875rem; font-weight: 600; }
