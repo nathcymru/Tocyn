@@ -1313,7 +1313,7 @@
     .page__inboxControls {
       gap: 0.5rem;
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
       align-items: end;
 }
 
@@ -1895,7 +1895,7 @@
     .ticketDetail__card {
       border: 1px solid;
       background: var(--colors-bg\.surface);
-      flex: 1 0 auto;
+      flex: 1 1 auto;
       overflow: hidden;
       border-color: var(--colors-border\.default);
       border-radius: var(--radii-l3);
@@ -1903,7 +1903,7 @@
       flex-direction: column;
       box-shadow: var(--shadows-xs);
       min-width: var(--sizes-0);
-      min-height: min(28rem, 100%);
+      min-height: var(--sizes-0);
 }
 
     .ticketDetail__header {
@@ -3135,6 +3135,8 @@
     .shell__sidebarDesktop {
       flex-shrink: 0;
       display: none;
+      height: 100%;
+      min-height: var(--sizes-0);
 }
 
     .shell__sidebarLabelled {
@@ -4068,9 +4070,6 @@
 }
 
     @media screen and (min-width: 40rem) {
-      .page__inboxControls {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-}
       .page__inboxMobileNote {
         display: none;
 }
@@ -4162,12 +4161,6 @@
         padding: 2rem;
 }
 }
-
-    @media screen and (min-width: 80rem) {
-      .page__inboxControls {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-}
 }
 
   .dialog__content--size_md {
@@ -4248,6 +4241,10 @@
     grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
 }
 
+  .grid-tc_repeat\(auto-fit\,_minmax\(12rem\,_1fr\)\) {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
   .sr_true {
     position: absolute;
     width: 1px;
@@ -4322,17 +4319,5 @@
 
   .max-w_56rem {
     max-width: 56rem;
-}
-
-  @media screen and (min-width: 40rem) {
-    .sm\:grid-tc_repeat\(2\,_minmax\(0\,_1fr\)\) {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-}
-
-  @media screen and (min-width: 80rem) {
-    .xl\:grid-tc_repeat\(4\,_minmax\(0\,_1fr\)\) {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-}
 }
 }
