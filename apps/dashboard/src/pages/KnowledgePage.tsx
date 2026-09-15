@@ -43,6 +43,7 @@ export const KnowledgePage: React.FC = () => {
   const [deleteStatus, setDeleteStatus] = useState('');
   const closeDelete = () => { if (!deleteGuard.current) setDeleteConfirm(previous => ({...previous,isOpen:false})); };
   const navigate = useNavigate();
+  const pageStyles = ParkPage('knowledge');
 
   const fetchData = async () => {
     try {
@@ -158,12 +159,10 @@ export const KnowledgePage: React.FC = () => {
     return (
       <div key={node.id} className="tocyn-knowledge-category-node">
         <div
-          className={`tocyn-knowledge-category-row ${
-            isSelected ? 'tocyn-knowledge-category-row-selected' : 'tocyn-knowledge-category-row-inactive'
-          }`}
-          style={{ paddingLeft: `${depth * 1.5 + 0.5}rem` }}
+          className={[pageStyles.knowledgeCategoryRow, isSelected ? pageStyles.knowledgeCategoryRowSelected : ''].filter(Boolean).join(' ')}
+          style={{ ['--tocyn-category-depth' as string]: depth }}
         >
-          <div className="tocyn-knowledge-category-main">
+          <div className={pageStyles.knowledgeCategoryMain}>
             {node.children.length > 0 ? (
               <ParkButton
                 aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`} aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
@@ -172,14 +171,14 @@ export const KnowledgePage: React.FC = () => {
                 {isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
               </ParkButton>
             ) : (
-              <span className="tocyn-knowledge-category-spacer"></span>
+              <span className={pageStyles.knowledgeCategorySpacer}></span>
             )}
-            <ParkButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className="tocyn-knowledge-category-select">
+            <ParkButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className={pageStyles.knowledgeCategoryButton}>
             <IconFolder size={14} className={isSelected ? 'tocyn-knowledge-category-icon-selected' : 'tocyn-knowledge-category-icon'} />
             <span className="tocyn-knowledge-category-name">{node.name}</span>
             </ParkButton>
           </div>
-          <div className="tocyn-knowledge-category-actions">
+          <div className={pageStyles.knowledgeCategoryActions}>
             <ParkButton
               onClick={(e) => {
                 e.stopPropagation();
@@ -205,7 +204,7 @@ export const KnowledgePage: React.FC = () => {
         </div>
 
         {isExpanded && node.children.length > 0 && (
-          <div className="tocyn-knowledge-category-children">
+          <div className={pageStyles.knowledgeCategoryChildren}>
             {node.children.map(child => renderCategoryNode(child, depth + 1))}
           </div>
         )}
@@ -238,10 +237,9 @@ export const KnowledgePage: React.FC = () => {
   const filteredDocs = docs.filter(doc =>
     selectedCategoryId === null || doc.category_id === selectedCategoryId
   );
-
   return (
-    <div className={[ParkPage('knowledge').root, ParkPage('knowledge').content, 'tocyn-knowledge-page'].join(' ')}>
-      <div className={['tocyn-knowledge-header', ParkPage('knowledge').header].join(' ')}>
+    <div className={[pageStyles.root, pageStyles.content].join(' ')}>
+      <header className={pageStyles.header}>
         <h1 ref={heading} tabIndex={-1} className="tocyn-knowledge-title">Knowledge Base</h1>
         <ParkButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
@@ -250,7 +248,7 @@ export const KnowledgePage: React.FC = () => {
           <IconPlus size={16} className="tocyn-knowledge-new-icon" />
           New Article
         </ParkButton>
-      </div>
+      </header>
 
       {error && (
         <div className="tocyn-knowledge-error" role="alert">
@@ -258,10 +256,10 @@ export const KnowledgePage: React.FC = () => {
         </div>
       )}
 
-      <div className="tocyn-knowledge-workspace">
+      <div className={pageStyles.knowledgeWorkspace}>
         {/* Sidebar */}
-        <ParkCard.Root variant="outline" className="tocyn-knowledge-sidebar">
-          <ParkCard.Header className="tocyn-knowledge-sidebar-header">
+        <ParkCard.Root variant="outline" className={pageStyles.knowledgeSidebar}>
+          <ParkCard.Header>
             <h2 className="tocyn-knowledge-sidebar-title">Categories</h2>
             <ParkButton
               onClick={() => setIsAddingCategory({ parentId: null })}
@@ -283,7 +281,7 @@ export const KnowledgePage: React.FC = () => {
               <span>All Articles</span>
             </ParkButton>
 
-            <div className="tocyn-knowledge-category-list">
+      <div className={pageStyles.knowledgeCategoryList}>
               {categories.map(root => renderCategoryNode(root))}
 
               {isAddingCategory?.parentId === null && (
@@ -309,9 +307,9 @@ export const KnowledgePage: React.FC = () => {
         </ParkCard.Root>
 
         {/* Main Content */}
-        <ParkCard.Root variant="outline" className="tocyn-knowledge-content">
+        <ParkCard.Root variant="outline" className={pageStyles.knowledgeContent}>
           <ParkCard.Body className="tocyn-knowledge-table-shell">
-            <table className="tocyn-knowledge-table">
+            <table className={pageStyles.knowledgeTable}>
               <thead className="tocyn-knowledge-table-head">
                 <tr>
                   <th>Title</th><th>Status</th><th>Tier</th><th>Created</th><th className="tocyn-knowledge-table-actions-heading">Actions</th>
@@ -321,22 +319,17 @@ export const KnowledgePage: React.FC = () => {
                 {filteredDocs.map((doc) => (
                   <tr
                     key={doc.id}
-                    className="tocyn-knowledge-table-row"
+                    className={pageStyles.knowledgeRow}
                     onClick={() => navigate(`/knowledge/edit/${doc.id}`)}
                   >
                     <td className="tocyn-knowledge-cell-title">{doc.title}</td>
                     <td className="tocyn-knowledge-cell-muted">
-                      <span className={`tocyn-knowledge-status-badge ${
-                        doc.status === 'active' ? 'tocyn-knowledge-status-active' :
-                        doc.status === 'processing' ? 'tocyn-knowledge-status-processing' : 'tocyn-knowledge-status-error'
-                      }`}>
+                      <span className={pageStyles.knowledgeStatusBadge} data-status={doc.status}>
                         {doc.status}
                       </span>
                     </td>
                     <td className="tocyn-knowledge-cell-muted">
-                      <span className={`tocyn-knowledge-status-badge ${
-                        doc.tier === 'sop' ? 'tocyn-knowledge-tier-sop' : 'tocyn-knowledge-tier-answer'
-                      }`}>
+                      <span className={pageStyles.knowledgeStatusBadge} data-tier={doc.tier}>
                         {doc.tier === 'sop' ? 'SOP' : 'Answer'}
                       </span>
                     </td>

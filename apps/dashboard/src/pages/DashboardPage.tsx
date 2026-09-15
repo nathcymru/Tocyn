@@ -24,41 +24,42 @@ export const DashboardPage: React.FC = () => {
       label: 'Total Tickets',
       value: totalTickets,
       icon: IconTicket,
-      color: 'tocyn-palette-blue-soft tocyn-palette-blue-text',
+      tone: 'blue',
     },
     {
       label: 'Open Tickets',
       value: getStatusCount('open'),
       icon: IconCircleExclamation,
-      color: 'tocyn-palette-green-soft tocyn-palette-green-text',
+      tone: 'green',
     },
     {
       label: 'Pending Tickets',
       value: getStatusCount('pending'),
       icon: IconClock,
-      color: 'tocyn-palette-amber-soft tocyn-palette-amber-text',
+      tone: 'amber',
     },
     {
       label: 'Resolved Tickets',
       value: getStatusCount('resolved') + getStatusCount('closed'),
       icon: IconCircleCheck,
-      color: 'tocyn-palette-neutral-soft tocyn-palette-neutral-text',
+      tone: 'neutral',
     },
   ];
 
+  const page = ParkPage('dashboard');
   return (
-    <div className={[ParkPage('dashboard').root, ParkPage('dashboard').content, 'tocyn-dashboard-page'].join(' ')}>
-      <header className={ParkPage('dashboard').header}>
+    <div className={[page.root, page.content].join(' ')}>
+      <header className={page.header}>
         <h1 className="tocyn-dashboard-page-title">Dashboard</h1>
         <p className="tocyn-dashboard-page-description">A quick overview of the support workload.</p>
         <ParkButton type="button" variant="solid" onClick={() => navigate('/inbox')} className="tocyn-dashboard-open-inbox">Open Inbox</ParkButton>
       </header>
 
-      <div className="tocyn-metric-strip">
+      <div className={page.metricStrip}>
         {cards.map((card, idx) => (
-          <ParkCard.Root key={idx} variant="outline" className="tocyn-metric-card">
+          <ParkCard.Root key={idx} variant="outline" className={page.metricCard}>
             <ParkCard.Header className="tocyn-metric-card-header">
-              <div className={`tocyn-metric-card-icon ${card.color}`}>
+              <div className={page.metricIcon} data-tone={card.tone}>
                 <card.icon className="tocyn-metric-card-icon-glyph" />
               </div>
               <span className="tocyn-metric-card-kicker">Metrics</span>
@@ -73,30 +74,27 @@ export const DashboardPage: React.FC = () => {
         ))}
       </div>
 
-      <div className="tocyn-dashboard-panels">
+      <div className={page.panels}>
         <ParkCard.Root variant="outline" className="tocyn-surface-card">
           <ParkCard.Header className="tocyn-dashboard-card-heading">
             <IconChartBar className="tocyn-dashboard-panel-icon" />
             <h3 className="tocyn-dashboard-panel-title">Tickets by Priority</h3>
           </ParkCard.Header>
-          <ParkCard.Body className="tocyn-priority-list">
+          <ParkCard.Body className={page.priorityList}>
             {['urgent', 'high', 'normal', 'low'].map((priority) => {
               const count = stats?.ticketsByPriority.find(p => p.priority === priority)?.count || 0;
               const percentage = totalTickets > 0 ? (count / totalTickets) * 100 : 0;
               return (
-                <div key={priority} className="tocyn-priority-row">
+                <div key={priority} className={page.priorityRow}>
                   <div className="tocyn-priority-label-row">
                     <span className="tocyn-priority-name">{priority}</span>
                     <span className="tocyn-priority-count">{count}</span>
                   </div>
-                  <div className="tocyn-progress-track">
+                  <div className={page.progressTrack}>
                     <div
-                      className={`tocyn-progress-fill ${
-                        priority === 'urgent' ? 'tocyn-palette-red-fill' :
-                        priority === 'high' ? 'tocyn-palette-orange-fill' :
-                        priority === 'normal' ? 'tocyn-palette-blue-fill' : 'tocyn-palette-neutral-fill'
-                      }`}
-                      style={{ width: `${percentage}%` }}
+                      className={page.progressFill}
+                      data-tone={priority}
+                      style={{ ['--tocyn-progress' as string]: `${percentage}%` }}
                     />
                   </div>
                 </div>
@@ -111,15 +109,15 @@ export const DashboardPage: React.FC = () => {
             <h3 className="tocyn-dashboard-panel-title">System Overview</h3>
           </ParkCard.Header>
           <ParkCard.Body>
-          <div className="tocyn-overview-grid">
-            <ParkCard.Root variant="subtle" className="tocyn-overview-card">
+          <div className={page.overviewGrid}>
+            <ParkCard.Root variant="subtle" className={page.overviewCard}>
               <div className="tocyn-overview-card-heading">
                 <IconUsers className="tocyn-overview-icon" />
                 <span className="tocyn-overview-label">Total Users</span>
               </div>
               <p className="tocyn-overview-value">{stats?.totalUsers || 0}</p>
             </ParkCard.Root>
-            <ParkCard.Root variant="subtle" className="tocyn-overview-card">
+            <ParkCard.Root variant="subtle" className={page.overviewCard}>
               <div className="tocyn-overview-card-heading">
                 <IconUsers className="tocyn-overview-icon" />
                 <span className="tocyn-overview-label">Active Groups</span>
@@ -127,7 +125,7 @@ export const DashboardPage: React.FC = () => {
               <p className="tocyn-overview-value">{stats?.totalGroups || 0}</p>
             </ParkCard.Root>
           </div>
-          <p className="tocyn-overview-footer">Use Inbox to keep the conversation list in place while reviewing and replying.</p>
+          <p className={page.overviewFooter}>Use Inbox to keep the conversation list in place while reviewing and replying.</p>
           </ParkCard.Body>
         </ParkCard.Root>
       </div>

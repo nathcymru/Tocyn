@@ -18,9 +18,6 @@ import { ticketReference } from '../utils/ticket-reference';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { TicketDetailPage } from './TicketDetailPage';
 
-const statusStyle={open:'tocyn-ticket-status-open',pending:'tocyn-ticket-status-pending',
-  resolved:'tocyn-ticket-status-neutral',closed:'tocyn-ticket-status-neutral'} as const;
-const priorityStyle={low:'tocyn-palette-neutral-text',normal:'tocyn-palette-blue-text',high:'tocyn-palette-orange-text',urgent:'tocyn-palette-red-text'} as const;
 const sortOptions = createListCollection({ items: [
   { label: 'Recently updated', value: 'updated_desc' }, { label: 'Least recently updated', value: 'updated_asc' },
   { label: 'Newest', value: 'created_desc' }, { label: 'Oldest', value: 'created_asc' },
@@ -57,6 +54,7 @@ function InboxWorkspace(){
   const lastRouteView=useRef<string|null>(null);
   const routeFilter=useMemo(()=>viewId&&viewId!=='all'&&!isQueueView(viewId)?filters?.find(filter=>filter.id===viewId):undefined,[filters,viewId]);
   const routeReady=!isLoadingFilters&&(viewId==='all'||isQueueView(viewId)||Boolean(routeFilter));
+  const page = ParkPage('inbox');
 
   useEffect(()=>{
     if(workspace.status==='loading'||isLoadingFilters)return;
@@ -81,7 +79,7 @@ function InboxWorkspace(){
     action={<ParkButton type="button" onClick={() => navigate('/inbox/all', { replace: true })} className="tocyn-inbox-view-unavailable-link">Open All tickets</ParkButton>}
   />;
 
-  return <ParkSplitter.Root className="tocyn-inbox-workspace" orientation="horizontal"
+  return <ParkSplitter.Root className={page.inboxWorkspace} orientation="horizontal"
     size={[workspace.splitterRatio, 100 - workspace.splitterRatio]} keyboardResizeBy={2}
     panels={[{ id: 'inbox-list', minSize: 24, maxSize: 50 }, { id: 'inbox-detail', minSize: 30, maxSize: 76 }]}
     onResizeEnd={({ size }) => {
@@ -93,11 +91,11 @@ function InboxWorkspace(){
     }}>
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
-    <ParkSplitter.Panel id="inbox-list" role="region" aria-label="Conversations" className={clsx('tocyn-inbox-list-panel',conversationId&&'tocyn-inbox-mobile-hidden')}>
+    <ParkSplitter.Panel id="inbox-list" role="region" aria-label="Conversations" className={clsx(page.inboxList,conversationId&&page.inboxMobileHidden)}>
       <ConversationList activeView={activeView} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
     </ParkSplitter.Panel>
     <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" />
-    <ParkSplitter.Panel id="inbox-detail" role="region" aria-label="Active conversation" className={clsx('tocyn-inbox-detail-panel',!conversationId&&'tocyn-inbox-mobile-hidden')}>
+    <ParkSplitter.Panel id="inbox-detail" role="region" aria-label="Active conversation" className={clsx(page.inboxDetail,!conversationId&&page.inboxMobileHidden)}>
       {advanceNotice && <p role="status" className="tocyn-inbox-status">{advanceNotice}</p>}
       {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${activeView}`} onResolved={onResolved} />:<EmptyConversation />}
     </ParkSplitter.Panel>
@@ -125,7 +123,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   // A successful route change starts a different view at page one; blocked navigation
   // leaves the current workspace untouched, and initial restoration keeps its page.
   const viewChanged=confirmedView.current!==null&&confirmedView.current!==activeView;
-  const page=viewChanged?1:pageFromAnchor(workspace.listAnchor);
+  const currentPage=viewChanged?1:pageFromAnchor(workspace.listAnchor);
   const [recoveringView,setRecoveringView]=useState<string|null>(null);
   const [filterInput,setFilterInput]=useState(workspace.listQuery);
   const [focusedIndex,setFocusedIndex]=useState(0);
@@ -134,7 +132,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   const heading=useRef<HTMLHeadingElement>(null);
   const paging=useRef(false);
   const [status,setStatus]=useState('');
-  const query=useTickets({page:String(page),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{})});
+  const query=useTickets({page:String(currentPage),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{})});
   const tickets=query.data?.data??[];
   const meta=query.data?.meta??{page:1,limit:20,total:0,total_pages:1};
   const slaSort=workspace.sort==='sla_priority';
@@ -163,7 +161,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     return () => { if (advanceRef.current === begin) advanceRef.current = null; };
   }, [advanceEnabled, advanceRef, advanceScope, onAdvanceNotice, identity, query.restartSla, routeReady, selectedTicketId, slaSort, workspace]);
   useEffect(() => {
-    if (!advanceRequest || page !== 1) return;
+    if (!advanceRequest || currentPage !== 1) return;
     if (advanceRequest.scope !== advanceScope) { setAdvanceRequest(null); onAdvanceNotice('Automatic advance stopped. The current conversation stays open.'); return; }
     let active = true;
     void query.refetch({throwOnError:true}).then(result => {
@@ -180,11 +178,11 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       }
     });
     return () => { active = false; };
-  }, [advanceRequest, advanceScope, activeView, identity, navigate, onAdvanceNotice, page, query.refetch]);
+  }, [advanceRequest, advanceScope, activeView, identity, navigate, onAdvanceNotice, currentPage, query.refetch]);
 
 
   const outOfRange=Boolean(query.data&&!query.isFetching&&!query.isPlaceholderData&&!query.error
-    &&meta.page===page&&page>1&&tickets.length===0&&meta.total>0);
+    &&meta.page===currentPage&&currentPage>1&&tickets.length===0&&meta.total>0);
   const recoveringPage=recoveringView===activeView;
   const emptyPage=tickets.length===0&&!query.error&&!query.isPlaceholderData&&!outOfRange&&!recoveringPage;
   const emptyMessage=meta.total>0?'No conversations on this page':queue==='drafts'?'No saved drafts'
@@ -201,11 +199,11 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   useEffect(()=>{
     if(recoveringView===null)return;
     if(recoveringView!==activeView){setRecoveringView(null);return;}
-    if(!query.isFetching&&(query.error||!query.isPlaceholderData&&meta.page===1&&page===1)){
+    if(!query.isFetching&&(query.error||!query.isPlaceholderData&&meta.page===1&&currentPage===1)){
       setRecoveringView(null);
       if(!query.error)setStatus('Showing the first page after the conversation list changed.');
     }
-  },[activeView,meta.page,page,query.error,query.isFetching,query.isPlaceholderData,recoveringView]);
+  },[activeView,meta.page,currentPage,query.error,query.isFetching,query.isPlaceholderData,recoveringView]);
   useEffect(()=>setFilterInput(workspace.listQuery),[workspace.listQuery]);
   useEffect(()=>{
     if(!query.isFetching&&paging.current){paging.current=false;if(!query.error||slaSort)heading.current?.focus();}
@@ -218,14 +216,15 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   const selectView=(id:string)=>{
     navigate(`/inbox/${id}`);
   };
+  const pageStyles = ParkPage('inbox');
   const moveFocus=(index:number)=>{const next=Math.max(0,Math.min(tickets.length-1,index));setFocusedIndex(next);rowRefs.current[next]?.focus();};
 
-  return <div className={[ParkPage('inbox').root, ParkPage('inbox').content, 'tocyn-inbox-list'].join(' ')}>
-    <header className={['tocyn-inbox-header', ParkPage('inbox').header].join(' ')}>
+  return <div className={[pageStyles.root, pageStyles.content, pageStyles.inboxList].join(' ')}>
+    <header className={[pageStyles.header, pageStyles.inboxHeader].join(' ')}>
       <div className="tocyn-inbox-title-row"><div><p className="tocyn-inbox-eyebrow">Workspace</p>
         <h1 ref={heading} tabIndex={-1} className="tocyn-inbox-title">Inbox</h1></div>
         <span className="tocyn-inbox-count">{meta.total} conversations</span></div>
-      <div className="tocyn-inbox-control-strip" aria-label="Inbox controls">
+      <div className={pageStyles.inboxControls} aria-label="Inbox controls">
         <label className="tocyn-inbox-control-cell"><span className="tocyn-inbox-control-label">Filter</span><ParkSelect.Root collection={filterOptions as never} value={[queue ? queue : activeView === 'all' ? 'all' : 'all']} onValueChange={({ value }) => value[0] && selectView(value[0])}>
           <ParkSelect.Label className="tocyn-visually-hidden">Filter conversations</ParkSelect.Label><ParkSelect.Control><ParkSelect.Trigger><ParkSelect.ValueText placeholder="All tickets" /></ParkSelect.Trigger><ParkSelect.IndicatorGroup><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.IndicatorGroup></ParkSelect.Control><ParkSelect.HiddenSelect /><ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{filterOptions.items.map(item => { const option=item as {label:string;value:string}; return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator /></ParkSelect.Item>; })}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
         </ParkSelect.Root></label>
@@ -238,14 +237,14 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       </div>
       <p className="tocyn-inbox-status">Queue totals cover standard views before search or custom filters.</p>
       {queueCounts.isFetching?<p role="status" className="tocyn-inbox-status">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="tocyn-inbox-status">Queue totals unavailable. <ParkButton type="button" onClick={()=>void queueCounts.refetch()} className="tocyn-inbox-inline-retry">Retry queue totals</ParkButton></p>:null}
-      <div className="tocyn-inbox-metric-strip" aria-label="Queue metrics">
+      <div className={pageStyles.inboxMetrics} aria-label="Queue metrics">
         {(['mine', 'unassigned', 'actionable', 'all'] as const).map(metric => <ParkCard.Root key={metric} variant="outline" className="tocyn-inbox-metric-card">
           <ParkCard.Body><ParkCard.Description className="tocyn-inbox-metric-label">{metric === 'all' ? 'All tickets' : queueViews[metric].label}</ParkCard.Description>
           <strong data-tabular className="tocyn-inbox-metric-value tocyn-tabular">{queueCounts.isFetching ? '—' : queueCounts.data?.[metric] ?? 0}</strong></ParkCard.Body>
         </ParkCard.Root>)}
         <span className="tocyn-visually-hidden">Current view: <span className="tocyn-inbox-current-view-name">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</span>
       </div>
-      <form className="tocyn-inbox-search-shell" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
+      <form className={pageStyles.inboxSearch} onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
         <Search className="tocyn-inbox-search-icon" aria-hidden="true" />
         <ParkInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
           onChange={event=>setFilterInput(event.target.value)} onKeyDown={event=>{if(event.key==='Escape'&&filterInput){event.preventDefault();setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}}
@@ -253,7 +252,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         <ParkButton type="button" aria-label="Clear current-view filter" disabled={!filterInput} onClick={()=>{setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}
           className="tocyn-inbox-clear-button">Clear</ParkButton>
       </form>
-      <div className="tocyn-inbox-toolbar"><div className="tocyn-inbox-toolbar-group"><div role="group" aria-label="Conversation presentation" className="tocyn-inbox-presentation-toggle">
+      <div className={pageStyles.inboxToolbar}><div className="tocyn-inbox-toolbar-group"><div role="group" aria-label="Conversation presentation" className="tocyn-inbox-presentation-toggle">
           <ParkButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('tocyn-inbox-presentation-button',presentation==='list'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><LayoutList className="tocyn-inbox-presentation-icon" aria-hidden="true" /></ParkButton>
           <ParkButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('tocyn-inbox-presentation-button',presentation==='table'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><Table2 className="tocyn-inbox-presentation-icon" aria-hidden="true" /></ParkButton>
         </div></div>
@@ -266,19 +265,19 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       <ParkButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave} className="tocyn-inbox-inline-retry">{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</ParkButton></div>:null}
     {drafts.status==='partial'&&<p role="status" className="tocyn-inbox-draft-loading">Some draft indicators are still loading.</p>}
     {presentation==='table'&&<p role="status" className="tocyn-inbox-mobile-note">Table view uses the compact conversation list on small screens.</p>}
-    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx('tocyn-inbox-list-rows',presentation==='table'&&'tocyn-inbox-list-mobile-hidden')}>
+    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx(pageStyles.inboxRows,presentation==='table'&&pageStyles.inboxTableMobileHidden)}>
       {query.isLoading?<p role="status" className="tocyn-inbox-loading-state">Loading conversations…</p>:emptyPage?<ParkEmptyState className="tocyn-inbox-empty-state" title={emptyMessage} description={queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'} />:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
           to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} onFocus={()=>setFocusedIndex(index)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();moveFocus(index+1);}if(event.key==='ArrowUp'){event.preventDefault();moveFocus(index-1);}}}
-          className={clsx('tocyn-inbox-row',selected&&'tocyn-inbox-row--selected')}>
+          className={clsx(pageStyles.inboxRow,selected&&'tocyn-inbox-row--selected')}>
           <div className="tocyn-inbox-title-row"><div className="tocyn-inbox-row-copy"><p className="tocyn-inbox-row-subject">{ticket.subject}</p><p className="tocyn-inbox-row-customer">{ticket.customer_email}</p></div>
             <time className="tocyn-inbox-row-date" dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></div>
           {ticket.snippet&&<p className="tocyn-inbox-row-preview">{ticket.snippet}</p>}
           <div className="tocyn-inbox-row-meta"><span className="tocyn-inbox-row-reference">{reference}</span>
-            <span className={clsx('tocyn-inbox-row-status',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span>
+            <span className={pageStyles.inboxStatus} data-status={ticket.status}>{ticket.status}</span>
             {queue&&!query.isPlaceholderData&&<span className="tocyn-inbox-row-queue" aria-label={`Inclusion reason: ${queue}`}>{queueViews[queue].label}</span>}
-            <span className={clsx('tocyn-inbox-row-priority',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="tocyn-inbox-priority-icon" aria-hidden="true" />{ticket.priority}</span>
+            <span className={pageStyles.inboxPriority} data-priority={ticket.priority}><AlertCircle className="tocyn-inbox-priority-icon" aria-hidden="true" />{ticket.priority}</span>
             {drafts.ticketIds.has(ticket.id)&&<span className="tocyn-inbox-row-draft">Draft</span>}</div>
           <div className="tocyn-inbox-row-sla">{ticketSla.isLoading?<span className="tocyn-inbox-row-sla-loading"><Clock className="tocyn-inbox-sla-icon" aria-hidden="true" />Loading service level…</span>
             :<ConversationSlaStatus sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id]} />}</div>
@@ -286,7 +285,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       })}
     </div>
       {presentation==='table'&&<div className="tocyn-inbox-table-wrap tocyn-inbox-table-responsive" aria-label="Conversation table">
-        <table className="tocyn-inbox-table"><caption className="tocyn-visually-hidden">Tickets in the current view</caption><thead className="tocyn-inbox-table-head"><tr>
+        <table className={pageStyles.inboxTable}><caption className="tocyn-visually-hidden">Tickets in the current view</caption><thead className="tocyn-inbox-table-head"><tr>
           <th scope="col" className="tocyn-inbox-table-cell-nowrap">Reference</th><th scope="col" className="tocyn-inbox-table-cell">Subject</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Status</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Priority</th><th scope="col" className="tocyn-inbox-table-cell">Customer</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Updated</th>
         </tr></thead><tbody className="tocyn-inbox-table-body">
         {query.isLoading?<tr><td colSpan={6} className="tocyn-inbox-table-loading"><ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading conversations…" className="tocyn-inbox-table-state" /></td></tr>:emptyPage?<tr><td colSpan={6} className="tocyn-inbox-table-empty"><ParkEmptyState headingLevel={false} title={emptyMessage} description={queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'} className="tocyn-inbox-table-state" /></td></tr>:tickets.map(ticket=>{
@@ -294,15 +293,15 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
           return <tr key={ticket.id} aria-selected={selected} className={clsx('tocyn-inbox-table-row',selected&&'tocyn-inbox-table-row-selected')}>
             <td className="tocyn-inbox-table-reference">{reference}</td>
             <td className="tocyn-inbox-table-subject"><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} className="tocyn-inbox-table-link">{ticket.subject}</Link>{ticket.snippet&&<p className="tocyn-inbox-table-preview">{ticket.snippet}</p>}</td>
-            <td className="tocyn-inbox-table-cell-nowrap"><span className={clsx('tocyn-inbox-row-status',statusStyle[ticket.status as keyof typeof statusStyle]??statusStyle.open)}>{ticket.status}</span></td>
-            <td className="tocyn-inbox-table-cell-nowrap"><span className={clsx('tocyn-inbox-row-priority',priorityStyle[ticket.priority as keyof typeof priorityStyle]??priorityStyle.normal)}><AlertCircle className="tocyn-inbox-priority-icon" aria-hidden="true" />{ticket.priority}</span></td>
+            <td className="tocyn-inbox-table-cell-nowrap"><span className={pageStyles.inboxStatus} data-status={ticket.status}>{ticket.status}</span></td>
+            <td className="tocyn-inbox-table-cell-nowrap"><span className={pageStyles.inboxPriority} data-priority={ticket.priority}><AlertCircle className="tocyn-inbox-priority-icon" aria-hidden="true" />{ticket.priority}</span></td>
             <td className="tocyn-inbox-table-customer" title={ticket.customer_email}>{ticket.customer_email}</td><td className="tocyn-inbox-table-date"><time dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></td>
           </tr>;
         })}
       </tbody></table>
     </div>}
     {meta.total_pages>1&&<footer className="tocyn-inbox-pagination"><span role="status" className="tocyn-inbox-status">Page {meta.page} of {meta.total_pages}</span><div className="tocyn-inbox-pagination-actions">
-      <ParkButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||page<=1} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page>1){paging.current=true;workspace.update({listAnchor:pageAnchor(page-1)});}}} className="tocyn-inbox-pagination-button"><ChevronLeft className="tocyn-inbox-pagination-icon" /></ParkButton>
-      <ParkButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||page>=meta.total_pages} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&page<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(page+1)});}}} className="tocyn-inbox-pagination-button"><ChevronRight className="tocyn-inbox-pagination-icon" /></ParkButton></div></footer>}
+      <ParkButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||currentPage<=1} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&currentPage>1){paging.current=true;workspace.update({listAnchor:pageAnchor(currentPage-1)});}}} className="tocyn-inbox-pagination-button"><ChevronLeft className="tocyn-inbox-pagination-icon" /></ParkButton>
+      <ParkButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||currentPage>=meta.total_pages} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&currentPage<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(currentPage+1)});}}} className="tocyn-inbox-pagination-button"><ChevronRight className="tocyn-inbox-pagination-icon" /></ParkButton></div></footer>}
   </div>;
 }

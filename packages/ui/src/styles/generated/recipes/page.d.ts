@@ -13,10 +13,10 @@ type PageVariantMap = {
   [key in keyof PageVariant]: Array<PageVariant[key]>
 }
 
-type PageSlot = "root" | "header" | "content" | "grid" | "section"
+type PageSlot = "root" | "header" | "content" | "grid" | "section" | "settingsSections" | "settingsField" | "settingsError" | "settingsHelp" | "knowledgeWorkspace" | "knowledgeSidebar" | "knowledgeContent" | "knowledgeTable" | "knowledgeRow" | "knowledgeSearch" | "knowledgePreview" | "knowledgeCategoryRow" | "knowledgeCategoryRowSelected" | "knowledgeCategoryMain" | "knowledgeCategoryActions" | "knowledgeCategoryChildren" | "knowledgeCategoryList" | "knowledgeCategorySpacer" | "knowledgeCategoryButton" | "knowledgeDeleteActions" | "knowledgeStatusBadge" | "accountGrid" | "accountIdentityName" | "accountIdentityEmail" | "inboxWorkspace" | "inboxList" | "inboxDetail" | "inboxHeader" | "inboxControls" | "inboxMetrics" | "inboxSearch" | "inboxToolbar" | "inboxRows" | "inboxRow" | "inboxTable" | "inboxEmpty" | "inboxMobileHidden" | "inboxTableMobileHidden" | "inboxStatus" | "inboxPriority" | "metricStrip" | "metricCard" | "metricIcon" | "panels" | "priorityList" | "priorityRow" | "progressTrack" | "progressFill" | "overviewGrid" | "overviewCard" | "overviewFooter"
 
 export type PageVariantProps = {
-  [key in keyof PageVariant]?: ConditionalValue<PageVariant[key]> | undefined
+  [key in keyof PageVariant]?: PageVariant[key] | undefined
 }
 
 export interface PageRecipe {

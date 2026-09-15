@@ -111,9 +111,11 @@ export const SettingsPage: React.FC = () => {
     return <ParkEmptyState title="Loading settings…" headingLevel={false} aria-busy="true" className="tocyn-settings-loading" />;
   }
 
+  const page = ParkPage('settings');
+
   return (
-    <div className={[ParkPage('settings').root, ParkPage('settings').content, 'tocyn-settings-page'].join(' ')}>
-      <div className={['tocyn-settings-header', ParkPage('settings').header].join(' ')}>
+    <div className={[page.root, page.content].join(' ')}>
+      <header className={page.header}>
         <div>
           <h1 className="tocyn-settings-title">General Settings</h1>
           <p className="tocyn-settings-description">Manage your organization and system defaults.</p>
@@ -130,10 +132,10 @@ export const SettingsPage: React.FC = () => {
           )}
           Save Changes
         </ParkButton>
-      </div>
+      </header>
 
       {masterKeyError && (
-        <div className="tocyn-settings-master-key-error">
+        <div className={page.settingsError}>
           <IconCircleExclamation className="tocyn-settings-master-key-icon" />
           <div>
             <h3 className="tocyn-settings-master-key-title">Critical: Missing Encryption Key</h3>
@@ -151,15 +153,15 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="tocyn-settings-sections">
+      <div className={page.settingsSections}>
         {/* Organization Profile */}
-        <ParkCard.Root variant="outline" className="tocyn-settings-card">
-          <ParkCard.Header className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
             <IconBuilding className="tocyn-settings-card-icon" />
             <h2>Organization Profile</h2>
           </ParkCard.Header>
-          <ParkCard.Body className="tocyn-settings-card-body">
-            <div className="tocyn-settings-field">
+          <ParkCard.Body>
+            <div className={page.settingsField}>
               <label htmlFor="COMPANY_NAME" className="tocyn-settings-label">
                 Company Name
               </label>
@@ -174,7 +176,7 @@ export const SettingsPage: React.FC = () => {
                 placeholder="e.g. Acme Corp"
               />
             </div>
-            <div className="tocyn-settings-field">
+            <div className={page.settingsField}>
               <label htmlFor="PORTAL_URL" className="tocyn-settings-label">
                 Portal URL
               </label>
@@ -193,13 +195,13 @@ export const SettingsPage: React.FC = () => {
         </ParkCard.Root>
 
         {/* System Defaults */}
-        <ParkCard.Root variant="outline" className="tocyn-settings-card">
-          <ParkCard.Header className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
             <IconGear className="tocyn-settings-card-icon" />
             <h2>System Defaults</h2>
           </ParkCard.Header>
-          <ParkCard.Body className="tocyn-settings-card-body">
-            <div className="tocyn-settings-field">
+          <ParkCard.Body>
+            <div className={page.settingsField}>
               <label htmlFor="SYSTEM_TIMEZONE" className="tocyn-settings-label">
                 System Timezone
               </label>
@@ -222,7 +224,7 @@ export const SettingsPage: React.FC = () => {
               </ParkSelect>
             </div>
 
-            <div className="tocyn-settings-field">
+            <div className={page.settingsField}>
               <label htmlFor="TICKET_PREFIX" className="tocyn-settings-label">
                 Ticket Prefix
               </label>
@@ -236,7 +238,7 @@ export const SettingsPage: React.FC = () => {
                 placeholder="e.g. TKT"
                 maxLength={10}
               />
-              <p className="tocyn-settings-help">
+              <p className={page.settingsHelp}>
                 Tickets will be numbered as {formData.TICKET_PREFIX || 'TKT'}-1001.
               </p>
             </div>
@@ -244,12 +246,12 @@ export const SettingsPage: React.FC = () => {
         </ParkCard.Root>
 
         {/* Agent Communication */}
-        <ParkCard.Root variant="outline" className="tocyn-settings-card">
-          <ParkCard.Header className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
             <IconEnvelope className="tocyn-settings-card-icon" />
             <h2>Agent Communication</h2>
           </ParkCard.Header>
-          <ParkCard.Body className="tocyn-settings-card-body">
+          <ParkCard.Body>
             <div>
               <label htmlFor="DEFAULT_EMAIL_SIGNATURE" className="tocyn-settings-label">
                 Default Email Signature
@@ -264,7 +266,7 @@ export const SettingsPage: React.FC = () => {
                 className="tocyn-settings-control tocyn-settings-control-resize"
                 placeholder="e.g. --&#10;Thank you,&#10;The Support Team"
               />
-              <p className="tocyn-settings-help tocyn-settings-help--signature">
+              <p className={page.settingsHelp}>
                 This signature will be appended to agent replies if they haven't set a personal one.
               </p>
             </div>
@@ -272,12 +274,12 @@ export const SettingsPage: React.FC = () => {
         </ParkCard.Root>
 
         {/* Cloudflare Integration */}
-        <ParkCard.Root variant="outline" className="tocyn-settings-card">
-          <ParkCard.Header className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
             <IconCloud className="tocyn-settings-card-icon" />
             <h2>Cloudflare API Credentials</h2>
           </ParkCard.Header>
-          <ParkCard.Body className="tocyn-settings-card-body">
+          <ParkCard.Body>
             <p className="tocyn-settings-intro">
               Configure your Cloudflare credentials to monitor usage and costs directly from the dashboard.
             </p>
@@ -308,7 +310,7 @@ export const SettingsPage: React.FC = () => {
                 className="tocyn-settings-control tocyn-settings-control-mono"
                 placeholder="Enter your API token"
               />
-              <p className="tocyn-settings-help tocyn-settings-help--compact">
+              <p className={page.settingsHelp}>
                 Requires <strong>Account Analytics: Read</strong> permissions. For security, this value is masked. Provide a new token only if you wish to overwrite the existing one.
               </p>
             </div>
@@ -316,12 +318,12 @@ export const SettingsPage: React.FC = () => {
         </ParkCard.Root>
 
         {/* Security & Authentication */}
-        <ParkCard.Root variant="outline" className="tocyn-settings-card">
-          <ParkCard.Header className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
             <IconShieldHalved className="tocyn-settings-card-icon" />
             <h2>Security & Authentication</h2>
           </ParkCard.Header>
-          <ParkCard.Body className="tocyn-settings-card-body">
+          <ParkCard.Body>
             <p className="tocyn-settings-intro">
               Configure Cloudflare Turnstile to protect your Customer Portal from spam and bots.
             </p>
@@ -352,7 +354,7 @@ export const SettingsPage: React.FC = () => {
                 className="tocyn-settings-control tocyn-settings-control-mono"
                 placeholder="Enter your Turnstile secret key"
               />
-              <p className="tocyn-settings-help tocyn-settings-help--compact">
+              <p className={page.settingsHelp}>
                 For security, this value is masked. Provide a new key only if you wish to overwrite the existing one.
               </p>
             </div>
