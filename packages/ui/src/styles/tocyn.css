@@ -317,6 +317,11 @@
 .tocyn-activity-badge { position: absolute; inset-block-start: 0; inset-inline-end: 0; min-inline-size: 1rem; border-radius: 999px; background: var(--tocyn-color-brand); padding-inline: .25rem; color: white; font-size: .625rem; font-weight: 700; line-height: 1rem; }
 .tocyn-sidebar-footer { position: relative; display: flex; width: 100%; flex-direction: column; align-items: center; gap: 0.5rem; margin-block-start: auto; border-block-start: 1px solid rgb(30 41 59 / 50%); padding: 1rem 0.5rem 1rem; }
 .tocyn-inbox-workspace { display: flex; height: 100%; min-height: 0; background: var(--tocyn-color-surface-muted); }
+.tocyn-inbox-workspace[data-park="splitter-root"] { display: flex; flex-direction: row; align-items: stretch; inline-size: 100%; }
+.tocyn-inbox-workspace [data-park="splitter-panel"] { min-inline-size: 0; }
+.tocyn-inbox-workspace [data-park="splitter-resize-trigger"] { z-index: 2; flex: 0 0 .5rem; cursor: col-resize; background: var(--tocyn-color-divider); outline: none; transition: background-color 160ms ease; }
+.tocyn-inbox-workspace [data-park="splitter-resize-trigger"]:hover,
+.tocyn-inbox-workspace [data-park="splitter-resize-trigger"]:focus-visible { background: var(--tocyn-color-focus); }
 .tocyn-inbox-list-panel, .tocyn-inbox-detail-panel { height: 100%; min-height: 0; overflow-y: auto; }
 .tocyn-inbox-list-panel { border-inline-end: 1px solid var(--tocyn-color-divider); background: var(--tocyn-color-surface); }
 .tocyn-inbox-detail-panel { background: var(--tocyn-color-surface-muted); padding: 1rem; }
@@ -332,7 +337,7 @@
   .tocyn-inbox-workspace { display: block !important; overflow: auto !important; }
   .tocyn-inbox-list-panel, .tocyn-inbox-detail-panel { width: 100% !important; min-width: 0 !important; max-width: 100% !important; flex: 0 0 100% !important; height: auto; min-height: 100%; }
   .tocyn-inbox-mobile-hidden { display: none; }
-  .tocyn-inbox-workspace [data-part="resize-trigger"] { display: none; }
+  .tocyn-inbox-workspace [data-park="splitter-resize-trigger"] { display: none; }
 }
 .tocyn-inbox-search-shell { position: relative; margin-top: 1rem; }
 .tocyn-inbox-view-unavailable { padding: 1.5rem; }
@@ -1707,6 +1712,11 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-inbox-control-label { color: var(--tocyn-color-text-muted); font-size: .75rem; font-weight: 600; }
 .tocyn-inbox-select-control { margin-inline-start: .5rem; }
 .tocyn-inbox-sort-trigger { display: inline-flex; min-inline-size: 10rem; align-items: center; justify-content: space-between; gap: .5rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .375rem .5rem; color: var(--tocyn-color-text); font-size: .875rem; }
+.tocyn-inbox-toolbar [data-park="select-trigger"] { display: inline-flex; min-block-size: 2.5rem; min-inline-size: 10rem; align-items: center; justify-content: space-between; gap: .5rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .5rem .75rem; color: var(--tocyn-color-text); font: inherit; }
+.tocyn-inbox-toolbar [data-park="select-trigger"]:focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
+.tocyn-inbox-toolbar [data-park="select-content"] { z-index: 70; min-inline-size: 12rem; overflow: hidden; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .25rem; box-shadow: 0 .75rem 1.5rem rgb(15 23 42 / 12%); }
+.tocyn-inbox-toolbar [data-park="select-item"] { display: flex; min-block-size: 2.5rem; align-items: center; justify-content: space-between; gap: .75rem; border-radius: .375rem; color: var(--tocyn-color-text); padding: .5rem .625rem; cursor: pointer; }
+.tocyn-inbox-toolbar [data-park="select-item"][data-highlighted], .tocyn-inbox-toolbar [data-park="select-item"]:hover { background: var(--tocyn-color-surface-muted); }
 .tocyn-inbox-presentation-toggle { display: inline-flex; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .125rem; }
 .tocyn-inbox-presentation-button { border-radius: .375rem; padding: .375rem; }
 .tocyn-inbox-presentation-icon, .tocyn-inbox-queue-total { inline-size: 1rem; block-size: 1rem; }

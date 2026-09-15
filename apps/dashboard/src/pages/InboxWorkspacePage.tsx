@@ -1,4 +1,5 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
+import { createListCollection } from '@ark-ui/react';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { ParkButton, ParkEmptyState, ParkInput, ParkSelect, ParkSplitter } from '@luminatick/ui/park';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,LayoutList,Search,Table2 } from '../components/icons';
@@ -20,6 +21,12 @@ import { TicketDetailPage } from './TicketDetailPage';
 const statusStyle={open:'tocyn-ticket-status-open',pending:'tocyn-ticket-status-pending',
   resolved:'tocyn-ticket-status-neutral',closed:'tocyn-ticket-status-neutral'} as const;
 const priorityStyle={low:'tocyn-palette-neutral-text',normal:'tocyn-palette-blue-text',high:'tocyn-palette-orange-text',urgent:'tocyn-palette-red-text'} as const;
+const sortOptions = createListCollection({ items: [
+  { label: 'Recently updated', value: 'updated_desc' }, { label: 'Least recently updated', value: 'updated_asc' },
+  { label: 'Newest', value: 'created_desc' }, { label: 'Oldest', value: 'created_asc' },
+  { label: 'Highest priority', value: 'priority_desc' }, { label: 'Lowest priority', value: 'priority_asc' },
+  { label: 'Earliest SLA deadline', value: 'sla_priority' },
+] });
 const queueViews={mentions:{label:'Mentions',description:'Actionable conversations with a mention for you that has not been dismissed.'},mine:{label:'Mine',description:'Open and pending conversations assigned to you and ready for work.'},unassigned:{label:'Unassigned',description:'Open and pending conversations without an assignee and ready for work.'},drafts:{label:'Drafts',description:'Conversations with your saved drafts.'},actionable:{label:'Needs Action',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
 type QueueView=keyof typeof queueViews;
 function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed'||value==='drafts'||value==='mine'||value==='unassigned'||value==='mentions';}
@@ -89,11 +96,11 @@ function InboxWorkspace(){
     <ParkSplitter.Panel id="inbox-list" role="region" aria-label="Conversations" className={clsx('tocyn-inbox-list-panel',conversationId&&'tocyn-inbox-mobile-hidden')}>
       <ConversationList activeView={activeView} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
     </ParkSplitter.Panel>
+    <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" />
     <ParkSplitter.Panel id="inbox-detail" role="region" aria-label="Active conversation" className={clsx('tocyn-inbox-detail-panel',!conversationId&&'tocyn-inbox-mobile-hidden')}>
       {advanceNotice && <p role="status" className="tocyn-inbox-status">{advanceNotice}</p>}
       {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${activeView}`} onResolved={onResolved} />:<EmptyConversation />}
     </ParkSplitter.Panel>
-    <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" />
   </ParkSplitter.Root>;
 }
 
@@ -243,10 +250,11 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         <ParkButton type="button" aria-label="Clear current-view filter" disabled={!filterInput} onClick={()=>{setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}
           className="tocyn-inbox-clear-button">Clear</ParkButton>
       </form>
-      <div className="tocyn-inbox-toolbar"><div className="tocyn-inbox-toolbar-group"><label className="tocyn-inbox-control-label">Sort
-        <ParkSelect aria-label="Sort conversations" value={workspace.sort} onChange={event=>{if(event.target.value==='sla_priority')query.restartSla();workspace.update({sort:event.target.value as WorkspacePreference['sort'],listAnchor:'page:1'});}}
-          className="tocyn-form-control tocyn-inbox-select-control"><option value="updated_desc">Recently updated</option><option value="updated_asc">Least recently updated</option>
-          <option value="created_desc">Newest</option><option value="created_asc">Oldest</option><option value="priority_desc">Highest priority</option><option value="priority_asc">Lowest priority</option><option value="sla_priority">Earliest SLA deadline</option></ParkSelect></label>
+      <div className="tocyn-inbox-toolbar"><div className="tocyn-inbox-toolbar-group"><span className="tocyn-inbox-control-label" id="inbox-sort-label">Sort</span>
+        <ParkSelect.Root collection={sortOptions as never} value={[workspace.sort]} onValueChange={({ value })=>{const next=value[0] as WorkspacePreference['sort']|undefined;if(!next)return;if(next==='sla_priority')query.restartSla();workspace.update({sort:next,listAnchor:'page:1'});}} positioning={{placement:'bottom-start'}}>
+          <ParkSelect.Label className="tocyn-visually-hidden">Sort conversations</ParkSelect.Label><ParkSelect.Control><ParkSelect.Trigger aria-labelledby="inbox-sort-label"><ParkSelect.ValueText placeholder="Recently updated" /></ParkSelect.Trigger><ParkSelect.Indicator aria-hidden="true">⌄</ParkSelect.Indicator></ParkSelect.Control><ParkSelect.HiddenSelect />
+          <ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{sortOptions.items.map(item=>{const option=item as {label:string;value:string};return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator>✓</ParkSelect.ItemIndicator></ParkSelect.Item>;})}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
+        </ParkSelect.Root>
         <div role="group" aria-label="Conversation presentation" className="tocyn-inbox-presentation-toggle">
           <ParkButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('tocyn-inbox-presentation-button',presentation==='list'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><LayoutList className="tocyn-inbox-presentation-icon" aria-hidden="true" /></ParkButton>
           <ParkButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('tocyn-inbox-presentation-button',presentation==='table'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><Table2 className="tocyn-inbox-presentation-icon" aria-hidden="true" /></ParkButton>
