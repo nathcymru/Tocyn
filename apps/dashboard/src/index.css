@@ -1,4 +1,10 @@
 @layer base {
+  html, body, #root {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+  }
+  #root { min-height: 100dvh; }
   :root {
     --tocyn-app-surface: var(--tocyn-color-surface, #ffffff);
     --tocyn-app-surface-panel: var(--tocyn-color-canvas, #f8fafc);
@@ -303,7 +309,7 @@
 .tocyn-shell-navigation-link-inactive { color: #94a3b8; }
 .tocyn-shell-navigation-icon { flex-shrink: 0; inline-size: 1.5rem; block-size: 1.5rem; }
 .tocyn-shell-sidebar-footer { position: relative; display: flex; flex-direction: column; align-items: center; gap: .5rem; inline-size: 100%; margin-block-start: auto; border-block-start: 1px solid rgb(30 41 59 / 50%); padding: 1rem .5rem .75rem; }
-.tocyn-shell-root { display: flex; background: var(--tocyn-app-surface-panel); }
+.tocyn-shell-root { display: flex; inline-size: 100%; min-block-size: 100dvh; background: var(--tocyn-app-surface-panel); }
 .tocyn-shell-root-inbox { block-size: 100dvh; min-block-size: 0; overflow: hidden; }
 .tocyn-shell-root-standard { min-block-size: 100vh; }
 .tocyn-shell-sidebar-desktop { flex-shrink: 0; border-inline-end: 1px solid #1e293b; background: #0f172a; }
