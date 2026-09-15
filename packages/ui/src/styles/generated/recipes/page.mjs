@@ -205,6 +205,26 @@ const pageSlotNames = [
     "page__inboxTable"
   ],
   [
+    "inboxTableWrap",
+    "page__inboxTableWrap"
+  ],
+  [
+    "inboxTableRow",
+    "page__inboxTableRow"
+  ],
+  [
+    "inboxPresentationButton",
+    "page__inboxPresentationButton"
+  ],
+  [
+    "inboxPresentationActive",
+    "page__inboxPresentationActive"
+  ],
+  [
+    "inboxPresentationInactive",
+    "page__inboxPresentationInactive"
+  ],
+  [
     "inboxEmpty",
     "page__inboxEmpty"
   ],

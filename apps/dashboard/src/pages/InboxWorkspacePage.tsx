@@ -253,8 +253,8 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
          >Clear</ParkButton>
       </form>
       <div className={pageStyles.inboxToolbar}><div className={pageStyles.inboxToolbarGroup}><div role="group" aria-label="Conversation presentation">
-          <ParkButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={clsx('tocyn-inbox-presentation-button',presentation==='list'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><LayoutList aria-hidden="true" /></ParkButton>
-          <ParkButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={clsx('tocyn-inbox-presentation-button',presentation==='table'?'tocyn-inbox-presentation-active':'tocyn-inbox-presentation-inactive')}><Table2 aria-hidden="true" /></ParkButton>
+          <ParkButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={[pageStyles.inboxPresentationButton, presentation==='list'?pageStyles.inboxPresentationActive:pageStyles.inboxPresentationInactive].join(' ')}><LayoutList aria-hidden="true" /></ParkButton>
+          <ParkButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={[pageStyles.inboxPresentationButton, presentation==='table'?pageStyles.inboxPresentationActive:pageStyles.inboxPresentationInactive].join(' ')}><Table2 aria-hidden="true" /></ParkButton>
         </div></div>
         <p role="status" aria-label="Inbox status">{recoveringPage?'Loading the first page after the conversation list changed…':query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p></div>
     </header>
@@ -270,7 +270,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
           to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} onFocus={()=>setFocusedIndex(index)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();moveFocus(index+1);}if(event.key==='ArrowUp'){event.preventDefault();moveFocus(index-1);}}}
-          className={clsx(pageStyles.inboxRow,selected&&'tocyn-inbox-row--selected')}>
+          className={pageStyles.inboxRow} data-selected={selected ? 'true' : undefined}>
           <div className={pageStyles.inboxTitleRow}><div className={pageStyles.inboxRowCopy}><p className={pageStyles.inboxRowSubject}>{ticket.subject}</p><p className={pageStyles.inboxRowCustomer}>{ticket.customer_email}</p></div>
             <time className={pageStyles.inboxRowDate} dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></div>
           {ticket.snippet&&<p className={pageStyles.inboxRowPreview}>{ticket.snippet}</p>}
@@ -284,13 +284,13 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         </Link>;
       })}
     </div>
-      {presentation==='table'&&<div className={[pageStyles.inboxTableResponsive, 'tocyn-inbox-table-wrap'].join(' ')} aria-label="Conversation table">
+      {presentation==='table'&&<div className={[pageStyles.inboxTableResponsive, pageStyles.inboxTableWrap].join(' ')} aria-label="Conversation table">
         <table className={pageStyles.inboxTable}><caption><ParkVisuallyHidden>Tickets in the current view</ParkVisuallyHidden></caption><thead><tr>
           <th scope="col">Reference</th><th scope="col">Subject</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Customer</th><th scope="col">Updated</th>
         </tr></thead><tbody>
         {query.isLoading?<tr><td colSpan={6}><ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading conversations…" /></td></tr>:emptyPage?<tr><td colSpan={6}><ParkEmptyState headingLevel={false} title={emptyMessage} description={queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'} /></td></tr>:tickets.map(ticket=>{
           const reference=ticketReference(ticket,prefix);const selected=ticket.id===selectedTicketId;
-          return <tr key={ticket.id} aria-selected={selected} className={clsx('tocyn-inbox-table-row',selected&&'tocyn-inbox-table-row-selected')}>
+          return <tr key={ticket.id} aria-selected={selected} className={pageStyles.inboxTableRow} data-selected={selected ? 'true' : undefined}>
             <td>{reference}</td>
             <td><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}}>{ticket.subject}</Link>{ticket.snippet&&<p>{ticket.snippet}</p>}</td>
             <td><span className={pageStyles.inboxStatus} data-status={ticket.status}>{ticket.status}</span></td>

@@ -1349,7 +1349,12 @@
       display: grid;
 }
 
-    .page__inboxRow:is(:hover, [data-hover]) {
+    .page__inboxRow[data-selected="true"] {
+      border-inline-start: 3px solid;
+      border-inline-start-color: var(--colors-border\.focus);
+}
+
+    .page__inboxRow[data-selected="true"],.page__inboxRow:is(:hover, [data-hover]) {
       background: var(--colors-bg\.subtle);
 }
 
@@ -1357,6 +1362,63 @@
       border-collapse: collapse;
       table-layout: fixed;
       width: 100%;
+}
+
+    .page__inboxTableWrap {
+      width: 100%;
+      min-width: var(--sizes-0);
+      overflow-x: auto;
+}
+
+    .page__inboxTableRow {
+      border-bottom: 1px solid;
+      border-color: var(--colors-border\.default);
+}
+
+    .page__inboxTableRow[data-selected="true"] {
+      background: var(--colors-bg\.subtle);
+}
+
+    .page__inboxTableRow td {
+      padding: 0.75rem 1rem;
+      vertical-align: top;
+}
+
+    .page__inboxTableRow:is(:hover, [data-hover]) {
+      background: var(--colors-bg\.subtle);
+}
+
+    .page__inboxPresentationButton {
+      border: 1px solid;
+      padding: 0.5rem;
+      border-color: var(--colors-border\.input);
+      border-radius: var(--radii-l2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+}
+
+    .page__inboxPresentationButton:is(:focus-visible, [data-focus-visible]) {
+      outline: 2px solid;
+      outline-color: var(--colors-border\.focus);
+      outline-offset: 2px;
+}
+
+    .page__inboxPresentationActive {
+      background: var(--colors-bg\.subtle);
+      color: var(--colors-text\.primary);
+}
+
+    .page__inboxPresentationInactive {
+      background: var(--colors-bg\.surface);
+      color: var(--colors-text\.muted);
+}
+
+    .page__inboxPresentationInactive:is(:hover, [data-hover]) {
+      background: var(--colors-bg\.subtle);
+      color: var(--colors-text\.primary);
 }
 
     .page__inboxEmpty {
