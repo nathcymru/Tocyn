@@ -22,6 +22,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage').then(module => 
 const TicketFieldsPage = lazy(() => import('./pages/TicketFieldsPage').then(module => ({ default: module.TicketFieldsPage })));
 const FiltersSettingsPage = lazy(() => import('./pages/FiltersSettingsPage').then(module => ({ default: module.FiltersSettingsPage })));
 const SecurityProfilePage = lazy(() => import('./pages/SecurityProfilePage').then(module => ({ default: module.SecurityProfilePage })));
+const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage').then(module => ({ default: module.AccountSettingsPage })));
 const UsagePage = lazy(() => import('./pages/UsagePage').then(module => ({ default: module.UsagePage })));
 const SupportStatesPage = lazy(() => import('./pages/SupportStatesPage').then(module => ({ default: module.SupportStatesPage })));
 const SlaSettingsPage = lazy(() => import('./pages/SlaSettingsPage').then(module => ({ default: module.SlaSettingsPage })));
@@ -82,6 +83,7 @@ export default function App() {
 
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="general" replace />} />
+            <Route path="account" element={<RouteContent><AccountSettingsPage /></RouteContent>} />
             <Route path="general" element={<RouteContent><SettingsPage /></RouteContent>} />
             <Route path="support-states" element={<RouteContent><SupportStatesPage /></RouteContent>} />
             <Route path="sla" element={<RouteContent><SlaSettingsPage /></RouteContent>} />

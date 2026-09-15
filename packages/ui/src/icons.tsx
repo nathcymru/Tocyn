@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   AlignLeft, ArrowLeft as ArrowLeftGlyph, ArrowRight, ArrowSquareOut, ArrowsClockwise, Bell as BellGlyph, BookOpen,
-  Buildings, Calendar as CalendarGlyph, ChartBar, ChartLine, Check as CheckGlyph, CheckCircle, CheckSquare, CircleNotch, ChatCircle, CaretDown, CaretLeft, CaretRight,
+  Buildings, Calendar as CalendarGlyph, ChartBar, ChartLine, Check as CheckGlyph, CheckCircle, CheckSquare, CircleNotch, ChatCircle, CaretDown, CaretLeft, CaretRight, House, Books,
   Clock as ClockGlyph, Cloud, Columns, Copy as CopyGlyph, Cpu, CreditCard, Database, DotsThreeVertical, Envelope,
   Eye as EyeGlyph, FileText, FloppyDisk, Folder, Funnel, Gear, HardDrive, Info as InfoGlyph, Key as KeyGlyph, Lightning,
   List, ListBullets, MagnifyingGlass, Paperclip as PaperclipGlyph, PaperPlaneTilt, PencilSimple, Plus as PlusGlyph,
@@ -28,6 +28,7 @@ export const IconBars = duotone(List);
 export const IconBell = duotone(BellGlyph);
 export const IconBolt = duotone(Lightning);
 export const IconBook = duotone(BookOpen);
+export const IconBooks = duotone(Books);
 export const IconBuilding = duotone(Buildings);
 export const IconCalendar = duotone(CalendarGlyph);
 export const IconChartBar = duotone(ChartBar);
@@ -56,6 +57,7 @@ export const IconFont = duotone(TextT);
 export const IconGear = duotone(Gear);
 export const IconHardDrive = duotone(HardDrive);
 export const IconKey = duotone(KeyGlyph);
+export const IconHouse = duotone(House);
 export const IconList = duotone(ListBullets);
 export const IconMagnifyingGlass = duotone(MagnifyingGlass);
 export const IconMessage = duotone(ChatCircle);
@@ -119,6 +121,8 @@ export const Users = IconUsers;
 export const Key = IconKey;
 export const LogOut = IconRightFromBracket;
 export const Book = IconBook;
+export const BooksIcon = IconBooks;
+export const HouseIcon = IconHouse;
 export const Menu = IconBars;
 export const WifiOff = IconWifi;
 export const Bell = IconBell;

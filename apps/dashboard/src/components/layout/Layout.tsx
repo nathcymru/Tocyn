@@ -1,21 +1,18 @@
 import { GlobalSearch } from './GlobalSearch';
-import { OperatorCapacityPanel } from '../capacity/OperatorCapacityPanel';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkInput } from '@luminatick/ui/park';
+import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkMenu } from '@luminatick/ui/park';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
-  LayoutDashboard,
+  HouseIcon,
   Ticket as TicketIcon,
   Users,
-  Key,
   Settings,
-  LogOut,
-  Book,
+  BooksIcon,
   Menu,
   X,
   WifiOff,
@@ -26,7 +23,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
-import { useOperatorPreferencesContext, OperatorPreferencesControl, OperatorThemeControl, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
+import { useOperatorPreferencesContext, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
 
 function cn(...inputs: any[]) {
   return clsx(inputs);
@@ -39,36 +36,14 @@ const MAX_RENDERED_ACTIVITY_ITEMS = 100;
 
 interface SidebarProps { onNavigate?: () => void; navigationFocus: () => HTMLElement | null; }
 
-function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
+function UserMenu({ onNavigate }: SidebarProps) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const [isOpen, setIsOpen] = useState(false);
-  const restoreAccountFocus = useRef(true);
   const loggingOut = useRef(false);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const securityProfile = useRef<HTMLAnchorElement>(null);
-  const disclosureId = React.useId();
-  const capacityTitleId=React.useId();
-  const [capacityOpen,setCapacityOpen]=useState(false);
-  const capacityClose=useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      restoreAccountFocus.current = true;
-      setIsOpen(false);
-      requestAnimationFrame(() => trigger.current?.focus());
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen]);
-
+  const handleNavigate = (path: string) => { onNavigate?.(); navigate(path); };
   const handleLogout = async () => {
     if (loggingOut.current) return;
     loggingOut.current = true;
-    restoreAccountFocus.current = false;
     let confirmed = false;
     try { await dashboardApi.post('/auth/logout'); confirmed = true; }
     catch { /* Local sign-out must still complete. */ }
@@ -76,65 +51,24 @@ function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
     if (!confirmed) window.alert("Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.");
   };
 
-  return (
-    <>
-    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} initialFocusEl={() => securityProfile.current} finalFocusEl={() => trigger.current} lazyMount unmountOnExit>
-    <div className="tocyn-shell-account-wrapper">
-      <Popover.Trigger asChild>
-      <ParkButton
-        type="button"
-        ref={trigger}
-        aria-label="Account options"
-        aria-expanded={isOpen}
-        aria-controls={disclosureId}
-        title={user?.full_name || 'User'}
-        className="tocyn-shell-account-trigger"
-      >
-        {user?.full_name?.[0] || 'A'}
-      </ParkButton></Popover.Trigger>
-
-      <Popover.Positioner>
-        <Popover.Content aria-label="Account options" data-tocyn-inverse="" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); restoreAccountFocus.current = true; setIsOpen(false); requestAnimationFrame(() => trigger.current?.focus()); } }} className="tocyn-shell-account-popover">
-          <div className="tocyn-shell-account-summary">
-            <p className="tocyn-shell-account-name">{user?.full_name}</p>
-            <p className="tocyn-shell-account-email">{user?.email}</p>
-          </div>
-          <Link
-            ref={securityProfile}
-            to="/profile/security"
-            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); setTimeout(() => navigationFocus()?.focus(), 50); }}
-            className="tocyn-shell-account-action"
-          >
-            <Key className="tocyn-shell-small-icon" />
-            Security Profile
-          </Link>
-          <ParkButton
-            onClick={handleLogout}
-            className="tocyn-shell-account-action tocyn-shell-account-action-full"
-          >
-            <LogOut className="tocyn-shell-small-icon" />
-            Sign out of all sessions
-          </ParkButton>
-          <ParkButton type="button" aria-haspopup="dialog" onClick={()=>{restoreAccountFocus.current=false;setIsOpen(false);setCapacityOpen(true);}}
-            className="tocyn-shell-account-action tocyn-shell-account-action-left">Current work</ParkButton>
-          <OperatorThemeControl />
-          <OperatorPreferencesControl />
-        </Popover.Content>
-      </Popover.Positioner>
-    </div>
-    </Popover.Root>
-    <TocynDialog open={capacityOpen} onOpenChange={setCapacityOpen} labelledBy={capacityTitleId}
-      initialFocusEl={()=>capacityClose.current} finalFocusEl={()=>trigger.current}>
-      <div className="tocyn-shell-capacity-dialog">
-        <div className="tocyn-shell-dialog-header">
-          <h2 id={capacityTitleId} className="tocyn-shell-dialog-title">Current work</h2>
-          <ParkButton ref={capacityClose} type="button" onClick={()=>setCapacityOpen(false)} className="tocyn-shell-dialog-close">Close current work</ParkButton>
-        </div>
-        {capacityOpen&&user?.id&&<OperatorCapacityPanel userId={user.id}/>}
-      </div>
-    </TocynDialog>
-    </>
-  );
+  return <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
+    <ParkMenu.Trigger asChild>
+      <ParkButton type="button" aria-label="Account options" title={user?.full_name || 'User'} className="tocyn-shell-persona-trigger">
+        <ParkAvatar className="tocyn-shell-persona-avatar">
+          <ParkAvatarFallback>{user?.full_name?.slice(0, 2).toUpperCase() || 'OP'}</ParkAvatarFallback>
+        </ParkAvatar>
+        <span className="tocyn-shell-persona-status" aria-label="Online" />
+      </ParkButton>
+    </ParkMenu.Trigger>
+    <ParkMenu.Positioner>
+      <ParkMenu.Content aria-label="Account menu" className="tocyn-shell-account-menu" data-tocyn-inverse="">
+        <ParkMenu.Item value="account" onClick={() => handleNavigate('/settings/account')} className="tocyn-shell-account-menu-item">Account</ParkMenu.Item>
+        <ParkMenu.Item value="settings" onClick={() => handleNavigate('/settings/general')} className="tocyn-shell-account-menu-item">Settings</ParkMenu.Item>
+        <ParkMenu.Separator className="tocyn-shell-account-menu-separator" />
+        <ParkMenu.Item value="logout" onClick={() => void handleLogout()} className="tocyn-shell-account-menu-item">Log out</ParkMenu.Item>
+      </ParkMenu.Content>
+    </ParkMenu.Positioner>
+  </ParkMenu.Root>;
 }
 
 function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
@@ -186,7 +120,6 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
               <Settings aria-hidden="true" className="tocyn-shell-navigation-icon" />{labelled && <span>Settings</span>}
             </Link>
 
-            <UserMenu onNavigate={onNavigate} navigationFocus={navigationFocus} />
           </div>
         </div>
   );
@@ -341,6 +274,8 @@ function LayoutContent() {
 
           <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
 
+          <UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} navigationFocus={() => main.current} />
+
           <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
             <Popover.Trigger asChild>
               <ParkButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className="tocyn-shell-activity-trigger">
@@ -440,7 +375,7 @@ export function Layout() {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/', icon: HouseIcon },
   { name: 'Inbox', href: '/inbox', icon: TicketIcon },
-  { name: 'Knowledge Base', href: '/knowledge', icon: Book },
+  { name: 'Knowledge Base', href: '/knowledge', icon: BooksIcon },
 ];

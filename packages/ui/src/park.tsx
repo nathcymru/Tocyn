@@ -4,6 +4,7 @@ import { Select as ArkSelect } from '@ark-ui/react/select';
 import { ScrollArea as ArkScrollArea } from '@ark-ui/react/scroll-area';
 import { Splitter as ArkSplitter } from '@ark-ui/react/splitter';
 import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
+import { Menu as ArkMenu } from '@ark-ui/react/menu';
 
 /** Park-compatible shared primitives. Styles are emitted by the package CSS; these
  * wrappers deliberately keep the existing Tocyn data attributes and DOM contracts. */
@@ -109,6 +110,14 @@ export const ParkAvatar = React.forwardRef<HTMLDivElement, React.ComponentPropsW
 
 export const ParkAvatarImage = Avatar.Image;
 export const ParkAvatarFallback = Avatar.Fallback;
+
+export const ParkMenuRoot = (props: React.ComponentProps<typeof ArkMenu.Root>) => <ArkMenu.Root {...props} data-park="menu-root" />;
+export const ParkMenuTrigger = (props: React.ComponentProps<typeof ArkMenu.Trigger>) => <ArkMenu.Trigger {...props} data-park="menu-trigger" className={parkPart('menu-trigger', props.className)} />;
+export const ParkMenuPositioner = (props: React.ComponentProps<typeof ArkMenu.Positioner>) => <ArkMenu.Positioner {...props} data-park="menu-positioner" className={parkPart('menu-positioner', props.className)} />;
+export const ParkMenuContent = (props: React.ComponentProps<typeof ArkMenu.Content>) => <ArkMenu.Content {...props} data-park="menu-content" className={parkPart('menu-content', props.className)} />;
+export const ParkMenuItem = (props: React.ComponentProps<typeof ArkMenu.Item>) => <ArkMenu.Item {...props} data-park="menu-item" className={parkPart('menu-item', props.className)} />;
+export const ParkMenuSeparator = (props: React.ComponentProps<typeof ArkMenu.Separator>) => <ArkMenu.Separator {...props} data-park="menu-separator" className={parkPart('menu-separator', props.className)} />;
+export const ParkMenu = { Root: ParkMenuRoot, Trigger: ParkMenuTrigger, Positioner: ParkMenuPositioner, Content: ParkMenuContent, Item: ParkMenuItem, Separator: ParkMenuSeparator };
 
 export interface ParkPinInputProps extends React.ComponentPropsWithoutRef<typeof PinInput.Root> {
   label?: React.ReactNode;

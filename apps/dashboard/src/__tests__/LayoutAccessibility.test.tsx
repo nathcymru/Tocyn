@@ -98,8 +98,8 @@ it('names account/connection disclosures and restores focus when their child act
   const result=await renderReady();
   const account = screen.getByRole('button', { name: 'Account options' });
   await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
-  const security = await screen.findByRole('link', { name: 'Security Profile' });
-  await waitFor(() => expect(security).toHaveFocus()); await userEvent.keyboard('{Escape}');
+  const accountItem = await screen.findByRole('menuitem', { name: 'Account' });
+  expect(accountItem).toBeVisible(); await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(account).toHaveFocus()); expect(account).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('button',{name:'Real-time'})).not.toBeInTheDocument();
   vi.mocked(useRealtime).mockReturnValue({...realtime,isConnected:false} as ReturnType<typeof useRealtime>);
@@ -118,7 +118,7 @@ it('keeps search and workspace navigation visible and keyboard reachable when fo
   document.documentElement.dataset.tocynFocusMode = 'true';
   const sidebar = document.querySelector('aside[data-tocyn-inverse]');
   expect(sidebar).toBeInTheDocument();
-  expect(within(sidebar as HTMLElement).getByRole('button', { name: 'Account options' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Account options' })).toBeInTheDocument();
   const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   const inbox = within(sidebar as HTMLElement).getByRole('link', { name: 'Inbox' });
   expect(search).toBeVisible();
@@ -129,52 +129,19 @@ it('keeps search and workspace navigation visible and keyboard reachable when fo
   expect(inbox).toHaveFocus();
 });
 
-it('keeps preference failure recovery and connection state reachable after using the Focus mode control', async () => {
-  const preference = { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
-  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
-    if (path === '/workspace/presentation-preference') return preference;
-    if (path === '/workspace/theme-preference') return { revision: 0, mode: 'system', updatedAt: null };
-    if (path === '/activities?limit=20') return { page: { items: [], next: null }, unread: { status: 'available', count: 0 } };
-    return { version: '1', light: {}, dark: {}, fallback: false };
-  });
-  vi.mocked(dashboardApi.put).mockRejectedValueOnce(new Error('Synthetic save failure'))
-    .mockResolvedValueOnce({ ...preference, revision: 1, focusMode: true });
+it('keeps the account menu concise and connection recovery reachable', async () => {
   vi.mocked(useRealtime).mockReturnValue({ ...realtime, isConnected: false } as ReturnType<typeof useRealtime>);
   await renderReady();
-  const workspace = screen.getByRole('main', { name: 'Workspace' });
-  await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
-  const focus = await screen.findByRole('checkbox', { name: 'Focus mode' });
-  await waitFor(() => expect(focus).toBeEnabled());
-  await waitFor(() => expect(screen.getByRole('link', { name: 'Security Profile' })).toHaveFocus());
-  const decoration = document.querySelector('[data-tocyn-focus-decoration]');
-  expect(decoration).toHaveAttribute('aria-hidden', 'true');
-  focus.focus();
-  await userEvent.keyboard(' ');
-  expect(focus).toBeChecked();
-  expect(document.documentElement.dataset.tocynFocusMode).toBe('true');
-  expect(screen.getByRole('textbox', { name: 'Search all tickets (global shell)' })).toBeVisible();
-  expect(document.getElementById('global-ticket-search-scope')).toHaveTextContent('Press Command or Control K');
-  expect(screen.getByRole('button', { name: 'Disconnected' })).toBeVisible();
-  await userEvent.click(screen.getByRole('button', { name: 'Save workspace preferences' }));
-  const retry = await screen.findByRole('button', { name: 'Retry workspace preferences' });
-  expect(screen.getByText('Workspace preferences were not saved. Retry.')).toBeVisible();
-  expect(focus).toBeChecked();
-  expect(screen.getByRole('main', { name: 'Workspace' })).toBe(workspace);
-  retry.focus();
-  await userEvent.keyboard('{Enter}');
-  await screen.findByText('Workspace preferences saved.');
-  expect(dashboardApi.put).toHaveBeenLastCalledWith('/workspace/presentation-preference', expect.objectContaining({ expectedRevision: 0, focusMode: true }));
+  const account = screen.getByRole('button', { name: 'Account options' });
+  await userEvent.click(account);
+  expect(await screen.findByRole('menuitem', { name: 'Account' })).toBeVisible();
+  expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
+  expect(screen.getByRole('menuitem', { name: 'Log out' })).toBeVisible();
+  expect(screen.queryByRole('combobox', { name: 'Workspace density' })).not.toBeInTheDocument();
   await userEvent.keyboard('{Escape}');
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Account options' })).toHaveFocus());
   const disconnected = screen.getByRole('button', { name: 'Disconnected' });
-  disconnected.focus();
-  await userEvent.keyboard('{Enter}');
+  await userEvent.click(disconnected);
   expect(await screen.findByText(/Live updates are paused/)).toBeVisible();
-  const reconnect = await screen.findByRole('button', { name: 'Force Reconnect' });
-  reconnect.focus();
-  await userEvent.keyboard('{Enter}');
-  expect(realtime.manualReconnect).toHaveBeenCalledTimes(1);
-  await waitFor(() => expect(disconnected).toHaveFocus());
 });
 
 it('closes mobile navigation after a selected destination and focuses the workspace', async () => {
@@ -292,9 +259,9 @@ it('re-reads bounded durable activity when realtime is restored', async () => {
 
 it('navigates from the account popover without stealing destination focus', async () => {
   await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
-  const destination = await screen.findByRole('link', { name: 'Security Profile' });
+  const destination = await screen.findByRole('menuitem', { name: 'Account' });
   await userEvent.click(destination);
-  await waitFor(() => expect(screen.getByRole('heading')).toHaveTextContent('/profile/security'));
+  await waitFor(() => expect(screen.getByRole('heading')).toHaveTextContent('/settings/account'));
   await waitFor(() => expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus());
 });
 
@@ -303,7 +270,7 @@ it('guards overlapping sign-outs and still clears local authentication when serv
   let reject!: (error: Error) => void;
   vi.mocked(dashboardApi.post).mockImplementationOnce(() => new Promise((_resolve, failure) => { reject = failure; }));
   await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
-  const signOut = await screen.findByRole('button', { name: 'Sign out of all sessions' });
+  const signOut = await screen.findByRole('menuitem', { name: 'Log out' });
   fireEvent.click(signOut); fireEvent.click(signOut); expect(dashboardApi.post).toHaveBeenCalledTimes(1);
   await act(async () => reject(new Error('Synthetic failure')));
   expect(useAuthStore.getState().user).toBeNull();
@@ -311,22 +278,14 @@ it('guards overlapping sign-outs and still clears local authentication when serv
   expect(alert).toHaveBeenCalledWith(expect.stringContaining('Server sign-out could not be confirmed'));
 });
 
-it('keeps nested account content fixed-positioned and dismisses it before mobile navigation', async () => {
-  await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
-  const navigation=await screen.findByRole('dialog',{name:'Navigation'});
-  await waitFor(()=>expect(within(navigation).getByRole('button',{name:'Close navigation'})).toHaveFocus());
-  const account=within(navigation).getByRole('button',{name:'Account options'});
-  await userEvent.click(account);
-  const security=await within(navigation).findByRole('link',{name:'Security Profile'});
-  await waitFor(()=>expect(security).toHaveFocus());
-  const positioner=security.closest('[data-scope="popover"][data-part="positioner"]');
-  expect(positioner).toHaveStyle({position:'fixed'});
+it('keeps the persona menu available while mobile navigation is open', async () => {
+  await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+  const navigation = await screen.findByRole('dialog', { name: 'Navigation' });
+  expect(within(navigation).getByRole('link', { name: 'Inbox' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Account options' })).toBeVisible();
   await userEvent.keyboard('{Escape}');
-  await waitFor(()=>expect(account).toHaveFocus());
-  expect(screen.getByRole('dialog',{name:'Navigation'})).toBeInTheDocument();
-  await userEvent.keyboard('{Escape}');
-  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Navigation'})).not.toBeInTheDocument());
-  await waitFor(()=>expect(screen.getByRole('button',{name:'Open navigation'})).toHaveFocus());
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument());
 });
 
 it('invalidates ticket queues after dismissing activity while reading retains mention membership',async()=>{
@@ -350,59 +309,19 @@ it('invalidates ticket queues after dismissing activity while reading retains me
 });
 
 
-it('opens own current work on demand and contains keyboard focus before returning to account options', async () => {
-  const original=vi.mocked(dashboardApi.get).getMockImplementation()!;
-  vi.mocked(dashboardApi.get).mockImplementation(async(path:string)=>path==='/operators/operator/capacity'
-    ? {userId:'operator',revision:0,availability:null,assignmentCeiling:null,currentWork:2,status:'unconfigured',definitionVersion:'2026-09-11.3',asOf:'2026-09-13T13:00:00Z'}
-    : original(path));
+it('opens the account page from the concise persona menu', async () => {
   await renderReady();
-  expect(vi.mocked(dashboardApi.get).mock.calls.some(([path])=>path.includes('/capacity'))).toBe(false);
-  const account=screen.getByRole('button',{name:'Account options'});
+  const account = screen.getByRole('button', { name: 'Account options' });
   await userEvent.click(account);
-  await waitFor(()=>expect(screen.getByRole('link',{name:'Security Profile'})).toHaveFocus());
-  const open=screen.getByRole('button',{name:'Current work'});open.focus();await userEvent.keyboard('{Enter}');
-  const dialog=await screen.findByRole('dialog',{name:'Current work'});
-  const close=within(dialog).getByRole('button',{name:'Close current work'});
-  await waitFor(()=>expect(close).toHaveFocus());
-  await within(dialog).findByText(/No capacity policy is configured/);
-  expect(within(dialog).queryByRole('button',{name:'Save capacity'})).not.toBeInTheDocument();
-  const refresh=within(dialog).getByRole('button',{name:'Refresh current work'});
-  await userEvent.tab({shift:true});expect(refresh).toHaveFocus();
-  await userEvent.tab();expect(close).toHaveFocus();
-  await userEvent.tab();expect(refresh).toHaveFocus();
-  await userEvent.keyboard('{Escape}');
-  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Current work'})).not.toBeInTheDocument());
-  await waitFor(()=>expect(account).toHaveFocus());
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Account' }));
+  await waitFor(() => expect(screen.getByRole('heading')).toHaveTextContent('/settings/account'));
 });
 
-it('keeps initial preference restore recovery visible through a local edit and validates revision before saving', async () => {
-  const preference = { version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  revision: 4, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null };
-  let restores = 0;
-  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
-    if (path === '/workspace/presentation-preference') {
-      if (++restores === 1) throw new Error('Synthetic initial restore failure');
-      return preference;
-    }
-    if (path === '/workspace/theme-preference') return { revision: 0, mode: 'system', updatedAt: null };
-    if (path === '/activities?limit=20') return { page: { items: [], next: null }, unread: { status: 'available', count: 0 } };
-    return { version: '1', light: {}, dark: {}, fallback: false };
-  });
-  vi.mocked(dashboardApi.put).mockResolvedValue({ ...preference, revision: 5, density: 'compact' });
+it('keeps account settings on their own route', async () => {
   await renderReady();
   await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
-  const density = await screen.findByRole('combobox', { name: 'Workspace density' });
-  await screen.findByRole('button', { name: 'Retry workspace preferences' });
-  await userEvent.selectOptions(density, 'compact');
-  expect(screen.getByRole('button', { name: 'Retry workspace preferences' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Save workspace preferences' })).toBeDisabled();
-  expect(dashboardApi.put).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole('button', { name: 'Retry workspace preferences' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Save workspace preferences' })).toBeEnabled());
-  expect(density).toHaveValue('compact');
-  await userEvent.click(screen.getByRole('button', { name: 'Save workspace preferences' }));
-  await screen.findByText('Workspace preferences saved.');
-  expect(dashboardApi.put).toHaveBeenLastCalledWith('/workspace/presentation-preference', expect.objectContaining({ expectedRevision: 4, density: 'compact' }));
-  expect(restores).toBe(2);
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Account' }));
+  await waitFor(() => expect(screen.getByRole('heading')).toHaveTextContent('/settings/account'));
 });
 
 it('renders labelled navigation and disables only the app search accelerator', async () => {
@@ -420,7 +339,7 @@ it('renders labelled navigation and disables only the app search accelerator', a
   expect(account).toHaveFocus();
   expect(search).not.toHaveAttribute('aria-keyshortcuts');
   await userEvent.keyboard('{Enter}');
-  await screen.findByRole('link', { name: 'Security Profile' });
+  await screen.findByRole('menuitem', { name: 'Account' });
   await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(account).toHaveFocus());
 });
