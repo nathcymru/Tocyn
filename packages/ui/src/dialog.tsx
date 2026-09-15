@@ -34,10 +34,12 @@ export interface TocynConfirmDialogProps extends Omit<TocynDialogProps, 'labelle
   cancelLabel?: string;
   error?: string;
   onConfirm: () => void;
+  confirmClassName?: string;
+  cancelClassName?: string;
 }
 
 /** The caller owns admission, mutation and recovery; cancellation receives initial focus. */
-export const TocynConfirmDialog = React.forwardRef<HTMLDivElement, TocynConfirmDialogProps>(function TocynConfirmDialog({title, description, confirmLabel, cancelLabel = 'Cancel', error, onConfirm, ...dialog}, ref) {
+export const TocynConfirmDialog = React.forwardRef<HTMLDivElement, TocynConfirmDialogProps>(function TocynConfirmDialog({title, description, confirmLabel, cancelLabel = 'Cancel', error, onConfirm, confirmClassName, cancelClassName, ...dialog}, ref) {
   const titleId = React.useId();
   const descriptionId = React.useId();
   const cancel = React.useRef<HTMLButtonElement>(null);
@@ -47,8 +49,8 @@ export const TocynConfirmDialog = React.forwardRef<HTMLDivElement, TocynConfirmD
       <p id={descriptionId}>{description}</p>
       {error && <p role="alert">{error}</p>}
       <div data-tocyn-confirm-actions="">
-        <ParkButton type="button" ref={cancel} disabled={dialog.busy} onClick={() => dialog.onOpenChange(false)}>{cancelLabel}</ParkButton>
-        <ParkButton type="button" disabled={dialog.busy} onClick={onConfirm}>{confirmLabel}</ParkButton>
+        <ParkButton type="button" ref={cancel} disabled={dialog.busy} onClick={() => dialog.onOpenChange(false)} className={cancelClassName}>{cancelLabel}</ParkButton>
+        <ParkButton type="button" disabled={dialog.busy} onClick={onConfirm} className={confirmClassName}>{confirmLabel}</ParkButton>
       </div>
     </div>
   </TocynDialog>;

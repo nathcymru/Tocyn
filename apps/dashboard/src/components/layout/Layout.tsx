@@ -1,7 +1,7 @@
 import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
-import { TocynDialog } from '@luminatick/ui/dialog';
+import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
 import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkMenu } from '@luminatick/ui/park';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
@@ -40,18 +40,29 @@ function UserMenu({ onNavigate }: SidebarProps) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const loggingOut = useRef(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutCountdown, setLogoutCountdown] = useState(10);
+  const [logoutBusy, setLogoutBusy] = useState(false);
   const handleNavigate = (path: string) => { onNavigate?.(); navigate(path); };
+  useEffect(() => {
+    if (!logoutOpen) return;
+    setLogoutCountdown(10);
+    const timer = window.setInterval(() => setLogoutCountdown(value => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [logoutOpen]);
   const handleLogout = async () => {
     if (loggingOut.current) return;
     loggingOut.current = true;
+    setLogoutBusy(true);
     let confirmed = false;
     try { await dashboardApi.post('/auth/logout'); confirmed = true; }
     catch { /* Local sign-out must still complete. */ }
-    finally { logout(); navigate('/login'); }
+    finally { logout(); navigate('/login'); setLogoutBusy(false); setLogoutOpen(false); }
     if (!confirmed) window.alert("Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.");
   };
 
-  return <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
+  return <>
+  <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
     <ParkMenu.Trigger asChild>
       <ParkButton type="button" aria-label="Account options" title={user?.full_name || 'User'} className="tocyn-shell-persona-trigger">
         <ParkAvatar className="tocyn-shell-persona-avatar">
@@ -68,11 +79,24 @@ function UserMenu({ onNavigate }: SidebarProps) {
         </div>
         <ParkMenu.Item value="account" onClick={() => handleNavigate('/settings/account')} className="tocyn-shell-account-menu-item">Account</ParkMenu.Item>
         <ParkMenu.Item value="settings" onClick={() => handleNavigate('/settings/general')} className="tocyn-shell-account-menu-item">Settings</ParkMenu.Item>
-        <ParkMenu.Separator className="tocyn-shell-account-menu-separator" />
-        <ParkMenu.Item value="logout" onClick={() => void handleLogout()} className="tocyn-shell-account-menu-item">Log out</ParkMenu.Item>
+        <ParkMenu.Item value="logout" onClick={() => { setLogoutCountdown(10); setLogoutOpen(true); }} className="tocyn-shell-account-menu-item tocyn-shell-account-menu-item--warning">Log out</ParkMenu.Item>
       </ParkMenu.Content>
     </ParkMenu.Positioner>
-  </ParkMenu.Root>;
+  </ParkMenu.Root>
+  <TocynConfirmDialog
+    open={logoutOpen}
+    onOpenChange={setLogoutOpen}
+    role="alertdialog"
+    busy={logoutBusy}
+    title="Confirm Logout"
+    description="You are about to log out of the system. Please ensure any active work is saved before proceeding. You will need to sign in again to resume access."
+    cancelLabel="Cancel"
+    confirmLabel={`Log Out (${logoutCountdown})`}
+    confirmClassName="tocyn-logout-confirm"
+    cancelClassName="tocyn-logout-cancel"
+    onConfirm={() => void handleLogout()}
+  />
+  </>;
 }
 
 function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
@@ -108,23 +132,6 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
             })}
           </nav>
 
-          <div className="tocyn-shell-sidebar-footer">
-            <Link
-              to="/settings/general"
-              title="Settings"
-              aria-label="Settings"
-              onClick={onNavigate}
-              className={cn(
-                labelled ? "tocyn-shell-navigation-link-labelled" : "tocyn-shell-navigation-link-icon",
-                location.pathname.startsWith('/settings')
-                  ? "tocyn-shell-navigation-link-active"
-                  : "tocyn-shell-navigation-link-inactive"
-              )}
-            >
-              <Settings aria-hidden="true" className="tocyn-shell-navigation-icon" />{labelled && <span>Settings</span>}
-            </Link>
-
-          </div>
         </div>
   );
 }
@@ -382,4 +389,5 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: HouseIcon },
   { name: 'Inbox', href: '/inbox', icon: TicketIcon },
   { name: 'Knowledge Base', href: '/knowledge', icon: BooksIcon },
+  { name: 'Settings', href: '/settings/general', icon: Settings },
 ];

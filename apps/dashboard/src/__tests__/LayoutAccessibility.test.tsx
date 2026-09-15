@@ -271,7 +271,9 @@ it('guards overlapping sign-outs and still clears local authentication when serv
   vi.mocked(dashboardApi.post).mockImplementationOnce(() => new Promise((_resolve, failure) => { reject = failure; }));
   await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
   const signOut = await screen.findByRole('menuitem', { name: 'Log out' });
-  fireEvent.click(signOut); fireEvent.click(signOut); expect(dashboardApi.post).toHaveBeenCalledTimes(1);
+  fireEvent.click(signOut);
+  const confirm = await screen.findByRole('button', { name: 'Log Out (10)' });
+  fireEvent.click(confirm); fireEvent.click(confirm); expect(dashboardApi.post).toHaveBeenCalledTimes(1);
   await act(async () => reject(new Error('Synthetic failure')));
   expect(useAuthStore.getState().user).toBeNull();
   expect(screen.getByRole('heading')).toHaveTextContent('/login');

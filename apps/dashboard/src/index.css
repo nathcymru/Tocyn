@@ -326,14 +326,18 @@
 .tocyn-shell-persona-trigger { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; min-inline-size: 2.75rem; min-block-size: 2.75rem; border-radius: .5rem; padding: .125rem; color: var(--tocyn-app-text); }
 .tocyn-shell-persona-avatar { inline-size: 2.5rem; block-size: 2.5rem; border: 0; border-radius: .5rem; background: var(--tocyn-app-surface-muted); color: var(--tocyn-app-text); font-size: .8125rem; font-weight: 700; }
 .tocyn-shell-persona-status { position: absolute; inset-block-end: .125rem; inset-inline-end: .125rem; inline-size: .625rem; block-size: .625rem; border: 2px solid var(--tocyn-app-surface); border-radius: 999px; background: #22c55e; }
-.tocyn-shell-account-menu { z-index: 60; min-inline-size: 15rem; max-inline-size: min(22rem, calc(100vw - 2rem)); border: 1px solid var(--tocyn-app-border); border-radius: .625rem; background: var(--tocyn-app-surface); padding: .375rem; box-shadow: 0 1rem 2rem rgb(15 23 42 / 18%); }
+.tocyn-shell-account-menu { box-sizing: border-box; z-index: 60; min-inline-size: 15rem; max-inline-size: min(22rem, calc(100vw - 2rem)); overflow: hidden; border: 1px solid var(--tocyn-app-border); border-radius: .625rem; background: var(--tocyn-app-surface); padding: .375rem; box-shadow: 0 1rem 2rem rgb(15 23 42 / 18%); }
 .tocyn-shell-account-summary { display: flex; min-inline-size: 0; flex-direction: column; gap: .125rem; border-block-end: 1px solid var(--tocyn-app-border); margin-block-end: .375rem; padding: .5rem .75rem .625rem; }
 .tocyn-shell-account-summary-name, .tocyn-shell-account-summary-email { overflow: hidden; min-inline-size: 0; text-overflow: ellipsis; white-space: nowrap; }
 .tocyn-shell-account-summary-name { color: var(--tocyn-app-text); font-size: .875rem; }
 .tocyn-shell-account-summary-email { color: var(--tocyn-app-text-muted); font-size: .75rem; }
-.tocyn-shell-account-menu-item { display: flex; inline-size: 100%; align-items: center; border-radius: .375rem; padding: .625rem .75rem; color: var(--tocyn-app-text); font-size: .875rem; text-align: start; }
+.tocyn-shell-account-menu-item { box-sizing: border-box; display: flex; inline-size: 100%; align-items: center; border-radius: .375rem; padding: .625rem .75rem; color: var(--tocyn-app-text); font-size: .875rem; text-align: start; }
 .tocyn-shell-account-menu-item:hover, .tocyn-shell-account-menu-item[data-highlighted] { background: var(--tocyn-app-surface-muted); }
-.tocyn-shell-account-menu-separator { block-size: 1px; margin: .375rem 0; background: var(--tocyn-app-border); }
+.tocyn-shell-account-menu-item--warning { color: var(--tocyn-color-critical); }
+.tocyn-shell-account-menu-item--warning:hover, .tocyn-shell-account-menu-item--warning[data-highlighted] { background: color-mix(in srgb, var(--tocyn-color-critical) 10%, transparent); color: var(--tocyn-color-critical); }
+.tocyn-logout-confirm { border-color: var(--tocyn-color-critical) !important; background: var(--tocyn-color-critical); color: var(--tocyn-color-icon-inverse, #fff); }
+.tocyn-logout-confirm:hover { background: color-mix(in srgb, var(--tocyn-color-critical) 86%, #000); }
+.tocyn-logout-cancel { border-color: var(--tocyn-app-border) !important; background: var(--tocyn-app-surface); color: var(--tocyn-app-text); }
 .tocyn-shell-activity-badge { position: absolute; inset-block-start: 0; inset-inline-end: 0; min-inline-size: 1rem; border-radius: 999px; background: var(--tocyn-color-brand); padding-inline: .25rem; color: #fff; font-size: 10px; font-weight: 700; text-align: center; }
 .tocyn-shell-icon, .tocyn-shell-menu-icon { inline-size: 1.5rem; block-size: 1.5rem; }
 .tocyn-shell-small-icon, .tocyn-shell-dismiss-icon { inline-size: .875rem; block-size: .875rem; }
