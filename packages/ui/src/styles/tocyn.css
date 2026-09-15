@@ -55,7 +55,7 @@
   outline: 2px solid var(--tocyn-color-focus);
   outline-offset: 2px;
 }
-.tocyn-button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-block-size: 2.75rem; min-inline-size: 2.75rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; padding: .5rem .875rem; background: var(--tocyn-color-surface); color: var(--tocyn-color-text); cursor: pointer; }
+.tocyn-button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-block-size: 2.75rem; min-inline-size: 2.75rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; padding: .5rem .875rem; background: var(--tocyn-color-surface); color: var(--tocyn-color-text); cursor: pointer; text-decoration: none; }
 .tocyn-button:disabled { cursor: not-allowed; opacity: .6; }
 .tocyn-button.tocyn-auth-submit { width: 100%; border-color: #2563eb; background: #2563eb; color: #fff; font-weight: 700; }
 .tocyn-button.tocyn-auth-submit:hover { background: #1d4ed8; }

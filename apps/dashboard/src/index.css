@@ -266,7 +266,7 @@
 .tocyn-knowledge-preview-title { color: var(--tocyn-app-text); font-weight: 600; }
 .tocyn-knowledge-preview-body { max-block-size: 16rem; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tocyn-sla-queue-notice { margin: 1rem; display: grid; gap: .5rem; border: 1px solid var(--tocyn-app-border); border-radius: .5rem; background: var(--tocyn-app-surface-panel); color: var(--tocyn-app-text); padding: .75rem; font-size: .875rem; }
-.tocyn-sla-queue-action { font-weight: 600; text-decoration: underline; justify-self: start; }
+.tocyn-sla-queue-action { justify-self: start; min-block-size: 2.5rem; font-weight: 600; text-decoration: none; }
 .tocyn-sla-target-breached { color: var(--tocyn-sla-breach-text); }
 .tocyn-sla-target-on-track { color: var(--tocyn-sla-on-track-text); }
 
@@ -276,7 +276,9 @@
 .tocyn-global-search-popover { position: absolute; inset-block-start: 100%; inset-inline-start: 0; z-index: 50; max-block-size: min(24rem,60vh); inline-size: 100%; overflow-y: auto; border: 1px solid var(--tocyn-app-border); border-radius: .5rem; background: var(--tocyn-app-surface); padding: .75rem; box-shadow: 0 10px 24px rgb(15 23 42 / 18%); }
 .tocyn-global-search-status { font-size: .875rem; }
 .tocyn-global-search-results { max-block-size: 16rem; overflow: auto; border: 1px solid var(--tocyn-app-border); background: var(--tocyn-app-surface); }
-.tocyn-global-search-result-link, .tocyn-global-search-result-button { display: block; inline-size: 100%; padding: .5rem; text-align: start; text-decoration: underline; }
+.tocyn-global-search-result-link, .tocyn-global-search-result-button { display: flex; inline-size: 100%; min-block-size: 2.5rem; align-items: center; border: 1px solid transparent; border-radius: .5rem; background: transparent; color: var(--tocyn-app-text); padding: .5rem .75rem; text-align: start; text-decoration: none; }
+.tocyn-global-search-result-link:hover, .tocyn-global-search-result-button:hover { background: color-mix(in srgb, var(--tocyn-app-surface-muted) 72%, transparent); }
+.tocyn-global-search-result-link:focus-visible, .tocyn-global-search-result-button:focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
 .tocyn-global-search-preview { border: 1px solid var(--tocyn-app-border); background: var(--tocyn-app-surface); padding: .5rem; }
 .tocyn-global-search-preview-title { font-weight: 600; }
 .tocyn-assignment-panel { display: grid; gap: .5rem; margin-block-start: .75rem; color: var(--tocyn-app-text); font-size: .875rem; }
