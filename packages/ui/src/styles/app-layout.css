@@ -189,6 +189,8 @@
 .tocyn-field [data-part="error-text"] { color: var(--tocyn-color-critical); font-size: .875rem; }
 .tocyn-avatar { display: inline-flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 999px; min-inline-size: 2.5rem; min-block-size: 2.5rem; background: var(--tocyn-color-surface-muted); color: var(--tocyn-color-text); }
 .tocyn-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.tocyn-shell-sidebar-desktop .tocyn-park-icon,
+[data-tocyn-inverse] .tocyn-park-icon { color: var(--tocyn-icon-inverse); }
 .tocyn-shell-persona-trigger .tocyn-shell-persona-avatar { border-radius: .5rem; background: transparent; }
 .tocyn-pin-input { display: grid; gap: .5rem; width: 100%; }
 .tocyn-pin-input [data-scope="pin-input"][data-part="control"] { display: flex; justify-content: center; gap: .5rem; width: 100%; max-width: 100%; }

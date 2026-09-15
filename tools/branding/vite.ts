@@ -14,7 +14,7 @@ export function productBranding(surface: string): Plugin {
       server.middlewares.use((request, response, next) => {
         const path = request.url?.split('?')[0];
         if (!path || !paths.includes(path)) return next();
-        response.setHeader('Content-Type', path.endsWith('.webp') ? 'image/webp' : 'image/png');
+        response.setHeader('Content-Type', path.endsWith('.webp') ? 'image/webp' : path.endsWith('.svg') ? 'image/svg+xml' : 'image/png');
         response.end(asset(path));
       });
     },
@@ -23,7 +23,7 @@ export function productBranding(surface: string): Plugin {
     },
     transformIndexHtml(html) {
       return { html: html.replace(/<title>.*?<\/title>/, `<title>${PRODUCT_BRAND.name} ${surface}</title>`),
-        tags: [{ tag: 'link', attrs: { rel: 'icon', type: 'image/png', href: PRODUCT_BRAND.icon }, injectTo: 'head' }] };
+        tags: [{ tag: 'link', attrs: { rel: 'icon', type: PRODUCT_BRAND.icon.endsWith('.svg') ? 'image/svg+xml' : 'image/png', href: PRODUCT_BRAND.icon }, injectTo: 'head' }] };
     },
   };
 }
