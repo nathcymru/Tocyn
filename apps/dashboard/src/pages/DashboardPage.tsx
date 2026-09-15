@@ -48,11 +48,11 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className={[ParkPage('dashboard').root, ParkPage('dashboard').content, 'tocyn-dashboard-page'].join(' ')}>
-      <div>
+      <header className={ParkPage('dashboard').header}>
         <h1 className="tocyn-dashboard-page-title">Dashboard</h1>
         <p className="tocyn-dashboard-page-description">A quick overview of the support workload.</p>
         <ParkButton type="button" variant="solid" onClick={() => navigate('/inbox')} className="tocyn-dashboard-open-inbox">Open Inbox</ParkButton>
-      </div>
+      </header>
 
       <div className="tocyn-metric-strip">
         {cards.map((card, idx) => (

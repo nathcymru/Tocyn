@@ -241,7 +241,7 @@ export const KnowledgePage: React.FC = () => {
 
   return (
     <div className={[ParkPage('knowledge').root, ParkPage('knowledge').content, 'tocyn-knowledge-page'].join(' ')}>
-      <div className="tocyn-knowledge-header">
+      <div className={['tocyn-knowledge-header', ParkPage('knowledge').header].join(' ')}>
         <h1 ref={heading} tabIndex={-1} className="tocyn-knowledge-title">Knowledge Base</h1>
         <ParkButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}

@@ -221,7 +221,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   const moveFocus=(index:number)=>{const next=Math.max(0,Math.min(tickets.length-1,index));setFocusedIndex(next);rowRefs.current[next]?.focus();};
 
   return <div className={[ParkPage('inbox').root, ParkPage('inbox').content, 'tocyn-inbox-list'].join(' ')}>
-    <header className="tocyn-inbox-header">
+    <header className={['tocyn-inbox-header', ParkPage('inbox').header].join(' ')}>
       <div className="tocyn-inbox-title-row"><div><p className="tocyn-inbox-eyebrow">Workspace</p>
         <h1 ref={heading} tabIndex={-1} className="tocyn-inbox-title">Inbox</h1></div>
         <span className="tocyn-inbox-count">{meta.total} conversations</span></div>

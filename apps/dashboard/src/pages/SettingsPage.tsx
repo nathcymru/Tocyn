@@ -113,7 +113,7 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className={[ParkPage('settings').root, ParkPage('settings').content, 'tocyn-settings-page'].join(' ')}>
-      <div className="tocyn-settings-header">
+      <div className={['tocyn-settings-header', ParkPage('settings').header].join(' ')}>
         <div>
           <h1 className="tocyn-settings-title">General Settings</h1>
           <p className="tocyn-settings-description">Manage your organization and system defaults.</p>

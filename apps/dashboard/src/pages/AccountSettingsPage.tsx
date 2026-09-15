@@ -8,7 +8,7 @@ export function AccountSettingsPage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   return <div className={[ParkPage('account').root, ParkPage('account').content, 'tocyn-account-page'].join(' ')}>
-    <header className="tocyn-account-page-header">
+    <header className={['tocyn-account-page-header', ParkPage('account').header].join(' ')}>
       <div>
         <p className="tocyn-page-eyebrow">Account</p>
         <h1>Account settings</h1>
