@@ -25,12 +25,15 @@ if (!window.IntersectionObserver) {
 }
 
 describe('Park-compatible shared primitives', () => {
-  it('provides styled native controls without changing form semantics', () => {
+  it('provides shared Park recipes without changing form semantics', () => {
     render(<form aria-label="Park form"><ParkField label="Name"><ParkInput name="name" aria-label="Name" required /></ParkField><ParkSelect name="priority" aria-label="Priority" defaultValue="normal"><option value="normal">Normal</option><option value="high">High</option></ParkSelect><ParkTextarea name="details" aria-label="Details" /><ParkButton type="submit">Save</ParkButton></form>);
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAttribute('data-park', 'input');
     expect(screen.getByRole('textbox', { name: 'Details' })).toHaveAttribute('data-park', 'textarea');
     expect(screen.getByRole('combobox', { name: 'Priority' })).toHaveAttribute('data-part', 'trigger');
     expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('data-park', 'button');
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('data-scope', 'button');
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAttribute('data-scope', 'input');
+    expect(screen.getByRole('textbox', { name: 'Details' })).toHaveAttribute('data-scope', 'textarea');
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeRequired();
   });
 
@@ -44,6 +47,8 @@ describe('Park-compatible shared primitives', () => {
   it('renders empty state as a labelled region with optional action', () => {
     render(<ParkEmptyState title="No tickets" description="Your queue is empty." action={<ParkButton>Refresh</ParkButton>} />);
     expect(screen.getByRole('region', { name: 'No tickets' })).toHaveAttribute('data-park', 'empty-state');
+    expect(screen.getByRole('region', { name: 'No tickets' })).toHaveAttribute('data-scope', 'empty-state');
+    expect(screen.getByRole('region', { name: 'No tickets' }).querySelector('[data-part="action"]')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
   });
 
