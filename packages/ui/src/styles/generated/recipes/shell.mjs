@@ -34,6 +34,18 @@ const shellSlotNames = [
     "shell__navigationLink"
   ],
   [
+    "navigationLinkLabelled",
+    "shell__navigationLinkLabelled"
+  ],
+  [
+    "navigationLinkIcon",
+    "shell__navigationLinkIcon"
+  ],
+  [
+    "navigationIcon",
+    "shell__navigationIcon"
+  ],
+  [
     "sidebarDesktop",
     "shell__sidebarDesktop"
   ],
@@ -56,6 +68,14 @@ const shellSlotNames = [
   [
     "mobileDialog",
     "shell__mobileDialog"
+  ],
+  [
+    "mobileDialogLabelled",
+    "shell__mobileDialogLabelled"
+  ],
+  [
+    "mobileDialogCompact",
+    "shell__mobileDialogCompact"
   ],
   [
     "mobileContent",

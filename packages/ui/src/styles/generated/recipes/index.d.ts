@@ -56,5 +56,6 @@ export * from './toast';
 export * from './toggle-group';
 export * from './tooltip';
 export * from './page';
+export * from './global-search';
 export * from './shell';
 export * from './empty-state';

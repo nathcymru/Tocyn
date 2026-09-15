@@ -7,7 +7,7 @@ import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
 import { Menu as ArkMenu } from '@ark-ui/react/menu';
 import { IconChevronDown, IconCheck } from './icons';
 import { visuallyHidden } from './styles/generated/patterns';
-import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, shell as shellRecipe, card as cardRecipe, page as pageRecipe } from './styles/generated/recipes';
+import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, globalSearch as globalSearchRecipe, shell as shellRecipe, card as cardRecipe, page as pageRecipe } from './styles/generated/recipes';
 
 const selectStyles = selectRecipe();
 const buttonClass = buttonRecipe();
@@ -199,7 +199,10 @@ export function ParkEmptyState({ title, description, action, headingLevel = 2, c
 }
 
 /** Panda slot recipe for the application shell layout. */
-export const ParkShell = shellRecipe;
+// Keep the shell recipe call in the package source so Panda's static extractor
+// emits its slot classes for consuming apps as part of the shared stylesheet.
+export const ParkShell = (props?: Parameters<typeof shellRecipe>[0]) => shellRecipe(props);
+export const ParkGlobalSearch = () => globalSearchRecipe();
 export const ParkPage = pageStyles;
 export const ParkVisuallyHidden = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement>>(function ParkVisuallyHidden({ className, ...props }, ref) {
   return <span {...props} ref={ref} className={[visuallyHidden(), className].filter(Boolean).join(' ')} />;

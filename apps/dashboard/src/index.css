@@ -137,15 +137,7 @@
 .tocyn-shell-capacity-dialog { inline-size: 100%; max-inline-size: 32rem; max-block-size: 90vh; overflow-y: auto; padding: 1.5rem; }
 .tocyn-shell-dialog-header, .tocyn-shell-connection-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block-end: 1rem; }
 .tocyn-shell-dialog-close { padding: .5rem .75rem; }
-.tocyn-shell-logo-link { display: flex; align-items: center; justify-content: center; inline-size: 2.75rem; block-size: 2.75rem; margin-block-end: 2rem; }
-.tocyn-shell-logo { inline-size: 2.5rem; block-size: 2.5rem; object-fit: contain; }
-.tocyn-shell-navigation { flex: 1; inline-size: 100%; padding-inline: .5rem; }
-.tocyn-shell-navigation-link-labelled { display: flex; align-items: center; gap: .75rem; inline-size: 100%; min-block-size: 2.75rem; padding: .5rem .75rem; }
-.tocyn-shell-navigation-link-icon { position: relative; display: flex; align-items: center; justify-content: center; inline-size: 100%; aspect-ratio: 1; }
-.tocyn-shell-navigation-icon { flex-shrink: 0; inline-size: 2.5rem; block-size: 2.5rem; }
-.tocyn-shell-mobile-dialog { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 50; inline-size: 5rem; block-size: 100dvh; max-block-size: none; margin: 0; overflow-y: auto; padding: .5rem; }
 .tocyn-shell-mobile-content { block-size: calc(100dvh - 4rem); }
-.tocyn-shell-mobile-close, .tocyn-shell-mobile-trigger { padding: .5rem; }
 .tocyn-shell-activity-badge { position: absolute; inset-block-start: 0; inset-inline-end: 0; min-inline-size: 1rem; padding-inline: .25rem; }
 .tocyn-shell-icon, .tocyn-shell-menu-icon { inline-size: 1.5rem; block-size: 1.5rem; }
 .tocyn-shell-small-icon, .tocyn-shell-dismiss-icon { inline-size: .875rem; block-size: .875rem; }

@@ -10,7 +10,7 @@ type ShellVariantMap = {
   [key in keyof ShellVariant]: Array<ShellVariant[key]>
 }
 
-type ShellSlot = "root" | "sidebar" | "main" | "header" | "content" | "navigation" | "navigationLink" | "sidebarDesktop" | "sidebarLabelled" | "sidebarCompact" | "logoLink" | "logo" | "mobileDialog" | "mobileContent" | "mobileClose" | "mobileTrigger" | "personaTrigger" | "personaAvatar" | "personaStatus" | "accountMenu" | "accountSummary" | "accountSummaryName" | "accountSummaryEmail" | "menuItem" | "activityTrigger" | "activityPopover" | "connectionWrap" | "connectionPopover" | "rootInbox" | "rootStandard" | "contentInbox" | "contentStandard" | "contentPadded"
+type ShellSlot = "root" | "sidebar" | "main" | "header" | "content" | "navigation" | "navigationLink" | "navigationLinkLabelled" | "navigationLinkIcon" | "navigationIcon" | "sidebarDesktop" | "sidebarLabelled" | "sidebarCompact" | "logoLink" | "logo" | "mobileDialog" | "mobileDialogLabelled" | "mobileDialogCompact" | "mobileContent" | "mobileClose" | "mobileTrigger" | "personaTrigger" | "personaAvatar" | "personaStatus" | "accountMenu" | "accountSummary" | "accountSummaryName" | "accountSummaryEmail" | "menuItem" | "activityTrigger" | "activityPopover" | "connectionWrap" | "connectionPopover" | "rootInbox" | "rootStandard" | "contentInbox" | "contentStandard" | "contentPadded"
 
 export type ShellVariantProps = {
   [key in keyof ShellVariant]?: ConditionalValue<ShellVariant[key]> | undefined

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { createListCollection } from '@ark-ui/react';
-import { ParkButton, ParkInput, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkGlobalSearch, ParkInput, ParkSelect } from '@luminatick/ui/park';
 import { dashboardApi } from '../../api/client';
 import { assignmentIdentity } from '../../hooks/useTicketAssignment';
 import { useAuthStore } from '../../store/authStore';
@@ -49,6 +49,7 @@ export function GlobalSearch({ shortcutsEnabled }: { shortcutsEnabled: boolean }
 }
 
 function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
+  const styles = ParkGlobalSearch();
   const identity = assignmentIdentity();
   const location = useLocation();
   const token = useAuthStore(state => state.token), generation = useAuthStore(state => state.sessionGeneration);
@@ -106,21 +107,21 @@ function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
     } catch { if (current()) setMessage(type === 'all' || type === 'tickets' ? 'Ticket search is unavailable. No partial results are shown.' : type === 'customers' ? 'Customer search is unavailable. No partial results are shown.' : 'Knowledge search is unavailable. The complete authorised list could not be loaded within its limits.'); }
     finally { if (current()) setBusy(false); }
   };
-  return <div className="tocyn-global-search-shell" onKeyDown={event => { if (event.key === 'Escape' && event.target !== input.current) { event.preventDefault(); invalidate(); input.current?.focus(); } }}>
-    <div className="tocyn-global-search-input-shell"><MagnifyingGlassIcon aria-hidden="true" className="tocyn-global-search-icon" /><ParkInput ref={input} type="text" maxLength={256} value={query} aria-label={type === 'all' || type === 'tickets' ? 'Search all tickets (global shell)' : `Search authorised ${type} (global shell)`} aria-describedby="global-ticket-search-scope" aria-keyshortcuts={shortcutsEnabled ? 'Control+K Meta+K' : undefined} placeholder={type === 'all' || type === 'tickets' ? 'Search...' : type === 'knowledge' ? 'Search authorised knowledge titles...' : 'Search authorised customers...'} onChange={event => { invalidate(); setQuery(event.target.value); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void search(); } if (event.key === 'Escape') { event.preventDefault(); clear(); } }} className="tocyn-global-search" />
-    {shortcutsEnabled && <span data-tocyn-focus-decoration="" aria-hidden="true" className="tocyn-search-shortcut">⌘K</span>}</div>
-    <span className="tocyn-search-divider" aria-hidden="true" />
-    <div className="tocyn-global-search-scope"><span className="tocyn-visually-hidden" id="global-search-scope-label">Search scope filter</span><ParkSelect.Root collection={searchScopeOptions as never} value={[type]} open={scopeOpen} onOpenChange={({ open }) => setScopeOpen(open)} onValueChange={({ value }) => { const next = value[0]; if (!next) return; setScopeOpen(false); invalidate(); setType(next); }} positioning={{ placement: 'bottom-end' }}>
+  return <div className={styles.root} onKeyDown={event => { if (event.key === 'Escape' && event.target !== input.current) { event.preventDefault(); invalidate(); input.current?.focus(); } }}>
+    <div className={styles.inputShell}><MagnifyingGlassIcon aria-hidden="true" className={styles.icon} /><ParkInput ref={input} type="text" maxLength={256} value={query} aria-label={type === 'all' || type === 'tickets' ? 'Search all tickets (global shell)' : `Search authorised ${type} (global shell)`} aria-describedby="global-ticket-search-scope" aria-keyshortcuts={shortcutsEnabled ? 'Control+K Meta+K' : undefined} placeholder={type === 'all' || type === 'tickets' ? 'Search...' : type === 'knowledge' ? 'Search authorised knowledge titles...' : 'Search authorised customers...'} onChange={event => { invalidate(); setQuery(event.target.value); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void search(); } if (event.key === 'Escape') { event.preventDefault(); clear(); } }} className={styles.input} />
+    {shortcutsEnabled && <span data-tocyn-focus-decoration="" aria-hidden="true" className={styles.shortcut}>⌘K</span>}</div>
+    <span className={styles.divider} aria-hidden="true" />
+    <div className={styles.scope}><span className="tocyn-visually-hidden" id="global-search-scope-label">Search scope filter</span><ParkSelect.Root collection={searchScopeOptions as never} value={[type]} open={scopeOpen} onOpenChange={({ open }) => setScopeOpen(open)} onValueChange={({ value }) => { const next = value[0]; if (!next) return; setScopeOpen(false); invalidate(); setType(next); }} positioning={{ placement: 'bottom-end' }}>
       <ParkSelect.Label className="tocyn-visually-hidden">Search scope filter</ParkSelect.Label>
       <ParkSelect.Control><ParkSelect.Trigger aria-labelledby="global-search-scope-label"><ParkSelect.ValueText placeholder="All" /></ParkSelect.Trigger><ParkSelect.IndicatorGroup><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.IndicatorGroup></ParkSelect.Control>
       <ParkSelect.HiddenSelect />
       <ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{searchScopeOptions.items.map(item => { const option = item as { label: string; value: string }; return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator /></ParkSelect.Item>; })}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
     </ParkSelect.Root></div>
     <p id="global-ticket-search-scope" className="tocyn-visually-hidden">{type === 'all' || type === 'tickets' ? 'Searches all tickets you are authorised to access.' : type === 'knowledge' ? 'Searches titles in the complete authorised knowledge list.' : 'Searches customer identities attached to tickets you are authorised to access.'} {shortcutsEnabled ? 'Press Command or Control K to focus this search.' : ''} Filter this view is available in the Inbox.</p>
-    {(type === 'customers' || busy || message || selected) && <div className="tocyn-global-search-popover">
-    {(busy || message) && <p role="status" className="tocyn-global-search-status">{busy ? 'Searching authorised results…' : message}</p>}
-    {results.length > 0 && <ul aria-label={type === 'all' || type === 'tickets' ? 'Ticket search results' : type === 'knowledge' ? 'Knowledge search results' : 'Customer search results'} className="tocyn-global-search-results">{results.map(row => <li key={row.id}>{type === 'all' || type === 'tickets' ? <Link to={`/inbox/all/${encodeURIComponent(row.id)}`} className="tocyn-global-search-result-link">Open in All tickets: {row.title || 'Untitled ticket'}</Link> : <ParkButton type="button" onClick={event => { previewOpener.current = event.currentTarget; setSelected(row); }} className="tocyn-global-search-result-button">{row.title || (type === 'customers' ? 'Unnamed customer' : 'Untitled knowledge')}</ParkButton>}</li>)}</ul>}
-    {selected && <section aria-label="Knowledge result preview" className="tocyn-global-search-preview"><h2 ref={previewHeading} tabIndex={-1} className="tocyn-global-search-preview-title">{selected.title}</h2><p>Status: {selected.status}</p><p>Category reference: {selected.category_id ?? 'Uncategorised'}</p><ParkButton type="button" onClick={() => { setSelected(null); if (previewOpener.current?.isConnected) previewOpener.current.focus(); }}>Close preview</ParkButton></section>}
+    {(type === 'customers' || busy || message || selected) && <div className={styles.popover}>
+    {(busy || message) && <p role="status" className={styles.status}>{busy ? 'Searching authorised results…' : message}</p>}
+    {results.length > 0 && <ul aria-label={type === 'all' || type === 'tickets' ? 'Ticket search results' : type === 'knowledge' ? 'Knowledge search results' : 'Customer search results'} className={styles.results}>{results.map(row => <li key={row.id}>{type === 'all' || type === 'tickets' ? <Link to={`/inbox/all/${encodeURIComponent(row.id)}`} className={styles.result}>Open in All tickets: {row.title || 'Untitled ticket'}</Link> : <ParkButton type="button" onClick={event => { previewOpener.current = event.currentTarget; setSelected(row); }} className={styles.result}>{row.title || (type === 'customers' ? 'Unnamed customer' : 'Untitled knowledge')}</ParkButton>}</li>)}</ul>}
+    {selected && <section aria-label="Knowledge result preview" className={styles.preview}><h2 ref={previewHeading} tabIndex={-1}>{selected.title}</h2><p>Status: {selected.status}</p><p>Category reference: {selected.category_id ?? 'Uncategorised'}</p><ParkButton type="button" onClick={() => { setSelected(null); if (previewOpener.current?.isConnected) previewOpener.current.focus(); }}>Close preview</ParkButton></section>}
     </div>}
   </div>;
 }

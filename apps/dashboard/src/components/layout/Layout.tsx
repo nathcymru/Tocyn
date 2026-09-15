@@ -105,7 +105,7 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   const labelled = useOperatorPreferencesContext().navigation === 'labelled';
   const shellStyles = ParkShell();
   return (
-        <div className={shellStyles.sidebar}>
+        <div className={cn(shellStyles.sidebar, labelled ? shellStyles.sidebarLabelled : shellStyles.sidebarCompact)}>
           <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className={shellStyles.logoLink}>
             <ProductLogo compact decorative className={shellStyles.logo} />
           </Link>
@@ -121,14 +121,12 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
                   aria-label={item.name}
                   aria-current={isActive ? "page" : undefined}
                   onClick={onNavigate}
-                  className={cn(shellStyles.navigationLink,
-                    labelled ? "tocyn-shell-navigation-link-labelled" : "tocyn-shell-navigation-link-icon",
-                    isActive
-                      ? "tocyn-shell-navigation-link-active"
-                      : "tocyn-shell-navigation-link-inactive"
+                  className={cn(
+                    shellStyles.navigationLink,
+                    labelled ? shellStyles.navigationLinkLabelled : shellStyles.navigationLinkIcon,
                   )}
                 >
-                  <item.icon aria-hidden="true" className="tocyn-shell-navigation-icon" />{labelled && <span>{item.name}</span>}
+                  <item.icon aria-hidden="true" className={shellStyles.navigationIcon} />{labelled && <span>{item.name}</span>}
                 </Link>
               );
             })}
@@ -256,14 +254,14 @@ function LayoutContent() {
 
   return (
       <div className={cn(shellStyles.root, isInboxRoute ? shellStyles.rootInbox : shellStyles.rootStandard, 'tocyn-shell-root', isInboxRoute ? 'tocyn-shell-root-inbox' : 'tocyn-shell-root-standard')}>
-      <aside data-tocyn-inverse="" className={cn(shellStyles.sidebarDesktop, preferences.navigation === 'labelled' ? shellStyles.sidebarLabelled : shellStyles.sidebarCompact, preferences.navigation === 'labelled' ? 'tocyn-shell-sidebar-labelled' : 'tocyn-shell-sidebar-compact')}>
+      <aside data-tocyn-inverse="" className={shellStyles.sidebarDesktop}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
         <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
           labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
           finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
           data-tocyn-dialog-edge="" data-tocyn-inverse=""
-          className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? 'tocyn-shell-mobile-labelled' : 'tocyn-shell-mobile-compact')}>
+          className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? shellStyles.mobileDialogLabelled : shellStyles.mobileDialogCompact)}>
           <h2 id={`${mobileDialogId}-title`} className="tocyn-visually-hidden">Navigation</h2>
           <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
             className={shellStyles.mobileClose}><X aria-hidden="true" /></ParkButton>
