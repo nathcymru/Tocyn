@@ -10,37 +10,14 @@
   }
   #root { min-height: 100dvh; }
   :root {
-    --tocyn-app-surface: var(--tocyn-color-surface, #ffffff);
-    --tocyn-app-surface-panel: var(--tocyn-color-canvas, #f8fafc);
-    --tocyn-app-surface-muted: var(--tocyn-color-input, #f1f5f9);
-    --tocyn-app-text: var(--tocyn-color-text, #1e293b);
-    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #64748b);
-    --tocyn-app-border: var(--tocyn-color-divider, #cbd5e1);
-    --tocyn-sla-breach-text: var(--tocyn-color-critical);
-    --tocyn-sla-on-track-text: var(--tocyn-color-success-text);
     color-scheme: light;
   }
   [data-tocyn-theme-mode="dark"] {
-    --tocyn-app-surface: var(--tocyn-color-surface, #1a1d23);
-    --tocyn-app-surface-panel: var(--tocyn-color-canvas, #0f1115);
-    --tocyn-app-surface-muted: var(--tocyn-color-input, #1e293b);
-    --tocyn-app-text: var(--tocyn-color-text, #e2e8f0);
-    --tocyn-app-text-muted: var(--tocyn-color-text-muted, #94a3b8);
-    --tocyn-app-border: var(--tocyn-color-divider, #334155);
-    --tocyn-sla-breach-text: #fca5a5;
-    --tocyn-sla-on-track-text: #6ee7b7;
     color-scheme: dark;
   }
   [data-tocyn-inverse] {
     /* Inverse containers use a fixed, independently validated dark context.
        Tenant palette aliases remain scoped to the workspace root. */
-    --tocyn-app-surface: var(--tocyn-color-sidebar);
-    --tocyn-app-surface-panel: var(--tocyn-color-sidebar-border);
-    --tocyn-app-surface-muted: #334155;
-    --tocyn-app-text: #f8fafc;
-    --tocyn-app-text-muted: #cbd5e1;
-    --tocyn-app-border: var(--tocyn-color-divider);
-    --tocyn-color-focus: #f8fafc;
     color-scheme: dark;
   }
   body {
