@@ -38,6 +38,14 @@ const shellSlotNames = [
     "shell__sidebarDesktop"
   ],
   [
+    "sidebarLabelled",
+    "shell__sidebarLabelled"
+  ],
+  [
+    "sidebarCompact",
+    "shell__sidebarCompact"
+  ],
+  [
     "logoLink",
     "shell__logoLink"
   ],
@@ -108,6 +116,26 @@ const shellSlotNames = [
   [
     "connectionPopover",
     "shell__connectionPopover"
+  ],
+  [
+    "rootInbox",
+    "shell__rootInbox"
+  ],
+  [
+    "rootStandard",
+    "shell__rootStandard"
+  ],
+  [
+    "contentInbox",
+    "shell__contentInbox"
+  ],
+  [
+    "contentStandard",
+    "shell__contentStandard"
+  ],
+  [
+    "contentPadded",
+    "shell__contentPadded"
   ]
 ]
 const shellSlotFns = /* @__PURE__ */ shellSlotNames.map(([slotName, slotKey]) => [slotName, createRecipe(slotKey, shellDefaultVariants, getSlotCompoundVariant(shellCompoundVariants, slotName))])

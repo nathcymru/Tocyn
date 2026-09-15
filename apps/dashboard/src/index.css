@@ -137,7 +137,6 @@
 .tocyn-shell-capacity-dialog { inline-size: 100%; max-inline-size: 32rem; max-block-size: 90vh; overflow-y: auto; padding: 1.5rem; }
 .tocyn-shell-dialog-header, .tocyn-shell-connection-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block-end: 1rem; }
 .tocyn-shell-dialog-close { padding: .5rem .75rem; }
-.tocyn-shell-sidebar { display: flex; flex-direction: column; align-items: center; block-size: 100%; padding-block: 1rem; }
 .tocyn-shell-logo-link { display: flex; align-items: center; justify-content: center; inline-size: 2.75rem; block-size: 2.75rem; margin-block-end: 2rem; }
 .tocyn-shell-logo { inline-size: 2.5rem; block-size: 2.5rem; object-fit: contain; }
 .tocyn-shell-navigation { flex: 1; inline-size: 100%; padding-inline: .5rem; }
@@ -145,19 +144,9 @@
 .tocyn-shell-navigation-link-icon { position: relative; display: flex; align-items: center; justify-content: center; inline-size: 100%; aspect-ratio: 1; }
 .tocyn-shell-navigation-icon { flex-shrink: 0; inline-size: 2.5rem; block-size: 2.5rem; }
 .tocyn-shell-sidebar-footer { position: relative; display: flex; flex-direction: column; align-items: center; gap: .5rem; inline-size: 100%; margin-block-start: auto; padding: 1rem .5rem .75rem; }
-.tocyn-shell-root { display: flex; inline-size: 100%; min-block-size: 100dvh; }
-.tocyn-shell-root-inbox { block-size: 100dvh; min-block-size: 0; overflow: hidden; }
-.tocyn-shell-root-standard { min-block-size: 100vh; }
-.tocyn-shell-sidebar-desktop { flex-shrink: 0; }
 .tocyn-shell-mobile-dialog { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 50; inline-size: 5rem; block-size: 100dvh; max-block-size: none; margin: 0; overflow-y: auto; padding: .5rem; }
 .tocyn-shell-mobile-content { block-size: calc(100dvh - 4rem); }
 .tocyn-shell-mobile-close, .tocyn-shell-mobile-trigger { padding: .5rem; }
-.tocyn-shell-main { display: flex; min-inline-size: 0; flex: 1; flex-direction: column; }
-.tocyn-shell-content { min-block-size: 0; min-inline-size: 0; flex: 1; }
-.tocyn-shell-content-inbox { overflow: hidden; }
-.tocyn-shell-content-standard { overflow: auto; }
-.tocyn-shell-content-padded { padding: 1rem; }
-.tocyn-shell-header { display: flex; min-block-size: 4rem; flex-shrink: 0; align-items: center; justify-content: space-between; padding-block: .5rem; padding-inline: 1rem; }
 .tocyn-shell-activity-badge { position: absolute; inset-block-start: 0; inset-inline-end: 0; min-inline-size: 1rem; padding-inline: .25rem; }
 .tocyn-shell-icon, .tocyn-shell-menu-icon { inline-size: 1.5rem; block-size: 1.5rem; }
 .tocyn-shell-small-icon, .tocyn-shell-dismiss-icon { inline-size: .875rem; block-size: .875rem; }
@@ -175,8 +164,6 @@
 .tocyn-shell-connection-dot { inline-size: .5rem; block-size: .5rem; }
 .tocyn-shell-reconnect-divider { margin-block-start: 1rem; padding-block-start: 1rem; }
 .tocyn-shell-reconnect-button { display: flex; align-items: center; justify-content: center; gap: .5rem; inline-size: 100%; padding: .5rem .75rem; }
-@media (min-width: 1024px) { .tocyn-shell-header { padding-inline: 2rem; } .tocyn-shell-mobile-trigger { display: none; } .tocyn-shell-sidebar-desktop { display: block; } }
-@media (min-width: 1024px) { .tocyn-shell-content-padded { padding: 2rem; } }
 .tocyn-capacity-panel { display: grid; gap: 1rem; }
 .tocyn-capacity-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; }
 .tocyn-capacity-refresh, .tocyn-capacity-save { padding: .5rem .75rem; }
@@ -219,7 +206,6 @@
 .tocyn-u-pre-wrap { white-space: pre-wrap; }
 .tocyn-u-wrap { overflow-wrap: anywhere; }
 
-.tocyn-shell-sidebar-labelled { inline-size: 16rem; } .tocyn-shell-sidebar-compact { inline-size: 4rem; }
 .tocyn-shell-mobile-labelled { inline-size: 14rem; max-inline-size: 90vw; } .tocyn-shell-mobile-compact { inline-size: 5rem; }
 .tocyn-users-dialog-unavailable-icon { display: block; inline-size: 3rem; block-size: 3rem; margin-inline: auto; margin-block-end: 1rem; }
 .tocyn-shell-workspace-main { flex: 1; min-block-size: 0; }

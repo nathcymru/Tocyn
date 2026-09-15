@@ -190,7 +190,7 @@ export default {
         },
         shell: {
           className: 'shell',
-          slots: ['root', 'sidebar', 'main', 'header', 'content', 'navigation', 'navigationLink', 'sidebarDesktop', 'logoLink', 'logo', 'mobileDialog', 'mobileContent', 'mobileClose', 'mobileTrigger', 'personaTrigger', 'personaAvatar', 'personaStatus', 'accountMenu', 'accountSummary', 'accountSummaryName', 'accountSummaryEmail', 'menuItem', 'activityTrigger', 'activityPopover', 'connectionWrap', 'connectionPopover'],
+          slots: ['root', 'sidebar', 'main', 'header', 'content', 'navigation', 'navigationLink', 'sidebarDesktop', 'sidebarLabelled', 'sidebarCompact', 'logoLink', 'logo', 'mobileDialog', 'mobileContent', 'mobileClose', 'mobileTrigger', 'personaTrigger', 'personaAvatar', 'personaStatus', 'accountMenu', 'accountSummary', 'accountSummaryName', 'accountSummaryEmail', 'menuItem', 'activityTrigger', 'activityPopover', 'connectionWrap', 'connectionPopover', 'rootInbox', 'rootStandard', 'contentInbox', 'contentStandard', 'contentPadded'],
           base: {
             root: { display: 'flex', width: '100%', minHeight: '100dvh', background: 'bg.canvas', color: 'text.primary', fontFamily: 'primary' },
             sidebar: { display: 'flex', flexDirection: 'column', flexShrink: '0', width: '4rem', minHeight: '100dvh', background: 'bg.surface', borderRight: '1px solid', borderColor: 'border.default', padding: '1rem 0.5rem' },
@@ -200,6 +200,8 @@ export default {
             navigation: { display: 'flex', flex: '1', width: '100%', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem' },
             navigationLink: { display: 'inline-flex', minWidth: '2.75rem', minHeight: '2.75rem', alignItems: 'center', justifyContent: 'center', borderRadius: 'l2', color: 'icon.muted', padding: '0.5rem', transition: 'colors', _hover: { background: 'bg.subtle', color: 'icon.primary' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } },
             sidebarDesktop: { flexShrink: '0' },
+            sidebarLabelled: { width: '16rem' },
+            sidebarCompact: { width: '4rem' },
             logoLink: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '2.75rem', height: '2.75rem', marginBottom: '2rem' },
             logo: { width: '2.5rem', height: '2.5rem', objectFit: 'contain' },
             mobileDialog: { position: 'fixed', insetBlock: '0', insetInlineStart: '0', zIndex: '50', width: '5rem', height: '100dvh', overflowY: 'auto', margin: '0', padding: '0.5rem' },
@@ -218,6 +220,11 @@ export default {
             activityPopover: { width: '24rem', maxWidth: 'calc(100vw - 2rem)', padding: '0.75rem' },
             connectionWrap: { position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem' },
             connectionPopover: { zIndex: '50', width: '16rem', padding: '1rem' },
+            rootInbox: { height: '100dvh', minHeight: '0', overflow: 'hidden' },
+            rootStandard: { minHeight: '100vh' },
+            contentInbox: { overflow: 'hidden' },
+            contentStandard: { overflow: 'auto' },
+            contentPadded: { padding: { base: '1rem', lg: '2rem' } },
           },
         },
         tabs: {
