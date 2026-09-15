@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ParkButton } from '@luminatick/ui/park';
 import { useAuthStore } from '../store/authStore';
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
@@ -6,6 +6,7 @@ import { OperatorPreferencesControl, OperatorThemeControl } from '../components/
 
 export function AccountSettingsPage() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   return <div className="tocyn-account-page">
     <header className="tocyn-account-page-header">
       <div>
@@ -13,7 +14,7 @@ export function AccountSettingsPage() {
         <h1>Account settings</h1>
         <p>Manage your operator identity, appearance, workspace preferences and current work.</p>
       </div>
-      <Link to="/profile/security" className="tocyn-button">Security profile</Link>
+      <ParkButton type="button" onClick={() => navigate('/profile/security')}>Security profile</ParkButton>
     </header>
     <section className="tocyn-account-card" aria-labelledby="account-identity-title">
       <h2 id="account-identity-title">Your identity</h2>

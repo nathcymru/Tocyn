@@ -1,10 +1,11 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { ParkEmptyState } from '@luminatick/ui/park';
+import { useNavigate } from 'react-router-dom';
+import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
 import { useStats } from '../hooks/useStats';
 import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const { data: stats, isLoading } = useStats();
 
   if (isLoading) {
@@ -50,7 +51,7 @@ export const DashboardPage: React.FC = () => {
       <div>
         <h1 className="tocyn-dashboard-page-title">Dashboard</h1>
         <p className="tocyn-dashboard-page-description">A quick overview of the support workload.</p>
-        <Link to="/inbox" className="tocyn-dashboard-open-inbox">Open Inbox</Link>
+        <ParkButton type="button" onClick={() => navigate('/inbox')} className="tocyn-dashboard-open-inbox">Open Inbox</ParkButton>
       </div>
 
       <div className="tocyn-metric-strip">

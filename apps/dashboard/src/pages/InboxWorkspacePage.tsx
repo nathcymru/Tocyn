@@ -71,7 +71,7 @@ function InboxWorkspace(){
   if(viewId&&viewId!=='all'&&!isQueueView(viewId)&&!isLoadingFilters&&!routeFilter)return <ParkEmptyState
     id="inbox-view-unavailable" className="tocyn-inbox-view-unavailable" title="Inbox view unavailable" headingLevel={1}
     description="This saved view is unavailable for the current account."
-    action={<Link to="/inbox/all" replace className="tocyn-inbox-view-unavailable-link">Open All tickets</Link>}
+    action={<ParkButton type="button" onClick={() => navigate('/inbox/all', { replace: true })} className="tocyn-inbox-view-unavailable-link">Open All tickets</ParkButton>}
   />;
 
   return <ParkSplitter.Root className="tocyn-inbox-workspace" orientation="horizontal"
