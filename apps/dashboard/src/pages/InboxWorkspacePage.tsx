@@ -2,7 +2,7 @@ import { useOptionalOperatorPreferencesContext } from '../components/theme/Opera
 import { createListCollection } from '@ark-ui/react';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { ParkButton, ParkEmptyState, ParkInput, ParkSelect, ParkSplitter } from '@luminatick/ui/park';
-import { AlertCircle,ChevronLeft,ChevronRight,Clock,Filter,LayoutList,Search,Table2 } from '../components/icons';
+import { AlertCircle,ChevronLeft,ChevronRight,Clock,LayoutList,Search,Table2 } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
@@ -116,6 +116,11 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   const prefix=settings?.TICKET_PREFIX||'#';
   const queue=isQueueView(activeView)?activeView:undefined;
   const filterId=activeView==='all'||queue?'':activeView;
+  const filterOptions = useMemo(() => createListCollection({ items: [
+    { label: 'All tickets', value: 'all' },
+    ...(['mine','unassigned','mentions','drafts','snoozed','actionable'] as const).map(view => ({ label: queueViews[view].label, value: view })),
+  ] }), []);
+  const savedViewOptions = useMemo(() => createListCollection({ items: (filters ?? []).map(filter => ({ label: filter.name, value: filter.id })) }), [filters]);
   const confirmedView=useRef<string|null>(null);
   // A successful route change starts a different view at page one; blocked navigation
   // leaves the current workspace untouched, and initial restoration keeps its page.
@@ -220,19 +225,14 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       <div className="tocyn-inbox-title-row"><div><p className="tocyn-inbox-eyebrow">Workspace</p>
         <h1 ref={heading} tabIndex={-1} className="tocyn-inbox-title">Inbox</h1></div>
         <span className="tocyn-inbox-count">{meta.total} conversations</span></div>
-      <nav aria-label="Work views" className="tocyn-inbox-view-nav">
-        {(['mine','unassigned','mentions','drafts','snoozed','actionable','all'] as const).map(view=>{
-          const label=view==='all'?'All tickets':queueViews[view].label;
-          const total=!queueCounts.isFetching&&!queueCounts.error?queueCounts.data?.[view]:undefined;
-          return <ParkButton key={view} type="button" aria-label={label} aria-pressed={activeView===view}
-            aria-describedby={total===undefined?undefined:`queue-total-${view}`} onClick={()=>selectView(view)}
-            className={clsx('tocyn-inbox-view-button',activeView===view?'tocyn-inbox-view-button-active':'tocyn-inbox-view-button-inactive')}>
-            {label}{total!==undefined&&<><span aria-hidden="true" className="tocyn-inbox-queue-total">{total}</span><span id={`queue-total-${view}`} className="tocyn-visually-hidden">{total} conversations in this standard queue</span></>}
-          </ParkButton>;
-        })}
-        {isLoadingFilters?<span role="status" className="tocyn-inbox-loading-label">Loading saved views…</span>:filters?.map(filter=><ParkButton key={filter.id} type="button"
-          aria-pressed={activeView===filter.id} onClick={()=>selectView(filter.id)} className={clsx('tocyn-inbox-view-button tocyn-inbox-view-button-with-icon',
-            activeView===filter.id?'tocyn-inbox-view-button-active':'tocyn-inbox-view-button-inactive')}><Filter className="tocyn-inbox-filter-icon" aria-hidden="true" />{filter.name}</ParkButton>)}</nav>
+      <div className="tocyn-inbox-control-strip" aria-label="Inbox controls">
+        <label className="tocyn-inbox-control-cell"><span className="tocyn-inbox-control-label">Filter</span><ParkSelect.Root collection={filterOptions as never} value={[queue ? queue : activeView === 'all' ? 'all' : 'all']} onValueChange={({ value }) => value[0] && selectView(value[0])}>
+          <ParkSelect.Label className="tocyn-visually-hidden">Filter conversations</ParkSelect.Label><ParkSelect.Control><ParkSelect.Trigger><ParkSelect.ValueText placeholder="All tickets" /></ParkSelect.Trigger><ParkSelect.Indicator aria-hidden="true">⌄</ParkSelect.Indicator></ParkSelect.Control><ParkSelect.HiddenSelect /><ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{filterOptions.items.map(item => { const option=item as {label:string;value:string}; return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator>✓</ParkSelect.ItemIndicator></ParkSelect.Item>; })}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
+        </ParkSelect.Root></label>
+        <label className="tocyn-inbox-control-cell"><span className="tocyn-inbox-control-label">Saved view</span>{isLoadingFilters ? <span role="status" className="tocyn-inbox-loading-label">Loading…</span> : <ParkSelect.Root collection={savedViewOptions as never} value={filterId ? [filterId] : []} onValueChange={({ value }) => value[0] && selectView(value[0])}>
+          <ParkSelect.Label className="tocyn-visually-hidden">Saved view</ParkSelect.Label><ParkSelect.Control><ParkSelect.Trigger><ParkSelect.ValueText placeholder="Choose a saved view" /></ParkSelect.Trigger><ParkSelect.Indicator aria-hidden="true">⌄</ParkSelect.Indicator></ParkSelect.Control><ParkSelect.HiddenSelect /><ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{savedViewOptions.items.map(item => { const option=item as {label:string;value:string}; return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator>✓</ParkSelect.ItemIndicator></ParkSelect.Item>; })}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
+        </ParkSelect.Root>}</label>
+      </div>
       <p className="tocyn-inbox-status">Queue totals cover standard views before search or custom filters.</p>
       {queueCounts.isFetching?<p role="status" className="tocyn-inbox-status">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="tocyn-inbox-status">Queue totals unavailable. <ParkButton type="button" onClick={()=>void queueCounts.refetch()} className="tocyn-inbox-inline-retry">Retry queue totals</ParkButton></p>:null}
       <div className="tocyn-inbox-metric-strip" aria-label="Queue metrics">
