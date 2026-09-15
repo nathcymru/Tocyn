@@ -97,7 +97,7 @@ export default {
             'knowledgeWorkspace', 'knowledgeSidebar', 'knowledgeContent', 'knowledgeTable', 'knowledgeRow', 'knowledgeSearch', 'knowledgePreview',
             'knowledgeCategoryRow', 'knowledgeCategoryRowSelected', 'knowledgeCategoryMain', 'knowledgeCategoryActions', 'knowledgeCategoryChildren', 'knowledgeCategoryList', 'knowledgeCategorySpacer', 'knowledgeCategoryButton', 'knowledgeDeleteActions', 'knowledgeStatusBadge',
             'accountGrid', 'accountIdentityName', 'accountIdentityEmail',
-            'inboxWorkspace', 'inboxList', 'inboxDetail', 'inboxHeader', 'inboxControls', 'inboxMetrics', 'inboxSearch', 'inboxToolbar', 'inboxRows', 'inboxRow', 'inboxTable', 'inboxEmpty', 'inboxMobileHidden', 'inboxTableMobileHidden', 'inboxStatus', 'inboxPriority',
+            'inboxWorkspace', 'inboxList', 'inboxDetail', 'inboxHeader', 'inboxControls', 'inboxMetrics', 'inboxSearch', 'inboxToolbar', 'inboxRows', 'inboxRow', 'inboxTable', 'inboxEmpty', 'inboxMobileHidden', 'inboxTableMobileHidden', 'inboxStatus', 'inboxPriority', 'inboxMobileNote', 'inboxTableResponsive',
             'metricStrip', 'metricCard', 'metricIcon', 'panels', 'priorityList', 'priorityRow', 'progressTrack', 'progressFill', 'overviewGrid', 'overviewCard', 'overviewFooter',
           ],
           base: {
@@ -146,6 +146,8 @@ export default {
             inboxTableMobileHidden: { display: { base: 'block', md: 'none' } },
             inboxStatus: { display: 'inline-flex', minHeight: '1.75rem', alignItems: 'center', borderRadius: 'full', background: 'bg.subtle', color: 'text.muted', padding: '0.25rem 0.625rem', fontSize: '0.8125rem', fontWeight: '600', '&[data-status="open"]': { background: 'info.surface', color: 'info.text' }, '&[data-status="pending"]': { background: 'warning.surface', color: 'warning' } },
             inboxPriority: { display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: 'text.muted', textTransform: 'capitalize', '&[data-priority="normal"]': { color: 'info.text' }, '&[data-priority="high"]': { color: 'warning' }, '&[data-priority="urgent"]': { color: 'critical' } },
+            inboxMobileNote: { display: { base: 'block', sm: 'none' }, color: 'text.muted', fontSize: '0.875rem' },
+            inboxTableResponsive: { display: { base: 'none', sm: 'block' }, overflowX: 'auto' },
             metricStrip: { display: 'grid', gridTemplateColumns: { base: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: '1rem' },
             metricCard: { minWidth: '0' },
             metricIcon: { display: 'inline-flex', width: '2.25rem', height: '2.25rem', alignItems: 'center', justifyContent: 'center', borderRadius: 'l2', background: 'bg.subtle', color: 'text.primary', '&[data-tone="blue"]': { background: 'info.surface', color: 'info.text' }, '&[data-tone="green"]': { background: 'rgba(16,185,129,0.12)', color: 'rgba(5,150,105,1)' }, '&[data-tone="amber"]': { background: 'warning.surface', color: 'warning' }, '&[data-tone="neutral"]': { background: 'bg.input', color: 'text.muted' } },

@@ -229,9 +229,6 @@
 .tocyn-u-resize-y { resize: vertical; }
 .tocyn-u-pre-wrap { white-space: pre-wrap; }
 .tocyn-u-wrap { overflow-wrap: anywhere; }
-.tocyn-inbox-mobile-note { display: none; }
-.tocyn-inbox-table-responsive { display: block; }
-@media (max-width: 639px) { .tocyn-inbox-mobile-note { display: block; } .tocyn-inbox-table-responsive { display: none; } }
 
 .tocyn-shell-sidebar-labelled { inline-size: 16rem; } .tocyn-shell-sidebar-compact { inline-size: 4rem; }
 .tocyn-shell-mobile-labelled { inline-size: 14rem; max-inline-size: 90vw; } .tocyn-shell-mobile-compact { inline-size: 5rem; }

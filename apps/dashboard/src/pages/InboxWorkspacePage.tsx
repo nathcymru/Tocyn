@@ -264,7 +264,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     {workspace.status==='error'||workspace.status==='conflict'?<div role="alert" className="tocyn-inbox-preference-error">{workspace.error}
       <ParkButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave} className="tocyn-inbox-inline-retry">{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</ParkButton></div>:null}
     {drafts.status==='partial'&&<p role="status" className="tocyn-inbox-draft-loading">Some draft indicators are still loading.</p>}
-    {presentation==='table'&&<p role="status" className="tocyn-inbox-mobile-note">Table view uses the compact conversation list on small screens.</p>}
+    {presentation==='table'&&<p role="status" className={pageStyles.inboxMobileNote}>Table view uses the compact conversation list on small screens.</p>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx(pageStyles.inboxRows,presentation==='table'&&pageStyles.inboxTableMobileHidden)}>
       {query.isLoading?<p role="status" className="tocyn-inbox-loading-state">Loading conversations…</p>:emptyPage?<ParkEmptyState className="tocyn-inbox-empty-state" title={emptyMessage} description={queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'} />:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
@@ -284,7 +284,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         </Link>;
       })}
     </div>
-      {presentation==='table'&&<div className="tocyn-inbox-table-wrap tocyn-inbox-table-responsive" aria-label="Conversation table">
+      {presentation==='table'&&<div className={[pageStyles.inboxTableResponsive, 'tocyn-inbox-table-wrap'].join(' ')} aria-label="Conversation table">
         <table className={pageStyles.inboxTable}><caption className="tocyn-visually-hidden">Tickets in the current view</caption><thead className="tocyn-inbox-table-head"><tr>
           <th scope="col" className="tocyn-inbox-table-cell-nowrap">Reference</th><th scope="col" className="tocyn-inbox-table-cell">Subject</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Status</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Priority</th><th scope="col" className="tocyn-inbox-table-cell">Customer</th><th scope="col" className="tocyn-inbox-table-cell-nowrap">Updated</th>
         </tr></thead><tbody className="tocyn-inbox-table-body">

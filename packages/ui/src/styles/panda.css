@@ -1405,6 +1405,17 @@
       color: var(--colors-critical);
 }
 
+    .page__inboxMobileNote {
+      display: block;
+      color: var(--colors-text\.muted);
+      font-size: 0.875rem;
+}
+
+    .page__inboxTableResponsive {
+      display: none;
+      overflow-x: auto;
+}
+
     .page__metricStrip {
       gap: 1rem;
       display: grid;
@@ -1748,6 +1759,15 @@
       gap: var(--spacing-2);
       display: inline-flex;
       isolation: isolate;
+}
+
+    @media screen and (min-width: 40rem) {
+      .page__inboxMobileNote {
+        display: none;
+}
+      .page__inboxTableResponsive {
+        display: block;
+}
 }
 
     @media screen and (min-width: 48rem) {

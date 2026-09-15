@@ -217,6 +217,14 @@ const pageSlotNames = [
     "page__inboxPriority"
   ],
   [
+    "inboxMobileNote",
+    "page__inboxMobileNote"
+  ],
+  [
+    "inboxTableResponsive",
+    "page__inboxTableResponsive"
+  ],
+  [
     "metricStrip",
     "page__metricStrip"
   ],
