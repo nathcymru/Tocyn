@@ -7,7 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./styles.css": "./src/styles/tocyn.css",
+    "./styles.css": "./src/styles/app-layout.css",
     "./primitives": "./src/primitives.tsx",
     "./ark": "./src/ark.ts",
     "./dialog": "./src/dialog.tsx",
@@ -31,7 +31,7 @@
     }
   },
   "sideEffects": [
-    "./src/styles/tocyn.css",
+    "./src/styles/app-layout.css",
     "./src/styles/panda.css"
   ],
   "scripts": {

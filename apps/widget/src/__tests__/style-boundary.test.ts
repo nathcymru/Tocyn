@@ -13,7 +13,7 @@ describe('shared stylesheet entry boundaries', () => {
       source('../../../dashboard/src/main.tsx'),
       source('../../../portal/src/main.tsx'),
       source('../main.tsx'),
-      source('../../../../packages/ui/src/styles/tocyn.css'),
+      source('../../../../packages/ui/src/styles/app-layout.css'),
     ]);
 
     expect(dashboardMain.match(/@luminatick\/ui\/styles\.css/g)).toHaveLength(1);
