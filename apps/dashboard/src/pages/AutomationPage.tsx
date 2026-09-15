@@ -190,7 +190,7 @@ export const AutomationPage: React.FC = () => {
         {!isEditing && (
           <ParkButton
             onClick={startCreate}
-            className="tocyn-automation-create"
+            variant="solid" className="tocyn-automation-create"
           >
             <IconPlus size={20} />
             Create Rule

@@ -167,8 +167,7 @@
 .tocyn-automation-header { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-block-end: 2rem; }
 .tocyn-automation-title { color: var(--tocyn-app-text); font-size: 1.5rem; font-weight: 700; }
 .tocyn-automation-description { color: var(--tocyn-app-text-muted); }
-.tocyn-automation-create { display: inline-flex; align-items: center; gap: .5rem; border-radius: .5rem; background: #4f46e5; color: white; padding: .5rem 1rem; transition: background-color 180ms ease; }
-.tocyn-automation-create:hover { background: #4338ca; }
+.tocyn-automation-create { gap: .5rem; }
 .tocyn-automation-alert { display: flex; align-items: center; gap: .75rem; margin-block-end: 1.5rem; border: 1px solid; border-radius: .5rem; padding: .75rem 1rem; }
 .tocyn-automation-alert--error { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
 .tocyn-automation-alert--success { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }

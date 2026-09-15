@@ -129,7 +129,7 @@ export function WidgetChannelPage() {
           <ParkButton
             onClick={handleSave}
             disabled={isSaving || isLoading || isError || !config}
-            className="tocyn-widget-save"
+            variant="solid" className="tocyn-widget-save"
           >
             {isSaving ? 'Saving...' : 'Save Changes'}
           </ParkButton>

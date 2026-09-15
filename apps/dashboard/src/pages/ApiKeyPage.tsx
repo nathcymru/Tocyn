@@ -153,7 +153,7 @@ export function ApiKeyPage() {
             createSucceeded.current = false; setCreateError(''); setCreatedKey(null);
             setIsCreating(true);
           }}
-          className="tocyn-api-key-create-button"
+          variant="solid" className="tocyn-api-key-create-button"
         >
           <IconPlus className="tocyn-api-key-create-icon" />
           Create New Key
@@ -182,7 +182,7 @@ export function ApiKeyPage() {
             <div className="tocyn-api-key-create-actions">
               <ParkButton
                 type="submit" ref={retryCreateButton}
-                className="tocyn-api-key-create-submit"
+                variant="solid" className="tocyn-api-key-create-submit"
               >
                 {creating ? 'Generating...' : createUnresolved ? 'Retry creation' : 'Generate Key'}
               </ParkButton>

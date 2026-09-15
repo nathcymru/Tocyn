@@ -254,8 +254,7 @@
 .tocyn-widget-checkbox { inline-size: 1rem; block-size: 1rem; accent-color: var(--tocyn-color-brand); }
 .tocyn-widget-feature-label { display: inline-flex; min-block-size: 2.75rem; align-items: center; color: var(--tocyn-color-text); font-size: .875rem; font-weight: 500; }
 .tocyn-widget-feature-help { color: var(--tocyn-color-text-muted); font-size: .75rem; }
-.tocyn-widget-save { width: 100%; border-radius: .5rem; background: var(--tocyn-color-brand); padding: .5rem; color: white; font-weight: 600; }
-.tocyn-widget-save:hover { background: var(--tocyn-color-brand-strong, #1d4ed8); }
+.tocyn-widget-save { width: 100%; font-weight: 600; }
 .tocyn-widget-aside { display: grid; gap: 1.5rem; }
 .tocyn-widget-snippet { border: 1px solid #1e293b; border-radius: .75rem; background: #0f172a; padding: 1.5rem; color: white; box-shadow: 0 1px 2px rgb(15 23 42 / 8%); }
 .tocyn-widget-snippet-title { margin: 0 0 1rem; color: #a5b4fc; font-size: 1.125rem; font-weight: 600; }
@@ -1096,8 +1095,7 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-api-key-revoke:hover { background: #fef2f2; }
 .tocyn-api-key-revoke-icon { inline-size: 1rem; block-size: 1rem; }
 .tocyn-api-key-created { border: 1px solid #fde68a; border-radius: .75rem; padding: 1.5rem; background: #fffbeb; }
-.tocyn-api-key-create-button { display: inline-flex; align-items: center; gap: .5rem; border-radius: .5rem; background: var(--tocyn-color-brand); padding: .5rem 1rem; color: white; transition: background-color 160ms ease; }
-.tocyn-api-key-create-button:hover { background: var(--tocyn-color-brand-strong, #1d4ed8); }
+.tocyn-api-key-create-button { gap: .5rem; }
 .tocyn-api-key-create-icon { inline-size: 1rem; block-size: 1rem; }
 .tocyn-api-key-create-card { border: 1px solid var(--tocyn-color-divider); border-radius: .75rem; background: var(--tocyn-color-surface); padding: 1.5rem; box-shadow: 0 1px 2px rgb(15 23 42 / 8%); }
 .tocyn-api-key-create-title { margin: 0 0 1rem; color: var(--tocyn-color-text); font-size: 1.125rem; font-weight: 600; }
@@ -1325,8 +1323,7 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-knowledge-page { display: flex; height: calc(100vh - 4rem); flex-direction: column; background: var(--tocyn-color-surface-muted); }
 .tocyn-knowledge-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 1rem; border-block-end: 1px solid var(--tocyn-color-divider); background: var(--tocyn-color-surface); padding: 1rem 1.5rem; }
 .tocyn-knowledge-title { margin: 0; color: var(--tocyn-color-text); font-size: 1.5rem; font-weight: 700; }
-.tocyn-knowledge-new-button { display: inline-flex; align-items: center; gap: .5rem; border: 1px solid transparent; border-radius: .5rem; background: var(--tocyn-color-brand); padding: .625rem 1rem; color: white; font-size: .875rem; font-weight: 600; box-shadow: 0 1px 2px rgb(15 23 42 / 8%); }
-.tocyn-knowledge-new-button:hover { background: var(--tocyn-color-brand-strong, #1d4ed8); }
+.tocyn-knowledge-new-button { gap: .5rem; font-size: .875rem; font-weight: 600; }
 .tocyn-knowledge-new-icon { inline-size: 1rem; block-size: 1rem; }
 .tocyn-knowledge-error { flex: none; margin: 1rem; border: 1px solid #fecaca; border-radius: .5rem; background: #fef2f2; padding: 1rem; color: #b91c1c; }
 .tocyn-knowledge-workspace { display: flex; min-height: 0; flex: 1 1 0%; overflow: hidden; }
@@ -1427,8 +1424,6 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-security-status-stack { display: grid; gap: 1rem; }
 .tocyn-security-status-enabled { display: flex; align-items: center; gap: .5rem; color: #15803d; font-weight: 500; }
 .tocyn-security-action { display: inline-flex; align-items: center; border-radius: .375rem; padding: .5rem 1rem; color: white; font-size: .875rem; font-weight: 500; box-shadow: 0 1px 2px rgb(15 23 42 / 8%); transition: opacity 160ms ease, background-color 160ms ease; }
-.tocyn-security-action-primary { background: #4f46e5; }
-.tocyn-security-action-primary:hover { background: #4338ca; }
 .tocyn-security-action-danger { background: #dc2626; }
 .tocyn-security-action-danger:hover { background: #b91c1c; }
 .tocyn-security-action[aria-disabled="true"] { cursor: default; opacity: .5; }

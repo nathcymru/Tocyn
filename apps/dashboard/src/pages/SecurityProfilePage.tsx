@@ -170,7 +170,7 @@ export function SecurityProfilePage() {
                     ref={disableButton}
                     onClick={() => { setError(null); setDisableOpen(true); }}
                     disabled={isLoading}
-                    className="tocyn-security-action tocyn-security-action-danger"
+                    variant="destructive" className="tocyn-security-action tocyn-security-action-danger"
                   >
                     <IconShield className="tocyn-security-action-icon" />
                     Disable 2FA
@@ -185,7 +185,7 @@ export function SecurityProfilePage() {
                     ref={setupButton}
                     onClick={startSetup}
                     disabled={isLoading}
-                    className="tocyn-security-action tocyn-security-action-primary"
+                    variant="solid" className="tocyn-security-action tocyn-security-action-primary"
                   >
                     <IconKey className="tocyn-security-action-icon" />
                     Set up 2FA

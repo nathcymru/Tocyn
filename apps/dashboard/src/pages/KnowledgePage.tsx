@@ -245,7 +245,7 @@ export const KnowledgePage: React.FC = () => {
         <h1 ref={heading} tabIndex={-1} className="tocyn-knowledge-title">Knowledge Base</h1>
         <ParkButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
-          className="tocyn-knowledge-new-button"
+          variant="solid" className="tocyn-knowledge-new-button"
         >
           <IconPlus size={16} className="tocyn-knowledge-new-icon" />
           New Article
