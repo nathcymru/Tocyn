@@ -56,7 +56,6 @@ function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
   const input = useRef<HTMLInputElement>(null), request = useRef<AbortController | null>(null), epoch = useRef(0);
   const previewOpener = useRef<HTMLButtonElement | null>(null), previewHeading = useRef<HTMLHeadingElement>(null);
   const [type, setType] = useState('all'), [query, setQuery] = useState('');
-  const [scopeOpen, setScopeOpen] = useState(false);
   const [results, setResults] = useState<Result[]>([]), [selected, setSelected] = useState<Result | null>(null);
   const [message, setMessage] = useState(''), [busy, setBusy] = useState(false);
   useEffect(() => { if (selected) previewHeading.current?.focus(); }, [selected]);
@@ -111,7 +110,7 @@ function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
     <div className={styles.inputShell}><MagnifyingGlassIcon aria-hidden="true" className={styles.icon} /><ParkInput ref={input} type="text" maxLength={256} value={query} aria-label={type === 'all' || type === 'tickets' ? 'Search all tickets (global shell)' : `Search authorised ${type} (global shell)`} aria-describedby="global-ticket-search-scope" aria-keyshortcuts={shortcutsEnabled ? 'Control+K Meta+K' : undefined} placeholder={type === 'all' || type === 'tickets' ? 'Search...' : type === 'knowledge' ? 'Search authorised knowledge titles...' : 'Search authorised customers...'} onChange={event => { invalidate(); setQuery(event.target.value); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void search(); } if (event.key === 'Escape') { event.preventDefault(); clear(); } }} className={styles.input} />
     {shortcutsEnabled && <span data-tocyn-focus-decoration="" aria-hidden="true" className={styles.shortcut}>⌘K</span>}</div>
     <span className={styles.divider} aria-hidden="true" />
-    <div className={styles.scope}><span className="tocyn-visually-hidden" id="global-search-scope-label">Search scope filter</span><ParkSelect.Root collection={searchScopeOptions as never} value={[type]} open={scopeOpen} onOpenChange={({ open }) => setScopeOpen(open)} onValueChange={({ value }) => { const next = value[0]; if (!next) return; setScopeOpen(false); invalidate(); setType(next); }} positioning={{ placement: 'bottom-end' }}>
+    <div className={styles.scope}><span className="tocyn-visually-hidden" id="global-search-scope-label">Search scope filter</span><ParkSelect.Root collection={searchScopeOptions as never} value={[type]} onValueChange={({ value }) => { const next = value[0]; if (!next) return; invalidate(); setType(next); }} positioning={{ placement: 'bottom-end' }}>
       <ParkSelect.Label className="tocyn-visually-hidden">Search scope filter</ParkSelect.Label>
       <ParkSelect.Control><ParkSelect.Trigger aria-labelledby="global-search-scope-label"><ParkSelect.ValueText placeholder="All" /></ParkSelect.Trigger><ParkSelect.IndicatorGroup><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.IndicatorGroup></ParkSelect.Control>
       <ParkSelect.HiddenSelect />
