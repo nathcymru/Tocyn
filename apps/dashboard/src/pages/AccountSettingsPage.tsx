@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ParkButton } from '@luminatick/ui/park';
+import { ParkButton, ParkCard } from '@luminatick/ui/park';
 import { useAuthStore } from '../store/authStore';
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { OperatorPreferencesControl, OperatorThemeControl } from '../components/theme/OperatorThemeProvider';
@@ -16,20 +16,20 @@ export function AccountSettingsPage() {
       </div>
       <ParkButton type="button" onClick={() => navigate('/profile/security')}>Security profile</ParkButton>
     </header>
-    <section className="tocyn-account-card" aria-labelledby="account-identity-title">
-      <h2 id="account-identity-title">Your identity</h2>
-      <p className="tocyn-account-identity-name">{user?.full_name || 'Operator'}</p>
-      <p className="tocyn-account-identity-email">{user?.email || 'No email available'}</p>
-    </section>
+    <ParkCard.Root variant="outline" className="tocyn-account-card" aria-labelledby="account-identity-title">
+      <ParkCard.Header><ParkCard.Title id="account-identity-title">Your identity</ParkCard.Title></ParkCard.Header>
+      <ParkCard.Body>
+        <p className="tocyn-account-identity-name">{user?.full_name || 'Operator'}</p>
+        <ParkCard.Description className="tocyn-account-identity-email">{user?.email || 'No email available'}</ParkCard.Description>
+      </ParkCard.Body>
+    </ParkCard.Root>
     <div className="tocyn-account-grid">
-      <section className="tocyn-account-card"><OperatorThemeControl /></section>
-      <section className="tocyn-account-card"><OperatorPreferencesControl /></section>
+      <ParkCard.Root variant="outline" className="tocyn-account-card"><ParkCard.Body><OperatorThemeControl /></ParkCard.Body></ParkCard.Root>
+      <ParkCard.Root variant="outline" className="tocyn-account-card"><ParkCard.Body><OperatorPreferencesControl /></ParkCard.Body></ParkCard.Root>
     </div>
-    <section className="tocyn-account-card" aria-labelledby="account-capacity-title">
-      <h2 id="account-capacity-title">Current work</h2>
-      <p>Set your availability and workload limits for assignments.</p>
-      {user?.id && <OperatorCapacityPanel userId={user.id} />}
-      <ParkButton type="button" disabled>Changes are saved automatically</ParkButton>
-    </section>
+    <ParkCard.Root variant="outline" className="tocyn-account-card" aria-labelledby="account-capacity-title">
+      <ParkCard.Header><ParkCard.Title id="account-capacity-title">Current work</ParkCard.Title><ParkCard.Description>Set your availability and workload limits for assignments.</ParkCard.Description></ParkCard.Header>
+      <ParkCard.Body>{user?.id && <OperatorCapacityPanel userId={user.id} />}<ParkButton type="button" disabled>Changes are saved automatically</ParkButton></ParkCard.Body>
+    </ParkCard.Root>
   </div>;
 }

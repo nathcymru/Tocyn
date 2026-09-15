@@ -1,4 +1,4 @@
-import { ParkButton, ParkEmptyState, ParkInput, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
 import {
@@ -153,12 +153,12 @@ export const SettingsPage: React.FC = () => {
 
       <div className="tocyn-settings-sections">
         {/* Organization Profile */}
-        <section className="tocyn-settings-card">
-          <div className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline" className="tocyn-settings-card">
+          <ParkCard.Header className="tocyn-settings-card-header">
             <IconBuilding className="tocyn-settings-card-icon" />
             <h2>Organization Profile</h2>
-          </div>
-          <div className="tocyn-settings-card-body">
+          </ParkCard.Header>
+          <ParkCard.Body className="tocyn-settings-card-body">
             <div className="tocyn-settings-field">
               <label htmlFor="COMPANY_NAME" className="tocyn-settings-label">
                 Company Name
@@ -189,16 +189,16 @@ export const SettingsPage: React.FC = () => {
                 placeholder="e.g. https://support.acme.com"
               />
             </div>
-          </div>
-        </section>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* System Defaults */}
-        <section className="tocyn-settings-card">
-          <div className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline" className="tocyn-settings-card">
+          <ParkCard.Header className="tocyn-settings-card-header">
             <IconGear className="tocyn-settings-card-icon" />
             <h2>System Defaults</h2>
-          </div>
-          <div className="tocyn-settings-card-body">
+          </ParkCard.Header>
+          <ParkCard.Body className="tocyn-settings-card-body">
             <div className="tocyn-settings-field">
               <label htmlFor="SYSTEM_TIMEZONE" className="tocyn-settings-label">
                 System Timezone
@@ -240,16 +240,16 @@ export const SettingsPage: React.FC = () => {
                 Tickets will be numbered as {formData.TICKET_PREFIX || 'TKT'}-1001.
               </p>
             </div>
-          </div>
-        </section>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* Agent Communication */}
-        <section className="tocyn-settings-card">
-          <div className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline" className="tocyn-settings-card">
+          <ParkCard.Header className="tocyn-settings-card-header">
             <IconEnvelope className="tocyn-settings-card-icon" />
             <h2>Agent Communication</h2>
-          </div>
-          <div className="tocyn-settings-card-body">
+          </ParkCard.Header>
+          <ParkCard.Body className="tocyn-settings-card-body">
             <div>
               <label htmlFor="DEFAULT_EMAIL_SIGNATURE" className="tocyn-settings-label">
                 Default Email Signature
@@ -268,16 +268,16 @@ export const SettingsPage: React.FC = () => {
                 This signature will be appended to agent replies if they haven't set a personal one.
               </p>
             </div>
-          </div>
-        </section>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* Cloudflare Integration */}
-        <section className="tocyn-settings-card">
-          <div className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline" className="tocyn-settings-card">
+          <ParkCard.Header className="tocyn-settings-card-header">
             <IconCloud className="tocyn-settings-card-icon" />
             <h2>Cloudflare API Credentials</h2>
-          </div>
-          <div className="tocyn-settings-card-body">
+          </ParkCard.Header>
+          <ParkCard.Body className="tocyn-settings-card-body">
             <p className="tocyn-settings-intro">
               Configure your Cloudflare credentials to monitor usage and costs directly from the dashboard.
             </p>
@@ -312,16 +312,16 @@ export const SettingsPage: React.FC = () => {
                 Requires <strong>Account Analytics: Read</strong> permissions. For security, this value is masked. Provide a new token only if you wish to overwrite the existing one.
               </p>
             </div>
-          </div>
-        </section>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* Security & Authentication */}
-        <section className="tocyn-settings-card">
-          <div className="tocyn-settings-card-header">
+        <ParkCard.Root variant="outline" className="tocyn-settings-card">
+          <ParkCard.Header className="tocyn-settings-card-header">
             <IconShieldHalved className="tocyn-settings-card-icon" />
             <h2>Security & Authentication</h2>
-          </div>
-          <div className="tocyn-settings-card-body">
+          </ParkCard.Header>
+          <ParkCard.Body className="tocyn-settings-card-body">
             <p className="tocyn-settings-intro">
               Configure Cloudflare Turnstile to protect your Customer Portal from spam and bots.
             </p>
@@ -356,8 +356,8 @@ export const SettingsPage: React.FC = () => {
                 For security, this value is masked. Provide a new key only if you wish to overwrite the existing one.
               </p>
             </div>
-          </div>
-        </section>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -260,8 +260,8 @@ export const KnowledgePage: React.FC = () => {
 
       <div className="tocyn-knowledge-workspace">
         {/* Sidebar */}
-        <div className="tocyn-knowledge-sidebar">
-          <div className="tocyn-knowledge-sidebar-header">
+        <ParkCard.Root variant="outline" className="tocyn-knowledge-sidebar">
+          <ParkCard.Header className="tocyn-knowledge-sidebar-header">
             <h2 className="tocyn-knowledge-sidebar-title">Categories</h2>
             <ParkButton
               onClick={() => setIsAddingCategory({ parentId: null })}
@@ -270,9 +270,9 @@ export const KnowledgePage: React.FC = () => {
             >
               <IconPlus size={16} />
             </ParkButton>
-          </div>
+          </ParkCard.Header>
 
-          <div className="tocyn-knowledge-sidebar-body">
+          <ParkCard.Body className="tocyn-knowledge-sidebar-body">
             <ParkButton aria-pressed={selectedCategoryId === null}
               className={`tocyn-knowledge-all-articles ${
                 selectedCategoryId === null ? 'tocyn-knowledge-all-articles--active' : ''
@@ -305,12 +305,12 @@ export const KnowledgePage: React.FC = () => {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* Main Content */}
-        <div className="tocyn-knowledge-content">
-          <div className="tocyn-knowledge-table-shell">
+        <ParkCard.Root variant="outline" className="tocyn-knowledge-content">
+          <ParkCard.Body className="tocyn-knowledge-table-shell">
             <table className="tocyn-knowledge-table">
               <thead className="tocyn-knowledge-table-head">
                 <tr>
@@ -362,8 +362,8 @@ export const KnowledgePage: React.FC = () => {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
+          </ParkCard.Body>
+        </ParkCard.Root>
       </div>
 
       {deleteStatus && <p role="status">{deleteStatus}</p>}

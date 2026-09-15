@@ -1,7 +1,7 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { createListCollection } from '@ark-ui/react';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { ParkButton, ParkEmptyState, ParkInput, ParkSelect, ParkSplitter } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkSelect, ParkSplitter } from '@luminatick/ui/park';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,LayoutList,Search,Table2 } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
@@ -239,10 +239,10 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       <p className="tocyn-inbox-status">Queue totals cover standard views before search or custom filters.</p>
       {queueCounts.isFetching?<p role="status" className="tocyn-inbox-status">Refreshing queue totals…</p>:queueCounts.error?<p role="status" className="tocyn-inbox-status">Queue totals unavailable. <ParkButton type="button" onClick={()=>void queueCounts.refetch()} className="tocyn-inbox-inline-retry">Retry queue totals</ParkButton></p>:null}
       <div className="tocyn-inbox-metric-strip" aria-label="Queue metrics">
-        {(['mine', 'unassigned', 'actionable', 'all'] as const).map(metric => <div key={metric} className="tocyn-inbox-metric-card">
-          <span className="tocyn-inbox-metric-label">{metric === 'all' ? 'All tickets' : queueViews[metric].label}</span>
-          <strong className="tocyn-inbox-metric-value tocyn-tabular">{queueCounts.isFetching ? '—' : queueCounts.data?.[metric] ?? 0}</strong>
-        </div>)}
+        {(['mine', 'unassigned', 'actionable', 'all'] as const).map(metric => <ParkCard.Root key={metric} variant="outline" className="tocyn-inbox-metric-card">
+          <ParkCard.Body><ParkCard.Description className="tocyn-inbox-metric-label">{metric === 'all' ? 'All tickets' : queueViews[metric].label}</ParkCard.Description>
+          <strong data-tabular className="tocyn-inbox-metric-value tocyn-tabular">{queueCounts.isFetching ? '—' : queueCounts.data?.[metric] ?? 0}</strong></ParkCard.Body>
+        </ParkCard.Root>)}
         <span className="tocyn-visually-hidden">Current view: <span className="tocyn-inbox-current-view-name">{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</span>
       </div>
       <form className="tocyn-inbox-search-shell" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
