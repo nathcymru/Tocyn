@@ -1,3 +1,5 @@
+/* Park/Panda layers are authoritative; compatibility route styles stay first. */
+@layer tocyn-legacy, reset, base, tokens, recipes, utilities;
 /* tocyn-legacy-layer-start */
 @layer tocyn-legacy {
 @layer base {
