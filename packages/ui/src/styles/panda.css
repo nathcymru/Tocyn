@@ -507,6 +507,14 @@
     --colors-selected: var(--tocyn-color-selected);
     --colors-divider: var(--tocyn-color-divider);
     --colors-critical: var(--tocyn-color-critical);
+    --colors-critical\.surface: var(--tocyn-color-critical-surface);
+    --colors-critical\.border: var(--tocyn-color-critical-border);
+    --colors-warning: var(--tocyn-color-warning-text);
+    --colors-warning\.surface: var(--tocyn-color-warning-surface);
+    --colors-warning\.border: var(--tocyn-color-warning-border);
+    --colors-info\.surface: var(--tocyn-color-info-surface);
+    --colors-info\.text: var(--tocyn-color-info-text);
+    --colors-inverse: var(--tocyn-color-inverse);
     --colors-bg\.default: var(--tocyn-color-surface-panel);
     --colors-bg\.subtle: var(--tocyn-color-surface-muted);
     --colors-fg\.default: var(--tocyn-color-text);

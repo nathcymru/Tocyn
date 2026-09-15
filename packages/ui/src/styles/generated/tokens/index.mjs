@@ -1851,6 +1851,38 @@ const tokens = {
     "value": "var(--tocyn-color-critical)",
     "variable": "var(--colors-critical)"
   },
+  "colors.critical.surface": {
+    "value": "var(--tocyn-color-critical-surface)",
+    "variable": "var(--colors-critical\\.surface)"
+  },
+  "colors.critical.border": {
+    "value": "var(--tocyn-color-critical-border)",
+    "variable": "var(--colors-critical\\.border)"
+  },
+  "colors.warning": {
+    "value": "var(--tocyn-color-warning-text)",
+    "variable": "var(--colors-warning)"
+  },
+  "colors.warning.surface": {
+    "value": "var(--tocyn-color-warning-surface)",
+    "variable": "var(--colors-warning\\.surface)"
+  },
+  "colors.warning.border": {
+    "value": "var(--tocyn-color-warning-border)",
+    "variable": "var(--colors-warning\\.border)"
+  },
+  "colors.info.surface": {
+    "value": "var(--tocyn-color-info-surface)",
+    "variable": "var(--colors-info\\.surface)"
+  },
+  "colors.info.text": {
+    "value": "var(--tocyn-color-info-text)",
+    "variable": "var(--colors-info\\.text)"
+  },
+  "colors.inverse": {
+    "value": "var(--tocyn-color-inverse)",
+    "variable": "var(--colors-inverse)"
+  },
   "colors.bg.default": {
     "value": "var(--tocyn-color-surface-panel)",
     "variable": "var(--colors-bg\\.default)"
