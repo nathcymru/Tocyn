@@ -137,7 +137,6 @@
 .tocyn-shell-capacity-dialog { inline-size: 100%; max-inline-size: 32rem; max-block-size: 90vh; overflow-y: auto; padding: 1.5rem; }
 .tocyn-shell-dialog-header, .tocyn-shell-connection-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block-end: 1rem; }
 .tocyn-shell-dialog-close { padding: .5rem .75rem; }
-.tocyn-shell-mobile-content { block-size: calc(100dvh - 4rem); }
 .tocyn-shell-activity-badge { position: absolute; inset-block-start: 0; inset-inline-end: 0; min-inline-size: 1rem; padding-inline: .25rem; }
 .tocyn-shell-icon, .tocyn-shell-menu-icon { inline-size: 1.5rem; block-size: 1.5rem; }
 .tocyn-shell-small-icon, .tocyn-shell-dismiss-icon { inline-size: .875rem; block-size: .875rem; }
@@ -197,7 +196,6 @@
 .tocyn-u-pre-wrap { white-space: pre-wrap; }
 .tocyn-u-wrap { overflow-wrap: anywhere; }
 
-.tocyn-shell-mobile-labelled { inline-size: 14rem; max-inline-size: 90vw; } .tocyn-shell-mobile-compact { inline-size: 5rem; }
 .tocyn-users-dialog-unavailable-icon { display: block; inline-size: 3rem; block-size: 3rem; margin-inline: auto; margin-block-end: 1rem; }
 .tocyn-shell-workspace-main { flex: 1; min-block-size: 0; }
 .tocyn-shell-workspace-inbox { overflow: hidden; }
