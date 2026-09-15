@@ -206,6 +206,70 @@ const ticketDetailSlotNames = [
     "ticketDetail__legacyMarker"
   ],
   [
+    "actions",
+    "ticketDetail__actions"
+  ],
+  [
+    "actionItem",
+    "ticketDetail__actionItem"
+  ],
+  [
+    "actionReason",
+    "ticketDetail__actionReason"
+  ],
+  [
+    "actionStatus",
+    "ticketDetail__actionStatus"
+  ],
+  [
+    "actionNotice",
+    "ticketDetail__actionNotice"
+  ],
+  [
+    "actionMore",
+    "ticketDetail__actionMore"
+  ],
+  [
+    "actionSummary",
+    "ticketDetail__actionSummary"
+  ],
+  [
+    "actionLink",
+    "ticketDetail__actionLink"
+  ],
+  [
+    "slaActionBar",
+    "ticketDetail__slaActionBar"
+  ],
+  [
+    "slaPanel",
+    "ticketDetail__slaPanel"
+  ],
+  [
+    "slaTitle",
+    "ticketDetail__slaTitle"
+  ],
+  [
+    "slaGrid",
+    "ticketDetail__slaGrid"
+  ],
+  [
+    "slaLabel",
+    "ticketDetail__slaLabel"
+  ],
+  [
+    "slaValue",
+    "ticketDetail__slaValue"
+  ],
+  [
+    "slaHandler",
+    "ticketDetail__slaHandler"
+  ],
+  [
+    "slaState",
+    "ticketDetail__slaState"
+  ],
+  [
     "qa",
     "ticketDetail__qa"
   ],

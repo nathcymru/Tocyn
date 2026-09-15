@@ -1,4 +1,4 @@
-import { ParkButton } from '@luminatick/ui/park';
+import { ParkButton, ParkTicketDetail } from '@luminatick/ui/park';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import type { TicketUtilityAction } from '@luminatick/shared';
 import React from 'react';
@@ -11,10 +11,9 @@ type TicketActionBarProps = Readonly<{
   retry: () => void;
 }>;
 
-const buttonClass = 'tocyn-ticket-action-button';
-
 /** The only dashboard slot for the finite server-issued utility-action manifest. */
 export function TicketActionBar({ reference, actions, loading, error, retry }: TicketActionBarProps) {
+  const detailStyles = ParkTicketDetail();
   const [dialogAction, setDialogAction] = React.useState<TicketUtilityAction | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const opener = React.useRef<HTMLButtonElement>(null);
@@ -47,38 +46,38 @@ export function TicketActionBar({ reference, actions, loading, error, retry }: T
   const renderAction = (current: TicketUtilityAction) => {
     const reasonId = `ticket-action-${current.id}-reason`;
     const disabled = !current.enabled;
-    const description = disabled ? <p id={reasonId} className="tocyn-ticket-action-reason">{current.reason}</p> : null;
-    if (current.kind === 'application-command') return <div key={current.id} className="tocyn-ticket-action-item">
-      <ParkButton type="button" disabled={disabled} aria-describedby={disabled ? reasonId : undefined} onClick={() => void copyReference()} className={buttonClass}>{current.label}</ParkButton>
+    const description = disabled ? <p id={reasonId} className={detailStyles.actionReason}>{current.reason}</p> : null;
+    if (current.kind === 'application-command') return <div key={current.id} className={detailStyles.actionItem}>
+      <ParkButton type="button" disabled={disabled} aria-describedby={disabled ? reasonId : undefined} onClick={() => void copyReference()}>{current.label}</ParkButton>
       {description}
     </div>;
-    if (current.kind === 'internal-dialog') return <div key={current.id} className="tocyn-ticket-action-item">
-      <ParkButton type="button" ref={opener} disabled={disabled} aria-describedby={disabled ? reasonId : undefined} onClick={() => setDialogAction(current)} className={buttonClass}>{current.label}</ParkButton>
+    if (current.kind === 'internal-dialog') return <div key={current.id} className={detailStyles.actionItem}>
+      <ParkButton type="button" ref={opener} disabled={disabled} aria-describedby={disabled ? reasonId : undefined} onClick={() => setDialogAction(current)}>{current.label}</ParkButton>
       {description}
     </div>;
-    return <div key={current.id} className="tocyn-ticket-action-item">
-      {disabled ? <ParkButton type="button" disabled aria-describedby={reasonId} className={buttonClass}>{current.label}</ParkButton>
-        : <a href={current.href} target="_blank" rel="noopener noreferrer" className={`${buttonClass} tocyn-ticket-action-link`}>{current.label}</a>}
+    return <div key={current.id} className={detailStyles.actionItem}>
+      {disabled ? <ParkButton type="button" disabled aria-describedby={reasonId}>{current.label}</ParkButton>
+        : <a href={current.href} target="_blank" rel="noopener noreferrer" className={detailStyles.actionLink}>{current.label}</a>}
       {description}
     </div>;
   };
 
-  return <section aria-label="Ticket actions" className="tocyn-ticket-actions">
-    {loading && <p role="status" className="tocyn-ticket-action-status">Loading ticket actions…</p>}
-    {error && <p role="alert" className="tocyn-ticket-action-status">Ticket actions are unavailable. <ParkButton type="button" onClick={retry}>Retry ticket actions</ParkButton></p>}
+  return <section aria-label="Ticket actions" className={detailStyles.actions}>
+    {loading && <p role="status" className={detailStyles.actionStatus}>Loading ticket actions…</p>}
+    {error && <p role="alert" className={detailStyles.actionStatus}>Ticket actions are unavailable. <ParkButton type="button" onClick={retry}>Retry ticket actions</ParkButton></p>}
     {!loading && !error && copy && renderAction(copy)}
     {!loading && !error && more.length > 0 && <details>
-      <summary className={`${buttonClass} tocyn-ticket-action-summary`}>More ticket actions</summary>
-      <div className="tocyn-ticket-actions-more">{more.map(renderAction)}</div>
+      <summary className={detailStyles.actionSummary}>More ticket actions</summary>
+      <div className={detailStyles.actionMore}>{more.map(renderAction)}</div>
     </details>}
-    {notice && <p role="status" className="tocyn-ticket-action-notice">{notice}</p>}
+    {notice && <p role="status" className={detailStyles.actionNotice}>{notice}</p>}
     <TocynDialog open={dialogAction?.kind === 'internal-dialog'} onOpenChange={open => { if (!open) setDialogAction(null); }}
       labelledBy={titleId} describedBy={descriptionId} initialFocusEl={() => close.current} finalFocusEl={() => opener.current}
-      className="tocyn-ticket-action-dialog">
+      >
       <h2 id={titleId} className="tocyn-ticket-action-dialog-title">Ticket reference</h2>
       <p id={descriptionId} className="tocyn-ticket-action-dialog-copy">Use this reference when you need to identify this ticket in a governed support workflow.</p>
       <p className="tocyn-ticket-action-reference">{reference}</p>
-      <ParkButton type="button" ref={close} onClick={() => setDialogAction(null)} className={`${buttonClass} tocyn-ticket-action-close`}>Close ticket reference</ParkButton>
+      <ParkButton type="button" ref={close} onClick={() => setDialogAction(null)}>Close ticket reference</ParkButton>
     </TocynDialog>
   </section>;
 }
