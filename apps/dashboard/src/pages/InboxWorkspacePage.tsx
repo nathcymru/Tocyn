@@ -239,8 +239,16 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         <label className={pageStyles.inboxControlCell}><span className={pageStyles.inboxControlLabel} id="inbox-sort-label">Sort</span><ParkSelect.Root collection={sortOptions as never} value={[workspace.sort]} onValueChange={({ value })=>{const next=value[0] as WorkspacePreference['sort']|undefined;if(!next)return;if(next==='sla_priority')query.restartSla();workspace.update({sort:next,listAnchor:'page:1'});}} positioning={{placement:'bottom-start'}}>
           <ParkSelect.Label className={pageStyles.inboxHiddenLabel}>Sort conversations</ParkSelect.Label><ParkSelect.Control><ParkSelect.Trigger aria-labelledby="inbox-sort-label"><ParkSelect.ValueText placeholder="Recently updated" /></ParkSelect.Trigger><ParkSelect.IndicatorGroup><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.IndicatorGroup></ParkSelect.Control><ParkSelect.HiddenSelect /><ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{sortOptions.items.map(item=>{const option=item as {label:string;value:string};return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator /></ParkSelect.Item>;})}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
         </ParkSelect.Root></label>
+        <form className={pageStyles.inboxSearch} onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
+          <Search aria-hidden="true" />
+          <ParkInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
+            onChange={event=>setFilterInput(event.target.value)} onKeyDown={event=>{if(event.key==='Escape'&&filterInput){event.preventDefault();setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}}
+          />
+          <ParkButton type="button" variant="ghost" size="sm" aria-label="Clear current-view filter" disabled={!filterInput} onClick={()=>{setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}
+           >Clear</ParkButton>
+        </form>
       </div>
-      <p>Queue totals cover standard views before search or custom filters.</p>
+      <ParkVisuallyHidden>Queue totals cover standard views before search or custom filters.</ParkVisuallyHidden>
       {queueCounts.isFetching?<p role="status">Refreshing queue totals…</p>:queueCounts.error?<p role="status">Queue totals unavailable. <ParkButton type="button" onClick={()=>void queueCounts.refetch()}>Retry queue totals</ParkButton></p>:null}
       <div className={pageStyles.inboxMetrics} aria-label="Queue metrics">
         {(['mine', 'unassigned', 'actionable', 'all'] as const).map(metric => <ParkCard.Root key={metric} variant="outline">
@@ -249,14 +257,6 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         </ParkCard.Root>)}
         <ParkVisuallyHidden>Current view: <span>{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</ParkVisuallyHidden>
       </div>
-      <form className={pageStyles.inboxSearch} onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
-        <Search aria-hidden="true" />
-        <ParkInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
-          onChange={event=>setFilterInput(event.target.value)} onKeyDown={event=>{if(event.key==='Escape'&&filterInput){event.preventDefault();setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}}
-          />
-        <ParkButton type="button" variant="ghost" size="sm" aria-label="Clear current-view filter" disabled={!filterInput} onClick={()=>{setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}
-         >Clear</ParkButton>
-      </form>
       <div className={pageStyles.inboxToolbar}><div className={pageStyles.inboxToolbarGroup}><div role="group" aria-label="Conversation presentation">
           <ParkButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={[pageStyles.inboxPresentationButton, presentation==='list'?pageStyles.inboxPresentationActive:pageStyles.inboxPresentationInactive].join(' ')}><LayoutList aria-hidden="true" /></ParkButton>
           <ParkButton type="button" aria-pressed={presentation==='table'} aria-label="Table view" onClick={()=>setPresentation('table')} className={[pageStyles.inboxPresentationButton, presentation==='table'?pageStyles.inboxPresentationActive:pageStyles.inboxPresentationInactive].join(' ')}><Table2 aria-hidden="true" /></ParkButton>
