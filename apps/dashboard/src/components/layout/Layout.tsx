@@ -136,6 +136,14 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   );
 }
 
+function pageTitle(pathname: string) {
+  if (pathname.startsWith('/inbox')) return 'Support Inbox';
+  if (pathname.startsWith('/knowledge')) return 'Knowledge Base';
+  if (pathname.startsWith('/settings/account')) return 'My Account';
+  if (pathname.startsWith('/settings')) return 'Admin Settings';
+  return 'Home';
+}
+
 function LayoutContent() {
   const preferences = useOperatorPreferencesContext();
   const [activityUpdatesAvailable, setActivityUpdatesAvailable] = useState(false);
@@ -165,6 +173,7 @@ function LayoutContent() {
   const main = useRef<HTMLElement>(null);
   const isInboxRoute = location.pathname.startsWith('/inbox');
   const shellStyles = ParkShell();
+  const title = pageTitle(location.pathname);
 
   useEffect(() => { main.current?.focus(); }, [location.pathname]);
   const loadActivity = React.useCallback(async () => {
@@ -283,6 +292,8 @@ function LayoutContent() {
           >
             <Menu className={shellStyles.menuIcon} />
           </ParkButton>
+
+          <span className={shellStyles.pageTitle} aria-label={`Current page: ${title}`}>{title}</span>
 
           <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
 

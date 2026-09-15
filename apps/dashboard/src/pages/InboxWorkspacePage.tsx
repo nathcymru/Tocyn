@@ -1,8 +1,7 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
-import { createListCollection } from '@ark-ui/react';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSelect, ParkSplitter, ParkVisuallyHidden } from '@luminatick/ui/park';
-import { AlertCircle,ChevronLeft,ChevronRight,Clock,LayoutList,Search,Table2 } from '../components/icons';
+import { ParkButton, ParkCard, ParkEmptyState, ParkPage, ParkSplitter, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { AlertCircle,ChevronLeft,ChevronRight,Clock,LayoutList,Table2 } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
@@ -10,7 +9,7 @@ import { SlaQueueNotice } from '../components/SlaQueueNotice';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { useFilters } from '../hooks/useFilters';
-import { OperatorWorkspaceProvider,useOperatorDraftIndicators,useOperatorWorkspaceState,type WorkspacePreference } from '../hooks/useOperatorWorkspaceState';
+import { OperatorWorkspaceProvider,useOperatorDraftIndicators,useOperatorWorkspaceState } from '../hooks/useOperatorWorkspaceState';
 import { useSettings } from '../hooks/useSettings';
 import { useTicketSlaBatch } from '../hooks/useTicketSla';
 import { useStandardQueueCounts, useTickets } from '../hooks/useTickets';
@@ -18,12 +17,6 @@ import { ticketReference } from '../utils/ticket-reference';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { TicketDetailPage } from './TicketDetailPage';
 
-const sortOptions = createListCollection({ items: [
-  { label: 'Recently updated', value: 'updated_desc' }, { label: 'Least recently updated', value: 'updated_asc' },
-  { label: 'Newest', value: 'created_desc' }, { label: 'Oldest', value: 'created_asc' },
-  { label: 'Highest priority', value: 'priority_desc' }, { label: 'Lowest priority', value: 'priority_asc' },
-  { label: 'Earliest SLA deadline', value: 'sla_priority' },
-] });
 const queueViews={mentions:{label:'Mentions',description:'Actionable conversations with a mention for you that has not been dismissed.'},mine:{label:'Mine',description:'Open and pending conversations assigned to you and ready for work.'},unassigned:{label:'Unassigned',description:'Open and pending conversations without an assignee and ready for work.'},drafts:{label:'Drafts',description:'Conversations with your saved drafts.'},actionable:{label:'Needs Action',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
 type QueueView=keyof typeof queueViews;
 function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed'||value==='drafts'||value==='mine'||value==='unassigned'||value==='mentions';}
@@ -112,25 +105,19 @@ function EmptyConversation(){return <div><ParkEmptyState title="Choose a convers
 function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onAdvanceNotice}:{activeView:string;selectedTicketId:string|null;routeReady:boolean;advanceRef:React.MutableRefObject<((id:string)=>void)|null>;onAdvanceNotice:(message:string)=>void}){
   const navigate=useNavigate();
   const workspace=useOperatorWorkspaceState();
-  const {data:filters,isLoading:isLoadingFilters}=useFilters();
+  const {data:filters}=useFilters();
   const drafts=useOperatorDraftIndicators();
   const queueCounts=useStandardQueueCounts();
   const {data:settings}=useSettings();
   const prefix=settings?.TICKET_PREFIX||'#';
   const queue=isQueueView(activeView)?activeView:undefined;
   const filterId=activeView==='all'||queue?'':activeView;
-  const filterOptions = useMemo(() => createListCollection({ items: [
-    { label: 'All tickets', value: 'all' },
-    ...(['mine','unassigned','mentions','drafts','snoozed','actionable'] as const).map(view => ({ label: queueViews[view].label, value: view })),
-  ] }), []);
-  const savedViewOptions = useMemo(() => createListCollection({ items: (filters ?? []).map(filter => ({ label: filter.name, value: filter.id })) }), [filters]);
   const confirmedView=useRef<string|null>(null);
   // A successful route change starts a different view at page one; blocked navigation
   // leaves the current workspace untouched, and initial restoration keeps its page.
   const viewChanged=confirmedView.current!==null&&confirmedView.current!==activeView;
   const currentPage=viewChanged?1:pageFromAnchor(workspace.listAnchor);
   const [recoveringView,setRecoveringView]=useState<string|null>(null);
-  const [filterInput,setFilterInput]=useState(workspace.listQuery);
   const [focusedIndex,setFocusedIndex]=useState(0);
   const [presentation,setPresentation]=useState<'list'|'table'>('list');
   const rowRefs=useRef<Array<HTMLAnchorElement|null>>([]);
@@ -209,7 +196,6 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       if(!query.error)setStatus('Showing the first page after the conversation list changed.');
     }
   },[activeView,meta.page,currentPage,query.error,query.isFetching,query.isPlaceholderData,recoveringView]);
-  useEffect(()=>setFilterInput(workspace.listQuery),[workspace.listQuery]);
   useEffect(()=>{
     if(!query.isFetching&&paging.current){paging.current=false;if(!query.error||slaSort)heading.current?.focus();}
   },[query.error,query.isFetching,slaSort]);
@@ -218,44 +204,20 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     setFocusedIndex(current=>selected>=0?selected:current>=tickets.length?Math.max(0,tickets.length-1):current);
   },[selectedTicketId,tickets]);
 
-  const selectView=(id:string)=>{
-    navigate(`/inbox/${id}`);
-  };
   const pageStyles = ParkPage('inbox');
   const moveFocus=(index:number)=>{const next=Math.max(0,Math.min(tickets.length-1,index));setFocusedIndex(next);rowRefs.current[next]?.focus();};
 
   return <div className={[pageStyles.root, pageStyles.content, pageStyles.inboxList].join(' ')}>
     <header className={[pageStyles.header, pageStyles.inboxHeader].join(' ')}>
-      <div className={pageStyles.inboxTitleRow}><div><p>Workspace</p>
-        <h1 ref={heading} tabIndex={-1}>Inbox</h1></div>
-        <span>{meta.total} conversations</span></div>
-      <div className={pageStyles.inboxControls} aria-label="Inbox controls">
-        <label className={pageStyles.inboxControlCell}><span className={pageStyles.inboxControlLabel}>Filter</span><ParkSelect.Root collection={filterOptions as never} value={[queue ? queue : activeView === 'all' ? 'all' : 'all']} onValueChange={({ value }) => value[0] && selectView(value[0])}>
-          <ParkSelect.Label className={pageStyles.inboxHiddenLabel}>Filter conversations</ParkSelect.Label><ParkSelect.Control><ParkSelect.Trigger><ParkSelect.ValueText placeholder="All tickets" /></ParkSelect.Trigger><ParkSelect.IndicatorGroup><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.IndicatorGroup></ParkSelect.Control><ParkSelect.HiddenSelect /><ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{filterOptions.items.map(item => { const option=item as {label:string;value:string}; return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator /></ParkSelect.Item>; })}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
-        </ParkSelect.Root></label>
-        <label className={pageStyles.inboxControlCell}><span className={pageStyles.inboxControlLabel}>Saved view</span>{isLoadingFilters ? <span role="status">Loading…</span> : <ParkSelect.Root collection={savedViewOptions as never} value={filterId ? [filterId] : []} onValueChange={({ value }) => value[0] && selectView(value[0])}>
-          <ParkSelect.Label className={pageStyles.inboxHiddenLabel}>Saved view</ParkSelect.Label><ParkSelect.Control><ParkSelect.Trigger><ParkSelect.ValueText placeholder="Choose a saved view" /></ParkSelect.Trigger><ParkSelect.IndicatorGroup><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.IndicatorGroup></ParkSelect.Control><ParkSelect.HiddenSelect /><ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{savedViewOptions.items.map(item => { const option=item as {label:string;value:string}; return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator /></ParkSelect.Item>; })}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
-        </ParkSelect.Root>}</label>
-        <label className={pageStyles.inboxControlCell}><span className={pageStyles.inboxControlLabel} id="inbox-sort-label">Sort</span><ParkSelect.Root collection={sortOptions as never} value={[workspace.sort]} onValueChange={({ value })=>{const next=value[0] as WorkspacePreference['sort']|undefined;if(!next)return;if(next==='sla_priority')query.restartSla();workspace.update({sort:next,listAnchor:'page:1'});}} positioning={{placement:'bottom-start'}}>
-          <ParkSelect.Label className={pageStyles.inboxHiddenLabel}>Sort conversations</ParkSelect.Label><ParkSelect.Control><ParkSelect.Trigger aria-labelledby="inbox-sort-label"><ParkSelect.ValueText placeholder="Recently updated" /></ParkSelect.Trigger><ParkSelect.IndicatorGroup><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.IndicatorGroup></ParkSelect.Control><ParkSelect.HiddenSelect /><ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{sortOptions.items.map(item=>{const option=item as {label:string;value:string};return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator /></ParkSelect.Item>;})}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
-        </ParkSelect.Root></label>
-        <form className={pageStyles.inboxSearch} onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterInput.trim(),listAnchor:'page:1'});setStatus(filterInput.trim()?'Current-view filter applied.':'Current-view filter cleared.');}}>
-          <Search aria-hidden="true" />
-          <ParkInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
-            onChange={event=>setFilterInput(event.target.value)} onKeyDown={event=>{if(event.key==='Escape'&&filterInput){event.preventDefault();setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}}
-          />
-          <ParkButton type="button" variant="ghost" size="sm" aria-label="Clear current-view filter" disabled={!filterInput} onClick={()=>{setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}
-           >Clear</ParkButton>
-        </form>
-      </div>
-      <ParkVisuallyHidden>Queue totals cover standard views before search or custom filters.</ParkVisuallyHidden>
+      <h1 ref={heading} tabIndex={-1} className={pageStyles.inboxHiddenHeading}>Support Inbox</h1>
+      <ParkVisuallyHidden>Queue totals for the standard inbox views.</ParkVisuallyHidden>
       {queueCounts.isFetching?<p role="status">Refreshing queue totals…</p>:queueCounts.error?<p role="status">Queue totals unavailable. <ParkButton type="button" onClick={()=>void queueCounts.refetch()}>Retry queue totals</ParkButton></p>:null}
       <div className={pageStyles.inboxMetrics} aria-label="Queue metrics">
         {(['mine', 'unassigned', 'actionable', 'all'] as const).map(metric => <ParkCard.Root key={metric} variant="outline">
           <ParkCard.Body><ParkCard.Description>{metric === 'all' ? 'All tickets' : queueViews[metric].label}</ParkCard.Description>
           <strong data-tabular>{queueCounts.isFetching ? '—' : queueCounts.data?.[metric] ?? 0}</strong></ParkCard.Body>
         </ParkCard.Root>)}
-        <ParkVisuallyHidden>Current view: <span>{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>. Filtering stays within this view.</ParkVisuallyHidden>
+          <ParkVisuallyHidden>Current view: <span>{activeView==='all'?'All tickets':queue?queueViews[queue].label:(filters?.find(filter=>filter.id===activeView)?.name??'Saved view')}</span>.</ParkVisuallyHidden>
       </div>
       <div className={pageStyles.inboxToolbar}><div className={pageStyles.inboxToolbarGroup}><div role="group" aria-label="Conversation presentation">
           <ParkButton type="button" aria-pressed={presentation==='list'} aria-label="List view" onClick={()=>setPresentation('list')} className={[pageStyles.inboxPresentationButton, presentation==='list'?pageStyles.inboxPresentationActive:pageStyles.inboxPresentationInactive].join(' ')}><LayoutList aria-hidden="true" /></ParkButton>
@@ -271,7 +233,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     {drafts.status==='partial'&&<p role="status">Some draft indicators are still loading.</p>}
     {presentation==='table'&&<p role="status" className={pageStyles.inboxMobileNote}>Table view uses the compact conversation list on small screens.</p>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={clsx(pageStyles.inboxRows,presentation==='table'&&pageStyles.inboxTableMobileHidden)}>
-      {query.isLoading?<p role="status">Loading conversations…</p>:emptyPage?<ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'} />:tickets.map((ticket,index)=>{
+      {query.isLoading?<p role="status">Loading conversations…</p>:emptyPage?<ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} />:tickets.map((ticket,index)=>{
         const selected=ticket.id===selectedTicketId;const reference=ticketReference(ticket,prefix);
         return <Link key={ticket.id} ref={node=>{rowRefs.current[index]=node;}} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={index===focusedIndex?0:-1}
           to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} onFocus={()=>setFocusedIndex(index)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();moveFocus(index+1);}if(event.key==='ArrowUp'){event.preventDefault();moveFocus(index-1);}}}
@@ -293,7 +255,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         <table className={pageStyles.inboxTable}><caption><ParkVisuallyHidden>Tickets in the current view</ParkVisuallyHidden></caption><thead><tr>
           <th scope="col">Reference</th><th scope="col">Subject</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Customer</th><th scope="col">Updated</th>
         </tr></thead><tbody>
-        {query.isLoading?<tr><td colSpan={6}><ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading conversations…" /></td></tr>:emptyPage?<tr><td colSpan={6}><ParkEmptyState headingLevel={false} title={emptyMessage} description={queue?queueViews[queue].description:'Clear the view filter or choose another saved view.'} /></td></tr>:tickets.map(ticket=>{
+        {query.isLoading?<tr><td colSpan={6}><ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading conversations…" /></td></tr>:emptyPage?<tr><td colSpan={6}><ParkEmptyState headingLevel={false} title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} /></td></tr>:tickets.map(ticket=>{
           const reference=ticketReference(ticket,prefix);const selected=ticket.id===selectedTicketId;
           return <tr key={ticket.id} aria-selected={selected} className={pageStyles.inboxTableRow} data-selected={selected ? 'true' : undefined}>
             <td>{reference}</td>

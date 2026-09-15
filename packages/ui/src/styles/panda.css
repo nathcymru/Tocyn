@@ -1316,25 +1316,15 @@
       font-size: 0.8125rem;
 }
 
-    .page__inboxControls {
-      gap: 0.5rem;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: end;
-      min-width: var(--sizes-0);
-}
-
-    .page__inboxControlCell {
-      flex: 1 1 9rem;
-      gap: 0.25rem;
-      display: grid;
-      min-width: 8rem;
-}
-
-    .page__inboxControlLabel {
-      color: var(--colors-text\.muted);
-      font-size: 0.8125rem;
-      font-weight: 600;
+    .page__inboxHiddenHeading {
+      overflow: hidden;
+      position: absolute;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      -webkit-clip-path: inset(50%);
+      white-space: nowrap;
+      width: 1px;
+      height: 1px;
 }
 
     .page__inboxMetrics {
@@ -1352,50 +1342,6 @@
       display: block;
       font-size: 1.25rem;
       margin-top: 0.125rem;
-}
-
-    .page__inboxSearch {
-      border: 1px solid;
-      background: var(--colors-bg\.input);
-      flex: 2 1 18rem;
-      gap: 0.5rem;
-      border-color: var(--colors-border\.input);
-      border-radius: var(--radii-l2);
-      padding-inline: 0.75rem;
-      display: flex;
-      align-items: center;
-      min-width: 12rem;
-      width: 100%;
-      max-width: none;
-      min-height: 2.75rem;
-}
-
-    .page__inboxSearch input {
-      border: 0;
-      background: var(--colors-transparent);
-      padding: var(--spacing-0);
-      flex: 1 1 0%;
-      outline: 0;
-      color: var(--colors-text\.primary);
-      min-width: var(--sizes-0);
-      min-height: 2.5rem;
-}
-
-    .page__inboxSearch input:is(:focus-visible, [data-focus-visible]) {
-      outline: 2px solid;
-      outline-color: var(--colors-border\.focus);
-      outline-offset: 2px;
-}
-
-    .page__inboxSearch > svg {
-      flex-shrink: 0;
-      color: var(--colors-icon\.muted);
-      width: 1rem;
-      height: 1rem;
-}
-
-    .page__inboxSearch > button {
-      flex-shrink: 0;
 }
 
     .page__inboxToolbar {
@@ -1586,30 +1532,6 @@
       min-width: var(--sizes-0);
 }
 
-    .page__inboxTitleRow p {
-      margin: var(--spacing-0);
-      color: var(--colors-text\.muted);
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-}
-
-    .page__inboxTitleRow h1 {
-      margin: 0.125rem 0 0;
-      color: var(--colors-text\.primary);
-      font-size: 1.5rem;
-      line-height: 1.1;
-}
-
-    .page__inboxTitleRow > span {
-      flex-shrink: 0;
-      color: var(--colors-text\.muted);
-      font-family: var(--fonts-tabular);
-      font-size: 0.8125rem;
-      padding-top: 0.125rem;
-}
-
     .page__inboxRowCopy {
       gap: 0.125rem;
       display: grid;
@@ -1671,15 +1593,6 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-}
-
-    .page__inboxHiddenLabel {
-      overflow: hidden;
-      position: absolute;
-      clip: rect(0 0 0 0);
-      white-space: nowrap;
-      width: 1px;
-      height: 1px;
 }
 
     .page__metricStrip {
@@ -3078,6 +2991,21 @@
       min-height: 4rem;
 }
 
+    .shell__pageTitle {
+      margin: var(--spacing-0);
+      overflow: hidden;
+      display: block;
+      flex-shrink: 0;
+      color: var(--colors-text\.primary);
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: var(--sizes-0);
+      max-width: 8rem;
+}
+
     .shell__content {
       min-width: var(--sizes-0);
       min-height: var(--sizes-0);
@@ -4097,6 +4025,9 @@
       .ticketDetail__slaGrid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+      .shell__pageTitle {
+        max-width: 14rem;
+}
 }
 
     @media screen and (min-width: 48rem) {
@@ -4168,6 +4099,9 @@
 }
       .ticketDetail__root {
         grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+}
+      .shell__pageTitle {
+        max-width: 18rem;
 }
       .shell__sidebarDesktop {
         display: block;

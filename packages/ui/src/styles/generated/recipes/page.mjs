@@ -161,24 +161,12 @@ const pageSlotNames = [
     "page__inboxHeader"
   ],
   [
-    "inboxControls",
-    "page__inboxControls"
-  ],
-  [
-    "inboxControlCell",
-    "page__inboxControlCell"
-  ],
-  [
-    "inboxControlLabel",
-    "page__inboxControlLabel"
+    "inboxHiddenHeading",
+    "page__inboxHiddenHeading"
   ],
   [
     "inboxMetrics",
     "page__inboxMetrics"
-  ],
-  [
-    "inboxSearch",
-    "page__inboxSearch"
   ],
   [
     "inboxToolbar",
@@ -279,10 +267,6 @@ const pageSlotNames = [
   [
     "inboxPagination",
     "page__inboxPagination"
-  ],
-  [
-    "inboxHiddenLabel",
-    "page__inboxHiddenLabel"
   ],
   [
     "metricStrip",
