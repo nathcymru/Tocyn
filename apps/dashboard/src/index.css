@@ -51,10 +51,10 @@
 
 [data-tocyn-appearance] {
   font-size: var(--tocyn-type-scale-body);
-  border-top: 1px solid var(--tocyn-app-border);
-  padding: 0.75rem 1rem;
+  border: 0;
+  padding: 0.25rem 0;
 }
-[data-tocyn-preferences] select { background: var(--tocyn-app-surface-panel); border: 1px solid var(--tocyn-app-border); color: var(--tocyn-app-text); }
+[data-tocyn-preferences] select { inline-size: 100%; min-block-size: 2.5rem; margin-block-start: .25rem; border: 1px solid color-mix(in srgb, var(--tocyn-app-border) 72%, transparent); border-radius: .5rem; background: var(--tocyn-app-surface-panel); color: var(--tocyn-app-text); padding: .5rem .75rem; }
 /* Root percentages retain the browser's initial font size and scale rem controls. */
 :root[data-tocyn-font-scale="large"] { font-size: 112.5%; }
 :root[data-tocyn-font-scale="larger"] { font-size: 125%; }
@@ -77,6 +77,8 @@
   font-weight: 600;
   line-height: 1.25rem;
 }
+[data-tocyn-appearance] legend { color: var(--tocyn-app-text-muted); font-size: .75rem; }
+[data-tocyn-appearance] fieldset { border: 0; padding: 0; }
 [data-tocyn-appearance] label + label { margin-top: 0.25rem; }
 [data-tocyn-appearance] fieldset { margin-top: 0.5rem; }
 [data-tocyn-appearance] label {
@@ -285,16 +287,7 @@
 .tocyn-assignment-select, .tocyn-assignment-reason { display: block; inline-size: 100%; border: 1px solid var(--tocyn-app-border); border-radius: .375rem; padding: .5rem .75rem; }
 
 .tocyn-shell-account-wrapper { position: relative; margin-block-start: .5rem; }
-.tocyn-shell-account-trigger { display: flex; align-items: center; justify-content: center; inline-size: 2.5rem; block-size: 2.5rem; border: 1px solid #475569; border-radius: 999px; background: #334155; color: #fff; font-weight: 700; }
-.tocyn-shell-account-popover { z-index: 50; inline-size: 20rem; max-inline-size: calc(100vw - 2rem); max-block-size: calc(100dvh - 2rem); overflow-y: auto; border: 1px solid #334155; border-radius: .5rem; background: #1e293b; padding-block: .25rem; box-shadow: 0 10px 24px rgb(15 23 42 / 25%); }
-.tocyn-shell-account-summary { border-block-end: 1px solid #334155; padding: .5rem 1rem; }
-.tocyn-shell-account-name, .tocyn-shell-account-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tocyn-shell-account-name { color: #fff; font-size: .875rem; font-weight: 500; }
-.tocyn-shell-account-email { color: #94a3b8; font-size: .75rem; }
-.tocyn-shell-account-action { display: flex; align-items: center; gap: .5rem; color: #cbd5e1; padding: .5rem 1rem; transition: background-color 180ms ease; }
-.tocyn-shell-account-action-full { inline-size: 100%; }
-.tocyn-shell-account-action-left { text-align: start; }
-.tocyn-shell-account-action:hover { background: #334155; color: #fff; }
+.tocyn-shell-account-trigger, .tocyn-shell-account-popover, .tocyn-shell-account-name, .tocyn-shell-account-email, .tocyn-shell-account-action { color: inherit; }
 .tocyn-shell-capacity-dialog { inline-size: 100%; max-inline-size: 32rem; max-block-size: 90vh; overflow-y: auto; border: 1px solid var(--tocyn-app-border); border-radius: .75rem; background: var(--tocyn-app-surface); color: var(--tocyn-app-text); padding: 1.5rem; box-shadow: 0 20px 40px rgb(15 23 42 / 20%); }
 .tocyn-shell-dialog-header, .tocyn-shell-connection-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block-end: 1rem; }
 .tocyn-shell-dialog-title { font-size: 1.25rem; font-weight: 700; }
@@ -326,13 +319,13 @@
 .tocyn-shell-persona-trigger { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; min-inline-size: 2.75rem; min-block-size: 2.75rem; border-radius: .5rem; padding: .125rem; color: var(--tocyn-app-text); }
 .tocyn-shell-persona-avatar { inline-size: 2.5rem; block-size: 2.5rem; border: 0; border-radius: .5rem; background: var(--tocyn-app-surface-muted); color: var(--tocyn-app-text); font-size: .8125rem; font-weight: 700; }
 .tocyn-shell-persona-status { position: absolute; inset-block-end: .125rem; inset-inline-end: .125rem; inline-size: .625rem; block-size: .625rem; border: 2px solid var(--tocyn-app-surface); border-radius: 999px; background: #22c55e; }
-.tocyn-shell-account-menu { box-sizing: border-box; z-index: 60; min-inline-size: 15rem; max-inline-size: min(22rem, calc(100vw - 2rem)); overflow: hidden; border: 1px solid var(--tocyn-color-divider); border-radius: .625rem; background: var(--tocyn-color-canvas); padding: .375rem; box-shadow: 0 .75rem 1.5rem rgb(15 23 42 / 12%); }
-.tocyn-shell-account-summary { display: flex; min-inline-size: 0; flex-direction: column; gap: .125rem; margin-block-end: .25rem; padding: .5rem .75rem .375rem; }
+.tocyn-shell-account-menu { box-sizing: border-box; z-index: 60; min-inline-size: 15rem; max-inline-size: min(22rem, calc(100vw - 2rem)); overflow: hidden; border: 1px solid color-mix(in srgb, var(--tocyn-color-divider) 68%, transparent); border-radius: .625rem; background: var(--tocyn-color-canvas); padding: .375rem; box-shadow: 0 .75rem 1.5rem rgb(15 23 42 / 10%); }
+.tocyn-shell-account-summary { display: flex; min-inline-size: 0; flex-direction: column; gap: .125rem; margin: 0 0 .25rem; border: 0 !important; border-block: 0 !important; padding: .5rem .75rem .375rem; }
 .tocyn-shell-account-summary-name, .tocyn-shell-account-summary-email { overflow: hidden; min-inline-size: 0; text-overflow: ellipsis; white-space: nowrap; }
 .tocyn-shell-account-summary-name { color: var(--tocyn-color-text); font-size: .875rem; }
 .tocyn-shell-account-summary-email { color: var(--tocyn-color-text-muted); font-size: .75rem; }
 .tocyn-shell-account-menu-item { box-sizing: border-box; display: flex; inline-size: 100%; align-items: center; border-radius: .375rem; padding: .625rem .75rem; color: var(--tocyn-color-text); font-size: .875rem; text-align: start; }
-.tocyn-shell-account-menu-item:hover, .tocyn-shell-account-menu-item[data-highlighted] { background: var(--tocyn-color-surface-muted); }
+.tocyn-shell-account-menu-item:hover, .tocyn-shell-account-menu-item[data-highlighted] { background: color-mix(in srgb, var(--tocyn-color-surface-muted) 72%, transparent); }
 .tocyn-shell-account-menu-item--warning { color: var(--tocyn-color-critical); }
 .tocyn-shell-account-menu-item--warning:hover, .tocyn-shell-account-menu-item--warning[data-highlighted] { background: color-mix(in srgb, var(--tocyn-color-critical) 10%, transparent); color: var(--tocyn-color-critical); }
 .tocyn-logout-confirm { border-color: var(--tocyn-color-critical) !important; background: var(--tocyn-color-critical); color: var(--tocyn-color-icon-inverse, #fff); }
@@ -357,11 +350,11 @@
 .tocyn-shell-activity-more-wrap { margin-block-start: .5rem; }
 .tocyn-account-page { max-inline-size: 72rem; margin-inline: auto; padding: 2rem; color: var(--tocyn-app-text); }
 .tocyn-account-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; margin-block-end: 1.5rem; }
-.tocyn-account-page-header h1 { margin: 0; font-size: 1.75rem; }
+.tocyn-account-page-header h1 { margin: 0; font-size: 1.75rem; letter-spacing: -.02em; }
 .tocyn-account-page-header p { margin-block: .375rem 0; color: var(--tocyn-app-text-muted); }
 .tocyn-page-eyebrow { color: var(--tocyn-app-brand) !important; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .tocyn-account-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-block: 1rem; }
-.tocyn-account-card { border: 1px solid var(--tocyn-app-border); border-radius: .75rem; background: var(--tocyn-app-surface); padding: 1.25rem; box-shadow: 0 1px 2px rgb(15 23 42 / 5%); }
+.tocyn-account-card { border: 1px solid color-mix(in srgb, var(--tocyn-app-border) 72%, transparent); border-radius: .875rem; background: var(--tocyn-app-surface); padding: 1.25rem; box-shadow: 0 1px 2px rgb(15 23 42 / 4%); }
 .tocyn-account-card h2 { margin-block: 0 .75rem; font-size: 1.05rem; }
 .tocyn-account-identity-name { margin: 0; font-size: 1.125rem; font-weight: 700; }
 .tocyn-account-identity-email { overflow: hidden; margin: .25rem 0 0; color: var(--tocyn-app-text-muted); text-overflow: ellipsis; white-space: nowrap; }
