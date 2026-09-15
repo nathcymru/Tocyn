@@ -1,4 +1,4 @@
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
 import {
@@ -112,7 +112,7 @@ export const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="tocyn-settings-page">
+    <div className={[ParkPage('settings').root, ParkPage('settings').content, 'tocyn-settings-page'].join(' ')}>
       <div className="tocyn-settings-header">
         <div>
           <h1 className="tocyn-settings-title">General Settings</h1>

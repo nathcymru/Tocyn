@@ -89,6 +89,27 @@ export default {
       },
       slotRecipes: {
         ...parkRegistrySlotRecipes,
+        page: {
+          className: 'page',
+          slots: ['root', 'header', 'content', 'grid', 'section'],
+          base: {
+            root: { width: '100%', minWidth: '0', minHeight: '100%', background: 'bg.canvas', color: 'text.primary', fontFamily: 'primary' },
+            header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1.5rem', marginBottom: '2rem' },
+            content: { width: '100%', minWidth: '0', maxWidth: '72rem', marginInline: 'auto', padding: '2rem 1rem' },
+            grid: { display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+            section: { minWidth: '0' },
+          },
+          variants: {
+            kind: {
+              dashboard: { content: { maxWidth: '88rem', display: 'grid', gap: '2rem' } },
+              knowledge: { content: { maxWidth: '96rem', display: 'grid', gap: '1.5rem' } },
+              inbox: { content: { maxWidth: 'none', padding: '0' } },
+              settings: { content: { maxWidth: '56rem' } },
+              account: { content: { maxWidth: '72rem' } },
+            },
+          },
+          defaultVariants: { kind: 'dashboard' },
+        },
         shell: {
           className: 'shell',
           slots: ['root', 'sidebar', 'main', 'header', 'content', 'navigation', 'navigationLink'],

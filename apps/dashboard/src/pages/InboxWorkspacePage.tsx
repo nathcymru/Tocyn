@@ -1,7 +1,7 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { createListCollection } from '@ark-ui/react';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkSelect, ParkSplitter } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSelect, ParkSplitter } from '@luminatick/ui/park';
 import { AlertCircle,ChevronLeft,ChevronRight,Clock,LayoutList,Search,Table2 } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
@@ -220,7 +220,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   };
   const moveFocus=(index:number)=>{const next=Math.max(0,Math.min(tickets.length-1,index));setFocusedIndex(next);rowRefs.current[next]?.focus();};
 
-  return <div className="tocyn-inbox-list">
+  return <div className={[ParkPage('inbox').root, ParkPage('inbox').content, 'tocyn-inbox-list'].join(' ')}>
     <header className="tocyn-inbox-header">
       <div className="tocyn-inbox-title-row"><div><p className="tocyn-inbox-eyebrow">Workspace</p>
         <h1 ref={heading} tabIndex={-1} className="tocyn-inbox-title">Inbox</h1></div>

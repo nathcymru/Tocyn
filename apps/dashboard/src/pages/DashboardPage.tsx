@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ParkButton, ParkCard, ParkEmptyState } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkPage } from '@luminatick/ui/park';
 import { useStats } from '../hooks/useStats';
 import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
 
@@ -47,7 +47,7 @@ export const DashboardPage: React.FC = () => {
   ];
 
   return (
-    <div className="tocyn-dashboard-page">
+    <div className={[ParkPage('dashboard').root, ParkPage('dashboard').content, 'tocyn-dashboard-page'].join(' ')}>
       <div>
         <h1 className="tocyn-dashboard-page-title">Dashboard</h1>
         <p className="tocyn-dashboard-page-description">A quick overview of the support workload.</p>

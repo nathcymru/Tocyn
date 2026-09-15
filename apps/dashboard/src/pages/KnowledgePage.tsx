@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -240,7 +240,7 @@ export const KnowledgePage: React.FC = () => {
   );
 
   return (
-    <div className="tocyn-knowledge-page">
+    <div className={[ParkPage('knowledge').root, ParkPage('knowledge').content, 'tocyn-knowledge-page'].join(' ')}>
       <div className="tocyn-knowledge-header">
         <h1 ref={heading} tabIndex={-1} className="tocyn-knowledge-title">Knowledge Base</h1>
         <ParkButton

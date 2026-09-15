@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ParkButton, ParkCard } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkPage } from '@luminatick/ui/park';
 import { useAuthStore } from '../store/authStore';
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { OperatorPreferencesControl, OperatorThemeControl } from '../components/theme/OperatorThemeProvider';
@@ -7,7 +7,7 @@ import { OperatorPreferencesControl, OperatorThemeControl } from '../components/
 export function AccountSettingsPage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  return <div className="tocyn-account-page">
+  return <div className={[ParkPage('account').root, ParkPage('account').content, 'tocyn-account-page'].join(' ')}>
     <header className="tocyn-account-page-header">
       <div>
         <p className="tocyn-page-eyebrow">Account</p>
