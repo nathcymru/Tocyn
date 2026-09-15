@@ -254,7 +254,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         <ParkInput aria-label="Filter this view" placeholder="Filter this view" value={filterInput} maxLength={256}
           onChange={event=>setFilterInput(event.target.value)} onKeyDown={event=>{if(event.key==='Escape'&&filterInput){event.preventDefault();setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}}
           />
-        <ParkButton type="button" aria-label="Clear current-view filter" disabled={!filterInput} onClick={()=>{setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}
+        <ParkButton type="button" variant="ghost" size="sm" aria-label="Clear current-view filter" disabled={!filterInput} onClick={()=>{setFilterInput('');workspace.update({listQuery:'',listAnchor:'page:1'});setStatus('Current-view filter cleared.');}}
          >Clear</ParkButton>
       </form>
       <div className={pageStyles.inboxToolbar}><div className={pageStyles.inboxToolbarGroup}><div role="group" aria-label="Conversation presentation">

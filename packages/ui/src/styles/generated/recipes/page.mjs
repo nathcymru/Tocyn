@@ -29,7 +29,11 @@ const pageCompoundVariants = [
     "kind": "inbox",
     "css": {
       "inboxControls": {
-        "gridTemplateColumns": "repeat(3, minmax(0, 1fr))"
+        "gridTemplateColumns": {
+          "base": "1fr",
+          "sm": "repeat(2, minmax(0, 1fr))",
+          "lg": "repeat(3, minmax(0, 1fr))"
+        }
       }
     }
   }
