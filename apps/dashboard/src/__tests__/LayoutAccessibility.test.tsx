@@ -50,15 +50,15 @@ afterEach(() => {
   vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
 
-it('names global search, makes its authorised scope available to assistive technology, clears it predictably, and keeps shared navigation reachable', async () => {
+it('names global search, makes its authorised scope available to assistive technology, clears it with Escape, and keeps shared navigation reachable', async () => {
   await renderReady();
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveClass('tocyn-visually-hidden');
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
   expect(screen.getByRole('heading').textContent).toBe('Route /tickets');
-  const clear = screen.getByRole('button', { name: 'Clear global ticket search' });
-  fireEvent.click(clear);
+  fireEvent.keyDown(search, { key: 'Escape' });
+  expect(search).toHaveValue('');
   expect(screen.getByRole('heading').textContent).toBe('Route /tickets');
   const trigger = screen.getByRole('button', { name: 'Open navigation' });
   trigger.focus(); fireEvent.click(trigger);

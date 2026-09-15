@@ -31,7 +31,7 @@ it('searches authorised customers from ticket identities and clear/type switchin
  await userEvent.keyboard('{Escape}'); expect(screen.getByRole('textbox')).toHaveFocus(); expect(screen.getByRole('textbox')).toHaveValue('');
  expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/mine?priority=urgent');
 });
-it('ticket query and clear never visit legacy route or change the current filter',async()=>{
+it('ticket query and keyboard clear never visit legacy route or change the current filter',async()=>{
  const page={data:[{id:'ticket-1',subject:'Synthetic result',status:'open',customer_email:'someone@example.test'}],meta:{total:1,page:1,limit:20,total_pages:1}};
  vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response(page));
  mount('/inbox/mine?priority=urgent');
@@ -40,7 +40,7 @@ it('ticket query and clear never visit legacy route or change the current filter
   expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/mine?priority=urgent');
   expect(screen.getByRole('link',{name:'Open in All tickets: Synthetic result'})).toHaveAttribute('href','/inbox/all/ticket-1');
   expect(dashboardApi.boundedBlob).toHaveBeenCalledWith('/tickets?search=Synthetic&limit=20&page=1',1048576,['application/json'],expect.anything());
-  await userEvent.click(screen.getByRole('button',{name:'Clear global ticket search'}));expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/mine?priority=urgent');
+  fireEvent.keyDown(screen.getByRole('textbox',{name:'Search all tickets (global shell)'}),{key:'Escape'});expect(screen.getByRole('textbox')).toHaveValue('');expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/mine?priority=urgent');
 });
 for(const [label,meta] of [['wrong count',{total:2,page:1,limit:20,total_pages:1}],['wrong page',{total:1,page:2,limit:20,total_pages:1}]])it(`ticket ${label} fails without partial results`,async()=>{
  vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response({data:[{id:'ticket-1',subject:'Synthetic',status:'open'}],meta}));mount();await userEvent.type(screen.getByRole('textbox'),'Synthetic{Enter}');expect(await screen.findByText(/Ticket search is unavailable/)).toBeVisible();expect(screen.queryByRole('link')).not.toBeInTheDocument();
