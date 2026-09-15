@@ -109,12 +109,6 @@
 .tocyn-users-invite { padding: .5rem 1rem; }
 .tocyn-users-error { margin-block-end: 1.5rem; padding: 1rem; }
 @media (max-width: 639px) { .tocyn-users-header { align-items: flex-start; flex-direction: column; gap: 1rem; } }
-.tocyn-ticket-fields-page { display: grid; max-inline-size: 72rem; margin-inline: auto; gap: 1.5rem; }
-.tocyn-ticket-fields-header { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
-.tocyn-ticket-fields-description { margin-block-start: .25rem; }
-.tocyn-ticket-fields-create { display: inline-flex; align-items: center; gap: .5rem; padding: .5rem 1rem; }
-.tocyn-ticket-fields-create-icon { inline-size: 1rem; block-size: 1rem; }
-@media (max-width: 639px) { .tocyn-ticket-fields-header { align-items: flex-start; flex-direction: column; gap: 1rem; } }
 .tocyn-markdown-code-block .token:is(.operator, .entity, .url),
 /* Presence status keeps normal-text contrast in both selected theme modes. */
 /* Semantic Panda migration surfaces. Keep layout and status styling on named contracts. */

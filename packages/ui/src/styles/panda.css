@@ -2777,6 +2777,194 @@
       margin-top: 0.75rem;
 }
 
+    .ticketFields__page {
+      margin-inline: auto;
+      gap: 1.5rem;
+      display: grid;
+      max-width: 72rem;
+      width: 100%;
+}
+
+    .ticketFields__header {
+      gap: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+}
+
+    .ticketFields__title {
+      margin: var(--spacing-0);
+      color: var(--colors-text\.primary);
+      font-size: 1.5rem;
+      font-weight: 700;
+}
+
+    .ticketFields__description {
+      margin: 0.25rem 0 0;
+      color: var(--colors-text\.muted);
+}
+
+    .ticketFields__create {
+      gap: 0.5rem;
+      display: inline-flex;
+      align-items: center;
+}
+
+    .ticketFields__createIcon {
+      width: 1rem;
+      height: 1rem;
+}
+
+    .ticketFields__tableShell {
+      border: 1px solid;
+      background: var(--colors-bg\.surface);
+      overflow: hidden;
+      border-color: var(--colors-border\.default);
+      border-radius: var(--radii-panel);
+}
+
+    .ticketFields__table {
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: 100%;
+}
+
+    .ticketFields__tableHead {
+      background: var(--colors-bg\.subtle);
+      color: var(--colors-text\.muted);
+      text-align: start;
+      font-size: 0.8125rem;
+      text-transform: uppercase;
+}
+
+    .ticketFields__tableRow {
+      border-top: 1px solid;
+      border-color: var(--colors-border\.default);
+}
+
+    .ticketFields__tableRow td,.ticketFields__tableRow th {
+      padding: 0.75rem 1rem;
+      text-align: start;
+      vertical-align: top;
+}
+
+    .ticketFields__tableRow:is(:hover, [data-hover]) {
+      background: var(--colors-bg\.subtle);
+}
+
+    .ticketFields__fieldType {
+      gap: 0.5rem;
+      display: inline-flex;
+      align-items: center;
+}
+
+    .ticketFields__fieldStatus {
+      padding: 0.25rem 0.625rem;
+      border-radius: var(--radii-full);
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      min-height: 1.75rem;
+}
+
+    .ticketFields__fieldStatusActive {
+      background: var(--colors-info\.surface);
+      color: var(--colors-info\.text);
+}
+
+    .ticketFields__fieldStatusInactive {
+      background: var(--colors-bg\.subtle);
+      color: var(--colors-text\.muted);
+}
+
+    .ticketFields__dialog {
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 32rem;
+}
+
+    .ticketFields__dialogHeader {
+      gap: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+}
+
+    .ticketFields__dialogTitle {
+      margin: var(--spacing-0);
+      color: var(--colors-text\.primary);
+      font-size: 1.25rem;
+}
+
+    .ticketFields__dialogClose {
+      padding: var(--spacing-0);
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+}
+
+    .ticketFields__dialogCloseIcon {
+      width: 1.25rem;
+      height: 1.25rem;
+}
+
+    .ticketFields__dialogForm {
+      gap: 1rem;
+      display: grid;
+      margin-top: 1rem;
+}
+
+    .ticketFields__dialogError {
+      margin: var(--spacing-0);
+      border: 1px solid;
+      background: var(--colors-critical\.surface);
+      padding: 0.75rem;
+      border-color: var(--colors-critical\.border);
+      border-radius: var(--radii-l2);
+      color: var(--colors-critical);
+}
+
+    .ticketFields__dialogFields {
+      border: 0;
+      padding: var(--spacing-0);
+      gap: 1rem;
+      display: grid;
+}
+
+    .ticketFields__dialogLabel {
+      display: block;
+      color: var(--colors-text\.primary);
+      font-weight: 600;
+      margin-bottom: 0.375rem;
+}
+
+    .ticketFields__dialogControl {
+      width: 100%;
+}
+
+    .ticketFields__dialogHelp {
+      margin: 0.25rem 0 0;
+      color: var(--colors-text\.muted);
+      font-size: 0.875rem;
+}
+
+    .ticketFields__optionsReveal {
+      display: grid;
+}
+
+    .ticketFields__checkbox {
+      gap: 0.5rem;
+      display: flex;
+      align-items: center;
+}
+
+    .ticketFields__dialogActions {
+      gap: 0.75rem;
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 0.5rem;
+}
+
     @media screen and (min-width: 40rem) {
       .page__inboxMobileNote {
         display: none;
