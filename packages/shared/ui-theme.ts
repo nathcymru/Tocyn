@@ -12,6 +12,7 @@ export interface TocynThemeTokens {
   colorTextMuted: string;
   colorFocus: string;
   colorSelected: string;
+  colorInverse: string;
   colorCritical: string;
   colorQuiet: string;
   motionDurationFast: string;
@@ -68,7 +69,7 @@ export interface ResolvedTocynTheme {
 const LIGHT_DEFAULTS: TocynThemeTokens = {
   colorSurface: '#ffffff', colorSurfacePanel: '#f8fafc', colorSurfaceMuted: '#f1f5f9',
   colorDivider: '#cbd5e1', colorText: '#1e293b', colorTextMuted: '#64748b',
-  colorFocus: '#3b82f6', colorSelected: '#eff6ff', colorCritical: '#b91c1c', colorQuiet: '#64748b',
+  colorFocus: '#3b82f6', colorSelected: '#eff6ff', colorInverse: '#0f172a', colorCritical: '#b91c1c', colorQuiet: '#64748b',
   motionDurationFast: '120ms', motionDurationNormal: '180ms', motionDurationSlow: '240ms',
   motionEasingStandard: 'cubic-bezier(0.2, 0, 0, 1)', targetMin: '44px', densityComfortable: '1rem',
   typeScaleBody: '1rem', typeLineHeightBody: '1.5',
@@ -77,7 +78,7 @@ const LIGHT_DEFAULTS: TocynThemeTokens = {
 const DARK_DEFAULTS: TocynThemeTokens = {
   ...LIGHT_DEFAULTS, colorSurface: '#1a1d23', colorSurfacePanel: '#0f1115', colorSurfaceMuted: '#1e293b',
   colorDivider: '#334155', colorText: '#e2e8f0', colorTextMuted: '#94a3b8', colorFocus: '#60a5fa',
-  colorSelected: '#1e3a5f', colorCritical: '#fca5a5', colorQuiet: '#94a3b8',
+  colorSelected: '#1e3a5f', colorInverse: '#0b1220', colorCritical: '#fca5a5', colorQuiet: '#94a3b8',
 };
 
 const tokenName = (key: string): `--tocyn-${string}` => `--tocyn-${key.replace(/[A-Z]/g, '-$&').toLowerCase()}`;
