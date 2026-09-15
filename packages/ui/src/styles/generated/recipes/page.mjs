@@ -24,14 +24,6 @@ const pageCompoundVariants = [
         "gridTemplateColumns": "minmax(15rem, 20rem) minmax(0, 1fr)"
       }
     }
-  },
-  {
-    "kind": "inbox",
-    "css": {
-      "inboxControls": {
-        "gridTemplateColumns": "repeat(auto-fit, minmax(12rem, 1fr))"
-      }
-    }
   }
 ]
 
