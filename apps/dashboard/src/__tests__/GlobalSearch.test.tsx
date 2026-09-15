@@ -6,7 +6,7 @@ import { GlobalSearch } from '../components/layout/GlobalSearch';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 vi.mock('../api/client', () => ({ dashboardApi: { boundedBlob: vi.fn() } }));
-const row = (id: string) => ({ id, title: `Guide ${id}`, status: 'ready', category_id: null });
+const row = (id: string) => ({ id, title: `Guide ${id}`, status: 'ready', category_id: null, customer_email: `${id}@example.test` });
 const response = (rows: unknown) => ({ blob: new Blob([JSON.stringify(rows)]), contentType: 'application/json' });
 function Location() { const location = useLocation(); return <output aria-label="Current route">{location.pathname}{location.search}</output>; }
 function mount(path='/inbox/mine?priority=urgent') { render(<MemoryRouter initialEntries={[path]}><GlobalSearch shortcutsEnabled /><Location /></MemoryRouter>); }
@@ -22,14 +22,17 @@ it('searches complete metadata, shows first20 with exact total, and previews wit
  expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/mine?priority=urgent');
  expect(dashboardApi.boundedBlob).toHaveBeenCalledWith('/knowledge/articles',1048576,['application/json'],expect.objectContaining({signal:expect.any(AbortSignal)}));
 });
-it('customers make no request and clear/type switching retain current work view and focus',async()=>{
- mount(); await userEvent.selectOptions(screen.getByRole('combobox'),'customers'); expect(screen.getByText('Customer search is not available in this workspace.')).toBeVisible();
- await userEvent.type(screen.getByRole('textbox'),'someone{Enter}'); expect(dashboardApi.boundedBlob).not.toHaveBeenCalled();
+it('searches authorised customers from ticket identities and clear/type switching retain current work view and focus',async()=>{
+ vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response({data:[{id:'ticket-1',subject:'Synthetic',status:'open',customer_email:'someone@example.test'}],meta:{total:1,page:1,limit:20,total_pages:1}}));
+ mount(); await userEvent.selectOptions(screen.getByRole('combobox'),'customers');
+ await userEvent.type(screen.getByRole('textbox'),'someone{Enter}'); expect(await screen.findByText('1 matching authorised customers. Showing 1.')).toBeVisible();
+ expect(screen.getByRole('list',{name:'Customer search results'})).toBeVisible();
+ expect(dashboardApi.boundedBlob).toHaveBeenCalledWith('/tickets?search=someone&limit=20&page=1',1048576,['application/json'],expect.anything());
  await userEvent.keyboard('{Escape}'); expect(screen.getByRole('textbox')).toHaveFocus(); expect(screen.getByRole('textbox')).toHaveValue('');
  expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/mine?priority=urgent');
 });
 it('ticket query and clear never visit legacy route or change the current filter',async()=>{
- const page={data:[{id:'ticket-1',subject:'Synthetic result',status:'open'}],meta:{total:1,page:1,limit:20,total_pages:1}};
+ const page={data:[{id:'ticket-1',subject:'Synthetic result',status:'open',customer_email:'someone@example.test'}],meta:{total:1,page:1,limit:20,total_pages:1}};
  vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response(page));
  mount('/inbox/mine?priority=urgent');
   await userEvent.type(screen.getByRole('textbox',{name:'Search all tickets (global shell)'}),'Synthetic{Enter}');
