@@ -207,6 +207,22 @@ export default {
             preview: { border: '1px solid', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.subtle', color: 'text.primary', padding: '0.75rem' },
           },
         },
+        settingsLayout: {
+          className: 'settingsLayout',
+          slots: ['root', 'sidebar', 'sidebarInner', 'title', 'nav', 'navLink', 'navIcon', 'sectionTitle', 'main', 'content'],
+          base: {
+            root: { display: 'grid', minWidth: '0', minHeight: '0', width: '100%', gridTemplateColumns: { base: '1fr', md: '16rem minmax(0, 1fr)' }, background: 'bg.canvas' },
+            sidebar: { minWidth: '0', borderBottom: { base: '1px solid', md: '0' }, borderRight: { md: '1px solid' }, borderColor: 'border.default', background: 'bg.surface' },
+            sidebarInner: { position: { md: 'sticky' }, top: { md: '0' }, display: 'grid', gap: '0.75rem', padding: '1.25rem 1rem' },
+            title: { margin: '0', color: 'text.primary', fontSize: '1.125rem', fontWeight: '700' },
+            nav: { display: 'grid', gap: '0.25rem' },
+            navLink: { display: 'flex', minHeight: '2.75rem', minWidth: '0', alignItems: 'center', gap: '0.75rem', borderRadius: 'l2', color: 'text.muted', padding: '0.5rem 0.75rem', textDecoration: 'none', transition: 'colors', _hover: { background: 'bg.subtle', color: 'text.primary' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, '&[aria-current="page"]': { background: 'bg.subtle', color: 'text.primary', fontWeight: '600' } },
+            navIcon: { flexShrink: '0', width: '1.25rem', height: '1.25rem', color: 'currentColor' },
+            sectionTitle: { margin: '0.75rem 0 0', color: 'text.muted', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase' },
+            main: { minWidth: '0', minHeight: '0' },
+            content: { width: '100%', maxWidth: '72rem', marginInline: 'auto', padding: { base: '1.25rem 1rem', md: '2rem 1.5rem' } },
+          },
+        },
         shell: {
           className: 'shell',
           slots: ['root', 'sidebar', 'main', 'header', 'content', 'navigation', 'navigationLink', 'navigationLinkLabelled', 'navigationLinkIcon', 'navigationIcon', 'sidebarDesktop', 'sidebarLabelled', 'sidebarCompact', 'logoLink', 'logo', 'mobileDialog', 'mobileDialogLabelled', 'mobileDialogCompact', 'mobileContent', 'mobileClose', 'mobileTrigger', 'personaTrigger', 'personaAvatar', 'personaStatus', 'accountMenu', 'accountSummary', 'accountSummaryName', 'accountSummaryEmail', 'menuItem', 'activityTrigger', 'activityPopover', 'activityBadge', 'activityHeader', 'activityTitle', 'activityRefresh', 'activityDismiss', 'activityMessage', 'activityWarning', 'activityRetry', 'activityList', 'activityRow', 'activityItem', 'activitySubject', 'activityMoreWrap', 'activityMore', 'connectionWrap', 'connectionPopover', 'connectionButton', 'connectionDot', 'connectionChevron', 'reconnectDivider', 'reconnectButton', 'icon', 'menuIcon', 'smallIcon', 'dismissIcon', 'rootInbox', 'rootStandard', 'contentInbox', 'contentStandard', 'contentPadded'],

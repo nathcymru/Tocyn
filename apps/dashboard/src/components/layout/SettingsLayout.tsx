@@ -1,13 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { IconGear, IconUsers, IconShieldHalved, IconBolt, IconKey, IconTableColumns, IconWpforms, IconEnvelope, IconCreditCard, IconDiagramProject, IconClock } from '@luminatick/ui/icons';
-import { clsx } from 'clsx';
 import { useAuthStore } from '../../store/authStore';
 import { dashboardApi } from '../../api/client';
-
-function cn(...inputs: any[]) {
-  return clsx(inputs);
-}
+import { ParkSettingsLayout } from '@luminatick/ui/park';
 
 const settingsNavigation = [
   { name: 'General', href: '/settings/general', icon: IconGear, permissionKey: 'general' },
@@ -28,6 +24,7 @@ const channelsNavigation = [
 ];
 
 export function SettingsLayout() {
+  const styles = ParkSettingsLayout();
   const { user } = useAuthStore();
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
 
@@ -46,26 +43,19 @@ export function SettingsLayout() {
   const filteredChannelsNav = channelsNavigation.filter(item => hasPermission(item.permissionKey));
 
   return (
-    <div className="tocyn-settings-layout">
+    <div className={styles.root}>
       {/* Sub-sidebar */}
-      <div className="tocyn-settings-sidebar">
-        <div className="tocyn-settings-sidebar-inner">
-          <h2 className="tocyn-settings-sidebar-title">Settings</h2>
-          <nav className="tocyn-settings-nav-list">
+      <aside className={styles.sidebar}>
+        <div className={styles.sidebarInner}>
+          <h2 className={styles.title}>Settings</h2>
+          <nav className={styles.nav}>
             {filteredSettingsNav.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.href}
-                className={({ isActive }) =>
-                  cn(
-                    "tocyn-settings-nav-link",
-                    isActive
-                      ? "tocyn-settings-nav-link--active"
-                      : "tocyn-settings-nav-link--inactive"
-                  )
-                }
+                className={styles.navLink}
               >
-                <item.icon className="tocyn-settings-nav-icon" />
+                <item.icon aria-hidden="true" className={styles.navIcon} />
                 {item.name}
               </NavLink>
             ))}
@@ -73,16 +63,9 @@ export function SettingsLayout() {
             {user?.role === 'admin' && (
               <NavLink
                 to="/settings/agent-permissions"
-                className={({ isActive }) =>
-                  cn(
-                    "tocyn-settings-nav-link tocyn-settings-nav-link--permissions",
-                    isActive
-                      ? "tocyn-settings-nav-link--permissions-active"
-                      : "tocyn-settings-nav-link--permissions-inactive"
-                  )
-                }
+                className={styles.navLink}
               >
-                <IconShieldHalved className="tocyn-settings-nav-icon" />
+                <IconShieldHalved aria-hidden="true" className={styles.navIcon} />
                 Agent Permissions
               </NavLink>
             )}
@@ -90,24 +73,17 @@ export function SettingsLayout() {
 
           {filteredChannelsNav.length > 0 && (
             <>
-              <h3 className="tocyn-settings-nav-section-title">
+              <h3 className={styles.sectionTitle}>
                 Channels
               </h3>
-              <nav className="tocyn-settings-nav-list">
+              <nav className={styles.nav}>
                 {filteredChannelsNav.map((item) => (
                   <NavLink
                     key={item.name}
                     to={item.href}
-                    className={({ isActive }) =>
-                      cn(
-                        "tocyn-settings-nav-link",
-                        isActive
-                          ? "tocyn-settings-nav-link--active"
-                          : "tocyn-settings-nav-link--inactive"
-                      )
-                    }
+                    className={styles.navLink}
                   >
-                    <item.icon className="tocyn-settings-nav-icon" />
+                    <item.icon aria-hidden="true" className={styles.navIcon} />
                     {item.name}
                   </NavLink>
                 ))}
@@ -115,14 +91,14 @@ export function SettingsLayout() {
             </>
           )}
         </div>
-      </div>
+      </aside>
 
       {/* Main Content */}
-      <div className="tocyn-settings-main">
-        <div className="tocyn-settings-content">
+      <main className={styles.main}>
+        <div className={styles.content}>
           <Outlet />
         </div>
-      </div>
+      </main>
     </div>
   );
 }
