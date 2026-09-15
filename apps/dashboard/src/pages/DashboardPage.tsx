@@ -10,7 +10,7 @@ export const DashboardPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <ParkEmptyState title="Loading dashboard metrics…" headingLevel={false} aria-busy="true" className="tocyn-dashboard-loading" />
+      <ParkEmptyState title="Loading dashboard metrics…" headingLevel={false} aria-busy="true" />
     );
   }
 
@@ -50,24 +50,24 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className={[page.root, page.content].join(' ')}>
       <header className={page.header}>
-        <h1 className="tocyn-dashboard-page-title">Dashboard</h1>
-        <p className="tocyn-dashboard-page-description">A quick overview of the support workload.</p>
-        <ParkButton type="button" variant="solid" onClick={() => navigate('/inbox')} className="tocyn-dashboard-open-inbox">Open Inbox</ParkButton>
+        <h1>Dashboard</h1>
+        <p>A quick overview of the support workload.</p>
+        <ParkButton type="button" variant="solid" onClick={() => navigate('/inbox')}>Open Inbox</ParkButton>
       </header>
 
       <div className={page.metricStrip}>
         {cards.map((card, idx) => (
           <ParkCard.Root key={idx} variant="outline" className={page.metricCard}>
-            <ParkCard.Header className="tocyn-metric-card-header">
+            <ParkCard.Header>
               <div className={page.metricIcon} data-tone={card.tone}>
-                <card.icon className="tocyn-metric-card-icon-glyph" />
+                <card.icon />
               </div>
-              <span className="tocyn-metric-card-kicker">Metrics</span>
+              <span>Metrics</span>
             </ParkCard.Header>
-            <ParkCard.Body className="tocyn-metric-card-content">
+            <ParkCard.Body>
               <div>
-                <ParkCard.Description className="tocyn-metric-card-label">{card.label}</ParkCard.Description>
-                <ParkCard.Title data-tabular className="tocyn-metric-card-value">{card.value}</ParkCard.Title>
+                <ParkCard.Description>{card.label}</ParkCard.Description>
+                <ParkCard.Title data-tabular>{card.value}</ParkCard.Title>
               </div>
             </ParkCard.Body>
           </ParkCard.Root>
@@ -75,10 +75,10 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       <div className={page.panels}>
-        <ParkCard.Root variant="outline" className="tocyn-surface-card">
-          <ParkCard.Header className="tocyn-dashboard-card-heading">
-            <IconChartBar className="tocyn-dashboard-panel-icon" />
-            <h3 className="tocyn-dashboard-panel-title">Tickets by Priority</h3>
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
+            <IconChartBar />
+            <h3>Tickets by Priority</h3>
           </ParkCard.Header>
           <ParkCard.Body className={page.priorityList}>
             {['urgent', 'high', 'normal', 'low'].map((priority) => {
@@ -86,9 +86,9 @@ export const DashboardPage: React.FC = () => {
               const percentage = totalTickets > 0 ? (count / totalTickets) * 100 : 0;
               return (
                 <div key={priority} className={page.priorityRow}>
-                  <div className="tocyn-priority-label-row">
-                    <span className="tocyn-priority-name">{priority}</span>
-                    <span className="tocyn-priority-count">{count}</span>
+                  <div>
+                    <span>{priority}</span>
+                    <span>{count}</span>
                   </div>
                   <div className={page.progressTrack}>
                     <div
@@ -103,26 +103,26 @@ export const DashboardPage: React.FC = () => {
           </ParkCard.Body>
         </ParkCard.Root>
 
-        <ParkCard.Root variant="outline" className="tocyn-surface-card">
-          <ParkCard.Header className="tocyn-dashboard-card-heading">
-            <IconUsers className="tocyn-dashboard-panel-icon" />
-            <h3 className="tocyn-dashboard-panel-title">System Overview</h3>
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
+            <IconUsers />
+            <h3>System Overview</h3>
           </ParkCard.Header>
           <ParkCard.Body>
           <div className={page.overviewGrid}>
             <ParkCard.Root variant="subtle" className={page.overviewCard}>
-              <div className="tocyn-overview-card-heading">
-                <IconUsers className="tocyn-overview-icon" />
-                <span className="tocyn-overview-label">Total Users</span>
+              <div>
+                <IconUsers />
+                <span>Total Users</span>
               </div>
-              <p className="tocyn-overview-value">{stats?.totalUsers || 0}</p>
+              <p>{stats?.totalUsers || 0}</p>
             </ParkCard.Root>
             <ParkCard.Root variant="subtle" className={page.overviewCard}>
-              <div className="tocyn-overview-card-heading">
-                <IconUsers className="tocyn-overview-icon" />
-                <span className="tocyn-overview-label">Active Groups</span>
+              <div>
+                <IconUsers />
+                <span>Active Groups</span>
               </div>
-              <p className="tocyn-overview-value">{stats?.totalGroups || 0}</p>
+              <p>{stats?.totalGroups || 0}</p>
             </ParkCard.Root>
           </div>
           <p className={page.overviewFooter}>Use Inbox to keep the conversation list in place while reviewing and replying.</p>

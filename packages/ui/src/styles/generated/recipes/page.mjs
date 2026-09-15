@@ -173,6 +173,14 @@ const pageSlotNames = [
     "page__inboxControls"
   ],
   [
+    "inboxControlCell",
+    "page__inboxControlCell"
+  ],
+  [
+    "inboxControlLabel",
+    "page__inboxControlLabel"
+  ],
+  [
     "inboxMetrics",
     "page__inboxMetrics"
   ],
@@ -223,6 +231,42 @@ const pageSlotNames = [
   [
     "inboxTableResponsive",
     "page__inboxTableResponsive"
+  ],
+  [
+    "inboxTitleRow",
+    "page__inboxTitleRow"
+  ],
+  [
+    "inboxRowCopy",
+    "page__inboxRowCopy"
+  ],
+  [
+    "inboxRowSubject",
+    "page__inboxRowSubject"
+  ],
+  [
+    "inboxRowCustomer",
+    "page__inboxRowCustomer"
+  ],
+  [
+    "inboxRowDate",
+    "page__inboxRowDate"
+  ],
+  [
+    "inboxRowPreview",
+    "page__inboxRowPreview"
+  ],
+  [
+    "inboxRowMeta",
+    "page__inboxRowMeta"
+  ],
+  [
+    "inboxToolbarGroup",
+    "page__inboxToolbarGroup"
+  ],
+  [
+    "inboxPagination",
+    "page__inboxPagination"
   ],
   [
     "metricStrip",

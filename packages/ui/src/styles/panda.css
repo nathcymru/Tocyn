@@ -1300,6 +1300,18 @@
       grid-template-columns: 1fr;
 }
 
+    .page__inboxControlCell {
+      gap: 0.375rem;
+      display: grid;
+      min-width: var(--sizes-0);
+}
+
+    .page__inboxControlLabel {
+      color: var(--colors-text\.muted);
+      font-size: 0.8125rem;
+      font-weight: 600;
+}
+
     .page__inboxMetrics {
       gap: 0.75rem;
       display: grid;
@@ -1414,6 +1426,76 @@
     .page__inboxTableResponsive {
       display: none;
       overflow-x: auto;
+}
+
+    .page__inboxTitleRow {
+      gap: 1rem;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      min-width: var(--sizes-0);
+}
+
+    .page__inboxRowCopy {
+      gap: 0.125rem;
+      display: grid;
+      min-width: var(--sizes-0);
+}
+
+    .page__inboxRowSubject {
+      font-weight: 600;
+}
+
+    .page__inboxRowSubject,.page__inboxRowCustomer {
+      margin: var(--spacing-0);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+}
+
+    .page__inboxRowCustomer {
+      color: var(--colors-text\.muted);
+      font-size: 0.875rem;
+}
+
+    .page__inboxRowDate {
+      flex-shrink: 0;
+      color: var(--colors-text\.muted);
+      font-size: 0.8125rem;
+}
+
+    .page__inboxRowPreview {
+      margin: var(--spacing-0);
+      overflow: hidden;
+      color: var(--colors-text\.muted);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.875rem;
+}
+
+    .page__inboxRowMeta {
+      gap: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      color: var(--colors-text\.muted);
+      font-size: 0.8125rem;
+}
+
+    .page__inboxToolbarGroup {
+      gap: 0.75rem;
+      display: flex;
+      align-items: center;
+}
+
+    .page__inboxPagination {
+      padding: 0.75rem 1.5rem;
+      gap: 1rem;
+      border-top: 1px solid;
+      border-color: var(--colors-border\.default);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
 }
 
     .page__metricStrip {

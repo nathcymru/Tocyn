@@ -157,7 +157,7 @@ export const KnowledgePage: React.FC = () => {
     const isSelected = selectedCategoryId === node.id;
 
     return (
-      <div key={node.id} className="tocyn-knowledge-category-node">
+      <div key={node.id}>
         <div
           className={[pageStyles.knowledgeCategoryRow, isSelected ? pageStyles.knowledgeCategoryRowSelected : ''].filter(Boolean).join(' ')}
           style={{ ['--tocyn-category-depth' as string]: depth }}
@@ -166,7 +166,7 @@ export const KnowledgePage: React.FC = () => {
             {node.children.length > 0 ? (
               <ParkButton
                 aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`} aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
-                className="tocyn-knowledge-category-toggle"
+               
               >
                 {isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
               </ParkButton>
@@ -174,8 +174,8 @@ export const KnowledgePage: React.FC = () => {
               <span className={pageStyles.knowledgeCategorySpacer}></span>
             )}
             <ParkButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className={pageStyles.knowledgeCategoryButton}>
-            <IconFolder size={14} className={isSelected ? 'tocyn-knowledge-category-icon-selected' : 'tocyn-knowledge-category-icon'} />
-            <span className="tocyn-knowledge-category-name">{node.name}</span>
+            <IconFolder size={14} aria-hidden="true" />
+            <span>{node.name}</span>
             </ParkButton>
           </div>
           <div className={pageStyles.knowledgeCategoryActions}>
@@ -185,7 +185,7 @@ export const KnowledgePage: React.FC = () => {
                 setIsAddingCategory({ parentId: node.id });
                 setExpandedCategories(prev => new Set(prev).add(node.id));
               }}
-              className="tocyn-knowledge-category-add"
+             
               title="Add Subcategory" aria-label={`Add subcategory to ${node.name}`}
             >
               <IconPlus size={14} />
@@ -195,7 +195,7 @@ export const KnowledgePage: React.FC = () => {
                 e.stopPropagation();
                 confirmDeleteCategory(node.id, node.name, e.currentTarget);
               }}
-              className="tocyn-knowledge-category-delete"
+             
               title="Delete Category" aria-label={`Delete category ${node.name}`}
             >
               <IconTrash size={14} />
@@ -211,8 +211,8 @@ export const KnowledgePage: React.FC = () => {
 
         {isAddingCategory?.parentId === node.id && (
           <div
-            className="tocyn-knowledge-category-add-row"
-            style={{ paddingLeft: `${(depth + 1) * 1.5 + 0.5}rem` }}
+            className={pageStyles.knowledgeCategoryRow}
+            style={{ ['--tocyn-category-depth' as string]: depth + 1 }}
           >
             <ParkInput
               aria-label={`New subcategory name for ${node.name}`}
@@ -240,18 +240,18 @@ export const KnowledgePage: React.FC = () => {
   return (
     <div className={[pageStyles.root, pageStyles.content].join(' ')}>
       <header className={pageStyles.header}>
-        <h1 ref={heading} tabIndex={-1} className="tocyn-knowledge-title">Knowledge Base</h1>
+        <h1 ref={heading} tabIndex={-1}>Knowledge Base</h1>
         <ParkButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
-          variant="solid" className="tocyn-knowledge-new-button"
+          variant="solid"
         >
-          <IconPlus size={16} className="tocyn-knowledge-new-icon" />
+          <IconPlus size={16} />
           New Article
         </ParkButton>
       </header>
 
       {error && (
-        <div className="tocyn-knowledge-error" role="alert">
+        <div role="alert">
           {error}
         </div>
       )}
@@ -260,24 +260,22 @@ export const KnowledgePage: React.FC = () => {
         {/* Sidebar */}
         <ParkCard.Root variant="outline" className={pageStyles.knowledgeSidebar}>
           <ParkCard.Header>
-            <h2 className="tocyn-knowledge-sidebar-title">Categories</h2>
+            <h2>Categories</h2>
             <ParkButton
               onClick={() => setIsAddingCategory({ parentId: null })}
-              className="tocyn-knowledge-add-category"
+             
               title="Add Root Category"
             >
               <IconPlus size={16} />
             </ParkButton>
           </ParkCard.Header>
 
-          <ParkCard.Body className="tocyn-knowledge-sidebar-body">
+          <ParkCard.Body>
             <ParkButton aria-pressed={selectedCategoryId === null}
-              className={`tocyn-knowledge-all-articles ${
-                selectedCategoryId === null ? 'tocyn-knowledge-all-articles--active' : ''
-              }`}
+              className={pageStyles.knowledgeCategoryButton}
               onClick={() => setSelectedCategoryId(null)}
             >
-              <IconFileLines size={16} className="tocyn-knowledge-all-icon" />
+              <IconFileLines size={16} />
               <span>All Articles</span>
             </ParkButton>
 
@@ -285,7 +283,7 @@ export const KnowledgePage: React.FC = () => {
               {categories.map(root => renderCategoryNode(root))}
 
               {isAddingCategory?.parentId === null && (
-                <div className="tocyn-knowledge-category-add-row-root">
+                <div>
                   <ParkInput
                     aria-label="New root category name"
                     autoFocus
@@ -297,7 +295,7 @@ export const KnowledgePage: React.FC = () => {
                       if (e.key === 'Escape') setIsAddingCategory(null);
                     }}
                     onBlur={() => handleAddCategory(null)}
-                    className="tocyn-knowledge-category-add-input"
+                   
                     placeholder="New category..."
                   />
                 </div>
@@ -308,38 +306,38 @@ export const KnowledgePage: React.FC = () => {
 
         {/* Main Content */}
         <ParkCard.Root variant="outline" className={pageStyles.knowledgeContent}>
-          <ParkCard.Body className="tocyn-knowledge-table-shell">
+          <ParkCard.Body>
             <table className={pageStyles.knowledgeTable}>
-              <thead className="tocyn-knowledge-table-head">
+              <thead>
                 <tr>
-                  <th>Title</th><th>Status</th><th>Tier</th><th>Created</th><th className="tocyn-knowledge-table-actions-heading">Actions</th>
+                  <th>Title</th><th>Status</th><th>Tier</th><th>Created</th><th>Actions</th>
                 </tr>
               </thead>
-              <tbody className="tocyn-knowledge-table-body">
+              <tbody>
                 {filteredDocs.map((doc) => (
                   <tr
                     key={doc.id}
                     className={pageStyles.knowledgeRow}
                     onClick={() => navigate(`/knowledge/edit/${doc.id}`)}
                   >
-                    <td className="tocyn-knowledge-cell-title">{doc.title}</td>
-                    <td className="tocyn-knowledge-cell-muted">
+                    <td>{doc.title}</td>
+                    <td>
                       <span className={pageStyles.knowledgeStatusBadge} data-status={doc.status}>
                         {doc.status}
                       </span>
                     </td>
-                    <td className="tocyn-knowledge-cell-muted">
+                    <td>
                       <span className={pageStyles.knowledgeStatusBadge} data-tier={doc.tier}>
                         {doc.tier === 'sop' ? 'SOP' : 'Answer'}
                       </span>
                     </td>
-                    <td className="tocyn-knowledge-cell-muted">
+                    <td>
                       {new Date(doc.created_at).toLocaleDateString()}
                     </td>
-                    <td className="tocyn-knowledge-cell-actions">
+                    <td>
                       <ParkButton
                         onClick={(e) => confirmDeleteDoc(doc.id, doc.title, e)}
-                        className="tocyn-knowledge-delete"
+                       
                       >
                         Delete
                       </ParkButton>
@@ -349,7 +347,7 @@ export const KnowledgePage: React.FC = () => {
                 {filteredDocs.length === 0 && (
                   <tr>
                     <td colSpan={5}>
-                      <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false} className="tocyn-knowledge-empty-state" />
+                      <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false} />
                     </td>
                   </tr>
                 )}
@@ -362,20 +360,20 @@ export const KnowledgePage: React.FC = () => {
       {deleteStatus && <p role="status">{deleteStatus}</p>}
       <TocynDialog open={deleteConfirm.isOpen} busy={deleting} labelledBy={deleteTitleId} initialFocusEl={() => deleteCancel.current}
         finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} onOpenChange={next => { if (!next) closeDelete(); }}>
-          <div className="tocyn-knowledge-delete-dialog">
-            <h3 id={deleteTitleId} className="tocyn-knowledge-delete-title">Confirm Deletion</h3>
-            <p className="tocyn-knowledge-delete-copy">{deleteConfirm.title}</p>
-            {deleteError && <p role="alert" className="tocyn-knowledge-delete-error">{deleteError}</p>}
-            <div className="tocyn-knowledge-delete-actions">
+          <div>
+            <h3 id={deleteTitleId}>Confirm Deletion</h3>
+            <p>{deleteConfirm.title}</p>
+            {deleteError && <p role="alert">{deleteError}</p>}
+            <div>
               <ParkButton
                 ref={deleteCancel} disabled={deleting} onClick={closeDelete}
-                className="tocyn-knowledge-delete-cancel"
+               
               >
                 Cancel
               </ParkButton>
               <ParkButton
                 disabled={deleting} onClick={executeDelete}
-                className="tocyn-knowledge-delete-confirm"
+               
               >
                 Delete
               </ParkButton>
