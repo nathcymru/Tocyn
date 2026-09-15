@@ -1,3 +1,8 @@
+import { absoluteCenter, badge, button, code, group, heading, icon, input, inputAddon, kbd, link, skeleton, spinner, text, textarea, accordion, alert, avatar, breadcrumb, card, carousel, checkbox, clipboard, collapsible, colorPicker, combobox, datePicker, dialog, drawer, editable, field, fieldset, fileUpload, hoverCard, inputGroup, menu, numberInput, pagination, pinInput, popover, progress, radioCardGroup, radioGroup, ratingGroup, scrollArea, segmentGroup, select, slider, splitter, switchRecipe, table, tabs, tagsInput, toast, toggleGroup, tooltip } from './src/theme/recipes/index';
+
+const parkRegistryRecipes = { absoluteCenter: absoluteCenter, badge: badge, button: button, code: code, group: group, heading: heading, icon: icon, input: input, inputAddon: inputAddon, kbd: kbd, link: link, skeleton: skeleton, spinner: spinner, text: text, textarea: textarea };
+const parkRegistrySlotRecipes = { accordion: accordion, alert: alert, avatar: avatar, breadcrumb: breadcrumb, card: card, carousel: carousel, checkbox: checkbox, clipboard: clipboard, collapsible: collapsible, colorPicker: colorPicker, combobox: combobox, datePicker: datePicker, dialog: dialog, drawer: drawer, editable: editable, field: field, fieldset: fieldset, fileUpload: fileUpload, hoverCard: hoverCard, inputGroup: inputGroup, menu: menu, numberInput: numberInput, pagination: pagination, pinInput: pinInput, popover: popover, progress: progress, radioCardGroup: radioCardGroup, radioGroup: radioGroup, ratingGroup: ratingGroup, scrollArea: scrollArea, segmentGroup: segmentGroup, select: select, slider: slider, splitter: splitter, switchRecipe: switchRecipe, table: table, tabs: tabs, tagsInput: tagsInput, toast: toast, toggleGroup: toggleGroup, tooltip: tooltip };
+
 /**
  * Build-time Panda configuration for the shared Park-compatible layer.
  * Keep this file dependency-light so consumers can import the UI contract
@@ -77,6 +82,7 @@ export default {
         tabular: { value: { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', lineHeight: '1.4' } },
       },
       slotRecipes: {
+        ...parkRegistrySlotRecipes,
         tabs: {
           className: 'tabs', slots: ['root', 'list', 'trigger', 'content', 'indicator'],
           base: { root: { display: 'flex', flexDirection: 'column', minWidth: '0' }, list: { display: 'flex', alignItems: 'center', gap: '0.25rem', borderBottom: '1px solid', borderColor: 'border.default' }, trigger: { minHeight: '2.5rem', border: '0', borderBottom: '2px solid transparent', background: 'transparent', color: 'fg.muted', padding: '0.5rem 0.75rem', fontFamily: 'primary', cursor: 'pointer', _hover: { color: 'fg.default' }, _selected: { color: 'fg.default', borderColor: 'accent.primary' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } }, content: { minWidth: '0', paddingBlock: '1rem' }, indicator: { display: 'none' } },
@@ -118,6 +124,7 @@ export default {
         },
       },
       recipes: {
+        ...parkRegistryRecipes,
         button: {
           className: 'button',
           base: { appearance: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '2.75rem', minWidth: '2.75rem', flexShrink: '0', isolation: 'isolate', position: 'relative', verticalAlign: 'middle', whiteSpace: 'nowrap', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', color: 'text.primary', padding: '0.5rem 0.875rem', fontFamily: 'primary', fontWeight: '600', cursor: 'pointer', userSelect: 'none', outline: '0', transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease', _hover: { background: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' }, '& svg': { flexShrink: '0' } },

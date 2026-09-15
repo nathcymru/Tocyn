@@ -678,6 +678,10 @@
       outline-color: var(--colors-border\.focus);
       outline-offset: 2px;
 }
+
+    .heading {
+      font-weight: var(--font-weights-semibold);
+}
 }
 
   .button--variant_surface {
@@ -700,6 +704,111 @@
 
 @layer recipes.slots{
   @layer _base{
+
+    .dialog__backdrop {
+      background: black.a7;
+      position: fixed;
+      z-index: var(--z-index);
+      height: 100dvh;
+      left: var(--spacing-0);
+      top: var(--spacing-0);
+      width: 100dvw;
+}
+
+    .dialog__backdrop:is([open], [data-open], [data-state="open"], :popover-open) {
+      animation-name: fade-in;
+      animation-timing-function: emphasized-in;
+      animation-duration: var(--durations-normal);
+}
+
+    .dialog__backdrop:is([closed], [data-closed], [data-state="closed"]) {
+      animation-name: fade-out;
+      animation-timing-function: emphasized-out;
+      animation-duration: var(--durations-fast);
+}
+
+    .dialog__positioner {
+      justify-content: center;
+      position: fixed;
+      height: 100dvh;
+      left: var(--spacing-0);
+      overscroll-behavior-y: none;
+      top: var(--spacing-0);
+      width: 100dvw;
+}
+
+    .dialog__positioner,.dialog__content {
+      --dialog-z-index: zIndex.modal;
+      display: flex;
+      z-index: calc(var(--dialog-z-index) + var(--layer-index, 0));
+}
+
+    .dialog__content {
+      background: gray.surface.bg;
+      border-radius: var(--radii-l3);
+      margin-block: var(--dialog-margin, var(--dialog-base-margin));
+      outline: 0;
+      padding-block: var(--spacing-4);
+      gap: var(--spacing-4);
+      box-shadow: var(--shadows-lg);
+      flex-direction: column;
+      position: relative;
+      font-size: 0.875rem;
+      line-height: calc(1.25 / 0.875);
+      width: 100%;
+}
+
+    .dialog__content:is([open], [data-open], [data-state="open"], :popover-open) {
+      animation-duration: var(--durations-slowest);
+}
+
+    .dialog__content:is([closed], [data-closed], [data-state="closed"]) {
+      animation-duration: var(--durations-normal);
+}
+
+    .dialog__title {
+      font-weight: var(--font-weights-semibold);
+      font-size: 1.125rem;
+      line-height: calc(1.75 / 1.125);
+}
+
+    .dialog__description {
+      color: var(--colors-fg\.muted);
+      font-size: 0.875rem;
+      line-height: calc(1.25 / 0.875);
+}
+
+    .dialog__closeTrigger {
+      position: absolute;
+      inset-inline-end: var(--spacing-3);
+      top: var(--spacing-3);
+}
+
+    .dialog__header {
+      gap: var(--spacing-0\.5);
+      flex: 0;
+      flex-direction: column;
+}
+
+    .dialog__header,.dialog__body {
+      padding-inline: var(--spacing-4);
+      display: flex;
+}
+
+    .dialog__body {
+      flex: 1 1 0%;
+      flex-direction: column;
+      align-items: flex-start;
+}
+
+    .dialog__footer {
+      flex: 0;
+      gap: var(--spacing-3);
+      padding-inline: var(--spacing-4);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+}
 
     .select__root {
       gap: 0.375rem;
@@ -1016,6 +1125,136 @@
       display: flex;
       margin-top: 0.5rem;
 }
+
+    .field__root {
+      gap: var(--spacing-1\.5);
+      display: flex;
+      flex-direction: column;
+}
+
+    .field__errorText {
+      color: error;
+}
+
+    .field__errorText,.field__helperText {
+      font-size: 0.875rem;
+      line-height: calc(1.25 / 0.875);
+}
+
+    .field__helperText {
+      color: var(--colors-fg\.muted);
+}
+
+    .field__helperText:is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {
+      layer-style: disabled;
+}
+
+    .field__label {
+      gap: var(--spacing-0\.5);
+      align-items: center;
+      color: var(--colors-fg\.default);
+      display: flex;
+      text-align: start;
+      -webkit-user-select: none;
+      user-select: none;
+}
+
+    .field__label:is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {
+      layer-style: disabled;
+}
+
+    .field__requiredIndicator {
+      color: colorPalette.solid;
+}
+
+    .pin-input__input {
+      border-radius: var(--radii-l2);
+      outline: 0;
+      transition-property: var(--transition-prop, color, background-color, border-color, outline-color, text-decoration-color, fill, stroke);
+      transition-timing-function: var(--transition-easing, cubic-bezier(0.4, 0, 0.2, 1));
+      transition-duration: var(--transition-duration, 150ms);
+      padding-inline: var(--spacing-1) !important;
+      appearance: none;
+      -webkit-appearance: none;
+      position: relative;
+      text-align: center;
+      height: var(--input-height);
+      min-height: var(--input-height);
+      min-width: var(--input-height);
+      width: var(--input-height);
+}
+
+    .pin-input__input:is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {
+      layer-style: disabled;
+}
+
+    .pin-input__control {
+      gap: var(--spacing-2);
+      display: inline-flex;
+      isolation: isolate;
+}
+
+    @media screen and (min-width: 48rem) {
+      .dialog__content {
+        padding-block: var(--spacing-6);
+        gap: var(--spacing-6);
+}
+      .dialog__header,.dialog__body,.dialog__footer {
+        padding-inline: var(--spacing-6);
+}
+}
+}
+
+  .dialog__content--size_md {
+    max-width: var(--sizes-md);
+}
+
+  .dialog__positioner--scrollBehavior_outside {
+    overflow: auto;
+    pointer-events: auto;
+}
+
+  .dialog__positioner--placement_center {
+    align-items: center;
+}
+
+  .dialog__content--placement_center {
+    --dialog-base-margin: auto;
+    margin-inline: auto;
+}
+
+  .dialog__content--motionPreset_scale:is([open], [data-open], [data-state="open"], :popover-open) {
+    animation-name: scale-in, fade-in;
+}
+
+  .dialog__content--motionPreset_scale:is([closed], [data-closed], [data-state="closed"]) {
+    animation-name: scale-out, fade-out;
+}
+
+  .pin-input__input--size_md {
+    --input-height: var(--sizes-10);
+    padding-inline: var(--spacing-3);
+    font-size: 1rem;
+    line-height: calc(1.5 / 1);
+}
+
+  .pin-input__input--variant_outline {
+    border-width: 1px;
+    border-color: gray.outline.border;
+    --focus-ring-color: var(--focus-ring-color-prop, var(--global-color-focus-ring, #005FCC));
+}
+
+  .pin-input__input--variant_outline:is(:focus-visible, [data-focus-visible]) {
+    outline-offset: 0px;
+    outline-width: var(--focus-ring-width, 1px);
+    outline-color: var(--focus-ring-color);
+    outline-style: var(--focus-ring-style, solid);
+    border-color: var(--focus-ring-color);
+}
+
+  .pin-input__input--variant_outline:is(:invalid, [data-invalid], [aria-invalid=true]) {
+    border-color: error;
+    --focus-ring-color-prop: error;
 }
 }
 
