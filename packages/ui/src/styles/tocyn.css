@@ -227,12 +227,6 @@
 .tocyn-global-search-scope .tocyn-form-control { min-width: 5.75rem; border: 0; background-color: transparent; padding: .5rem 1.75rem .5rem .625rem; box-shadow: none; }
 .tocyn-global-search-scope [data-park="select-root"] { position: relative; min-inline-size: 5.75rem; }
 .tocyn-global-search-scope [data-park="select-control"] { display: flex; align-items: center; }
-.tocyn-global-search-scope [data-park="select-trigger"] { display: inline-flex; min-block-size: 2.5rem; min-inline-size: 5.75rem; align-items: center; justify-content: space-between; gap: .375rem; border: 0; border-radius: .375rem; background: transparent; color: var(--tocyn-color-text); padding: .5rem .625rem; font: inherit; cursor: pointer; }
-.tocyn-global-search-scope [data-park="select-trigger"]:hover, .tocyn-global-search-scope [data-park="select-trigger"][data-state="open"] { background: var(--tocyn-color-surface-muted); }
-.tocyn-global-search-scope [data-park="select-trigger"]:focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
-.tocyn-global-search-scope [data-park="select-content"] { z-index: 70; min-inline-size: 8rem; overflow: hidden; border: 1px solid color-mix(in srgb, var(--tocyn-color-divider) 72%, transparent); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .25rem; box-shadow: 0 .75rem 1.5rem rgb(15 23 42 / 12%); }
-.tocyn-global-search-scope [data-park="select-item"] { display: flex; min-block-size: 2.5rem; align-items: center; justify-content: space-between; gap: .75rem; border-radius: .375rem; color: var(--tocyn-color-text); padding: .5rem .625rem; cursor: pointer; }
-.tocyn-global-search-scope [data-park="select-item"][data-highlighted], .tocyn-global-search-scope [data-park="select-item"]:hover { background: var(--tocyn-color-surface-muted); }
 .tocyn-global-search-scope [data-park="select-item-indicator"] { color: var(--tocyn-color-brand); }
 .tocyn-search-divider { inline-size: 1px; block-size: 1.5rem; flex: 0 0 auto; background: var(--tocyn-color-divider); }
 .tocyn-global-search-icon { position: absolute; inset-inline-start: .75rem; inset-block-start: 50%; inline-size: 1rem; block-size: 1rem; color: var(--tocyn-color-text-muted); transform: translateY(-50%); }
@@ -342,11 +336,6 @@
 .tocyn-inbox-control-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-block-start: 1rem; border: 1px solid var(--tocyn-color-divider); border-radius: .625rem; background: var(--tocyn-color-surface-muted); overflow: visible; }
 .tocyn-inbox-control-cell { display: grid; min-inline-size: 0; gap: .375rem; padding: .75rem 1rem; }
 .tocyn-inbox-control-cell + .tocyn-inbox-control-cell { border-inline-start: 1px solid var(--tocyn-color-divider); }
-.tocyn-inbox-control-cell [data-park="select-trigger"] { display: inline-flex; min-block-size: 2.5rem; min-inline-size: 0; align-items: center; justify-content: space-between; gap: .5rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .5rem .75rem; color: var(--tocyn-color-text); font: inherit; text-align: start; }
-.tocyn-inbox-control-cell [data-park="select-trigger"]:focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
-.tocyn-inbox-control-cell [data-park="select-content"] { z-index: 70; min-inline-size: 12rem; overflow: hidden; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .25rem; box-shadow: 0 .75rem 1.5rem rgb(15 23 42 / 12%); }
-.tocyn-inbox-control-cell [data-park="select-item"] { display: flex; min-block-size: 2.5rem; align-items: center; justify-content: space-between; border-radius: .375rem; padding: .5rem .625rem; color: var(--tocyn-color-text); cursor: pointer; }
-.tocyn-inbox-control-cell [data-park="select-item"][data-highlighted], .tocyn-inbox-control-cell [data-park="select-item"]:hover { background: var(--tocyn-color-surface-muted); }
 .tocyn-inbox-feed { flex: 1 1 0%; }
 .tocyn-inbox-row { display: block; border-inline-start: 4px solid transparent; background: var(--tocyn-color-surface); padding: 1rem; outline: none; transition: background-color 180ms ease, border-color 180ms ease; }
 .tocyn-inbox-row:hover { background: var(--tocyn-color-surface-muted); }
@@ -1732,9 +1721,6 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-inbox-control-label { color: var(--tocyn-color-text-muted); font-size: .75rem; font-weight: 600; }
 .tocyn-inbox-select-control { margin-inline-start: .5rem; }
 .tocyn-inbox-sort-trigger { display: inline-flex; min-inline-size: 10rem; align-items: center; justify-content: space-between; gap: .5rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .375rem .5rem; color: var(--tocyn-color-text); font-size: .875rem; }
-.tocyn-inbox-toolbar [data-park="select-trigger"] { display: inline-flex; min-block-size: 2.5rem; min-inline-size: 10rem; align-items: center; justify-content: space-between; gap: .5rem; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .5rem .75rem; color: var(--tocyn-color-text); font: inherit; }
-.tocyn-inbox-toolbar [data-park="select-trigger"]:focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
-.tocyn-inbox-toolbar [data-park="select-content"] { z-index: 70; min-inline-size: 12rem; overflow: hidden; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .25rem; box-shadow: 0 .75rem 1.5rem rgb(15 23 42 / 12%); }
 .tocyn-inbox-toolbar [data-park="select-item"] { display: flex; min-block-size: 2.5rem; align-items: center; justify-content: space-between; gap: .75rem; border-radius: .375rem; color: var(--tocyn-color-text); padding: .5rem .625rem; cursor: pointer; }
 .tocyn-inbox-toolbar [data-park="select-item"][data-highlighted], .tocyn-inbox-toolbar [data-park="select-item"]:hover { background: var(--tocyn-color-surface-muted); }
 .tocyn-inbox-presentation-toggle { display: inline-flex; border: 1px solid var(--tocyn-color-divider); border-radius: .5rem; background: var(--tocyn-color-surface); padding: .125rem; }
