@@ -411,8 +411,6 @@
     --radii-control: var(--radii-l2);
     --radii-panel: var(--radii-l3);
     --shadows-2xs: 0 1px rgb(0 0 0 / 0.05);
-    --shadows-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-    --shadows-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
     --shadows-inset-2xs: inset 0 1px rgb(0 0 0 / 0.05);
     --shadows-inset-xs: inset 0 1px 1px rgb(0 0 0 / 0.05);
     --shadows-inset-sm: inset 0 2px 4px rgb(0 0 0 / 0.05);
@@ -420,6 +418,8 @@
     --shadows-sm: 0 2px 6px rgb(15 23 42 / 8%);
     --shadows-md: 0 8px 20px rgb(15 23 42 / 10%);
     --shadows-lg: 0 16px 32px rgb(15 23 42 / 12%);
+    --shadows-xl: 0 20px 40px rgb(15 23 42 / 14%);
+    --shadows-2xl: 0 24px 48px rgb(15 23 42 / 16%);
     --sizes-0: 0rem;
     --sizes-1: 0.25rem;
     --sizes-2: 0.5rem;
@@ -563,12 +563,22 @@
       padding: 0.5rem 0.875rem;
       gap: 0.5rem;
       border-color: var(--colors-border\.input);
-      border-radius: 0.5rem;
+      border-radius: var(--radii-l2);
+      outline: 0;
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+      appearance: none;
+      -webkit-appearance: none;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
+      isolation: isolate;
+      position: relative;
+      vertical-align: middle;
+      white-space: nowrap;
       color: var(--colors-text\.primary);
       font-family: fonts.primary;
+      font-weight: 600;
       cursor: pointer;
       -webkit-user-select: none;
       user-select: none;
@@ -579,6 +589,10 @@
     .button:is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {
       opacity: 0.6;
       cursor: not-allowed;
+}
+
+    .button svg {
+      flex-shrink: 0;
 }
 
     .button:is(:focus-visible, [data-focus-visible]) {
