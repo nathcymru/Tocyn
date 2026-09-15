@@ -34,7 +34,7 @@ export default {
           'icon.disabled': { value: { base: '#94a3b8', _dark: '#475569' } },
           'icon.selected': { value: { base: '#3b82f6', _dark: '#60a5fa' } },
           'icon.critical': { value: { base: '#b91c1c', _dark: '#fca5a5' } },
-          'icon.inverse': { value: { base: '#f8fafc', _dark: '#0f1115' } },
+          'icon.inverse': { value: { base: '#f8fafc', _dark: '#e2e8f0' } },
           'gray.surface.bg': { value: { base: '#ffffff', _dark: '#1a1d23' } },
           'gray.subtle.bg': { value: { base: '#f1f5f9', _dark: '#1e293b' } },
           canvas: { value: 'var(--tocyn-color-surface)' },
