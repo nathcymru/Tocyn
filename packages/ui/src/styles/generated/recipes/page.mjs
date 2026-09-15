@@ -269,6 +269,10 @@ const pageSlotNames = [
     "page__inboxPagination"
   ],
   [
+    "inboxHiddenLabel",
+    "page__inboxHiddenLabel"
+  ],
+  [
     "metricStrip",
     "page__metricStrip"
   ],

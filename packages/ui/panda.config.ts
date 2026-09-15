@@ -97,7 +97,7 @@ export default {
             'knowledgeWorkspace', 'knowledgeSidebar', 'knowledgeContent', 'knowledgeTable', 'knowledgeRow', 'knowledgeSearch', 'knowledgePreview',
             'knowledgeCategoryRow', 'knowledgeCategoryRowSelected', 'knowledgeCategoryMain', 'knowledgeCategoryActions', 'knowledgeCategoryChildren', 'knowledgeCategoryList', 'knowledgeCategorySpacer', 'knowledgeCategoryButton', 'knowledgeDeleteActions', 'knowledgeStatusBadge',
             'accountGrid', 'accountIdentityName', 'accountIdentityEmail',
-            'inboxWorkspace', 'inboxList', 'inboxDetail', 'inboxHeader', 'inboxControls', 'inboxControlCell', 'inboxControlLabel', 'inboxMetrics', 'inboxSearch', 'inboxToolbar', 'inboxRows', 'inboxRow', 'inboxTable', 'inboxEmpty', 'inboxMobileHidden', 'inboxTableMobileHidden', 'inboxStatus', 'inboxPriority', 'inboxMobileNote', 'inboxTableResponsive', 'inboxTitleRow', 'inboxRowCopy', 'inboxRowSubject', 'inboxRowCustomer', 'inboxRowDate', 'inboxRowPreview', 'inboxRowMeta', 'inboxToolbarGroup', 'inboxPagination',
+            'inboxWorkspace', 'inboxList', 'inboxDetail', 'inboxHeader', 'inboxControls', 'inboxControlCell', 'inboxControlLabel', 'inboxMetrics', 'inboxSearch', 'inboxToolbar', 'inboxRows', 'inboxRow', 'inboxTable', 'inboxEmpty', 'inboxMobileHidden', 'inboxTableMobileHidden', 'inboxStatus', 'inboxPriority', 'inboxMobileNote', 'inboxTableResponsive', 'inboxTitleRow', 'inboxRowCopy', 'inboxRowSubject', 'inboxRowCustomer', 'inboxRowDate', 'inboxRowPreview', 'inboxRowMeta', 'inboxToolbarGroup', 'inboxPagination', 'inboxHiddenLabel',
             'metricStrip', 'metricCard', 'metricIcon', 'panels', 'priorityList', 'priorityRow', 'progressTrack', 'progressFill', 'overviewGrid', 'overviewCard', 'overviewFooter',
           ],
           base: {
@@ -159,6 +159,7 @@ export default {
             inboxRowMeta: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', color: 'text.muted', fontSize: '0.8125rem' },
             inboxToolbarGroup: { display: 'flex', alignItems: 'center', gap: '0.75rem' },
             inboxPagination: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderTop: '1px solid', borderColor: 'border.default', padding: '0.75rem 1.5rem' },
+            inboxHiddenLabel: { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' },
             metricStrip: { display: 'grid', gridTemplateColumns: { base: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: '1rem' },
             metricCard: { minWidth: '0' },
             metricIcon: { display: 'inline-flex', width: '2.25rem', height: '2.25rem', alignItems: 'center', justifyContent: 'center', borderRadius: 'l2', background: 'bg.subtle', color: 'text.primary', '&[data-tone="blue"]': { background: 'info.surface', color: 'info.text' }, '&[data-tone="green"]': { background: 'rgba(16,185,129,0.12)', color: 'rgba(5,150,105,1)' }, '&[data-tone="amber"]': { background: 'warning.surface', color: 'warning' }, '&[data-tone="neutral"]': { background: 'bg.input', color: 'text.muted' } },

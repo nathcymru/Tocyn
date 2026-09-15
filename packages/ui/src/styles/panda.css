@@ -1498,6 +1498,15 @@
       justify-content: space-between;
 }
 
+    .page__inboxHiddenLabel {
+      overflow: hidden;
+      position: absolute;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      width: 1px;
+      height: 1px;
+}
+
     .page__metricStrip {
       gap: 1rem;
       display: grid;
@@ -1973,6 +1982,18 @@
 
   .grid-tc_repeat\(3\,_minmax\(0\,_1fr\)\) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+  .sr_true {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
 
   .c_canvas {
