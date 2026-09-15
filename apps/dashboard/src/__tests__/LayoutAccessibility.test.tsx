@@ -286,7 +286,7 @@ it('keeps the persona menu available while mobile navigation is open', async () 
   const navigation = await screen.findByRole('dialog', { name: 'Navigation' });
   expect(within(navigation).getByRole('link', { name: 'Inbox' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Account options' })).toBeVisible();
-  await userEvent.keyboard('{Escape}');
+  fireEvent.click(within(navigation).getByRole('button', { name: 'Close navigation' }));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument());
 });
 

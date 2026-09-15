@@ -72,7 +72,7 @@ function UserMenu({ onNavigate }: SidebarProps) {
       </ParkButton>
     </ParkMenu.Trigger>
     <ParkMenu.Positioner>
-      <ParkMenu.Content aria-label="Account menu" className="tocyn-shell-account-menu" data-tocyn-inverse="">
+      <ParkMenu.Content aria-label="Account menu" className="tocyn-shell-account-menu">
         <div className="tocyn-shell-account-summary">
           <strong className="tocyn-shell-account-summary-name">{user?.full_name || 'Operator'}</strong>
           <span className="tocyn-shell-account-summary-email">{user?.email || 'No email available'}</span>
