@@ -281,7 +281,7 @@ function LayoutContent() {
             className={shellStyles.mobileTrigger}
             onClick={() => { restoreNavigationFocus.current = true; setIsSidebarOpen(true); }}
           >
-            <Menu className="tocyn-shell-menu-icon" />
+            <Menu className={shellStyles.menuIcon} />
           </ParkButton>
 
           <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
@@ -289,30 +289,30 @@ function LayoutContent() {
           <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
             <Popover.Trigger asChild>
               <ParkButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className={shellStyles.activityTrigger}>
-                <Bell className="tocyn-shell-icon" />
-                {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className="tocyn-shell-activity-badge">{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
+                <Bell className={shellStyles.icon} />
+                {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className={shellStyles.activityBadge}>{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
               </ParkButton>
             </Popover.Trigger>
             <Popover.Positioner>
               <Popover.Content aria-label="Activity" className={shellStyles.activityPopover}>
-                <div className="tocyn-shell-activity-header"><h2 className="tocyn-shell-activity-title">Activity</h2><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className="tocyn-shell-activity-refresh">Refresh</ParkButton></div>
-                {activityUpdatesAvailable && <p role="status" className="tocyn-shell-activity-message">Updates available. Refresh to load current activity.</p>}
-                {activityError && <div role="alert" className="tocyn-shell-activity-warning"><p>{activityError}</p><ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="tocyn-shell-activity-retry">Retry loading activity</ParkButton></div>}
-                {activityLoading && !activity && <p role="status" className="tocyn-shell-activity-message tocyn-shell-activity-muted">Loading durable activity…</p>}
-                {activity?.unread.status === 'unavailable' && <p role="status" className="tocyn-shell-activity-warning">Unread count is temporarily unavailable. Your activity remains available below.</p>}
-                {activity && visibleActivityItems.length === 0 && <p className="tocyn-shell-activity-message tocyn-shell-activity-muted">{activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'}</p>}
-                <ul aria-label="Durable activity" className="tocyn-shell-activity-list">
-                  {visibleActivityItems.map(item => <li key={item.id} className="tocyn-shell-activity-row">
-                    <ParkButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="tocyn-shell-activity-item">
-                      <p className="tocyn-shell-activity-item-kind">{item.kind.replace(/_/g, ' ')}</p>
-                      <p className="tocyn-shell-activity-subject">{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
-                      <p className="tocyn-shell-activity-meta">Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
+                <div className={shellStyles.activityHeader}><h2 className={shellStyles.activityTitle}>Activity</h2><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className={shellStyles.activityRefresh}>Refresh</ParkButton></div>
+                {activityUpdatesAvailable && <p role="status" className={shellStyles.activityMessage}>Updates available. Refresh to load current activity.</p>}
+                {activityError && <div role="alert" className={shellStyles.activityWarning}><p>{activityError}</p><ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className={shellStyles.activityRetry}>Retry loading activity</ParkButton></div>}
+                {activityLoading && !activity && <p role="status" className={shellStyles.activityMessage}>Loading durable activity…</p>}
+                {activity?.unread.status === 'unavailable' && <p role="status" className={shellStyles.activityWarning}>Unread count is temporarily unavailable. Your activity remains available below.</p>}
+                {activity && visibleActivityItems.length === 0 && <p className={shellStyles.activityMessage}>{activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'}</p>}
+                <ul aria-label="Durable activity" className={shellStyles.activityList}>
+                  {visibleActivityItems.map(item => <li key={item.id} className={shellStyles.activityRow}>
+                    <ParkButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className={shellStyles.activityItem}>
+                      <p>{item.kind.replace(/_/g, ' ')}</p>
+                      <p className={shellStyles.activitySubject}>{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
+                      <p>Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
                     </ParkButton>
-                    <ParkButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className="tocyn-shell-activity-dismiss"><X className="tocyn-shell-dismiss-icon" /></ParkButton>
+                    <ParkButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className={shellStyles.activityDismiss}><X className={shellStyles.dismissIcon} /></ParkButton>
                   </li>)}
                 </ul>
-                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="tocyn-shell-activity-limit">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
-                {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className="tocyn-shell-activity-more-wrap"><ParkButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className="tocyn-shell-activity-more">{activityLoading ? 'Loading more activity…' : 'Load more activity'}</ParkButton></div>}
+                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
+                {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className={shellStyles.activityMoreWrap}><ParkButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className={shellStyles.activityMore}>{activityLoading ? 'Loading more activity…' : 'Load more activity'}</ParkButton></div>}
                 {activity && !activityLoading && visibleActivityItems.length > 0 && <p role="status" className="tocyn-visually-hidden">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</p>}
               </Popover.Content>
             </Popover.Positioner>
@@ -328,40 +328,32 @@ function LayoutContent() {
               ref={connectionTrigger}
               aria-expanded={showConnDetails}
               aria-controls={connectionId}
-              className={cn(
-                "tocyn-shell-connection-button",
-                isConnected
-                  ? "tocyn-shell-connection-connected"
-                  : "tocyn-shell-connection-disconnected"
-              )}
+              className={shellStyles.connectionButton}
             >
-              <WifiOff className="tocyn-shell-small-icon" />
+              <WifiOff className={shellStyles.smallIcon} />
               <span>Disconnected</span>
-              <ChevronDown className={cn("tocyn-shell-chevron", showConnDetails && "rotate-180")} />
+              <ChevronDown className={cn(shellStyles.connectionChevron, showConnDetails && "rotate-180")} />
             </ParkButton></Popover.Trigger>
 
             <Popover.Positioner>
               <Popover.Content aria-label="Connection Status" className={shellStyles.connectionPopover}>
-                <div className="tocyn-shell-connection-header">
-                  <h3 className="tocyn-shell-activity-title">Connection Status</h3>
-                  <div className={cn(
-                    "tocyn-shell-connection-dot",
-                    isConnected ? "tocyn-shell-connection-dot-connected" : "tocyn-palette-red-fill"
-                  )} />
+                <div className={shellStyles.activityHeader}>
+                  <h3 className={shellStyles.activityTitle}>Connection Status</h3>
+                  <div className={shellStyles.connectionDot} data-state={isConnected ? 'connected' : 'disconnected'} />
                 </div>
 
-                <p role="status" className="tocyn-shell-connection-copy">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
+                <p role="status">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
 
-                <div className="tocyn-shell-reconnect-divider">
+                <div className={shellStyles.reconnectDivider}>
                   <ParkButton
                     onClick={() => {
                       manualReconnect();
                       setShowConnDetails(false);
                       connectionTrigger.current?.focus();
                     }}
-                    className="tocyn-shell-reconnect-button"
+                    className={shellStyles.reconnectButton}
                   >
-                    <RefreshCw className="tocyn-shell-small-icon" />
+                    <RefreshCw className={shellStyles.smallIcon} />
                     Force Reconnect
                   </ParkButton>
                 </div>

@@ -130,12 +130,104 @@ const shellSlotNames = [
     "shell__activityPopover"
   ],
   [
+    "activityBadge",
+    "shell__activityBadge"
+  ],
+  [
+    "activityHeader",
+    "shell__activityHeader"
+  ],
+  [
+    "activityTitle",
+    "shell__activityTitle"
+  ],
+  [
+    "activityRefresh",
+    "shell__activityRefresh"
+  ],
+  [
+    "activityDismiss",
+    "shell__activityDismiss"
+  ],
+  [
+    "activityMessage",
+    "shell__activityMessage"
+  ],
+  [
+    "activityWarning",
+    "shell__activityWarning"
+  ],
+  [
+    "activityRetry",
+    "shell__activityRetry"
+  ],
+  [
+    "activityList",
+    "shell__activityList"
+  ],
+  [
+    "activityRow",
+    "shell__activityRow"
+  ],
+  [
+    "activityItem",
+    "shell__activityItem"
+  ],
+  [
+    "activitySubject",
+    "shell__activitySubject"
+  ],
+  [
+    "activityMoreWrap",
+    "shell__activityMoreWrap"
+  ],
+  [
+    "activityMore",
+    "shell__activityMore"
+  ],
+  [
     "connectionWrap",
     "shell__connectionWrap"
   ],
   [
     "connectionPopover",
     "shell__connectionPopover"
+  ],
+  [
+    "connectionButton",
+    "shell__connectionButton"
+  ],
+  [
+    "connectionDot",
+    "shell__connectionDot"
+  ],
+  [
+    "connectionChevron",
+    "shell__connectionChevron"
+  ],
+  [
+    "reconnectDivider",
+    "shell__reconnectDivider"
+  ],
+  [
+    "reconnectButton",
+    "shell__reconnectButton"
+  ],
+  [
+    "icon",
+    "shell__icon"
+  ],
+  [
+    "menuIcon",
+    "shell__menuIcon"
+  ],
+  [
+    "smallIcon",
+    "shell__smallIcon"
+  ],
+  [
+    "dismissIcon",
+    "shell__dismissIcon"
   ],
   [
     "rootInbox",
