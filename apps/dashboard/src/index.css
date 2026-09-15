@@ -158,18 +158,9 @@
 .tocyn-shell-content-standard { overflow: auto; }
 .tocyn-shell-content-padded { padding: 1rem; }
 .tocyn-shell-header { display: flex; min-block-size: 4rem; flex-shrink: 0; align-items: center; justify-content: space-between; padding-block: .5rem; padding-inline: 1rem; }
-.tocyn-shell-activity-trigger { position: relative; padding: .5rem; }
-.tocyn-shell-persona-trigger { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; min-inline-size: 2.75rem; min-block-size: 2.75rem; padding: .125rem; }
-.tocyn-shell-persona-avatar { inline-size: 2.5rem; block-size: 2.5rem; }
-.tocyn-shell-persona-status { position: absolute; inset-block-end: .125rem; inset-inline-end: .125rem; inline-size: .625rem; block-size: .625rem; }
-.tocyn-shell-account-menu { box-sizing: border-box; z-index: 60; min-inline-size: 15rem; max-inline-size: min(22rem, calc(100vw - 2rem)); overflow: hidden; padding: .375rem; }
-.tocyn-shell-account-summary { display: flex; min-inline-size: 0; flex-direction: column; gap: .125rem; margin: 0 0 .25rem; padding: .5rem .75rem .375rem; }
-.tocyn-shell-account-summary-name, .tocyn-shell-account-summary-email { overflow: hidden; min-inline-size: 0; white-space: nowrap; }
-.tocyn-shell-account-menu-item { box-sizing: border-box; display: flex; inline-size: 100%; align-items: center; padding: .625rem .75rem; }
 .tocyn-shell-activity-badge { position: absolute; inset-block-start: 0; inset-inline-end: 0; min-inline-size: 1rem; padding-inline: .25rem; }
 .tocyn-shell-icon, .tocyn-shell-menu-icon { inline-size: 1.5rem; block-size: 1.5rem; }
 .tocyn-shell-small-icon, .tocyn-shell-dismiss-icon { inline-size: .875rem; block-size: .875rem; }
-.tocyn-shell-activity-popover { inline-size: 24rem; max-inline-size: calc(100vw - 2rem); padding: .75rem; }
 .tocyn-shell-activity-header { display: flex; align-items: center; justify-content: space-between; margin-block-end: .5rem; }
 .tocyn-shell-activity-refresh, .tocyn-shell-activity-dismiss { padding: .25rem .5rem; }
 .tocyn-shell-activity-message { padding: .5rem; }
@@ -181,8 +172,6 @@
 .tocyn-shell-activity-subject { overflow: hidden; white-space: nowrap; }
 .tocyn-shell-activity-more-wrap { margin-block-start: .5rem; }
 .tocyn-shell-activity-more { inline-size: 100%; padding: .5rem .75rem; }
-.tocyn-shell-connection-wrap { position: relative; display: flex; align-items: center; gap: 1rem; }
-.tocyn-shell-connection-popover { z-index: 50; inline-size: 16rem; padding: 1rem; }
 .tocyn-shell-connection-dot { inline-size: .5rem; block-size: .5rem; }
 .tocyn-shell-reconnect-divider { margin-block-start: 1rem; padding-block-start: 1rem; }
 .tocyn-shell-reconnect-button { display: flex; align-items: center; justify-content: center; gap: .5rem; inline-size: 100%; padding: .5rem .75rem; }

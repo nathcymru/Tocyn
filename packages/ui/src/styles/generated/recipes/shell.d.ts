@@ -10,7 +10,7 @@ type ShellVariantMap = {
   [key in keyof ShellVariant]: Array<ShellVariant[key]>
 }
 
-type ShellSlot = "root" | "sidebar" | "main" | "header" | "content" | "navigation" | "navigationLink"
+type ShellSlot = "root" | "sidebar" | "main" | "header" | "content" | "navigation" | "navigationLink" | "sidebarDesktop" | "logoLink" | "logo" | "mobileDialog" | "mobileContent" | "mobileClose" | "mobileTrigger" | "personaTrigger" | "personaAvatar" | "personaStatus" | "accountMenu" | "accountSummary" | "accountSummaryName" | "accountSummaryEmail" | "menuItem" | "activityTrigger" | "activityPopover" | "connectionWrap" | "connectionPopover"
 
 export type ShellVariantProps = {
   [key in keyof ShellVariant]?: ConditionalValue<ShellVariant[key]> | undefined

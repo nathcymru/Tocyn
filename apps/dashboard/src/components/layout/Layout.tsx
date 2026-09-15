@@ -43,6 +43,7 @@ function UserMenu({ onNavigate }: SidebarProps) {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutCountdown, setLogoutCountdown] = useState(10);
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const shellStyles = ParkShell();
   const handleNavigate = (path: string) => { onNavigate?.(); navigate(path); };
   useEffect(() => {
     if (!logoutOpen) return;
@@ -64,22 +65,22 @@ function UserMenu({ onNavigate }: SidebarProps) {
   return <>
   <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
     <ParkMenu.Trigger asChild>
-      <ParkButton type="button" aria-label="Account options" title={user?.full_name || 'User'} className="tocyn-shell-persona-trigger">
-        <ParkAvatar className="tocyn-shell-persona-avatar">
+      <ParkButton type="button" aria-label="Account options" title={user?.full_name || 'User'} className={shellStyles.personaTrigger}>
+        <ParkAvatar className={shellStyles.personaAvatar}>
           <ParkAvatarFallback>{user?.full_name?.slice(0, 2).toUpperCase() || 'OP'}</ParkAvatarFallback>
         </ParkAvatar>
-        <span className="tocyn-shell-persona-status" aria-label="Online" />
+        <span className={shellStyles.personaStatus} aria-label="Online" />
       </ParkButton>
     </ParkMenu.Trigger>
     <ParkMenu.Positioner>
-      <ParkMenu.Content aria-label="Account menu" className="tocyn-shell-account-menu">
-        <div className="tocyn-shell-account-summary">
-          <strong className="tocyn-shell-account-summary-name">{user?.full_name || 'Operator'}</strong>
-          <span className="tocyn-shell-account-summary-email">{user?.email || 'No email available'}</span>
+      <ParkMenu.Content aria-label="Account menu" className={shellStyles.accountMenu}>
+        <div className={shellStyles.accountSummary}>
+          <strong className={shellStyles.accountSummaryName}>{user?.full_name || 'Operator'}</strong>
+          <span className={shellStyles.accountSummaryEmail}>{user?.email || 'No email available'}</span>
         </div>
-        <ParkMenu.Item value="account" onClick={() => handleNavigate('/settings/account')} className="tocyn-shell-account-menu-item">Account</ParkMenu.Item>
-        <ParkMenu.Item value="settings" onClick={() => handleNavigate('/settings/general')} className="tocyn-shell-account-menu-item">Settings</ParkMenu.Item>
-        <ParkMenu.Item value="logout" onClick={() => { setLogoutCountdown(10); setLogoutOpen(true); }} className="tocyn-shell-account-menu-item tocyn-shell-account-menu-item--warning">Log out</ParkMenu.Item>
+        <ParkMenu.Item value="account" onClick={() => handleNavigate('/settings/account')} className={shellStyles.menuItem}>Account</ParkMenu.Item>
+        <ParkMenu.Item value="settings" onClick={() => handleNavigate('/settings/general')} className={shellStyles.menuItem}>Settings</ParkMenu.Item>
+        <ParkMenu.Item value="logout" data-tone="critical" onClick={() => { setLogoutCountdown(10); setLogoutOpen(true); }} className={shellStyles.menuItem}>Log out</ParkMenu.Item>
       </ParkMenu.Content>
     </ParkMenu.Positioner>
   </ParkMenu.Root>
@@ -104,12 +105,12 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   const labelled = useOperatorPreferencesContext().navigation === 'labelled';
   const shellStyles = ParkShell();
   return (
-        <div className={cn('tocyn-shell-sidebar', shellStyles.sidebar)}>
-          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="tocyn-shell-logo-link">
-            <ProductLogo compact decorative className="tocyn-shell-logo" />
+        <div className={shellStyles.sidebar}>
+          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className={shellStyles.logoLink}>
+            <ProductLogo compact decorative className={shellStyles.logo} />
           </Link>
 
-          <nav aria-label="Workspace navigation" className={cn('tocyn-shell-navigation', shellStyles.navigation)}>
+          <nav aria-label="Workspace navigation" className={shellStyles.navigation}>
             {navigation.map((item) => {
               const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
               return (
@@ -255,22 +256,22 @@ function LayoutContent() {
 
   return (
     <div className={cn(shellStyles.root, 'tocyn-shell-root', isInboxRoute ? 'tocyn-shell-root-inbox' : 'tocyn-shell-root-standard')}>
-      <aside data-tocyn-inverse="" className={cn('tocyn-shell-sidebar-desktop', preferences.navigation === 'labelled' ? 'tocyn-shell-sidebar-labelled' : 'tocyn-shell-sidebar-compact')}>
+      <aside data-tocyn-inverse="" className={cn(shellStyles.sidebarDesktop, preferences.navigation === 'labelled' ? 'tocyn-shell-sidebar-labelled' : 'tocyn-shell-sidebar-compact')}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
         <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
           labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
           finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
           data-tocyn-dialog-edge="" data-tocyn-inverse=""
-          className={cn('tocyn-shell-mobile-dialog', preferences.navigation === 'labelled' ? 'tocyn-shell-mobile-labelled' : 'tocyn-shell-mobile-compact')}>
+          className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? 'tocyn-shell-mobile-labelled' : 'tocyn-shell-mobile-compact')}>
           <h2 id={`${mobileDialogId}-title`} className="tocyn-visually-hidden">Navigation</h2>
           <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
-            className="tocyn-shell-mobile-close"><X aria-hidden="true" /></ParkButton>
-          <div className="tocyn-shell-mobile-content"><SidebarContent navigationFocus={() => main.current} onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
+            className={shellStyles.mobileClose}><X aria-hidden="true" /></ParkButton>
+          <div className={shellStyles.mobileContent}><SidebarContent navigationFocus={() => main.current} onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
         </TocynDialog>
 
       {/* Main content */}
-      <div className={cn(shellStyles.main, 'tocyn-shell-main')}>
+      <div className={shellStyles.main}>
         <header className={cn(shellStyles.header, 'tocyn-shell-header')}>
           <ParkButton
             type="button"
@@ -279,7 +280,7 @@ function LayoutContent() {
             aria-haspopup="dialog"
             aria-expanded={isSidebarOpen}
             aria-controls={mobileDialogId}
-            className="tocyn-shell-mobile-trigger"
+            className={shellStyles.mobileTrigger}
             onClick={() => { restoreNavigationFocus.current = true; setIsSidebarOpen(true); }}
           >
             <Menu className="tocyn-shell-menu-icon" />
@@ -289,13 +290,13 @@ function LayoutContent() {
 
           <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
             <Popover.Trigger asChild>
-              <ParkButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className="tocyn-shell-activity-trigger">
+              <ParkButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className={shellStyles.activityTrigger}>
                 <Bell className="tocyn-shell-icon" />
                 {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className="tocyn-shell-activity-badge">{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
               </ParkButton>
             </Popover.Trigger>
             <Popover.Positioner>
-              <Popover.Content aria-label="Activity" className="tocyn-shell-activity-popover">
+              <Popover.Content aria-label="Activity" className={shellStyles.activityPopover}>
                 <div className="tocyn-shell-activity-header"><h2 className="tocyn-shell-activity-title">Activity</h2><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className="tocyn-shell-activity-refresh">Refresh</ParkButton></div>
                 {activityUpdatesAvailable && <p role="status" className="tocyn-shell-activity-message">Updates available. Refresh to load current activity.</p>}
                 {activityError && <div role="alert" className="tocyn-shell-activity-warning"><p>{activityError}</p><ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="tocyn-shell-activity-retry">Retry loading activity</ParkButton></div>}
@@ -322,7 +323,7 @@ function LayoutContent() {
           <UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} navigationFocus={() => main.current} />
 
           {!isConnected && <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
-          <div className="tocyn-shell-connection-wrap">
+          <div className={shellStyles.connectionWrap}>
             <Popover.Trigger asChild>
             <ParkButton
               type="button"
@@ -342,7 +343,7 @@ function LayoutContent() {
             </ParkButton></Popover.Trigger>
 
             <Popover.Positioner>
-              <Popover.Content aria-label="Connection Status" className="tocyn-shell-connection-popover">
+              <Popover.Content aria-label="Connection Status" className={shellStyles.connectionPopover}>
                 <div className="tocyn-shell-connection-header">
                   <h3 className="tocyn-shell-activity-title">Connection Status</h3>
                   <div className={cn(
