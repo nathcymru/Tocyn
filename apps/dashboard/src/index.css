@@ -115,24 +115,6 @@
   }
 }
 
-/* The dashboard still has a small set of legacy neutral utility classes.
-   Map them through the validated aliases in every resolved appearance mode. */
-[data-tocyn-theme-mode] :where(.bg-white, .bg-slate-50) {
-  background-color: var(--tocyn-app-surface);
-}
-[data-tocyn-theme-mode] :where(.bg-slate-100) {
-  background-color: var(--tocyn-app-surface-muted);
-}
-[data-tocyn-theme-mode] :where(.text-slate-900, .text-slate-700, .text-slate-600) {
-  color: var(--tocyn-app-text);
-}
-[data-tocyn-theme-mode] :where(.text-slate-500, .text-slate-400) {
-  color: var(--tocyn-app-text-muted);
-}
-[data-tocyn-theme-mode] :where(.border-slate-200, .border-slate-100) {
-  border-color: var(--tocyn-app-border);
-}
-
 /* Prism token markup is created only from sanitized fenced Markdown. */
 .tocyn-markdown-code-block {
   background: var(--tocyn-color-sidebar);
