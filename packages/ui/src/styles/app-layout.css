@@ -61,10 +61,8 @@
 .tocyn-park-button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--tocyn-color-focus) 34%, var(--tocyn-color-divider)); background: var(--tocyn-color-surface-muted); }
 .tocyn-park-button[data-state="active"], .tocyn-park-button[aria-pressed="true"] { border-color: var(--tocyn-color-focus); background: color-mix(in srgb, var(--tocyn-color-focus) 12%, var(--tocyn-color-surface)); }
 .tocyn-button:disabled { cursor: not-allowed; opacity: .6; }
-.tocyn-button.tocyn-auth-submit { width: 100%; border-color: #2563eb; background: #2563eb; color: #fff; font-weight: 700; }
-.tocyn-button.tocyn-auth-submit:hover { background: #1d4ed8; }
-.tocyn-button.tocyn-auth-secondary { width: 100%; margin-block-start: .75rem; border-color: transparent; background: transparent; color: var(--tocyn-color-text-muted); }
-.tocyn-button.tocyn-auth-secondary:hover { background: var(--tocyn-color-surface-muted); color: var(--tocyn-color-text); }
+.tocyn-button.tocyn-auth-submit { width: 100%; font-weight: 700; }
+.tocyn-button.tocyn-auth-secondary { width: 100%; margin-block-start: .75rem; }
 .tocyn-auth-page { width: 100%; min-width: 0; }
 .tocyn-auth-card { width: 100%; min-width: 0; border: 1px solid var(--tocyn-color-divider); border-radius: 1rem; padding: 1.5rem; background: var(--tocyn-color-surface); box-shadow: 0 1rem 2.5rem rgb(15 23 42 / 8%); }
 @media (min-width: 640px) { .tocyn-auth-card { padding: 2rem; } }
@@ -700,8 +698,7 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-portal-auth-card-body { width: 100%; }
 .tocyn-portal-auth-form { display: flex; flex-direction: column; gap: 1.5rem; }
 .tocyn-portal-auth-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-.tocyn-portal-auth-submit { display: inline-flex; min-block-size: 2.75rem; width: 100%; align-items: center; justify-content: center; gap: .5rem; border: 1px solid transparent; border-radius: .375rem; background: #2563eb; color: #fff; padding: .5rem 1rem; font-size: .875rem; font-weight: 600; box-shadow: 0 1px 2px rgb(15 23 42 / 8%); }
-.tocyn-portal-auth-submit:hover { background: #1d4ed8; }
+.tocyn-portal-auth-submit { width: 100%; }
 .tocyn-portal-auth-success { text-align: center; }
 .tocyn-portal-auth-success-icon { display: flex; width: 4rem; height: 4rem; align-items: center; justify-content: center; margin: 0 auto 1rem; border-radius: 999px; background: #dcfce7; }
 .tocyn-portal-auth-success-mark { width: 2rem; height: 2rem; color: #16a34a; }

@@ -1,9 +1,17 @@
 import { memo, splitProps } from '../helpers.mjs';
 import { createRecipe, mergeRecipes } from './create-recipe.mjs';
 
-const buttonFn = /* @__PURE__ */ createRecipe('button', {}, [])
+const buttonFn = /* @__PURE__ */ createRecipe('button', {
+  "variant": "solid"
+}, [])
 
-const buttonVariantMap = {}
+const buttonVariantMap = {
+  "variant": [
+    "solid",
+    "ghost",
+    "destructive"
+  ]
+}
 
 const buttonVariantKeys = Object.keys(buttonVariantMap)
 

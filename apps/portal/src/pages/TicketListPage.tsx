@@ -129,7 +129,7 @@ export function TicketListPage() {
           ref={createButton}
           type="button"
           onClick={() => { setCreateError(null); setIsCreating(true); }}
-          className="tocyn-portal-ticket-list-create"
+          variant="solid" className="tocyn-portal-ticket-list-create"
         >
           <IconPlus className="tocyn-portal-ticket-list-icon" />
           New Ticket
@@ -198,7 +198,7 @@ export function TicketListPage() {
               <ParkButton
                 type="submit"
                 aria-disabled={creatingTicket}
-                className="tocyn-portal-ticket-submit"
+                variant="solid" className="tocyn-portal-ticket-submit"
               >
                 {creatingTicket && <IconSpinner className="tocyn-portal-ticket-spinner" />}
                 Create Ticket
@@ -209,7 +209,7 @@ export function TicketListPage() {
 
       <div className="tocyn-portal-surface">
         {tickets.length === 0 ? (
-          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} className="tocyn-portal-ticket-empty-create"> <IconPlus className="tocyn-portal-ticket-list-icon" /> New Ticket</ParkButton>} className="tocyn-portal-ticket-empty" />
+          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} variant="solid" className="tocyn-portal-ticket-empty-create"> <IconPlus className="tocyn-portal-ticket-list-icon" /> New Ticket</ParkButton>} className="tocyn-portal-ticket-empty" />
         ) : (
           <ul className="tocyn-portal-ticket-list-items">
             {tickets.map((ticket) => (

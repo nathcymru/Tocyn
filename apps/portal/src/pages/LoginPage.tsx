@@ -185,7 +185,7 @@ export function LoginPage() {
               <ParkButton
                 type="submit"
                 aria-disabled={loading || success || !email || (!!siteKey && !turnstileToken)}
-                className="tocyn-portal-auth-submit"
+                variant="solid" className="tocyn-portal-auth-submit"
               >
                 {loading ? <IconSpinner className="tocyn-portal-auth-spinner" /> : <IconArrowRight className="tocyn-portal-auth-icon" />}
                 {loading ? 'Sending...' : `Send ${type === 'magic_link' ? 'Magic Link' : 'Code'}`}

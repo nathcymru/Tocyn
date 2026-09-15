@@ -139,7 +139,7 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
               <ParkButton
                 type="submit"
                 aria-disabled={loading || code.length !== 6}
-                className="tocyn-portal-auth-submit"
+                variant="solid" className="tocyn-portal-auth-submit"
               >
                 {loading ? <IconSpinner className="tocyn-portal-auth-spinner" /> : <IconCircleCheck className="tocyn-portal-auth-icon" />}
                 {loading ? 'Verifying...' : 'Verify Code'}

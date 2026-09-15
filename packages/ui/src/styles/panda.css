@@ -627,6 +627,17 @@
       outline-offset: 2px;
 }
 }
+
+  .button--variant_solid {
+    background: var(--colors-accent\.primary);
+    border-color: var(--colors-accent\.primary);
+    color: var(--colors-bg\.surface);
+}
+
+  .button--variant_solid:is(:hover, [data-hover]) {
+    background: var(--colors-text\.primary);
+    border-color: var(--colors-text\.primary);
+}
 }
 
 @layer recipes.slots{

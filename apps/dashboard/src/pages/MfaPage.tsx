@@ -175,13 +175,14 @@ export function MfaPage() {
           </div>
           <ParkButton
             type="submit"
+            variant="solid"
             aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
             className="tocyn-auth-submit"
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </ParkButton>
         </form>
-        {!isSetupMode && <ParkButton type="button" disabled={loading} className="tocyn-auth-secondary" onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</ParkButton>}
+        {!isSetupMode && <ParkButton type="button" variant="ghost" disabled={loading} className="tocyn-auth-secondary" onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</ParkButton>}
         <p role="status" aria-live="polite" className="tocyn-auth-status">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
       </div>
     </div>

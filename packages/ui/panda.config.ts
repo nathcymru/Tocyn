@@ -79,6 +79,14 @@ export default {
         button: {
           className: 'button',
           base: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '2.75rem', minWidth: '2.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.surface', color: 'text.primary', padding: '0.5rem 0.875rem', fontFamily: 'fonts.primary', cursor: 'pointer', userSelect: 'none', _hover: { background: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
+          variants: {
+            variant: {
+              solid: { background: 'accent.primary', borderColor: 'accent.primary', color: 'bg.surface', _hover: { background: 'text.primary', borderColor: 'text.primary' } },
+              ghost: { background: 'transparent', borderColor: 'transparent', color: 'text.primary', _hover: { background: 'bg.subtle', borderColor: 'border.input' } },
+              destructive: { background: 'critical', borderColor: 'critical', color: 'bg.surface', _hover: { filter: 'brightness(0.92)' } },
+            },
+          },
+          defaultVariants: { variant: 'solid' },
         },
         input: {
           className: 'input',

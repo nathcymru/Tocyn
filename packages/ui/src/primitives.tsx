@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { ComposableState, PrimitiveProps } from './types';
+import { button as buttonRecipe, input as inputRecipe, textarea as textareaRecipe } from './styles/generated/recipes';
 
 export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, PrimitiveProps, ComposableState<'idle' | 'loading' | 'disabled'> {
   ref?: React.Ref<HTMLButtonElement>;
@@ -7,7 +8,7 @@ export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonE
 export const TocynButton = React.forwardRef<HTMLButtonElement, TocynButtonProps>(function TocynButton(
   { children, className, disabled, loading, state, ...props }, ref,
 ) {
-  return <button {...props} ref={ref} data-tocyn-primitive="button" disabled={disabled || loading || state === 'loading' || state === 'disabled'} className={className} aria-busy={loading || state === 'loading' || props['aria-busy']}>
+  return <button {...props} ref={ref} data-tocyn-primitive="button" data-park="button" data-scope="button" data-part="root" disabled={disabled || loading || state === 'loading' || state === 'disabled'} className={[buttonRecipe(), className].filter(Boolean).join(' ')} aria-busy={loading || state === 'loading' || props['aria-busy']}>
     {children}
   </button>;
 });
@@ -18,7 +19,7 @@ export interface TocynInputProps extends React.InputHTMLAttributes<HTMLInputElem
 export const TocynInput = React.forwardRef<HTMLInputElement, TocynInputProps>(function TocynInput(
   { className, disabled, loading, state, ...props }, ref,
 ) {
-  return <input {...props} data-tocyn-primitive="input" ref={ref} disabled={disabled || loading} className={className} aria-busy={loading || props['aria-busy']} data-state={state} />;
+  return <input {...props} data-tocyn-primitive="input" data-park="input" data-scope="input" data-part="root" ref={ref} disabled={disabled || loading} className={[inputRecipe(), className].filter(Boolean).join(' ')} aria-busy={loading || props['aria-busy']} data-state={state} />;
 });
 
 export interface TocynPanelProps extends React.HTMLAttributes<HTMLElement>, PrimitiveProps, ComposableState<'open' | 'closed'> {
@@ -55,7 +56,7 @@ export interface TocynTextareaProps extends React.TextareaHTMLAttributes<HTMLTex
   ref?: React.Ref<HTMLTextAreaElement>;
 }
 export const TocynTextarea = React.forwardRef<HTMLTextAreaElement, TocynTextareaProps>(function TocynTextarea(props, ref) {
-  return <textarea {...props} data-tocyn-primitive="textarea" ref={ref} />;
+  return <textarea {...props} data-tocyn-primitive="textarea" data-park="textarea" data-scope="textarea" data-part="root" ref={ref} className={[textareaRecipe(), props.className].filter(Boolean).join(' ')} />;
 });
 
 export interface TocynSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement>, PrimitiveProps {

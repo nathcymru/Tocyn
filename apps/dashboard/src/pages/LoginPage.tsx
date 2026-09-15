@@ -95,6 +95,7 @@ export function LoginPage() {
           </ParkField>
           <ParkButton
             type="submit"
+            variant="solid"
             aria-disabled={loading}
             className="tocyn-auth-submit"
           >
