@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Avatar, Field, PinInput } from '@ark-ui/react';
+import { Avatar, Field, PinInput, createListCollection } from '@ark-ui/react';
 import { Select as ArkSelect } from '@ark-ui/react/select';
 import { ScrollArea as ArkScrollArea } from '@ark-ui/react/scroll-area';
 import { Splitter as ArkSplitter } from '@ark-ui/react/splitter';
@@ -27,11 +27,11 @@ export const ParkTextarea = React.forwardRef<HTMLTextAreaElement, React.Textarea
 );
 
 /** Native compatibility entry point. Compound anatomy is attached below. */
-const ParkSelectNative = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
-  function ParkSelect({ className, ...props }, ref) {
-    return <select {...props} ref={ref} data-tocyn-primitive="select" data-park="select" className={['tocyn-select', className].filter(Boolean).join(' ')} />;
-  },
-);
+type ParkSelectCompatProps = Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value' | 'defaultValue'> & {
+  value?: string;
+  defaultValue?: string;
+  onChange?: React.ChangeEventHandler<HTMLSelectElement>;
+};
 
 const parkPart = (name: string, className?: string) => ['tocyn-park-part', `tocyn-park-${name}`, className].filter(Boolean).join(' ');
 
@@ -50,7 +50,21 @@ export const ParkSelectItemIndicator = (props: React.ComponentProps<typeof ArkSe
 export const ParkSelectHiddenSelect = (props: React.ComponentProps<typeof ArkSelect.HiddenSelect>) => <ArkSelect.HiddenSelect {...props} data-park="select-hidden" />;
 
 /** Ark Select anatomy with a native-compatible call signature for existing consumers. */
-export const ParkSelect = Object.assign(ParkSelectNative, {
+const ParkSelectCompat = React.forwardRef<any, ParkSelectCompatProps>(function ParkSelectCompat({ className, children, value, defaultValue, onChange, name, disabled, id, 'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy }, ref) {
+  const options = React.Children.toArray(children).flatMap(child => React.isValidElement(child) && child.type === 'option' ? [{ label: String(child.props.children), value: String(child.props.value ?? '') }] : []);
+  const collection = React.useMemo(() => createListCollection({ items: options }), [options.map(option => `${option.value}:${option.label}`).join('|')]);
+  const initial = value ?? defaultValue ?? options[0]?.value ?? '';
+  return <ArkSelect.Root collection={collection} value={[initial]} disabled={disabled} onValueChange={({ value: next }) => {
+    const target = { value: next[0] ?? '' } as HTMLSelectElement;
+    onChange?.({ target, currentTarget: target } as React.ChangeEvent<HTMLSelectElement>);
+  }} data-tocyn-primitive="select" data-park="select-root" className={['tocyn-select-root', className].filter(Boolean).join(' ')}>
+    <ArkSelect.Control><ArkSelect.Trigger ref={ref} id={id} aria-label={ariaLabel} aria-describedby={ariaDescribedBy} aria-disabled={disabled}><ArkSelect.ValueText /></ArkSelect.Trigger><ArkSelect.Indicator aria-hidden="true">⌄</ArkSelect.Indicator></ArkSelect.Control>
+    <ArkSelect.HiddenSelect name={name} />
+    <ArkSelect.Positioner><ArkSelect.Content><ArkSelect.List>{options.map(option => <ArkSelect.Item key={option.value} item={option}><ArkSelect.ItemText>{option.label}</ArkSelect.ItemText><ArkSelect.ItemIndicator>✓</ArkSelect.ItemIndicator></ArkSelect.Item>)}</ArkSelect.List></ArkSelect.Content></ArkSelect.Positioner>
+  </ArkSelect.Root>;
+});
+
+export const ParkSelect = Object.assign(ParkSelectCompat, {
   Root: ParkSelectRoot,
   Label: ParkSelectLabel,
   Control: ParkSelectControl,

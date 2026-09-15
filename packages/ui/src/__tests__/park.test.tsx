@@ -29,7 +29,7 @@ describe('Park-compatible shared primitives', () => {
     render(<form aria-label="Park form"><ParkField label="Name"><ParkInput name="name" aria-label="Name" required /></ParkField><ParkSelect name="priority" aria-label="Priority" defaultValue="normal"><option value="normal">Normal</option><option value="high">High</option></ParkSelect><ParkTextarea name="details" aria-label="Details" /><ParkButton type="submit">Save</ParkButton></form>);
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAttribute('data-park', 'input');
     expect(screen.getByRole('textbox', { name: 'Details' })).toHaveAttribute('data-park', 'textarea');
-    expect(screen.getByRole('combobox', { name: 'Priority' })).toHaveAttribute('data-park', 'select');
+    expect(screen.getByRole('combobox', { name: 'Priority' })).toHaveAttribute('data-part', 'trigger');
     expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('data-park', 'button');
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeRequired();
   });
