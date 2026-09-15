@@ -1989,6 +1989,30 @@ button[data-tocyn-primitive="button"]:focus-visible { text-decoration: none; }
 .tocyn-ticket-action-button { display: inline-flex; align-items: center; min-block-size: 2.25rem; border: 1px solid var(--tocyn-color-divider); border-radius: .375rem; background: var(--tocyn-color-surface); padding: .375rem .75rem; color: var(--tocyn-color-text); font-size: .875rem; font-weight: 600; }
 .tocyn-ticket-action-button:focus-visible { outline: 2px solid var(--tocyn-color-focus); outline-offset: 2px; }
 .tocyn-ticket-action-button:disabled { cursor: not-allowed; opacity: .6; }
+
+/* Final Park contract. Route classes may provide layout only; they cannot
+   replace the shared recipe's geometry, typography or semantic palette. */
+button.tocyn-park-button {
+  box-sizing: border-box !important;
+  min-block-size: 2.5rem !important;
+  min-inline-size: 2.5rem !important;
+  border-radius: var(--radii-l2, .5rem) !important;
+  font-family: var(--fonts-primary, var(--tocyn-font-primary)) !important;
+  text-decoration: none !important;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+}
+button.tocyn-park-button.button--variant_solid { background: var(--colors-accent\.primary, var(--tocyn-color-accent)) !important; border-color: var(--colors-accent\.primary, var(--tocyn-color-accent)) !important; color: var(--colors-bg\.surface, var(--tocyn-color-surface)) !important; }
+button.tocyn-park-button.button--variant_subtle { background: var(--colors-bg\.subtle, var(--tocyn-color-surface-muted)) !important; border-color: var(--colors-border\.default, var(--tocyn-color-divider)) !important; color: var(--colors-fg\.default, var(--tocyn-color-text)) !important; }
+button.tocyn-park-button.button--variant_surface { background: var(--colors-bg\.surface, var(--tocyn-color-surface)) !important; border-color: var(--colors-border\.input, var(--tocyn-color-divider)) !important; color: var(--colors-fg\.default, var(--tocyn-color-text)) !important; }
+button.tocyn-park-button.button--variant_outline,
+button.tocyn-park-button.button--variant_plain,
+button.tocyn-park-button.button--variant_ghost { color: var(--colors-fg\.default, var(--tocyn-color-text)) !important; }
+button.tocyn-park-button.button--variant_destructive { background: var(--colors-critical, var(--tocyn-color-critical)) !important; border-color: var(--colors-critical, var(--tocyn-color-critical)) !important; color: var(--colors-bg\.surface, var(--tocyn-color-surface)) !important; }
+button.tocyn-park-button:focus-visible { outline: 2px solid var(--colors-border\.focus, var(--tocyn-color-focus)) !important; outline-offset: 2px !important; }
+input.tocyn-park-input,
+textarea.tocyn-park-textarea { box-sizing: border-box !important; border-radius: var(--radii-l2, .5rem) !important; background: var(--colors-bg\.input, var(--tocyn-color-input)) !important; color: var(--colors-text\.primary, var(--tocyn-color-text)) !important; font-family: var(--fonts-primary, var(--tocyn-font-primary)) !important; }
+input.tocyn-park-input:focus-visible,
+textarea.tocyn-park-textarea:focus-visible { outline: 2px solid var(--colors-border\.focus, var(--tocyn-color-focus)) !important; outline-offset: 2px !important; }
 .tocyn-ticket-action-link { text-decoration: none; }
 .tocyn-ticket-action-summary { cursor: pointer; }
 .tocyn-ticket-action-reason { margin: 0; color: var(--tocyn-color-text-muted); font-size: .75rem; }
