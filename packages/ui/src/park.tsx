@@ -48,6 +48,7 @@ export const ParkSelectLabel = (props: React.ComponentProps<typeof ArkSelect.Lab
 export const ParkSelectControl = (props: React.ComponentProps<typeof ArkSelect.Control>) => <ArkSelect.Control {...props} data-park="select-control" className={[selectStyles.control, parkPart('select-control', props.className)].filter(Boolean).join(' ')} />;
 export const ParkSelectTrigger = (props: React.ComponentProps<typeof ArkSelect.Trigger>) => <ArkSelect.Trigger {...props} data-park="select-trigger" className={[selectStyles.trigger, parkPart('select-trigger', props.className)].filter(Boolean).join(' ')} />;
 export const ParkSelectValueText = (props: React.ComponentProps<typeof ArkSelect.ValueText>) => <ArkSelect.ValueText {...props} data-park="select-value" className={[selectStyles.valueText, parkPart('select-value', props.className)].filter(Boolean).join(' ')} />;
+export const ParkSelectIndicatorGroup = (props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} data-park="select-indicator-group" className={[selectStyles.indicatorGroup, parkPart('select-indicator-group', props.className)].filter(Boolean).join(' ')} />;
 export const ParkSelectIndicator = ({ children, ...props }: React.ComponentProps<typeof ArkSelect.Indicator>) => <ArkSelect.Indicator {...props} data-park="select-indicator" className={[selectStyles.indicator, parkPart('select-indicator', props.className)].filter(Boolean).join(' ')}>{children ?? <IconChevronDown size={16} aria-hidden="true" />}</ArkSelect.Indicator>;
 export const ParkSelectPositioner = (props: React.ComponentProps<typeof ArkSelect.Positioner>) => <ArkSelect.Positioner {...props} data-park="select-positioner" className={[selectStyles.positioner, parkPart('select-positioner', props.className)].filter(Boolean).join(' ')} />;
 export const ParkSelectContent = (props: React.ComponentProps<typeof ArkSelect.Content>) => <ArkSelect.Content {...props} data-park="select-content" className={[selectStyles.content, parkPart('select-content', props.className)].filter(Boolean).join(' ')} />;
@@ -66,7 +67,7 @@ const ParkSelectCompat = React.forwardRef<any, ParkSelectCompatProps>(function P
     const target = { value: next[0] ?? '' } as HTMLSelectElement;
     onChange?.({ target, currentTarget: target } as React.ChangeEvent<HTMLSelectElement>);
   }} data-tocyn-primitive="select" data-park="select-root" className={[selectStyles.root, 'tocyn-select-root', className].filter(Boolean).join(' ')}>
-    <ArkSelect.Control className={selectStyles.control}><ArkSelect.Trigger ref={ref} id={id} aria-label={ariaLabel} aria-describedby={ariaDescribedBy} aria-disabled={disabled} className={selectStyles.trigger}><ArkSelect.ValueText className={selectStyles.valueText} /></ArkSelect.Trigger><ArkSelect.Indicator aria-hidden="true" className={selectStyles.indicator}><IconChevronDown size={16} aria-hidden="true" /></ArkSelect.Indicator></ArkSelect.Control>
+    <ArkSelect.Control className={selectStyles.control}><ArkSelect.Trigger ref={ref} id={id} aria-label={ariaLabel} aria-describedby={ariaDescribedBy} aria-disabled={disabled} className={selectStyles.trigger}><ArkSelect.ValueText className={selectStyles.valueText} /></ArkSelect.Trigger><ParkSelectIndicatorGroup><ArkSelect.Indicator aria-hidden="true" className={selectStyles.indicator}><IconChevronDown size={16} aria-hidden="true" /></ArkSelect.Indicator></ParkSelectIndicatorGroup></ArkSelect.Control>
     <ArkSelect.HiddenSelect name={name} />
     <ArkSelect.Positioner className={selectStyles.positioner}><ArkSelect.Content className={selectStyles.content}><ArkSelect.List className={selectStyles.list}>{options.map(option => <ArkSelect.Item key={option.value} item={option} className={selectStyles.item}><ArkSelect.ItemText className={selectStyles.itemText}>{option.label}</ArkSelect.ItemText><ArkSelect.ItemIndicator className={selectStyles.itemIndicator}><IconCheck size={16} aria-hidden="true" /></ArkSelect.ItemIndicator></ArkSelect.Item>)}</ArkSelect.List></ArkSelect.Content></ArkSelect.Positioner>
   </ArkSelect.Root>;
@@ -78,6 +79,7 @@ export const ParkSelect = Object.assign(ParkSelectCompat, {
   Control: ParkSelectControl,
   Trigger: ParkSelectTrigger,
   ValueText: ParkSelectValueText,
+  IndicatorGroup: ParkSelectIndicatorGroup,
   Indicator: ParkSelectIndicator,
   Positioner: ParkSelectPositioner,
   Content: ParkSelectContent,

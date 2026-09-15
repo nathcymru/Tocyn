@@ -26,6 +26,10 @@ const selectSlotNames = [
     "select__valueText"
   ],
   [
+    "indicatorGroup",
+    "select__indicatorGroup"
+  ],
+  [
     "indicator",
     "select__indicator"
   ],

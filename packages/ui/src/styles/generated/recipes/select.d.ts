@@ -10,7 +10,7 @@ type SelectVariantMap = {
   [key in keyof SelectVariant]: Array<SelectVariant[key]>
 }
 
-type SelectSlot = "root" | "label" | "control" | "trigger" | "valueText" | "indicator" | "positioner" | "content" | "list" | "item" | "itemText" | "itemIndicator"
+type SelectSlot = "root" | "label" | "control" | "trigger" | "valueText" | "indicatorGroup" | "indicator" | "positioner" | "content" | "list" | "item" | "itemText" | "itemIndicator"
 
 export type SelectVariantProps = {
   [key in keyof SelectVariant]?: ConditionalValue<SelectVariant[key]> | undefined

@@ -57,13 +57,14 @@ export default {
       slotRecipes: {
         select: {
           className: 'select',
-          slots: ['root', 'label', 'control', 'trigger', 'valueText', 'indicator', 'positioner', 'content', 'list', 'item', 'itemText', 'itemIndicator'],
+          slots: ['root', 'label', 'control', 'trigger', 'valueText', 'indicatorGroup', 'indicator', 'positioner', 'content', 'list', 'item', 'itemText', 'itemIndicator'],
           base: {
             root: { display: 'flex', flexDirection: 'column', gap: '0.375rem', width: '100%' },
             label: { color: 'text.muted', fontSize: '0.75rem', fontWeight: '600', userSelect: 'none' },
-            control: { display: 'flex', alignItems: 'center', width: '100%' },
-            trigger: { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%', minHeight: '2.75rem', minWidth: '0', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'fonts.primary', textAlign: 'start', cursor: 'pointer', userSelect: 'none', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
+            control: { position: 'relative', display: 'flex', alignItems: 'center', width: '100%' },
+            trigger: { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%', minHeight: '2.75rem', minWidth: '0', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 2.5rem 0.625rem 0.75rem', fontFamily: 'fonts.primary', textAlign: 'start', cursor: 'pointer', userSelect: 'none', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
             valueText: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', _placeholderShown: { color: 'text.muted' } },
+            indicatorGroup: { position: 'absolute', insetInlineEnd: '0.75rem', insetBlock: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
             indicator: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'text.muted', pointerEvents: 'none' },
             positioner: { zIndex: 70 },
             content: { minWidth: 'var(--reference-width)', maxHeight: 'min(var(--available-height), 24rem)', overflowY: 'auto', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.surface', padding: '0.25rem', boxShadow: '0 0.75rem 1.5rem rgb(15 23 42 / 12%)' },

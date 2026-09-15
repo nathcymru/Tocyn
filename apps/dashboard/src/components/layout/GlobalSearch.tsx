@@ -112,7 +112,7 @@ function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
     <span className="tocyn-search-divider" aria-hidden="true" />
     <div className="tocyn-global-search-scope"><span className="tocyn-visually-hidden" id="global-search-scope-label">Search scope filter</span><ParkSelect.Root collection={searchScopeOptions as never} value={[type]} open={scopeOpen} onOpenChange={({ open }) => setScopeOpen(open)} onValueChange={({ value }) => { const next = value[0]; if (!next) return; setScopeOpen(false); invalidate(); setType(next); }} positioning={{ placement: 'bottom-end' }}>
       <ParkSelect.Label className="tocyn-visually-hidden">Search scope filter</ParkSelect.Label>
-      <ParkSelect.Control><ParkSelect.Trigger aria-labelledby="global-search-scope-label"><ParkSelect.ValueText placeholder="All" /></ParkSelect.Trigger><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.Control>
+      <ParkSelect.Control><ParkSelect.Trigger aria-labelledby="global-search-scope-label"><ParkSelect.ValueText placeholder="All" /></ParkSelect.Trigger><ParkSelect.IndicatorGroup><ParkSelect.Indicator aria-hidden="true" /></ParkSelect.IndicatorGroup></ParkSelect.Control>
       <ParkSelect.HiddenSelect />
       <ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{searchScopeOptions.items.map(item => { const option = item as { label: string; value: string }; return <ParkSelect.Item key={option.value} item={option}><ParkSelect.ItemText>{option.label}</ParkSelect.ItemText><ParkSelect.ItemIndicator /></ParkSelect.Item>; })}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
     </ParkSelect.Root></div>
