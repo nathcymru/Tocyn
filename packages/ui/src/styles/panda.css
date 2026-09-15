@@ -2491,6 +2491,230 @@
       max-width: 72rem;
 }
 
+    .knowledgeEditor__root {
+      gap: 1.5rem;
+      display: grid;
+      min-width: var(--sizes-0);
+}
+
+    .knowledgeEditor__header {
+      gap: 1rem;
+      border-bottom: 1px solid;
+      border-color: var(--colors-border\.default);
+      justify-content: space-between;
+      padding-bottom: 1rem;
+}
+
+    .knowledgeEditor__header,.knowledgeEditor__heading {
+      display: flex;
+      align-items: center;
+      min-width: var(--sizes-0);
+}
+
+    .knowledgeEditor__heading {
+      gap: 0.75rem;
+}
+
+    .knowledgeEditor__back {
+      padding: var(--spacing-0);
+      flex-shrink: 0;
+      width: 2.75rem;
+      height: 2.75rem;
+}
+
+    .knowledgeEditor__title {
+      margin: var(--spacing-0);
+      overflow: hidden;
+      color: var(--colors-text\.primary);
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+}
+
+    .knowledgeEditor__save {
+      flex-shrink: 0;
+}
+
+    .knowledgeEditor__spinner {
+      animation: spin 1s linear infinite;
+}
+
+    .knowledgeEditor__content {
+      width: 100%;
+}
+
+    .knowledgeEditor__stack {
+      margin-inline: auto;
+      gap: 1rem;
+      display: grid;
+      max-width: 72rem;
+}
+
+    .knowledgeEditor__error {
+      width: 100%;
+}
+
+    .knowledgeEditor__card {
+      border: 1px solid;
+      background: var(--colors-bg\.surface);
+      padding: 1rem;
+      gap: 1.5rem;
+      border-color: var(--colors-border\.default);
+      border-radius: var(--radii-panel);
+      display: grid;
+}
+
+    .knowledgeEditor__fields {
+      gap: 1rem;
+      display: grid;
+      grid-template-columns: 1fr;
+}
+
+    .knowledgeEditor__field {
+      gap: 0.375rem;
+      display: grid;
+      min-width: var(--sizes-0);
+}
+
+    .knowledgeEditor__control {
+      width: 100%;
+}
+
+    .knowledgeEditor__tiptap,.composer__root {
+      min-width: var(--sizes-0);
+}
+
+    .composer__root {
+      gap: 0.75rem;
+      position: relative;
+      display: grid;
+}
+
+    .composer__formatHelp {
+      margin: var(--spacing-0);
+      color: var(--colors-text\.muted);
+      font-size: 0.875rem;
+}
+
+    .composer__markdown {
+      border: 1px solid;
+      background: var(--colors-bg\.input);
+      overflow: hidden;
+      border-color: var(--colors-border\.input);
+      border-radius: var(--radii-l2);
+      display: grid;
+      min-width: var(--sizes-0);
+}
+
+    .composer__toolbar {
+      background: var(--colors-bg\.surface);
+      padding: 0.375rem;
+      gap: 0.25rem;
+      border-bottom: 1px solid;
+      border-color: var(--colors-border\.input);
+      display: flex;
+      flex-wrap: wrap;
+}
+
+    .composer__toolbarButton {
+      padding: 0.5rem;
+      background: var(--colors-transparent);
+      color: var(--colors-icon\.primary);
+      min-width: 2.5rem;
+      min-height: 2.5rem;
+}
+
+    .composer__toolbarButton:is(:hover, [data-hover]),.composer__toolbarButtonActive {
+      background: var(--colors-bg\.subtle);
+}
+
+    .composer__toolbarButtonActive {
+      color: var(--colors-text\.primary);
+}
+
+    .composer__input {
+      resize: vertical;
+      min-height: 12rem;
+}
+
+    .composer__editor {
+      padding: 1rem;
+      color: var(--colors-text\.primary);
+      font-family: var(--fonts-primary);
+      line-height: 1.5;
+      min-height: 12rem;
+}
+
+    .composer__editor .ProseMirror {
+      outline: 0;
+      min-height: 10rem;
+}
+
+    .composer__editor .ProseMirror code {
+      font-family: var(--fonts-tabular);
+}
+
+    .composer__editor:focus-within {
+      outline: 2px solid;
+      outline-color: var(--colors-border\.focus);
+      outline-offset: 2px;
+}
+
+    .composer__autocomplete {
+      border: 1px solid;
+      background: var(--colors-bg\.surface);
+      padding: 0.25rem;
+      border-color: var(--colors-border\.default);
+      border-radius: var(--radii-l2);
+      position: absolute;
+      z-index: 10;
+      box-shadow: var(--shadows-sm);
+      max-width: 24rem;
+      max-height: 15rem;
+      overflow-y: auto;
+}
+
+    .composer__autocompleteOption {
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radii-l2);
+      display: flex;
+      align-items: center;
+      text-align: start;
+      width: 100%;
+      min-height: 2.5rem;
+}
+
+    .composer__autocompleteOption:is(:hover, [data-hover]) {
+      background: var(--colors-bg\.subtle);
+}
+
+    .composer__dropHelp {
+      margin: var(--spacing-0);
+      color: var(--colors-text\.muted);
+      font-size: 0.875rem;
+}
+
+    .composer__preview {
+      border: 1px solid;
+      background: var(--colors-bg\.subtle);
+      padding: 0.75rem;
+      border-color: var(--colors-border\.default);
+      border-radius: var(--radii-l2);
+}
+
+    .composer__previewSummary {
+      cursor: pointer;
+      color: var(--colors-text\.muted);
+      font-weight: 600;
+}
+
+    .composer__previewBody {
+      white-space: pre-wrap;
+      font-family: var(--fonts-primary);
+      margin-top: 0.75rem;
+}
+
     @media screen and (min-width: 40rem) {
       .page__inboxMobileNote {
         display: none;
@@ -2536,6 +2760,12 @@
 }
       .settingsLayout__content {
         padding: 2rem 1.5rem;
+}
+      .knowledgeEditor__card {
+        padding: 1.5rem;
+}
+      .knowledgeEditor__fields {
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 }
 

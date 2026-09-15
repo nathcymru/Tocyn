@@ -58,5 +58,7 @@ export * from './tooltip';
 export * from './page';
 export * from './global-search';
 export * from './settings-layout';
+export * from './knowledge-editor';
+export * from './composer';
 export * from './shell';
 export * from './empty-state';

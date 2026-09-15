@@ -1,5 +1,5 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
-import { ParkButton, ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkComposer, ParkTextarea } from '@luminatick/ui/park';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
@@ -29,6 +29,7 @@ export const TIPTAP_MARKDOWN_CONTRACT = Object.freeze({
   imageMimeTypes: COMPOSER_IMAGE_MIME_TYPES,
   maxImageBytes: COMPOSER_MAX_IMAGE_BYTES,
 });
+const composerStyles = ParkComposer();
 const AUTOCOMPLETE_LIMIT = 6;
 
 type InsertionKind = 'command' | 'emoji' | 'knowledge' | 'saved-response';
@@ -83,7 +84,7 @@ export function SafeMarkdown({ children, className = '' }: { children: string; c
 }
 
 const ToolbarButton = ({ label, active, onClick, children }: { label: string; active?: boolean; onClick: () => void; children: React.ReactNode }) => (
-  <ParkButton type="button" aria-label={label} aria-pressed={active} className={`tocyn-composer-toolbar-button${active ? ' tocyn-composer-toolbar-button-active' : ''}`} onMouseDown={event => event.preventDefault()} onClick={onClick}>{children}</ParkButton>
+  <ParkButton type="button" aria-label={label} aria-pressed={active} className={[composerStyles.toolbarButton, active ? composerStyles.toolbarButtonActive : ''].filter(Boolean).join(' ')} onMouseDown={event => event.preventDefault()} onClick={onClick}>{children}</ParkButton>
 );
 
 /** A standalone Markdown-backed Tiptap field used by knowledge editing. */
@@ -98,16 +99,16 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
   useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); if (ariaDescribedBy) dom.setAttribute('aria-describedby', ariaDescribedBy); else dom.removeAttribute('aria-describedby'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); } }, [editor, id, ariaDescribedBy]);
   useEffect(() => { legacyValueRef.current = value; if (editor) editor.commands.setContent(value || '', { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
-  if (!editor) return <div id={id} className="tocyn-knowledge-editor-tiptap" aria-busy="true" aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} />;
-  return <div className="tocyn-knowledge-editor-tiptap" aria-disabled={readOnly}>
-    <div className="tocyn-composer-toolbar" role="toolbar" aria-label="Formatting controls">
+  if (!editor) return <div id={id} className={composerStyles.editor} aria-busy="true" aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} />;
+  return <div className={composerStyles.editor} aria-disabled={readOnly}>
+    <div className={composerStyles.toolbar} role="toolbar" aria-label="Formatting controls">
       <ToolbarButton label="Add bold text (ctrl + b)" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><TextB weight="duotone" aria-hidden="true" /></ToolbarButton>
       <ToolbarButton label="Add italic text (ctrl + i)" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><TextItalic weight="duotone" aria-hidden="true" /></ToolbarButton>
       <ToolbarButton label="Add heading" active={editor.isActive('heading')} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><TextH weight="duotone" aria-hidden="true" /></ToolbarButton>
       <ToolbarButton label="Add bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}><ListBullets weight="duotone" aria-hidden="true" /></ToolbarButton>
       <ToolbarButton label="Add code block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><CodeBlock weight="duotone" aria-hidden="true" /></ToolbarButton>
     </div>
-    <EditorContent editor={editor} aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} onChange={event => { if (!readOnly) onChange((event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown()); }} onKeyDown={event => { if (readOnly) event.preventDefault(); }} />
+    <EditorContent editor={editor} className={composerStyles.editor} aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} onChange={event => { if (!readOnly) onChange((event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown()); }} onKeyDown={event => { if (readOnly) event.preventDefault(); }} />
   </div>;
 }
 
@@ -207,7 +208,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
   const receiveImages = (files: FileList | readonly File[]) => { if (readOnly) return; const received = Array.from(files); const accepted = acceptedComposerImages(received); if (accepted.length) onImageFiles(accepted); if (accepted.length !== received.length) onRejectedImageFiles(received.length - accepted.length); };
   const receiveDrop = (event: DragEvent<HTMLElement>) => { const files = event.dataTransfer.files; if (!files.length) return; event.preventDefault(); receiveImages(files); };
   const receivePaste = (event: ClipboardEvent<HTMLElement>) => { const files = event.clipboardData.files; if (!files.length) return; event.preventDefault(); receiveImages(files); };
-  const editorToolbar = editor && format !== 'plain' && <div className="tocyn-composer-toolbar" role="toolbar" aria-label="Formatting controls">
+  const editorToolbar = editor && format !== 'plain' && <div className={composerStyles.toolbar} role="toolbar" aria-label="Formatting controls">
     <ToolbarButton label="Add bold text (ctrl + b)" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><TextB weight="duotone" aria-hidden="true" /></ToolbarButton>
     <ToolbarButton label="Add italic text (ctrl + i)" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><TextItalic weight="duotone" aria-hidden="true" /></ToolbarButton>
     <ToolbarButton label="Add heading" active={editor.isActive('heading')} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><TextH weight="duotone" aria-hidden="true" /></ToolbarButton>
@@ -217,20 +218,20 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     <ToolbarButton label="Add inline code" active={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()}><Code weight="duotone" aria-hidden="true" /></ToolbarButton>
     <ToolbarButton label="Add link" active={editor.isActive('link')} onClick={() => { const url = window.prompt('Link URL'); if (url && safeLink(url)) editor.chain().focus().setLink({ href: safeLink(url)! }).run(); }}><LinkIcon weight="duotone" aria-hidden="true" /></ToolbarButton>
   </div>;
-  return <section ref={rootRef} aria-label="Rich message composer" onDragOver={event => { if (!readOnly && event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={receiveDrop} onPaste={receivePaste} className={`tocyn-composer-shell ${mode === 'internal' ? 'tocyn-composer-shell--internal' : 'tocyn-composer-shell--public'}`}>
-    {format === 'markdown-v1' && <p className="tocyn-composer-format-help">Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Formatting controls use accessible rich text editing.</p>}
+  return <section ref={rootRef} aria-label="Rich message composer" onDragOver={event => { if (!readOnly && event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={receiveDrop} onPaste={receivePaste} className={composerStyles.root}>
+    {format === 'markdown-v1' && <p className={composerStyles.formatHelp}>Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Formatting controls use accessible rich text editing.</p>}
     <div onClickCapture={event => { if (readOnly) event.stopPropagation(); }} onKeyDownCapture={event => { if (readOnly) event.stopPropagation(); else handleEditorKeyDown(event); }}>
       {format === 'plain' ? (
-        <ParkTextarea id={id} aria-label="Reply message" value={value} readOnly={readOnly} onChange={event => { if (!readOnly) onChange(event.target.value); }} className="tocyn-composer-input" />
+        <ParkTextarea id={id} aria-label="Reply message" value={value} readOnly={readOnly} onChange={event => { if (!readOnly) onChange(event.target.value); }} className={composerStyles.input} />
       ) : (
-        <div className="tocyn-composer-markdown-editor" aria-busy={readOnly}>
+        <div className={composerStyles.markdown} aria-busy={readOnly}>
           {editorToolbar}
-        <EditorContent editor={editor} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onInput={handleLegacyInput} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); legacyValueRef.current = next; if (editor.getMarkdown() !== next) editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false }); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
+        <EditorContent editor={editor} className={composerStyles.editor} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onInput={handleLegacyInput} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); legacyValueRef.current = next; if (editor.getMarkdown() !== next) editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false }); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
         </div>
       )}
     </div>
-    {autocomplete && <div id={listboxId} role="listbox" aria-label={autocomplete.kind === 'slash' ? 'Slash command suggestions' : 'Emoji suggestions'} className="tocyn-composer-autocomplete">{autocomplete.options.map((option, index) => <ParkButton id={`${listboxId}-option-${index}`} key={`${option.kind}-${option.id}`} type="button" role="option" aria-selected={activeIndex === index} onMouseDown={event => event.preventDefault()} onClick={() => chooseAutocomplete(option)} className={`tocyn-composer-autocomplete-option ${activeIndex === index ? 'tocyn-composer-autocomplete-option-active' : ''}`}>{option.displayLabel}</ParkButton>)}</div>}
-    <p className="tocyn-composer-drop-help">Drop or paste a JPEG, PNG, GIF, or WebP image to attach it (10 MB each).</p>
-    <details className="tocyn-composer-preview"><summary className="tocyn-composer-preview-summary">Safe preview</summary>{format === 'plain' ? <div className="tocyn-composer-preview-body">{value}</div> : <SafeMarkdown className="tocyn-composer-preview-body">{value}</SafeMarkdown>}</details>
+    {autocomplete && <div id={listboxId} role="listbox" aria-label={autocomplete.kind === 'slash' ? 'Slash command suggestions' : 'Emoji suggestions'} className={composerStyles.autocomplete}>{autocomplete.options.map((option, index) => <ParkButton id={`${listboxId}-option-${index}`} key={`${option.kind}-${option.id}`} type="button" role="option" aria-selected={activeIndex === index} onMouseDown={event => event.preventDefault()} onClick={() => chooseAutocomplete(option)} className={composerStyles.autocompleteOption}>{option.displayLabel}</ParkButton>)}</div>}
+    <p className={composerStyles.dropHelp}>Drop or paste a JPEG, PNG, GIF, or WebP image to attach it (10 MB each).</p>
+    <details className={composerStyles.preview}><summary className={composerStyles.previewSummary}>Safe preview</summary>{format === 'plain' ? <div className={composerStyles.previewBody}>{value}</div> : <SafeMarkdown className={composerStyles.previewBody}>{value}</SafeMarkdown>}</details>
   </section>;
 }

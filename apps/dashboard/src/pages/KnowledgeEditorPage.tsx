@@ -1,4 +1,4 @@
-import { ParkButton, ParkEmptyState, ParkInput, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkInput, ParkKnowledgeEditor, ParkSelect } from '@luminatick/ui/park';
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -7,6 +7,7 @@ import { TiptapMarkdownField } from '../components/RichComposer';
 import { ArrowLeft, FloppyDisk, SpinnerGap } from '@phosphor-icons/react';
 
 export const KnowledgeEditorPage: React.FC = () => {
+  const styles = ParkKnowledgeEditor();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -147,19 +148,19 @@ export const KnowledgeEditorPage: React.FC = () => {
   };
 
   return (
-    <div className="tocyn-knowledge-editor">
+    <div className={styles.root}>
       {/* Header */}
-      <div className="tocyn-knowledge-editor-header">
-        <div className="tocyn-knowledge-editor-heading">
+      <div className={styles.header}>
+        <div className={styles.heading}>
           <ParkButton
             onClick={() => navigate('/knowledge')}
             aria-label="Back to knowledge base"
             disabled={isSaving || !editorReady}
-            className="tocyn-knowledge-editor-back"
+            className={styles.back}
           >
             <ArrowLeft size={20} weight="duotone" aria-hidden="true" />
           </ParkButton>
-          <h1 className="tocyn-knowledge-editor-title">
+          <h1 className={styles.title}>
             {id ? 'Edit Article' : 'New Article'}
           </h1>
         </div>
@@ -167,20 +168,20 @@ export const KnowledgeEditorPage: React.FC = () => {
         <ParkButton
           onClick={handleSave}
           disabled={isSaving || !editorReady}
-          className="tocyn-knowledge-editor-save"
+          className={styles.save}
         >
           {isSaving ? (
-            <SpinnerGap className="tocyn-knowledge-editor-spinner" size={18} weight="duotone" aria-hidden="true" />
+            <SpinnerGap className={styles.spinner} size={18} weight="duotone" aria-hidden="true" />
           ) : (
-            <FloppyDisk size={16} weight="duotone" aria-hidden="true" className="tocyn-knowledge-editor-save-icon" />
+            <FloppyDisk size={16} weight="duotone" aria-hidden="true" />
           )}
           {isSaving ? 'Processing...' : 'Save Article'}
         </ParkButton>
       </div>
 
       {/* Editor Content */}
-      <div className="tocyn-knowledge-editor-content">
-        <div className="tocyn-knowledge-editor-stack">
+      <div className={styles.content}>
+        <div className={styles.stack}>
           {error && (
             <ParkEmptyState
               id={errorId}
@@ -188,13 +189,13 @@ export const KnowledgeEditorPage: React.FC = () => {
               title="Article editor unavailable."
               description={error}
               headingLevel={false}
-              className="tocyn-knowledge-editor-error"
+              className={styles.error}
             />
           )}
 
-          <div className="tocyn-knowledge-editor-card">
-            <div className="tocyn-knowledge-editor-fields">
-              <div className="tocyn-knowledge-editor-title-field tocyn-form-field">
+          <div className={styles.card}>
+            <div className={styles.fields}>
+              <div className={styles.field}>
                 <label htmlFor={titleId}>Title *</label>
                 <ParkInput
                   id={titleId}
@@ -202,34 +203,34 @@ export const KnowledgeEditorPage: React.FC = () => {
                   value={title}
                   disabled={isSaving || !editorReady}
                   onChange={e => setTitle(e.target.value)}
-                  className="tocyn-form-control tocyn-knowledge-editor-control"
+                  className={styles.control}
                   placeholder="e.g., How to reset your password"
                   required
                 />
               </div>
 
-              <div className="tocyn-form-field">
+              <div className={styles.field}>
                 <label htmlFor={categoryIdInput}>Category</label>
                 <ParkSelect
                   id={categoryIdInput}
                   value={categoryId}
                   disabled={isSaving || !editorReady}
                   onChange={e => setCategoryId(e.target.value)}
-                  className="tocyn-form-control tocyn-knowledge-editor-control"
+                  className={styles.control}
                 >
                   <option value="">No Category (Root)</option>
                   {renderCategoryOptions(categories)}
                 </ParkSelect>
               </div>
 
-              <div className="tocyn-form-field">
+              <div className={styles.field}>
                 <label htmlFor={tierId}>Tier</label>
                 <ParkSelect
                   id={tierId}
                   value={tier}
                   disabled={isSaving || !editorReady}
                   onChange={e => setTier(e.target.value as 'answer' | 'sop')}
-                  className="tocyn-form-control tocyn-knowledge-editor-control"
+                  className={styles.control}
                 >
                   <option value="answer">Customer Facing Answer</option>
                   <option value="sop">Internal SOP (Standard Operating Procedure)</option>
@@ -237,7 +238,7 @@ export const KnowledgeEditorPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="tocyn-form-field">
+            <div className={styles.field}>
               <label htmlFor={contentId}>Content (Markdown)</label>
               <div aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
                 <TiptapMarkdownField key={`${routeKey}-${editorReady ? 'ready' : 'loading'}`} id={contentId} value={content} readOnly={isSaving || !editorReady} ariaDescribedBy={error ? errorId : undefined} onChange={value => { if (!savingRef.current && editorReady) setContent(value); }} />

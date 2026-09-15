@@ -57,5 +57,7 @@ export * from './tooltip.mjs';
 export * from './page.mjs';
 export * from './global-search.mjs';
 export * from './settings-layout.mjs';
+export * from './knowledge-editor.mjs';
+export * from './composer.mjs';
 export * from './shell.mjs';
 export * from './empty-state.mjs';
