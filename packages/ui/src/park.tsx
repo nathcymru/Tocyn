@@ -6,28 +6,31 @@ import { Splitter as ArkSplitter } from '@ark-ui/react/splitter';
 import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
 import { Menu as ArkMenu } from '@ark-ui/react/menu';
 import { CaretDown, Check } from '@phosphor-icons/react';
-import { select as selectRecipe } from './styles/generated/recipes';
+import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe } from './styles/generated/recipes';
 
 const selectStyles = selectRecipe();
+const buttonClass = buttonRecipe();
+const inputClass = inputRecipe();
+const textareaClass = textareaRecipe();
 
 /** Shared Park recipes. Stateless controls intentionally use their semantic HTML
  * element (as Park does); stateful controls below use Ark state machines. Every
  * visible control carries the same Park scope/part contract and package recipe. */
 export const ParkButton = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
   function ParkButton({ className, ...props }, ref) {
-    return <button {...props} ref={ref} data-tocyn-primitive="button" data-park="button" data-scope="button" data-part="root" className={['tocyn-button', 'tocyn-park-button', className].filter(Boolean).join(' ')}>{props.children}</button>;
+    return <button {...props} ref={ref} data-tocyn-primitive="button" data-park="button" data-scope="button" data-part="root" className={[buttonClass, 'tocyn-button', 'tocyn-park-button', className].filter(Boolean).join(' ')}>{props.children}</button>;
   },
 );
 
 export const ParkInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   function ParkInput({ className, ...props }, ref) {
-    return <input {...props} ref={ref} data-tocyn-primitive="input" data-park="input" data-scope="input" data-part="root" className={['tocyn-input', 'tocyn-park-input', className].filter(Boolean).join(' ')} />;
+    return <input {...props} ref={ref} data-tocyn-primitive="input" data-park="input" data-scope="input" data-part="root" className={[inputClass, 'tocyn-input', 'tocyn-park-input', className].filter(Boolean).join(' ')} />;
   },
 );
 
 export const ParkTextarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
   function ParkTextarea({ className, ...props }, ref) {
-    return <textarea {...props} ref={ref} data-tocyn-primitive="textarea" data-park="textarea" data-scope="textarea" data-part="root" className={['tocyn-textarea', 'tocyn-park-textarea', className].filter(Boolean).join(' ')} />;
+    return <textarea {...props} ref={ref} data-tocyn-primitive="textarea" data-park="textarea" data-scope="textarea" data-part="root" className={[textareaClass, 'tocyn-textarea', 'tocyn-park-textarea', className].filter(Boolean).join(' ')} />;
   },
 );
 

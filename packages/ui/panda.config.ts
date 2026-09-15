@@ -74,6 +74,20 @@ export default {
           },
         },
       },
+      recipes: {
+        button: {
+          className: 'button',
+          base: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '2.75rem', minWidth: '2.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.surface', color: 'text.primary', padding: '0.5rem 0.875rem', fontFamily: 'fonts.primary', cursor: 'pointer', userSelect: 'none', _hover: { background: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
+        },
+        input: {
+          className: 'input',
+          base: { boxSizing: 'border-box', width: '100%', minHeight: '2.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'fonts.primary', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
+        },
+        textarea: {
+          className: 'textarea',
+          base: { boxSizing: 'border-box', width: '100%', minHeight: '6rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'fonts.primary', resize: 'vertical', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
+        },
+      },
     },
   },
   staticCss: { css: [{ properties: { color: ['canvas', 'panel', 'muted', 'text', 'textMuted', 'focus', 'selected', 'divider', 'critical', 'icon.primary', 'icon.muted', 'icon.disabled', 'icon.selected', 'icon.critical', 'icon.inverse'] } }] },
