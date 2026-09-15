@@ -55,6 +55,11 @@ function InboxWorkspace(){
   const routeFilter=useMemo(()=>viewId&&viewId!=='all'&&!isQueueView(viewId)?filters?.find(filter=>filter.id===viewId):undefined,[filters,viewId]);
   const routeReady=!isLoadingFilters&&(viewId==='all'||isQueueView(viewId)||Boolean(routeFilter));
   const page = ParkPage('inbox');
+  // A restored preference can be absent while an older fixture is migrating;
+  // keep Ark's splitter state numeric so its separator never receives NaN.
+  const splitterRatio = Number.isFinite(workspace.splitterRatio)
+    ? Math.max(24, Math.min(50, Math.round(workspace.splitterRatio)))
+    : 32;
 
   useEffect(()=>{
     if(workspace.status==='loading'||isLoadingFilters)return;
@@ -80,7 +85,7 @@ function InboxWorkspace(){
   />;
 
   return <ParkSplitter.Root className={page.inboxWorkspace} orientation="horizontal"
-    size={[workspace.splitterRatio, 100 - workspace.splitterRatio]} keyboardResizeBy={2}
+    size={[splitterRatio, 100 - splitterRatio]} keyboardResizeBy={2}
     panels={[{ id: 'inbox-list', minSize: 24, maxSize: 50 }, { id: 'inbox-detail', minSize: 30, maxSize: 76 }]}
     onResizeEnd={({ size }) => {
       const ratio = Math.max(24, Math.min(50, Math.round(size[0] ?? workspace.splitterRatio)));

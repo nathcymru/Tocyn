@@ -7,7 +7,7 @@ import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
 import { Menu as ArkMenu } from '@ark-ui/react/menu';
 import { IconChevronDown, IconCheck } from './icons';
 import { visuallyHidden } from './styles/generated/patterns';
-import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, globalSearch as globalSearchRecipe, settingsLayout as settingsLayoutRecipe, knowledgeEditor as knowledgeEditorRecipe, composer as composerRecipe, ticketFields as ticketFieldsRecipe, shell as shellRecipe, card as cardRecipe, page as pageRecipe } from './styles/generated/recipes';
+import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, globalSearch as globalSearchRecipe, settingsLayout as settingsLayoutRecipe, knowledgeEditor as knowledgeEditorRecipe, composer as composerRecipe, ticketFields as ticketFieldsRecipe, shell as shellRecipe, card as cardRecipe, page as pageRecipe, ticketDetail as ticketDetailRecipe } from './styles/generated/recipes';
 
 const selectStyles = selectRecipe();
 const buttonClass = buttonRecipe();
@@ -15,6 +15,7 @@ const inputClass = inputRecipe();
 const textareaClass = textareaRecipe();
 const cardStyles = cardRecipe();
 const pageStyles = (kind: 'dashboard' | 'knowledge' | 'inbox' | 'settings' | 'account') => pageRecipe({ kind });
+const ticketDetailStyles = () => ticketDetailRecipe();
 const tabsStyles = tabsRecipe();
 const splitterStyles = splitterRecipe();
 const scrollAreaStyles = scrollAreaRecipe();
@@ -207,6 +208,7 @@ export const ParkSettingsLayout = () => settingsLayoutRecipe();
 export const ParkKnowledgeEditor = () => knowledgeEditorRecipe();
 export const ParkComposer = () => composerRecipe();
 export const ParkTicketFields = () => ticketFieldsRecipe();
+export const ParkTicketDetail = () => ticketDetailStyles();
 export const ParkPage = pageStyles;
 export const ParkVisuallyHidden = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement>>(function ParkVisuallyHidden({ className, ...props }, ref) {
   return <span {...props} ref={ref} className={[visuallyHidden(), className].filter(Boolean).join(' ')} />;

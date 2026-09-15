@@ -56,6 +56,7 @@ export * from './toast';
 export * from './toggle-group';
 export * from './tooltip';
 export * from './page';
+export * from './ticket-detail';
 export * from './global-search';
 export * from './settings-layout';
 export * from './knowledge-editor';

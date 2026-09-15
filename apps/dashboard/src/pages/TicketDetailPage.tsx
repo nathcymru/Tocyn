@@ -5,7 +5,7 @@ import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
-import { ParkButton, ParkEmptyState, ParkInput, ParkSelect, ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkInput, ParkSelect, ParkTextarea, ParkTicketDetail } from '@luminatick/ui/park';
 import { attachmentSize } from '../utils/attachment-size';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
@@ -716,9 +716,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
     }
   };
 
-  if (isLoading) return <div role="status" className="tocyn-ticket-detail-loading">Loading ticket...</div>;
+  const detailStyles = ParkTicketDetail();
+  if (isLoading) return <div role="status" className={detailStyles.loading}>Loading ticket...</div>;
   if (!ticket) return <ParkEmptyState
-    role="alert" className="tocyn-ticket-detail-unavailable" title={error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}
+    role="alert" className={detailStyles.unavailable} title={error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}
     description="The conversation could not be displayed. Retry loading it or return to the list."
     action={<div><ParkButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="tocyn-ticket-detail-retry">Retry loading ticket</ParkButton>
       <Link to={workspaceBackHref??'/tickets'} className="tocyn-ticket-detail-back">{workspaceBackHref?'Back to conversations':'Back to Tickets'}</Link></div>}
@@ -730,29 +731,29 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
       <DraftNavigationGuard pending={draftNavigationPending} flush={flushDraftBeforeNavigation}
         failureMessage="Your draft or workspace preferences are not saved. Stay on this ticket, retry or restore preferences, then navigate again."
         retryLabel="Retry navigation" />
-      <div className="tocyn-ticket-detail-grid">
-      <div className="tocyn-ticket-detail-main">
-        {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className="tocyn-ticket-detail-alert">
+      <div data-panel={workspace.panel === 'details' ? 'details' : 'conversation'} className={detailStyles.root}>
+      <div className={detailStyles.main}>
+        {((error && !isFetchNextPageError) || pendingTicketSelectRefresh) && <div role={error ? 'alert' : 'status'} className={detailStyles.alert}>
           {error ? 'Could not refresh this ticket. Showing the last confirmed details. ' : 'Confirm the saved ticket details before making another change. '}
           <ParkButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className="tocyn-ticket-detail-inline-action">Retry loading ticket</ParkButton>
         </div>}
-        {changeError && <p role="alert" className="tocyn-ticket-detail-alert">{changeError}</p>}
-        {supportStateError && <p role="alert" className="tocyn-ticket-detail-alert">{supportStateError} <ParkButton type="button" onClick={() => void refreshSupportState()} className="tocyn-ticket-detail-inline-action">Refresh current support state</ParkButton></p>}
-        {notice && <p role="status" className="tocyn-ticket-detail-notice">{notice}</p>}
-        {supportStateNotice && <p role="status" className="tocyn-ticket-detail-notice">{supportStateNotice}</p>}
+        {changeError && <p role="alert" className={detailStyles.alert}>{changeError}</p>}
+        {supportStateError && <p role="alert" className={detailStyles.alert}>{supportStateError} <ParkButton type="button" onClick={() => void refreshSupportState()}>Refresh current support state</ParkButton></p>}
+        {notice && <p role="status" className={detailStyles.notice}>{notice}</p>}
+        {supportStateNotice && <p role="status" className={detailStyles.notice}>{supportStateNotice}</p>}
         {advanceConfirmationRequired && <ParkButton type="button" disabled={isConfirmingTicketSelect} onClick={event => void retryTicketDetail(event.currentTarget)}>Confirm resolved ticket</ParkButton>}
-        {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className="tocyn-ticket-detail-status">
+        {(workspace.status === 'saving' || workspace.status === 'saved' || workspace.status === 'error' || workspace.status === 'conflict') && <p role={workspace.status === 'error' || workspace.status === 'conflict' ? 'alert' : 'status'} className={detailStyles.status}>
           {workspace.status === 'saving' && 'Saving workspace preference…'}
           {workspace.status === 'saved' && 'Workspace preference saved.'}
           {workspace.status === 'error' && <>{workspace.error} <ParkButton type="button" onClick={() => workspace.retrySave()} className="tocyn-ticket-detail-inline-action">Retry workspace preference</ParkButton></>}
           {workspace.status === 'conflict' && <>{workspace.error} <ParkButton type="button" onClick={() => workspace.restoreServerState()} className="tocyn-ticket-detail-inline-action">Restore server preferences</ParkButton></>}
         </p>}
-        <div className="tocyn-ticket-detail-toolbar">
-          <Link to={workspaceBackHref??'/tickets'} className={clsx("tocyn-ticket-detail-back",workspaceBackHref&&"tocyn-ticket-detail-back--mobile-only")}>
+        <div className={detailStyles.toolbar}>
+          <Link to={workspaceBackHref??'/tickets'} className={detailStyles.back}>
             <ArrowLeft className="tocyn-ticket-detail-icon-md" />
             {workspaceBackHref?'Back to conversations':'Back to Tickets'}
           </Link>
-          <div className="tocyn-ticket-detail-controls">
+          <div className={detailStyles.controls}>
             <ParkButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
               onClick={() => {
                 contextApplied.current = true;
@@ -760,7 +761,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 if (opening) setFocusContext(true);
                 else contextTriggerRef.current?.focus();
                 workspace.update({ panel: opening ? 'details' : 'conversation' });
-              }} className="tocyn-ticket-detail-context-button">
+              }}>
               {workspace.panel === 'details' ? 'Hide ticket context' : 'Show ticket context'}
             </ParkButton>
             <ParkSelect
@@ -772,7 +773,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.status; return; }
                 void handleTicketChange({ status: e.target.value as TicketChanges['status'] }, 'status');
               }}
-              className="tocyn-ticket-detail-select"
+              className={detailStyles.control}
             >
               <option value="open">Open</option>
               <option value="pending">Pending</option>
@@ -787,51 +788,51 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         <TicketSlaActionBar ticketId={ticket.id} />
         <TicketSlaPanel ticketId={ticket.id} />
         {!showSupportState && <ParkButton type="button" onClick={() => setShowSupportState(true)} className="tocyn-ticket-detail-secondary-action">Manage support state</ParkButton>}
-        {showSupportState && supportState.isLoading && <p role="status" className="tocyn-support-state-loading">Loading current support state…</p>}
-        {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className="tocyn-support-state-form" aria-label="Support state">
-          <div className="tocyn-support-state-header"><h2 className="tocyn-support-state-form-title">Support state</h2><p className="tocyn-support-state-description">Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
-          <label className="tocyn-form-field">State
+        {showSupportState && supportState.isLoading && <p role="status" className={detailStyles.status}>Loading current support state…</p>}
+        {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className={detailStyles.supportStateForm} aria-label="Support state">
+          <div className={detailStyles.supportStateHeader}><h2 className={detailStyles.contextFieldLabel}>Support state</h2><p className={detailStyles.supportStateHelp}>Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
+          <label className={detailStyles.contextField}>State
             <ParkSelect ref={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} aria-disabled={isSupportStateSubmitting || isLoadingSupportStates} onChange={event => updateSupportStateDraft({ definitionId: event.target.value })} className="tocyn-ticket-detail-select">
               {!selectedSupportStateDefinition && supportState.data?.definition_id === supportStateDraft.definitionId && <option value={supportStateDraft.definitionId}>{supportState.data.internal_label} ({supportState.data.lifecycle}) — state details loading</option>}
               {supportStates.map(state => <option key={state.id} value={state.id}>{state.internal_label} ({state.legacy_status})</option>)}
             </ParkSelect>
           </label>
           {isLoadingSupportStates && <p role="status" className="tocyn-ticket-detail-status">Loading support-state definitions…</p>}
-          <div className="tocyn-support-state-fields">
-            <label className="tocyn-form-field">Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="tocyn-ticket-detail-select" /></label>
-            <label className="tocyn-form-field">Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="tocyn-ticket-detail-select" /></label>
+          <div className={detailStyles.supportStateFields}>
+            <label className={detailStyles.contextField}>Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className="tocyn-ticket-detail-select" /></label>
+            <label className={detailStyles.contextField}>Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className="tocyn-ticket-detail-select" /></label>
           </div>
-          <div className="tocyn-support-state-snooze">
-            <label className="tocyn-form-field">Snooze until (your local time)
+          <div className={detailStyles.supportStateFields}>
+            <label className={detailStyles.contextField}>Snooze until (your local time)
               <ParkInput type="datetime-local" aria-label="Snooze until (your local time)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className="tocyn-ticket-detail-datetime" />
             </label>
             <p className="tocyn-ticket-detail-help">The shared queue will resurface this ticket at the selected local time.</p>
-            <div className="tocyn-support-state-actions">
+            <div className={detailStyles.supportStateActions}>
               <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className="tocyn-ticket-detail-primary-outline">Snooze ticket</ParkButton>
               {supportState.data.snoozed_until && <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className="tocyn-ticket-detail-secondary-action">Unsnooze ticket</ParkButton>}
             </div>
             {supportState.data.snoozed_until && <p role="status" className="tocyn-ticket-detail-status">Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
           </div>
           {selectedSupportStateNeedsDetails && <p role="status" className="tocyn-ticket-detail-status">Load the current support-state definition before saving.</p>}
-          <div className="tocyn-support-state-actions"><ParkButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className="tocyn-support-state-submit">Save support state</ParkButton><ParkButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="tocyn-ticket-detail-inline-action">Refresh current state</ParkButton>{supportStateDraftDirty.current && <ParkButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="tocyn-ticket-detail-inline-action">Discard local changes</ParkButton>}</div>
+          <div className={detailStyles.supportStateActions}><ParkButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className={detailStyles.modeButton}>Save support state</ParkButton><ParkButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className="tocyn-ticket-detail-inline-action">Refresh current state</ParkButton>{supportStateDraftDirty.current && <ParkButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className="tocyn-ticket-detail-inline-action">Discard local changes</ParkButton>}</div>
           {hasMoreSupportStates && <ParkButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className="tocyn-ticket-detail-inline-action">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</ParkButton>}
           {isLoadMoreSupportStatesError && <p role="alert" className="tocyn-ticket-detail-load-more-error">Could not load more support states. Try again.</p>}
         </form>}
 
-        <div className="tocyn-ticket-detail-card">
-          <div className="tocyn-ticket-detail-header">
-            <div className="tocyn-ticket-detail-heading">
-              <div className="tocyn-ticket-detail-title-stack">
-                <div className="tocyn-ticket-detail-title-row">
-                  <span className="tocyn-ticket-detail-reference" title={reference}>{reference}</span>
-                  <h1 ref={conversationHeadingRef} tabIndex={-1} className="tocyn-ticket-detail-title">{ticket.subject}</h1>
+        <div className={detailStyles.card}>
+          <div className={detailStyles.header}>
+            <div className={detailStyles.heading}>
+              <div className={detailStyles.titleStack}>
+                <div className={detailStyles.titleRow}>
+                  <span className={detailStyles.reference} title={reference}>{reference}</span>
+                  <h1 ref={conversationHeadingRef} tabIndex={-1} className={detailStyles.title}>{ticket.subject}</h1>
                 </div>
-                <div className="tocyn-ticket-detail-meta">
-                  <span className="tocyn-ticket-detail-customer">
+                <div className={detailStyles.meta}>
+                  <span className={detailStyles.customer}>
                     <User className="tocyn-ticket-detail-icon-xs" />
                     {ticket.customer_email}
                   </span>
-                  <span className="tocyn-ticket-detail-opened">
+                  <span className={detailStyles.opened}>
                     <Clock className="tocyn-ticket-detail-icon-xs" />
                     Opened {utcTimestamp(ticket.created_at).toLocaleDateString()}
                   </span>
@@ -839,34 +840,34 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
 
               {/* Presence Indicator */}
-              <div className="tocyn-ticket-detail-presence">
+              <div className={detailStyles.presence}>
                 {!workspaceBackHref && viewers.length > 0 && (
-                  <div className="tocyn-ticket-detail-viewers">
-                    <div aria-hidden="true" className="tocyn-ticket-detail-avatars">
+                  <div className={detailStyles.viewers}>
+                    <div aria-hidden="true" className={detailStyles.avatars}>
                       {viewers.slice(0, 3).map((viewer, i) => (
                         <div
                           key={i}
-                          className="tocyn-ticket-detail-avatar"
+                          className={detailStyles.avatar}
                           title={`${viewer.name} is viewing this ticket`}
                         >
                           {viewer.name[0]}
                         </div>
                       ))}
                       {viewers.length > 3 && (
-                        <div className="tocyn-ticket-detail-avatar tocyn-ticket-detail-avatar-more">
+                        <div className={detailStyles.avatar}>
                           +{viewers.length - 3}
                         </div>
                       )}
                     </div>
                     <span className="tocyn-visually-hidden">Viewing this ticket: {viewers.map(viewer => viewer.name).join(', ')}</span>
-                    <span className="tocyn-ticket-detail-live-label">
-                      <span className="tocyn-ticket-detail-live-dot" />
+                    <span className={detailStyles.liveLabel}>
+                      <span className={detailStyles.liveDot} />
                       Live Viewers
                     </span>
                   </div>
                 )}
                 {typing.length > 0 && (
-                  <p className="tocyn-ticket-detail-typing">
+                  <p className={detailStyles.typing}>
                     {typing.map(candidate => candidate.actor.name).join(', ')} {typing.length === 1 ? 'is' : 'are'} typing…
                   </p>
                 )}
@@ -874,45 +875,32 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </div>
           </div>
 
-          <div id="conversation-messages" className="tocyn-ticket-detail-messages">
+          <div id="conversation-messages" className={detailStyles.messages}>
             {ticket.articles.map((article) => (
               <div
                 key={article.id}
-                className={clsx(
-                  "tocyn-timeline-row",
-                  article.sender_type === 'agent' && "is-agent"
-                )}
+                className={detailStyles.timelineRow}
               >
-                <div className={clsx(
-                  "tocyn-timeline-avatar",
-                  article.sender_type === 'agent' ? "tocyn-timeline-avatar-agent" : "tocyn-timeline-avatar-customer",
-                  article.is_internal && "tocyn-timeline-avatar-internal"
-                )}>
+                <div data-sender={article.sender_type} data-internal={article.is_internal ? 'true' : 'false'} className={detailStyles.timelineAvatar}>
                   {article.sender_type === 'agent' ? 'A' : article.sender_type === 'system' ? 'S' : 'C'}
                 </div>
-                <div className={clsx(
-                  "tocyn-timeline-bubble",
-                  article.sender_type === 'agent'
-                    ? "tocyn-timeline-bubble-agent"
-                    : "tocyn-timeline-bubble-customer",
-                  article.is_internal && "tocyn-timeline-bubble-internal"
-                )}>
-                  <div className="tocyn-timeline-meta">
-                    <span className="tocyn-timeline-label">
+                <div data-sender={article.sender_type} data-internal={article.is_internal ? 'true' : 'false'} className={detailStyles.timelineBubble}>
+                  <div className={detailStyles.timelineMeta}>
+                    <span className={detailStyles.timelineLabel}>
                       {article.sender_type} {article.is_internal && '• Internal Note'}
                     </span>
-                    <span className="tocyn-timeline-time">
+                    <span className={detailStyles.timelineTime}>
                       {utcTimestamp(article.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   {(ticket.source === 'email' || article.raw_email_id) && article.sender_type === 'customer' && (
-                    <div className="tocyn-email-presentation">
-                      <div className="tocyn-email-summary">
-                        <Mail className="tocyn-email-summary-icon" aria-hidden="true" />
-                        <span className="tocyn-email-summary-label">Email</span>
-                        <span className="tocyn-email-summary-time">{utcTimestamp(article.created_at).toLocaleString()}</span>
+                    <div className={detailStyles.emailPresentation}>
+                      <div className={detailStyles.emailSummary}>
+                        <Mail className={detailStyles.emailSummaryIcon} aria-hidden="true" />
+                        <span className={detailStyles.emailSummaryLabel}>Email</span>
+                        <span className={detailStyles.emailSummaryTime}>{utcTimestamp(article.created_at).toLocaleString()}</span>
                       </div>
-                      <dl className="tocyn-email-summary-fields">
+                      <dl className={detailStyles.emailSummaryFields}>
                         <div><dt>From</dt><dd>{ticket.customer_email}</dd></div>
                         <div><dt>To</dt><dd>Support queue</dd></div>
                         <div><dt>Subject</dt><dd>{ticket.subject}</dd></div>
@@ -921,12 +909,12 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   )}
                   {/* Only explicitly versioned new content is interpreted as Markdown. */}
                   {article.body_format === 'markdown-v1'
-                    ? <SafeMarkdown className="tocyn-timeline-body">{article.body ?? ''}</SafeMarkdown>
-                    : <div className="tocyn-timeline-body tocyn-timeline-body-plain">{article.body ?? ''}</div>}
+                    ? <SafeMarkdown className={detailStyles.timelineBody}>{article.body ?? ''}</SafeMarkdown>
+                    : <div className={detailStyles.timelineBody}>{article.body ?? ''}</div>}
                   {(ticket.source === 'email' || article.raw_email_id) && article.sender_type === 'customer' && (
-                    <details className="tocyn-email-full-disclosure">
+                    <details className={detailStyles.emailDisclosure}>
                       <summary>Show full email</summary>
-                      <div className="tocyn-email-full-copy">
+                      <div className={detailStyles.emailCopy}>
                         <p>Structured headers and quoted history are unavailable for this stored message.</p>
                         <p>Complete stored body is shown above.</p>
                         {article.raw_email_id && <p>Raw email reference: {article.raw_email_id}</p>}
@@ -936,23 +924,17 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
 
                   {/* Attachments */}
                   {article.attachments && article.attachments.length > 0 && (
-                    <div className="tocyn-timeline-attachments">
+                    <div className={detailStyles.attachments}>
                       {article.attachments.map((att: any) => {
                         const filename = att.filename || att.file_name || 'Attachment';
                         return <div key={att.id}>
                           <ParkButton
                             onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, filename); }}
-                            className={clsx(
-                              "tocyn-timeline-attachment-link",
-                              article.sender_type === 'agent'
-                                ? "tocyn-timeline-attachment-link-agent"
-                                : "tocyn-timeline-attachment-link-customer",
-                              article.is_internal && "tocyn-timeline-attachment-link-internal"
-                            )}
+                            className={detailStyles.attachmentLink}
                           >
-                            <Paperclip className="tocyn-timeline-attachment-icon" />
-                            <span className="tocyn-timeline-attachment-name">{filename}</span>
-                            <span className="tocyn-timeline-attachment-size">
+                            <Paperclip className={detailStyles.attachmentIcon} />
+                            <span className={detailStyles.attachmentName}>{filename}</span>
+                            <span className={detailStyles.attachmentSize}>
                               {attachmentSize(att.size ?? att.file_size)}
                             </span>
                           </ParkButton>
@@ -968,34 +950,28 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     </div>
                   )}
 
-                  {article.qa_type === 'question' && <p className="tocyn-timeline-legacy-marker">Legacy Question marker retained. Compatibility review is required before changing this marker.</p>}
+                  {article.qa_type === 'question' && <p className={detailStyles.legacyMarker}>Legacy Question marker retained. Compatibility review is required before changing this marker.</p>}
                   {/* QA Toggle Buttons */}
-                  <div className="tocyn-timeline-qa">
-                    <div className="tocyn-timeline-qa-actions">
+                  <div className={detailStyles.qa}>
+                    <div className={detailStyles.qaActions}>
                       <ParkButton
                         aria-label="Mark as SOP (internal procedure)" aria-pressed={article.qa_type === 'sop'} disabled={qaPending || article.qa_type === 'question'}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'sop' ? null : 'sop')}
-                        className={clsx(
-                          "tocyn-timeline-qa-button",
-                          article.qa_type === 'sop' ? "tocyn-timeline-qa-button-active" : "tocyn-timeline-qa-button-inactive"
-                        )}
+                        className={clsx(detailStyles.qaButton, article.qa_type === 'sop' ? detailStyles.qaButtonActive : detailStyles.qaButtonInactive)}
                       >
                         {article.qa_type === 'sop' ? '✓ SOP (internal)' : 'Mark as SOP (internal)'}
                       </ParkButton>
                       <ParkButton
                         aria-label="Mark as answer" aria-pressed={article.qa_type === 'answer'} disabled={qaPending || article.qa_type === 'question'}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'answer' ? null : 'answer')}
-                        className={clsx(
-                          "tocyn-timeline-qa-button",
-                          article.qa_type === 'answer' ? "tocyn-timeline-qa-button-active" : "tocyn-timeline-qa-button-inactive"
-                        )}
+                        className={clsx(detailStyles.qaButton, article.qa_type === 'answer' ? detailStyles.qaButtonActive : detailStyles.qaButtonInactive)}
                       >
                         {article.qa_type === 'answer' ? '✓ Answer' : 'Mark as Answer'}
                       </ParkButton>
                     </div>
                     {article.qa_type && (
-                      <span className="tocyn-timeline-qa-marked">
-                        <ShieldCheck className="tocyn-timeline-qa-marked-icon" />
+                      <span className={detailStyles.qaMarked}>
+                        <ShieldCheck className={detailStyles.qaMarkedIcon} />
                         QA marked
                       </span>
                     )}
@@ -1005,18 +981,18 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             ))}
           </div>
 
-          {ticket.pagination && <div className="tocyn-ticket-pagination">
+          {ticket.pagination && <div className={detailStyles.pagination}>
             <ParkButton type="button" onClick={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage({ cancelRefetch: false }); }} aria-disabled={!hasNextPage || isFetchingNextPage}
               aria-controls="conversation-messages" aria-busy={isFetchingNextPage}
-              className="tocyn-ticket-pagination-button">
+              className={detailStyles.paginationButton}>
               {isFetchingNextPage ? 'Loading messages…' : hasNextPage ? 'Load more messages' : 'All messages loaded'}
             </ParkButton>
-            <p role="status" aria-live="polite" className="tocyn-ticket-detail-status">
+            <p role="status" aria-live="polite" className={detailStyles.status}>
               {isFetchNextPageError ? 'Could not load more messages. Try again.' : isFetchingNextPage ? 'Loading more messages…' : `Showing ${ticket.articles.length} messages.${hasNextPage ? ' More messages are available.' : ' All messages are loaded.'}`}
             </p>
           </div>}
-          <div className="tocyn-ticket-composer-panel">
-            {replyError && <p role="alert" className="tocyn-ticket-composer-alert">{replyError} {' '}
+          <div className={detailStyles.composerPanel}>
+            {replyError && <p role="alert" className={detailStyles.composerAlert}>{replyError} {' '}
               {staleReplyReview ? <>
                 {staleReplyReview === 'refreshing'
                   ? <span role="status">Refreshing the latest conversation…</span>
@@ -1025,10 +1001,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     : <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className="tocyn-ticket-detail-inline-action">Rebase saved draft</ParkButton>}
               </> : <ParkButton type="button" onClick={() => void refetch()} className="tocyn-ticket-detail-inline-action">Refresh conversation</ParkButton>}
             </p>}
-            {(draft.status !== 'idle' && draft.status !== 'discarded') && <div role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} className={clsx(
-              'tocyn-ticket-composer-draft-status',
-              draft.status === 'error' || draft.status === 'conflict' ? 'tocyn-ticket-composer-draft-status-error' : 'tocyn-ticket-composer-draft-status-neutral'
-            )}>
+            {(draft.status !== 'idle' && draft.status !== 'discarded') && <div role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} className={detailStyles.draftStatus}>
               <span>
                 {draft.status === 'loading' && 'Restoring your saved draft…'}
                 {draft.status === 'unsaved' && 'Draft has unsaved changes.'}
@@ -1037,23 +1010,20 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 {draft.status === 'error' && (draft.error ?? 'Draft could not be saved.')}
                 {draft.status === 'conflict' && (draft.error ?? 'Draft changed in another session. Review before discarding it.')}
               </span>
-              <span className="tocyn-ticket-composer-draft-actions">
+              <span className={detailStyles.draftActions}>
                 {draft.status === 'error' && <ParkButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className="tocyn-ticket-detail-inline-action">Retry draft</ParkButton>}
                 {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className="tocyn-ticket-detail-inline-action">Discard draft</ParkButton>}
               </span>
             </div>}
-            <form onSubmit={handleSubmitReply} className="tocyn-ticket-composer-form">
+            <form onSubmit={handleSubmitReply} className={detailStyles.composerForm}>
               {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()}>Retry sent-draft cleanup</ParkButton></p>}
-              <div className="tocyn-ticket-composer-mode-row">
-                <div className="tocyn-ticket-composer-mode-group">
+              <div className={detailStyles.modeRow}>
+                <div className={detailStyles.modeGroup}>
                   <ParkButton
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={!isInternal}
                     onClick={() => { if (!submission.current) updateDraft({ mode: 'public', mentionedUserIds: [] }); }}
-                    className={clsx(
-                      "tocyn-ticket-composer-mode-button",
-                      !isInternal ? "tocyn-ticket-composer-mode-button-public" : "tocyn-ticket-composer-mode-button-inactive"
-                    )}
+                    className={clsx(detailStyles.modeButton, !isInternal ? detailStyles.modeButtonActive : detailStyles.modeButtonInactive)}
                   >
                     Public Reply
                   </ParkButton>
@@ -1061,10 +1031,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     type="button"
                     aria-disabled={isSubmitting} aria-pressed={isInternal}
                     onClick={() => { if (!submission.current) updateDraft({ mode: 'internal' }); }}
-                    className={clsx(
-                      "tocyn-ticket-composer-mode-button",
-                      isInternal ? "tocyn-ticket-composer-mode-button-internal" : "tocyn-ticket-composer-mode-button-inactive"
-                    )}
+                    className={clsx(detailStyles.modeButton, isInternal ? detailStyles.modeButtonActive : detailStyles.modeButtonInactive)}
                   >
                     Internal Note
                   </ParkButton>
@@ -1074,7 +1041,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   type="button"
                   onClick={handleGetAiSuggestion}
                   disabled={isGeneratingSuggestion || isSubmitting}
-                  className="tocyn-ticket-composer-suggestion-button"
+                  className={detailStyles.modeButton}
                 >
                   <Activity className="tocyn-ticket-detail-icon-sm" />
                   {isGeneratingSuggestion ? 'Thinking...' : 'AI Suggestion'}
@@ -1082,13 +1049,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
 
               {suggestion && (
-                <div className="tocyn-ticket-composer-suggestion">
-                  <div className="tocyn-ticket-composer-suggestion-header">
+                <div className={detailStyles.suggestion}>
+                  <div className={detailStyles.suggestionHeader}>
                     <span className="tocyn-ticket-composer-suggestion-label">
                       <ShieldCheck className="tocyn-ticket-detail-icon-sm" />
                       AI Auto-Draft
                     </span>
-                    <div className="tocyn-ticket-composer-suggestion-actions">
+                    <div className={detailStyles.suggestionActions}>
                       <ParkButton
                         type="button"
                         disabled={isSubmitting}
@@ -1115,11 +1082,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                       </ParkButton>
                     </div>
                   </div>
-                  <p className="tocyn-ticket-composer-suggestion-copy">"{suggestion}"</p>
+                  <p className={detailStyles.suggestionCopy}>"{suggestion}"</p>
                 </div>
               )}
 
-              {!replyCapability ? <div role="status" className="tocyn-ticket-reply-capability">
+              {!replyCapability ? <div role="status" className={detailStyles.replyCapability}>
                 {replyCapabilities.isLoading ? 'Loading reply options…' : 'Reply options are unavailable.'}
                 {replyCapabilities.isError && <ParkButton
                   type="button"
@@ -1131,13 +1098,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div> : <p className="tocyn-ticket-reply-capability tocyn-ticket-reply-capability-ready">{replyCapability.channel === 'email'
                 ? `Email reply to ${ticket.customer_email}. Delivery is attempted after saving.`
                 : 'Internal note. No email is sent.'} Up to {replyCapability.attachments.maxCount} attachments, {replyCapability.attachments.maxBytesPerFile / 1024 / 1024} MB each.</p>}
-              {isInternal && replyCapabilities.data?.internalMentions && <fieldset className="tocyn-composer-mentions">
+              {isInternal && replyCapabilities.data?.internalMentions && <fieldset className={detailStyles.mentions}>
                 <legend className="tocyn-composer-mentions-title">Mention colleagues</legend>
                 <p id="mention-help" className="tocyn-composer-mentions-help">Mentioned colleagues with current ticket access receive a private activity after this note is saved. Up to 16.</p>
-                {mentionCandidates.length ? <div className="tocyn-composer-mentions-list">
+                {mentionCandidates.length ? <div className={detailStyles.mentionList}>
                   {mentionCandidates.map(agent => {
                     const checked = mentionedUserIds.includes(agent.id);
-                    return <label key={agent.id} className="tocyn-composer-mention-option">
+                    return <label key={agent.id} className={detailStyles.mentionOption}>
                       <ParkInput type="checkbox" aria-describedby="mention-help" checked={checked} disabled={isSubmitting}
                         onChange={() => updateDraft({ mentionedUserIds: checked ? mentionedUserIds.filter(id => id !== agent.id)
                           : mentionedUserIds.length < (replyCapabilities.data?.internalMentions?.maxRecipients ?? 0) ? [...mentionedUserIds, agent.id] : mentionedUserIds })} />
@@ -1172,9 +1139,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               />
 
               {(draft.attachments.length > 0 || visiblePendingAttachments.length > 0) && (
-                <div className="tocyn-composer-attachments">
+                <div className={detailStyles.composerAttachments}>
                   {draft.attachments.map(attachment => (
-                    <div key={attachment.storageKey} className="tocyn-composer-attachment">
+                    <div key={attachment.storageKey} className={detailStyles.composerAttachment}>
                       <Paperclip className="tocyn-composer-attachment-icon" />
                       <span className="tocyn-composer-attachment-name">{attachment.filename}</span>
                       <ParkButton
@@ -1193,7 +1160,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     </div>
                   ))}
                   {visiblePendingAttachments.map(attachment => (
-                    <div key={attachment.id} className="tocyn-composer-attachment">
+                    <div key={attachment.id} className={detailStyles.composerAttachment}>
                       <Paperclip className="tocyn-composer-attachment-icon" />
                       <span className="tocyn-composer-attachment-name">{attachment.file.name}</span>
                       <span role={attachment.status === 'error' ? 'alert' : 'status'} className="tocyn-composer-attachment-status">{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
@@ -1217,14 +1184,14 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 </div>
               )}
 
-              <div className="tocyn-composer-footer">
-                <p className="tocyn-composer-note">
+              <div className={detailStyles.composerFooter}>
+                <p className={detailStyles.composerNote}>
                   <Info className="tocyn-ticket-detail-icon-xs" />
                   {isInternal
                     ? "Private note for team coordination."
                     : "Public replies are visible to the customer in this conversation."}
                 </p>
-                <div className="tocyn-composer-actions">
+                <div className={detailStyles.composerActions}>
                   <ParkInput
                     type="file" aria-label="Reply attachments" disabled={isSubmitting}
                     multiple
@@ -1265,12 +1232,12 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         </div>
       </div>
 
-      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className="tocyn-ticket-context-panel">
-        <details open className="tocyn-ticket-context-card">
-          <summary className="tocyn-ticket-context-summary">
+      <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className={detailStyles.contextPanel}>
+        <details open className={detailStyles.contextCard}>
+          <summary className={detailStyles.contextSummary}>
             <span className="tocyn-ticket-context-summary-label"><User className="tocyn-ticket-context-user-icon" />Customer</span>
           </summary>
-          <div className="tocyn-ticket-context-body">
+          <div className={detailStyles.contextBody}>
             <div>
               <p className="tocyn-ticket-context-eyebrow">Verified identity</p>
               <p className="tocyn-ticket-context-value">{ticket.customer_email}</p>
@@ -1303,25 +1270,25 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </div>
         </details>
 
-        <div className="tocyn-ticket-context-settings-card">
-          <h3 ref={contextHeadingRef} tabIndex={-1} className="tocyn-ticket-context-settings-heading">
-            <Info className="tocyn-ticket-context-settings-icon" />
+        <div className={detailStyles.contextSettingsCard}>
+          <h3 ref={contextHeadingRef} tabIndex={-1} className={detailStyles.contextFieldLabel}>
+            <Info className={detailStyles.attachmentIcon} />
             Ticket Details
           </h3>
-          <div className="tocyn-ticket-context-settings-fields">
+          <div className={detailStyles.contextSettingsFields}>
             <div>
-              <label htmlFor="ticket-priority" className="tocyn-ticket-context-settings-label">Priority</label>
-              <div className="tocyn-ticket-context-settings-field-control">
+              <span className={detailStyles.contextFieldLabel}>Priority</span>
+              <div className={detailStyles.contextFieldControl}>
                 <ParkSelect
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   ref={node => { ticketSelectRefs.current.priority = node; }}
-                  id="ticket-priority" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-priority" aria-label="Priority" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.priority}
                   onChange={(e) => {
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.priority; return; }
                     void handleTicketChange({ priority: e.target.value as TicketChanges['priority'] }, 'priority');
                   }}
-                  className="tocyn-form-control tocyn-ticket-context-settings-control"
+                  className={detailStyles.contextFieldControl}
                 >
                   <option value="low">Low</option>
                   <option value="normal">Normal</option>
@@ -1331,18 +1298,18 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
             </div>
             <div>
-              <label htmlFor="ticket-assigned_to" className="tocyn-ticket-context-settings-label">Assigned To</label>
-              <div className="tocyn-ticket-context-settings-field-control">
+              <span className={detailStyles.contextFieldLabel}>Assigned To</span>
+              <div className={detailStyles.contextFieldControl}>
                 <ParkSelect
                   key={`ticket-assigned_to-${ticketSelectVersions.assigned_to}`}
                   ref={node => { ticketSelectRefs.current.assigned_to = node; }}
-                  id="ticket-assigned_to" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-assigned_to" aria-label="Assigned To" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.assigned_to || ''}
                   onChange={(e) => {
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.assigned_to || ''; return; }
                     void handleTicketChange({ assigned_to: e.target.value || null }, 'assigned_to');
                   }}
-                  className="tocyn-form-control tocyn-ticket-context-settings-control"
+                  className={detailStyles.contextFieldControl}
                 >
                   <option value="">Unassigned</option>
                   {agents?.map(agent => (
@@ -1356,18 +1323,18 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
             </div>
             <div>
-              <label htmlFor="ticket-group_id" className="tocyn-ticket-context-settings-label">Group</label>
-              <div className="tocyn-ticket-context-settings-field-control">
+              <span className={detailStyles.contextFieldLabel}>Group</span>
+              <div className={detailStyles.contextFieldControl}>
                 <ParkSelect
                   key={`ticket-group_id-${ticketSelectVersions.group_id}`}
                   ref={node => { ticketSelectRefs.current.group_id = node; }}
-                  id="ticket-group_id" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-group_id" aria-label="Group" aria-disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.group_id || ''}
                   onChange={(e) => {
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) { e.currentTarget.value = ticket.group_id || ''; return; }
                     void handleTicketChange({ group_id: e.target.value || null }, 'group_id');
                   }}
-                  className="tocyn-form-control tocyn-ticket-context-settings-control"
+                  className={detailStyles.contextFieldControl}
                 >
                   <option value="">No Group</option>
                   {groups?.map(group => (
@@ -1397,16 +1364,17 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     };
 
                     return (
-                      <div key={field.id} className="tocyn-form-field">
-                        <label htmlFor={inputId} className="tocyn-ticket-context-settings-label">
+                      <div key={field.id} className={detailStyles.contextField}>
+                        <span className={detailStyles.contextFieldLabel}>
                           {field.label}
-                        </label>
+                        </span>
                         {field.field_type === 'select' && field.options ? (
                           <ParkSelect
                             id={inputId}
+                            aria-label={field.label}
                             value={value || ''}
                             onChange={(e) => handleSave(e.target.value)}
-                            className="tocyn-form-control tocyn-ticket-context-settings-control"
+                            className={detailStyles.contextFieldControl}
                           >
                             <option value="">Select...</option>
                             {field.options.split(',').map(s => s.trim()).filter(Boolean).map((opt) => (
@@ -1417,6 +1385,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                           <div className="tocyn-ticket-context-checkbox-row">
                             <ParkInput
                               id={inputId}
+                              aria-label={field.label}
                               type="checkbox"
                               checked={value === true || value === 'true'}
                               onChange={(e) => handleSave(e.target.checked)}
@@ -1506,6 +1475,7 @@ function CustomFieldInput({ id, field, value, onSave }: { id: string, field: any
     return (
       <ParkTextarea
         id={id}
+        aria-label={field.label}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
@@ -1518,6 +1488,7 @@ function CustomFieldInput({ id, field, value, onSave }: { id: string, field: any
   return (
     <ParkInput
       id={id}
+      aria-label={field.label}
       type="text"
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}

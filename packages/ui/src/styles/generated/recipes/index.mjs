@@ -55,6 +55,7 @@ export * from './toast.mjs';
 export * from './toggle-group.mjs';
 export * from './tooltip.mjs';
 export * from './page.mjs';
+export * from './ticket-detail.mjs';
 export * from './global-search.mjs';
 export * from './settings-layout.mjs';
 export * from './knowledge-editor.mjs';
