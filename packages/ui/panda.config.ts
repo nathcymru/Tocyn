@@ -73,8 +73,8 @@ export default {
         sizes: { target: { value: 'var(--tocyn-target-min)' } },
       },
       textStyles: {
-        body: { value: { fontFamily: 'fonts.primary', fontSize: '1rem', lineHeight: '1.5' } },
-        tabular: { value: { fontFamily: 'fonts.tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', lineHeight: '1.4' } },
+        body: { value: { fontFamily: 'primary', fontSize: '1rem', lineHeight: '1.5' } },
+        tabular: { value: { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', lineHeight: '1.4' } },
       },
       slotRecipes: {
         select: {
@@ -84,7 +84,7 @@ export default {
             root: { display: 'flex', flexDirection: 'column', gap: '0.375rem', width: '100%' },
             label: { color: 'text.muted', fontSize: '0.75rem', fontWeight: '600', userSelect: 'none' },
             control: { position: 'relative', display: 'flex', alignItems: 'center', width: '100%' },
-            trigger: { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%', minHeight: '2.75rem', minWidth: '0', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 2.5rem 0.625rem 0.75rem', fontFamily: 'fonts.primary', textAlign: 'start', cursor: 'pointer', userSelect: 'none', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
+            trigger: { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%', minHeight: '2.75rem', minWidth: '0', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 2.5rem 0.625rem 0.75rem', fontFamily: 'primary', textAlign: 'start', cursor: 'pointer', userSelect: 'none', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
             valueText: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', _placeholderShown: { color: 'text.muted' } },
             indicatorGroup: { position: 'absolute', insetInlineEnd: '0.75rem', insetBlock: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
             indicator: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'text.muted', pointerEvents: 'none' },
@@ -100,7 +100,7 @@ export default {
       recipes: {
         button: {
           className: 'button',
-          base: { appearance: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '2.75rem', minWidth: '2.75rem', flexShrink: '0', isolation: 'isolate', position: 'relative', verticalAlign: 'middle', whiteSpace: 'nowrap', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', color: 'text.primary', padding: '0.5rem 0.875rem', fontFamily: 'fonts.primary', fontWeight: '600', cursor: 'pointer', userSelect: 'none', outline: '0', transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease', _hover: { background: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' }, '& svg': { flexShrink: '0' } },
+          base: { appearance: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '2.75rem', minWidth: '2.75rem', flexShrink: '0', isolation: 'isolate', position: 'relative', verticalAlign: 'middle', whiteSpace: 'nowrap', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', color: 'text.primary', padding: '0.5rem 0.875rem', fontFamily: 'primary', fontWeight: '600', cursor: 'pointer', userSelect: 'none', outline: '0', transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease', _hover: { background: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' }, '& svg': { flexShrink: '0' } },
           variants: {
             variant: {
               solid: { background: 'accent.primary', borderColor: 'accent.primary', color: 'bg.surface', _hover: { background: 'text.primary', borderColor: 'text.primary' } },
@@ -124,11 +124,11 @@ export default {
         },
         input: {
           className: 'input',
-          base: { boxSizing: 'border-box', width: '100%', minHeight: '2.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'fonts.primary', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
+          base: { boxSizing: 'border-box', width: '100%', minHeight: '2.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'primary', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
         },
         textarea: {
           className: 'textarea',
-          base: { boxSizing: 'border-box', width: '100%', minHeight: '6rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'fonts.primary', resize: 'vertical', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
+          base: { boxSizing: 'border-box', width: '100%', minHeight: '6rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'primary', resize: 'vertical', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
         },
       },
     },

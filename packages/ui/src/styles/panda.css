@@ -577,7 +577,7 @@
       vertical-align: middle;
       white-space: nowrap;
       color: var(--colors-text\.primary);
-      font-family: fonts.primary;
+      font-family: var(--fonts-primary);
       font-weight: 600;
       cursor: pointer;
       -webkit-user-select: none;
@@ -613,7 +613,7 @@
       border-radius: 0.5rem;
       box-sizing: border-box;
       color: var(--colors-text\.primary);
-      font-family: fonts.primary;
+      font-family: var(--fonts-primary);
       width: 100%;
       min-height: 2.75rem;
 }
@@ -636,7 +636,7 @@
       border-radius: 0.5rem;
       box-sizing: border-box;
       color: var(--colors-text\.primary);
-      font-family: fonts.primary;
+      font-family: var(--fonts-primary);
       resize: vertical;
       width: 100%;
       min-height: 6rem;
@@ -709,7 +709,7 @@
       display: inline-flex;
       justify-content: space-between;
       color: var(--colors-text\.primary);
-      font-family: fonts.primary;
+      font-family: var(--fonts-primary);
       text-align: start;
       cursor: pointer;
       -webkit-user-select: none;
