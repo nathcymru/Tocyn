@@ -327,6 +327,7 @@ export class SqlTicketRepository implements TicketRepository {
       ticketNo?: string;
       search?: string;
       customerEmail?: string;
+      createdAfter?: string;
       /** Server-owned queue predicate; filters only refine it. */
       queue?: TicketQueueKey;
       /** Supplied only by the local-beta retention boundary, never a client clock. */

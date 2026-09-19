@@ -5,7 +5,7 @@ import { ticketQueuePredicate } from './ticket-queue-predicate';
 import { TicketListScanError, ticketListScanFenceSql, ticketListCurrentCredentialSql, type TicketListScanSnapshot, type TicketListCurrentCredential } from './ticket-list-scan.repository';
 
 export type TicketListPredicateOptions = Readonly<{
-  filterId?:string;status?:string;priority?:string;assignedTo?:string;groupId?:string;ticketNo?:string;search?:string;customerEmail?:string;
+  filterId?:string;status?:string;priority?:string;assignedTo?:string;groupId?:string;ticketNo?:string;search?:string;customerEmail?:string;createdAfter?:string;
   queue?:TicketQueueKey;draftNotExpiredAt?:string;viewer?:Readonly<{role:'admin'|'agent';actorId:string}>;
   scanFence?:TicketListScanSnapshot;currentCredential?:TicketListCurrentCredential;
 }>;
@@ -22,6 +22,10 @@ export async function ticketListPredicate(db:D1Database,scope:VerifiedTenantScop
     if (options.customerEmail) {
       where += " AND customer_email = ?";
       params.push(options.customerEmail);
+    }
+    if (options.createdAfter) {
+      where += " AND created_at >= ?";
+      params.push(options.createdAfter);
     }
 
     if (options.queue) {

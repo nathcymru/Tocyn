@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run panda:cssgen --workspace=@luminatick/ui",
     "dev": "vite --config vite.config.ts --host 127.0.0.1 --port 5173",
+    "prebuild": "npm run panda:cssgen --workspace=@luminatick/ui",
     "build": "tsc && vite build --config vite.config.ts",
     "preview": "vite preview --config vite.config.ts",
     "test": "vitest run"

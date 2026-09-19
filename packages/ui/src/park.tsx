@@ -19,7 +19,8 @@ const ticketDetailStyles = () => ticketDetailRecipe();
 const tabsStyles = tabsRecipe();
 const splitterStyles = splitterRecipe();
 const scrollAreaStyles = scrollAreaRecipe();
-const avatarStyles = avatarRecipe();
+const defaultAvatarStyles = avatarRecipe({ size: 'md', shape: 'full', variant: 'subtle' });
+const AvatarStylesContext = React.createContext(defaultAvatarStyles);
 const emptyStateStyles = emptyStateRecipe();
 const progressStyles = (props?: Parameters<typeof progressRecipe>[0]) => progressRecipe(props);
 
@@ -157,14 +158,26 @@ export function ParkField({ label, description, error, required, children, class
   </Field.Root>;
 }
 
-export const ParkAvatar = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<typeof Avatar.Root>>(
-  function ParkAvatar({ className, children, ...props }, ref) {
-    return <Avatar.Root {...props} ref={ref} data-park="avatar" className={[avatarStyles.root, 'tocyn-avatar', className].filter(Boolean).join(' ')}>{children}</Avatar.Root>;
+export type ParkAvatarProps = React.ComponentPropsWithoutRef<typeof Avatar.Root> & {
+  size?: '2xs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+  shape?: 'square' | 'rounded' | 'full';
+  variant?: 'solid' | 'surface' | 'subtle' | 'outline';
+};
+export const ParkAvatar = React.forwardRef<HTMLDivElement, ParkAvatarProps>(
+  function ParkAvatar({ className, children, size = 'md', shape = 'full', variant = 'subtle', ...props }, ref) {
+    const styles = avatarRecipe({ size, shape, variant });
+    return <AvatarStylesContext.Provider value={styles}><Avatar.Root {...props} ref={ref} data-park="avatar" className={[styles.root, 'tocyn-avatar', className].filter(Boolean).join(' ')}>{children}</Avatar.Root></AvatarStylesContext.Provider>;
   },
 );
 
-export const ParkAvatarImage = (props: React.ComponentProps<typeof Avatar.Image>) => <Avatar.Image {...props} data-part="image" className={[avatarStyles.image, props.className].filter(Boolean).join(' ')} />;
-export const ParkAvatarFallback = (props: React.ComponentProps<typeof Avatar.Fallback>) => <Avatar.Fallback {...props} data-part="fallback" className={[avatarStyles.fallback, props.className].filter(Boolean).join(' ')} />;
+export const ParkAvatarImage = (props: React.ComponentProps<typeof Avatar.Image>) => {
+  const styles = React.useContext(AvatarStylesContext);
+  return <Avatar.Image {...props} data-part="image" className={[styles.image, props.className].filter(Boolean).join(' ')} />;
+};
+export const ParkAvatarFallback = (props: React.ComponentProps<typeof Avatar.Fallback>) => {
+  const styles = React.useContext(AvatarStylesContext);
+  return <Avatar.Fallback {...props} data-part="fallback" className={[styles.fallback, props.className].filter(Boolean).join(' ')} />;
+};
 
 export const ParkMenuRoot = (props: React.ComponentProps<typeof ArkMenu.Root>) => <ArkMenu.Root {...props} data-park="menu-root" />;
 export const ParkMenuTrigger = (props: React.ComponentProps<typeof ArkMenu.Trigger>) => <ArkMenu.Trigger {...props} data-park="menu-trigger" className={parkPart('menu-trigger', props.className)} />;

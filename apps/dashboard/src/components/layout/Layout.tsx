@@ -3,6 +3,7 @@ import { ProductLogo } from '@luminatick/ui/brand';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
 import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkMenu, ParkShell } from '@luminatick/ui/park';
+import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
@@ -65,8 +66,8 @@ function UserMenu({ onNavigate }: SidebarProps) {
   return <>
   <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
     <ParkMenu.Trigger asChild>
-      <ParkButton type="button" aria-label="Account options" title={user?.full_name || 'User'} className={shellStyles.personaTrigger}>
-        <ParkAvatar className={shellStyles.personaAvatar}>
+      <ParkButton type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={shellStyles.personaTrigger}>
+        <ParkAvatar shape="square" className={shellStyles.personaAvatar}>
           <ParkAvatarFallback>{user?.full_name?.slice(0, 2).toUpperCase() || 'OP'}</ParkAvatarFallback>
         </ParkAvatar>
         <span className={shellStyles.personaStatus} aria-label="Online" />
@@ -386,7 +387,7 @@ function LayoutContent() {
 export function Layout() {
   const { user, sessionGeneration } = useAuthStore();
   const identity = `${sessionGeneration}:${user?.tenant_id ?? ''}:${user?.id ?? ''}`;
-  return <OperatorThemeProvider key={identity}><LayoutContent /></OperatorThemeProvider>;
+  return <OperatorThemeProvider key={identity}><InboxGlobalAlertProvider><LayoutContent /></InboxGlobalAlertProvider></OperatorThemeProvider>;
 }
 
 const navigation = [

@@ -15,7 +15,7 @@ export default {
     'html, body, #root': { fontFamily: 'primary', color: 'text.primary', background: 'bg.canvas' },
     '[data-tabular]': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' },
   },
-  include: ['./src/**/*.{ts,tsx}'],
+  include: ['./src/**/*.{ts,tsx}', '../../apps/dashboard/src/**/*.{ts,tsx}'],
   outdir: './src/styles/generated',
   theme: {
     extend: {
@@ -515,10 +515,6 @@ export default {
         scrollArea: {
           className: 'scrollArea', slots: ['root', 'viewport', 'content', 'scrollbar', 'thumb'],
           base: { root: { position: 'relative', overflow: 'hidden' }, viewport: { width: '100%', height: '100%', overflow: 'auto' }, content: { minWidth: '0' }, scrollbar: { display: 'flex', width: '0.5rem', padding: '0.125rem', background: 'bg.subtle' }, thumb: { flex: '1', borderRadius: 'full', background: 'border.default' } },
-        },
-        avatar: {
-          className: 'avatar', slots: ['root', 'image', 'fallback'],
-          base: { root: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', width: '2.5rem', height: '2.5rem', borderRadius: 'l2', background: 'bg.subtle', color: 'fg.default', fontFamily: 'primary', fontWeight: '600' }, image: { width: '100%', height: '100%', objectFit: 'cover' }, fallback: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' } },
         },
         emptyState: {
           className: 'emptyState', slots: ['root', 'title', 'description', 'action'],
