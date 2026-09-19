@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Avatar, Field, PinInput, createListCollection } from '@ark-ui/react';
+import { Avatar, Field, PinInput, Progress as ArkProgress, createListCollection } from '@ark-ui/react';
 import { Select as ArkSelect } from '@ark-ui/react/select';
 import { ScrollArea as ArkScrollArea } from '@ark-ui/react/scroll-area';
 import { Splitter as ArkSplitter } from '@ark-ui/react/splitter';
@@ -7,7 +7,7 @@ import { Tabs as ArkTabs } from '@ark-ui/react/tabs';
 import { Menu as ArkMenu } from '@ark-ui/react/menu';
 import { IconChevronDown, IconCheck } from './icons';
 import { visuallyHidden } from './styles/generated/patterns';
-import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, globalSearch as globalSearchRecipe, settingsLayout as settingsLayoutRecipe, knowledgeEditor as knowledgeEditorRecipe, composer as composerRecipe, ticketFields as ticketFieldsRecipe, shell as shellRecipe, card as cardRecipe, page as pageRecipe, ticketDetail as ticketDetailRecipe } from './styles/generated/recipes';
+import { button as buttonRecipe, input as inputRecipe, select as selectRecipe, textarea as textareaRecipe, tabs as tabsRecipe, splitter as splitterRecipe, scrollArea as scrollAreaRecipe, avatar as avatarRecipe, emptyState as emptyStateRecipe, globalSearch as globalSearchRecipe, settingsLayout as settingsLayoutRecipe, knowledgeEditor as knowledgeEditorRecipe, composer as composerRecipe, ticketFields as ticketFieldsRecipe, shell as shellRecipe, card as cardRecipe, page as pageRecipe, progress as progressRecipe, skeleton as skeletonRecipe, ticketDetail as ticketDetailRecipe } from './styles/generated/recipes';
 
 const selectStyles = selectRecipe();
 const buttonClass = buttonRecipe();
@@ -21,6 +21,7 @@ const splitterStyles = splitterRecipe();
 const scrollAreaStyles = scrollAreaRecipe();
 const avatarStyles = avatarRecipe();
 const emptyStateStyles = emptyStateRecipe();
+const progressStyles = (props?: Parameters<typeof progressRecipe>[0]) => progressRecipe(props);
 
 /** Shared Park recipes. Stateless controls intentionally use their semantic HTML
  * element (as Park does); stateful controls below use Ark state machines. Every
@@ -47,6 +48,22 @@ export const ParkTextarea = React.forwardRef<HTMLTextAreaElement, React.Textarea
     return <textarea {...props} ref={ref} data-tocyn-primitive="textarea" data-park="textarea" data-scope="textarea" data-part="root" className={[textareaClass, 'tocyn-textarea', 'tocyn-park-textarea', className].filter(Boolean).join(' ')} />;
   },
 );
+
+/** Park's skeleton recipe for short, layout-preserving loading states. */
+export const ParkSkeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { loading?: boolean; variant?: 'pulse' | 'shine' | 'none' }>(
+  function ParkSkeleton({ className, loading = true, variant = 'pulse', ...props }, ref) {
+    return <div {...props} ref={ref} aria-hidden={loading || props['aria-hidden']} data-park="skeleton" data-scope="skeleton" data-part="root" className={[skeletonRecipe({ loading, variant }), className].filter(Boolean).join(' ')} />;
+  },
+);
+
+/** Park's Ark-backed progress recipe. A null value is intentionally indeterminate. */
+export function ParkProgress({ value = null, label, className }: { value?: number | null; label: React.ReactNode; className?: string }) {
+  const styles = progressStyles({ variant: 'subtle', shape: 'full', size: 'sm' });
+  return <ArkProgress.Root value={value} className={[styles.root, className].filter(Boolean).join(' ')} data-park="progress" data-scope="progress" data-part="root">
+    <ArkProgress.Label className={styles.label}>{label}</ArkProgress.Label>
+    <ArkProgress.Track className={styles.track}><ArkProgress.Range className={styles.range} /></ArkProgress.Track>
+  </ArkProgress.Root>;
+}
 
 /** Native compatibility entry point. Compound anatomy is attached below. */
 type ParkSelectCompatProps = Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value' | 'defaultValue'> & {

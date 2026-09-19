@@ -20,12 +20,14 @@ const theme = (status: string, overrides: Record<string, unknown> = {}) => ({
 describe('OperatorThemeProvider', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it('keeps the workspace usable behind an accessible restore banner, then resolves it', () => {
+  it('keeps the workspace usable with Park skeleton and progress feedback, then resolves it', () => {
     const hook = vi.mocked(useOperatorTheme);
     hook.mockReturnValueOnce(theme('loading')).mockReturnValueOnce(theme('restored')).mockReturnValue(theme('loading'));
     const view = render(<OperatorThemeProvider><input aria-label="composer" /></OperatorThemeProvider>);
     expect(screen.getByRole('status')).toHaveTextContent('Loading appearance');
     expect(screen.getByRole('textbox', { name: 'composer' })).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(document.querySelector('[data-park="skeleton"]')).not.toBeNull();
     act(() => view.rerender(<OperatorThemeProvider><input aria-label="composer" /></OperatorThemeProvider>));
     const composer = screen.getByRole('textbox', { name: 'composer' });
     expect(composer).toBeInTheDocument();
@@ -40,6 +42,16 @@ describe('OperatorThemeProvider', () => {
     render(<OperatorThemeProvider><OperatorThemeControl /></OperatorThemeProvider>);
     expect(screen.getByRole('alert')).toHaveTextContent('Appearance unavailable.');
     fireEvent.click(screen.getAllByRole('button', { name: 'Retry appearance' })[0]);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('breaks an initial timed-out appearance load into a retryable error page', () => {
+    const retry = vi.fn();
+    vi.mocked(useOperatorTheme).mockReturnValue(theme('error', { error: 'Appearance settings took too long to load. Check your connection and retry.', retry }));
+    render(<OperatorThemeProvider><input aria-label="composer" /></OperatorThemeProvider>);
+    expect(screen.getByRole('alert')).toHaveTextContent('Appearance settings could not be loaded');
+    expect(screen.queryByRole('textbox', { name: 'composer' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry appearance' }));
     expect(retry).toHaveBeenCalledTimes(1);
   });
 

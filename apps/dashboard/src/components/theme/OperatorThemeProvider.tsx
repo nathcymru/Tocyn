@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createTocynThemeScope } from '@luminatick/ui';
-import { ParkButton, ParkInput, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkInput, ParkProgress, ParkSelect, ParkSkeleton } from '@luminatick/ui/park';
 import { useOperatorTheme, type OperatorThemeMode } from '../../hooks/useOperatorTheme';
 import { useOperatorPreferences, type OperatorDensity, type OperatorFontScale, type OperatorMotion } from '../../hooks/useOperatorPreferences';
 
@@ -12,8 +12,8 @@ export function OperatorThemeProvider({ children }: { children: React.ReactNode 
   const theme = useOperatorTheme();
   const preferences = useOperatorPreferences();
   const scope = React.useRef<ReturnType<typeof createTocynThemeScope> | null>(null);
-  const hasResolved = React.useRef(false);
-  if (theme.status !== 'loading' && theme.status !== 'idle') hasResolved.current = true;
+  const hasStableAppearance = React.useRef(false);
+  if (theme.status === 'restored' || theme.status === 'unsaved' || theme.status === 'saved' || theme.status === 'conflict') hasStableAppearance.current = true;
   React.useLayoutEffect(() => {
     if (typeof document === 'undefined' || theme.status === 'loading' || theme.status === 'idle') {
       if (theme.status === 'idle') { scope.current?.remove(); scope.current = null; }
@@ -23,12 +23,37 @@ export function OperatorThemeProvider({ children }: { children: React.ReactNode 
     if (!scope.current) scope.current = createTocynThemeScope(document.documentElement, input); else scope.current.apply(input);
   }, [theme.resolvedMode, theme.theme, theme.status]);
   React.useEffect(() => () => { scope.current?.remove(); scope.current = null; }, []);
-  const loading = !hasResolved.current && theme.status === 'loading';
+  const loading = theme.status === 'loading';
+  const loadingMessage = useAppearanceLoadingMessage(loading);
+  const startupTimeout = theme.status === 'error' && !hasStableAppearance.current && theme.error?.includes('took too long');
   return <ThemeContext.Provider value={theme}>
-    {loading && <div role="status" aria-live="polite" className="tocyn-theme-loading">Loading appearance…</div>}
+    {startupTimeout ? <section role="alert" aria-labelledby="appearance-load-error-title" className="tocyn-theme-load-error">
+      <h1 id="appearance-load-error-title" tabIndex={-1}>Appearance settings could not be loaded</h1>
+      <p>{theme.error}</p>
+      <ParkButton type="button" onClick={theme.retry}>Retry appearance</ParkButton>
+    </section> : <>
+    {loading && <section role="status" aria-live="polite" aria-label="Restoring appearance" className="tocyn-theme-loading">
+      <div className="tocyn-theme-loading-skeletons" aria-hidden="true"><ParkSkeleton /><ParkSkeleton /><ParkSkeleton /></div>
+      <ParkProgress value={null} label={loadingMessage} />
+      <p>Workspace controls remain available while appearance settings load.</p>
+    </section>}
     {(theme.status === 'error' || theme.status === 'conflict') && <div role="alert" className="tocyn-theme-status-banner"><span>{theme.error || 'Appearance could not be restored.'}</span><ParkButton type="button" onClick={theme.retry} className="tocyn-theme-retry">Retry appearance</ParkButton></div>}
     <PreferencesContext.Provider value={preferences}>{children}</PreferencesContext.Provider>
+    </>}
   </ThemeContext.Provider>;
+}
+
+function useAppearanceLoadingMessage(loading: boolean) {
+  const [elapsed, setElapsed] = React.useState(0);
+  React.useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    const started = Date.now();
+    const timer = window.setInterval(() => setElapsed(Date.now() - started), 1_000);
+    return () => window.clearInterval(timer);
+  }, [loading]);
+  if (elapsed >= 5_000) return 'Appearance settings are taking longer than expected…';
+  if (elapsed >= 2_000) return 'Applying your saved appearance…';
+  return 'Loading appearance…';
 }
 
 type PreferencesContextValue = ReturnType<typeof useOperatorPreferences>;

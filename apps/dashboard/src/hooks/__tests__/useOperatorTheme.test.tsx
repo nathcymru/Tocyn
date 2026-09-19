@@ -10,7 +10,7 @@ vi.mock('../../store/authStore', () => {
   (hook as any).setState = (next: any) => { state = { ...state, ...next }; listeners.forEach(listener => listener()); };
   return { useAuthStore: hook };
 });
-import { useOperatorTheme } from '../useOperatorTheme';
+import { APPEARANCE_RESTORE_TIMEOUT_MS, useOperatorTheme } from '../useOperatorTheme';
 import { useAuthStore } from '../../store/authStore';
 
 const user = (id = 'operator', tenant_id = 'tenant-a') => ({ id, tenant_id, email: `${id}@example.invalid`, full_name: id, role: 'admin', mfa_enabled: true });
@@ -27,6 +27,16 @@ it('restores system mode and resolves validated light palette', async () => {
   vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json({ revision: 0, mode: 'system', updatedAt: null })).mockResolvedValueOnce(json(tenant)));
   render(<Harness />); await waitFor(() => expect(current()).toMatchObject({ status: 'restored', mode: 'system', resolved: 'light', revision: 0 }));
+});
+
+it('stops an indefinitely pending appearance restore and exposes a retryable error', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+  render(<Harness />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(APPEARANCE_RESTORE_TIMEOUT_MS); });
+  expect(current()).toMatchObject({ status: 'error' });
+  expect(current().error).toMatch(/took too long/);
+  vi.useRealTimers();
 });
 
 it('restores appearance after StrictMode replay and ignores the previous effect response', async () => {

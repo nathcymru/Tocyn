@@ -10,6 +10,7 @@ export type OperatorThemeSnapshot = Readonly<OperatorThemePreference & { resolve
 
 const DEFAULT: OperatorThemePreference = { revision: 0, mode: 'system', updatedAt: null };
 const FALLBACK: TocynTenantTheme = parseTocynTenantTheme({ version: '1', light: {}, dark: {} });
+export const APPEARANCE_RESTORE_TIMEOUT_MS = 8_000;
 const identityFor = (generation: number, tenantId?: string, userId?: string) => tenantId && userId ? JSON.stringify([generation, tenantId, userId]) : null;
 const validMode = (mode: unknown): mode is OperatorThemeMode => mode === 'light' || mode === 'dark' || mode === 'system';
 const validPreference = (value: unknown): value is OperatorThemePreference => {
@@ -84,12 +85,20 @@ function createController(identity: string | null) {
     const preserveLocal = dirty && !discardLocal;
     revisionKnown = false;
     if (!dirty) replace({ ...state, status: 'loading', error: null });
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        abort.abort();
+        reject(new Error('appearance-restore-timeout'));
+      }, APPEARANCE_RESTORE_TIMEOUT_MS);
+    });
     const flight = (async () => {
       try {
-        const [preferenceResponse, themeResponse] = await Promise.all([
-          dashboardApi.get<unknown>('/workspace/theme-preference'),
-          dashboardApi.get<unknown>('/settings/theme'),
-        ]);
+        const [preferenceResponse, themeResponse] = await Promise.race([Promise.all([
+          dashboardApi.get<unknown>('/workspace/theme-preference', { signal: abort.signal }),
+          dashboardApi.get<unknown>('/settings/theme', { signal: abort.signal }),
+        ]), timeout]);
         if (!current(requestEpoch)) return;
         if (!validPreference(preferenceResponse)) {
           // Do not continue to write against a revision from an older, now untrusted read.
@@ -113,7 +122,11 @@ function createController(identity: string | null) {
       } catch (error) {
         if (!current(requestEpoch)) return;
         if (error instanceof ApiError && error.status === 403) { clearUnauthorized(); return; }
-        replace({ ...state, status: 'error', error: 'Theme preferences could not be restored. Retry.' });
+        replace({ ...state, status: 'error', error: error instanceof Error && error.message === 'appearance-restore-timeout'
+          ? 'Appearance settings took too long to load. Check your connection and retry.'
+          : 'Theme preferences could not be restored. Retry.' });
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     })();
     restoreFlight = flight;
