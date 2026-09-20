@@ -289,6 +289,17 @@ it('puts the conversation before secondary ticket tools in the detail reading or
   expect(screen.getByRole('button', { name: 'Copy ticket reference' })).toBeInTheDocument();
 });
 
+it('keeps secondary disclosures at least 24px tall with the Park keyboard focus ring', async () => {
+  transport(() => json(ticket));
+  showDetail();
+  await screen.findByText('Customer question');
+  for (const name of ['Operational context', 'Knowledge', 'Collaboration']) {
+    const trigger = screen.getByRole('button', { name });
+    expect(trigger).toHaveClass('min-h_8', 'focusVisible:focus-v-ring_outside');
+    expect(trigger.className).not.toContain('focusVisible:outline');
+  }
+});
+
 it.each([
   [0, '0 B'], [62, '62 B'], [1536, '1.5 KB'], [1048576, '1 MB'],
 ])('displays canonical attachment size %s in truthful units', async (size, expected) => {

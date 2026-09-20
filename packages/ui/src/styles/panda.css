@@ -12480,16 +12480,16 @@
     display: inline-block;
 }
 
-  .flex-sh_1 {
-    flex-shrink: 1;
-}
-
   .cursor_pointer {
     cursor: pointer;
 }
 
   .ta_left {
     text-align: left;
+}
+
+  .flex-sh_1 {
+    flex-shrink: 1;
 }
 
   .c_warning {
