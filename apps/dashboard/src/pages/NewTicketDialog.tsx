@@ -154,14 +154,16 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
     closeOnEscape={!pending} closeOnInteractOutside={false} lazyMount unmountOnExit>
     <ParkDialog.Backdrop />
     <ParkDialog.Positioner>
-    <ParkDialog.Content aria-labelledby={titleId} className={css({ w: 'min(100% - 2rem, 40rem)', maxH: 'calc(100dvh - 2rem)', overflowY: 'auto' })}>
-    <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
-      <ParkDialog.Title id={titleId}>Create New Ticket</ParkDialog.Title>
-      <ParkButton type="button" variant="plain" aria-label="Close new ticket" aria-disabled={pending} onClick={close}>
-        <X aria-hidden="true" />
-      </ParkButton>
+    <ParkDialog.Content aria-labelledby={titleId} className={css({ w: 'min(100% - 2rem, 40rem)', maxH: 'calc(100dvh - 2rem)', display: 'flex', flexDirection: 'column', overflow: 'hidden' })}>
+    <ParkDialog.Header className={css({ flexShrink: 0 })}>
+      <div className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+        <ParkDialog.Title id={titleId}>Create New Ticket</ParkDialog.Title>
+        <ParkButton type="button" variant="plain" aria-label="Close new ticket" aria-disabled={pending} onClick={close}>
+          <X aria-hidden="true" />
+        </ParkButton>
+      </div>
     </ParkDialog.Header>
-    <ParkDialog.Body>
+    <ParkDialog.Body className={css({ minH: 0, overflowY: 'auto' })}>
       <form id="new-ticket-form" aria-busy={pending} onSubmit={event => { void submitDraft(event); }}
         className={css({ display: 'grid', gap: '4' })}>
         <p role="status" aria-label="Ticket creation status" className={css({ m: '0', color: 'fg.muted', fontSize: 'sm' })}>
@@ -245,7 +247,7 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
         </section>
       </form>
     </ParkDialog.Body>
-    <ParkDialog.Footer>
+    <ParkDialog.Footer className={css({ flexShrink: 0 })}>
       <ParkButton type="button" variant="outline" aria-disabled={pending} onClick={close}>Cancel</ParkButton>
       <ParkButton ref={submit} type="submit" form="new-ticket-form" aria-disabled={pending} onClick={event => { if (pending) event.preventDefault(); }}>
         {pending ? 'Creating…' : 'Create Ticket'}
