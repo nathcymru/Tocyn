@@ -16,6 +16,8 @@ export function MfaPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const submitButton = React.useRef<HTMLButtonElement>(null);
+  const restoreSubmitFocus = React.useRef(false);
   const [setupAttempt, setSetupAttempt] = useState(0);
   const [setupStatus, setSetupStatus] = useState('');
   const [pinSize, setPinSize] = useState<'xs' | 'md'>(() => window.matchMedia?.('(min-width: 640px)').matches ? 'md' : 'xs');
@@ -36,6 +38,13 @@ export function MfaPage() {
     update();
     return () => media.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    if (!loading && restoreSubmitFocus.current) {
+      restoreSubmitFocus.current = false;
+      submitButton.current?.focus();
+    }
+  }, [loading]);
 
   useEffect(() => {
     if (!user || user.mfa_enabled) return;
@@ -68,6 +77,7 @@ export function MfaPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading || code.length !== 6 || (!user?.mfa_enabled && !setupData)) return;
+    restoreSubmitFocus.current = document.activeElement === submitButton.current;
     setError('');
     setSetupStatus('');
     setLoading(true);
@@ -164,6 +174,7 @@ export function MfaPage() {
           <div className={authStyles.pinWrap}>
             <ParkPinInput
               id="mfa-code"
+              label="Authentication Code"
               size={pinSize}
               ref={codeInput}
               defaultValue={Array.from({ length: 6 }, () => '')}
@@ -177,7 +188,6 @@ export function MfaPage() {
               name="code"
               placeholder="0"
             >
-              <span className={authStyles.visuallyHidden}>Authentication Code</span>
               {Array.from({ length: 6 }, (_, index) => <ParkPinInputSlot key={index} index={index}
                 aria-label={index === 0 ? 'Authentication Code' : `Authentication Code digit ${index + 1}`}
                 aria-describedby={error ? 'mfa-instructions mfa-error' : 'mfa-instructions'}
@@ -186,9 +196,10 @@ export function MfaPage() {
             </ParkPinInput>
           </div>
           <ParkButton
+            ref={submitButton}
             type="submit"
             variant="solid"
-            aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
+            disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
             className={authStyles.submit}
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}

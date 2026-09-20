@@ -17,5 +17,4 @@ export const authStyles = {
   secret: css({ display: 'inline-block', marginTop: '0.5rem', padding: '0.375rem 0.625rem', borderRadius: 'l1', background: 'bg.input', color: 'text.primary', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', userSelect: 'all' }),
   secondary: css({ justifySelf: 'center' }),
   pinWrap: css({ display: 'flex', justifyContent: 'center', minWidth: '0' }),
-  visuallyHidden: css({ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap' }),
 };

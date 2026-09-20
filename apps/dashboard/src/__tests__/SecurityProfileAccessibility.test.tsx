@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import { AuthQueryBoundary } from '../components/auth/AuthQueryBoundary';
 import { dashboardApi } from '../api/client';
 vi.mock('../api/client',()=>({dashboardApi:{post:vi.fn()}}));
-vi.mock('qrcode.react',()=>({QRCodeSVG:()=> <span>Local setup QR</span>}));
+vi.mock('qrcode.react',()=>({QRCodeSVG:({role, 'aria-label': label}:{role?:string;'aria-label'?:string})=> <span role={role} aria-label={label}>Local setup QR</span>}));
 const user={id:'synthetic-user',tenant_id:'synthetic-tenant',email:'operator@example.invalid',full_name:'Synthetic operator',role:'agent',mfa_enabled:false};
 const setup={provisioning_uri:'otpauth://totp/Synthetic?secret=SYNTHETIC_ONLY'};
 beforeEach(()=>{
@@ -18,6 +18,7 @@ it('guards setup and confirmation, focuses code and adopts the replacement serve
   let finish!:(value:unknown)=>void;vi.mocked(dashboardApi.post).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
   render(<SecurityProfilePage/>);const start=screen.getByRole('button',{name:'Set up 2FA'});fireEvent.click(start);fireEvent.click(start);
   expect(dashboardApi.post).toHaveBeenCalledTimes(1);await act(async()=>finish(setup));
+  expect(screen.getByRole('img',{name:'Authenticator setup QR code; a text key follows'})).toBeInTheDocument();
   const code=await screen.findByRole('textbox',{name:'Authentication Code'});await waitFor(()=>expect(code).toHaveFocus());
   const cells=screen.getAllByRole('textbox',{name:/Authentication Code/});expect(cells).toHaveLength(6);
   expect(code).toHaveClass('pin-input__input--size_xs');

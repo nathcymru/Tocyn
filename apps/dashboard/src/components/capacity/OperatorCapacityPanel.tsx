@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
-import { ParkAlert, ParkButton, ParkEmptyState, ParkInput, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
-import { Field } from '@luminatick/ui/components';
+import { ParkAlert, ParkButton, ParkEmptyState, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { NumberInput } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useOperatorCapacity,type CapacityInput } from '../../hooks/useOperatorCapacity';
 import { DashboardSelect } from '../DashboardSelect';
@@ -61,11 +61,13 @@ function CapacityContent({capacity,editable}:{capacity:ReturnType<typeof useOper
     {editable&&<form onSubmit={submit} className={capacityStyles.form}>
       <p className={capacityStyles.note}>Changes apply to new assignments. Existing work stays assigned.</p>
       <DashboardSelect id={`${id}-availability`} label="Availability for assignments" value={availability} disabled={phase==='saving'} onValueChange={value=>{setAvailability(value as CapacityInput['availability']);setDirty(true);}} options={[{value:'available',label:'Available'},{value:'unavailable',label:'Unavailable'}]} />
-      <Field.Root>
-        <Field.Label htmlFor={`${id}-ceiling`}>Assignment limit (0–1000)</Field.Label>
-        <ParkInput id={`${id}-ceiling`} type="number" min={0} max={1000} step={1} value={ceiling} disabled={phase==='saving'}
-          onChange={event=>{setCeiling(event.target.value);setDirty(true);}} />
-      </Field.Root>
+      <NumberInput.Root min={0} max={1000} step={1} value={ceiling} disabled={phase==='saving'}
+        allowOverflow clampValueOnBlur={false} formatOptions={{useGrouping:false}}
+        onValueChange={({value})=>{setCeiling(value);setDirty(true);}}>
+        <NumberInput.Label htmlFor={`${id}-ceiling`}>Assignment limit (0–1000)</NumberInput.Label>
+        <NumberInput.Input id={`${id}-ceiling`} />
+        <NumberInput.Control />
+      </NumberInput.Root>
       {data&&dirty&&<p className={capacityStyles.note}>Current saved policy: {data.availability??'not configured'}, limit {data.assignmentCeiling??'not configured'}. Your entered values are separate until saved.</p>}
       <ParkButton type="submit" disabled={busy||needsReload||!data||!valid||data.revision>=Number.MAX_SAFE_INTEGER}>Save capacity</ParkButton>
     </form>}

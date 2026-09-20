@@ -33,7 +33,7 @@ it('loads only the selected operator and contains focus with Escape return to th
  const openers=screen.getAllByRole('button',{name:'Capacity'});expect(openers).toHaveLength(2);
  openers[1].focus();await userEvent.keyboard('{Enter}');
  const dialog=await screen.findByRole('dialog',{name:'Operator capacity'});
- await waitFor(()=>expect(within(dialog).getByRole('spinbutton',{name:'Assignment limit (0–1000)'})).toHaveValue(3));
+ await waitFor(()=>expect(within(dialog).getByRole('spinbutton',{name:'Assignment limit (0–1000)'})).toHaveValue('3'));
  expect(dashboardApi.get).toHaveBeenCalledExactlyOnceWith('/operators/second/capacity');
  const close=within(dialog).getByRole('button',{name:'Close user details'});
  await waitFor(()=>expect(close).toHaveFocus());

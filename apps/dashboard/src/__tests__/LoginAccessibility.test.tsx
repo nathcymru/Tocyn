@@ -41,8 +41,7 @@ describe('staff login accessibility', () => {
     const button = screen.getByRole('button', { name: 'Sign In' });
     button.focus(); fireEvent.click(button);
     expect(screen.getByRole('status').textContent).toContain('Signing in');
-    expect(button.hasAttribute('disabled')).toBe(false);
-    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(dashboardApi.post).toHaveBeenCalledTimes(1);
     reject(new Error('Sign-in unavailable. Try again.'));
@@ -53,7 +52,7 @@ describe('staff login accessibility', () => {
     expect(email.getAttribute('aria-describedby')).toBe(alert.id);
     expect(password.getAttribute('aria-describedby')).toBe(alert.id);
     expect(document.activeElement).toBe(button);
-    expect(button.getAttribute('aria-disabled')).toBe('false');
+    expect(button).toBeEnabled();
   });
 
   it('preserves the successful password-to-MFA handoff', async () => {
@@ -62,7 +61,7 @@ describe('staff login accessibility', () => {
     fireEvent.change(screen.getByLabelText('Email Address'), { target: { value: staff.email } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'synthetic-password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
-    await screen.findByLabelText('Authentication Code');
+    await screen.findByRole('textbox', { name: 'Authentication Code' });
     expect(screen.queryByLabelText('Password')).toBeNull();
     expect(useAuthStore.getState().mfaRequired).toBe(true);
   });
@@ -71,15 +70,18 @@ describe('staff login accessibility', () => {
     useAuthStore.getState().setAuth('synthetic-pre-mfa', staff);
     vi.mocked(dashboardApi.post).mockRejectedValue(new Error('Invalid authentication code'));
     mount(MfaPage);
-    const code = screen.getByLabelText('Authentication Code');
+    const code = screen.getByRole('textbox', { name: 'Authentication Code' });
     const cells = screen.getAllByRole('textbox', { name: /Authentication Code/ });
     expect(cells).toHaveLength(6);
+    expect(document.querySelector('[data-scope="pin-input"][data-part="label"]')).toHaveClass('pin-input__label');
     expect(cells[0]).toHaveClass('pin-input__input--size_xs');
     expect(code.getAttribute('inputmode')).toBe('numeric');
     expect(code.getAttribute('autocomplete')).toBe('one-time-code');
     const button = screen.getByRole('button', { name: 'Verify Code' });
+    expect(button).toBeDisabled();
     fireEvent.click(button); expect(dashboardApi.post).not.toHaveBeenCalled();
     await userEvent.type(cells[0], '123456');
+    expect(button).toBeEnabled();
     button.focus(); fireEvent.click(button);
     expect(screen.getByRole('status').textContent).toContain('Verifying code');
     const alert = await screen.findByRole('alert');
@@ -111,6 +113,6 @@ describe('staff login accessibility', () => {
     mount(MfaPage);
     await screen.findByRole('img', { name: 'Authenticator setup QR code; a text key follows' });
     expect(screen.getByText(/manually enter this secret key/)).toBeTruthy();
-    expect(screen.getByLabelText('Authentication Code').getAttribute('aria-describedby')).toBe('mfa-instructions');
+    expect(screen.getByRole('textbox', { name: 'Authentication Code' }).getAttribute('aria-describedby')).toBe('mfa-instructions');
   });
 });
