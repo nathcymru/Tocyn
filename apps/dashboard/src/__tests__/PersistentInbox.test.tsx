@@ -132,7 +132,10 @@ it('renders spaced ticket surfaces with a left SLA anchor, stable marker slots a
   const preview=row.querySelector('[data-part="ticket-preview"]');
   expect(surface).toBeInTheDocument();
   expect(surface?.firstElementChild).toBe(slaAnchor);
-  expect(slaAnchor).toHaveTextContent('H');
+  await waitFor(() => {
+    expect(slaAnchor?.querySelector('[aria-label]')).toHaveAttribute('aria-label', 'Service level unavailable');
+    expect(slaAnchor).toHaveTextContent('H');
+  }, { timeout: 5000 });
   expect(within(row).getByText('#1')).toBeInTheDocument();
   expect(within(row).getByRole('heading',{name:'Fixture conversation 1'})).toBeInTheDocument();
   expect(row.querySelector('time')).toHaveAttribute('aria-label', expect.stringMatching(/^Updated /));

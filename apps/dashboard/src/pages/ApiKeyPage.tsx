@@ -27,6 +27,7 @@ export function ApiKeyPage() {
   const [revokeStatus, setRevokeStatus] = useState('');
   const [listError, setListError] = useState('');
   const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [hasLoadedKeys, setHasLoadedKeys] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const createOpener = React.useRef<HTMLButtonElement>(null);
   const keyNameInput = React.useRef<HTMLInputElement>(null);
@@ -64,9 +65,9 @@ export function ApiKeyPage() {
   const fetchKeys = async () => {
     try {
       const data = await dashboardApi.get<ApiKey[]>('/api-keys');
-      setKeys(data.filter(key => !revokedIds.current.has(key.id))); setListError('');
+      setKeys(data.filter(key => !revokedIds.current.has(key.id))); setHasLoadedKeys(true); setListError('');
     } catch {
-      setListError('The API key list could not be refreshed. Retry loading keys before relying on the list.');
+      setListError('The API key list could not be loaded. Retry loading keys before relying on the list.');
     } finally {
       setIsLoading(false);
     }
@@ -261,10 +262,10 @@ export function ApiKeyPage() {
         </ParkAlert.Root>
       )}
 
-      {listError && <ParkAlert.Root role="alert" status="error" variant="surface">
+      {listError && hasLoadedKeys && <ParkAlert.Root role="alert" status="error" variant="surface">
         <ParkAlert.Content>
-          <ParkAlert.Description>{listError}</ParkAlert.Description>
-          {keys.length > 0 && <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton>}
+          <ParkAlert.Description>The API key list could not be refreshed. Showing the last confirmed list. Retry loading keys before relying on it.</ParkAlert.Description>
+          <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton>
         </ParkAlert.Content>
       </ParkAlert.Root>}
       <ParkCard.Root variant="outline" className={css({ minW: 0 })}>
@@ -278,11 +279,12 @@ export function ApiKeyPage() {
             </div>
           ) : keys.length === 0 ? (
             <ParkEmptyState
-              title={listError ? 'API key list unavailable.' : 'No API keys found.'}
-              description={listError ? 'Retry loading keys before relying on the list.' : 'Create a key when an integration requires external API access.'}
+              role={listError && !hasLoadedKeys ? 'alert' : undefined}
+              title={listError && !hasLoadedKeys ? 'API key list unavailable.' : 'No API keys found.'}
+              description={listError && !hasLoadedKeys ? listError : listError ? 'The last confirmed list is empty.' : 'Create a key when an integration requires external API access.'}
               headingLevel={false}
               className={css({ minW: 0 })}
-              action={listError ? <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton> : undefined}
+              action={listError && !hasLoadedKeys ? <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton> : undefined}
             />
           ) : (
             <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>

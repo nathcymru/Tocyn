@@ -79,9 +79,9 @@ it('reports clipboard success only after resolution and keeps copy failures reco
 
 it('reports unavailable key metadata instead of claiming an empty key list',async()=>{
  api.get.mockRejectedValueOnce(new Error('synthetic list failure')).mockResolvedValueOnce([key]);render(<ApiKeyPage/>);
- expect(await screen.findByRole('alert')).toHaveTextContent('could not be refreshed');expect(screen.getByText('API key list unavailable.')).toBeInTheDocument();expect(screen.queryByText('No API keys found.')).not.toBeInTheDocument();
+ const unavailable=await screen.findByRole('alert');expect(unavailable).toHaveClass('emptyState__root');expect(unavailable).toHaveTextContent('could not be loaded');expect(unavailable).toHaveTextContent('API key list unavailable.');expect(screen.getAllByRole('alert')).toHaveLength(1);expect(screen.queryByText('No API keys found.')).not.toBeInTheDocument();
  expect(screen.getByText('API key list unavailable.').closest('table')).toBeNull();expect(screen.queryByRole('table')).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('button',{name:'Retry loading keys'}));
+ fireEvent.click(within(unavailable).getByRole('button',{name:'Retry loading keys'}));
  const row=await screen.findByRole('row',{name:/Synthetic key fixture/});
  expect(within(row).getAllByRole('cell')).toHaveLength(5);
  expect(screen.queryByText('API key list unavailable.')).not.toBeInTheDocument();
@@ -102,6 +102,20 @@ it('keeps cached keys visible and offers an inline retry after a refresh fails',
  await screen.findByRole('button',{name:'Revoke Created key'});
  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
  expect(api.get).toHaveBeenCalledTimes(3);
+});
+
+it('keeps a confirmed empty list distinct from an initial load failure',async()=>{
+ api.get.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('synthetic refresh failure'));
+ api.post.mockResolvedValue({id:'key-b',name:'Created key',apiKey:'synthetic-one-time-value'});
+ render(<ApiKeyPage/>);
+ await screen.findByText('No API keys found.');
+ await create();
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveClass('alert__root', 'alert__root--status_error');
+ expect(alert).toHaveTextContent('could not be refreshed');
+ expect(screen.getByText('No API keys found.')).toBeInTheDocument();
+ expect(screen.queryByText('API key list unavailable.')).not.toBeInTheDocument();
+ expect(within(alert).getByRole('button',{name:'Retry loading keys'})).toBeEnabled();
 });
 
 it('renders a loaded empty state at card width without a five-column table',async()=>{
