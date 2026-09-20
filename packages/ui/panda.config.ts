@@ -630,9 +630,9 @@ export default {
       keyframes: {
         ...keyframes,
         'overduePulse': {
-          '0%': { boxShadow: '0 0 0 0 color-mix(in srgb, currentColor 55%, transparent)' },
-          '70%': { boxShadow: '0 0 0 8px color-mix(in srgb, currentColor 0%, transparent)' },
-          '100%': { boxShadow: '0 0 0 0 color-mix(in srgb, currentColor 0%, transparent)' },
+          '0%': { boxShadow: '0 0 0 0 currentColor' },
+          '70%': { boxShadow: '0 0 0 8px transparent' },
+          '100%': { boxShadow: '0 0 0 0 transparent' },
         },
       },
       layerStyles: layerStyles
