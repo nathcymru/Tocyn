@@ -1,4 +1,5 @@
 import { StaffTicketMutationService } from '../../services/staff-ticket-mutation.service';
+import { TicketMutationError } from '../../services/ticket-mutation-replay.service';
 import { BroadcastService } from '../../services/broadcast.service';
 import { TicketEmailDeliveryAdmissionService } from '../../services/email/ticket-email-admission.service';
 import { TenantTicketService } from '../../services/tenant-ticket.service';
@@ -304,6 +305,52 @@ describe("Dashboard Handler Integration Tests", () => {
   });
 
   describe("PATCH /tickets/:id", () => {
+    describe('configured classification route', () => {
+      afterEach(() => vi.restoreAllMocks());
+
+      it('returns the receipted correction, replays the same key, and propagates tenant denial',async()=>{
+        const ticket={id:'t-1',priority_score:40,priority_classification_revision:1};
+        const outcome={status:200,body:{success:true},ticket,article:null,attachments:[],replayed:false,keyed:true};
+        const prepared={replay:null};
+        const prepare=vi.spyOn(StaffTicketMutationService.prototype,'prepareStaffMutation')
+          .mockResolvedValueOnce(prepared as any)
+          .mockResolvedValueOnce({replay:{...outcome,replayed:true}} as any)
+          .mockRejectedValueOnce(new TicketMutationError(403,'staff_mutation_denied','Ticket mutation is not authorized'));
+        const admit=vi.spyOn(StaffTicketMutationService.prototype,'admit').mockResolvedValue({status:'spent',commitAuthority:{}} as any);
+        const commit=vi.spyOn(StaffTicketMutationService.prototype,'commit').mockResolvedValue(outcome as any);
+        vi.spyOn(StaffTicketMutationService.prototype,'broadcastGrant').mockReturnValue(null);
+        const finish=vi.spyOn(StaffTicketMutationService.prototype,'finish').mockImplementation(()=>{});
+        const broadcast=vi.spyOn(BroadcastService.prototype,'notifyTicketUpdated').mockResolvedValue({status:'accepted',attempts:1});
+        const send=(id:string,key:string)=>request(`/tickets/${id}`,{
+          method:'PATCH',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json','Idempotency-Key':key},
+          body:JSON.stringify({classification:completeClassification,expectedClassificationRevision:0}),
+        },{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+
+        const first=await send('t-1','classification-correction-1');
+        expect(first.status).toBe(200);
+        expect(await first.json()).toEqual({success:true});
+        expect(first.headers.get('Idempotency-Replayed')).toBe('false');
+        expect(prepare).toHaveBeenCalledWith({operation:'dashboard.ticket.update',ticketId:'t-1',
+          data:{classification:completeClassification,expectedClassificationRevision:0}},'classification-correction-1');
+        expect(commit).toHaveBeenCalledWith(prepared);
+        expect(broadcast).toHaveBeenCalledWith(expect.objectContaining({priority_score:40,priority_classification_revision:1}),null);
+
+        const replay=await send('t-1','classification-correction-1');
+        expect(replay.status).toBe(200);
+        expect(await replay.json()).toEqual({success:true});
+        expect(replay.headers.get('Idempotency-Replayed')).toBe('true');
+        expect(admit).toHaveBeenCalledTimes(1);
+        expect(commit).toHaveBeenCalledTimes(1);
+        expect(broadcast).toHaveBeenCalledTimes(1);
+        expect(finish).toHaveBeenCalledTimes(1);
+
+        const denied=await send('foreign','classification-foreign');
+        expect(denied.status).toBe(403);
+        expect((await denied.json()).code).toBe('staff_mutation_denied');
+        expect(commit).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('fails closed for classification when canonical staff admission is disabled', async () => {
       const res=await request('/tickets/t-1',{
         method:'PATCH',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json','Idempotency-Key':'classification-1'},
