@@ -25,9 +25,16 @@ export function SlaSettingsPage() {
   }, [data, dirty]);
   const revisionChanged = editingRevision !== null && data?.revision !== editingRevision;
   const submit = async (event: React.FormEvent) => { event.preventDefault(); if (!data || editingRevision === null || revisionChanged || error) return; setMessage(null); try {
-    const parseTarget = (value: string) => value.trim() ? Number(value) * 60_000 : null;
+    const parseTarget = (value: string) => {
+      const text = value.trim();
+      if (!text) return null;
+      const wholeMinutes = Number(text);
+      if (!/^[0-9]+$/.test(text) || !Number.isSafeInteger(wholeMinutes) || wholeMinutes < 1 || !Number.isSafeInteger(wholeMinutes * 60_000)) {
+        throw new Error('Configured targets must be whole minutes of at least one minute.');
+      }
+      return wholeMinutes * 60_000;
+    };
     const responseTargetMs = parseTarget(response), resolutionTargetMs = parseTarget(resolution);
-    if ((responseTargetMs !== null && (!Number.isSafeInteger(responseTargetMs) || responseTargetMs < 60_000)) || (resolutionTargetMs !== null && (!Number.isSafeInteger(resolutionTargetMs) || resolutionTargetMs < 60_000))) throw new Error('Configured targets must be whole minutes of at least one minute.');
     await update.mutateAsync({ expectedRevision: editingRevision, calendar: JSON.parse(calendarText), responseTargetMs, resolutionTargetMs, reopenPolicy: { response: responseReopen, resolution: resolutionReopen } });
     setDirty(false);
     setMessage('Saved. This policy applies only to clocks started after this revision.');
