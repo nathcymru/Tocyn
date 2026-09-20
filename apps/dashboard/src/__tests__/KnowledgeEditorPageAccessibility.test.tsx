@@ -48,6 +48,7 @@ it('names the navigation, title, category, tier and markdown controls and expose
   expect(content).toHaveAttribute('aria-labelledby', `${content.id}-label`);
   fireEvent.click(screen.getByRole('button', { name: 'Save Article' }));
   const error = await screen.findByRole('alert');
+  expect(error).toHaveTextContent('Article needs a title');
   expect(error).toHaveTextContent('Title is required');
   expect(content).toHaveAttribute('aria-describedby', error.id);
 });
@@ -66,13 +67,85 @@ it('prevents duplicate saves, retains the draft after failure, and retries the s
   expect(screen.getByRole('textbox', { name: 'Title' })).toBeDisabled();
   expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveAttribute('contenteditable', 'false');
   await act(async () => reject(new Error('synthetic save failure')));
-  expect(await screen.findByRole('alert')).toHaveTextContent('synthetic save failure');
+  const saveError = await screen.findByRole('alert');
+  expect(saveError).toHaveTextContent('Article could not be saved');
+  expect(saveError).toHaveTextContent('synthetic save failure');
+  expect(saveError).not.toHaveTextContent('editor unavailable');
   expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Keep this article');
   expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Retained content');
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveAttribute('contenteditable', 'true');
+  expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Save Article' }));
   await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(2));
   expect(mocks.post.mock.calls[1]).toEqual(['/knowledge/articles', { title: 'Keep this article', category_id: null, content: 'Retained content', tier: 'answer' }]);
   await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/knowledge'));
+});
+
+it('labels a category-read failure honestly without disabling the editor', async () => {
+  mocks.get.mockRejectedValueOnce(new Error('Synthetic categories unavailable')).mockResolvedValueOnce([
+    { id: 'recovered-category', name: 'Recovered category', parent_id: null, created_at: '2026-01-01T00:00:00Z' },
+  ]);
+  render(<KnowledgeEditorPage />);
+  const error = await screen.findByRole('alert');
+  expect(error).toHaveTextContent('Categories could not be loaded');
+  expect(error).toHaveTextContent('Synthetic categories unavailable');
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveAttribute('contenteditable', 'true');
+  expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
+  await setEditorText('Preserved category retry draft');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry categories' }));
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(2));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Preserved category retry draft');
+  await userEvent.click(screen.getByRole('combobox', { name: 'Category' }));
+  expect(await screen.findByRole('option', { name: 'Recovered category' })).toBeInTheDocument();
+});
+
+it('keeps article Retry visible when categories fail later, then reveals category Retry after article recovery', async () => {
+  mocks.route.id = 'article-a';
+  let rejectCategories!: (error: Error) => void;
+  const firstCategoryRead = new Promise<never>((_resolve, reject) => { rejectCategories = reject; });
+  let categoryReads = 0;
+  let articleReads = 0;
+  mocks.get.mockImplementation((path: string) => {
+    if (path === '/knowledge/categories') {
+      categoryReads += 1;
+      return categoryReads === 1 ? firstCategoryRead : Promise.resolve([
+        { id: 'recovered-category', name: 'Recovered category', parent_id: null, created_at: '2026-01-01T00:00:00Z' },
+      ]);
+    }
+    articleReads += 1;
+    if (articleReads <= 2) return Promise.reject(new Error('Synthetic article unavailable'));
+    return Promise.resolve(path.endsWith('/content')
+      ? { content: 'Recovered article body' }
+      : { title: 'Recovered article', category_id: '', tier: 'answer' });
+  });
+  render(<KnowledgeEditorPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Article could not be loaded');
+  await act(async () => rejectCategories(new Error('Synthetic categories unavailable')));
+  expect(screen.getByRole('alert')).toHaveTextContent('Synthetic article unavailable');
+  expect(screen.getByRole('button', { name: 'Retry article' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Retry categories' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry article' }));
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Recovered article'));
+  expect(screen.getByRole('alert')).toHaveTextContent('Categories could not be loaded');
+  expect(screen.getByRole('button', { name: 'Retry categories' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Recovered article body');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry categories' }));
+  await waitFor(() => expect(categoryReads).toBe(2));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Recovered article body');
+});
+
+it('keeps the article loading skeleton visible if categories fail first', async () => {
+  mocks.route.id = 'article-a';
+  mocks.get.mockImplementation((path: string) => path === '/knowledge/categories'
+    ? Promise.reject(new Error('Synthetic categories unavailable'))
+    : new Promise(() => {}));
+  render(<KnowledgeEditorPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Categories could not be loaded');
+  expect(screen.getByRole('status', { name: 'Loading article' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save Article' })).toBeDisabled();
 });
 
 it('does not apply a stale article response after the route changes', async () => {
@@ -122,6 +195,7 @@ it('shows a loading skeleton and retries a failed article read without enabling 
   render(<KnowledgeEditorPage />);
   expect(screen.getByRole('status', { name: 'Loading article' })).toBeInTheDocument();
   expect(await screen.findByRole('alert')).toHaveTextContent('Synthetic read failure');
+  expect(screen.getByRole('alert')).toHaveTextContent('Article could not be loaded');
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry article' }));
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Recovered article'));

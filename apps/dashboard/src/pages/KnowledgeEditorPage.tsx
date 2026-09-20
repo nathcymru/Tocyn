@@ -8,6 +8,15 @@ import { TiptapMarkdownField } from '../components/RichComposer';
 import { DashboardSelect } from '../components/DashboardSelect';
 import { ArrowLeft, FloppyDisk, SpinnerGap } from '@phosphor-icons/react';
 
+type EditorError = { source: 'article-load' | 'category-load' | 'validation' | 'save'; message: string };
+
+const errorTitles: Record<EditorError['source'], string> = {
+  'article-load': 'Article could not be loaded',
+  'category-load': 'Categories could not be loaded',
+  validation: 'Article needs a title',
+  save: 'Article could not be saved',
+};
+
 export const KnowledgeEditorPage: React.FC = () => {
   const styles = ParkKnowledgeEditor();
   const { id } = useParams<{ id: string }>();
@@ -34,8 +43,12 @@ export const KnowledgeEditorPage: React.FC = () => {
 
   const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [articleError, setArticleError] = useState<EditorError | null>(null);
+  const [categoryError, setCategoryError] = useState<EditorError | null>(null);
+  const [formError, setFormError] = useState<EditorError | null>(null);
   const [articleLoadAttempt, setArticleLoadAttempt] = useState(0);
+  const [categoryLoadAttempt, setCategoryLoadAttempt] = useState(0);
+  const error = articleError ?? formError ?? categoryError;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -48,7 +61,8 @@ export const KnowledgeEditorPage: React.FC = () => {
     savingRef.current = false;
     setIsSaving(false);
     setLoadedRouteKey(null);
-    setError(null);
+    setArticleError(null);
+    setFormError(null);
     setTitle('');
     setCategoryId(searchParams.get('categoryId') || '');
     setTier('answer');
@@ -61,14 +75,14 @@ export const KnowledgeEditorPage: React.FC = () => {
     const fetchCategories = async () => {
       try {
         const cats = await dashboardApi.get<KnowledgeCategory[]>('/knowledge/categories');
-        if (current) setCategories(cats);
+        if (current) { setCategories(cats); setCategoryError(null); }
       } catch (err: any) {
-        if (current) setError(err.message);
+        if (current) setCategoryError({ source: 'category-load', message: err.message });
       }
     };
     fetchCategories();
     return () => { current = false; };
-  }, []);
+  }, [categoryLoadAttempt]);
 
   useEffect(() => {
     let current = true;
@@ -86,8 +100,9 @@ export const KnowledgeEditorPage: React.FC = () => {
           setTier(doc.tier || 'answer');
           setContent(articleContent.content || articleContent || '');
           setLoadedRouteKey(routeKey);
+          setArticleError(null);
         } catch (err: any) {
-          if (current) setError(err.message);
+          if (current) setArticleError({ source: 'article-load', message: err.message });
         }
       };
       fetchArticle();
@@ -98,7 +113,7 @@ export const KnowledgeEditorPage: React.FC = () => {
   const handleSave = async () => {
     if (savingRef.current || !editorReady) return;
     if (!title.trim()) {
-      setError('Title is required');
+      setFormError({ source: 'validation', message: 'Title is required' });
       return;
     }
 
@@ -107,7 +122,7 @@ export const KnowledgeEditorPage: React.FC = () => {
     saveRequestRef.current = request;
     savingRef.current = true;
     setIsSaving(true);
-    setError(null);
+    setFormError(null);
     try {
       if (id) {
         await dashboardApi.put(`/knowledge/articles/${id}`, {
@@ -126,7 +141,7 @@ export const KnowledgeEditorPage: React.FC = () => {
       }
       if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) navigate('/knowledge');
     } catch (err: any) {
-      if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) setError(err.message);
+      if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) setFormError({ source: 'save', message: err.message });
     } finally {
       if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) {
         savingRef.current = false;
@@ -186,15 +201,19 @@ export const KnowledgeEditorPage: React.FC = () => {
             <ParkEmptyState
               id={errorId}
               role="alert"
-              title={id && !editorReady ? 'Article could not be loaded' : 'Article editor unavailable'}
-              description={error}
-              action={id && !editorReady ? <ParkButton onClick={() => { setError(null); setArticleLoadAttempt(attempt => attempt + 1); }}>Retry article</ParkButton> : undefined}
+              title={errorTitles[error.source]}
+              description={error.message}
+              action={error.source === 'article-load'
+                ? <ParkButton onClick={() => { setArticleError(null); setArticleLoadAttempt(attempt => attempt + 1); }}>Retry article</ParkButton>
+                : error.source === 'category-load'
+                  ? <ParkButton onClick={() => { setCategoryError(null); setCategoryLoadAttempt(attempt => attempt + 1); }}>Retry categories</ParkButton>
+                  : undefined}
               headingLevel={false}
               className={styles.error}
             />
           )}
 
-          {!editorReady && !error && <div role="status" aria-label="Loading article" className={styles.card}>
+          {!editorReady && !articleError && <div role="status" aria-label="Loading article" className={styles.card}>
             <ParkSkeleton height="8" width="full" />
             <ParkSkeleton height="8" width="full" />
           </div>}
