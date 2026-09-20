@@ -11817,6 +11817,10 @@
     flex: 1 1 100%;
 }
 
+  .px_2 {
+    padding-inline: var(--spacing-2);
+}
+
   .bdr_xl {
     border-radius: var(--radii-xl);
 }
@@ -12458,16 +12462,16 @@
     display: inline-block;
 }
 
-  .flex-sh_1 {
-    flex-shrink: 1;
-}
-
   .cursor_pointer {
     cursor: pointer;
 }
 
   .ta_left {
     text-align: left;
+}
+
+  .flex-sh_1 {
+    flex-shrink: 1;
 }
 
   .c_warning {
@@ -13022,6 +13026,10 @@
     margin-bottom: var(--spacing-2);
 }
 
+  .min-h_8 {
+    min-height: var(--sizes-8);
+}
+
   .min-h_64 {
     min-height: var(--sizes-64);
 }
@@ -13056,10 +13064,6 @@
 
   .min-w_8 {
     min-width: var(--sizes-8);
-}
-
-  .min-h_8 {
-    min-height: var(--sizes-8);
 }
 
   .pt_4 {

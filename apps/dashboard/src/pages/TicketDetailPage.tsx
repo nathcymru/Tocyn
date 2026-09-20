@@ -68,6 +68,20 @@ const attachmentIcons: Record<AttachmentIconKind, typeof IconFile> = {
   pdf: IconFilePdf, image: IconFileImage, archive: IconFileZip, text: IconFileLines, generic: IconFile,
 };
 
+const secondaryDisclosureTrigger = css({
+  display: 'flex',
+  alignItems: 'center',
+  minH: '8',
+  w: 'full',
+  px: '2',
+  cursor: 'pointer',
+  color: 'text.primary',
+  fontSize: 'sm',
+  fontWeight: 'bold',
+  textAlign: 'left',
+  _focusVisible: { focusVisibleRing: 'outside' },
+});
+
 export function TicketDetailPage({id:providedId,workspaceBackHref,onResolved}:{id?:string;workspaceBackHref?:string;onResolved?:(id:string)=>void}={}) {
   const { id:routeId } = useParams<{ id: string }>();
   const id=providedId??routeId;
@@ -1496,14 +1510,14 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         </div>
 
         <ParkCollapsible.Root defaultOpen className={css({ mt: '4', p: '5', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'xl', boxShadow: 'sm' })}>
-          <ParkCollapsible.Trigger className={css({ cursor: 'pointer', color: 'text.primary', fontSize: 'sm', fontWeight: 'bold', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus' } })}>
+          <ParkCollapsible.Trigger className={secondaryDisclosureTrigger}>
             <span className={css({ display: 'flex', alignItems: 'center', gap: '2' })}><Activity className={css({ w: '4', h: '4', color: 'text.muted' })} />Operational context</span>
           </ParkCollapsible.Trigger>
           <ParkCollapsible.Content><ParkEmptyState headingLevel={3} title="Operational context unavailable" description="No operational source is connected for this ticket. Live SLA and routing details remain unavailable." /></ParkCollapsible.Content>
         </ParkCollapsible.Root>
 
         <ParkCollapsible.Root defaultOpen className={css({ mt: '4', p: '5', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'xl', boxShadow: 'sm' })}>
-          <ParkCollapsible.Trigger className={css({ cursor: 'pointer', color: 'text.primary', fontSize: 'sm', fontWeight: 'bold', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus' } })}>
+          <ParkCollapsible.Trigger className={secondaryDisclosureTrigger}>
             <span className={css({ display: 'flex', alignItems: 'center', gap: '2' })}><MessageSquare className={css({ w: '4', h: '4', color: 'text.muted' })} />Knowledge</span>
           </ParkCollapsible.Trigger>
           <ParkCollapsible.Content><div className={css({ display: 'grid', gap: '3', mt: '4' })}>
@@ -1517,7 +1531,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         </ParkCollapsible.Root>
 
         <ParkCollapsible.Root defaultOpen className={css({ mt: '4', p: '5', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'xl', boxShadow: 'sm' })}>
-            <ParkCollapsible.Trigger className={css({ cursor: 'pointer', color: 'text.primary', fontSize: 'sm', fontWeight: 'bold', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus' } })}>
+            <ParkCollapsible.Trigger className={secondaryDisclosureTrigger}>
               <span className={css({ display: 'flex', alignItems: 'center', gap: '2' })}><Eye className={css({ w: '4', h: '4', color: 'accent.primary' })} />Collaboration</span>
             </ParkCollapsible.Trigger>
             <ParkCollapsible.Content>
