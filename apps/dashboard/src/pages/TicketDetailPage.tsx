@@ -10,6 +10,7 @@ import { Collapsible as ParkCollapsible, Field, Link as ParkLink } from '@lumina
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
+import { attachmentIconKind, type AttachmentIconKind } from '../utils/attachment-icon-kind';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
 import { flushSync } from 'react-dom';
@@ -44,6 +45,7 @@ import {
   Info,
   Activity,
   X,
+  IconFile, IconFileImage, IconFileLines, IconFilePdf, IconFileZip,
   Paperclip } from '../components/icons';
 import { clsx } from 'clsx';
 import { ticketReference } from '../utils/ticket-reference';
@@ -62,6 +64,9 @@ type StaleReplyReview = number | 'refreshing' | 'retry';
 
 const statusOptions = [{ value: 'open', label: 'Open' }, { value: 'pending', label: 'Pending' }, { value: 'resolved', label: 'Resolved' }, { value: 'closed', label: 'Closed' }];
 const priorityOptions = [{ value: 'low', label: 'Low' }, { value: 'normal', label: 'Normal' }, { value: 'high', label: 'High' }, { value: 'urgent', label: 'Urgent' }];
+const attachmentIcons: Record<AttachmentIconKind, typeof IconFile> = {
+  pdf: IconFilePdf, image: IconFileImage, archive: IconFileZip, text: IconFileLines, generic: IconFile,
+};
 
 export function TicketDetailPage({id:providedId,workspaceBackHref,onResolved}:{id?:string;workspaceBackHref?:string;onResolved?:(id:string)=>void}={}) {
   const { id:routeId } = useParams<{ id: string }>();
@@ -1011,13 +1016,17 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   {article.attachments && article.attachments.length > 0 && (
                     <div className={detailStyles.attachments}>
                       {article.attachments.map((att: any) => {
-                        const filename = att.filename || att.file_name || 'Attachment';
+                        const filename = (typeof att.filename === 'string' && att.filename)
+                          || (typeof att.file_name === 'string' && att.file_name)
+                          || 'Attachment';
+                        const contentType = att.contentType ?? att.content_type;
+                        const AttachmentGlyph = attachmentIcons[attachmentIconKind(filename, contentType)];
                         return <div key={att.id} className={css({ minW: 0, maxW: 'full' })}>
                           <ParkButton
                             onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, filename); }}
                             className={detailStyles.attachmentLink}
                           >
-                            <Paperclip className={detailStyles.attachmentIcon} />
+                            <AttachmentGlyph className={detailStyles.attachmentIcon} />
                             <span className={detailStyles.attachmentName}>{filename}</span>
                             <span className={detailStyles.attachmentSize}>
                               {attachmentSize(att.size ?? att.file_size)}
@@ -1027,7 +1036,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                             ticketId={id}
                             attachmentId={att.id}
                             filename={filename}
-                            contentType={att.contentType ?? att.content_type}
+                            contentType={contentType}
                             size={att.size ?? att.file_size}
                           />
                         </div>;

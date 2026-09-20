@@ -342,7 +342,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     <header className={css({ flexShrink: 0, borderBottom: '1px solid', borderColor: 'border.default', bg: 'bg.surface' })}>
       <h1 ref={heading} tabIndex={-1} className={pageStyles.inboxHiddenHeading}>Support Inbox</h1>
       <div data-part="inbox-primary-toolbar" className={css({ display: 'flex', minH: '14', alignItems: 'center', justifyContent: 'space-between', gap: '2', px: '4' })}>
-        <ParkMenu.Root positioning={{ placement: 'bottom-start' }}><ParkMenu.Trigger asChild><ParkButton type="button" variant="plain" aria-label="Inbox views" className={css({ gap: '1', fontWeight: 'semibold', minW: 0, maxW: 'full' })}><CurrentViewIcon aria-hidden="true" className={css({ display: { base: 'none', md: 'block' } })} /><span className={css({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{selectedViewLabel}</span><ChevronDown aria-hidden="true" /></ParkButton></ParkMenu.Trigger><ParkMenu.Positioner><ParkMenu.Content aria-label="Inbox views" className={css({ zIndex: 20, minW: '56', maxH: '80', overflowY: 'auto' })}>
+        <ParkMenu.Root positioning={{ placement: 'bottom-start' }}><ParkMenu.Trigger asChild><ParkButton type="button" variant="plain" aria-label="Inbox views" className={css({ gap: '1', fontWeight: 'semibold', minW: 0, maxW: 'full', flex: '1 1 auto', justifyContent: 'flex-start', px: '1' })}><CurrentViewIcon aria-hidden="true" className={css({ display: { base: 'none', '2xl': 'block' } })} /><span className={css({ minW: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{selectedViewLabel}</span><ChevronDown aria-hidden="true" className={css({ flexShrink: 0 })} /></ParkButton></ParkMenu.Trigger><ParkMenu.Positioner><ParkMenu.Content aria-label="Inbox views" className={css({ zIndex: 20, minW: '56', maxH: '80', overflowY: 'auto' })}>
           <ParkMenu.Item value="attention" onClick={()=>changeView('actionable','updated_desc',true)}><IconClock aria-hidden="true" />Needs Attention</ParkMenu.Item>
           <ParkMenu.Item value="impact" onClick={()=>changeView('all','priority_desc',true)}><IconCircleExclamation aria-hidden="true" />Highest Impact</ParkMenu.Item>
           <ParkMenu.Item value="sla" onClick={()=>changeView('all','sla_priority',true)}><IconShieldHalved aria-hidden="true" />Contract SLAs</ParkMenu.Item>
@@ -354,10 +354,10 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
           <ParkMenu.Item value="list-presentation" onClick={()=>setPresentation('list')}>List view</ParkMenu.Item>
           <ParkMenu.Item value="table-presentation" onClick={()=>setPresentation('table')}>Table view</ParkMenu.Item>
         </ParkMenu.Content></ParkMenu.Positioner></ParkMenu.Root>
-        <div className={css({ display: 'flex', gap: '1' })}>
+        <div className={css({ display: 'flex', flexShrink: 0, gap: '1' })}>
           <ParkButton ref={statsTrigger} type="button" variant="plain" aria-label="Quick statistics" aria-expanded={statsOpen} aria-controls="inbox-quick-statistics" className={css({ w: '10', minW: '10', px: '0', flexShrink: 0 })} onClick={()=>{setStatsOpen(open=>!open);setFilterOpen(false);}} onKeyDown={event=>{if(event.key==='Escape'&&statsOpen){event.stopPropagation();setStatsOpen(false);}}}><IconChartBar aria-hidden="true" /></ParkButton>
           <ParkButton ref={filterTrigger} type="button" variant="plain" aria-label="Filter tickets" aria-expanded={filterOpen} aria-controls="inbox-natural-filter" className={css({ w: '10', minW: '10', px: '0', flexShrink: 0 })} onClick={openFilter} onKeyDown={event=>{if(event.key==='Escape'&&filterOpen){event.stopPropagation();setFilterOpen(false);setNamingQuickView(false);}}}><Filter aria-hidden="true" /></ParkButton>
-          <ParkButton ref={createTrigger} type="button" variant="plain" aria-label="New Ticket" title="New Ticket" className={css({ w: '10', minW: '10', px: '0', flexShrink: 0 })} onClick={()=>{setCreateMounted(true);setCreateOpen(true);}}><Plus aria-hidden="true" /></ParkButton>
+          <ParkButton ref={createTrigger} type="button" variant="plain" aria-label="New Ticket" title="New Ticket" className={css({ minW: '10', px: { base: '0', xl: '2' }, gap: '1', flexShrink: 0, whiteSpace: 'nowrap' })} onClick={()=>{setCreateMounted(true);setCreateOpen(true);}}><Plus aria-hidden="true" /><span data-part="new-ticket-label" className={css({ display: { base: 'none', xl: 'inline' } })}>New Ticket</span></ParkButton>
         </div>
       </div>
       {filterOpen && <section id="inbox-natural-filter" role="region" aria-label="Ticket filters" onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();filterTrigger.current?.focus();setFilterOpen(false);setNamingQuickView(false);}}} className={css({ borderTop: '1px solid', borderColor: 'border.default', bg: 'bg.subtle', p: '4' })}>
@@ -420,7 +420,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         </ParkTable.Root>
       </div>
     </>}
-    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={css({ flex: '1', overflowY: 'auto', bg: 'bg.surface', display: presentation==='table'?{base:'flex',md:'none'}:'flex', flexDirection: 'column' })}>
+    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={css({ flex: '1', minW: 0, overflowY: 'auto', overflowX: 'hidden', bg: 'bg.subtle', display: presentation==='table'?{base:'flex',md:'none'}:'flex', flexDirection: 'column', gap: '2', p: '2' })}>
       {query.isLoading?<div role="status" aria-label="Loading conversations" className={css({ display: 'grid', gap: '3', p: '4' })}>
         <ParkVisuallyHidden>Loading conversations…</ParkVisuallyHidden>
         {[0,1,2,3].map(row=><div key={row} className={css({ display: 'flex', alignItems: 'center', gap: '3' })}>
@@ -488,7 +488,7 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
     setDragX(0);
   };
   return <article ref={node => { rowRefs.current[index] = node; }} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={focused?0:-1} data-selected={selected ? 'true' : undefined} data-preview-expanded={expanded ? 'true' : 'false'}
-    className={css({ position: 'relative', flexShrink: '0', overflow: 'hidden', bg: selected ? 'bg.subtle' : 'bg.surface', borderBottomWidth: '1px', borderColor: selected ? 'border.focus' : 'border.default', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _hover: { bg: 'bg.subtle' } })}
+    className={css({ position: 'relative', flexShrink: '0', overflow: 'hidden', bg: selected ? 'bg.subtle' : 'bg.surface', borderWidth: '1px', borderRadius: 'l2', borderColor: selected ? 'border.focus' : 'border.default', focusVisibleRing: 'outside', _hover: { bg: 'bg.subtle' } })}
     onMouseEnter={() => onExpanded(ticket.id)} onMouseLeave={event => { if (!event.currentTarget.contains(document.activeElement)) onExpanded(null); }}
     onFocus={() => { onFocus(); onExpanded(ticket.id); }}
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) onExpanded(null); }}

@@ -167,7 +167,9 @@ it('keeps one compact toolbar and shows honest metrics only in the statistics dr
   expect(within(toolbar).getByRole('button',{name:'Inbox views'}).querySelector('svg')).toHaveAttribute('aria-hidden','true');
   expect(within(toolbar).getByRole('button',{name:'Quick statistics'})).toBeInTheDocument();
   expect(within(toolbar).getByRole('button',{name:'Filter tickets'})).toBeInTheDocument();
-  expect(within(toolbar).getByRole('button',{name:'New Ticket'})).toBeInTheDocument();
+  const create=within(toolbar).getByRole('button',{name:'New Ticket'});
+  expect(within(create).getByText('New Ticket')).toBeInTheDocument();
+  expect(create.querySelector('svg')).toHaveAttribute('aria-hidden','true');
   expect(document.querySelector('[data-part="inbox-page-metrics"]')).toBeNull();
   expect(screen.queryByRole('region',{name:'Quick statistics'})).not.toBeInTheDocument();
   fireEvent.click(within(toolbar).getByRole('button',{name:'Quick statistics'}));

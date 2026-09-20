@@ -28,6 +28,8 @@ const messageArea = css({ h: 'clamp(12rem, 40dvh, 24rem)', minW: '0' });
 const messageViewport = css({ h: 'full', minH: '0' });
 const messageContent = css({ display: 'flex', minW: '0', flexDirection: 'column', gap: '4', p: '4' });
 const errorActionsWrap = css({ flexWrap: 'wrap' });
+const detailHeadingBody = css({ minW: '0' });
+const detailTitleWrap = css({ minW: '0', overflowWrap: 'anywhere' });
 const replyRefreshWarning = 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.';
 
 export function TicketDetailPage() {
@@ -328,8 +330,8 @@ function TicketDetail({ id }: { id: string | undefined }) {
             <IconArrowLeft className={p.chatBackIcon} aria-hidden="true" />
           </RouterLink>
         </ParkLink>
-        <div>
-          <h1 ref={conversationHeading} tabIndex={-1} className={p.ticketDetailTitle}>
+        <div className={detailHeadingBody}>
+          <h1 ref={conversationHeading} tabIndex={-1} className={[p.ticketDetailTitle, detailTitleWrap].join(' ')}>
             {ticket.subject}
             <span className={[p.chatStatusPill, statusColors[ticket.status]].join(' ')}>
               {ticket.status}

@@ -4,7 +4,7 @@ import {
   AlignLeft, ArrowLeft as ArrowLeftGlyph, ArrowRight, ArrowSquareOut, ArrowsClockwise, Bell as BellGlyph, BookOpen,
   Buildings, Calendar as CalendarGlyph, ChartBar, ChartLine, Check as CheckGlyph, CheckCircle, CheckSquare, CircleNotch, ChatCircle, CaretDown, CaretLeft, CaretRight, House, Books,
   Clock as ClockGlyph, Cloud, Columns, Copy as CopyGlyph, Cpu, CreditCard, Database, DotsThreeVertical, Envelope,
-  Eye as EyeGlyph, FileText, FloppyDisk, Folder, Funnel, Gear, HardDrive, Info as InfoGlyph, Key as KeyGlyph, Lightning,
+  Eye as EyeGlyph, File, FileImage, FilePdf, FileText, FileZip, FloppyDisk, Folder, Funnel, Gear, HardDrive, Info as InfoGlyph, Key as KeyGlyph, Lightning,
   List, ListBullets, MagnifyingGlass, Paperclip as PaperclipGlyph, PaperPlaneTilt, PencilSimple, Plus as PlusGlyph,
   Shield as ShieldGlyph, ShieldCheck as ShieldCheckGlyph, SignOut, TextT, Textbox, Ticket as TicketGlyph, TreeStructure,
   Trash, ToggleLeft, ToggleRight, User as UserGlyph, UserPlus, Users as UsersGlyph, Warning, WarningCircle,
@@ -49,7 +49,11 @@ export const IconDiagramProject = duotone(TreeStructure);
 export const IconEllipsisVertical = duotone(DotsThreeVertical);
 export const IconEnvelope = duotone(Envelope);
 export const IconEye = duotone(EyeGlyph);
+export const IconFile = duotone(File);
+export const IconFileImage = duotone(FileImage);
 export const IconFileLines = duotone(FileText);
+export const IconFilePdf = duotone(FilePdf);
+export const IconFileZip = duotone(FileZip);
 export const IconFilter = duotone(Funnel);
 export const IconFloppyDisk = duotone(FloppyDisk);
 export const IconFolder = duotone(Folder);

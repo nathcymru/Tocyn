@@ -25,6 +25,7 @@ const LIMITS = {
   vectorize_queries: 30_000_000, // 30M per month
   vectorize_writes: 5_000_000, // 5M per month
 };
+const usageHeading = css({ display: 'flex', alignItems: 'center', gap: '2', fontSize: 'xl', fontWeight: 'semibold', lineHeight: 'tight', color: 'text.primary' });
 
 function formatNumber(num: number) {
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
@@ -226,8 +227,8 @@ export function UsagePage() {
     return (
       <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
         <div>
-          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>
-            <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
+          <h1 className={usageHeading}>
+            <IconCreditCard aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>
         </div>
@@ -240,8 +241,8 @@ export function UsagePage() {
     return (
       <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
         <div>
-          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>
-            <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
+          <h1 className={usageHeading}>
+            <IconCreditCard aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>
         </div>
@@ -254,8 +255,8 @@ export function UsagePage() {
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>
-            <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
+          <h1 className={usageHeading}>
+            <IconCreditCard aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>
           <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
@@ -387,13 +388,13 @@ function StatCard({ title, description, icon: Icon, current, limit, unit, format
 
   return <ParkCard.Root variant="outline">
     <ParkCard.Body className={css({ display: 'grid', gap: '4' })}>
-      <div className={css({ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '3' })}>
-        <div className={css({ display: 'flex', alignItems: 'center', gap: '3', minW: 0 })}>
-          <div className={[css({ display: 'grid', placeItems: 'center', w: '10', h: '10', rounded: 'md' }), bgClass].join(' ')}><Icon aria-hidden="true" /></div>
-          <div><ParkCard.Title>{title}</ParkCard.Title><ParkCard.Description>{description}</ParkCard.Description></div>
+      <div data-part="usage-stat-summary" className={css({ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '3', minW: 0 })}>
+        <div className={css({ display: 'flex', alignItems: 'start', gap: '3', minW: 0 })}>
+          <div className={[css({ display: 'grid', placeItems: 'center', w: '10', h: '10', rounded: 'md', flexShrink: 0 }), bgClass].join(' ')}><Icon aria-hidden="true" /></div>
+          <div className={css({ minW: 0 })}><ParkCard.Title>{title}</ParkCard.Title><ParkCard.Description>{description}</ParkCard.Description></div>
         </div>
-        <div className={css({ textAlign: 'right', flexShrink: 0 })}>
-          <strong>{displayCurrent}</strong><p className={css({ color: 'text.muted', fontSize: 'xs' })}>of {displayLimit} {unit}</p>
+        <div data-part="usage-stat-reading" className={css({ display: 'flex', alignItems: 'baseline', gap: '2', flexWrap: 'wrap', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' })}>
+          <strong className={css({ fontSize: '2xl', lineHeight: 'tight' })}>{displayCurrent}</strong>{' '}<span className={css({ color: 'text.muted', fontSize: 'xs' })}>of {displayLimit} {unit}</span>
         </div>
       </div>
       {percentage === null
