@@ -120,3 +120,18 @@ it('keeps edited values and an actionable error after a failed save', async () =
     consoleError.mockRestore();
   }
 });
+
+it('shows saved values read-only after the local beta permanently rejects settings changes', async () => {
+  vi.mocked(dashboardApi.get).mockResolvedValue({ COMPANY_NAME: 'Synthetic Co', SYSTEM_TIMEZONE: 'UTC' });
+  vi.mocked(dashboardApi.put).mockRejectedValue(new ApiError('This feature is disabled in the local beta.', 503, 'feature_disabled'));
+  renderPage();
+  const company = await screen.findByRole('textbox', { name: 'Company Name' });
+  await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('General settings changes are unavailable in this local review');
+  expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument();
+  expect(company).toHaveValue('Synthetic Co');
+  expect(company).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'System Timezone' })).toBeDisabled();
+  expect(screen.getByRole('textbox', { name: 'Default Email Signature' })).toBeDisabled();
+  expect(dashboardApi.put).toHaveBeenCalledTimes(1);
+});

@@ -27,6 +27,7 @@ export const SettingsPage: React.FC = () => {
 
   const [masterKeyError, setMasterKeyError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveDisabled, setSaveDisabled] = useState(false);
 
   useEffect(() => {
     if (fetchError && fetchError instanceof ApiError) {
@@ -62,6 +63,7 @@ export const SettingsPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saveDisabled) return;
     setMasterKeyError(null);
     setSaveError(null);
     try {
@@ -99,6 +101,11 @@ export const SettingsPage: React.FC = () => {
 
       await updateSettings.mutateAsync(finalPayload);
     } catch (error: any) {
+      if (error instanceof ApiError && error.code === 'feature_disabled') {
+        setSaveDisabled(true);
+        setSaveError(null);
+        return;
+      }
       console.error('Failed to update settings:', error);
       if (error?.message?.includes('APP_MASTER_KEY')) {
         setMasterKeyError(error.message);
@@ -137,7 +144,7 @@ export const SettingsPage: React.FC = () => {
           <h1 className={css({ m: '0', color: 'fg.default', textStyle: '2xl', fontWeight: 'semibold' })}>General Settings</h1>
           <p className={css({ color: 'fg.muted' })}>Manage your organization and system defaults.</p>
         </div>
-        <ParkButton
+        {!saveDisabled && <ParkButton
           type="button"
           onClick={handleSubmit}
           disabled={!!masterKeyError}
@@ -146,7 +153,7 @@ export const SettingsPage: React.FC = () => {
         >
           <IconFloppyDisk aria-hidden="true" />
           Save Changes
-        </ParkButton>
+        </ParkButton>}
       </header>
 
       {masterKeyError && (
@@ -167,6 +174,10 @@ export const SettingsPage: React.FC = () => {
         </ParkAlert.Root>
       )}
       {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+      {saveDisabled && <ParkAlert.Root role="status" status="warning" variant="surface"><ParkAlert.Content>
+        <ParkAlert.Title>General settings changes are unavailable in this local review</ParkAlert.Title>
+        <ParkAlert.Description>You can review saved settings, but this local beta does not allow changes.</ParkAlert.Description>
+      </ParkAlert.Content></ParkAlert.Root>}
       {hasRefreshError && <ParkAlert.Root role="alert" status="error">
         <ParkAlert.Content>
           <ParkAlert.Title>General settings could not be refreshed</ParkAlert.Title>
@@ -187,6 +198,7 @@ export const SettingsPage: React.FC = () => {
                 Company Name
               </Field.Label>
               <ParkInput
+                disabled={saveDisabled}
                 type="text"
                 id="COMPANY_NAME"
                 name="COMPANY_NAME"
@@ -202,6 +214,7 @@ export const SettingsPage: React.FC = () => {
                 Portal URL
               </Field.Label>
               <ParkInput
+                disabled={saveDisabled}
                 type="url"
                 id="PORTAL_URL"
                 name="PORTAL_URL"
@@ -223,6 +236,7 @@ export const SettingsPage: React.FC = () => {
           <ParkCard.Body>
             <div className={page.settingsField}>
               <DashboardSelect id="SYSTEM_TIMEZONE" label="System Timezone" name="SYSTEM_TIMEZONE" value={formData.SYSTEM_TIMEZONE}
+                disabled={saveDisabled}
                 onValueChange={value => setFormData(prev => ({ ...prev, SYSTEM_TIMEZONE: value }))}
                 options={[{ value: 'UTC', label: 'UTC' }, { value: 'America/New_York', label: 'Eastern Time (ET)' },
                   { value: 'America/Chicago', label: 'Central Time (CT)' }, { value: 'America/Denver', label: 'Mountain Time (MT)' },
@@ -236,6 +250,7 @@ export const SettingsPage: React.FC = () => {
                 Ticket Prefix
               </Field.Label>
               <ParkInput
+                disabled={saveDisabled}
                 type="text"
                 id="TICKET_PREFIX"
                 name="TICKET_PREFIX"
@@ -263,6 +278,7 @@ export const SettingsPage: React.FC = () => {
                 Default Email Signature
               </Field.Label>
               <ParkTextarea
+                disabled={saveDisabled}
                 id="DEFAULT_EMAIL_SIGNATURE"
                 name="DEFAULT_EMAIL_SIGNATURE"
                 value={formData.DEFAULT_EMAIL_SIGNATURE}
@@ -293,6 +309,7 @@ export const SettingsPage: React.FC = () => {
                 Cloudflare Account ID
               </Field.Label>
               <ParkInput
+                disabled={saveDisabled}
                 type="text"
                 id="CLOUDFLARE_ACCOUNT_ID"
                 name="CLOUDFLARE_ACCOUNT_ID"
@@ -307,6 +324,7 @@ export const SettingsPage: React.FC = () => {
                 Cloudflare API Token
               </Field.Label>
               <ParkInput
+                disabled={saveDisabled}
                 type="password"
                 id="CLOUDFLARE_API_TOKEN"
                 name="CLOUDFLARE_API_TOKEN"
@@ -336,6 +354,7 @@ export const SettingsPage: React.FC = () => {
                 Turnstile Site Key
               </Field.Label>
               <ParkInput
+                disabled={saveDisabled}
                 type="text"
                 id="TURNSTILE_SITE_KEY"
                 name="TURNSTILE_SITE_KEY"
@@ -350,6 +369,7 @@ export const SettingsPage: React.FC = () => {
                 Turnstile Secret Key
               </Field.Label>
               <ParkInput
+                disabled={saveDisabled}
                 type="password"
                 id="TURNSTILE_SECRET_KEY"
                 name="TURNSTILE_SECRET_KEY"
