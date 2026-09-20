@@ -3,7 +3,8 @@ import { css } from '@luminatick/ui/styled-system/css';
 import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
 import { Badge, Field as ParkField } from '@luminatick/ui/components';
 import React, { useEffect, useState } from 'react';
-import { dashboardApi } from '../api/client';
+import { Link } from 'react-router-dom';
+import { ApiError, dashboardApi } from '../api/client';
 import { AutomationRule, AutomationCondition, WebhookConfig, RetentionConfig } from '../types';
 import {
   IconPlus,
@@ -63,6 +64,7 @@ export const AutomationPage: React.FC = () => {
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [localBetaDisabled, setLocalBetaDisabled] = useState(false);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<AutomationRule>>({});
   const [error, setError] = useState<string | null>(null);
@@ -78,8 +80,11 @@ export const AutomationPage: React.FC = () => {
       const data = await dashboardApi.get<AutomationRule[]>('/automations');
       setRules(data);
       setLoadError(false);
+      setLocalBetaDisabled(false);
     } catch (error) {
-      setLoadError(true);
+      const disabled = error instanceof ApiError && error.code === 'feature_disabled';
+      setLocalBetaDisabled(disabled);
+      setLoadError(!disabled);
     } finally {
       setLoading(false);
     }
@@ -188,6 +193,12 @@ export const AutomationPage: React.FC = () => {
   };
 
   if (loading && rules.length === 0 && !loadError) return <section role="status" aria-label="Loading automations" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}><span className={css({ srOnly: true })}>Loading automations…</span><ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} /></section>;
+  if (localBetaDisabled) return <section className={css({ maxW: '6xl', mx: 'auto', p: '6', display: 'grid', gap: '6' })}>
+    <h1 className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Automation Rules</h1>
+    <ParkEmptyState role="status" title="Automations are unavailable in this local review"
+      description="The local beta does not enable automation rules."
+      action={<ParkButton asChild><Link to="/inbox/all">Return to Inbox</Link></ParkButton>} />
+  </section>;
 
   return (
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>

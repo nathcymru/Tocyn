@@ -2,6 +2,7 @@ import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { UsagePage } from '../pages/UsagePage';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { AutomationPage } from '../pages/AutomationPage';
 const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),put:vi.fn(),patch:vi.fn(),delete:vi.fn()}));
@@ -51,6 +52,22 @@ it('shows a retryable Park empty state after an initial automation load failure'
  const name=await screen.findByText('Synthetic rule');
  expect(name.closest('[class*="card__root"]')).toBeInTheDocument();
  expect(screen.getByRole('button',{name:'Edit Synthetic rule'})).toBeInTheDocument();
+});
+
+it('uses a permanent Park empty state for feature_disabled without futile create or retry controls', async () => {
+ api.get.mockRejectedValue(Object.assign(new ApiError('Automations are disabled in this local beta', 503), {code:'feature_disabled'}));
+ render(<MemoryRouter initialEntries={['/automations']}><Routes>
+  <Route path="/automations" element={<AutomationPage/>} />
+  <Route path="/inbox/all" element={<p>Inbox destination</p>} />
+ </Routes></MemoryRouter>);
+ const title = await screen.findByText('Automations are unavailable in this local review');
+ expect(title.closest('[role="status"]')).toHaveClass('emptyState__root');
+ expect(screen.queryByRole('button',{name:'Create Rule'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Retry automations'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Refresh automations'})).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('link',{name:'Return to Inbox'}));
+ expect(screen.getByText('Inbox destination')).toBeInTheDocument();
+ expect(api.get).toHaveBeenCalledTimes(1);
 });
 
 it('retains last-loaded automation rules with a Park retry alert after refresh fails', async () => {
