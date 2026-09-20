@@ -54,8 +54,9 @@ test('run-owned local-beta policy gets complete two-tenant authority for an eigh
     initializeLocalBetaTicketAdmission(db, 'local-beta-test', now);
     const deployment = db.prepare('SELECT deployment_id,state FROM budget_deployment_authority').get() as { deployment_id: string; state: string };
     assert.deepEqual(deployment, { deployment_id: 'local-beta-test-budget', state: 'active' });
-    const ownerRow = db.prepare('SELECT policy_json,authority_max_age_ms FROM budget_owner_policies').get() as { policy_json: string; authority_max_age_ms: number };
+    const ownerRow = db.prepare('SELECT policy_json,max_reservations,authority_max_age_ms FROM budget_owner_policies').get() as { policy_json: string; max_reservations: number; authority_max_age_ms: number };
     const policy = costPolicySchema.parse(JSON.parse(ownerRow.policy_json));
+    assert.equal(ownerRow.max_reservations, 1024, 'The finite local review capacity must allow extended browsing without changing production policy');
     assert.equal(ownerRow.authority_max_age_ms, 60_000);
     assert.deepEqual(policy.budgets.map(budget => budget.dimension), [...RESOURCE_DIMENSIONS]);
     assert.ok(policy.budgets.every(budget => STOCK_DIMENSIONS.includes(budget.dimension)

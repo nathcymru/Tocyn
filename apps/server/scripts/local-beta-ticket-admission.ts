@@ -6,6 +6,9 @@ import { costPolicySchema, effectiveTenantPolicy } from '../src/utils/cost-polic
 const TENANTS = ['fixture-tenant-a', 'fixture-tenant-b'] as const;
 const PREVIEW_WINDOW_MS = 8 * 60 * 60 * 1000;
 const GRANT_LIFETIME_MS = 60_000;
+// The disposable review UI issues several admitted reads per route change.
+// Keep a finite ceiling without exhausting a human test session after 64 reads.
+const PREVIEW_MAX_RESERVATIONS = 1024;
 
 /** Only the explicit, disposable local-beta launcher may change its generated config. */
 export function configureLocalBetaTicketAdmission(config: { vars: Record<string, string>; compatibility_flags?: string[] }, enabled: boolean): void {
@@ -57,8 +60,8 @@ export function initializeLocalBetaTicketAdmission(db: Database.Database, runId:
       .run(deploymentId, now);
     db.prepare(`INSERT INTO budget_owner_policies
       (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
-      VALUES (?,?,1,1,?,64,?,?)`)
-      .run(deploymentId, policyId, `${runId}-coordinator`, GRANT_LIFETIME_MS, JSON.stringify(ownerPolicy));
+      VALUES (?,?,1,1,?,?,?,?)`)
+      .run(deploymentId, policyId, `${runId}-coordinator`, PREVIEW_MAX_RESERVATIONS, GRANT_LIFETIME_MS, JSON.stringify(ownerPolicy));
     for (const [index, tenantId] of TENANTS.entries()) {
       db.prepare(`INSERT INTO budget_tenant_allocations
         (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
