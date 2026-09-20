@@ -8,7 +8,6 @@ export const authStyles = {
   heading: css({ display: 'grid', gap: '0.375rem', textAlign: 'center', '& h1': { margin: '0', fontSize: '1.75rem', lineHeight: '1.2' }, '& p': { margin: '0', color: 'text.muted' } }),
   form: css({ display: 'grid', gap: '1.25rem', minWidth: '0' }),
   submit: css({ width: '100%', minHeight: '2.75rem' }),
-  alert: css({ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.875rem 1rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'critical.border', borderRadius: 'l2', background: 'critical.surface', color: 'critical', overflowWrap: 'anywhere' }),
   status: css({ minHeight: '1.5rem', margin: '0', color: 'text.muted', textAlign: 'center', fontSize: '0.875rem' }),
   iconWrap: css({ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '2.75rem', height: '2.75rem', marginInline: 'auto', marginBottom: '0.5rem', borderRadius: 'full', background: 'bg.input', color: 'icon.primary' }),
   icon: css({ width: '1.5rem', height: '1.5rem' }),

@@ -1,7 +1,7 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useId, useRef, useState } from 'react';
-import { ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
 import { ApiError } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { type SupportLifecycle, type SupportStateDefinition, useCreateSupportState, useDeactivateSupportState, useSupportStates, useUpdateSupportState } from '../hooks/useSupportStates';
@@ -55,7 +55,11 @@ export function SupportStatesPage() {
   return <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
     <div className={css({"display":"grid","gap":"1","mb":"2"})}><h1 ref={heading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Support states</h1><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Name the operator workflow separately from the customer-facing label. State labels do not change access permissions.</p></div>
     {notice && <p role="status">{notice}</p>}{errorMessage && <p role="alert">{errorMessage}</p>}
-    {error && <p role="alert">The latest support-state list could not be refreshed. <ParkButton type="button" onClick={() => void refetch()}>Retry loading support states</ParkButton></p>}
+    {error && !isLoadMoreError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Title>Support states could not be refreshed</ParkAlert.Title>
+      <ParkAlert.Description>These definitions are the last loaded version and may have changed.</ParkAlert.Description>
+      <ParkButton type="button" variant="outline" onClick={() => void refetch()}>Retry loading support states</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>}
     <ParkCard.Root variant="outline"><ParkCard.Header><ParkCard.Title asChild><h2>{editing ? `Edit ${editing}` : 'Create support state'}</h2></ParkCard.Title></ParkCard.Header><ParkCard.Body>
     <form onSubmit={save} className={css({ display: 'grid', gap: '4' })} aria-label={editing ? 'Edit support state' : 'Create support state'}>
       <div className={css({"display":"grid","gap":"4","gridTemplateColumns":{"base":"1fr","md":"repeat(2,minmax(0,1fr))"}})}>
@@ -79,6 +83,10 @@ export function SupportStatesPage() {
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><div className={css({"minW":0})}><h2 className={css({"fontWeight":"medium","color":"fg.default"})}>{state.internal_label} {!state.is_active && <span className={css({"minW":0})}>(inactive)</span>}</h2><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Customer label: {state.public_label} · Legacy lifecycle: {state.legacy_status}</p><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{state.waiting_reason_required ? 'Waiting reason required' : 'Waiting reason optional'} · {state.next_action_required ? 'Next action required' : 'Next action optional'}</p></div><div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><ParkButton type="button" onClick={() => beginEdit(state)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Edit {state.internal_label}</ParkButton>{state.is_active === 1 && state.is_compatibility_default === 0 && <ParkButton type="button" onClick={() => { setDeactivating(state.id); setReplacementId(''); setErrorMessage(''); }} className={css({"minW":0})}>Deactivate {state.internal_label}</ParkButton>}</div></div>
       {deactivating === state.id && <div className={css({"minW":0})}><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>Active tickets must move to an active replacement; this cannot leave tickets without a state.</p><label className={css({"fontWeight":"medium","color":"fg.default","display":"grid","gap":"1","fontSize":"sm"})}>Replacement state<DashboardSelect aria-label="Replacement state" autoFocus value={replacementId} onValueChange={setReplacementId} options={[{ value: '', label: 'Choose a replacement' }, ...states.filter(candidate => candidate.is_active === 1 && candidate.id !== state.id).map(candidate => ({ value: candidate.id, label: `${candidate.internal_label} (${candidate.legacy_status})` }))]} /></label><div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><ParkButton type="button" loading={deactivate.isPending} loadingText="Deactivating" onClick={() => void confirmDeactivate(state)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Remap and deactivate</ParkButton><ParkButton type="button" onClick={() => setDeactivating(null)}>Cancel</ParkButton></div></div>}
       </ParkCard.Body></ParkCard.Root>
-    </li>)}</ul>}{hasMore && <ParkButton type="button" onClick={() => void loadMore()} loading={isLoadingMore} loadingText="Loading more support states…">Load more support states</ParkButton>}{isLoadMoreError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"fg.default"})}>Could not load more support states. Try again.</p>}
+    </li>)}</ul>}{hasMore && !isLoadMoreError && <ParkButton type="button" onClick={() => void loadMore()} loading={isLoadingMore} loadingText="Loading more support states…">Load more support states</ParkButton>}{isLoadMoreError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Title>Could not load more support states</ParkAlert.Title>
+      <ParkAlert.Description>The definitions already shown are retained. Retry to load the next page.</ParkAlert.Description>
+      <ParkButton type="button" variant="outline" onClick={() => void loadMore()} loading={isLoadingMore} loadingText="Retrying support states…">Retry loading more support states</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>}
   </div>;
 }

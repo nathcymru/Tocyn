@@ -79,7 +79,7 @@ for (const [name, [file, ...classes]] of Object.entries(required)) {
   for (const className of classes) if (!css.includes(className)) failures.push(`Generated CSS lacks ${className}`);
 }
 
-const unresolved = [...css.matchAll(/:\s*((?:colors\.)?(?:colorPalette|gray|blue|red|green)\.[\w.-]+)\s*(?=[;}])/g)];
+const unresolved = [...css.matchAll(/:\s*((?:colors\.)?(?:colorPalette|gray|blue|red|green|text|fg|bg|border|accent|icon)\.[\w.-]+)\s*(?=[;}])/g)];
 for (const [, value] of unresolved.slice(0, 20)) failures.push(`Generated CSS has unresolved token ${value}`);
 if (unresolved.length > 20) failures.push(`${unresolved.length - 20} more unresolved token declarations`);
 

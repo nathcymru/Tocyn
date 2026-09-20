@@ -11387,10 +11387,6 @@
     background: var(--colors-bg\.subtle);
 }
 
-  .bg_bg\.muted {
-    background: bg.muted;
-}
-
   .p_3 {
     padding: var(--spacing-3);
 }
@@ -11465,10 +11461,6 @@
 
   .p_clamp\(1\.25rem\,_4vw\,_2rem\) {
     padding: clamp(1.25rem, 4vw, 2rem);
-}
-
-  .p_0\.875rem_1rem {
-    padding: 0.875rem 1rem;
 }
 
   .bg_bg\.input {
@@ -11931,10 +11923,6 @@
     line-height: var(--line-heights-tight);
 }
 
-  .c_text\.default {
-    color: text.default;
-}
-
   .ff_mono {
     font-family: var(--fonts-mono);
 }
@@ -12341,10 +12329,6 @@
     text-align: center;
 }
 
-  .ai_flex-start {
-    align-items: flex-start;
-}
-
   .fs_0\.875rem {
     font-size: 0.875rem;
 }
@@ -12395,6 +12379,10 @@
 
   .fs_md {
     font-size: var(--font-sizes-md);
+}
+
+  .ai_flex-start {
+    align-items: flex-start;
 }
 
   .ai_flex-end {

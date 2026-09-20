@@ -1,4 +1,4 @@
-import { ParkButton, ParkPinInput, ParkPinInputSlot } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkPinInput, ParkPinInputSlot } from '@luminatick/ui/park';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
@@ -117,10 +117,10 @@ export function MfaPage() {
         </div>
 
         {error && (
-          <div id="mfa-error" role="alert" aria-atomic="true" className={authStyles.alert}>
+          <ParkAlert.Root id="mfa-error" role="alert" aria-atomic="true" status="error">
             <IconTriangleExclamation className={authStyles.icon} aria-hidden="true" />
-            <p>{error}</p>
-          </div>
+            <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+          </ParkAlert.Root>
         )}
 
         {isSetupMode && !setupData && error && (

@@ -146,7 +146,7 @@ export function ApiKeyPage() {
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>API Keys</h1>
+          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>API Keys</h1>
           <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Manage external access to the {PRODUCT_BRAND.name} API.</p>
         </div>
         <ParkButton
@@ -214,7 +214,7 @@ export function ApiKeyPage() {
           <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
             <IconShieldHalved className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
             <div>
-              <h3 ref={createdHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>New API Key Generated</h3>
+              <h3 ref={createdHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>New API Key Generated</h3>
               <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                 Copy this key now. For security reasons, it will <strong>never</strong> be shown again.
               </p>
@@ -222,7 +222,7 @@ export function ApiKeyPage() {
           </div>
 
           <div className={css({"minW":0})}>
-            <span className={css({"overflowX":"auto","rounded":"md","bg":"bg.muted","p":"3","fontFamily":"mono","fontSize":"sm"})}>{createdKey.apiKey}</span>
+            <span className={css({"overflowX":"auto","rounded":"md","bg":"bg.subtle","p":"3","fontFamily":"mono","fontSize":"sm"})}>{createdKey.apiKey}</span>
             <ParkButton
               disabled={copying} aria-label="Copy API key" onClick={() => copyToClipboard(createdKey.apiKey)}
               className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}
@@ -246,8 +246,8 @@ export function ApiKeyPage() {
       )}
 
       {uncertainKey && (
-        <div className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})} role="alert">
-          <h2 ref={uncertainHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>API key created; plaintext unavailable</h2>
+        <div className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.primary"})} role="alert">
+          <h2 ref={uncertainHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>API key created; plaintext unavailable</h2>
           <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>
             The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
             but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.
@@ -299,7 +299,7 @@ export function ApiKeyPage() {
               ) : (
                 keys.map((key) => (
                   <ParkTable.Row key={key.id}>
-                    <ParkTable.Cell className={css({"fontWeight":"medium","color":"text.default"})}>{key.name}</ParkTable.Cell>
+                    <ParkTable.Cell className={css({"fontWeight":"medium","color":"text.primary"})}>{key.name}</ParkTable.Cell>
                     <ParkTable.Cell className={css({"minW":0})}>{key.prefix}</ParkTable.Cell>
                     <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                       {new Date(key.created_at).toLocaleDateString()}

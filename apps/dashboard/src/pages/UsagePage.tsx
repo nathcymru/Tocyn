@@ -130,7 +130,7 @@ export function UsagePage() {
         </ParkAlert.Root>
         <div className={css({ minW: 0 })}>
         <div>
-          <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.default"})}>1. How to get your API Token:</h4>
+          <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.primary"})}>1. How to get your API Token:</h4>
           <ol className={css({"minW":0})}>
             <li>
               Go to your <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className={css({"minW":0})}>Cloudflare API Tokens <IconArrowUpRightFromSquare className={css({"w":"4","h":"4","flexShrink":0})} /></a> dashboard.
@@ -148,7 +148,7 @@ export function UsagePage() {
         </div>
 
         <div>
-          <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.default","maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>2. Enter your credentials:</h4>
+          <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.primary","maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>2. Enter your credentials:</h4>
           <div className={css({"display":"grid","gap":"4"})}>
             <ParkField label="Cloudflare Account ID">
               <ParkInput
@@ -206,7 +206,7 @@ export function UsagePage() {
     return (
       <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
         <div>
-          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>
             <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>
@@ -220,7 +220,7 @@ export function UsagePage() {
     return (
       <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
         <div>
-          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>
             <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>
@@ -234,7 +234,7 @@ export function UsagePage() {
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>
             <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>

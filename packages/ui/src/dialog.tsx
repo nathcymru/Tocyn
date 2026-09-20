@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ParkButton, ParkDialog } from './park';
+import { ParkAlert, ParkButton, ParkDialog } from './park';
 
 export interface TocynDialogProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
@@ -46,7 +46,9 @@ export const TocynConfirmDialog = React.forwardRef<HTMLDivElement, TocynConfirmD
     <ParkDialog.Body data-tocyn-confirm-body="">
       <ParkDialog.Title id={titleId}>{title}</ParkDialog.Title>
       <ParkDialog.Description id={descriptionId}>{description}</ParkDialog.Description>
-      {error && <p role="alert">{error}</p>}
+      {error && <ParkAlert.Root role="alert" aria-atomic="true" status="error" variant="surface">
+        <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+      </ParkAlert.Root>}
       <ParkDialog.Footer data-tocyn-confirm-actions="">
         <ParkButton type="button" ref={cancel} disabled={dialog.busy} onClick={() => dialog.onOpenChange(false)} className={cancelClassName}>{cancelLabel}</ParkButton>
         <ParkButton type="button" disabled={dialog.busy} onClick={onConfirm} className={confirmClassName}>{confirmLabel}</ParkButton>

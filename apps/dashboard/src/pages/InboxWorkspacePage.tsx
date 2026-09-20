@@ -489,7 +489,7 @@ function InboxSlaRing({ sla, loading, priority }: { sla: TicketSla | undefined; 
   const circumference = 2 * Math.PI * 15;
   const label = loading ? 'Loading service level' : !target || target.state === 'unavailable' ? 'Service level unavailable' : `${target.state === 'breached' ? 'Breached' : 'On-track'} service level`;
   return <span aria-label={label}
-    className={css({ position: 'relative', display: 'inline-grid', h: '10', w: '10', placeItems: 'center', fontSize: '2xs', fontWeight: 'bold', color: breached ? 'critical' : 'text.default' })}>
+    className={css({ position: 'relative', display: 'inline-grid', h: '10', w: '10', placeItems: 'center', fontSize: '2xs', fontWeight: 'bold', color: breached ? 'critical' : 'text.primary' })}>
     <svg aria-hidden="true" viewBox="0 0 36 36" className={css({ position: 'absolute', inset: 0, h: 'full', w: 'full', transform: 'rotate(-90deg)' })}>
       <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" opacity="0.18" />
       <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${circumference}`} strokeDashoffset={`${circumference * (1 - (breached ? 1 : elapsed))}`} />

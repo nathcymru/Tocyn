@@ -48,6 +48,8 @@ describe('staff login accessibility', () => {
     reject(new Error('Sign-in unavailable. Try again.'));
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Sign-in unavailable');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Sign-in unavailable');
     expect(email.getAttribute('aria-describedby')).toBe(alert.id);
     expect(password.getAttribute('aria-describedby')).toBe(alert.id);
     expect(document.activeElement).toBe(button);
@@ -80,6 +82,8 @@ describe('staff login accessibility', () => {
     button.focus(); fireEvent.click(button);
     expect(screen.getByRole('status').textContent).toContain('Verifying code');
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Invalid authentication code');
     expect(code.getAttribute('aria-describedby')).toContain(alert.id);
     expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
     expect(document.activeElement).toBe(button);

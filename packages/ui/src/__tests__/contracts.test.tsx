@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { composeEventHandlers, WorkspaceShell, WorkViewNavigator, ConversationList, ActiveConversation, ContextPanel } from '../index';
 import { createListCollection } from '@ark-ui/react';
@@ -138,4 +138,24 @@ it('forwards dialog content refs and caller ARIA descriptions through the shared
   fireEvent.keyDown(dialog,{key:'x'});expect(key).toHaveBeenCalledOnce();unmount();expect(ref.current).toBeNull();
   render(<TocynConfirmDialog open ref={confirmation} title="Confirmation reference" description="Action description" confirmLabel="Confirm" onConfirm={()=>{}} onOpenChange={()=>{}}/>);
   const confirm=await screen.findByRole('dialog',{name:'Confirmation reference'});expect(confirmation.current).toBe(confirm);expect(confirm).toHaveAccessibleDescription('Action description');
+});
+
+it('renders confirmation failures with Park Alert anatomy without changing busy actions', async () => {
+  const onConfirm = vi.fn();
+  const onOpenChange = vi.fn();
+  const props = { open: true, title: 'Confirm removal', description: 'Review this action', confirmLabel: 'Remove', error: 'Could not remove item', onConfirm, onOpenChange };
+  const { rerender } = render(<TocynConfirmDialog {...props} busy />);
+  const dialog = await screen.findByRole('dialog', { name: 'Confirm removal' });
+  expect(dialog).toHaveAccessibleDescription('Review this action');
+  const alert = within(dialog).getByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('Could not remove item');
+  expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  expect(within(dialog).getByRole('button', { name: 'Remove' })).toBeDisabled();
+  rerender(<TocynConfirmDialog {...props} busy={false} />);
+  const cancel = within(dialog).getByRole('button', { name: 'Cancel' });
+  cancel.focus();
+  expect(cancel).toHaveFocus();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+  expect(onConfirm).toHaveBeenCalledOnce();
 });

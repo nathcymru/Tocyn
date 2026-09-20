@@ -26,7 +26,9 @@ it('shares initial setup across effect replay, retains retry focus and announces
   expect(dashboardApi.post).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('status')).toHaveTextContent('Preparing authenticator setup');
   await act(async () => { fail(new Error('Setup temporarily unavailable')); });
-  expect(await screen.findByRole('alert')).toHaveTextContent('Setup temporarily unavailable');
+  const setupAlert = await screen.findByRole('alert');
+  expect(setupAlert).toHaveClass('alert__root');
+  expect(setupAlert.querySelector('.alert__description')).toHaveTextContent('Setup temporarily unavailable');
   let finish!: (value: typeof setup) => void;
   vi.mocked(dashboardApi.post).mockImplementationOnce(() => new Promise(resolve => { finish = resolve as typeof finish; }));
   const retry = screen.getByRole('button', { name: 'Retry authenticator setup' });
@@ -56,6 +58,7 @@ it('retains the submitted setup code through a pending rejection and preserves a
   expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
   await act(async () => { fail(new Error('Invalid authentication code')); });
   const error = await screen.findByRole('alert');
+  expect(error).toHaveClass('alert__root');
   expect(code.getAttribute('aria-describedby')).toContain(error.id);
   expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456'); expect(submit).toHaveFocus();
   vi.mocked(dashboardApi.post).mockResolvedValueOnce({ token: 'synthetic-authenticated-session', user: { ...staff, mfa_enabled: true } });

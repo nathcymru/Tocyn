@@ -1,5 +1,5 @@
 import userEvent from '@testing-library/user-event';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SupportStatesPage } from '../pages/SupportStatesPage';
@@ -14,6 +14,7 @@ const states = [
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(<QueryClientProvider client={client}><SupportStatesPage /></QueryClientProvider>);
+  return client;
 }
 
 beforeEach(() => {
@@ -68,6 +69,28 @@ it('uses a retryable empty state when initial definitions fail to load', async (
   expect(await screen.findByText('Waiting on customer')).toBeInTheDocument();
 });
 
+it('keeps cached definitions and identifies them as stale after a failed refresh', async () => {
+  let attempts = 0;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (new URL(url, 'http://localhost').pathname === '/api/support-states' && options.method === 'GET') {
+      attempts += 1;
+      if (attempts === 2) throw new Error('synthetic refresh failure');
+      return json(states);
+    }
+    return json({});
+  }));
+  const client = renderPage();
+  expect(await screen.findByText('Waiting on customer')).toBeInTheDocument();
+  await act(async () => { await client.invalidateQueries({ queryKey: ['support-states'] }); });
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Support states could not be refreshed');
+  expect(alert).toHaveTextContent('last loaded version');
+  expect(screen.getByText('Waiting on customer')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading support states' }));
+  await waitFor(() => expect(screen.queryByText('Support states could not be refreshed')).not.toBeInTheDocument());
+  expect(attempts).toBe(3);
+});
+
 it('does not expose state administration to an agent', () => {
   useAuthStore.getState().setAuth('synthetic-agent', { id: 'agent', tenant_id: 'tenant-a', email: 'agent@example.invalid', full_name: 'Agent', role: 'agent', mfa_enabled: true });
   renderPage();
@@ -111,9 +134,11 @@ it('keeps the first page and offers a retry when a later definition page fails',
   renderPage();
   expect(await screen.findByText('Waiting on customer')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
-  expect(await screen.findByText('Could not load more support states. Try again.')).toBeInTheDocument();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load more support states');
+  expect(screen.getByRole('alert')).toHaveTextContent('definitions already shown are retained');
   expect(screen.getByText('Waiting on customer')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
+  expect(screen.queryByRole('button', { name: 'Load more support states' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading more support states' }));
   expect(await screen.findByText('Recovered replacement')).toBeInTheDocument();
-  expect(screen.queryByText('Could not load more support states. Try again.')).not.toBeInTheDocument();
+  expect(screen.queryByText('Could not load more support states')).not.toBeInTheDocument();
 });

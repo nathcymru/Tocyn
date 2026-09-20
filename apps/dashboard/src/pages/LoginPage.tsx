@@ -62,9 +62,9 @@ export function LoginPage() {
         </div>
 
         {(error || logoutWarning) && (
-          <div id="staff-login-error" role="alert" aria-atomic="true" className={authStyles.alert}>
-            {error || logoutWarning}
-          </div>
+          <ParkAlert.Root id="staff-login-error" role="alert" aria-atomic="true" status="error">
+            <ParkAlert.Content><ParkAlert.Description>{error || logoutWarning}</ParkAlert.Description></ParkAlert.Content>
+          </ParkAlert.Root>
         )}
 
         <form aria-busy={loading} onSubmit={handleSubmit} className={authStyles.form}>
