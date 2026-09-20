@@ -22,7 +22,11 @@ it('uses installed Park Dialog anatomy and returns focus after idle Escape witho
  expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
  expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent('Create Ticket Field');
  expect(dialog.querySelector('.dialog__body')).toBeInTheDocument();
- expect(dialog.querySelector('.dialog__footer')).toContainElement(within(dialog).getByRole('button',{name:'Cancel'}));
+ const footer=dialog.querySelector<HTMLElement>('.dialog__footer');
+ expect(footer).toContainElement(within(dialog).getByRole('button',{name:'Cancel'}));
+ expect(dialog.querySelector('.dialog__body')).not.toContainElement(footer);
+ const form=within(dialog).getByRole('form');
+ expect(within(dialog).getByRole('button',{name:'Create Field'})).toHaveAttribute('form',form.id);
  fireEvent.pointerDown(document.body);fireEvent.click(document.body);
  expect(dialog).toBeInTheDocument();
  fireEvent.keyDown(document.activeElement!,{key:'Escape'});
@@ -52,7 +56,7 @@ it('preserves generated and overridden names, options and active state in the su
  fireEvent.change(options,{target:{value:'One, Two'}});
  await userEvent.click(within(dialog).getByText('Active'));
  expect(within(dialog).getByRole('checkbox',{name:'Active'})).not.toBeChecked();
- fireEvent.submit(within(dialog).getByRole('form'));
+ fireEvent.click(within(dialog).getByRole('button',{name:'Create Field'}));
  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(dashboardApi.post).toHaveBeenCalledWith('/ticket-fields',{name:'custom_key',label:'Model Name',field_type:'select',options:'One, Two',is_active:false});
  expect(invalidate).toHaveBeenCalledWith({queryKey:['ticket-fields']});await waitFor(()=>expect(opener).toHaveFocus());

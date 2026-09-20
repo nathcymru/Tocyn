@@ -1,7 +1,7 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
-import { Badge, Field } from '@luminatick/ui/components';
+import { Badge, Field, IconButton as ParkIconButton } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -121,6 +121,7 @@ export function TicketFieldsPage() {
 
 function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: boolean, finalFocusEl: () => HTMLElement | null, onClose: () => void, onSuccess: () => void }) {
   const titleId = React.useId();
+  const formId = `${titleId}-form`;
   const initialFocus = React.useRef<HTMLInputElement>(null);
   const savingGuard = React.useRef(false);
   const [saveError, setSaveError] = useState('');
@@ -177,12 +178,12 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
         <ParkDialog.Content aria-labelledby={titleId}>
         <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
           <ParkDialog.Title id={titleId}>Create Ticket Field</ParkDialog.Title>
-          <ParkButton type="button" variant="plain" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close}>
+          <ParkIconButton type="button" variant="plain" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close}>
             <IconXmark aria-hidden="true" className={css({ w: '4', h: '4' })} />
-          </ParkButton>
+          </ParkIconButton>
         </ParkDialog.Header>
 
-        <ParkDialog.Body><form onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
+        <ParkDialog.Body><form id={formId} onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
           {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
           <fieldset disabled={mutation.isPending} className={css({ display: 'grid', gap: '4' })}>
           <Field.Root required>
@@ -231,22 +232,12 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
             <ParkCheckbox.HiddenInput /><ParkCheckbox.Label>Active</ParkCheckbox.Label>
           </ParkCheckbox.Root>
 
-          <ParkDialog.Footer>
-            <ParkButton
-              type="button" variant="outline"
-              onClick={close}
-            >
-              Cancel
-            </ParkButton>
-            <ParkButton
-              type="submit"
-              loading={mutation.isPending} loadingText="Creating field…"
-            >
-              Create Field
-            </ParkButton>
-          </ParkDialog.Footer>
           </fieldset>
         </form></ParkDialog.Body>
+        <ParkDialog.Footer>
+          <ParkButton type="button" variant="outline" disabled={mutation.isPending} onClick={close}>Cancel</ParkButton>
+          <ParkButton type="submit" form={formId} loading={mutation.isPending} loadingText="Creating field…">Create Field</ParkButton>
+        </ParkDialog.Footer>
         </ParkDialog.Content>
       </ParkDialog.Positioner>
     </ParkDialog.Root>

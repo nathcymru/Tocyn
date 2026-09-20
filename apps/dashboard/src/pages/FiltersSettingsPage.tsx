@@ -1,7 +1,7 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
-import { Badge, Field as ParkField } from '@luminatick/ui/components';
+import { Badge, Field as ParkField, IconButton as ParkIconButton } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
 import {
@@ -52,6 +52,7 @@ export function FiltersSettingsPage() {
   const opener = React.useRef<HTMLElement | null>(null);
   const nameInput = React.useRef<HTMLInputElement>(null);
   const titleId = React.useId();
+  const formId = `${titleId}-form`;
   const nameId = React.useId();
   const [editingFilter, setEditingFilter] = useState<TicketFilter | null>(null);
 
@@ -208,21 +209,19 @@ export function FiltersSettingsPage() {
                   </ParkTable.Cell>
                   <ParkTable.Cell>
                     <div className={css({ display: 'flex', alignItems: 'center', gap: '2', flexWrap: 'wrap' })}>
-                      <ParkButton type="button" variant="outline" aria-label={`Edit ${filter.name}`}
+                      <ParkIconButton type="button" variant="plain" aria-label={`Edit ${filter.name}`}
                         onClick={event => handleOpenModal(filter, event.currentTarget)}
-                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Edit Filter"
                       >
                         <IconPenToSquare aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
-                      </ParkButton>
+                      </ParkIconButton>
                       {!filter.is_system && (
-                        <ParkButton type="button" variant="outline"
+                        <ParkIconButton type="button" variant="plain"
                           aria-label={`Delete ${filter.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(filter); setDeleteError(''); setDeleteOpen(true); }}
-                          className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                           title="Delete Filter"
                         >
                           <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
-                        </ParkButton>
+                        </ParkIconButton>
                       )}
                     </div>
                   </ParkTable.Cell>
@@ -242,11 +241,11 @@ export function FiltersSettingsPage() {
               <ParkDialog.Title id={titleId}>
                 {editingFilter ? 'Edit Filter' : 'Create Filter'}
               </ParkDialog.Title>
-              <ParkButton type="button" variant="plain" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal}>
+              <ParkIconButton type="button" variant="plain" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal}>
                 <IconXmark aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
-              </ParkButton>
+              </ParkIconButton>
           </ParkDialog.Header>
-          <ParkDialog.Body><form onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
+          <ParkDialog.Body><form id={formId} onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
               {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
               <fieldset disabled={saving} className={css({"display":"grid","gap":"4"})}>
               <ParkField.Root required className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
@@ -289,13 +288,12 @@ export function FiltersSettingsPage() {
                           onChange={e => changeCondition(idx, 'value', e.target.value)}
                         />
                       </ParkField.Root>
-                      <ParkButton
-                        type="button"
+                      <ParkIconButton
+                        type="button" variant="plain"
                         aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}
-                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                       >
                         <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
-                      </ParkButton>
+                      </ParkIconButton>
                     </div>
                   ))}
 
@@ -309,24 +307,14 @@ export function FiltersSettingsPage() {
                 </div>
               </div>
 
-              <ParkDialog.Footer>
-                <ParkButton
-                  type="button" variant="outline"
-                  onClick={handleCloseModal}
-                  className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
-                >
-                  Cancel
-                </ParkButton>
-                <ParkButton
-                  type="submit"
-                  disabled={saving || createFilter.isPending || updateFilter.isPending}
-                  className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
-                >
-                  {editingFilter ? 'Save Changes' : 'Create Filter'}
-                </ParkButton>
-              </ParkDialog.Footer>
               </fieldset>
             </form></ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton type="button" variant="outline" disabled={saving} onClick={handleCloseModal}>Cancel</ParkButton>
+              <ParkButton type="submit" form={formId} disabled={saving || createFilter.isPending || updateFilter.isPending}>
+                {editingFilter ? 'Save Changes' : 'Create Filter'}
+              </ParkButton>
+            </ParkDialog.Footer>
           </ParkDialog.Content>
         </ParkDialog.Positioner>
       </ParkDialog.Root>
