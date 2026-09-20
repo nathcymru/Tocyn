@@ -12041,8 +12041,9 @@
     line-height: var(--line-heights-tight);
 }
 
-  .ff_mono {
-    font-family: var(--fonts-mono);
+  .us_all {
+    -webkit-user-select: all;
+    user-select: all;
 }
 
   .bd-cl_collapse {
@@ -12451,11 +12452,6 @@
 
   .d_inline-block {
     display: inline-block;
-}
-
-  .us_all {
-    -webkit-user-select: all;
-    user-select: all;
 }
 
   .flex-sh_1 {

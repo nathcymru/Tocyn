@@ -1,7 +1,7 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
-import { Badge, Field } from '@luminatick/ui/components';
+import { Badge, Field, IconButton as ParkIconButton } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -330,14 +330,13 @@ export function EmailChannelPage() {
                 </div>
 
                 <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-                  <ParkButton type="button" variant="outline"
+                  <ParkIconButton type="button" variant="plain"
                     aria-label={`Remove ${email.email_address}`} onClick={event => { removalOpener.current = event.currentTarget; removalSucceeded.current = false; setRemoval(email); setRemoveError(''); setRemoveOpen(true); }}
                     disabled={deleteEmail.isPending}
-                    className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                     title="Remove email"
                   >
                     <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
-                  </ParkButton>
+                  </ParkIconButton>
                 </div>
               </div>
             ))}

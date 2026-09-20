@@ -11,6 +11,7 @@ afterEach(()=>{cleanup();client.clear();vi.restoreAllMocks();vi.resetAllMocks();
 async function open(){render(<QueryClientProvider client={client}><EmailChannelPage/></QueryClientProvider>);const opener=await screen.findByRole('button',{name:'Remove support@example.invalid'});opener.focus();fireEvent.click(opener);const dialog=await screen.findByRole('dialog',{name:'Remove email channel: support@example.invalid'});await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());return{opener,dialog};}
 it('requires confirmation and restores focus on cancellation without a provider or deletion request',async()=>{
  const {opener,dialog}=await open();
+ expect(opener).toHaveClass('button', 'button--variant_plain');
  expect(dialog).toHaveClass('dialog__content');
  expect(dialog).toHaveAccessibleDescription('Remove this configured email channel?');
  expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();

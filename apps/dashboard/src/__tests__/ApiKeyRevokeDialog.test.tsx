@@ -9,6 +9,7 @@ beforeEach(()=>{api.get.mockResolvedValue([key]);vi.spyOn(HTMLElement.prototype,
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.resetAllMocks();if(originalClipboard)Object.defineProperty(navigator,'clipboard',originalClipboard);else Reflect.deleteProperty(navigator,'clipboard');});
 async function confirm(name='Synthetic key'){
  const opener=await screen.findByRole('button',{name:`Revoke ${name}`});opener.focus();fireEvent.click(opener);
+ expect(opener).toHaveClass('button', 'button--variant_plain');
  const dialog=await screen.findByRole('dialog',{name:`Revoke API key: ${name}`});
  expect(dialog).toHaveClass('dialog__content');expect(dialog.querySelector('.dialog__footer')).toBeInTheDocument();
  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());return{opener,dialog};
@@ -72,6 +73,8 @@ it('reports clipboard success only after resolution and keeps copy failures reco
  const write=vi.fn();let finish!:()=>void;write.mockImplementationOnce(()=>Promise.reject(new Error('synthetic clipboard failure'))).mockImplementationOnce(()=>new Promise(resolve=>{finish=()=>resolve(undefined);}));
  Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:write}});
  api.post.mockResolvedValue({id:'key-b',name:'Created key',apiKey:'synthetic-one-time-value'});render(<ApiKeyPage/>);await create();const copy=screen.getByRole('button',{name:'Copy API key'});
+ expect(copy).toHaveClass('button', 'button--variant_plain');
+ expect(screen.getByText('synthetic-one-time-value').tagName).toBe('CODE');
  fireEvent.click(copy);expect(await screen.findByRole('alert')).toHaveTextContent('could not be copied');expect(screen.queryByText('API key copied.')).not.toBeInTheDocument();
  fireEvent.click(copy);fireEvent.click(copy);expect(copy).toBeDisabled();expect(write).toHaveBeenCalledTimes(2);expect(screen.queryByText('API key copied.')).not.toBeInTheDocument();
  await act(async()=>finish());expect(screen.getByRole('status')).toHaveTextContent('API key copied.');expect(screen.getByRole('status')).toHaveClass('alert__root', 'alert__root--status_success');expect(write).toHaveBeenLastCalledWith('synthetic-one-time-value');
