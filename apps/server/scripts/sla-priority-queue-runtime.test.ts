@@ -15,6 +15,9 @@ import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.se
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
 import { SlaPriorityQueueService,SlaQueueRestart,type PriorityQueueSort } from '../src/budgets/sla-priority-queue-admission.service';
 import { SlaPriorityQueueRepository,SlaQueueUnavailable,type SlaQueueSelection } from '../src/repositories/sla-priority-queue.repository';
+import { PriorityClockRepository } from '../src/repositories/priority-clock.repository';
+import { TicketListScanRepository } from '../src/repositories/ticket-list-scan.repository';
+import { ticketListEnvelope } from '../src/budgets/http-ticket-list-admission.service';
 import { DEFAULT_SLA_CALENDAR,SlaEvaluationExhaustedError } from '../src/domain/sla-clock';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
 
@@ -127,6 +130,65 @@ test('priority views sort the complete authorised clock snapshot before paginati
   const overdue=await f.read({}, {sort:'priority_focus',limit:2});
   assert.equal(overdue.triageOverdueCount,2,'the banner count covers the complete selected queue before pagination');
   assert.deepEqual(overdue.data.map(item=>item.ticket.id),['overdue-one','overdue-two']);
+ }finally{await f.mf.dispose();}
+});
+
+test('ordinary list clock projections are bounded to the selected page and current staff visibility',async()=>{
+ const f=await fixture();try{
+  await f.ticket('visible',3_600_000,'normal','a',new Date(f.now-1_800_000).toISOString());
+  await f.ticket('other-tenant',3_600_000,'normal','b',new Date(f.now-1_800_000).toISOString());
+  await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+    priority_regulatory_officer_on_site=0,priority_vip_blocked=0,priority_hard_deadline=0,
+    priority_score=1,contract_sla_tier='alpha',criticality_tier=4 WHERE tenant_id='a' AND id='visible'`).run();
+  const repo=new PriorityClockRepository(f.db,f.scope);
+  const fence={tenantId:'a',actorId:'actor',role:'agent' as const,sessionVersion:1};
+  const page=await repo.getPageForStaff(['visible','other-tenant'],fence,f.now);
+  assert.equal(page.visible?.timeRemainingHours,0.5);
+  assert.equal(page['other-tenant'],null);
+  await f.db.prepare("INSERT INTO groups(tenant_id,id,name) VALUES('a','restricted','Restricted')").run();
+  await f.db.prepare("UPDATE tickets SET group_id='restricted' WHERE tenant_id='a' AND id='visible'").run();
+  assert.equal((await repo.getPageForStaff(['visible'],fence,f.now)).visible,null);
+  await f.db.prepare("UPDATE users SET session_version=2 WHERE tenant_id='a' AND id='actor'").run();
+  assert.equal((await repo.getPageForStaff(['visible'],fence,f.now)).visible,null);
+  await assert.rejects(repo.getPageForStaff(Array.from({length:101},(_,n)=>String(n)),fence,f.now),RangeError);
+ }finally{await f.mf.dispose();}
+});
+
+test('a full 100-row group-restricted clock page stays within its admitted read margin',async()=>{
+ const f=await fixture();try{
+  const ids=Array.from({length:100},(_,index)=>`clock-${index}`);
+  await f.db.batch(ids.map(id=>f.db.prepare(`INSERT INTO tickets
+    (tenant_id,id,subject,customer_email,group_id,source,priority,created_at,
+      priority_category,priority_scope,priority_regulatory_officer_on_site,priority_vip_blocked,
+      priority_hard_deadline,priority_score,contract_sla_tier,criticality_tier)
+    VALUES('a',?,?,'synthetic@example.test','group','dashboard','normal',?,
+      'information-requests','isolated',0,0,0,1,'alpha',4)`)
+    .bind(id,id,new Date(f.now-1_800_000).toISOString())));
+  const scan=await new TicketListScanRepository(f.db,f.scope).snapshot();
+  const base=ticketListEnvelope(scan,{groupRestricted:true});
+  const withClocks=ticketListEnvelope(scan,{groupRestricted:true,includePriorityClocks:true});
+  assert.ok(base?.d1RowsRead!==undefined&&withClocks?.d1RowsRead!==undefined);
+  const clockReadMargin=withClocks.d1RowsRead-base.d1RowsRead;
+  assert.equal(clockReadMargin,6*scan.ticketRows);
+  const largePopulation={...scan,ticketRows:10_000};
+  const largeBase=ticketListEnvelope(largePopulation,{groupRestricted:true})!;
+  const largeWithClocks=ticketListEnvelope(largePopulation,{groupRestricted:true,includePriorityClocks:true})!;
+  assert.equal(largeWithClocks.d1RowsRead!-largeBase.d1RowsRead!,600,
+    'the clock reserve follows the bounded page rather than the whole tenant population');
+  let measuredRowsRead=0;
+  const meteredDb=new Proxy(f.db,{get(target,key){
+    if(key==='prepare')return (sql:string)=>({bind:(...values:unknown[])=>({all:async()=>{
+      const result=await target.prepare(sql).bind(...values).all();
+      measuredRowsRead+=result.meta.rows_read;return result;
+    }})});
+    const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+  }}) as D1Database;
+  const page=await new PriorityClockRepository(meteredDb,f.scope).getPageForStaff(ids,
+    {tenantId:'a',actorId:'actor',role:'agent',sessionVersion:1},f.now);
+  assert.equal(Object.keys(page).length,100);
+  assert.ok(Object.values(page).every(clock=>clock?.timeRemainingHours===0.5));
+  assert.ok(measuredRowsRead>0&&measuredRowsRead<=clockReadMargin,
+    `Clock page read ${measuredRowsRead} D1 rows against ${clockReadMargin} reserved`);
  }finally{await f.mf.dispose();}
 });
 

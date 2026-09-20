@@ -18,8 +18,12 @@ test('operator sort is validated, tenant-scoped, stable and applied before pagin
       ['gamma', 'high', '2023-01-01', '2023-01-01'],
     ]) {
       await fixture.db.prepare('INSERT INTO tickets(tenant_id,id,subject,customer_id,customer_email,source,priority,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
-        .bind('fixture-tenant-a', id, 'Synthetic sort', fixture.principals.customerA.localId, fixture.principals.customerA.email, 'web', priority, created, updated).run();
+        .bind('fixture-tenant-a', id, 'Synthetic sort', fixture.principals.customerA.localId, fixture.principals.customerA.email, 'web', priority, `${created}T00:00:00Z`, `${updated}T00:00:00Z`).run();
     }
+    await fixture.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+      priority_regulatory_officer_on_site=0,priority_vip_blocked=0,priority_hard_deadline=0,
+      priority_score=1,contract_sla_tier='alpha',criticality_tier=4
+      WHERE tenant_id='fixture-tenant-a' AND id='alpha'`).run();
     const expected: Record<string, string[]> = {
       updated_desc: ['beta', 'gamma', 'alpha', 'fixture-ticket'], updated_asc: ['fixture-ticket', 'alpha', 'beta', 'gamma'],
       created_desc: ['gamma', 'beta', 'alpha', 'fixture-ticket'], created_asc: ['fixture-ticket', 'alpha', 'beta', 'gamma'],
@@ -30,9 +34,12 @@ test('operator sort is validated, tenant-scoped, stable and applied before pagin
       for (const page of [1, 2]) {
         const response = await fixture.request(`/api/tickets?sort=${sort}&limit=2&page=${page}`, { token: session.token });
         assert.equal(response.status, 200);
-        const result = await response.json<{ data: { id: string; tenant_id: string }[]; meta: { total: number } }>();
+        const result = await response.json<{ data: { id: string; tenant_id: string }[]; meta: { total: number };
+          priorityClocks:Record<string,{remainingHours:number;paused:boolean;asOf:string}|null> }>();
         assert.equal(result.meta.total, 4);
         assert.ok(result.data.every(ticket => ticket.tenant_id === 'fixture-tenant-a'));
+        assert.deepEqual(Object.keys(result.priorityClocks).sort(),result.data.map(ticket=>ticket.id).sort());
+        for(const ticket of result.data)assert.equal(result.priorityClocks[ticket.id]!==null,ticket.id==='alpha');
         actual.push(...result.data.map(ticket => ticket.id));
       }
       assert.deepEqual(actual, ids, sort);

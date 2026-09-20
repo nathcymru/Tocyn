@@ -28,6 +28,12 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); useAuthStore.getState().logout(); localStorage.clear(); });
 
+it('starts a new operator in Default Focus while preserving existing saved sort choices', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(null)));
+  render(<Harness />);
+  await waitFor(() => expect(current()).toMatchObject({ status: 'restored', view: 'all', sort: 'priority_focus' }));
+});
+
 it('restores server preferences, preserves unmodified fields, and serializes later saves', async () => {
   const firstSave = deferred<Response>();
   const first = { ...stored(8, 'updated query'), listAnchor: 'page:4' };

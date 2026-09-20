@@ -412,7 +412,7 @@ it('shows all three priority views with authoritative triage clocks and the sepa
   await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Default Focus'));
   const first=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
   expect(within(first).getByRole('meter',{name:/Alpha contract, level 4 priority triage clock: Overdue by/})).toHaveTextContent('A4−30m');
-  expect(within(first).getByLabelText('Service level unavailable')).toBeInTheDocument();
+  expect(within(first).queryByLabelText('Service level unavailable')).toBeNull();
   expect(screen.getByRole('alert')).toHaveTextContent('7 fixed-hour priority countdowns have expired in this priority view');
   expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(2);
   await choosePresentation('Table view');
@@ -426,6 +426,22 @@ it('shows all three priority views with authoritative triage clocks and the sepa
   await chooseView('All tickets');
   await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('All tickets'));
   expect(within(screen.getByRole('listbox')).queryByRole('meter')).toBeNull();
+});
+
+it('shows the A4 triage ring and countdown in an ordinary legacy sort without replacing contractual SLA data',async()=>{
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified={...tickets[0],contract_sla_tier:'alpha',criticality_tier:4};
+  const sampledAt=new Date().toISOString();
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?'))return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},
+      priorityClocks:{[classified.id]:{remainingHours:0.5,paused:false,asOf:sampledAt}}});
+    return base(url,options);
+  });
+  showInbox('/inbox/all');
+  const row=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  expect(within(row).getByRole('meter',{name:/Alpha contract, level 4 priority triage clock: 30m remaining/})).toHaveTextContent('A430m');
+  expect(within(row).queryByLabelText('Service level unavailable')).toBeNull();
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/ticket-sla/projections')).toBe(true));
 });
 
 it('restarts an expired priority snapshot without displaying stale ordinary rows',async()=>{

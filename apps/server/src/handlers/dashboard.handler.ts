@@ -9,6 +9,7 @@ import { ActivityBudgetFenceError } from '../repositories/operator-activity.repo
 import { SUPPORT_SLA_RECEIPT_SNAPSHOTS } from '../repositories/support-sla-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import { articlePageQuery, assertConversationResponseBounds, ConversationReadError } from '../services/conversation-read-bounds';
+import { PriorityClockRepository } from '../repositories/priority-clock.repository';
 import { conversationHistory } from './conversation-history';
 import { validateAttachmentReferences } from '../services/attachment-references';
 import { EmailService } from '../services/email/outbound.service';
@@ -1203,13 +1204,23 @@ dashboard.get("/tickets", async (c) => {
       ...(queue.data ? { queue: queue.data as TicketQueueKey } : {}),
       ...(draftNotExpiredAt ? { draftNotExpiredAt } : {}),
     };
+    const pageClocks = async (ids: string[]) => {
+      const asOf = c.env.localNow?.() ?? Date.now();
+      const rows = await new PriorityClockRepository(d.database,d.scope).getPageForStaff(ids,
+        {tenantId:d.scope.tenantId,actorId:d.scope.actorId,role:currentCredential.role,sessionVersion:currentCredential.sessionVersion},asOf);
+      return Object.fromEntries(ids.map(id=>[id,rows[id] ? {
+        remainingHours:rows[id]!.timeRemainingHours,paused:rows[id]!.paused,asOf:new Date(asOf).toISOString(),
+      } : null]));
+    };
     if (queue.data) {
       const result = await d.repositories.queues.list({ ...listOptions, queue: queue.data });
-      const response=c.json({ data: result.items.map(item => ({ ...item.ticket, inclusion_reason: item.inclusionReason })),
+      const data=result.items.map(item => ({ ...item.ticket, inclusion_reason: item.inclusionReason }));
+      const response=c.json({ data,priorityClocks:await pageClocks(data.map(ticket=>ticket.id)),
         meta: { total: result.total, page: result.page, limit: result.limit, total_pages: result.totalPages } });
       listOutcome='committed';return response;
     }
-    const response=c.json(await d.repositories.tickets.list(listOptions));listOutcome='committed';return response;
+    const result=await d.repositories.tickets.list(listOptions);
+    const response=c.json({...result,priorityClocks:await pageClocks(result.data.map(ticket=>ticket.id))});listOutcome='committed';return response;
   } catch (error) {
     if (error instanceof TicketListScanError) return c.json({ code: 'budget_admission_unavailable', error: 'Ticket list capacity changed; retry the request' }, 503);
     throw error;

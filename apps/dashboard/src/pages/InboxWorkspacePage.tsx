@@ -28,7 +28,7 @@ import { NewTicketDialog } from './NewTicketDialog';
 const queueViews={mentions:{label:'Mentions',description:'Actionable conversations with a mention for you that has not been dismissed.'},mine:{label:'Mine',description:'Open and pending conversations assigned to you and ready for work.'},unassigned:{label:'Unassigned',description:'Open and pending conversations without an assignee and ready for work.'},drafts:{label:'Drafts',description:'Conversations with your saved drafts.'},actionable:{label:'Needs Action',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
 const queueOrder=['mentions','mine','unassigned','drafts','actionable','snoozed'] as const;
 type NaturalFilters={owner:'All tickets'|'My tickets'|'Unassigned';created:'hour'|'day'|'week'|'month'|'quarter'|'anytime';customer:string;sort:WorkspacePreference['sort'];search:string};
-const defaultNaturalFilters:NaturalFilters={owner:'All tickets',created:'anytime',customer:'anyone',sort:'updated_desc',search:''};
+const defaultNaturalFilters:NaturalFilters={owner:'All tickets',created:'anytime',customer:'anyone',sort:'priority_focus',search:''};
 function ownerForView(view:string):NaturalFilters['owner']{return view==='mine'?'My tickets':view==='unassigned'?'Unassigned':'All tickets';}
 const naturalSortOptions:Readonly<Record<NaturalFilters['sort'],string>>={updated_desc:'recently updated',updated_asc:'least recently updated',created_desc:'newest first',created_asc:'oldest first',priority_desc:'highest impact',priority_asc:'lowest impact',sla_priority:'contract SLA',priority_focus:'default focus',priority_criticality:'criticality matrix',priority_commitment:'SLA commitment'};
 function naturalSortLabel(sort:NaturalFilters['sort']){return naturalSortOptions[sort];}
@@ -233,8 +233,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   const displayPage=query.data??(!snapshotSort&&query.error&&confirmedPage.current?.scope===listScope?confirmedPage.current.data:undefined);
   const tickets=displayPage?.data??[];
   const meta=displayPage?.meta??{page:1,limit:20,total:0,total_pages:1};
-  const priorityClocks=priorityMatrixSort&&!query.error&&!query.isPlaceholderData
-    ?(query.data as PriorityMatrixTicketQueryPage|undefined)?.priorityClocks:undefined;
+  const priorityClocks=!query.error&&!query.isPlaceholderData?query.data?.priorityClocks:undefined;
   const batchSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),!snapshotSort&&routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
   const ticketSla=snapshotSort?{...query,data:Object.fromEntries(Object.entries(query.data?.sla??{}).filter(([,value])=>value!==null))}:batchSla;
   const setGlobalAlert = useInboxGlobalAlert();
@@ -453,7 +452,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
               <ParkTable.Cell><ParkLink asChild><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} className={css({ minW: 0, minH: '6', maxW: 'full', overflowWrap: 'anywhere', whiteSpace: 'normal', textAlign: 'start' })}>{ticket.subject}</Link></ParkLink></ParkTable.Cell>
               <ParkTable.Cell>{ticket.customer_email}</ParkTable.Cell>
               <ParkTable.Cell>{ticket.status}</ParkTable.Cell>
-              <ParkTable.Cell><InboxClocks ticket={ticket} showPriorityRing={priorityMatrixSort} priorityClock={priorityClocks?.[ticket.id]} sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id]??undefined} slaLoading={ticketSla.isLoading} /></ParkTable.Cell>
+              <ParkTable.Cell><InboxClocks ticket={ticket} priorityClock={priorityClocks?.[ticket.id]} sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id]??undefined} slaLoading={ticketSla.isLoading} /></ParkTable.Cell>
             </ParkTable.Row>)}
           </ParkTable.Body>
         </ParkTable.Root>
@@ -470,7 +469,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         key={ticket.id} ticket={ticket} reference={ticketReference(ticket,prefix)} index={index} activeView={activeView}
         selected={ticket.id===selectedTicketId} focused={index===focusedIndex} expanded={expandedTicketId===ticket.id}
         sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id] ?? undefined} slaLoading={ticketSla.isLoading}
-        showPriorityRing={priorityMatrixSort} priorityClock={priorityClocks?.[ticket.id]}
+        priorityClock={priorityClocks?.[ticket.id]}
         hasDraft={drafts.ticketIds.has(ticket.id)} queueId={queue&&!query.isPlaceholderData?queue:undefined} queueLabel={queue&&!query.isPlaceholderData?queueViews[queue].label:undefined}
         rowRefs={rowRefs}
         onFocus={()=>setFocusedIndex(index)} onMoveFocus={moveFocus} onExpanded={setExpandedTicketId}
@@ -485,7 +484,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   </div>;
 }
 
-function InboxConversationCard({ ticket, reference, index, activeView, selected, focused, expanded, sla, slaLoading, showPriorityRing, priorityClock, hasDraft, queueId, queueLabel, rowRefs, onFocus, onMoveFocus, onExpanded, onOpen, onResolve, onUrgent }: {
+function InboxConversationCard({ ticket, reference, index, activeView, selected, focused, expanded, sla, slaLoading, priorityClock, hasDraft, queueId, queueLabel, rowRefs, onFocus, onMoveFocus, onExpanded, onOpen, onResolve, onUrgent }: {
   ticket: Ticket;
   reference: string;
   index: number;
@@ -495,7 +494,6 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
   expanded: boolean;
   sla: TicketSla | undefined;
   slaLoading: boolean;
-  showPriorityRing: boolean;
   priorityClock: PriorityClockProjection | null | undefined;
   hasDraft: boolean;
   queueId: QueueView | undefined;
@@ -537,9 +535,9 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
     onClick={event => { if (!(event.target as Element).closest('a')) linkRef.current?.click(); }}
     onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); onMoveFocus(index + 1); } else if (event.key === 'ArrowUp') { event.preventDefault(); onMoveFocus(index - 1); } else if (event.key === 'Enter') { event.preventDefault(); linkRef.current?.click(); } else if (event.key === ' ' && event.target === event.currentTarget) { event.preventDefault(); onExpanded(expanded ? null : ticket.id); } else if (event.key === 'Escape' && expanded) { event.preventDefault(); onExpanded(null); } else if (event.altKey && event.key === 'ArrowRight') { event.preventDefault(); onResolve(); } else if (event.altKey && event.key === 'ArrowLeft') { event.preventDefault(); onUrgent(); } }}>
     <div aria-hidden="true" style={{ visibility: dragX === 0 ? 'hidden' : 'visible' }} className={css({ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bg: 'critical', px: '4', color: 'white', fontSize: 'sm', fontWeight: 'bold' })}><span>Resolve</span><span>Mark urgent</span></div>
-    <div data-part="ticket-row-surface" style={{ transform: `translateX(${dragX}px)` }} onPointerDown={event => { pointerStart.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerStart.current !== null) setDragX(Math.max(-112, Math.min(112, event.clientX - pointerStart.current))); }} onPointerUp={finishSwipe} onPointerCancel={() => { pointerStart.current = null; setDragX(0); }} className={clsx(css({ position: 'relative', display: 'grid', alignItems: 'start', gap: '2', p: '2', touchAction: 'pan-y', bg: 'bg.surface', _hover: { bg: 'bg.subtle' }, ...(selected ? { borderInlineStartWidth: '3px', borderInlineStartColor: 'border.focus', bg: 'bg.subtle' } : {}) }),showPriorityRing&&isClassifiedTicket(ticket)?css({ gridTemplateColumns: '7.5rem minmax(0, 1fr)' }):css({ gridTemplateColumns: '3rem minmax(0, 1fr)' }))}>
+    <div data-part="ticket-row-surface" style={{ transform: `translateX(${dragX}px)` }} onPointerDown={event => { pointerStart.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerStart.current !== null) setDragX(Math.max(-112, Math.min(112, event.clientX - pointerStart.current))); }} onPointerUp={finishSwipe} onPointerCancel={() => { pointerStart.current = null; setDragX(0); }} className={clsx(css({ position: 'relative', display: 'grid', alignItems: 'start', gap: '2', p: '2', touchAction: 'pan-y', bg: 'bg.surface', _hover: { bg: 'bg.subtle' }, ...(selected ? { borderInlineStartWidth: '3px', borderInlineStartColor: 'border.focus', bg: 'bg.subtle' } : {}) }),isClassifiedTicket(ticket)?css({ gridTemplateColumns: '7.5rem minmax(0, 1fr)' }):css({ gridTemplateColumns: '3rem minmax(0, 1fr)' }))}>
       <div data-part="ticket-sla-anchor" className={css({ display: 'flex', alignItems: 'start', justifyContent: 'center', gap: '1', minW: 0 })}>
-        <InboxClocks ticket={ticket} showPriorityRing={showPriorityRing} priorityClock={priorityClock} sla={sla} slaLoading={slaLoading} />
+        <InboxClocks ticket={ticket} priorityClock={priorityClock} sla={sla} slaLoading={slaLoading} />
       </div>
       <Link ref={linkRef} tabIndex={-1} aria-label={`Open ${reference}: ${ticket.subject}`} to={`/inbox/${activeView}/${ticket.id}`} onClick={event => { if (didSwipe.current) { event.preventDefault(); didSwipe.current = false; return; } onOpen(); }} className={css({ display: 'block', minW: 0, color: 'inherit', textDecoration: 'none' })}>
         <div data-part="ticket-default" aria-hidden={expanded} className={css({ display: 'grid', gridTemplateRows: expanded ? '0fr' : '1fr', opacity: expanded ? 0 : 1, transition: 'grid-template-rows 180ms ease, opacity 180ms ease', '@media (prefers-reduced-motion: reduce)': { transition: 'none' } })}>
@@ -561,12 +559,13 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
   </article>;
 }
 
-function InboxClocks({ticket,showPriorityRing,priorityClock,sla,slaLoading}:{
-  ticket:Ticket;showPriorityRing:boolean;priorityClock:PriorityClockProjection|null|undefined;sla:TicketSla|undefined;slaLoading:boolean;
+function InboxClocks({ticket,priorityClock,sla,slaLoading}:{
+  ticket:Ticket;priorityClock:PriorityClockProjection|null|undefined;sla:TicketSla|undefined;slaLoading:boolean;
 }){
   return <div className={css({ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: '1' })}>
-    {showPriorityRing&&isClassifiedTicket(ticket)&&<PriorityTriageRing ticket={ticket} projection={priorityClock} />}
-    <InboxSlaRing sla={sla} loading={slaLoading} priority={ticket.priority} />
+    {isClassifiedTicket(ticket)
+      ? <PriorityTriageRing ticket={ticket} projection={priorityClock} />
+      : <InboxSlaRing sla={sla} loading={slaLoading} priority={ticket.priority} />}
   </div>;
 }
 

@@ -8,6 +8,7 @@ import { parseTicketSla, type TicketSla } from './useTicketSla';
 
 export type TicketQueryPage = PaginatedResponse<Ticket> & {
   sla?: Record<string, TicketSla | null>; asOf?: string; next?: string | null;
+  priorityClocks?: Record<string, { remainingHours: number; paused: boolean; asOf: string } | null>;
 };
 const restartError = () => new ApiError('The SLA queue changed or expired. Restart SLA ordering.', 409, 'sla_sort_restart');
 

@@ -192,12 +192,19 @@ test('many current group-visible tickets, saved filters, and an all-miss substri
       fixture.db.prepare('INSERT INTO user_groups(tenant_id,user_id,group_id) VALUES(?,?,?)').bind(tenantId, agent.id, 'list-scale-group'),
       fixture.db.prepare('INSERT INTO ticket_filters(tenant_id,id,name,conditions) VALUES(?,?,?,?)').bind(tenantId, 'list-scale-filter', 'scale', JSON.stringify([{ field: 'status', operator: 'equals', value: 'open' }])),
     ]);
+    const scope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 1);
+    const baselineRepository = new SqlTicketRepository(scope,fixture.db);
+    const baselineSelection = {page:1,limit:1,filterId:'list-scale-filter',viewer:{role:'agent' as const,actorId:agent.id}};
+    const baselineActionable = (await baselineRepository.list({...baselineSelection,queue:'actionable'})).total;
+    const baselineUnassigned = (await baselineRepository.list({...baselineSelection,queue:'unassigned'})).total;
+    const baselineSnapshot=await new TicketListScanRepository(fixture.db,scope).snapshot();
+    const baselineCounts=await new TicketQueueCountsRepository(fixture.db,scope).counts({snapshot:baselineSnapshot,
+      credential:{role:'agent',sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600}});
     for (let offset = 0; offset < 10_000; offset += 100) {
       await fixture.db.batch(Array.from({ length: 100 }, (_, index) => fixture.db.prepare(
         "INSERT INTO tickets(tenant_id,id,subject,customer_email,group_id,source,status) VALUES(?,?,?,?,?,?,?)")
         .bind(tenantId, `list-scale-${String(offset + index).padStart(5, '0')}`, 'scale candidate', fixture.principals.customerA.email, 'list-scale-group', 'fixture', 'open')));
     }
-    const scope = createVerifiedTenantScope(tenantId, agent.id, ['agent'], 1);
     const snapshot = await new TicketListScanRepository(fixture.db, scope).snapshot('list-scale-filter');
     const envelope = ticketListEnvelope(snapshot, { search: 'all-miss-substring', groupRestricted: true });
     const observations: D1Observation[] = [];
@@ -218,7 +225,7 @@ test('many current group-visible tickets, saved filters, and an all-miss substri
       const queueObservations:D1Observation[]=[];
       const page=await new SqlTicketRepository(scope,observeDatabase(fixture.db,queueObservations)).list({queue,
         page:1,limit:50,filterId:'list-scale-filter',viewer:{role:'agent',actorId:agent.id},scanFence:queueSnapshot});
-      assert.equal(page.total,10001);
+      assert.equal(page.total,10000+(queue==='unassigned'?baselineUnassigned:baselineActionable));
       const reads=queueObservations.reduce((sum,item)=>sum+item.rowsRead,0);
       t.diagnostic(`${queue}: ${queueSnapshot.ticketRows} candidates, ${reads} native reads, ${queueEnvelope!.d1RowsRead} reserved`);
       if(reads>queueEnvelope!.d1RowsRead!) boundFailures.push(`${queue} reads ${reads} exceed ${queueEnvelope!.d1RowsRead}`);
@@ -227,7 +234,9 @@ test('many current group-visible tickets, saved filters, and an all-miss substri
     const countObservations:D1Observation[]=[];
     const totals=await new TicketQueueCountsRepository(observeDatabase(fixture.db,countObservations),scope).counts({snapshot:countSnapshot,
       credential:{role:'agent',sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600}});
-    assert.equal(totals.counts.all,10001);assert.equal(totals.counts.mine,10001);assert.equal(totals.counts.unassigned,0);
+    assert.equal(totals.counts.all,baselineCounts.counts.all+10000);
+    assert.equal(totals.counts.mine,baselineCounts.counts.actionable+10000);
+    assert.equal(totals.counts.unassigned,0);
     const countReads=countObservations.reduce((sum,item)=>sum+item.rowsRead,0);
     const countEnvelope=ticketListEnvelope(countSnapshot,{groupRestricted:true,aggregateCounts:true})!;
     assert.ok(countReads>0&&countReads<=countEnvelope.d1RowsRead!);
