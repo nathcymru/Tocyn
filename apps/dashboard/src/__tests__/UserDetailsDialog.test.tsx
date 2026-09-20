@@ -17,6 +17,7 @@ it.each([['Profile details','User Profile'],['View Activity','User Activity Log'
   expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent(title);
   expect(dialog.querySelector('.dialog__body')).toBeInTheDocument();
   expect(dialog.querySelector('.dialog__footer')).toContainElement(within(dialog).getByRole('button',{name:'Close'}));
+  expect(within(dialog).getByRole('button',{name:'Close user details'})).toHaveClass('button', 'button--variant_plain');
   await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Close user details'})).toHaveFocus());
   fireEvent.pointerDown(document.body);fireEvent.click(document.body);
   expect(dialog).toBeInTheDocument();
