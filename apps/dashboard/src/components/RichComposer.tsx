@@ -146,6 +146,14 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
   const linkInputRef = useRef<HTMLInputElement>(null);
   const linkSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const focusEditorAfterLinkRef = useRef(false);
+  const controlledRef = useRef({ value, format, readOnly, onChange });
+  const syncedRef = useRef(false);
+  const desiredRef = useRef({ value, format, readOnly });
+  if (desiredRef.current.value !== value || desiredRef.current.format !== format || desiredRef.current.readOnly !== readOnly) {
+    desiredRef.current = { value, format, readOnly };
+    syncedRef.current = false;
+  }
+  controlledRef.current = { value, format, readOnly, onChange };
   const editor = useEditor({
     extensions: tocynMarkdownExtensions,
     content: format === 'plain' ? '' : value,
@@ -153,8 +161,9 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     editable: !readOnly,
     editorProps: { attributes: { id, role: 'textbox', 'aria-label': 'Reply message', 'aria-autocomplete': 'list' } },
     onUpdate: ({ editor: instance }) => {
-      if (readOnly || format === 'plain') return;
-      onChange(instance.getMarkdown());
+      const controlled = controlledRef.current;
+      if (controlled.readOnly || controlled.format === 'plain' || !syncedRef.current) return;
+      controlled.onChange(instance.getMarkdown());
       const beforeCaret = instance.state.doc.textBetween(0, instance.state.selection.from, '\n');
       setAutocomplete(findComposerAutocomplete(beforeCaret, beforeCaret.length, hooks));
       setActiveIndex(0);
@@ -177,10 +186,11 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     }
   }, [editor, readOnly]);
   useLayoutEffect(() => { if (editor) { const dom = editor.view.dom; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); } }, [editor, id]);
-  useEffect(() => {
-    if (!editor || format === 'plain' || editor.getMarkdown() === value) return;
-    editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
-  }, [editor, value, readOnly, format]);
+  useLayoutEffect(() => {
+    if (!editor || format === 'plain') return;
+    if (editor.getMarkdown() !== value) editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
+    syncedRef.current = true;
+  }, [editor, value, format, readOnly]);
   const insert = (markdown: string, match = autocomplete) => {
     if (!editor || readOnly || !match) return;
     const { from, to } = editor.state.selection;

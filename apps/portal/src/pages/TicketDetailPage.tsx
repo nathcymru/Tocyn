@@ -27,6 +27,7 @@ type DetailPage = { ticket: Ticket; articles: Article[]; pagination?: { next_cur
 const messageArea = css({ h: 'clamp(12rem, 40dvh, 24rem)', minW: '0' });
 const messageViewport = css({ h: 'full', minH: '0' });
 const messageContent = css({ display: 'flex', minW: '0', flexDirection: 'column', gap: '4', p: '4' });
+const errorActionsWrap = css({ flexWrap: 'wrap' });
 const replyRefreshWarning = 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.';
 
 export function TicketDetailPage() {
@@ -316,7 +317,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
   }
 
   if (error || !ticket) {
-    return <ParkEmptyState role="alert" title="Conversation could not be loaded." description={error || 'Ticket not found'} headingLevel={false} className={p.emptyError} action={<div className={p.emptyActions}><ParkButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }}>Retry loading conversation</ParkButton><ParkLink asChild><RouterLink to="/tickets">Back to Tickets</RouterLink></ParkLink></div>} />;
+    return <ParkEmptyState role="alert" title="Conversation could not be loaded." description={error || 'Ticket not found'} headingLevel={false} className={p.emptyError} action={<div className={[p.emptyActions, errorActionsWrap].join(' ')}><ParkButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }}>Retry loading conversation</ParkButton><ParkLink asChild><RouterLink to="/tickets">Back to Tickets</RouterLink></ParkLink></div>} />;
   }
 
   return (

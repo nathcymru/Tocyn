@@ -42,6 +42,15 @@ it('selects the available ticket form when AI is disabled', async () => {
   expect(screen.getByRole('tab', { name: 'New Ticket' })).toHaveAttribute('aria-selected', 'true');
   expect(screen.getByRole('textbox', { name: 'Message' })).toBeVisible();
 });
+it('keeps a long tenant title inside the widget header', async () => {
+  const title = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  await open({ aiChat: true, ticketForm: true }, { title });
+  const heading = screen.getByRole('heading', { name: title });
+  expect(heading).toHaveClass('min-w_0', 'ov-wrap_anywhere');
+  const region = screen.getByRole('region', { name: title });
+  expect(region).toHaveAttribute('aria-labelledby', heading.id);
+  expect(within(region).getByRole('button', { name: 'Close support' })).toBeVisible();
+});
 it('honours string-valued tenant feature switches and hides a widget with no enabled option', async () => {
   await open({ aiChat: 'false', ticketForm: 'true' });
   expect(screen.queryByRole('tab', { name: 'AI Chat' })).not.toBeInTheDocument();

@@ -7,7 +7,7 @@ export const w = {
   launcherWrap: css({ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }),
   panel: css({ display: 'flex', w: { base: 'calc(100vw - 2.5rem)', sm: '24rem' }, maxH: 'min(600px, calc(100dvh - 7.5rem))', flexDirection: 'column', mb: '4', bg: 'bg.surface', rounded: 'lg', boxShadow: 'xl', overflow: 'hidden', borderWidth: '1px', borderTopWidth: '3px', borderColor: 'border.default', borderTopColor: 'var(--widget-brand-color)' }),
   panelHeader: css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: '4', bg: 'bg.surface', color: 'fg.default', borderBottomWidth: '1px', borderColor: 'border.default' }),
-  panelTitle: css({ m: '0', fontSize: 'lg', fontWeight: 'semibold' }),
+  panelTitle: css({ m: '0', minW: '0', overflowWrap: 'anywhere', fontSize: 'lg', fontWeight: 'semibold' }),
   close: css({ display: 'grid', minW: '11', minH: '11', placeItems: 'center' }),
   closeIcon: css({ w: '6', h: '6' }),
   launcher: css({ display: 'grid', minW: '14', minH: '14', placeItems: 'center', rounded: 'full', boxShadow: 'lg' }),

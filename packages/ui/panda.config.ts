@@ -47,6 +47,9 @@ export default {
     ':root[data-tocyn-focus-mode="true"] [data-tocyn-focus-decoration]': { display: 'none' },
     '[data-tocyn-density="compact"] main[aria-label="Workspace"]': { padding: '1rem' },
     '[data-tabular]': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' },
+    // Panda's fontFamily utility is used by metric, reference and SLA content.
+    // Give every Inter instance the same numeric features as textStyles.tabular.
+    '.ff_tabular': { fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' },
     '.table__root': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' },
   },
 
@@ -211,8 +214,10 @@ export default {
             accountIdentityName: { margin: '0', fontWeight: '600' },
             accountIdentityEmail: { overflow: 'hidden', margin: '0.25rem 0 0', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
             inboxWorkspace: { display: 'flex', minWidth: '0', minHeight: '0', width: '100%', height: '100%', flex: '1', '& [data-part="resize-trigger"]': { display: { base: 'none', lg: 'flex' } } },
-            inboxList: { display: 'flex', minHeight: '0', height: '100%', flex: { base: '1 1 100% !important', lg: '1' }, minWidth: { base: '0 !important', lg: '0' }, maxWidth: { base: 'none !important', lg: 'none' }, flexDirection: 'column', overflow: 'hidden', width: '100%', margin: '0', padding: '0', boxSizing: 'border-box' },
-            inboxDetail: { display: 'flex', minHeight: '0', height: '100%', flex: { base: '1 1 100% !important', lg: '1' }, minWidth: { base: '0 !important', lg: '0' }, maxWidth: { base: 'none !important', lg: 'none' }, flexDirection: 'column', overflow: 'hidden', background: 'bg.canvas', width: '100%', margin: '0', padding: '0', boxSizing: 'border-box' },
+            // Ark owns desktop panel flex ratios and bounds through inline styles.
+            // Override its max-width only while a single mobile panel is visible.
+            inboxList: { display: 'flex', minHeight: '0', height: '100%', minWidth: '0', flexDirection: 'column', overflow: 'hidden', width: '100%', margin: '0', padding: '0', boxSizing: 'border-box', '@media screen and (max-width: 63.999rem)': { maxWidth: 'none !important' } },
+            inboxDetail: { display: 'flex', minHeight: '0', height: '100%', minWidth: '0', flexDirection: 'column', overflow: 'hidden', background: 'bg.canvas', width: '100%', margin: '0', padding: '0', boxSizing: 'border-box', '@media screen and (max-width: 63.999rem)': { maxWidth: 'none !important' } },
             inboxHeader: { display: 'grid', flexShrink: '0', gap: '0.75rem', padding: { base: '0.75rem', md: '0.875rem 1rem 0.75rem' }, borderBottom: '1px solid', borderColor: 'border.default', background: 'bg.surface', '& > p': { margin: '0', color: 'text.muted', fontSize: '0.8125rem' } },
             inboxMetrics: { display: 'grid', gridTemplateColumns: { base: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: '0.5rem', '& [data-part="body"]': { minWidth: '0', padding: '0.625rem 0.75rem' }, '& strong': { display: 'block', marginTop: '0.125rem', fontSize: '1.25rem' } },
             inboxHiddenHeading: { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', whiteSpace: 'nowrap' },
@@ -325,7 +330,7 @@ export default {
             header: { display: 'flex', minWidth: '0', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', borderBottom: '1px solid', borderColor: 'border.default', padding: '1rem 1.25rem' },
             heading: { display: 'flex', minWidth: '0', flex: '1', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' },
             titleStack: { display: 'grid', minWidth: '0', gap: '0.5rem' },
-            titleRow: { display: 'flex', minWidth: '0', alignItems: 'baseline', gap: '0.75rem' },
+            titleRow: { display: 'flex', minWidth: '0', flexDirection: { base: 'column', sm: 'row' }, alignItems: { base: 'flex-start', sm: 'baseline' }, gap: { base: '0.25rem', sm: '0.75rem' } },
             reference: { flexShrink: '0', color: 'text.muted', fontFamily: 'tabular', fontSize: '0.875rem' },
             title: { minWidth: '0', margin: '0', overflow: 'hidden', color: 'text.primary', fontSize: '1.25rem', fontWeight: '700', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
             meta: { display: 'flex', minWidth: '0', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', color: 'text.muted', fontSize: '0.875rem' },

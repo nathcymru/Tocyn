@@ -142,6 +142,31 @@ it('converts the legacy attachment byte field when canonical size is absent', as
   expect(await screen.findByRole('button', { name: /legacy\.txt/ })).toHaveTextContent('2 KB');
 });
 
+it('keeps the complete email subject, sender, plain body and attachment readable in a narrow detail pane', async () => {
+  const subject = 'A deliberately long synthetic email subject for narrow layout review';
+  const sender = 'long.synthetic.customer.address@example.invalid';
+  const data = { ...ticket, subject, source: 'email', customer_email: sender, articles: [
+    { id: 'email-fixture', sender_type: 'customer', is_internal: false, body: 'Newest message body.\n\n> Older quoted history retained.', body_format: 'plain', raw_email_id: 'synthetic-email-raw', created_at: '2026-09-09T00:00:00Z', attachments: [{ id: 'document-fixture', file_name: 'a-very-long-synthetic-attachment-name-for-geometry-check.pdf', file_size: 24576, content_type: 'application/pdf' }] },
+    { id: 'internal-fixture', sender_type: 'agent', is_internal: true, body: 'Private internal note.', body_format: 'plain', created_at: '2026-09-09T00:01:00Z', attachments: [] },
+  ] };
+  transport(() => json(data)); showDetail();
+  const heading = await screen.findByRole('heading', { name: subject });
+  expect(heading).toHaveClass('white-space_normal', 'ov-wrap_anywhere');
+  const metadata = document.querySelector('.ticketDetail__emailSummaryFields');
+  expect(metadata?.querySelectorAll('dd span')).toHaveLength(2);
+  expect(metadata?.textContent).toContain(sender);
+  expect(metadata?.textContent).toContain(subject);
+  const body = screen.getByText(/Newest message body\./);
+  expect(body).toHaveClass('white-space_pre-wrap');
+  expect(body.textContent).toContain('\n\n> Older quoted history retained.');
+  const attachment = screen.getByRole('button', { name: /a-very-long-synthetic-attachment-name/ });
+  expect(attachment.parentElement).toHaveClass('min-w_0', 'max-w_full');
+  expect(document.querySelector('.ticketDetail__composerForm')).toHaveClass('grid-tc_minmax(0,_1fr)');
+  expect(document.querySelector('[data-internal="true"] .ticketDetail__timelineLabel')).toHaveTextContent('Internal Note');
+  fireEvent.click(screen.getByRole('button', { name: 'Show full email' }));
+  expect(screen.getByText('Complete stored body is shown above.')).toBeInTheDocument();
+});
+
 it('previews an article raster attachment only through its authenticated download endpoint', async () => {
   const data = { ...ticket, articles: ticket.articles.map(article => ({ ...article,
     attachments: [{ id: 'image-fixture', filename: 'article-image.png', size: 15, contentType: 'image/png' }],

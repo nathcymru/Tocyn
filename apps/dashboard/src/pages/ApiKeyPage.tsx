@@ -66,7 +66,7 @@ export function ApiKeyPage() {
       const data = await dashboardApi.get<ApiKey[]>('/api-keys');
       setKeys(data.filter(key => !revokedIds.current.has(key.id))); setListError('');
     } catch {
-      setListError('The API key list could not be refreshed. Reload this page before relying on the list.');
+      setListError('The API key list could not be refreshed. Retry loading keys before relying on the list.');
     } finally {
       setIsLoading(false);
     }
@@ -262,7 +262,10 @@ export function ApiKeyPage() {
       )}
 
       {listError && <ParkAlert.Root role="alert" status="error" variant="surface">
-        <ParkAlert.Content><ParkAlert.Description>{listError}</ParkAlert.Description></ParkAlert.Content>
+        <ParkAlert.Content>
+          <ParkAlert.Description>{listError}</ParkAlert.Description>
+          {keys.length > 0 && <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton>}
+        </ParkAlert.Content>
       </ParkAlert.Root>}
       <ParkCard.Root variant="outline" className={css({ minW: 0 })}>
         <ParkCard.Body className={keys.length > 0
@@ -276,7 +279,7 @@ export function ApiKeyPage() {
           ) : keys.length === 0 ? (
             <ParkEmptyState
               title={listError ? 'API key list unavailable.' : 'No API keys found.'}
-              description={listError ? 'Reload this page before relying on the list.' : 'Create a key when an integration requires external API access.'}
+              description={listError ? 'Retry loading keys before relying on the list.' : 'Create a key when an integration requires external API access.'}
               headingLevel={false}
               className={css({ minW: 0 })}
               action={listError ? <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton> : undefined}

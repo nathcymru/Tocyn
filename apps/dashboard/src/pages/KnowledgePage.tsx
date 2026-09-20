@@ -1,6 +1,8 @@
 import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Link as ParkLink } from '@luminatick/ui/components';
+import { css } from '@luminatick/ui/styled-system/css';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory, KnowledgeDoc } from '../types';
 import {
@@ -164,7 +166,7 @@ export const KnowledgePage: React.FC = () => {
     return (
       <div key={node.id}>
         <div
-          className={[pageStyles.knowledgeCategoryRow, isSelected ? pageStyles.knowledgeCategoryRowSelected : ''].filter(Boolean).join(' ')}
+          className={[pageStyles.knowledgeCategoryRow, css({ display: 'grid', w: 'full', maxW: 'full', gridTemplateColumns: { base: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' } }), isSelected ? pageStyles.knowledgeCategoryRowSelected : ''].filter(Boolean).join(' ')}
           style={{ ['--tocyn-category-depth' as string]: depth }}
         >
           <div className={pageStyles.knowledgeCategoryMain}>
@@ -178,12 +180,12 @@ export const KnowledgePage: React.FC = () => {
             ) : (
               <span className={pageStyles.knowledgeCategorySpacer}></span>
             )}
-            <ParkButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className={pageStyles.knowledgeCategoryButton}>
-            <IconFolder size={14} aria-hidden="true" />
-            <span>{node.name}</span>
+            <ParkButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className={`${pageStyles.knowledgeCategoryButton} ${css({ w: 'full', maxW: 'full', h: 'auto', minH: '10', whiteSpace: 'normal', overflowWrap: 'anywhere' })}`}>
+            <IconFolder size={14} aria-hidden="true" className={css({ flexShrink: 0 })} />
+            <span className={css({ minW: 0, whiteSpace: 'normal', overflowWrap: 'anywhere' })}>{node.name}</span>
             </ParkButton>
           </div>
-          <div className={pageStyles.knowledgeCategoryActions}>
+          <div className={`${pageStyles.knowledgeCategoryActions} ${css({ justifySelf: 'end' })}`}>
             <ParkButton
               onClick={(e) => {
                 e.stopPropagation();
@@ -312,10 +314,11 @@ export const KnowledgePage: React.FC = () => {
               <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false}
                 action={<ParkButton onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}>Create article</ParkButton>} />
             ) : (
-            <ParkTable.Root className={pageStyles.knowledgeTable}>
+            <div role="region" aria-label="Knowledge articles" tabIndex={0} className={css({ maxW: 'full', overflowX: 'auto', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } })}>
+            <ParkTable.Root className={`${pageStyles.knowledgeTable} ${css({ minW: '44rem' })}`}>
               <ParkTable.Head>
                 <ParkTable.Row>
-                  <ParkTable.Header scope="col">Title</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header><ParkTable.Header scope="col">Tier</ParkTable.Header><ParkTable.Header scope="col">Created</ParkTable.Header><ParkTable.Header scope="col">Actions</ParkTable.Header>
+                  <ParkTable.Header scope="col" className={css({ w: '32%' })}>Title</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header><ParkTable.Header scope="col">Tier</ParkTable.Header><ParkTable.Header scope="col">Created</ParkTable.Header><ParkTable.Header scope="col">Actions</ParkTable.Header>
                 </ParkTable.Row>
               </ParkTable.Head>
               <ParkTable.Body>
@@ -331,7 +334,7 @@ export const KnowledgePage: React.FC = () => {
                     key={doc.id}
                     className={pageStyles.knowledgeRow}
                   >
-                    <ParkTable.Cell><ParkButton variant="plain" onClick={() => navigate(`/knowledge/edit/${doc.id}`)} aria-label={`Edit ${doc.title}`}>{doc.title}</ParkButton></ParkTable.Cell>
+                    <ParkTable.Cell><ParkLink asChild variant="plain"><Link to={`/knowledge/edit/${doc.id}`} aria-label={`Edit ${doc.title}`} className={css({ minW: 0, minH: '10', maxW: 'full', whiteSpace: 'normal', overflowWrap: 'anywhere', textAlign: 'start' })}>{doc.title}</Link></ParkLink></ParkTable.Cell>
                     <ParkTable.Cell>
                       <span className={pageStyles.knowledgeStatusBadge} data-status={doc.status}>
                         {doc.status}
@@ -357,6 +360,7 @@ export const KnowledgePage: React.FC = () => {
                 ))}
               </ParkTable.Body>
             </ParkTable.Root>
+            </div>
             )}
           </ParkCard.Body>
         </ParkCard.Root>

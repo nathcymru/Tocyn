@@ -55,6 +55,20 @@ it('exposes category selection as named pressed-state buttons',async()=>{
  fireEvent.click(all);expect(category).toHaveAttribute('aria-pressed','false');expect(all).toHaveAttribute('aria-pressed','true');
 });
 
+it('wraps long category names while keeping selection and actions keyboard discoverable', async () => {
+ const name = 'A long synthetic knowledge category name that requires accessible wrapping';
+ api.get.mockImplementation(async (path: string) => path.endsWith('categories') ? [{ id: 'category-a', name, parent_id: null }] : []);
+ render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
+ const category = await screen.findByRole('button',{name});
+ expect(category).toHaveClass('white-space_normal','ov-wrap_anywhere','h_auto');
+ expect(category.querySelector('span')).toHaveClass('white-space_normal','ov-wrap_anywhere');
+ expect(category.closest('.page__knowledgeCategoryRow')).toHaveClass('d_grid','w_full');
+ expect(screen.getByRole('button',{name:`Add subcategory to ${name}`})).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:`Delete category ${name}`})).toBeInTheDocument();
+ category.focus();expect(category).toHaveFocus();
+ fireEvent.click(category);expect(category).toHaveAttribute('aria-pressed','true');
+});
+
 
 it.each([
  ['Add Root Category','New root category name'],
@@ -87,9 +101,25 @@ it('shows Park loading and a retryable failure before the article table is empty
  expect(screen.getByRole('button',{name:'Create article'})).toBeInTheDocument();
 });
 
-it('uses a named Park button to open an article from the table', async () => {
+it('uses a named Park link to open an article from the table', async () => {
  render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
- const edit = await screen.findByRole('button',{name:'Edit Synthetic article'});
- expect(edit).toBeInTheDocument();
+ const edit = await screen.findByRole('link',{name:'Edit Synthetic article'});
+ expect(edit).toHaveClass('link');
+ expect(edit).toHaveAttribute('href','/knowledge/edit/article-a');
  expect(screen.getByRole('table')).toBeInTheDocument();
+});
+
+it('keeps long article titles readable in a keyboard-scrollable Park table region', async () => {
+ const title = 'An exceptionally long synthetic knowledge title that should remain readable on a narrow screen without disappearing into a tiny table cell';
+ api.get.mockImplementation(async (path: string) => path.endsWith('categories') ? [] : [{ id: 'article-a', title, category_id: null, created_at: '2026-09-10', status: 'active', tier: 'answer' }]);
+ render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
+ const link = await screen.findByRole('link',{name:`Edit ${title}`});
+ const region = screen.getByRole('region',{name:'Knowledge articles'});
+ expect(region).toHaveAttribute('tabindex','0');
+ expect(region).toHaveClass('ov-x_auto');
+ expect(region.querySelector('table')).toHaveClass('table__root','min-w_44rem');
+ expect(link).toHaveClass('link','white-space_normal','ov-wrap_anywhere','max-w_full');
+ region.focus();
+ expect(region).toHaveFocus();
+ expect(link).toHaveAttribute('href','/knowledge/edit/article-a');
 });

@@ -55,7 +55,7 @@ function visualSnapshot(locator, pseudo = null) {
     const focusContrast = focusColor && !focusBackdrop.unsupported ? (Math.max(luminance(composite(focusColor, focusBackdrop)), luminance(focusBackdrop)) + .05) / (Math.min(luminance(composite(focusColor, focusBackdrop)), luminance(focusBackdrop)) + .05) : null;
     const root = element.getRootNode();
     const activeInShadow = root instanceof ShadowRoot && root.activeElement === element;
-    return { activeInShadow, text: { color: style.color, background: backdrop.unsupported ? null : backdrop, contrast, unsupported: backdrop.unsupported ?? (!foreground ? `foreground:${style.color}` : null) }, focus: { visible: activeInShadow && element.matches(':focus-visible'), outlineWidth: style.outlineWidth, outlineStyle: style.outlineStyle, outlineColor: style.outlineColor, boxShadow: style.boxShadow, contrast: focusContrast, unsupported: focusContrast === null ? (focusBackdrop.unsupported ?? 'no nontransparent focus color') : null }, target: { width: box.width, height: box.height } };
+    return { activeInShadow, text: { color: style.color, background: backdrop.unsupported ? null : backdrop, contrast, unsupported: backdrop.unsupported ?? (!foreground ? `foreground:${style.color}` : null) }, focus: { visible: activeInShadow && element.matches(':focus-visible'), outlineWidth: style.outlineWidth, outlineOffset: style.outlineOffset, outlineStyle: style.outlineStyle, outlineColor: style.outlineColor, boxShadow: style.boxShadow, contrast: focusContrast, unsupported: focusContrast === null ? (focusBackdrop.unsupported ?? 'no nontransparent focus color') : null }, target: { width: box.width, height: box.height } };
   }, pseudo);
 }
 
@@ -88,28 +88,39 @@ try {
       if (aiChat) { assert.equal(await chat.getAttribute('aria-selected'), 'true'); await chat.focus(); await page.keyboard.press('ArrowRight'); await page.waitForFunction(() => document.querySelector('#lumina-widget-container')?.shadowRoot?.activeElement?.textContent?.includes('New Ticket')); assert.equal(await ticket.evaluate(element => element.getRootNode().activeElement === element), true); assert.equal(await chat.getAttribute('aria-selected'), 'true'); await page.keyboard.press('Enter'); }
       else { assert.equal(await chat.count(), 0); assert.equal(await ticket.getAttribute('aria-selected'), 'true'); }
       await ticket.click(); assert.equal(await ticket.getAttribute('aria-selected'), 'true');
-      await page.keyboard.press('Tab'); await ticket.focus(); const ticketVisual = await visualSnapshot(ticket);
+      await page.keyboard.press('Tab'); await ticket.focus();
+      await page.waitForFunction(element => {
+        const style = getComputedStyle(element);
+        return element.getRootNode().activeElement === element && element.matches(':focus-visible')
+          && parseFloat(style.outlineWidth) >= 2 && parseFloat(style.outlineOffset) >= 2;
+      }, await ticket.elementHandle());
+      const ticketVisual = await visualSnapshot(ticket);
       await close.focus(); const closeVisual = await visualSnapshot(close);
       const controls = { launcher: launcherVisual, close: closeVisual, ticketTab: ticketVisual, name: await visualSnapshot(page.getByLabel('Your Name', { exact: true })), subject: await visualSnapshot(page.getByLabel('Subject', { exact: true })), message: await visualSnapshot(page.getByLabel('Message', { exact: true })), send: await visualSnapshot(page.getByRole('button', { name: 'Send Message', exact: true })) };
       const subject = page.getByLabel('Subject', { exact: true });
       const send = page.getByRole('button', { name: 'Send Message', exact: true });
       const name = page.getByLabel('Your Name', { exact: true });
       await name.focus();
+      controls.name = await visualSnapshot(name);
       await page.keyboard.press('Tab');
       await page.keyboard.press('Tab');
-      await page.waitForFunction(() => {
-        const root = document.querySelector('#lumina-widget-container')?.shadowRoot;
-        return root?.activeElement?.id.endsWith('-subject') ?? false;
-      });
+      // Park Field owns the generated input ID. Follow the labelled control
+      // itself instead of assuming an application-specific ID suffix.
+      const subjectElement = await subject.elementHandle();
+      assert.ok(subjectElement, 'Subject input must be rendered');
+      await page.waitForFunction(element => element.getRootNode().activeElement === element, subjectElement);
       assert.equal(await subject.evaluate(element => element.getRootNode().activeElement === element), true, 'Keyboard navigation must focus Subject in the widget shadow tree');
       controls.subject = await visualSnapshot(subject);
       await page.keyboard.press('Tab');
+      const message = page.getByLabel('Message', { exact: true });
+      assert.equal(await message.evaluate(element => element.getRootNode().activeElement === element), true, 'Keyboard navigation must focus Message after Subject');
+      controls.message = await visualSnapshot(message);
       await page.keyboard.press('Tab');
       assert.equal(await send.evaluate(element => element.getRootNode().activeElement === element), true, 'Keyboard navigation must reach Send Message in the widget shadow tree');
       controls.send = await visualSnapshot(send);
       controls.send.keyboardReachable = await send.evaluate(element => {
         const panel = element.getRootNode().querySelector('[role="region"]');
-        const scrollArea = element.closest('.overflow-y-auto');
+        const scrollArea = element.closest('[data-scope="scroll-area"][data-part="viewport"]');
         const box = element.getBoundingClientRect();
         const panelBox = panel?.getBoundingClientRect();
         return Boolean(panelBox && box.top >= panelBox.top && box.bottom <= panelBox.bottom && (!scrollArea || scrollArea.scrollTop > 0 || scrollArea.scrollHeight <= scrollArea.clientHeight));
@@ -124,10 +135,21 @@ try {
       const defects = Object.entries({ ...controls, ...text }).flatMap(([name, measurement]) => [
         measurement.text.unsupported ? `${name}: ${measurement.text.unsupported}` : measurement.text.contrast !== null && measurement.text.contrast < 4.5 ? `${name}: text contrast ${measurement.text.contrast.toFixed(2)}:1` : null,
         measurement.focus.visible && measurement.focus.unsupported ? `${name}: ${measurement.focus.unsupported}` : (measurement.focus.visible && measurement.focus.contrast !== null && measurement.focus.contrast < 3 ? `${name}: visible focus contrast ${measurement.focus.contrast.toFixed(2)}:1` : null),
-      ]).concat(Object.entries(controls).map(([name, measurement]) => measurement.target.width < 44 || measurement.target.height < 44 ? `${name}: target ${measurement.target.width.toFixed(1)}×${measurement.target.height.toFixed(1)}px` : null)).filter(Boolean);
-      for (const name of ['launcher', 'close', 'ticketTab', 'subject', 'send']) {
+      ]).concat(Object.entries(controls).map(([name, measurement]) => {
+        const { width, height } = measurement.target;
+        if (width < 24 || height < 24) return `${name}: pointer target below 24px (${width.toFixed(1)}×${height.toFixed(1)}px)`;
+        // These are normal controls; Park's 40px size is the approved minimum.
+        return width < 40 || height < 40 ? `${name}: normal control below 40px (${width.toFixed(1)}×${height.toFixed(1)}px)` : null;
+      })).filter(Boolean);
+      // Installed Park inputs and textarea use an inside ring (0px offset);
+      // Park buttons and tab triggers use an outside ring (2px offset).
+      const focusOffsets = { launcher: 2, close: 2, ticketTab: 2, name: 0, subject: 0, message: 0, send: 2 };
+      for (const [name, offset] of Object.entries(focusOffsets)) {
         const focus = controls[name].focus;
-        if (!focus.visible || parseFloat(focus.outlineWidth) < 2 || ['none', 'hidden'].includes(focus.outlineStyle)) defects.push(`${name}: visible keyboard outline missing`);
+        const actualOffset = parseFloat(focus.outlineOffset);
+        if (!focus.visible || parseFloat(focus.outlineWidth) < 2 || !Number.isFinite(actualOffset)
+          || (offset === 0 ? actualOffset !== 0 : actualOffset < offset)
+          || ['none', 'hidden'].includes(focus.outlineStyle)) defects.push(`${name}: Park keyboard ring (2px outline, ${offset}px offset) missing`);
       }
       if (!controls.send.keyboardReachable) defects.push('send: keyboard navigation did not reveal Send Message');
       if (clipping) defects.push('widget panel or document overflow/clipping observed');

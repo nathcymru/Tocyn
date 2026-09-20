@@ -57,6 +57,18 @@ describe('portal conversation accessibility and recovery', () => {
     expect(within(download).getByText(expected)).toBeTruthy();
   });
 
+  it('keeps a long unbroken customer message complete inside a wrapping conversation bubble', async () => {
+    const longBody = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    vi.mocked(portalApi.get).mockImplementation(async path => (path === '/config'
+      ? { TICKET_PREFIX: '#' }
+      : { ...detail, articles: [{ ...article, body: longBody }] }) as never);
+    mountDetail();
+    const body = await screen.findByText(longBody);
+    expect(body).toHaveClass('min-w_0', 'ov-wrap_anywhere');
+    expect(body.parentElement).toHaveClass('min-w_0', 'ov-wrap_anywhere');
+    expect(screen.getByRole('region', { name: 'Conversation messages' })).toContainElement(body);
+  });
+
   it.each([null, 42])('shows a truthful ticket reference in list and detail when number is %s', async ticketNumber => {
     const current = { ...ticket, id: '43c8cee6-28f5-4d32-aa8f-59b80c3a2dc4', ticket_no: ticketNumber };
     const reference = ticketNumber === null ? current.id : 'CASE-42';

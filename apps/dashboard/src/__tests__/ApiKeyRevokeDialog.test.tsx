@@ -87,6 +87,23 @@ it('reports unavailable key metadata instead of claiming an empty key list',asyn
  expect(screen.queryByText('API key list unavailable.')).not.toBeInTheDocument();
 });
 
+it('keeps cached keys visible and offers an inline retry after a refresh fails',async()=>{
+ api.get.mockResolvedValueOnce([key]).mockRejectedValueOnce(new Error('synthetic refresh failure'))
+   .mockResolvedValueOnce([key,{...key,id:'key-b',name:'Created key'}]);
+ api.post.mockResolvedValue({id:'key-b',name:'Created key',apiKey:'synthetic-one-time-value'});
+ render(<ApiKeyPage/>);
+ await screen.findByRole('button',{name:'Revoke Synthetic key'});
+ await create();
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveClass('alert__root', 'alert__root--status_error');
+ expect(screen.getByRole('button',{name:'Revoke Synthetic key'})).toBeInTheDocument();
+ expect(screen.queryByText('API key list unavailable.')).not.toBeInTheDocument();
+ fireEvent.click(within(alert).getByRole('button',{name:'Retry loading keys'}));
+ await screen.findByRole('button',{name:'Revoke Created key'});
+ expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+ expect(api.get).toHaveBeenCalledTimes(3);
+});
+
 it('renders a loaded empty state at card width without a five-column table',async()=>{
  api.get.mockResolvedValueOnce([]);render(<ApiKeyPage/>);
  const empty=await screen.findByText('No API keys found.');

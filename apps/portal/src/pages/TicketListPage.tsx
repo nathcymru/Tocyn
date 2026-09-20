@@ -1,6 +1,7 @@
 import { p } from '../portalStyles';
 import { ParkAlert, ParkButton, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { Link as ParkLink } from '@luminatick/ui/components';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useState, useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
@@ -14,6 +15,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { ticketReference } from '../utils/ticket-reference';
 import { PortalLoadingSkeleton } from '../components/RouteContent';
+
+const ticketRowMainWrap = css({ minW: '0', flexWrap: 'wrap' });
+const ticketSubjectWrap = css({ minW: '0', overflowWrap: 'anywhere' });
 
 export function TicketListPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -218,9 +222,9 @@ export function TicketListPage() {
                 <ParkLink asChild variant="plain">
                   <RouterLink to={`/tickets/${ticket.id}`} className={p.ticketListLink}>
                   <div className={p.ticketListRow}>
-                    <div className={p.ticketRowMain}>
+                    <div className={[p.ticketRowMain, ticketRowMainWrap].join(' ')}>
                       <span className={p.ticketReference}>{ticketReference(ticket, ticketPrefix)}</span>
-                      <h3 className={p.ticketSubject}>{ticket.subject}</h3>
+                      <h3 className={[p.ticketSubject, ticketSubjectWrap].join(' ')}>{ticket.subject}</h3>
                     </div>
                     <span className={[p.ticketStatus, statusColors[ticket.status]].join(' ')}>
                       {ticket.status}

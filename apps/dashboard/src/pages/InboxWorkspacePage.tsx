@@ -1,7 +1,7 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSkeleton, ParkSplitter, ParkTable, ParkVisuallyHidden } from '@luminatick/ui/park';
-import { Link as ParkLink } from '@luminatick/ui/components';
+import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { ChevronDown,ChevronLeft,ChevronRight,Filter,IconChartBar,IconCircleExclamation,IconClock,IconFilter,IconShieldHalved,IconTicket,Plus } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
@@ -362,7 +362,15 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       </div>
       {filterOpen && <section id="inbox-natural-filter" role="region" aria-label="Ticket filters" onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();filterTrigger.current?.focus();setFilterOpen(false);setNamingQuickView(false);}}} className={css({ borderTop: '1px solid', borderColor: 'border.default', bg: 'bg.subtle', p: '4' })}>
         <div className={css({ color: 'fg.muted', lineHeight: 'relaxed' })}>Showing <FilterKeyword name="Ticket owner" label={draftFilters.owner} options={['All tickets','My tickets','Unassigned']} onSelect={owner=>setDraftFilters(current=>({...current,owner:owner as NaturalFilters['owner']}))} />, created <FilterKeyword name="Created" label={draftFilters.created} options={['hour','day','week','month','quarter','anytime']} onSelect={created=>setDraftFilters(current=>({...current,created:created as NaturalFilters['created']}))} />, for <FilterKeyword name="Customer" label={draftFilters.customer} options={['anyone',...Array.from(new Set(tickets.map(ticket=>ticket.customer_email))).slice(0,6)]} onSelect={customer=>setDraftFilters(current=>({...current,customer}))} />, sorted by <FilterKeyword name="Sort" label={naturalSortLabel(draftFilters.sort)} options={Object.values(naturalSortOptions)} onSelect={sort=>{const next=(Object.keys(naturalSortOptions) as NaturalFilters['sort'][]).find(key=>naturalSortOptions[key]===sort)??'updated_desc';setDraftFilters(current=>({...current,sort:next}));}} />.</div>
-        <div className={css({ display: 'flex', flexWrap: 'wrap', gap: '2', mt: '3' })}><ParkInput aria-label="Filter by exact customer email" type="email" placeholder="Customer email" value={draftFilters.customer==='anyone'?'':draftFilters.customer} onChange={event=>setDraftFilters(current=>({...current,customer:event.target.value.trim()||'anyone'}))} className={css({ flex: '1 1 13rem', minW: 0 })} /><ParkInput aria-label="Search ticket text" placeholder="Search ticket text" value={draftFilters.search} onChange={event=>setDraftFilters(current=>({...current,search:event.target.value}))} className={css({ flex: '1 1 13rem', minW: 0 })} /></div>
+        <ParkCollapsible.Root defaultOpen={draftFilters.customer!=='anyone'||Boolean(draftFilters.search.trim())} className={css({ mt: '2' })}>
+          <ParkCollapsible.Trigger asChild><ParkButton type="button" variant="plain" className={css({ minH: '10', gap: '1' })}>
+            More filters{draftFilters.customer!=='anyone'||draftFilters.search.trim() ? ` (${Number(draftFilters.customer!=='anyone')+Number(Boolean(draftFilters.search.trim()))} set)` : ''}
+            <ChevronDown aria-hidden="true" />
+          </ParkButton></ParkCollapsible.Trigger>
+          <ParkCollapsible.Content className={css({ pt: '2' })}>
+            <div className={css({ display: 'flex', flexWrap: 'wrap', gap: '2' })}><ParkInput aria-label="Filter by exact customer email" type="email" placeholder="Customer email" value={draftFilters.customer==='anyone'?'':draftFilters.customer} onChange={event=>setDraftFilters(current=>({...current,customer:event.target.value.trim()||'anyone'}))} className={css({ flex: '1 1 13rem', minW: 0 })} /><ParkInput aria-label="Search ticket text" placeholder="Search ticket text" value={draftFilters.search} onChange={event=>setDraftFilters(current=>({...current,search:event.target.value}))} className={css({ flex: '1 1 13rem', minW: 0 })} /></div>
+          </ParkCollapsible.Content>
+        </ParkCollapsible.Root>
         <div className={css({ mt: '3', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '2', borderTopWidth: '1px', borderColor: 'border.default', pt: '3' })}>
           <ParkButton type="button" variant="plain" onClick={()=>{setNamingQuickView(true);setQuickViewError('');}}><Plus aria-hidden="true" />Add to quick view</ParkButton>
           <div className={css({ display: 'flex', gap: '1' })}><ParkButton type="button" variant="plain" onClick={clearFilters}>Clear all</ParkButton><ParkButton type="button" onClick={()=>applyFilters(draftFilters)}>Apply filters</ParkButton></div>
@@ -412,7 +420,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         </ParkTable.Root>
       </div>
     </>}
-    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={css({ flex: '1', overflowY: 'auto', bg: 'bg.subtle', display: presentation==='table'?{base:'flex',md:'none'}:'flex', flexDirection: 'column', gap: '3', p: '3' })}>
+    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={css({ flex: '1', overflowY: 'auto', bg: 'bg.surface', display: presentation==='table'?{base:'flex',md:'none'}:'flex', flexDirection: 'column' })}>
       {query.isLoading?<div role="status" aria-label="Loading conversations" className={css({ display: 'grid', gap: '3', p: '4' })}>
         <ParkVisuallyHidden>Loading conversations…</ParkVisuallyHidden>
         {[0,1,2,3].map(row=><div key={row} className={css({ display: 'flex', alignItems: 'center', gap: '3' })}>
@@ -472,7 +480,7 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
   ].filter((pill): pill is string => Boolean(pill));
   if (queueLabel) pills.push(queueLabel);
   const pillSlots = Array.from({ length: Math.max(2, pills.length) }, (_, slot) => pills[slot] ?? null);
-  const pillClass = (pill: string) => css({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minH: '6', minW: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', rounded: 'sm', bg: pill === 'Overdue' || pill === 'Urgent' ? 'bg.subtle' : 'bg.canvas', color: pill === 'Overdue' || pill === 'Urgent' ? 'red.11' : 'fg.muted', px: '2', fontSize: 'xs', fontWeight: 'medium' });
+  const pillClass = (pill: string) => css({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minH: '5', minW: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', rounded: 'sm', bg: pill === 'Overdue' || pill === 'Urgent' ? 'bg.subtle' : 'bg.canvas', color: pill === 'Overdue' || pill === 'Urgent' ? 'red.11' : 'fg.muted', px: '1', fontSize: 'xs', fontWeight: 'medium' });
   const finishSwipe = () => {
     if (dragX >= 88) { didSwipe.current = true; onResolve(); }
     if (dragX <= -88) { didSwipe.current = true; onUrgent(); }
@@ -480,24 +488,26 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
     setDragX(0);
   };
   return <article ref={node => { rowRefs.current[index] = node; }} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={focused?0:-1} data-selected={selected ? 'true' : undefined} data-preview-expanded={expanded ? 'true' : 'false'}
-    className={css({ position: 'relative', flexShrink: '0', overflow: 'hidden', bg: 'bg.surface', borderWidth: '1px', borderColor: selected ? 'border.focus' : 'border.default', rounded: 'lg', boxShadow: 'xs', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _hover: { bg: 'bg.subtle' } })}
+    className={css({ position: 'relative', flexShrink: '0', overflow: 'hidden', bg: selected ? 'bg.subtle' : 'bg.surface', borderBottomWidth: '1px', borderColor: selected ? 'border.focus' : 'border.default', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _hover: { bg: 'bg.subtle' } })}
     onMouseEnter={() => onExpanded(ticket.id)} onMouseLeave={event => { if (!event.currentTarget.contains(document.activeElement)) onExpanded(null); }}
     onFocus={() => { onFocus(); onExpanded(ticket.id); }}
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) onExpanded(null); }}
     onClick={event => { if (!(event.target as Element).closest('a')) linkRef.current?.click(); }}
     onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); onMoveFocus(index + 1); } else if (event.key === 'ArrowUp') { event.preventDefault(); onMoveFocus(index - 1); } else if (event.key === 'Enter') { event.preventDefault(); linkRef.current?.click(); } else if (event.key === ' ' && event.target === event.currentTarget) { event.preventDefault(); onExpanded(expanded ? null : ticket.id); } else if (event.altKey && event.key === 'ArrowRight') { event.preventDefault(); onResolve(); } else if (event.altKey && event.key === 'ArrowLeft') { event.preventDefault(); onUrgent(); } }}>
     <div aria-hidden="true" style={{ visibility: dragX === 0 ? 'hidden' : 'visible' }} className={css({ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bg: 'critical', px: '4', color: 'white', fontSize: 'sm', fontWeight: 'bold' })}><span>Resolve</span><span>Mark urgent</span></div>
-    <div data-part="ticket-row-surface" style={{ transform: `translateX(${dragX}px)` }} onPointerDown={event => { pointerStart.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerStart.current !== null) setDragX(Math.max(-112, Math.min(112, event.clientX - pointerStart.current))); }} onPointerUp={finishSwipe} onPointerCancel={() => { pointerStart.current = null; setDragX(0); }} className={css({ position: 'relative', display: 'grid', gridTemplateColumns: '3.5rem minmax(0, 1fr)', alignItems: 'start', gap: '3', p: '3', touchAction: 'pan-y', bg: 'bg.surface', _hover: { bg: 'bg.subtle' }, ...(selected ? { borderInlineStartWidth: '3px', borderInlineStartColor: 'border.focus', bg: 'bg.subtle' } : {}) })}>
+    <div data-part="ticket-row-surface" style={{ transform: `translateX(${dragX}px)` }} onPointerDown={event => { pointerStart.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerStart.current !== null) setDragX(Math.max(-112, Math.min(112, event.clientX - pointerStart.current))); }} onPointerUp={finishSwipe} onPointerCancel={() => { pointerStart.current = null; setDragX(0); }} className={css({ position: 'relative', display: 'grid', gridTemplateColumns: '3rem minmax(0, 1fr)', alignItems: 'start', gap: '2', p: '2', touchAction: 'pan-y', bg: 'bg.surface', _hover: { bg: 'bg.subtle' }, ...(selected ? { borderInlineStartWidth: '3px', borderInlineStartColor: 'border.focus', bg: 'bg.subtle' } : {}) })}>
       <div data-part="ticket-sla-anchor" className={css({ display: 'flex', flexDirection: 'column', alignItems: 'center', minW: 0 })}>
         <InboxSlaRing sla={sla} loading={slaLoading} priority={ticket.priority} />
       </div>
       <Link ref={linkRef} tabIndex={-1} to={`/inbox/${activeView}/${ticket.id}`} onClick={event => { if (didSwipe.current) { event.preventDefault(); didSwipe.current = false; return; } onOpen(); }} className={css({ display: 'block', minW: 0, color: 'inherit', textDecoration: 'none' })}>
         <div className={css({ display: 'flex', alignItems: 'baseline', gap: '2', minW: 0 })}><span className={css({ flexShrink: 0, color: 'fg.muted', fontFamily: 'tabular', fontSize: 'xs', fontWeight: 'semibold' })}>{reference}</span><h3 className={css({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'sm', fontWeight: 'semibold' })}>{ticket.subject}</h3></div>
-        <div className={css({ mt: '1', display: 'flex', minW: 0, flexWrap: 'wrap', gap: '1', color: 'fg.muted', fontSize: 'xs' })}><span className={css({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{ticket.customer_email}</span><span aria-hidden="true">·</span><span>{ticket.assigned_to?'Assigned':'Unassigned'}</span><span aria-hidden="true">·</span><time dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></div>
-        <div data-part="ticket-pill-slots" className={css({ mt: '2', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1', maxW: '44' })}>{pillSlots.map((pill,slot) => pill
+        <div className={css({ mt: '1', display: 'flex', alignItems: 'center', minW: 0, gap: '1', color: 'fg.muted', fontSize: 'xs' })}><span className={css({ flex: '1', minW: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{ticket.customer_email}</span><span aria-hidden="true">·</span><span className={css({ flexShrink: 0 })}>{ticket.assigned_to?'Assigned':'Unassigned'}</span><time dateTime={ticket.updated_at} aria-label={`Updated ${utcTimestamp(ticket.updated_at).toLocaleDateString()}`} className={css({ '@media screen and (max-width: 63.999rem)': { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' } })}>· {utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></div>
+        <div data-part="ticket-pill-slots" className={css({ mt: '1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1', maxW: '44' })}>{pillSlots.map((pill,slot) => pill
           ? <span key={`${pill}-${slot}`} data-part="ticket-pill-slot" aria-label={queueLabel===pill&&queueId?`Inclusion reason: ${queueId}`:undefined} className={pillClass(pill)}>{pill}</span>
-          : <span key={`empty-${slot}`} data-part="ticket-pill-slot" aria-hidden="true" className={css({ minH: '6' })} />)}</div>
-        <p data-part="ticket-preview" data-expanded={expanded ? 'true' : 'false'} className={clsx(css({ mt: '2', overflow: 'hidden', color: 'fg.muted', fontSize: 'sm', overflowWrap: 'anywhere' }),expanded?css({lineClamp:3}):css({lineClamp:1}))}>{ticket.snippet || 'No conversation preview is available.'}</p>
+          : <span key={`empty-${slot}`} data-part="ticket-pill-slot" aria-hidden="true" className={css({ minH: '5' })} />)}</div>
+        <p data-part="ticket-preview" data-expanded={expanded ? 'true' : 'false'} className={expanded
+          ? css({ mt: '2', color: 'fg.muted', fontSize: 'sm', overflowWrap: 'anywhere', lineClamp: 3 })
+          : css({ srOnly: true })}>{ticket.snippet || 'No conversation preview is available.'}</p>
       </Link>
     </div>
   </article>;

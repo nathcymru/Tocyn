@@ -1,4 +1,5 @@
 import { p } from '../portalStyles';
+import { css } from '@luminatick/ui/styled-system/css';
 import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -91,7 +92,7 @@ export function LoginPage() {
           <ParkAlert.Content>
             <ParkAlert.Title asChild><h2 ref={successHeading} tabIndex={-1}>Check your email</h2></ParkAlert.Title>
             <ParkAlert.Description>
-              We sent a magic link to <strong>{email}</strong>.<br/>
+              We sent a magic link to <strong className={css({ overflowWrap: 'anywhere' })}>{email}</strong>.<br/>
               Click the link in the email to log in.
             </ParkAlert.Description>
           </ParkAlert.Content>

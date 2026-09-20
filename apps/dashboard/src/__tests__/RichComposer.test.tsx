@@ -253,6 +253,47 @@ it('keeps a declared plain draft literal and offers no Markdown toolbar or autoc
   expect(screen.getByText('**literal** /code', { selector: 'div' }).querySelector('strong')).toBeNull();
 });
 
+it('restores a saved Markdown draft when the same composer switches tickets', async () => {
+  function TicketDrafts() {
+    const [ticket, setTicket] = useState<'first' | 'second'>('first');
+    const [bodies, setBodies] = useState({ first: '', second: 'Plain second ticket draft' });
+    return <>
+      <button type="button" onClick={() => setTicket('first')}>First ticket</button>
+      <button type="button" onClick={() => setTicket('second')}>Second ticket</button>
+      <output data-testid="saved-first">{bodies.first}</output>
+      <RichComposer id="reply-message" value={bodies[ticket]} onChange={body => setBodies(current => ({ ...current, [ticket]: body }))}
+        onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public"
+        format={ticket === 'first' ? 'markdown-v1' : 'plain'} />
+    </>;
+  }
+  render(<TicketDrafts />);
+  await setEditorText(editorFor(), 'Synthetic acceptance draft — do not send.');
+  await waitFor(() => expect(screen.getByTestId('saved-first')).toHaveTextContent('Synthetic acceptance draft — do not send.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Second ticket' }));
+  expect(editorFor()).toHaveValue('Plain second ticket draft');
+  fireEvent.click(screen.getByRole('button', { name: 'First ticket' }));
+  await waitFor(() => expectEditorText(editorFor(), 'Synthetic acceptance draft — do not send.'));
+  expect(screen.getByTestId('saved-first')).toHaveTextContent('Synthetic acceptance draft — do not send.');
+});
+
+it('shows a saved plain draft when its format changes to Markdown', async () => {
+  function FormatDraft() {
+    const [format, setFormat] = useState<'plain' | 'markdown-v1'>('plain');
+    const [body, setBody] = useState('Plain acceptance draft 001');
+    return <>
+      <button type="button" onClick={() => setFormat('markdown-v1')}>Use Markdown</button>
+      <output data-testid="stored-draft">{body}</output>
+      <RichComposer id="reply-message" value={body} onChange={setBody} onImageFiles={() => undefined}
+        onRejectedImageFiles={() => undefined} readOnly={false} mode="public" format={format} />
+    </>;
+  }
+  render(<FormatDraft />);
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Plain acceptance draft 001');
+  fireEvent.click(screen.getByRole('button', { name: 'Use Markdown' }));
+  await waitFor(() => expectEditorText(editorFor(), 'Plain acceptance draft 001'));
+  expect(screen.getByTestId('stored-draft')).toHaveTextContent('Plain acceptance draft 001');
+});
+
 
 it('keeps the safe preview as the only available preview mode', () => {
   render(<RichComposer id="preview-guard" onImageFiles={() => {}} onRejectedImageFiles={() => {}} readOnly={false} value={'![remote](https://tracker.invalid/pixel)'} onChange={() => {}} mode="public" />);

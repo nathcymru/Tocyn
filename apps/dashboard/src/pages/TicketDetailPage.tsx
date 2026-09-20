@@ -908,7 +908,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               <div className={detailStyles.titleStack}>
                 <div className={detailStyles.titleRow}>
                   <span className={detailStyles.reference} title={reference}>{reference}</span>
-                  <h1 ref={conversationHeadingRef} tabIndex={-1} className={detailStyles.title}>{ticket.subject}</h1>
+                  <h1 ref={conversationHeadingRef} tabIndex={-1} className={`${detailStyles.title} ${css({ whiteSpace: 'normal', overflowWrap: 'anywhere' })}`}>{ticket.subject}</h1>
                 </div>
                 <div className={detailStyles.meta}>
                   <span className={detailStyles.customer}>
@@ -986,16 +986,16 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                         <span className={detailStyles.emailSummaryTime}>{utcTimestamp(article.created_at).toLocaleString()}</span>
                       </div>
                       <dl className={detailStyles.emailSummaryFields}>
-                        <div><dt>From</dt><dd>{ticket.customer_email}</dd></div>
+                        <div><dt>From</dt><dd><span className={css({ display: 'block', whiteSpace: 'normal', overflowWrap: 'anywhere' })}>{ticket.customer_email}</span></dd></div>
                         <div><dt>To</dt><dd>Support queue</dd></div>
-                        <div><dt>Subject</dt><dd>{ticket.subject}</dd></div>
+                        <div><dt>Subject</dt><dd><span className={css({ display: 'block', whiteSpace: 'normal', overflowWrap: 'anywhere' })}>{ticket.subject}</span></dd></div>
                       </dl>
                     </div>
                   )}
                   {/* Only explicitly versioned new content is interpreted as Markdown. */}
                   {article.body_format === 'markdown-v1'
                     ? <SafeMarkdown className={detailStyles.timelineBody}>{article.body ?? ''}</SafeMarkdown>
-                    : <div className={detailStyles.timelineBody}>{article.body ?? ''}</div>}
+                    : <div className={`${detailStyles.timelineBody} ${css({ whiteSpace: 'pre-wrap' })}`}>{article.body ?? ''}</div>}
                   {(ticket.source === 'email' || article.raw_email_id) && article.sender_type === 'customer' && (
                     <ParkCollapsible.Root className={detailStyles.emailDisclosure}>
                       <ParkCollapsible.Trigger className={css({ cursor: 'pointer', color: 'text.primary', fontWeight: 'semibold', textAlign: 'left' })}>Show full email</ParkCollapsible.Trigger>
@@ -1012,7 +1012,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     <div className={detailStyles.attachments}>
                       {article.attachments.map((att: any) => {
                         const filename = att.filename || att.file_name || 'Attachment';
-                        return <div key={att.id}>
+                        return <div key={att.id} className={css({ minW: 0, maxW: 'full' })}>
                           <ParkButton
                             onClick={(e) => { e.preventDefault(); dashboardApi.download(`/attachments/${att.id}/download`, filename); }}
                             className={detailStyles.attachmentLink}
@@ -1104,7 +1104,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </span>
               </ParkAlert.Content>
             </ParkAlert.Root>}
-            <form onSubmit={handleSubmitReply} className={detailStyles.composerForm}>
+            <form onSubmit={handleSubmitReply} className={`${detailStyles.composerForm} ${css({ gridTemplateColumns: 'minmax(0, 1fr)' })}`}>
               {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()}>Retry sent-draft cleanup</ParkButton></p>}
               <div className={detailStyles.modeRow}>
                 <ParkTabs.Root value={isInternal ? 'internal' : 'public'} onValueChange={({ value }) => {

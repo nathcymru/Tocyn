@@ -295,7 +295,16 @@
     padding: 1rem;
 }
 
-  [data-tabular],.table__root {
+  [data-tabular] {
+    font-family: var(--fonts-tabular);
+}
+
+  [data-tabular],.ff_tabular {
+    font-feature-settings: "tnum" 1, "cv01" 1;
+    font-variant-numeric: tabular-nums;
+}
+
+  .table__root {
     font-family: var(--fonts-tabular);
     font-feature-settings: "tnum" 1, "cv01" 1;
     font-variant-numeric: tabular-nums;
@@ -3158,15 +3167,13 @@
     .page__inboxList,.page__inboxDetail {
       margin: var(--spacing-0);
       padding: var(--spacing-0);
-      flex: 1 1 100% !important;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       box-sizing: border-box;
       min-height: var(--sizes-0);
       height: 100%;
-      min-width: var(--sizes-0) !important;
-      max-width: none !important;
+      min-width: var(--sizes-0);
       width: 100%;
 }
 
@@ -3961,9 +3968,10 @@
 }
 
     .ticketDetail__titleRow {
-      gap: 0.75rem;
+      gap: 0.25rem;
       display: flex;
-      align-items: baseline;
+      flex-direction: column;
+      align-items: flex-start;
       min-width: var(--sizes-0);
 }
 
@@ -8454,7 +8462,15 @@
       .page__inboxTableResponsive {
         display: block;
 }
-      .page__metricStrip,.page__overviewGrid,.ticketDetail__slaGrid {
+      .page__metricStrip,.page__overviewGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+      .ticketDetail__titleRow {
+        gap: 0.75rem;
+        flex-direction: row;
+        align-items: baseline;
+}
+      .ticketDetail__slaGrid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
 }
       .shell__pageTitle {
@@ -8571,11 +8587,6 @@
       .page__inboxWorkspace [data-part="resize-trigger"] {
         display: flex;
 }
-      .page__inboxList,.page__inboxDetail {
-        flex: 1 1 0%;
-        min-width: var(--sizes-0);
-        max-width: none;
-}
       .page__inboxMetrics {
         grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -8608,6 +8619,12 @@
 }
       .shell__contentPadded {
         padding: 2rem;
+}
+}
+
+    @media screen and (max-width: 63.999rem) {
+      .page__inboxList,.page__inboxDetail {
+        max-width: none !important;
 }
 }
 }
@@ -11448,6 +11465,10 @@
     background: var(--colors-critical);
 }
 
+  .p_2 {
+    padding: var(--spacing-2);
+}
+
   .p_2rem_1rem {
     padding: 2rem 1rem;
 }
@@ -11522,10 +11543,6 @@
 
   .bg_accent\.primary {
     background: var(--colors-accent\.primary);
-}
-
-  .p_2 {
-    padding: var(--spacing-2);
 }
 
   .mx_auto {
@@ -11664,16 +11681,8 @@
     border-radius: var(--radii-sm);
 }
 
-  .px_2 {
-    padding-inline: var(--spacing-2);
-}
-
   .bd-c_border\.focus {
     border-color: var(--colors-border\.focus);
-}
-
-  .bdr_lg {
-    border-radius: var(--radii-lg);
 }
 
   .td_none {
@@ -11728,12 +11737,20 @@
     margin-block: var(--spacing-4);
 }
 
+  .bdr_lg {
+    border-radius: var(--radii-lg);
+}
+
   .py_1 {
     padding-block: var(--spacing-1);
 }
 
   .py_8 {
     padding-block: var(--spacing-8);
+}
+
+  .px_2 {
+    padding-inline: var(--spacing-2);
 }
 
   .py_0\.5 {
@@ -12233,16 +12250,12 @@
     position: relative;
 }
 
-  .bx-sh_xs {
-    box-shadow: var(--shadows-xs);
-}
-
   .c_white {
     color: var(--colors-white);
 }
 
-  .grid-tc_3\.5rem_minmax\(0\,_1fr\) {
-    grid-template-columns: 3.5rem minmax(0, 1fr);
+  .grid-tc_3rem_minmax\(0\,_1fr\) {
+    grid-template-columns: 3rem minmax(0, 1fr);
 }
 
   .ai_start {
@@ -12283,6 +12296,10 @@
 
   .trf_rotate\(-90deg\) {
     transform: rotate(-90deg);
+}
+
+  .justify-self_end {
+    justify-self: end;
 }
 
   .justify-items_start {
@@ -12398,10 +12415,6 @@
     align-items: flex-end;
 }
 
-  .ov-wrap_break-word {
-    overflow-wrap: break-word;
-}
-
   .c_bg\.surface {
     color: var(--colors-bg\.surface);
 }
@@ -12436,6 +12449,10 @@
 
   .pe_1 {
     padding-inline-end: var(--spacing-1);
+}
+
+  .ov-wrap_break-word {
+    overflow-wrap: break-word;
 }
 
   .fill_none {
@@ -12746,6 +12763,10 @@
     min-width: var(--sizes-10);
 }
 
+  .pt_2 {
+    padding-top: var(--spacing-2);
+}
+
   .mt_3 {
     margin-top: var(--spacing-3);
 }
@@ -12774,22 +12795,19 @@
     min-height: var(--sizes-6);
 }
 
+  .min-h_5 {
+    min-height: var(--sizes-5);
+}
+
   .max-w_44 {
     max-width: var(--sizes-44);
 }
 
   .lc_3 {
-    -webkit-line-clamp: 3;
-}
-
-  .lc_3,.lc_1 {
     overflow: hidden;
     display: -webkit-box;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
-}
-
-  .lc_1 {
-    -webkit-line-clamp: 1;
 }
 
   .w_12 {
@@ -12802,6 +12820,18 @@
 
   .h_3 {
     height: var(--sizes-3);
+}
+
+  .h_auto {
+    height: auto;
+}
+
+  .min-w_44rem {
+    min-width: 44rem;
+}
+
+  .w_32\% {
+    width: 32%;
 }
 
   .w_min\(100\%_-_2rem\,_40rem\) {
@@ -12884,10 +12914,6 @@
     min-height: var(--sizes-8);
 }
 
-  .pt_2 {
-    padding-top: var(--spacing-2);
-}
-
   .pt_4 {
     padding-top: var(--spacing-4);
 }
@@ -12918,10 +12944,6 @@
 
   .w_12rem {
     width: 12rem;
-}
-
-  .h_auto {
-    height: auto;
 }
 
   .min-h_2\.75rem {
@@ -13217,6 +13239,9 @@
 }
 
   @media screen and (min-width: 40rem) {
+    .sm\:grid-tc_minmax\(0\,_1fr\)_auto {
+      grid-template-columns: minmax(0, 1fr) auto;
+}
     .sm\:grid-tc_repeat\(2\,_minmax\(0\,_1fr\)\) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -13270,6 +13295,27 @@
   @media screen and (min-width: 80rem) {
     .xl\:grid-tc_repeat\(3\,minmax\(0\,1fr\)\) {
       grid-template-columns: repeat(3,minmax(0,1fr));
+}
+}
+
+  @media screen and (max-width: 63.999rem) {
+    .\[\@media_screen_and_\(max-width\:_63\.999rem\)\]\:ov_hidden {
+      overflow: hidden;
+}
+    .\[\@media_screen_and_\(max-width\:_63\.999rem\)\]\:pos_absolute {
+      position: absolute;
+}
+    .\[\@media_screen_and_\(max-width\:_63\.999rem\)\]\:clip_rect\(0_0_0_0\) {
+      clip: rect(0 0 0 0);
+}
+    .\[\@media_screen_and_\(max-width\:_63\.999rem\)\]\:white-space_nowrap {
+      white-space: nowrap;
+}
+    .\[\@media_screen_and_\(max-width\:_63\.999rem\)\]\:w_1px {
+      width: 1px;
+}
+    .\[\@media_screen_and_\(max-width\:_63\.999rem\)\]\:h_1px {
+      height: 1px;
 }
 }
 

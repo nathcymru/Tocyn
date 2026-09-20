@@ -61,6 +61,21 @@ describe('LoginPage', () => {
     expect(success.querySelector('.alert__title')).toHaveTextContent('Check your email');
     expect(success.querySelector('.alert__description')).toHaveTextContent('We sent a magic link to test@example.com.');
   });
+
+  it('keeps a long recipient address readable inside the Park success alert', async () => {
+    vi.mocked(portalApi.post).mockResolvedValueOnce({});
+    const email = 'averylongunbrokenlocalpartwithmanycharactersabcdefghijklmnopqrstuvwxyz0123456789@example.invalid';
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: email } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send Magic Link' }));
+
+    const alert = (await screen.findByRole('heading', { name: 'Check your email' })).closest('[role="status"]');
+    if (!alert) throw new Error('The Park success alert was not rendered.');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('strong')).toHaveTextContent(email);
+    expect(alert.querySelector('strong')).toHaveClass('ov-wrap_anywhere');
+  });
 });
 
 it('keeps OTP verification in the login page, retains the challenge and permits retry', async () => {
