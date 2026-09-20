@@ -14,6 +14,18 @@ beforeEach(()=>{
   vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});
 });
 afterEach(()=>{cleanup();useAuthStore.getState().logout();vi.restoreAllMocks();vi.clearAllMocks();});
+it('shows a Park recovery state and removes setup material when the signed-in identity disappears',async()=>{
+  vi.mocked(dashboardApi.post).mockResolvedValueOnce(setup);
+  render(<SecurityProfilePage/>);
+  fireEvent.click(screen.getByRole('button',{name:'Set up 2FA'}));
+  expect(await screen.findByText('SYNTHETIC_ONLY')).toBeInTheDocument();
+  act(()=>useAuthStore.getState().logout());
+  const unavailable=screen.getByRole('alert',{name:'Security profile is unavailable'});
+  expect(unavailable).toHaveClass('emptyState__root');
+  expect(within(unavailable).getByRole('link',{name:'Sign in again'})).toHaveAttribute('href','/login');
+  expect(screen.queryByText('SYNTHETIC_ONLY')).not.toBeInTheDocument();
+  expect(screen.queryByRole('textbox',{name:'Authentication Code'})).not.toBeInTheDocument();
+});
 it('guards setup and confirmation, focuses code and adopts the replacement server session only after confirmation',async()=>{
   let finish!:(value:unknown)=>void;vi.mocked(dashboardApi.post).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
   render(<SecurityProfilePage/>);const start=screen.getByRole('button',{name:'Set up 2FA'});fireEvent.click(start);fireEvent.click(start);

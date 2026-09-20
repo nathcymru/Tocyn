@@ -14,6 +14,18 @@ async function confirm(name='Synthetic key'){
  expect(dialog).toHaveClass('dialog__content');expect(dialog.querySelector('.dialog__footer')).toBeInTheDocument();
  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());return{opener,dialog};
 }
+it('announces the API key loading skeleton until the first list response arrives',async()=>{
+ let finish!:()=>void;
+ api.get.mockImplementationOnce(()=>new Promise(resolve=>{finish=()=>resolve([]);}));
+ render(<ApiKeyPage/>);
+ const loading=screen.getByRole('status',{name:'Loading API keys'});
+ expect(loading).toHaveAttribute('aria-busy','true');
+ expect(loading).toHaveTextContent('Loading API keys…');
+ expect(loading.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2);
+ await act(async()=>finish());
+ expect(screen.queryByRole('status',{name:'Loading API keys'})).not.toBeInTheDocument();
+ expect(screen.getByText('No API keys found.')).toBeInTheDocument();
+});
 it('cancels revocation and returns focus without sending a mutation',async()=>{
  render(<ApiKeyPage/>);const {opener}=await confirm();fireEvent.keyDown(document.activeElement!,{key:'Escape'});
  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());await waitFor(()=>expect(opener).toHaveFocus());expect(api.delete).not.toHaveBeenCalled();

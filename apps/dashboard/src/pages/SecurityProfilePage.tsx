@@ -1,4 +1,4 @@
-import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkPinInput, ParkPinInputSlot } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkPinInput, ParkPinInputSlot } from '@luminatick/ui/park';
 import { Badge } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect, useRef } from 'react';
@@ -124,7 +124,12 @@ export function SecurityProfilePage() {
     }
   };
 
-  if (!user) return null;
+  if (!user) return <ParkEmptyState
+    role="alert"
+    title="Security profile is unavailable"
+    description="Your signed-in identity could not be confirmed. Sign in again to view your security settings."
+    action={<ParkButton asChild><a href="/login" onClick={logout}>Sign in again</a></ParkButton>}
+  />;
 
   return (
     <div className={securityStyles.page}>

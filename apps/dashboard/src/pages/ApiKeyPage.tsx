@@ -274,7 +274,8 @@ export function ApiKeyPage() {
           ? css({ minW: 0, overflowX: 'auto' })
           : css({ minW: 0, overflowX: 'visible' })}>
           {isLoading ? (
-            <div aria-label="Loading API keys" aria-busy="true" className={css({ display: 'grid', gap: '2' })}>
+            <div role="status" aria-label="Loading API keys" aria-live="polite" aria-busy="true" className={css({ display: 'grid', gap: '2' })}>
+              <span className={css({ srOnly: true })}>Loading API keys…</span>
               <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
               <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
             </div>
