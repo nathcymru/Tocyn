@@ -33,6 +33,7 @@ describe('permission administration recovery', () => {
     await userEvent.click(screen.getByText('Allow agents to use General settings'));expect(toggle).toBeChecked();
     await act(async()=>finish());
     await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('Permissions saved'));
+    expect(screen.getByRole('status')).toHaveClass('alert__root', 'alert__root--status_success');
   });
   it('offers an explicit reload after a policy conflict while preserving the draft', async () => {
     vi.mocked(dashboardApi.get).mockResolvedValue(policy);
@@ -56,6 +57,7 @@ describe('permission administration recovery', () => {
     const save = screen.getByRole('button', {name:'Save changes'});
     save.focus(); fireEvent.click(save);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Permissions saved, but the current policy could not be loaded'));
+    expect(screen.getByRole('status')).toHaveClass('alert__root', 'alert__root--status_warning');
     expect(save).toHaveFocus();
     expect(save).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(save); await userEvent.click(screen.getByText('Allow agents to use General settings'));
@@ -64,7 +66,7 @@ describe('permission administration recovery', () => {
     fireEvent.click(screen.getByRole('button', {name:'Reload permissions'}));
     await waitFor(() => expect(save).toHaveAttribute('aria-disabled', 'false'));
     expect(toggle).not.toBeChecked();
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     fireEvent.click(save);
     expect(dashboardApi.put).toHaveBeenLastCalledWith('/permissions', {revision:5, policies:{general:false}});
   });

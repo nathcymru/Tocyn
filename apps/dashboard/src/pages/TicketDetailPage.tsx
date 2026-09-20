@@ -6,7 +6,7 @@ import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCheckbox, ParkEmptyState, ParkFileUpload, ParkInput, ParkScrollArea, ParkSkeleton, ParkTabs, ParkTextarea, ParkTicketDetail } from '@luminatick/ui/park';
-import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
+import { Collapsible as ParkCollapsible, Field, Link as ParkLink } from '@luminatick/ui/components';
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
@@ -876,19 +876,17 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             {showSupportState && supportState.isLoading && <div role="status" aria-label="Loading current support state" className={css({ display: 'grid', gap: '2', p: '3' })}><span className={css({ srOnly: true })}>Loading current support state…</span><ParkSkeleton aria-hidden="true" height="4" width="70%" /><ParkSkeleton aria-hidden="true" height="4" width="90%" /></div>}
             {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className={detailStyles.supportStateForm} aria-label="Support state">
           <div className={detailStyles.supportStateHeader}><h2 className={detailStyles.contextFieldLabel}>Support state</h2><p className={detailStyles.supportStateHelp}>Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
-          <label className={detailStyles.contextField}>State
-            <DashboardSelect triggerRef={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} onValueChange={definitionId => updateSupportStateDraft({ definitionId })} className={css({ w: 'full' })}
-              options={supportStateOptions} />
-          </label>
+          <DashboardSelect triggerRef={supportStateSelect} label="Support state" aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} onValueChange={definitionId => updateSupportStateDraft({ definitionId })} className={css({ w: 'full' })}
+            options={supportStateOptions} />
           {isLoadingSupportStates && <div role="status" aria-label="Loading support-state definitions" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading support-state definitions…</span><ParkSkeleton aria-hidden="true" height="4" width="75%" /></div>}
           <div className={detailStyles.supportStateFields}>
-            <label className={detailStyles.contextField}>Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className={css({ w: 'full' })} /></label>
-            <label className={detailStyles.contextField}>Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className={css({ w: 'full' })} /></label>
+            <Field.Root className={detailStyles.contextField}><Field.Label htmlFor={`${customFieldPrefix}-waiting-reason`}>Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}</Field.Label><ParkInput id={`${customFieldPrefix}-waiting-reason`} aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className={css({ w: 'full' })} /></Field.Root>
+            <Field.Root className={detailStyles.contextField}><Field.Label htmlFor={`${customFieldPrefix}-next-action`}>Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}</Field.Label><ParkInput id={`${customFieldPrefix}-next-action`} aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className={css({ w: 'full' })} /></Field.Root>
           </div>
           <div className={detailStyles.supportStateFields}>
-            <label className={detailStyles.contextField}>Snooze until (your local time)
-              <ParkInput type="datetime-local" aria-label="Snooze until (your local time)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className={css({ w: 'full' })} />
-            </label>
+            <Field.Root className={detailStyles.contextField}><Field.Label htmlFor={`${customFieldPrefix}-snooze-until`}>Snooze until (your local time)</Field.Label>
+              <ParkInput id={`${customFieldPrefix}-snooze-until`} type="datetime-local" aria-label="Snooze until (your local time)" disabled={isSupportStateSubmitting} value={supportStateDraft.snoozedUntil} onChange={event => updateSupportStateDraft({ snoozedUntil: event.target.value })} className={css({ w: 'full' })} />
+            </Field.Root>
             <p className={css({ color: 'text.muted', fontSize: 'sm' })}>The shared queue will resurface this ticket at the selected local time.</p>
             <div className={detailStyles.supportStateActions}>
               <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className={css({ minH: '10' })}>Snooze ticket</ParkButton>
@@ -1201,13 +1199,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   })}
                 </div> : <p className={detailStyles.status}>No colleagues are available to mention.</p>}
               </fieldset>}
-              <label className={css({ display: 'grid', gap: '1', color: 'text.primary', fontSize: 'sm', fontWeight: 'medium' })}>
-                Message format
-                <DashboardSelect aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
+              <DashboardSelect label="Message format" aria-label="Message format" value={draft.bodyFormat ?? 'plain'} disabled={!replyCapability || isSubmitting || draft.status === 'loading'}
                   onValueChange={value => { if (!submission.current && (value === 'plain' || value === 'markdown-v1') && replyCapability?.body.acceptedFormats.includes(value)) updateDraft({ bodyFormat: value }); }}
                   className={css({ w: 'full' })}
                   options={[...(replyCapability?.body.acceptedFormats.includes('plain') ? [{ value: 'plain', label: 'Plain text' }] : []), ...(replyCapability?.body.acceptedFormats.includes('markdown-v1') ? [{ value: 'markdown-v1', label: 'Markdown' }] : [])]} />
-              </label>
               <RichComposer
                 id="reply-message"
                 value={reply}
@@ -1372,12 +1367,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </h3>
           <div className={detailStyles.contextSettingsFields}>
             <div>
-              <span className={detailStyles.contextFieldLabel}>Priority</span>
               <div className={detailStyles.contextFieldControl}>
                 <DashboardSelect
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   triggerRef={node => { ticketSelectRefs.current.priority = node; }}
-                  id="ticket-priority" aria-label="Priority" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-priority" label="Priority" aria-label="Priority" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.priority}
                   onValueChange={(value) => {
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) return;
@@ -1389,12 +1383,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
             </div>
             <div>
-              <span className={detailStyles.contextFieldLabel}>Assigned To</span>
               <div className={detailStyles.contextFieldControl}>
                 <DashboardSelect
                   key={`ticket-assigned_to-${ticketSelectVersions.assigned_to}`}
                   triggerRef={node => { ticketSelectRefs.current.assigned_to = node; }}
-                  id="ticket-assigned_to" aria-label="Assigned To" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-assigned_to" label="Assigned To" aria-label="Assigned To" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.assigned_to || ''}
                   onValueChange={(value) => {
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) return;
@@ -1410,12 +1403,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               </div>
             </div>
             <div>
-              <span className={detailStyles.contextFieldLabel}>Group</span>
               <div className={detailStyles.contextFieldControl}>
                 <DashboardSelect
                   key={`ticket-group_id-${ticketSelectVersions.group_id}`}
                   triggerRef={node => { ticketSelectRefs.current.group_id = node; }}
-                  id="ticket-group_id" aria-label="Group" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-group_id" label="Group" aria-label="Group" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.group_id || ''}
                   onValueChange={(value) => {
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) return;
@@ -1448,10 +1440,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
 
                     return (
                       <div key={field.id} className={detailStyles.contextField}>
-                        {field.field_type !== 'checkbox' && <span className={detailStyles.contextFieldLabel}>{field.label}</span>}
                         {field.field_type === 'select' && field.options ? (
                           <DashboardSelect
                             id={inputId}
+                            label={field.label}
                             aria-label={field.label}
                             value={String(value || '')}
                             onValueChange={handleSave}
@@ -1465,12 +1457,15 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                             <ParkCheckbox.HiddenInput id={inputId} />
                           </ParkCheckbox.Root>
                         ) : (
-                          <CustomFieldInput
-                            id={inputId}
-                            field={field}
-                            value={value}
-                            onSave={handleSave}
-                          />
+                          <Field.Root>
+                            <Field.Label htmlFor={inputId}>{field.label}</Field.Label>
+                            <CustomFieldInput
+                              id={inputId}
+                              field={field}
+                              value={value}
+                              onSave={handleSave}
+                            />
+                          </Field.Root>
                         )}
                       </div>
                     );

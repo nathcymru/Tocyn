@@ -29,10 +29,23 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); });
 it('names the navigation, title, category, tier and markdown controls and exposes validation to assistive technology', async () => {
   render(<KnowledgeEditorPage />);
   expect(screen.getByRole('button', { name: 'Back to knowledge base' })).toBeInTheDocument();
-  expect(screen.getByRole('textbox', { name: 'Title *' })).toBeRequired();
-  expect(screen.getByRole('combobox', { name: 'Category' })).toBeInTheDocument();
-  expect(screen.getByRole('combobox', { name: 'Tier' })).toBeInTheDocument();
+  const title = screen.getByRole('textbox', { name: 'Title' });
+  expect(title).toBeRequired();
+  const titleField = title.closest('[data-scope="field"][data-part="root"]');
+  expect(titleField).toHaveClass('field__root');
+  expect(titleField?.querySelector('[data-scope="field"][data-part="label"]')).toHaveAttribute('for', title.id);
+  expect(titleField?.querySelector('[data-scope="field"][data-part="required-indicator"]')).toHaveTextContent('*');
+  for (const name of ['Category', 'Tier']) {
+    const select = screen.getByRole('combobox', { name }).closest('[data-scope="select"][data-part="root"]');
+    expect(select).toHaveClass('select__root');
+    expect(select?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
+    expect(select?.querySelector('[data-scope="select"][data-part="label"]')).toHaveTextContent(name);
+  }
   const content = screen.getByRole('textbox', { name: 'Content (Markdown)' });
+  const contentField = content.closest('[data-scope="field"][data-part="root"]');
+  expect(contentField).toHaveClass('field__root');
+  expect(contentField?.querySelector('[data-scope="field"][data-part="label"]')).toHaveAttribute('for', content.id);
+  expect(content).toHaveAttribute('aria-labelledby', `${content.id}-label`);
   fireEvent.click(screen.getByRole('button', { name: 'Save Article' }));
   const error = await screen.findByRole('alert');
   expect(error).toHaveTextContent('Title is required');
@@ -43,18 +56,18 @@ it('prevents duplicate saves, retains the draft after failure, and retries the s
   let reject!: (error: Error) => void;
   mocks.post.mockImplementationOnce(() => new Promise((_resolve, rejectSave) => { reject = rejectSave; })).mockResolvedValueOnce({});
   render(<React.StrictMode><KnowledgeEditorPage /></React.StrictMode>);
-  fireEvent.change(screen.getByRole('textbox', { name: 'Title *' }), { target: { value: 'Keep this article' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'Keep this article' } });
   await setEditorText('Retained content');
   const save = screen.getByRole('button', { name: 'Save Article' });
   fireEvent.click(save); fireEvent.click(save);
   await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));
   expect(screen.getByRole('button', { name: 'Processing...' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Back to knowledge base' })).toBeDisabled();
-  expect(screen.getByRole('textbox', { name: 'Title *' })).toBeDisabled();
+  expect(screen.getByRole('textbox', { name: 'Title' })).toBeDisabled();
   expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveAttribute('contenteditable', 'false');
   await act(async () => reject(new Error('synthetic save failure')));
   expect(await screen.findByRole('alert')).toHaveTextContent('synthetic save failure');
-  expect(screen.getByRole('textbox', { name: 'Title *' })).toHaveValue('Keep this article');
+  expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Keep this article');
   expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Retained content');
   fireEvent.click(screen.getByRole('button', { name: 'Save Article' }));
   await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(2));
@@ -79,18 +92,18 @@ it('does not apply a stale article response after the route changes', async () =
   await waitFor(() => expect(deferred.has('/knowledge/articles/current/content')).toBe(true));
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Back to knowledge base' })).toBeDisabled();
-  expect(screen.getByRole('textbox', { name: 'Title *' })).toBeDisabled();
+  expect(screen.getByRole('textbox', { name: 'Title' })).toBeDisabled();
   await act(async () => {
     deferred.get('/knowledge/articles/older')!.resolve({ title: 'Stale title', category_id: '', tier: 'answer' });
     deferred.get('/knowledge/articles/older/content')!.resolve({ content: 'stale' });
   });
-  expect(screen.getByRole('textbox', { name: 'Title *' })).not.toHaveValue('Stale title');
+  expect(screen.getByRole('textbox', { name: 'Title' })).not.toHaveValue('Stale title');
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeDisabled();
   await act(async () => {
     deferred.get('/knowledge/articles/current')!.resolve({ title: 'Current title', category_id: '', tier: 'sop' });
     deferred.get('/knowledge/articles/current/content')!.resolve({ content: 'current' });
   });
-  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title *' })).toHaveValue('Current title'));
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Current title'));
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('current'));
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
 });
@@ -111,7 +124,7 @@ it('shows a loading skeleton and retries a failed article read without enabling 
   expect(await screen.findByRole('alert')).toHaveTextContent('Synthetic read failure');
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry article' }));
-  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title *' })).toHaveValue('Recovered article'));
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Recovered article'));
   expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Recovered article content');
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
 });
@@ -120,7 +133,7 @@ it('does not navigate when an old save resolves after the route changes', async 
   let resolve!: (value: unknown) => void;
   mocks.post.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
   const view = render(<KnowledgeEditorPage />);
-  fireEvent.change(screen.getByRole('textbox', { name: 'Title *' }), { target: { value: 'Old route article' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'Old route article' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save Article' }));
   await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));
   mocks.route.id = 'new-route';

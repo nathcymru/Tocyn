@@ -1,4 +1,5 @@
 import { ParkButton, ParkEmptyState, ParkInput, ParkKnowledgeEditor, ParkSkeleton } from '@luminatick/ui/park';
+import { Field } from '@luminatick/ui/components';
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -200,8 +201,8 @@ export const KnowledgeEditorPage: React.FC = () => {
 
           <div className={styles.card}>
             <div className={styles.fields}>
-              <div className={styles.field}>
-                <label htmlFor={titleId}>Title *</label>
+              <Field.Root required className={styles.field}>
+                <Field.Label htmlFor={titleId}>Title <Field.RequiredIndicator> *</Field.RequiredIndicator></Field.Label>
                 <ParkInput
                   id={titleId}
                   type="text"
@@ -212,12 +213,12 @@ export const KnowledgeEditorPage: React.FC = () => {
                   placeholder="e.g., How to reset your password"
                   required
                 />
-              </div>
+              </Field.Root>
 
               <div className={styles.field}>
-                <label htmlFor={categoryIdInput}>Category</label>
                 <DashboardSelect
                   id={categoryIdInput}
+                  label="Category"
                   value={categoryId}
                   disabled={isSaving || !editorReady}
                   onValueChange={setCategoryId}
@@ -227,9 +228,9 @@ export const KnowledgeEditorPage: React.FC = () => {
               </div>
 
               <div className={styles.field}>
-                <label htmlFor={tierId}>Tier</label>
                 <DashboardSelect
                   id={tierId}
+                  label="Tier"
                   value={tier}
                   disabled={isSaving || !editorReady}
                   onValueChange={value => setTier(value as 'answer' | 'sop')}
@@ -239,12 +240,12 @@ export const KnowledgeEditorPage: React.FC = () => {
               </div>
             </div>
 
-            <div className={styles.field}>
-              <label htmlFor={contentId}>Content (Markdown)</label>
+            <Field.Root className={styles.field}>
+              <Field.Label id={`${contentId}-label`} htmlFor={contentId}>Content (Markdown)</Field.Label>
               <div aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
-                <TiptapMarkdownField key={`${routeKey}-${editorReady ? 'ready' : 'loading'}`} id={contentId} value={content} readOnly={isSaving || !editorReady} ariaDescribedBy={error ? errorId : undefined} onChange={value => { if (!savingRef.current && editorReady) setContent(value); }} />
+                <TiptapMarkdownField key={`${routeKey}-${editorReady ? 'ready' : 'loading'}`} id={contentId} value={content} readOnly={isSaving || !editorReady} ariaLabelledBy={`${contentId}-label`} ariaDescribedBy={error ? errorId : undefined} onChange={value => { if (!savingRef.current && editorReady) setContent(value); }} />
               </div>
-            </div>
+            </Field.Root>
           </div>
         </div>
       </div>

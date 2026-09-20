@@ -1,6 +1,6 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
 import { ParkAlert, ParkButton, ParkComposer, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
-import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
+import { Collapsible as ParkCollapsible, Field, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { tocynMarkdownExtensions } from './tiptap-markdown';
@@ -94,7 +94,7 @@ const ToolbarButton = ({ label, active, disabled, onClick, children }: { label: 
 );
 
 /** A standalone Markdown-backed Tiptap field used by knowledge editing. */
-export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescribedBy }: { id: string; value: string; onChange: (value: string) => void; readOnly: boolean; ariaDescribedBy?: string }) {
+export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescribedBy, ariaLabelledBy }: { id: string; value: string; onChange: (value: string) => void; readOnly: boolean; ariaDescribedBy?: string; ariaLabelledBy?: string }) {
   const editor = useEditor({
     extensions: tocynMarkdownExtensions,
     content: value, contentType: 'markdown', editable: !readOnly,
@@ -102,7 +102,7 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
     onUpdate: ({ editor: instance }) => { if (!readOnly) onChange(instance.getMarkdown()); },
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
-  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); if (ariaDescribedBy) dom.setAttribute('aria-describedby', ariaDescribedBy); else dom.removeAttribute('aria-describedby'); } }, [editor, id, ariaDescribedBy]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); if (ariaLabelledBy) dom.setAttribute('aria-labelledby', ariaLabelledBy); else dom.removeAttribute('aria-labelledby'); if (ariaDescribedBy) dom.setAttribute('aria-describedby', ariaDescribedBy); else dom.removeAttribute('aria-describedby'); } }, [editor, id, ariaDescribedBy, ariaLabelledBy]);
   useEffect(() => { if (editor && editor.getMarkdown() !== value) editor.commands.setContent(value || '', { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
   if (!editor) return <div id={id} className={composerStyles.editor} aria-busy="true" aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} />;
   return <div className={composerStyles.editor} aria-disabled={readOnly}>
@@ -271,10 +271,12 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
           <ParkDialog.Header><ParkDialog.Title id={linkTitleId}>Insert link</ParkDialog.Title></ParkDialog.Header>
           <form onSubmit={applyLink}>
             <ParkDialog.Body className={css({ display: 'grid', gap: '2' })}>
-              <label htmlFor={linkInputId} className={css({ textStyle: 'label' })}>Link URL</label>
-              <ParkInput ref={linkInputRef} id={linkInputId} type="text" inputMode="url" autoComplete="url" value={linkUrl}
-                onChange={event => { setLinkUrl(event.target.value); if (linkError) setLinkError(''); }}
-                aria-invalid={Boolean(linkError)} aria-describedby={linkError ? linkErrorId : undefined} />
+              <Field.Root invalid={Boolean(linkError)}>
+                <Field.Label htmlFor={linkInputId}>Link URL</Field.Label>
+                <ParkInput ref={linkInputRef} id={linkInputId} type="text" inputMode="url" autoComplete="url" value={linkUrl}
+                  onChange={event => { setLinkUrl(event.target.value); if (linkError) setLinkError(''); }}
+                  aria-invalid={Boolean(linkError)} aria-describedby={linkError ? linkErrorId : undefined} />
+              </Field.Root>
               {linkError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description id={linkErrorId}>{linkError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             </ParkDialog.Body>
             <ParkDialog.Footer>

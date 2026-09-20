@@ -55,6 +55,11 @@ describe('LoginPage', () => {
     });
 
     expect(screen.getByText('Check your email')).toBeInTheDocument();
+    const success = screen.getByRole('status');
+    expect(success).toHaveClass('alert__root', 'alert__root--status_info');
+    expect(success.querySelector('.alert__indicator')).toBeInTheDocument();
+    expect(success.querySelector('.alert__title')).toHaveTextContent('Check your email');
+    expect(success.querySelector('.alert__description')).toHaveTextContent('We sent a magic link to test@example.com.');
   });
 });
 

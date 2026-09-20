@@ -27,10 +27,7 @@ export function AccountSettingsPage() {
     </ParkCard.Root>
     <div className={page.accountGrid}>
       <ParkCard.Root variant="outline"><ParkCard.Body><OperatorThemeControl /></ParkCard.Body></ParkCard.Root>
-      <ParkCard.Root variant="outline"><ParkCard.Body className={css({
-        '& [data-tocyn-preferences] fieldset > label:not([data-scope="checkbox"])': { display: 'grid', gap: '1', minW: '0' },
-        '& [data-tocyn-preferences] fieldset > label > [data-scope="select"]': { minW: '0', w: 'full' },
-      })}><OperatorPreferencesControl /></ParkCard.Body></ParkCard.Root>
+      <ParkCard.Root variant="outline"><ParkCard.Body><OperatorPreferencesControl /></ParkCard.Body></ParkCard.Root>
     </div>
     <ParkCard.Root variant="outline" aria-labelledby="account-capacity-title">
       <ParkCard.Header><ParkCard.Title asChild><h2 id="account-capacity-title">Current work</h2></ParkCard.Title><ParkCard.Description>Set your availability and workload limits for assignments.</ParkCard.Description></ParkCard.Header>

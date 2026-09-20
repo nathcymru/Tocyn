@@ -11268,20 +11268,18 @@
 @layer utilities{
   @layer compositions{
 
-    .textStyle_label {
-      font-size: var(--font-sizes-sm);
-      line-height: 1.25rem;
-      font-weight: var(--font-weights-medium);
-}
-
     .textStyle_2xl {
       font-size: var(--font-sizes-2xl);
       line-height: 2rem;
 }
 
-    .textStyle_sm {
+    .textStyle_sm,.textStyle_label {
       font-size: var(--font-sizes-sm);
       line-height: 1.25rem;
+}
+
+    .textStyle_label {
+      font-weight: var(--font-weights-medium);
 }
 }
 
@@ -12283,12 +12281,12 @@
     font-size: var(--font-sizes-2xl);
 }
 
-  .c_info\.text {
-    color: var(--colors-info\.text);
-}
-
   .fs_md {
     font-size: var(--font-sizes-md);
+}
+
+  .c_info\.text {
+    color: var(--colors-info\.text);
 }
 
   .ai_flex-start {
@@ -12885,22 +12883,6 @@
     max-width: var(--sizes-md);
 }
 
-  .w_14 {
-    width: var(--sizes-14);
-}
-
-  .h_14 {
-    height: var(--sizes-14);
-}
-
-  .w_7 {
-    width: var(--sizes-7);
-}
-
-  .h_7 {
-    height: var(--sizes-7);
-}
-
   .min-w_10 {
     min-width: var(--sizes-10);
 }
@@ -12993,16 +12975,8 @@
     margin: var(--spacing-0);
 }
 
-  .\[\&_\[data-tocyn-preferences\]_fieldset_\>_label\:not\(\[data-scope\=\"checkbox\"\]\)\]\:gap_1 [data-tocyn-preferences] fieldset > label:not([data-scope="checkbox"]) {
-    gap: var(--spacing-1);
-}
-
   .\[\&_\>_\*\:not\(\:first-child\)\:not\(\:last-child\)\]\:bdr_0 > *:not(:first-child):not(:last-child) {
     border-radius: 0;
-}
-
-  .\[\&_\[data-tocyn-preferences\]_fieldset_\>_label\:not\(\[data-scope\=\"checkbox\"\]\)\]\:d_grid [data-tocyn-preferences] fieldset > label:not([data-scope="checkbox"]) {
-    display: grid;
 }
 
   .\[\&_h1\]\:fs_1\.75rem h1 {
@@ -13063,14 +13037,6 @@
   .\[\&_\>_\*\:last-child\]\:bdr-t_0 > *:last-child {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
-}
-
-  .\[\&_\[data-tocyn-preferences\]_fieldset_\>_label\:not\(\[data-scope\=\"checkbox\"\]\)\]\:min-w_0 [data-tocyn-preferences] fieldset > label:not([data-scope="checkbox"]),.\[\&_\[data-tocyn-preferences\]_fieldset_\>_label_\>_\[data-scope\=\"select\"\]\]\:min-w_0 [data-tocyn-preferences] fieldset > label > [data-scope="select"] {
-    min-width: var(--sizes-0);
-}
-
-  .\[\&_\[data-tocyn-preferences\]_fieldset_\>_label_\>_\[data-scope\=\"select\"\]\]\:w_full [data-tocyn-preferences] fieldset > label > [data-scope="select"] {
-    width: var(--sizes-full);
 }
 
   .\[\&_svg\]\:max-w_100\% svg {

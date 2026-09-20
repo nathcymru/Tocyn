@@ -416,11 +416,9 @@ function TicketDetail({ id }: { id: string | undefined }) {
                 {replyError && <ParkAlert.Root id="reply-error" role="alert" status="error" variant="surface">
                   <ParkAlert.Content><ParkAlert.Description>{replyError}</ParkAlert.Description></ParkAlert.Content>
                 </ParkAlert.Root>}
-                {replyStatus === replyRefreshWarning
-                  ? <ParkAlert.Root role="status" aria-label="Reply status" status="warning" variant="surface">
-                    <ParkAlert.Content><ParkAlert.Description>{replyStatus}</ParkAlert.Description></ParkAlert.Content>
-                  </ParkAlert.Root>
-                  : <p role="status" aria-label="Reply status" className={p.chatReplyStatus}>{replyStatus}</p>}
+                {replyStatus && <ParkAlert.Root role="status" aria-label="Reply status" aria-live="polite" status={replyStatus === replyRefreshWarning ? 'warning' : replyStatus === 'Reply sent.' ? 'success' : 'info'} variant="surface">
+                  <ParkAlert.Content><ParkAlert.Description>{replyStatus}</ParkAlert.Description></ParkAlert.Content>
+                </ParkAlert.Root>}
                 <p id="reply-requirement" className={p.chatReplyRequirement}>Reply text is required, including when attaching files.</p>
                 <ParkTextarea
                   readOnly={sending}

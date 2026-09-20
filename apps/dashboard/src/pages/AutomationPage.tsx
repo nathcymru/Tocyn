@@ -2,7 +2,7 @@ import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
-import { Badge } from '@luminatick/ui/components';
+import { Badge, Field as ParkField } from '@luminatick/ui/components';
 import React, { useEffect, useState } from 'react';
 import { dashboardApi } from '../api/client';
 import { AutomationRule, AutomationCondition, WebhookConfig, RetentionConfig } from '../types';
@@ -232,8 +232,8 @@ export const AutomationPage: React.FC = () => {
             <ParkCard.Body className={css({ display: 'grid', gap: '5' })}>
             <div className={css({"display":"grid","gap":"4"})}>
               <div className={css({"minW":0})}>
-                <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                  <label htmlFor="automation-rule-name">Rule Name</label>
+                <ParkField.Root className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
+                  <ParkField.Label htmlFor="automation-rule-name">Rule Name</ParkField.Label>
                   <ParkInput
                     id="automation-rule-name"
                     type="text"
@@ -242,16 +242,14 @@ export const AutomationPage: React.FC = () => {
                     value={editForm.name || ''}
                     onChange={e => setEditForm({ ...editForm, name: e.target.value })}
                   />
-                </div>
+                </ParkField.Root>
                 <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                  <label htmlFor="automation-trigger">Trigger Event</label>
-                  <DashboardSelect id="automation-trigger" aria-label="Trigger Event" value={editForm.event_type ?? ''} onValueChange={value => setEditForm({ ...editForm, event_type: value as typeof editForm.event_type })} options={EVENT_TYPES} />
+                  <DashboardSelect id="automation-trigger" label="Trigger Event" value={editForm.event_type ?? ''} onValueChange={value => setEditForm({ ...editForm, event_type: value as typeof editForm.event_type })} options={EVENT_TYPES} />
                 </div>
               </div>
               <div className={css({"minW":0})}>
                 <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                  <label htmlFor="automation-action">Action Type</label>
-                  <DashboardSelect id="automation-action" aria-label="Action Type" value={editForm.action_type ?? ''} onValueChange={value => setEditForm({ ...editForm, action_type: value as typeof editForm.action_type })} options={ACTION_TYPES} />
+                  <DashboardSelect id="automation-action" label="Action Type" value={editForm.action_type ?? ''} onValueChange={value => setEditForm({ ...editForm, action_type: value as typeof editForm.action_type })} options={ACTION_TYPES} />
                 </div>
                 <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                   <span className={css({ textStyle: 'label' })}>Status</span>
@@ -283,16 +281,18 @@ export const AutomationPage: React.FC = () => {
               <div className={css({"display":"grid","gap":"4"})}>
                 {JSON.parse(editForm.conditions || '[]').map((cond: AutomationCondition, idx: number) => (
                   <div key={idx} className={css({ display: 'grid', gap: '2', gridTemplateColumns: { base: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr)) auto' }, alignItems: 'end' })}>
-                    <DashboardSelect aria-label={`Condition ${idx + 1} field`} value={cond.field} onValueChange={value => changeCondition(idx, 'field', value)} options={FIELDS} />
-                    <DashboardSelect aria-label={`Condition ${idx + 1} operator`} value={cond.operator} onValueChange={value => changeCondition(idx, 'operator', value as typeof cond.operator)} options={OPERATORS} />
-                    <ParkInput
-                      type="text"
-                      className={css({ w: 'full', minW: '0' })}
-                      placeholder="Value..."
-                      aria-label={`Condition ${idx + 1} value`}
-                      value={cond.value}
-                      onChange={e => changeCondition(idx, 'value', e.target.value)}
-                    />
+                    <DashboardSelect label={`Condition ${idx + 1} field`} value={cond.field} onValueChange={value => changeCondition(idx, 'field', value)} options={FIELDS} />
+                    <DashboardSelect label={`Condition ${idx + 1} operator`} value={cond.operator} onValueChange={value => changeCondition(idx, 'operator', value as typeof cond.operator)} options={OPERATORS} />
+                    <ParkField.Root className={css({ minW: '0' })}>
+                      <ParkField.Label>Condition {idx + 1} value</ParkField.Label>
+                      <ParkInput
+                        type="text"
+                        className={css({ w: 'full', minW: '0' })}
+                        placeholder="Value..."
+                        value={cond.value}
+                        onChange={e => changeCondition(idx, 'value', e.target.value)}
+                      />
+                    </ParkField.Root>
                     <ParkButton type="button" variant="outline" aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}>
                       <IconTrash aria-hidden="true" size={18} />
                     </ParkButton>
@@ -310,8 +310,8 @@ export const AutomationPage: React.FC = () => {
               <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"fg.default"})}>Action Configuration</h3>
               {editForm.action_type === 'webhook' ? (
                 <ParkCard.Root variant="outline"><ParkCard.Body className={css({ display: 'grid', gap: '4' })}>
-                  <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                    <label htmlFor="automation-webhook-url">Webhook URL</label>
+                  <ParkField.Root className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
+                    <ParkField.Label htmlFor="automation-webhook-url">Webhook URL</ParkField.Label>
                     <ParkInput
                       id="automation-webhook-url"
                       type="url"
@@ -320,19 +320,18 @@ export const AutomationPage: React.FC = () => {
                       value={getActionConfig().url || ''}
                       onChange={e => updateActionConfig({ ...getActionConfig(), url: e.target.value })}
                     />
-                  </div>
+                  </ParkField.Root>
                   <div className={css({"display":"grid","gap":"4"})}>
                     <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                      <label htmlFor="automation-webhook-method">HTTP Method</label>
-                      <DashboardSelect id="automation-webhook-method" aria-label="HTTP Method" value={getActionConfig().method || 'POST'} onValueChange={value => updateActionConfig({ ...getActionConfig(), method: value })} options={[{ value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }]} />
+                      <DashboardSelect id="automation-webhook-method" label="HTTP Method" value={getActionConfig().method || 'POST'} onValueChange={value => updateActionConfig({ ...getActionConfig(), method: value })} options={[{ value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }]} />
                     </div>
                   </div>
                 </ParkCard.Body></ParkCard.Root>
               ) : (
                 <ParkCard.Root variant="outline"><ParkCard.Body>
                   <div className={css({"display":"grid","gap":"4"})}>
-                    <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                      <label htmlFor="automation-retention-days">Retention Period (Days)</label>
+                    <ParkField.Root className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
+                      <ParkField.Label htmlFor="automation-retention-days">Retention Period (Days)</ParkField.Label>
                       <ParkInput
                         id="automation-retention-days"
                         type="number"
@@ -340,7 +339,7 @@ export const AutomationPage: React.FC = () => {
                         value={getActionConfig().days_to_keep || 365}
                         onChange={e => updateActionConfig({ ...getActionConfig(), days_to_keep: parseInt(e.target.value) })}
                       />
-                    </div>
+                    </ParkField.Root>
                     <ParkCheckbox.Root checked={getActionConfig().delete_attachments}
                       onCheckedChange={({ checked }) => updateActionConfig({ ...getActionConfig(), delete_attachments: checked === true })}>
                       <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>

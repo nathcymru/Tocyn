@@ -235,7 +235,7 @@ export function ApiKeyPage() {
           {copyError && <ParkAlert.Root role="alert" status="error" variant="surface">
             <ParkAlert.Content><ParkAlert.Description>{copyError}</ParkAlert.Description></ParkAlert.Content>
           </ParkAlert.Root>}
-          {copied && <p role="status">API key copied.</p>}
+          {copied && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>API key copied.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
           <ParkButton
             onClick={() => { setCreatedKey(null); createOpener.current?.focus(); }}
             className={css({"minW":0})}
@@ -328,7 +328,7 @@ export function ApiKeyPage() {
           </ParkTable.Root>
         </ParkCard.Body>
       </ParkCard.Root>
-      {revokeStatus && <p role="status">{revokeStatus}</p>}
+      {revokeStatus && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>{revokeStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
       <ParkDialog.Root open={revokeOpen}
         onOpenChange={({ open }) => { if (!open && !revokeGuard.current) setRevokeOpen(false); }}
         initialFocusEl={() => revokeCancel.current}

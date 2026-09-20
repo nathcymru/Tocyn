@@ -24,6 +24,7 @@ it('retains a failed target, blocks duplicate/pending dismissal, and removes onl
  await act(async()=>reject(new Error('synthetic untrusted failure text')));const failure=await screen.findByRole('alert');expect(failure).toHaveClass('alert__root');expect(failure).toHaveTextContent('could not be confirmed');expect(screen.queryByText('synthetic untrusted failure text')).not.toBeInTheDocument();
  fireEvent.click(within(dialog).getByRole('button',{name:'Revoke key'}));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(api.delete).toHaveBeenLastCalledWith('/api-keys/key-a');expect(screen.queryByRole('button',{name:'Revoke Synthetic key'})).not.toBeInTheDocument();expect(screen.getByRole('status')).toHaveTextContent('API key revoked.');
+ expect(screen.getByRole('status')).toHaveClass('alert__root', 'alert__root--status_success');
  await waitFor(()=>expect(screen.getByRole('heading',{name:'API Keys'})).toHaveFocus());
 });
 async function create(){
@@ -70,7 +71,7 @@ it('reports clipboard success only after resolution and keeps copy failures reco
  api.post.mockResolvedValue({id:'key-b',name:'Created key',apiKey:'synthetic-one-time-value'});render(<ApiKeyPage/>);await create();const copy=screen.getByRole('button',{name:'Copy API key'});
  fireEvent.click(copy);expect(await screen.findByRole('alert')).toHaveTextContent('could not be copied');expect(screen.queryByText('API key copied.')).not.toBeInTheDocument();
  fireEvent.click(copy);fireEvent.click(copy);expect(copy).toBeDisabled();expect(write).toHaveBeenCalledTimes(2);expect(screen.queryByText('API key copied.')).not.toBeInTheDocument();
- await act(async()=>finish());expect(screen.getByText('API key copied.')).toBeInTheDocument();expect(write).toHaveBeenLastCalledWith('synthetic-one-time-value');
+ await act(async()=>finish());expect(screen.getByRole('status')).toHaveTextContent('API key copied.');expect(screen.getByRole('status')).toHaveClass('alert__root', 'alert__root--status_success');expect(write).toHaveBeenLastCalledWith('synthetic-one-time-value');
  fireEvent.click(screen.getByRole('button',{name:"I've saved my key"}));expect(screen.queryByText('synthetic-one-time-value')).not.toBeInTheDocument();expect(screen.queryByText('API key copied.')).not.toBeInTheDocument();
 });
 

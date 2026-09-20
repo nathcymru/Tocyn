@@ -20,13 +20,21 @@ it('associates automation labels, exposes status state, and swaps conditional ac
  expect(screen.getByRole('combobox',{name:'Condition 1 field'})).toBeInTheDocument();
  expect(screen.getByRole('combobox',{name:'Condition 1 operator'})).toBeInTheDocument();
  expect(screen.getByRole('textbox',{name:'Condition 1 value'})).toBeInTheDocument();
+ expect(screen.getByRole('combobox',{name:'Condition 1 field'}).closest('[data-scope="select"][data-part="root"]')).toHaveTextContent('Condition 1 field');
+ expect(screen.getByRole('combobox',{name:'Condition 1 operator'}).closest('[data-scope="select"][data-part="root"]')).toHaveTextContent('Condition 1 operator');
+ expect(screen.getByRole('textbox',{name:'Condition 1 value'}).closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Remove condition 1'}));
  expect(screen.queryByRole('textbox',{name:'Condition 1 value'})).not.toBeInTheDocument();
- expect(screen.getByRole('textbox',{name:'Rule Name'})).toBeInTheDocument();expect(screen.getByRole('combobox',{name:'Trigger Event'})).toBeInTheDocument();
+ expect(screen.getByRole('textbox',{name:'Rule Name'}).closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument();
+ expect(screen.getByRole('combobox',{name:'Trigger Event'}).closest('[data-scope="select"][data-part="root"]')).toHaveTextContent('Trigger Event');
  const action=screen.getByRole('combobox',{name:'Action Type'});expect(action).toBeInTheDocument();
+ expect(action.closest('[data-scope="select"][data-part="root"]')).toHaveTextContent('Action Type');
  const status=screen.getByRole('button',{name:'Rule status'});expect(status).toHaveAttribute('aria-pressed','true');fireEvent.click(status);expect(status).toHaveAttribute('aria-pressed','false');
- expect(screen.getByRole('textbox',{name:'Webhook URL'})).toBeInTheDocument();expect(screen.getByRole('combobox',{name:'HTTP Method'})).toBeInTheDocument();
- await userEvent.click(action);await userEvent.click(await screen.findByRole('option',{name:/Retention/i}));await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'Retention Period (Days)'})).toBeInTheDocument());expect(screen.queryByRole('textbox',{name:'Webhook URL'})).not.toBeInTheDocument();
+ expect(screen.getByRole('textbox',{name:'Webhook URL'}).closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument();
+ expect(screen.getByRole('combobox',{name:'HTTP Method'}).closest('[data-scope="select"][data-part="root"]')).toHaveTextContent('HTTP Method');
+ await userEvent.click(action);await userEvent.click(await screen.findByRole('option',{name:/Retention/i}));
+ await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'Retention Period (Days)'}).closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument());
+ expect(screen.queryByRole('textbox',{name:'Webhook URL'})).not.toBeInTheDocument();
 });
 
 it('shows a retryable Park empty state after an initial automation load failure',async()=>{

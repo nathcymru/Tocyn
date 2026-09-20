@@ -84,16 +84,18 @@ export function LoginPage() {
   if (success && type === 'magic_link') {
     return (
       <div className={p.authShell}>
-        <div className={[p.authHeading, p.authSuccess].join(' ')}>
-          <div className={p.authSuccessIcon}>
-            <IconEnvelope className={p.authSuccessMark} aria-hidden="true" />
-          </div>
-          <h2 ref={successHeading} tabIndex={-1} className={p.authSuccessTitle}>Check your email</h2>
-          <p className={p.authSuccessCopy}>
-            We sent a magic link to <strong>{email}</strong>.<br/>
-            Click the link in the email to log in.
-          </p>
-        </div>
+        <ParkAlert.Root role="status" aria-live="polite" aria-atomic="true" status="info" variant="surface">
+          <ParkAlert.Indicator aria-hidden="true">
+            <IconEnvelope aria-hidden="true" />
+          </ParkAlert.Indicator>
+          <ParkAlert.Content>
+            <ParkAlert.Title asChild><h2 ref={successHeading} tabIndex={-1}>Check your email</h2></ParkAlert.Title>
+            <ParkAlert.Description>
+              We sent a magic link to <strong>{email}</strong>.<br/>
+              Click the link in the email to log in.
+            </ParkAlert.Description>
+          </ParkAlert.Content>
+        </ParkAlert.Root>
       </div>
     );
   }

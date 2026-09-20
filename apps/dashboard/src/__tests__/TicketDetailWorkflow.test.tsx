@@ -267,6 +267,11 @@ it.each([
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const previous = screen.getByRole('combobox', { name });
+  if (name !== 'Status') {
+    const root = previous.closest('[data-scope="select"][data-part="root"]');
+    expect(root).toHaveClass('select__root');
+    expect(root?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
+  }
   previous.focus(); await chooseSelect(name, optionLabel(name, expected));
   await waitFor(() => {
     const refreshed = screen.getByRole('combobox', { name });
@@ -354,7 +359,14 @@ it('transitions a custom waiting state with its required private facts and retai
   }));
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
-  await screen.findByRole('combobox', { name: 'Support state' });
+  const stateSelect = await screen.findByRole('combobox', { name: 'Support state' });
+  expect(stateSelect.closest('[data-scope="select"][data-part="root"]')?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
+  for (const name of ['Waiting reason', 'Next action', 'Snooze until (your local time)']) {
+    const input = screen.getByLabelText(name);
+    const field = input.closest('[data-scope="field"][data-part="root"]');
+    expect(field).toHaveClass('field__root');
+    expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveClass('field__label');
+  }
   expect(screen.getByText(/Customer-facing label: We need your reply/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
@@ -566,6 +578,7 @@ it('advertises and guards the separate confirmation read after mutation pending 
   await waitFor(() => expect(postPatchReads).toBe(2));
   for (const select of screen.getAllByRole('combobox').filter(element => element.getAttribute('aria-label') !== 'Message format')) expect(select).toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'Message format' })).not.toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'Message format' }).closest('[data-scope="select"][data-part="root"]')?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
   expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
   expect(['trigger', 'list']).toContain(document.activeElement?.getAttribute('data-part'));
   await userEvent.click(priority);
@@ -959,16 +972,26 @@ it('replaces a pre-commit read when event and mutation invalidations overlap',as
 });
 
 
-it('associates every retained custom field label with its native control', async () => {
+it('associates every retained custom field label with its control', async () => {
   const fields = ['text','textarea','select','checkbox'].map((field_type, i) => ({id:`field-${i}`,name:`field_${i}`,label:`Custom ${field_type}`,field_type,options:field_type==='select'?'One,Two':null,is_active:true}));
   transport(() => json(ticket), fields);
   showDetail();
   for (const field of fields) {
-    const input = await screen.findByLabelText(field.label);
+    const input = field.field_type === 'select'
+      ? await screen.findByRole('combobox', { name: field.label })
+      : await screen.findByLabelText(field.label);
     expect(input).toHaveAccessibleName(field.label);
     expect(input.id).toBeTruthy();
+    if (field.field_type === 'text' || field.field_type === 'textarea') {
+      const root = input.closest('[data-scope="field"][data-part="root"]');
+      expect(root).toHaveClass('field__root');
+      expect(root?.querySelector('[data-scope="field"][data-part="label"]')).toHaveClass('field__label');
+    }
   }
   expect(screen.getByRole('combobox',{name:'Custom select'})).toBeVisible();
+  const customSelectRoot = screen.getByRole('combobox',{name:'Custom select'}).closest('[data-scope="select"][data-part="root"]');
+  expect(customSelectRoot).toHaveClass('select__root');
+  expect(customSelectRoot?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
   expect(screen.getByRole('checkbox',{name:'Custom checkbox'})).toBeVisible();
 });
 

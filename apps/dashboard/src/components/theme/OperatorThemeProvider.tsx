@@ -69,6 +69,8 @@ export function useOperatorPreferencesContext() { const value = React.useContext
 
 export function OperatorThemeControl() {
   const theme = useOperatorThemeContext(); const busy = theme.status === 'loading' || theme.status === 'saving';
+  const localStatus = theme.status === 'error' || theme.status === 'conflict' ? '' : theme.error
+    || (theme.status === 'saved' ? 'Appearance saved.' : theme.status === 'unsaved' ? 'Unsaved appearance choice.' : '');
   return <section aria-labelledby="appearance-title" data-tocyn-appearance className={css({ display: 'grid', gap: '4' })}>
     <h3 id="appearance-title">Appearance</h3>
     <ParkRadioGroup.Root value={theme.mode} onValueChange={({ value }) => theme.updateMode(value as OperatorThemeMode)} disabled={busy} aria-label="Theme mode">
@@ -79,13 +81,16 @@ export function OperatorThemeControl() {
       </ParkRadioGroup.Item>)}
     </ParkRadioGroup.Root>
     <div className={css({ display: 'flex', gap: '2', flexWrap: 'wrap' })}><ParkButton type="button" disabled={busy || theme.status !== 'unsaved'} onClick={() => void theme.save()}>Save appearance</ParkButton>{(theme.status === 'error' || theme.status === 'conflict') && <ParkButton type="button" onClick={theme.retry}>Retry appearance</ParkButton>}{theme.status === 'conflict' && <ParkButton type="button" onClick={theme.restore}>Restore server appearance</ParkButton>}</div>
-    <p role="status" aria-live="polite">{theme.error || (theme.status === 'saved' ? 'Appearance saved.' : theme.status === 'saving' ? 'Saving appearance…' : theme.status === 'unsaved' ? 'Unsaved appearance choice.' : '')}</p>
+    {theme.status === 'saving' ? <div role="status" aria-live="polite"><ParkProgress value={null} label="Saving appearance…" /></div>
+      : localStatus && <ParkAlert.Root role="status" aria-live="polite" status={theme.error ? 'warning' : theme.status === 'saved' ? 'success' : 'info'}><ParkAlert.Content><ParkAlert.Description>{localStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
   </section>;
 }
 
 export function OperatorPreferencesControl() {
   const preferences = useOperatorPreferencesContext();
   const busy = preferences.status === 'loading' || preferences.status === 'saving' || preferences.schemaUnavailable || preferences.status === 'conflict';
+  const localStatus = preferences.error || (preferences.status === 'saved' ? 'Workspace preferences saved.'
+    : preferences.status === 'unsaved' ? 'Unsaved workspace preferences.' : '');
   return <section aria-labelledby="workspace-preferences-title" data-tocyn-appearance data-tocyn-preferences className={css({ display: 'grid', gap: '4' })}>
     <h3 id="workspace-preferences-title">Workspace preferences</h3>
     <fieldset disabled={busy} className={css({ display: 'grid', gap: '3' })}>
@@ -100,6 +105,8 @@ export function OperatorPreferencesControl() {
       <ParkCheckbox.Root checked={preferences.advanceAfterResolve} disabled={busy} onCheckedChange={({ checked }) => preferences.update({ advanceAfterResolve: checked === true })}><ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control><ParkCheckbox.Label>Advance after resolving a conversation</ParkCheckbox.Label><ParkCheckbox.HiddenInput /></ParkCheckbox.Root>
     </fieldset>
     <div className={css({ display: 'flex', gap: '2', flexWrap: 'wrap' })}><ParkButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</ParkButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <ParkButton type="button" onClick={preferences.retry}>Retry workspace preferences</ParkButton>}{preferences.status === 'conflict' && <ParkButton type="button" onClick={preferences.restore}>Restore server preferences</ParkButton>}</div>
-    <p role="status" aria-live="polite">{preferences.error || (preferences.status === 'saved' ? 'Workspace preferences saved.' : preferences.status === 'saving' ? 'Saving workspace preferences…' : preferences.status === 'unsaved' ? 'Unsaved workspace preferences.' : preferences.status === 'loading' ? 'Restoring workspace preferences…' : '')}</p>
+    {preferences.status === 'loading' || preferences.status === 'saving'
+      ? <div role="status" aria-live="polite"><ParkProgress value={null} label={preferences.status === 'loading' ? 'Restoring workspace preferences…' : 'Saving workspace preferences…'} /></div>
+      : localStatus && <ParkAlert.Root role={preferences.error ? 'alert' : 'status'} aria-live={preferences.error ? undefined : 'polite'} status={preferences.error ? 'error' : preferences.status === 'saved' ? 'success' : 'info'}><ParkAlert.Content><ParkAlert.Description>{localStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
   </section>;
 }

@@ -108,7 +108,10 @@ describe('customer login accessibility', () => {
     mount(LoginPage);
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'customer@example.invalid' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send Magic Link' }));
-    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBe(document.activeElement);
+    const heading = await screen.findByRole('heading', { name: 'Check your email', level: 2 });
+    expect(heading).toBe(document.activeElement);
+    expect(heading).toHaveClass('alert__title');
+    expect(heading.closest('.alert__root')).toHaveAttribute('role', 'status');
   });
 
   it('exposes pending magic-link verification as status while retaining the heading', () => {

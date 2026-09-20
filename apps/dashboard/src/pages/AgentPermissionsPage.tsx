@@ -98,7 +98,7 @@ export function AgentPermissionsPage() {
         <span className={css({ srOnly: true })}>Loading permissions…</span>
         <ParkSkeleton aria-hidden="true" className={css({ h: '20', w: 'full' })} />
         <ParkSkeleton aria-hidden="true" className={css({ h: '20', w: 'full' })} />
-      </section> : <p role="status" aria-live="polite" className={css({ color: 'fg.muted', textStyle: 'sm' })}>{status}</p>}
+      </section> : status && <ParkAlert.Root role="status" aria-live="polite" status={status.startsWith('Permissions saved.') ? 'success' : status.startsWith('Saving') ? 'info' : 'warning'}><ParkAlert.Content><ParkAlert.Description>{status}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
       {error && capabilities.length === 0 ? <ParkEmptyState role="alert" title="Permissions could not be loaded" description={error} action={<ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</ParkButton>} /> : error && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description>
         <ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</ParkButton>
       </ParkAlert.Content></ParkAlert.Root>}

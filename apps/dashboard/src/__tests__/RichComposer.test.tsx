@@ -101,6 +101,8 @@ it('uses the Park link dialog and rejects unsafe URLs without changing the draft
   fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
   const dialog = await screen.findByRole('dialog', { name: 'Insert link' });
   const input = screen.getByRole('textbox', { name: 'Link URL' });
+  expect(input.closest('[data-scope="field"][data-part="root"]')).toHaveClass('field__root');
+  expect(input.closest('[data-scope="field"][data-part="root"]')?.querySelector('[data-part="label"]')).toHaveClass('field__label');
   await waitFor(() => expect(input).toHaveFocus());
   fireEvent.change(input, { target: { value: 'javascript:alert(1)' } });
   fireEvent.click(screen.getByRole('button', { name: 'Apply link' }));

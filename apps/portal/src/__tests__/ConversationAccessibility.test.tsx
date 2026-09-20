@@ -221,7 +221,9 @@ describe('portal conversation accessibility and recovery', () => {
     expect(screen.getAllByRole('button', { name: 'Remove repeat.txt' })).toHaveLength(1);
     await userEvent.upload(input, file);
     expect(screen.getAllByRole('button', { name: 'Remove repeat.txt' })).toHaveLength(2);
-    expect(screen.getByRole('status', { name: 'Reply status' })).toHaveTextContent('1 attachment added.');
+    const replyStatus = screen.getByRole('status', { name: 'Reply status' });
+    expect(replyStatus).toHaveClass('alert__root', 'alert__root--status_info');
+    expect(replyStatus.querySelector('.alert__description')).toHaveTextContent('1 attachment added.');
   });
 
   it('retains a failed reply draft and selected file, announces failure and prevents duplicate pending uploads', async () => {
@@ -290,6 +292,9 @@ describe('portal conversation accessibility and recovery', () => {
     vi.mocked(portalApi.post).mockResolvedValueOnce({});
     fireEvent.click(submit);
     await screen.findByText('Reply sent.');
+    const replyStatus = screen.getByRole('status', { name: 'Reply status' });
+    expect(replyStatus).toHaveClass('alert__root', 'alert__root--status_success');
+    expect(replyStatus.querySelector('.alert__description')).toHaveTextContent('Reply sent.');
     expect(portalApi.postForm).toHaveBeenCalledTimes(3);
     expect(vi.mocked(portalApi.postForm).mock.calls[2][1].get('file')).toBe(first);
     expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/tickets/ticket/messages', {

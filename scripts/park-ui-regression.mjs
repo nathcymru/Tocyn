@@ -3,6 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { fileURLToPath } from 'node:url';
 import { parkLinkCompositionFailures } from './park-link-composition.mjs';
+import { parkRawLabelFailure } from './park-raw-label.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = path.join(root, 'packages/ui');
@@ -107,6 +108,8 @@ function visit(relative) {
     function inspect(node) {
       if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
         const tag = node.tagName.getText(jsx);
+        const labelFailure = parkRawLabelFailure(relative, node, jsx);
+        if (labelFailure) failures.push(labelFailure);
         if (['button', 'input', 'textarea', 'select'].includes(tag)) {
           failures.push(`Native ${tag} remains in active application source: ${relative}`);
         }

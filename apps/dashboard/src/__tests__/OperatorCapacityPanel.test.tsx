@@ -22,12 +22,14 @@ it('retains entered values through a conflict and failed reload, then explicitly
  vi.mocked(dashboardApi.put).mockRejectedValueOnce(new ApiError('Conflict',409)).mockResolvedValueOnce({...row(5),availability:'unavailable',assignmentCeiling:5});
  render(<OperatorCapacityPanel userId="operator" editable/>);
  const limit=await screen.findByRole('spinbutton',{name:'Assignment limit (0–1000)'});
+ expect(limit.closest('[data-scope="field"][data-part="root"]')).toHaveClass('field__root');
+ expect(limit.closest('[data-scope="field"][data-part="root"]')?.querySelector('[data-part="label"]')).toHaveClass('field__label');
  await waitFor(()=>expect(limit).toHaveValue(3));
  fireEvent.change(limit,{target:{value:'5'}});
  await userEvent.click(screen.getByRole('combobox',{name:'Availability for assignments'}));
  await userEvent.click(screen.getByRole('option',{name:'Unavailable'}));
  fireEvent.click(screen.getByRole('button',{name:'Save capacity'}));
- await screen.findByText(/Capacity changed elsewhere/);expect(limit).toHaveValue(5);
+ await screen.findByText(/Capacity changed elsewhere/);expect(screen.getByRole('alert')).toHaveClass('alert__root');expect(limit).toHaveValue(5);
  expect(screen.getByRole('button',{name:'Save capacity'})).toBeDisabled();
  fireEvent.click(screen.getByRole('button',{name:'Reload current policy'}));
  await screen.findByText(/Current work could not be loaded/);expect(limit).toHaveValue(5);

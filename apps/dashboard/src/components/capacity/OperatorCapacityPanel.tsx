@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
-import { ParkButton, ParkEmptyState, ParkInput, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkEmptyState, ParkInput, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { Field } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useOperatorCapacity,type CapacityInput } from '../../hooks/useOperatorCapacity';
 import { DashboardSelect } from '../DashboardSelect';
@@ -25,6 +26,7 @@ function CapacityContent({capacity,editable}:{capacity:ReturnType<typeof useOper
   const value=ceiling.trim()===''?NaN:Number(ceiling);
   const valid=Number.isSafeInteger(value)&&value>=0&&value<=1000;
   const submit=async(event:React.FormEvent)=>{event.preventDefault();if(valid)await capacity.save({availability,assignmentCeiling:value});};
+  const statusText=message??(phase==='loading'?'Loading current work…':phase==='idle'?'Current work is unavailable for this session.':'');
   if(!data&&phase==='loading')return <div className={capacityStyles.panel} role="status" aria-live="polite">
     <ParkVisuallyHidden>Loading current work…</ParkVisuallyHidden>
     <ParkSkeleton className={css({ h: '5', w: '70%' })}/>
@@ -50,18 +52,20 @@ function CapacityContent({capacity,editable}:{capacity:ReturnType<typeof useOper
       {data.currentWork!==null&&data.assignmentCeiling!==null&&data.currentWork>data.assignmentCeiling&&<p className={capacityStyles.note}>Existing work remains assigned above the limit. Further normal assignments are blocked.</p>}
       <p className={capacityStyles.note}>Confirmed at <time dateTime={data.asOf}>{new Date(data.asOf).toLocaleString()}</time>.</p>
     </>}
-    <p role={phase==='error'||phase==='conflict'?'alert':'status'} aria-live="polite" className={capacityStyles.note}>
-      {message??(phase==='loading'?'Loading current work…':phase==='idle'?'Current work is unavailable for this session.':'')}
-    </p>
+    {phase==='error'||phase==='conflict'
+      ? <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{statusText}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>
+      : statusText && <p role="status" aria-live="polite" className={capacityStyles.note}>{statusText}</p>}
     <ParkButton type="button" disabled={busy} onClick={()=>void capacity.reload()}>
       {phase==='error'?'Retry':needsReload&&data?'Reload current policy':'Refresh current work'}
     </ParkButton>
     {editable&&<form onSubmit={submit} className={capacityStyles.form}>
       <p className={capacityStyles.note}>Changes apply to new assignments. Existing work stays assigned.</p>
       <DashboardSelect id={`${id}-availability`} label="Availability for assignments" value={availability} disabled={phase==='saving'} onValueChange={value=>{setAvailability(value as CapacityInput['availability']);setDirty(true);}} options={[{value:'available',label:'Available'},{value:'unavailable',label:'Unavailable'}]} />
-      <label htmlFor={`${id}-ceiling`}>Assignment limit (0–1000)</label>
-      <ParkInput id={`${id}-ceiling`} type="number" min={0} max={1000} step={1} value={ceiling} disabled={phase==='saving'}
-        onChange={event=>{setCeiling(event.target.value);setDirty(true);}} />
+      <Field.Root>
+        <Field.Label htmlFor={`${id}-ceiling`}>Assignment limit (0–1000)</Field.Label>
+        <ParkInput id={`${id}-ceiling`} type="number" min={0} max={1000} step={1} value={ceiling} disabled={phase==='saving'}
+          onChange={event=>{setCeiling(event.target.value);setDirty(true);}} />
+      </Field.Root>
       {data&&dirty&&<p className={capacityStyles.note}>Current saved policy: {data.availability??'not configured'}, limit {data.assignmentCeiling??'not configured'}. Your entered values are separate until saved.</p>}
       <ParkButton type="submit" disabled={busy||needsReload||!data||!valid||data.revision>=Number.MAX_SAFE_INTEGER}>Save capacity</ParkButton>
     </form>}
