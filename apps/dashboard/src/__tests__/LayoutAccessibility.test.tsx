@@ -189,7 +189,7 @@ it('places one Park account menu in the desktop sidebar footer, separate from Se
   expect(within(sidebar).getByRole('navigation', { name: 'Settings navigation' })).not.toContainElement(account);
   expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Account options' })).not.toBeInTheDocument();
   expect(account).toHaveClass('menu__trigger');
-  expect(account).toHaveClass('button--size_2xs');
+  expect(account).toHaveClass('button--size_md');
   account.focus();
   await userEvent.keyboard('{Enter}');
   await screen.findByRole('menuitem', { name: 'Account' });
@@ -203,7 +203,7 @@ it('keeps the sole account menu in the mobile header when navigation dialog open
   await renderReady();
   const account = within(screen.getByRole('banner')).getByRole('button', { name: 'Account options' });
   expect(screen.getAllByRole('button', { name: 'Account options' })).toHaveLength(1);
-  expect(account).toHaveClass('button--size_2xs');
+  expect(account).toHaveClass('button--size_md');
   await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
   const dialog = await screen.findByRole('dialog', { name: 'Navigation' });
   expect(within(dialog).queryByRole('button', { name: 'Account options' })).not.toBeInTheDocument();
@@ -244,11 +244,10 @@ it('names account/connection disclosures and restores focus when their child act
   const avatar = account.querySelector('.avatar__root');
   expect(avatar).toHaveClass('avatar__root--shape_full');
   expect(account.querySelector('.avatar__fallback')).toHaveTextContent('O');
-  const avatarWrap = account.querySelector('.shell__personaAvatarWrap');
   const status = account.querySelector('.shell__personaStatus');
-  expect(avatarWrap).toContainElement(avatar as HTMLElement);
-  expect(avatarWrap).toContainElement(status as HTMLElement);
-  expect(avatar?.contains(status)).toBe(false);
+  expect(avatar).toHaveClass('avatar__root--size_md');
+  expect(avatar).toContainElement(status as HTMLElement);
+  expect(account).toHaveClass('button--size_md');
   expect(status).toHaveAttribute('aria-hidden', 'true');
   expect(account).toHaveAttribute('aria-label', 'Account options');
   await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');

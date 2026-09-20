@@ -126,10 +126,6 @@ const shellSlotNames = [
     "shell__personaTriggerLabelled"
   ],
   [
-    "personaAvatarWrap",
-    "shell__personaAvatarWrap"
-  ],
-  [
     "personaAvatar",
     "shell__personaAvatar"
   ],
