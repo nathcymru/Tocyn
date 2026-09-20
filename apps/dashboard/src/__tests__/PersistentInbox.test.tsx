@@ -4,6 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter,Link,RouterProvider,useLocation } from 'react-router-dom';
 import { afterEach,beforeEach,expect,it,vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import postcss from 'postcss';
 import { InboxWorkspacePage } from '../pages/InboxWorkspacePage';
 import { GlobalPriorityAlertBridge, InboxGlobalAlertProvider } from '../components/InboxGlobalAlert';
 import { useAuthStore } from '../store/authStore';
@@ -261,6 +264,55 @@ it('pulses either live breached SLA phase but keeps a historical breach static',
   expect(rows[1].querySelector('[data-sla-breached]')).toHaveAttribute('aria-label','Breached service level');
   expect(rows[2].querySelector('[data-sla-breached]')).toHaveAttribute('data-sla-breached','true');
   expect(rows[2].querySelector('[data-sla-pulsing]')).toHaveAttribute('data-sla-pulsing','false');
+  const ring=rows[0].querySelector('[data-sla-pulsing="true"]') as HTMLElement;
+  expect(ring.className).toContain('anim_overduePulse');
+  expect(ring.className).not.toContain('prefers-reduced-motion');
+  for(const part of ['ticket-default','ticket-preview-panel']){
+    const panel=rows[0].querySelector(`[data-part="${part}"]`) as HTMLElement;
+    expect(panel.className).toContain('trs_grid-template-rows');
+    expect(panel.className).not.toContain('prefers-reduced-motion');
+  }
+});
+
+it('uses the generated Panda motion rules for system, reduced and explicit full preferences',()=>{
+  const css=postcss.parse(readFileSync(resolve(process.cwd(),'../../packages/ui/src/styles/panda.css'),'utf8'));
+  let explicitReduced:postcss.Rule|undefined;
+  let systemReduced:postcss.Rule|undefined;
+  css.walkRules(rule=>{
+    if(rule.selector.startsWith('html[data-tocyn-motion="reduced"] *'))explicitReduced=rule;
+  });
+  css.walkAtRules('media',media=>{
+    if(media.params==='(prefers-reduced-motion: reduce)')media.walkRules(rule=>{
+      if(rule.selector.startsWith('html:not([data-tocyn-motion="full"]) *'))systemReduced=rule;
+    });
+  });
+  const suppresses=(rule:postcss.Rule|undefined)=>rule?.nodes
+    ?.filter(node=>node.type==='decl')
+    .map(node=>`${node.prop}: ${node.value}${node.important?' !important':''}`);
+  expect(suppresses(explicitReduced)).toEqual(expect.arrayContaining([
+    'animation-duration: 0.01ms !important',
+    'animation-iteration-count: 1 !important',
+    'transition-duration: 0.01ms !important',
+  ]));
+  expect(suppresses(systemReduced)).toEqual(expect.arrayContaining([
+    'animation-duration: 0.01ms !important',
+    'animation-iteration-count: 1 !important',
+    'transition-duration: 0.01ms !important',
+  ]));
+  const target=document.createElement('span');
+  document.body.append(target);
+  try{
+    for(const [motion,systemSuppressed,explicitlySuppressed] of [
+      ['system',true,false],['reduced',true,true],['full',false,false],
+    ] as const){
+      document.documentElement.dataset.tocynMotion=motion;
+      expect(target.matches(systemReduced!.selector)).toBe(systemSuppressed);
+      expect(target.matches(explicitReduced!.selector)).toBe(explicitlySuppressed);
+    }
+  }finally{
+    target.remove();
+    delete document.documentElement.dataset.tocynMotion;
+  }
 });
 
 it('keeps one compact toolbar and shows honest metrics only in the statistics drawer',async()=>{
