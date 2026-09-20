@@ -101,7 +101,7 @@ it('names account/connection disclosures and restores focus when their child act
   expect(accountItem).toBeVisible();
   // Ark moves focus into the menu after it mounts. Wait for that transition
   // before sending Escape so the test exercises the open menu, not its trigger.
-  await waitFor(() => expect(screen.getByRole('menu')).toContainElement(document.activeElement));
+  await waitFor(() => expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true));
   await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(account).toHaveFocus()); expect(account).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('button',{name:'Real-time'})).not.toBeInTheDocument();
@@ -351,6 +351,7 @@ it('renders labelled navigation and disables only the app search accelerator', a
   expect(search).not.toHaveAttribute('aria-keyshortcuts');
   await userEvent.keyboard('{Enter}');
   await screen.findByRole('menuitem', { name: 'Account' });
+  await waitFor(() => expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true));
   await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(account).toHaveFocus());
 });
