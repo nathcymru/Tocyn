@@ -37,3 +37,18 @@ it('keeps account sections readable and reaches the security profile', async () 
   await userEvent.click(securityLink);
   expect(await screen.findByRole('heading', { name: 'Security profile destination' })).toBeInTheDocument();
 });
+
+it('shows a recoverable Park empty state when the session has no operator identity', () => {
+  useAuthStore.setState({ user: null });
+  const router = createMemoryRouter([
+    { path: '/settings/account', element: <AccountSettingsPage /> },
+  ], { initialEntries: ['/settings/account'] });
+  render(<RouterProvider router={router} />);
+
+  const unavailable = screen.getByRole('status', { name: 'Account details unavailable' });
+  expect(unavailable).toHaveClass('emptyState__root');
+  expect(screen.getByRole('button', { name: 'Reload account' })).toBeInTheDocument();
+  expect(screen.queryByText('No email available')).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Current work' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Security profile' })).not.toBeInTheDocument();
+});

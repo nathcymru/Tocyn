@@ -100,10 +100,11 @@ export function AgentPermissionsPage() {
         <ParkSkeleton aria-hidden="true" className={css({ h: '20', w: 'full' })} />
       </section> : status && <ParkAlert.Root role="status" aria-live="polite" status={status.startsWith('Permissions saved.') ? 'success' : status.startsWith('Saving') ? 'info' : 'warning'}><ParkAlert.Content><ParkAlert.Description>{status}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
       {error && capabilities.length === 0 ? <ParkEmptyState role="alert" title="Permissions could not be loaded" description={error} action={<ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</ParkButton>} /> : error && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description>
+        {revision === null && <ParkAlert.Description>Last confirmed permissions are shown below. Changes are unavailable until the current policy is reloaded.</ParkAlert.Description>}
         <ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</ParkButton>
       </ParkAlert.Content></ParkAlert.Root>}
 
-      <div className={css({"display":"grid","gap":"3"})}>
+      {!loading && <div className={css({"display":"grid","gap":"3"})}>
         {capabilities.length === 0 && !loading && !error ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className={css({"py":"6"})} action={<ParkButton type="button" onClick={() => void loadPermissions()}>Reload permissions</ParkButton>} /> : capabilities.map(capability => {
           const tenantManaged = capability.key !== capability.capability;
           const available = capability.ownerAllowed && capability.roleAllowed && tenantManaged;
@@ -125,7 +126,7 @@ export function AgentPermissionsPage() {
             </ParkCard.Body></ParkCard.Root>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }
