@@ -25,6 +25,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
 import { css } from '@luminatick/ui/styled-system/css';
+import { Circle, Float } from '@luminatick/ui/styled-system/jsx';
 import { useOperatorPreferencesContext, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
 
 function cn(...inputs: any[]) {
@@ -74,7 +75,9 @@ function UserMenu({ onNavigate, desktop, labelled, open, onOpenChange }: { onNav
       <ParkButton ref={accountTrigger} type="button" variant="plain" size="md" aria-label="Account options" title={user?.full_name || 'User'} className={cn(shellStyles.personaTrigger, desktop && labelled && shellStyles.personaTriggerLabelled)}>
         <ParkAvatar size="md" className={shellStyles.personaAvatar}>
           <ParkAvatarFallback name={user?.full_name || 'Operator'} />
-          <span className={shellStyles.personaStatus} aria-hidden="true" />
+          <Float placement="bottom-end" offset="0.125rem" pointerEvents="none">
+            <Circle className={shellStyles.personaStatus} aria-hidden="true" />
+          </Float>
         </ParkAvatar>
         {desktop && labelled && <span className={shellStyles.personaDetails} aria-hidden="true"><strong className={shellStyles.personaName}>{user?.full_name || 'Operator'}</strong><span className={shellStyles.personaPresence}>Signed in</span></span>}
       </ParkButton>

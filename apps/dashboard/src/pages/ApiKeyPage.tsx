@@ -1,6 +1,7 @@
 import { css } from '@luminatick/ui/styled-system/css';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
+import { IconButton as ParkIconButton } from '@luminatick/ui/components';
 import React, { useEffect, useState } from 'react';
 import {
   IconPlus,
@@ -223,15 +224,14 @@ export function ApiKeyPage() {
             </div>
           </div>
 
-          <div className={css({"minW":0})}>
-            <span className={css({"overflowX":"auto","rounded":"md","bg":"bg.subtle","p":"3","fontFamily":"mono","fontSize":"sm"})}>{createdKey.apiKey}</span>
-            <ParkButton
-              disabled={copying} aria-label="Copy API key" onClick={() => copyToClipboard(createdKey.apiKey)}
-              className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}
+          <div className={css({ display: 'flex', minW: 0, alignItems: 'center', gap: '2' })}>
+            <code className={css({ display: 'block', minW: 0, flex: '1', overflowWrap: 'anywhere', borderRadius: 'l2', bg: 'bg.subtle', p: '3', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', fontSize: 'sm', userSelect: 'all' })}>{createdKey.apiKey}</code>
+            <ParkIconButton
+              type="button" variant="plain" disabled={copying} aria-label="Copy API key" onClick={() => copyToClipboard(createdKey.apiKey)}
               title="Copy to clipboard"
             >
               {copied ? <IconCheck className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" /> : <IconCopy className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />}
-            </ParkButton>
+            </ParkIconButton>
           </div>
 
           {copyError && <ParkAlert.Root role="alert" status="error" variant="surface">
@@ -313,13 +313,13 @@ export function ApiKeyPage() {
                       </div>
                     </ParkTable.Cell>
                     <ParkTable.Cell>
-                      <ParkButton
+                      <ParkIconButton
+                        type="button" variant="plain"
                         aria-label={`Revoke ${key.name}`} onClick={event => { revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(key); setRevokeError(''); setRevokeOpen(true); }}
-                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Revoke Key"
                       >
                         <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
-                      </ParkButton>
+                      </ParkIconButton>
                     </ParkTable.Cell>
                 </ParkTable.Row>
               ))}

@@ -10,6 +10,8 @@ async function openEditor(){
  const dialog=await screen.findByRole('dialog',{name:'Create Filter'});const name=within(dialog).getByRole('textbox',{name:'Filter Name'});
  expect(dialog).toHaveAttribute('data-scope','dialog');expect(dialog).toHaveAttribute('data-part','content');expect(dialog).toHaveClass('dialog__content');
  expect(dialog.parentElement).toHaveClass('dialog__positioner');expect(document.querySelector('[data-scope="dialog"][data-part="backdrop"]')).toHaveClass('dialog__backdrop');
+ expect(dialog.querySelector('.dialog__body')).not.toContainElement(dialog.querySelector('.dialog__footer'));
+ expect(within(dialog).getByRole('button',{name:'Create Filter'})).toHaveAttribute('form',within(dialog).getByRole('form').id);
  await waitFor(()=>expect(name).toHaveFocus());return {opener,dialog,name};
 }
 it('bounds duplicate submissions and preserves the dialog through pending Escape, then returns focus on success',async()=>{
@@ -58,7 +60,7 @@ it('loads the selected filter into the Park editor and saves its updated conditi
  expect(within(dialog).getByRole('textbox',{name:'Condition 1 value'})).toHaveValue('open');
  await waitFor(()=>expect(name).toHaveFocus());fireEvent.change(name,{target:{value:'Revised view'}});
  fireEvent.change(within(dialog).getByRole('textbox',{name:'Condition 1 value'}),{target:{value:'pending'}});
- fireEvent.submit(within(dialog).getByRole('form'));
+ fireEvent.click(within(dialog).getByRole('button',{name:'Save Changes'}));
  await waitFor(()=>expect(mutations.update).toHaveBeenCalledWith({id:'saved-filter',name:'Revised view',conditions:[{field:'status',operator:'equals',value:'pending'}]}));
  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Edit Filter'})).not.toBeInTheDocument());
  await waitFor(()=>expect(opener).toHaveFocus());

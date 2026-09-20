@@ -5347,12 +5347,8 @@
 
     .shell__personaStatus {
       background: var(--colors-green-9);
-      border-radius: var(--radii-full);
       border-width: 2px;
       border-color: var(--colors-bg\.surface);
-      position: absolute;
-      inset-block-end: -0.0625rem;
-      inset-inline-end: -0.0625rem;
       width: 0.75rem;
       height: 0.75rem;
 }
@@ -11825,6 +11821,14 @@
     border-radius: var(--radii-l3);
 }
 
+  .flex_0_0_auto {
+    flex: 0 0 auto;
+}
+
+  .bdr_9999px {
+    border-radius: 9999px;
+}
+
   .py_4 {
     padding-block: var(--spacing-4);
 }
@@ -12077,8 +12081,9 @@
     line-height: var(--line-heights-tight);
 }
 
-  .ff_mono {
-    font-family: var(--fonts-mono);
+  .us_all {
+    -webkit-user-select: all;
+    user-select: all;
 }
 
   .bd-cl_collapse {
@@ -12465,11 +12470,6 @@
     display: inline-block;
 }
 
-  .us_all {
-    -webkit-user-select: all;
-    user-select: all;
-}
-
   .flex-sh_1 {
     flex-shrink: 1;
 }
@@ -12532,6 +12532,30 @@
 
   .clip_rect\(0\,_0\,_0\,_0\) {
     clip: rect(0, 0, 0, 0);
+}
+
+  .inset-bs_auto {
+    inset-block-start: auto;
+}
+
+  .inset-be_0\.125rem {
+    inset-block-end: 0.125rem;
+}
+
+  .inset-s_auto {
+    inset-inline-start: auto;
+}
+
+  .inset-e_0\.125rem {
+    inset-inline-end: 0.125rem;
+}
+
+  .translate_50\%_50\% {
+    translate: 50% 50%;
+}
+
+  .pointer-events_none {
+    pointer-events: none;
 }
 
   .trf_rotate\(180deg\) {
