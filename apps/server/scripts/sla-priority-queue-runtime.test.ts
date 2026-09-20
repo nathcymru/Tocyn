@@ -130,6 +130,13 @@ test('priority views sort the complete authorised clock snapshot before paginati
   const overdue=await f.read({}, {sort:'priority_focus',limit:2});
   assert.equal(overdue.triageOverdueCount,2,'the banner count covers the complete selected queue before pagination');
   assert.deepEqual(overdue.data.map(item=>item.ticket.id),['overdue-one','overdue-two']);
+  await f.ticket('exact-deadline',3_600_000,'normal','a',at(1));
+  await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+   priority_regulatory_officer_on_site=0,priority_vip_blocked=0,priority_hard_deadline=0,
+   priority_score=1,contract_sla_tier='alpha',criticality_tier=4 WHERE tenant_id='a' AND id='exact-deadline'`).run();
+  const exact=await f.read({}, {sort:'priority_focus',limit:3});
+  assert.equal(exact.triageOverdueCount,3,'the fixed-hour deadline counts as overdue at equality');
+  assert.equal(exact.data.find(item=>item.ticket.id==='exact-deadline')?.priorityClock?.timeRemainingHours,0);
  }finally{await f.mf.dispose();}
 });
 

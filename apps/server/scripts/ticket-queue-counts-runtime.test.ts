@@ -123,10 +123,10 @@ test('global triage overdue total uses active accrued clocks and current tenant/
       .run();
     await fixture.db.prepare("INSERT INTO tickets(tenant_id,id,subject,status,customer_email,source,created_at) VALUES(?,'clock-unclassified','Unclassified','open','synthetic@example.invalid','fixture','2026-09-19T00:00:00.000Z')")
       .bind(tenantId).run();
-    assert.equal((await reader.counts({credential,asOfMs:exactly})).triageOverdueCount,baseline+2,
-      'exact deadline is not overdue; a paused, resolved, hidden, foreign or unclassified row is excluded');
+    assert.equal((await reader.counts({credential,asOfMs:exactly})).triageOverdueCount,baseline+3,
+      'exact deadline is overdue; a paused, resolved, hidden, foreign or unclassified row is excluded');
     assert.equal((await reader.counts({credential,asOfMs:exactly+1})).triageOverdueCount,baseline+3,
-      'the deadline becomes overdue at the first millisecond after the boundary');
+      'the overdue total stays stable at the first millisecond after the boundary');
     await fixture.db.prepare("UPDATE ticket_priority_clocks SET active_since='2026-09-20T01:00:00.001Z',stop_reason=NULL,updated_at='2026-09-20T01:00:00.001Z' WHERE tenant_id=? AND ticket_id='clock-paused'")
       .bind(tenantId).run();
     assert.equal((await reader.counts({credential,asOfMs:exactly+1})).triageOverdueCount,baseline+4,

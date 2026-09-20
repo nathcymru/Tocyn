@@ -49,7 +49,7 @@ export function ticketQueueCountsSql(scope: VerifiedTenantScope, options: Ticket
   const mentions=ticketMentionPredicate('tickets',scope.actorId);
   // The fixed-hour triage clock is distinct from contractual calendar SLAs.
   // Match projectPriorityClock's active elapsed calculation: accrued time plus
-  // nonnegative time since active_since, with equality still on time.
+  // nonnegative time since active_since, with the deadline itself overdue.
   const activeSinceMs=`(CAST(strftime('%s',priority_clock.active_since) AS INTEGER)*1000+
     CAST(substr(strftime('%f',priority_clock.active_since),4,3) AS INTEGER))`;
   const windowMs=`MIN(CASE tickets.contract_sla_tier WHEN 'alpha' THEN 1 WHEN 'bravo' THEN 4
@@ -60,7 +60,7 @@ export function ticketQueueCountsSql(scope: VerifiedTenantScope, options: Ticket
     AND tickets.contract_sla_tier IN ('alpha','bravo','charlie','delta')
     AND tickets.criticality_tier IN (1,2,3,4)
     AND ${activeSinceMs} IS NOT NULL
-    AND priority_clock.accrued_active_ms+MAX(0,?-${activeSinceMs})>${windowMs}
+    AND priority_clock.accrued_active_ms+MAX(0,?-${activeSinceMs})>=${windowMs}
     THEN 1 ELSE 0 END`;
   return {authority,sql:`WITH authority AS MATERIALIZED (${authority.sql}),
     visible AS MATERIALIZED (

@@ -42,6 +42,18 @@ describe('priority triage ring', () => {
     expect(meter).toHaveAttribute('aria-valuetext', 'Overdue by 30m, paused');
   });
 
+  it('treats the exact fixed-hour deadline as overdue, but never pulses a paused clock', () => {
+    const a4 = { ...ticket, contract_sla_tier: 'alpha' as const, criticality_tier: 4 as const };
+    const { rerender } = render(<PriorityTriageRing ticket={a4} projection={{ remainingHours: 0, paused: false, asOf }} />);
+    const meter = screen.getByRole('meter');
+    expect(meter).toHaveAttribute('data-priority-clock-state', 'overdue');
+    expect(meter).toHaveAttribute('data-priority-clock-pulsing', 'true');
+    expect(meter).toHaveAttribute('aria-valuetext', 'Overdue by 0m');
+    rerender(<PriorityTriageRing ticket={a4} projection={{ remainingHours: 0, paused: true, asOf }} />);
+    expect(meter).toHaveAttribute('data-priority-clock-state', 'paused');
+    expect(meter).toHaveAttribute('data-priority-clock-pulsing', 'false');
+  });
+
   it('shows a stopped clock for resolved tickets with the authoritative paused projection', () => {
     render(<PriorityTriageRing ticket={{ ...ticket, status: 'resolved' }} projection={{ remainingHours: 1, paused: true, asOf }} />);
     const meter = screen.getByRole('meter');

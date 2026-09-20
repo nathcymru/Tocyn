@@ -131,7 +131,7 @@ export class SlaPriorityQueueService{
    const sorted=ordered(items,meter,sort);if(offset>sorted.length)throw new SlaQueueRestart('Queue changed; restart pagination');
    meter.charge(items.length);
    const triageOverdueCount=items.filter(item=>item.priorityClock&&!item.priorityClock.paused
-    &&item.ticket.status!=='resolved'&&item.ticket.status!=='closed'&&item.priorityClock.timeRemainingHours<0).length;
+    &&item.ticket.status!=='resolved'&&item.ticket.status!=='closed'&&item.priorityClock.timeRemainingHours<=0).length;
    const nextOffset=offset+limit;
    const next=nextOffset<sorted.length?await new SignJWT({tenant:this.scope.tenantId,session:this.credential.sessionVersion,selection:selectionHash,sort,asOf,offset:nextOffset,digest,limit})
     .setProtectedHeader({alg:'HS256'}).setAudience('sla-priority-queue-v1').setSubject(this.scope.actorId).setExpirationTime(Math.floor((asOf+30000)/1000)).sign(secret):null;

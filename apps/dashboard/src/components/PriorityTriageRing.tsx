@@ -56,7 +56,7 @@ export function PriorityTriageRing({ ticket, projection }: PriorityTriageRingPro
     : null;
   const windowHours = absoluteWindowHours(ticket.contract_sla_tier, ticket.criticality_tier);
   const elapsed = remaining === null ? null : Math.max(0, Math.min(1, 1 - remaining / windowHours));
-  const overdue = remaining !== null && remaining < 0;
+  const overdue = remaining !== null && remaining <= 0;
   const status = remaining === null
     ? 'Clock unavailable'
     : `${overdue ? `Overdue by ${formatHours(remaining)}` : `${formatHours(remaining)} remaining`}${terminal ? ', stopped' : projection?.paused ? ', paused' : ''}`;
