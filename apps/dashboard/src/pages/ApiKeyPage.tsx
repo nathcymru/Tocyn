@@ -264,9 +264,25 @@ export function ApiKeyPage() {
       {listError && <ParkAlert.Root role="alert" status="error" variant="surface">
         <ParkAlert.Content><ParkAlert.Description>{listError}</ParkAlert.Description></ParkAlert.Content>
       </ParkAlert.Root>}
-      <ParkCard.Root variant="outline">
-        <ParkCard.Body className={css({ overflowX: 'auto' })}>
-          <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>
+      <ParkCard.Root variant="outline" className={css({ minW: 0 })}>
+        <ParkCard.Body className={keys.length > 0
+          ? css({ minW: 0, overflowX: 'auto' })
+          : css({ minW: 0, overflowX: 'visible' })}>
+          {isLoading ? (
+            <div aria-label="Loading API keys" aria-busy="true" className={css({ display: 'grid', gap: '2' })}>
+              <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
+              <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
+            </div>
+          ) : keys.length === 0 ? (
+            <ParkEmptyState
+              title={listError ? 'API key list unavailable.' : 'No API keys found.'}
+              description={listError ? 'Reload this page before relying on the list.' : 'Create a key when an integration requires external API access.'}
+              headingLevel={false}
+              className={css({ minW: 0 })}
+              action={listError ? <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton> : undefined}
+            />
+          ) : (
+            <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>
             <ParkTable.Head>
               <ParkTable.Row className={css({"borderBottomWidth":"1px","borderColor":"border.default"})}>
                 <ParkTable.Header>Name</ParkTable.Header>
@@ -277,30 +293,8 @@ export function ApiKeyPage() {
               </ParkTable.Row>
             </ParkTable.Head>
             <ParkTable.Body className={css({"minW":0})}>
-              {isLoading ? (
-                <ParkTable.Row>
-                  <ParkTable.Cell colSpan={5} className={css({"minW":0})}>
-                    <div aria-label="Loading API keys" aria-busy="true" className={css({ display: 'grid', gap: '2' })}>
-                      <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
-                      <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
-                    </div>
-                  </ParkTable.Cell>
-                </ParkTable.Row>
-              ) : keys.length === 0 ? (
-                <ParkTable.Row>
-                  <ParkTable.Cell colSpan={5} className={css({"minW":0})}>
-                    <ParkEmptyState
-                      title={listError ? 'API key list unavailable.' : 'No API keys found.'}
-                      description={listError ? 'Reload this page before relying on the list.' : 'Create a key when an integration requires external API access.'}
-                      headingLevel={false}
-                      className={css({"minW":0})}
-                      action={listError ? <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton> : undefined}
-                    />
-                  </ParkTable.Cell>
-                </ParkTable.Row>
-              ) : (
-                keys.map((key) => (
-                  <ParkTable.Row key={key.id}>
+              {keys.map((key) => (
+                <ParkTable.Row key={key.id}>
                     <ParkTable.Cell className={css({"fontWeight":"medium","color":"text.primary"})}>{key.name}</ParkTable.Cell>
                     <ParkTable.Cell className={css({"minW":0})}>{key.prefix}</ParkTable.Cell>
                     <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
@@ -321,11 +315,11 @@ export function ApiKeyPage() {
                         <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
                       </ParkButton>
                     </ParkTable.Cell>
-                  </ParkTable.Row>
-                ))
-              )}
+                </ParkTable.Row>
+              ))}
             </ParkTable.Body>
-          </ParkTable.Root>
+            </ParkTable.Root>
+          )}
         </ParkCard.Body>
       </ParkCard.Root>
       {revokeStatus && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>{revokeStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}

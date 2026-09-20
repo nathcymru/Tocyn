@@ -183,8 +183,12 @@ export function FiltersSettingsPage() {
           </ParkDialog.Content>
         </ParkDialog.Positioner>
       </ParkDialog.Root>
-      {isError && !filters?.length ? <ParkEmptyState role="alert" title="Filters could not be loaded" description="Retry to load saved filters before editing them." action={<ParkButton type="button" onClick={() => void refetch()}>Retry filters</ParkButton>} /> : <ParkCard.Root variant="outline"><ParkCard.Body className={css({ overflowX: 'auto' })}>
+      {isError && !filters?.length ? <ParkEmptyState role="alert" title="Filters could not be loaded" description="Retry to load saved filters before editing them." action={<ParkButton type="button" onClick={() => void refetch()}>Retry filters</ParkButton>} />
+        : !filters?.length ? <ParkEmptyState title="No filters created yet." description="Create a filter to save a view for your team."
+          headingLevel={false} action={<ParkButton type="button" onClick={event => handleOpenModal(undefined, event.currentTarget)}>Create filter</ParkButton>} />
+          : <>
         {isError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>The filter list could not be refreshed.</ParkAlert.Description><ParkButton type="button" onClick={() => void refetch()}>Retry filters</ParkButton></ParkAlert.Content></ParkAlert.Root>}
+        <ParkCard.Root variant="outline"><ParkCard.Body className={css({ overflowX: 'auto' })}>
         <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
           <ParkTable.Head>
             <ParkTable.Row>
@@ -194,15 +198,7 @@ export function FiltersSettingsPage() {
             </ParkTable.Row>
           </ParkTable.Head>
           <ParkTable.Body>
-            {!filters?.length ? (
-              <ParkTable.Row>
-                <ParkTable.Cell colSpan={3} className={css({"py":"6"})}>
-                  <ParkEmptyState title="No filters created yet." description="Create a filter to save a view for your team."
-                    headingLevel={false} action={<ParkButton type="button" onClick={event => handleOpenModal(undefined, event.currentTarget)}>Create filter</ParkButton>} />
-                </ParkTable.Cell>
-              </ParkTable.Row>
-            ) : (
-              filters?.map((filter) => (
+            {filters.map((filter) => (
                 <ParkTable.Row key={filter.id}>
                   <ParkTable.Cell>
                     <div className={css({ fontWeight: 'medium', color: 'fg.default' })}>{filter.name}</div>
@@ -231,11 +227,10 @@ export function FiltersSettingsPage() {
                     </div>
                   </ParkTable.Cell>
                 </ParkTable.Row>
-              ))
-            )}
+              ))}
           </ParkTable.Body>
         </ParkTable.Root>
-      </ParkCard.Body></ParkCard.Root>}
+      </ParkCard.Body></ParkCard.Root></>}
 
       <ParkDialog.Root open={isModalOpen} onOpenChange={({ open }) => { if (!open && !saving) handleCloseModal(); }}
         initialFocusEl={() => nameInput.current} finalFocusEl={() => opener.current}

@@ -16,3 +16,8 @@ it('keeps the Knowledge empty description readable and rows near the heading', (
   expect(css).toMatch(/\.page__knowledgeContent \.emptyState__description\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/);
   expect(css).toMatch(/\.page__content--kind_knowledge\s*\{[^}]*align-content:\s*start;/);
 });
+
+it('wraps the Knowledge editor heading on narrow screens and restores a single desktop line', () => {
+  expect(css).toMatch(/\.knowledgeEditor__title\s*\{[^}]*white-space:\s*normal;/);
+  expect(css).toMatch(/@media screen and \(min-width: 48rem\)[\s\S]*?\.knowledgeEditor__title\s*\{[^}]*white-space:\s*nowrap;/);
+});

@@ -97,6 +97,8 @@ it('shows malformed batch SLA data as unavailable without asserting a breach', a
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => url === '/api/ticket-sla/projections')).toBe(true));
   expect(await screen.findByLabelText('Service level unavailable')).toBeInTheDocument();
   expect(within(row).queryByText('Overdue')).not.toBeInTheDocument();
-  const metricBand = document.querySelector('[data-part="inbox-page-metrics"]') as HTMLElement;
-  expect(within(metricBand).getByText('Overdue').parentElement).toHaveTextContent('—');
+  expect(document.querySelector('[data-part="inbox-page-metrics"]')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Quick statistics' }));
+  const drawer = screen.getByRole('region', { name: 'Quick statistics' });
+  expect(within(drawer).getByText('Overdue').parentElement).toHaveTextContent('—');
 });

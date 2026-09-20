@@ -152,17 +152,18 @@ it('renders spaced ticket surfaces with a left SLA anchor, stable marker slots a
   expect(preview).toHaveAttribute('data-expanded','false');
 });
 
-it('keeps the preset toolbar compact while showing honest current-page metrics and filter controls',async()=>{
+it('keeps one compact toolbar and shows honest metrics only in the statistics drawer',async()=>{
   showInbox();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
   const toolbar=document.querySelector('[data-part="inbox-primary-toolbar"]') as HTMLElement;
-  const metricBand=document.querySelector('[data-part="inbox-page-metrics"]') as HTMLElement;
   expect(within(toolbar).getByRole('button',{name:'Inbox views'}).querySelector('svg')).toHaveAttribute('aria-hidden','true');
   expect(within(toolbar).getByRole('button',{name:'Quick statistics'})).toBeInTheDocument();
   expect(within(toolbar).getByRole('button',{name:'Filter tickets'})).toBeInTheDocument();
-  expect(within(toolbar).queryByRole('button',{name:'New Ticket'})).not.toBeInTheDocument();
-  expect(within(metricBand).getByRole('button',{name:'New Ticket'})).toBeInTheDocument();
-  const metrics=metricBand.querySelector('dl') as HTMLElement;
+  expect(within(toolbar).getByRole('button',{name:'New Ticket'})).toBeInTheDocument();
+  expect(document.querySelector('[data-part="inbox-page-metrics"]')).toBeNull();
+  expect(screen.queryByRole('region',{name:'Quick statistics'})).not.toBeInTheDocument();
+  fireEvent.click(within(toolbar).getByRole('button',{name:'Quick statistics'}));
+  const metrics=screen.getByRole('region',{name:'Quick statistics'}).querySelector('dl') as HTMLElement;
   expect(metrics).toHaveAttribute('aria-label','Tickets on the current page');
   await waitFor(()=>expect(within(metrics).getByText('Open / pending').parentElement).toHaveTextContent('20'));
   expect(within(metrics).getByText('Resolved / closed').parentElement).toHaveTextContent('0');
@@ -898,10 +899,10 @@ it('distinguishes a failed inbox read from an empty view and retries the authori
   showInbox();
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not load conversations.');
   expect(screen.queryByText('No conversations in this view')).not.toBeInTheDocument();
-  const metrics=document.querySelector('[data-part="inbox-page-metrics"]') as HTMLElement;
-  for(const label of ['Open / pending','Overdue','Resolved / closed'])expect(within(metrics).getByText(label).parentElement).toHaveTextContent('—');
+  expect(document.querySelector('[data-part="inbox-page-metrics"]')).toBeNull();
   fireEvent.click(screen.getByRole('button',{name:'Quick statistics'}));
   const drawer=screen.getByRole('region',{name:'Quick statistics'});
+  expect(drawer.querySelector('dl')).toHaveAttribute('aria-label','Tickets on the current page');
   for(const label of ['Open / pending','Overdue','Resolved / closed'])expect(within(drawer).getByText(label).parentElement).toHaveTextContent('—');
   const retry=screen.getByRole('button',{name:'Retry conversations'});
   fireEvent.click(retry);
@@ -926,10 +927,11 @@ it('retains confirmed inbox rows and a retry action after a background refresh f
   expect(failedRefresh).toHaveClass('alert__root');
   expect(failedRefresh).toHaveTextContent('Could not refresh conversations. The last confirmed list remains visible.');
   expect(first).toBeInTheDocument();
-  const metricBand=document.querySelector('[data-part="inbox-page-metrics"]') as HTMLElement;
-  expect(metricBand.querySelector('dl')).toHaveAttribute('aria-label','Tickets on the last confirmed page');
-  expect(within(metricBand).getByText('Open / pending').parentElement).toHaveTextContent('20');
-  expect(within(metricBand).getByText('Metrics show the last confirmed page while refresh is unavailable.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Quick statistics'}));
+  const drawer=screen.getByRole('region',{name:'Quick statistics'});
+  expect(drawer.querySelector('dl')).toHaveAttribute('aria-label','Tickets on the last confirmed page');
+  expect(within(drawer).getByText('Open / pending').parentElement).toHaveTextContent('20');
+  expect(within(drawer).getByText('Metrics show the last confirmed page while refresh is unavailable.')).toBeInTheDocument();
   expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
   expect(screen.queryByText('No conversations in this view')).not.toBeInTheDocument();
 });
@@ -942,11 +944,9 @@ it('does not invent an overdue zero when the SLA projection fails',async()=>{
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/ticket-sla/projections')).toBe(true));
   await waitFor(()=>expect(client.getQueryCache().getAll().find(query=>query.queryKey[0]==='ticket-sla'&&Array.isArray(query.queryKey[1])&&query.queryKey[1].includes('ticket-1'))?.state.status).toBe('error'));
-  const metricBand=document.querySelector('[data-part="inbox-page-metrics"]') as HTMLElement;
-  expect(within(metricBand).getByText('Open / pending').parentElement).toHaveTextContent('20');
-  expect(within(metricBand).getByText('Overdue').parentElement).toHaveTextContent('—');
   fireEvent.click(screen.getByRole('button',{name:'Quick statistics'}));
   const drawer=screen.getByRole('region',{name:'Quick statistics'});
+  expect(within(drawer).getByText('Open / pending').parentElement).toHaveTextContent('20');
   expect(within(drawer).getByText('Overdue').parentElement).toHaveTextContent('—');
 });
 

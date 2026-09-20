@@ -70,6 +70,8 @@ it('uses an actionable Park empty state when no filters exist', async () => {
   render(<FiltersSettingsPage />);
 
   const empty = screen.getByRole('region', { name: 'No filters created yet.' });
+  expect(empty.closest('table')).toBeNull();
+  expect(screen.queryByRole('table')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Create filter' }));
   expect(empty).toBeInTheDocument();
   expect(await screen.findByRole('dialog')).toBeInTheDocument();
@@ -80,6 +82,25 @@ it('offers an explicit retry when saved filters fail to load', () => {
   filters.useFilters.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
   render(<FiltersSettingsPage />);
   expect(screen.getByRole('alert')).toHaveTextContent('Filters could not be loaded');
+  expect(screen.queryByRole('table')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry filters' }));
+  expect(refetch).toHaveBeenCalledOnce();
+});
+
+it('keeps a populated table and retry action visible after a failed refresh', () => {
+  const refetch = vi.fn();
+  filters.useFilters.mockReturnValue({
+    data: [{ id: 'custom-open', name: 'My open', is_system: 0, conditions: [] }],
+    isLoading: false,
+    isError: true,
+    refetch,
+  });
+
+  render(<FiltersSettingsPage />);
+
+  expect(screen.getByRole('alert')).toHaveTextContent('The filter list could not be refreshed.');
+  expect(screen.getByRole('table')).toHaveTextContent('My open');
+  expect(screen.getByRole('alert').closest('table')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Retry filters' }));
   expect(refetch).toHaveBeenCalledOnce();
 });

@@ -452,7 +452,7 @@ export default {
             header: { display: 'flex', minWidth: '0', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderBottom: '1px solid', borderColor: 'border.default', paddingBottom: '1rem' },
             heading: { display: 'flex', minWidth: '0', alignItems: 'center', gap: '0.75rem' },
             back: { flexShrink: '0', width: '2.75rem', height: '2.75rem', padding: '0' },
-            title: { margin: '0', overflow: 'hidden', color: 'text.primary', fontSize: '1.5rem', fontWeight: '700', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+            title: { minWidth: '0', margin: '0', overflow: { base: 'visible', md: 'hidden' }, color: 'text.primary', fontSize: '1.5rem', fontWeight: '700', lineHeight: 'shorter', textOverflow: { base: 'clip', md: 'ellipsis' }, whiteSpace: { base: 'normal', md: 'nowrap' } },
             save: { flexShrink: '0' },
             spinner: { animation: 'spin 1s linear infinite' },
             content: { width: '100%' },

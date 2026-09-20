@@ -80,9 +80,19 @@ it('reports clipboard success only after resolution and keeps copy failures reco
 it('reports unavailable key metadata instead of claiming an empty key list',async()=>{
  api.get.mockRejectedValueOnce(new Error('synthetic list failure')).mockResolvedValueOnce([key]);render(<ApiKeyPage/>);
  expect(await screen.findByRole('alert')).toHaveTextContent('could not be refreshed');expect(screen.getByText('API key list unavailable.')).toBeInTheDocument();expect(screen.queryByText('No API keys found.')).not.toBeInTheDocument();
+ expect(screen.getByText('API key list unavailable.').closest('table')).toBeNull();expect(screen.queryByRole('table')).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Retry loading keys'}));
  const row=await screen.findByRole('row',{name:/Synthetic key fixture/});
  expect(within(row).getAllByRole('cell')).toHaveLength(5);
+ expect(screen.queryByText('API key list unavailable.')).not.toBeInTheDocument();
+});
+
+it('renders a loaded empty state at card width without a five-column table',async()=>{
+ api.get.mockResolvedValueOnce([]);render(<ApiKeyPage/>);
+ const empty=await screen.findByText('No API keys found.');
+ expect(empty.closest('section')).toHaveClass('emptyState__root');
+ expect(empty.closest('table')).toBeNull();expect(screen.queryByRole('table')).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Create New Key'})).toBeEnabled();
 });
 
 it('restores keyboard focus to retry when an uncertain creation is reopened',async()=>{
