@@ -2928,6 +2928,10 @@
       min-height: 4rem;
 }
 
+    .shell__headerInbox {
+      border-bottom: 0;
+}
+
     .shell__pageTitle {
       margin: var(--spacing-0);
       overflow: hidden;

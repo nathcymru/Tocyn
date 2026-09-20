@@ -326,7 +326,7 @@ function LayoutContent() {
 
   return (
       <div className={cn(shellStyles.root, isInboxRoute ? shellStyles.rootInbox : shellStyles.rootStandard)}>
-        <header className={shellStyles.header}>
+        <header className={cn(shellStyles.header, isInboxRoute && shellStyles.headerInbox)}>
           <ParkButton
             type="button"
             ref={navigationTrigger}
