@@ -23,4 +23,5 @@ it('keeps an unbroken ticket subject readable inside its Park-linked row', async
   expect(link).toHaveAttribute('href', '/tickets/synthetic-ticket');
   expect(heading).toHaveClass('min-w_0', 'ov-wrap_anywhere');
   expect(heading.parentElement).toHaveClass('min-w_0', 'flex-wrap_wrap');
+  expect(link?.querySelector('span.badge')).toHaveClass('badge--variant_subtle', 'tt_capitalize', 'bg_info.surface');
 });

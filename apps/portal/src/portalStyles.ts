@@ -86,7 +86,7 @@ export const p = {
   ticketRowMain: row,
   ticketReference: css({ fontFamily: 'tabular', fontSize: 'sm', fontWeight: 'bold' }),
   ticketSubject: css({ fontSize: 'md', fontWeight: 'semibold' }),
-  ticketStatus: badge,
+  ticketStatus: css({ textTransform: 'capitalize' }),
   ticketListMeta: css({ display: 'flex', gap: '2', mt: '2', color: 'text.muted', fontSize: 'xs' }),
   ticketPriority: css({ textTransform: 'capitalize' }),
   statusOpen: css({ bg: 'info.surface', color: 'info.text' }),

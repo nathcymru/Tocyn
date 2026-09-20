@@ -12298,6 +12298,10 @@
     --colors-color-palette-plain-fg: var(--colors-gray-plain-fg);
 }
 
+  .flex-d_column {
+    flex-direction: column;
+}
+
   .z_30 {
     z-index: 30;
 }
@@ -12332,10 +12336,6 @@
 
   .ta_start {
     text-align: start;
-}
-
-  .flex-d_column {
-    flex-direction: column;
 }
 
   .c_red\.11 {
