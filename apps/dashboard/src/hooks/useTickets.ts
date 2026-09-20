@@ -6,14 +6,19 @@ import { Ticket, TicketWithDetails } from '@luminatick/shared';
 import { useSlaPriorityTickets, type TicketQueryPage } from './useSlaPriorityTickets';
 
 export function useTickets(params: Record<string, string> = {}) {
+  const user = useAuthStore(state => state.user);
+  const generation = useAuthStore(state => state.sessionGeneration);
+  const identity = JSON.stringify([generation, user?.tenant_id, user?.id, user?.role]);
   const queryParams = new URLSearchParams(params).toString();
   const sla = useSlaPriorityTickets(params, params.sort === 'sla_priority');
   const ordinary = useQuery({
-    enabled: params.sort !== 'sla_priority',
-    queryKey: ['tickets', params],
-    placeholderData: previous => previous,
+    enabled: params.sort !== 'sla_priority' && Boolean(user?.id),
+    queryKey: ['tickets', params, identity],
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === identity ? previous : undefined,
     queryFn: async () => {
+      if (assignmentIdentity() !== identity) throw new DOMException('Obsolete ticket list response', 'AbortError');
       const data = await dashboardApi.get<TicketQueryPage>(`/tickets?${queryParams}`);
+      if (assignmentIdentity() !== identity) throw new DOMException('Obsolete ticket list response', 'AbortError');
       return data;
     },
     refetchInterval: () => document.visibilityState === 'visible' ? 30000 : false,

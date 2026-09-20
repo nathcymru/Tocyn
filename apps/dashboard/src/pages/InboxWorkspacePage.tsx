@@ -1,6 +1,6 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSplitter, ParkTable } from '@luminatick/ui/park';
+import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSkeleton, ParkSplitter, ParkTable, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { ChevronDown,ChevronLeft,ChevronRight,Filter,IconChartBar,Plus } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
@@ -14,10 +14,12 @@ import { OperatorWorkspaceProvider,useOperatorDraftIndicators,useOperatorWorkspa
 import { useSettings } from '../hooks/useSettings';
 import { useTicketSlaBatch, type TicketSla } from '../hooks/useTicketSla';
 import { useStandardQueueCounts, useTickets, useUpdateTicket } from '../hooks/useTickets';
+import type { TicketQueryPage } from '../hooks/useSlaPriorityTickets';
 import type { Ticket } from '@luminatick/shared';
 import { ticketReference } from '../utils/ticket-reference';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { TicketDetailPage } from './TicketDetailPage';
+import { NewTicketDialog } from './NewTicketDialog';
 
 const queueViews={mentions:{label:'Mentions',description:'Actionable conversations with a mention for you that has not been dismissed.'},mine:{label:'Mine',description:'Open and pending conversations assigned to you and ready for work.'},unassigned:{label:'Unassigned',description:'Open and pending conversations without an assignee and ready for work.'},drafts:{label:'Drafts',description:'Conversations with your saved drafts.'},actionable:{label:'Needs Action',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
 const queueOrder=['mentions','mine','unassigned','drafts','actionable','snoozed'] as const;
@@ -149,6 +151,9 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   const [focusedIndex,setFocusedIndex]=useState(0);
   const [filterOpen,setFilterOpen]=useState(false);
   const [statsOpen,setStatsOpen]=useState(false);
+  const [createOpen,setCreateOpen]=useState(false);
+  const [createMounted,setCreateMounted]=useState(false);
+  const createTrigger=useRef<HTMLButtonElement>(null);
   const [presentation,setPresentation]=useState<'list'|'table'>('list');
   const [semanticFilters,setSemanticFilters]=useState<NaturalFilters>({...defaultNaturalFilters,owner:ownerForView(activeView),sort:workspace.sort,search:workspace.listQuery});
   const [draftFilters,setDraftFilters]=useState<NaturalFilters>(semanticFilters);
@@ -160,6 +165,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   const preserveNextFilterRoute=useRef<string|null>(null);
   const rowRefs=useRef<Array<HTMLElement|null>>([]);
   const heading=useRef<HTMLHeadingElement>(null);
+  const retryButton=useRef<HTMLButtonElement>(null);
   const paging=useRef(false);
   const [status,setStatus]=useState('');
   const [expandedTicketId,setExpandedTicketId]=useState<string|null>(null);
@@ -201,9 +207,19 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     }catch{setQuickViewError('Could not save the quick view. Your filter choices are still here; try again.');}
   };
   const createdAfter = useMemo(() => createdAfterFor(semanticFilters.created), [semanticFilters.created]);
+  const identity = assignmentIdentity();
+  const listScope = JSON.stringify([identity,activeView,queue,filterId,workspace.listQuery,workspace.sort,semanticFilters.customer,createdAfter]);
   const query=useTickets({page:String(currentPage),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{}),...(semanticFilters.customer==='anyone'||filterId?{}:{customer_email:semanticFilters.customer}),...(createdAfter?{created_after:createdAfter}:{})});
-  const tickets=query.data?.data??[];
-  const meta=query.data?.meta??{page:1,limit:20,total:0,total_pages:1};
+  // A failed page read must not turn a confirmed list into an apparent empty queue.
+  // Scope the fallback by authenticated operator and every list filter so a change
+  // of tenant or view can never display rows from the previous identity/view.
+  const confirmedPage=useRef<{scope:string;data:TicketQueryPage}|null>(null);
+  if(query.data&&!query.error&&!query.isPlaceholderData)confirmedPage.current={scope:listScope,data:query.data};
+  // SLA ordering is a whole-view snapshot; an expired snapshot must be restarted
+  // and must never borrow rows from the previous snapshot.
+  const displayPage=query.data??(workspace.sort!=='sla_priority'&&query.error&&confirmedPage.current?.scope===listScope?confirmedPage.current.data:undefined);
+  const tickets=displayPage?.data??[];
+  const meta=displayPage?.meta??{page:1,limit:20,total:0,total_pages:1};
   const slaSort=workspace.sort==='sla_priority';
   const batchSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),!slaSort&&routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
   const ticketSla=slaSort?{...query,data:Object.fromEntries(Object.entries(query.data?.sla??{}).filter(([,value])=>value!==null))}:batchSla;
@@ -220,7 +236,6 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   }, [activeView, query.isPlaceholderData, setGlobalAlert, ticketSla.data, ticketSla.isError, ticketSla.isLoading, tickets]);
   const restartSla=()=>{query.restartSla();workspace.update({listAnchor:'page:1'});setStatus('SLA ordering restarted. The selected conversation stays open.');};
   const advanceEnabled = useOptionalOperatorPreferencesContext()?.advanceAfterResolve ?? false;
-  const identity = assignmentIdentity();
   const advanceScope = JSON.stringify([identity, activeView, filterId, workspace.listQuery, workspace.sort, workspace.filters, filters, selectedTicketId, advanceEnabled]);
   const committedAdvanceScope = useRef(advanceScope);
   const manualPageGeneration = useRef(0);
@@ -285,7 +300,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     }
   },[activeView,meta.page,currentPage,query.error,query.isFetching,query.isPlaceholderData,recoveringView]);
   useEffect(()=>{
-    if(!query.isFetching&&paging.current){paging.current=false;if(!query.error||slaSort)heading.current?.focus();}
+    if(!query.isFetching&&paging.current){paging.current=false;if(query.error&&!slaSort)retryButton.current?.focus();else heading.current?.focus();}
   },[query.error,query.isFetching,slaSort]);
   useEffect(()=>{
     const selected=tickets.findIndex(ticket=>ticket.id===selectedTicketId);
@@ -328,6 +343,8 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
           <ParkMenu.Item value="table-presentation" onClick={()=>setPresentation('table')}>Table view</ParkMenu.Item>
         </ParkMenu.Content></ParkMenu.Positioner></ParkMenu.Root>
         <div className={css({ display: 'flex', gap: '1' })}>
+          <ParkButton ref={createTrigger} type="button" variant="plain" aria-label="New Ticket" title="New Ticket"
+            onClick={()=>{setCreateMounted(true);setCreateOpen(true);}}><Plus aria-hidden="true" /></ParkButton>
           <ParkButton type="button" variant="plain" aria-label="Quick statistics" aria-expanded={statsOpen} aria-controls="inbox-quick-statistics" onClick={()=>{setStatsOpen(open=>!open);setFilterOpen(false);}}><IconChartBar aria-hidden="true" /></ParkButton>
           <ParkButton type="button" variant="plain" aria-label="Filter tickets" aria-expanded={filterOpen} aria-controls="inbox-natural-filter" onClick={openFilter}><Filter aria-hidden="true" /></ParkButton>
         </div>
@@ -354,9 +371,10 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       </section>}
       {(recoveringPage||query.isPlaceholderData||workspace.status==='saving'||status) && <p role="status" aria-label="Inbox status" className={css({ px: '4', pb: '2', color: 'text.muted', fontSize: 'xs' })}>{recoveringPage?'Loading the first page after the conversation list changed…':query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p>}
     </header>
+    {createMounted&&<NewTicketDialog open={createOpen} onOpenChange={setCreateOpen} trigger={createTrigger} onCreated={()=>setStatus('Ticket created.')} />}
     {slaSort&&<SlaQueueNotice asOf={query.data?.asOf} error={query.error} busy={query.isFetching} restart={restartSla} />}
     {query.error&&<div role="alert"><p>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</p>
-      <ParkButton type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()}>Retry conversations</ParkButton></div>}
+      <ParkButton ref={retryButton} type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()}>Retry conversations</ParkButton></div>}
     {workspace.status==='error'||workspace.status==='conflict'?<div role="alert">{workspace.error}
       <ParkButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave}>{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</ParkButton></div>:null}
     {drafts.status==='partial'&&<p role="status">Some draft indicators are still loading.</p>}
@@ -366,6 +384,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         <ParkTable.Root aria-label="Tickets in the current view" className={pageStyles.inboxTable}>
           <ParkTable.Head><ParkTable.Row><ParkTable.Header scope="col">Reference</ParkTable.Header><ParkTable.Header scope="col">Conversation</ParkTable.Header><ParkTable.Header scope="col">Customer</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header></ParkTable.Row></ParkTable.Head>
           <ParkTable.Body>
+            {query.isLoading&&<ParkTable.Row><ParkTable.Cell colSpan={4}><div role="status" aria-label="Loading conversations"><ParkSkeleton height="10" width="100%" /></div></ParkTable.Cell></ParkTable.Row>}
             {emptyPage&&<ParkTable.Row><ParkTable.Cell colSpan={4}><ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} /></ParkTable.Cell></ParkTable.Row>}
             {!emptyPage&&!query.isLoading&&tickets.map(ticket=><ParkTable.Row key={ticket.id} data-selected={ticket.id===selectedTicketId?'true':undefined} className={pageStyles.inboxTableRow}>
               <ParkTable.Cell>{ticketReference(ticket,prefix)}</ParkTable.Cell>
@@ -378,7 +397,13 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       </div>
     </>}
     <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={css({ flex: '1', overflowY: 'auto', bg: 'bg.surface', display: presentation==='table'?{base:'flex',md:'none'}:'flex', flexDirection: 'column' })}>
-      {query.isLoading?<p role="status">Loading conversations…</p>:emptyPage?<ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} />:tickets.map((ticket,index)=><InboxConversationCard
+      {query.isLoading?<div role="status" aria-label="Loading conversations" className={css({ display: 'grid', gap: '3', p: '4' })}>
+        <ParkVisuallyHidden>Loading conversations…</ParkVisuallyHidden>
+        {[0,1,2,3].map(row=><div key={row} className={css({ display: 'flex', alignItems: 'center', gap: '3' })}>
+          <ParkSkeleton width="10" height="10" />
+          <div className={css({ display: 'grid', flex: '1', gap: '2' })}><ParkSkeleton height="4" width="70%" /><ParkSkeleton height="3" width="90%" /></div>
+        </div>)}
+      </div>:emptyPage?<ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} />:tickets.map((ticket,index)=><InboxConversationCard
         key={ticket.id} ticket={ticket} reference={ticketReference(ticket,prefix)} index={index} activeView={activeView}
         selected={ticket.id===selectedTicketId} focused={index===focusedIndex} expanded={expandedTicketId===ticket.id}
         sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id] ?? undefined} slaLoading={ticketSla.isLoading}

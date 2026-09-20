@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TicketListPage } from '../pages/TicketListPage';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
@@ -143,6 +144,22 @@ describe('portal conversation accessibility and recovery', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Attach Files' }));
     expect(screen.getByText('Attachment removed.')).toBeTruthy();
     expect(portalApi.postForm).not.toHaveBeenCalled();
+  });
+
+  it('uses Park FileUpload anatomy and accepts the same file again after selection', async () => {
+    setupReads(); mountDetail();
+    const input = await screen.findByLabelText('Choose reply attachments') as HTMLInputElement;
+    const trigger = screen.getByRole('button', { name: 'Attach Files' });
+    expect(input).toHaveAttribute('type', 'file');
+    expect(input).toHaveAttribute('aria-hidden', 'true');
+    expect(trigger).toHaveAttribute('data-scope', 'file-upload');
+    expect(trigger).toHaveAttribute('data-part', 'trigger');
+    const file = new File(['synthetic'], 'repeat.txt', { type: 'text/plain' });
+    await userEvent.upload(input, file);
+    expect(screen.getAllByRole('button', { name: 'Remove repeat.txt' })).toHaveLength(1);
+    await userEvent.upload(input, file);
+    expect(screen.getAllByRole('button', { name: 'Remove repeat.txt' })).toHaveLength(2);
+    expect(screen.getByRole('status', { name: 'Reply status' })).toHaveTextContent('1 attachment added.');
   });
 
   it('retains a failed reply draft and selected file, announces failure and prevents duplicate pending uploads', async () => {

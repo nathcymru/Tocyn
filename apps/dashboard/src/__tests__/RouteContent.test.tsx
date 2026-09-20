@@ -34,13 +34,13 @@ it('focuses a safe load-error message, offers a real reload and permits another 
   vi.spyOn(console,'error').mockImplementation(()=>{});
   const before=useAuthStore.getState();
   const Page=lazy(()=>Promise.reject(new Error('synthetic private module failure')));
-  render(<MemoryRouter initialEntries={['/tickets?filter=open']}><Link to="/other">Other page</Link><Routes>
-    <Route path="/tickets" element={<RouteContent><Page/></RouteContent>}/>
+  render(<MemoryRouter initialEntries={['/inbox/all?sort=updated_desc']}><Link to="/other">Other page</Link><Routes>
+    <Route path="/inbox/all" element={<RouteContent><Page/></RouteContent>}/>
     <Route path="/other" element={<RouteContent><h1>Other page loaded</h1></RouteContent>}/>
   </Routes></MemoryRouter>);
   const heading=await screen.findByRole('heading',{name:'This page could not be loaded'});
   await waitFor(()=>expect(heading).toHaveFocus());
-  expect(screen.getByRole('link',{name:'Reload this page'})).toHaveAttribute('href','/tickets?filter=open');
+  expect(screen.getByRole('link',{name:'Reload this page'})).toHaveAttribute('href','/inbox/all?sort=updated_desc');
   expect(screen.queryByText(/synthetic private module failure/)).not.toBeInTheDocument();
   expect(useAuthStore.getState()).toBe(before);
   fireEvent.click(screen.getByRole('link',{name:'Other page'}));

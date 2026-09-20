@@ -1,7 +1,6 @@
 export * from './types';
-export { WorkspaceRegion, type WorkspaceRegionProps } from './primitives';
+export { WorkspaceRegion, type WorkspaceRegionProps } from './workspace-region';
 export * from './workspace';
-export * from './ark';
 export * from './theme';
 export * from './theme-scope';
 export * from './park';

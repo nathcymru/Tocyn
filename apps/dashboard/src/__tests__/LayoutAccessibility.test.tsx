@@ -24,7 +24,7 @@ vi.mock('../api/client', async () => ({ ...(await vi.importActual<typeof import(
 let client: QueryClient;
 const realtime = { isConnected: true, lastMessage: null, presence: [], updateLocation: vi.fn(), connectionDetails: { latency: 10, reconnectCount: 0 }, manualReconnect: vi.fn() };
 function Destination() { const location = useLocation(); return <><h1>Route {location.pathname}{location.search}</h1>{location.state?.logoutWarning && <p role="alert">{location.state.logoutWarning}</p>}</>; }
-function tree(initialEntry = '/tickets') {
+function tree(initialEntry = '/inbox/all') {
   return <QueryClientProvider client={client}><CollaborationProvider><MemoryRouter initialEntries={[initialEntry]}><Routes>
     <Route element={<Layout />}><Route path="*" element={<Destination />} /></Route>
   </Routes></MemoryRouter></CollaborationProvider></QueryClientProvider>;
@@ -56,10 +56,10 @@ it('names global search, makes its authorised scope available to assistive techn
   const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveAttribute('id', 'global-ticket-search-scope');
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
-  expect(screen.getByRole('heading').textContent).toBe('Route /tickets');
+  expect(screen.getByRole('heading').textContent).toBe('Route /inbox/all');
   fireEvent.keyDown(search, { key: 'Escape' });
   expect(search).toHaveValue('');
-  expect(screen.getByRole('heading').textContent).toBe('Route /tickets');
+  expect(screen.getByRole('heading').textContent).toBe('Route /inbox/all');
   const trigger = screen.getByRole('button', { name: 'Open navigation' });
   trigger.focus(); fireEvent.click(trigger);
   const dialog = await screen.findByRole('dialog', { name: 'Navigation' });

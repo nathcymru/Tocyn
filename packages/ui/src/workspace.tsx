@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { WorkspaceRegion } from './primitives';
+import { WorkspaceRegion } from './workspace-region';
 
 export interface WorkspaceShellProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;

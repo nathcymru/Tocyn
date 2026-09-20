@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ParkButton, ParkInput, ParkSelect, ParkTextarea } from '../../../packages/ui/src/park';
+import { Tabs, Combobox, Splitter, Popover } from '../../../packages/ui/src/components/ui';
+import { Listbox, createListCollection } from '@ark-ui/react';
 import { WorkspaceShell } from '../../../packages/ui/src/workspace';
 import { composeEventHandlers } from '../../../packages/ui/src/types';
 import { TocynConfirmDialog } from '../../../packages/ui/src/dialog';
-import { Tabs, Listbox, Popover, Combobox, Splitter, createListCollection } from '../../../packages/ui/src/ark';
 
 const mode=new URLSearchParams(location.search).get('style');
 if(mode==='none')document.querySelector('#tocyn-style')?.remove();
@@ -41,6 +42,7 @@ function Fixture(){
    <Tabs.List aria-label="Work panes"><Tabs.Trigger value="first">First pane</Tabs.Trigger><Tabs.Trigger value="second">Second pane</Tabs.Trigger></Tabs.List>
    <Tabs.Content value="first">First content</Tabs.Content><Tabs.Content value="second">Second content</Tabs.Content>
   </Tabs.Root>
+  {/* Park does not ship standalone Listbox source; retain its headless Ark keyboard contract. */}
   <Listbox.Root collection={collection} onValueChange={details=>setSelected(details.value.join(','))}>
    <Listbox.Label>Views</Listbox.Label><Listbox.Content>{collection.items.map(item=><Listbox.Item key={item} item={item}><Listbox.ItemText>{item}</Listbox.ItemText></Listbox.Item>)}</Listbox.Content>
   </Listbox.Root><output aria-label="Selected view">{selected}</output>
@@ -51,7 +53,7 @@ function Fixture(){
   <Splitter.Root keyboardResizeBy={10} panels={panels} defaultSize={initialSizes} onResize={details=>setSizes(details.size)} style={{width:600,height:120}}>
    <Splitter.Panel id="navigation">Navigation content</Splitter.Panel><Splitter.ResizeTrigger id="navigation:conversation" aria-label="Resize navigation" /><Splitter.Panel id="conversation">Conversation content</Splitter.Panel>
   </Splitter.Root><output aria-label="Panel sizes">{JSON.stringify(sizes)}</output>
-  <Popover.Root><Popover.Trigger asChild><ParkButton>Open details</ParkButton></Popover.Trigger><Popover.Positioner><Popover.Content aria-label="Details"><Popover.Title>Details</Popover.Title><Popover.CloseTrigger asChild aria-label="Close details"><ParkButton>Close details</ParkButton></Popover.CloseTrigger></Popover.Content></Popover.Positioner></Popover.Root>
+  <Popover.Root><Popover.Trigger asChild><ParkButton>Open details</ParkButton></Popover.Trigger><Popover.Positioner><Popover.Content aria-label="Details"><Popover.Title>Details</Popover.Title><Popover.CloseTrigger asChild aria-label="Close details"><ParkButton size="lg">Close details</ParkButton></Popover.CloseTrigger></Popover.Content></Popover.Positioner></Popover.Root>
  </WorkspaceShell>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture/>);

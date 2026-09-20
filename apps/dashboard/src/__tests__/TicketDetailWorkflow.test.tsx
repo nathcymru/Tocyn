@@ -62,7 +62,7 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
   }));
 }
 function showDetail(onRender?: ProfilerOnRenderCallback){
-  const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> },{path:'/settings',element:<h1>General settings</h1>}], { initialEntries: ['/tickets/workflow-ticket'] });
+  const router = createMemoryRouter([{ path: '/inbox/all/:id', element: <TicketDetailPage /> },{path:'/settings',element:<h1>General settings</h1>}], { initialEntries: ['/inbox/all/workflow-ticket'] });
   render(<QueryClientProvider client={client}><CollaborationProvider><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></CollaborationProvider></QueryClientProvider>);
   return router;
 }
@@ -167,6 +167,21 @@ it('snapshots native file selection before clearing the input and preserves expl
   expect(screen.queryByRole('button', { name: 'Remove selected.txt' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Attach files' })).toHaveFocus();
   expect(screen.getByText('Attachment removed.')).toHaveAttribute('role', 'status');
+});
+
+it('allows a file to be selected again after its queued attachment is removed', async () => {
+  transport(() => json(ticket));
+  showDetail(); await screen.findByText('Customer question');
+  const input = screen.getByLabelText('Reply attachments');
+  const file = new File(['synthetic'], 'reselect.txt', { type: 'text/plain' });
+
+  fireEvent.change(input, { target: { files: [file] } });
+  const firstRemove = await screen.findByRole('button', { name: 'Remove reselect.txt' });
+  fireEvent.click(firstRemove);
+  expect(screen.queryByRole('button', { name: 'Remove reselect.txt' })).not.toBeInTheDocument();
+
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(await screen.findByRole('button', { name: 'Remove reselect.txt' })).toBeInTheDocument();
 });
 
 it('distinguishes a recoverable detail failure from not found and recovers through an explicit retry',async()=>{

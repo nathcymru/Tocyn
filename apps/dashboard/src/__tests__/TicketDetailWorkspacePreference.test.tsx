@@ -32,7 +32,7 @@ function show(initial=preference(3), writeStatus=200) {
     return json([]);
   }));
   useAuthStore.getState().setAuth('workspace-session',{id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
-  const router=createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage/>}],{initialEntries:['/tickets/workspace-ticket']});
+  const router=createMemoryRouter([{path:'/inbox/all/:id',element:<TicketDetailPage/>}],{initialEntries:['/inbox/all/workspace-ticket']});
   render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
   return writes;
 }

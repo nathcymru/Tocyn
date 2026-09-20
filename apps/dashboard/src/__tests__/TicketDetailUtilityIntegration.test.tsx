@@ -35,7 +35,7 @@ function show(utility:(id:string)=>Response|Promise<Response>) {
   }));
   useAuthStore.getState().setAuth('synthetic-session',{id:'operator',tenant_id:'synthetic-tenant',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});clients.push(client);
-  const router=createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage/>}],{initialEntries:['/tickets/one']});
+  const router=createMemoryRouter([{path:'/inbox/all/:id',element:<TicketDetailPage/>}],{initialEntries:['/inbox/all/one']});
   render(<QueryClientProvider client={client}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
   return {router,utilityRequests};
 }
@@ -61,7 +61,7 @@ it('rejects a manifest for the previous ticket after route navigation, then show
   let wrongTicket=true;
   const {router}=show(id=>json(id==='two'&&wrongTicket?manifest('one'):manifest(id,id!=='two')));
   await screen.findByRole('button',{name:'Copy ticket reference'});
-  await act(async()=>{await router.navigate('/tickets/two');});
+  await act(async()=>{await router.navigate('/inbox/all/two');});
   await screen.findByRole('heading',{name:'Conversation two'});
   const retry=await screen.findByRole('button',{name:'Retry ticket actions'});
   expect(screen.queryByRole('button',{name:'Copy ticket reference'})).not.toBeInTheDocument();
@@ -82,7 +82,7 @@ it('unmounts the active reference dialog and discards an unresolved copy result 
   const opener=await screen.findByRole('button',{name:'View ticket reference'});opener.focus();fireEvent.click(opener);
   const dialog=await screen.findByRole('dialog',{name:'Ticket reference'});
   expect(within(dialog).getByText('#1')).toBeInTheDocument();
-  await act(async()=>{await router.navigate('/tickets/two');finishCopy();});
+  await act(async()=>{await router.navigate('/inbox/all/two');finishCopy();});
   await screen.findByRole('heading',{name:'Conversation two'});
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.queryByText('Ticket reference copied.')).not.toBeInTheDocument();

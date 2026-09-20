@@ -55,7 +55,7 @@ Remaining application adoption includes complex dialogs/menus. The accepted #79 
 
 ## Native-control adoption receipt
 
-Dashboard, portal and widget now consume named button/input/select/textarea primitives through the narrow `@luminatick/ui/primitives` entry point. Native props, form semantics, refs, controlled/uncontrolled values, caller ARIA and event handlers are retained. Dashboard module resolution follows its Vite bundler so package export contracts resolve consistently. Widget token CSS is injected into its ShadowRoot; this does not claim completion of the separate wrapper packaging issue #67.
+The `@luminatick/ui/primitives` entry point has been retired. Current dashboard, portal and widget controls use the installed Park UI component source and Panda recipes through `@luminatick/ui/park`; `WorkspaceRegion` is a Tocyn-specific semantic section exported from the package root. Native form semantics, refs, caller ARIA and event handlers remain part of the active component contracts. Widget CSS stays inside its ShadowRoot; the separate wrapper packaging issue #67 remains open.
 
 Validation at this increment: all three production builds; 73 dashboard, 59 portal, 3 widget and 6 shared UI tests pass. Tests include actual keyboard activation, dialog Escape/focus restoration, listbox keyboard selection, form serialization and caller busy-state retention. These DOM tests do not substitute for the remaining browser/assistive-technology acceptance or measured startup/interaction performance. Existing dashboard large-chunk warning remains; no threshold was weakened.
 

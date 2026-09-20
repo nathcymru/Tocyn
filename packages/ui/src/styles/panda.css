@@ -275,6 +275,14 @@
     color-scheme: light;
 }
 
+  :root[data-tocyn-font-scale="large"] {
+    font-size: 112.5%;
+}
+
+  :root[data-tocyn-font-scale="larger"] {
+    font-size: 125%;
+}
+
   [data-tocyn-theme-mode="dark"],[data-tocyn-inverse] {
     color-scheme: dark;
 }
@@ -4854,88 +4862,6 @@
       font-size: 0.875rem;
 }
 
-    .popover__arrow {
-      --arrow-size: var(--sizes-3);
-      --arrow-background: var(--popover-bg);
-}
-
-    .popover__arrowTip {
-      border-inline-start-width: 0.5px;
-      border-top-width: 0.5px;
-}
-
-    .popover__content {
-      --popover-bg: var(--colors-gray-surface-bg);
-      --popover-padding: var(--spacing-4);
-      background: var(--popover-bg);
-      border-radius: var(--radii-l3);
-      outline: 0;
-      box-shadow: var(--shadows-lg);
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      font-size: var(--font-sizes-sm);
-      line-height: 1.25rem;
-      transform-origin: var(--transform-origin);
-      z-index: calc(var(--z-index-popover) + var(--layer-index, 0));
-      max-height: var(--available-height);
-      width: var(--sizes-xs);
-}
-
-    .popover__content:is([open], [data-open], [data-state="open"], :popover-open) {
-      transform-origin: var(--transform-origin);
-      animation-name: scale-in, fade-in;
-      animation-duration: var(--durations-fast);
-}
-
-    .popover__content:is([closed], [data-closed], [data-state="closed"]) {
-      transform-origin: var(--transform-origin);
-      animation-name: scale-out, fade-out;
-      animation-duration: var(--durations-faster);
-}
-
-    .popover__title {
-      color: var(--colors-fg-default);
-      font-weight: var(--font-weights-medium);
-      font-size: var(--font-sizes-md);
-      line-height: 1.5rem;
-}
-
-    .popover__description {
-      color: var(--colors-fg-muted);
-      font-size: var(--font-sizes-sm);
-      line-height: 1.25rem;
-}
-
-    .popover__closeTrigger {
-      position: absolute;
-      top: var(--spacing-1);
-      right: var(--spacing-1);
-}
-
-    .popover__header {
-      padding-inline: var(--popover-padding);
-      display: flex;
-      flex-direction: column;
-      padding-top: var(--popover-padding);
-}
-
-    .popover__body {
-      padding: var(--popover-padding);
-      flex: 1 1 0%;
-      display: flex;
-      flex-direction: column;
-}
-
-    .popover__footer {
-      gap: var(--spacing-3);
-      padding-inline: var(--popover-padding);
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      padding-bottom: var(--popover-padding);
-}
-
     .menu__content {
       --menu-z-index: var(--z-index-dropdown);
       background: var(--colors-gray-surface-bg);
@@ -6009,111 +5935,6 @@
       padding-top: 0.5rem;
 }
 
-    .dialog__backdrop {
-      background: var(--colors-black-a7);
-      position: fixed;
-      z-index: var(--z-index);
-      height: 100dvh;
-      left: var(--spacing-0);
-      top: var(--spacing-0);
-      width: 100dvw;
-}
-
-    .dialog__backdrop:is([open], [data-open], [data-state="open"], :popover-open) {
-      animation-name: fade-in;
-      animation-timing-function: emphasized-in;
-      animation-duration: var(--durations-normal);
-}
-
-    .dialog__backdrop:is([closed], [data-closed], [data-state="closed"]) {
-      animation-name: fade-out;
-      animation-timing-function: emphasized-out;
-      animation-duration: var(--durations-fast);
-}
-
-    .dialog__positioner {
-      justify-content: center;
-      position: fixed;
-      height: 100dvh;
-      left: var(--spacing-0);
-      overscroll-behavior-y: none;
-      top: var(--spacing-0);
-      width: 100dvw;
-}
-
-    .dialog__positioner,.dialog__content {
-      --dialog-z-index: var(--z-index-modal);
-      display: flex;
-      z-index: calc(var(--dialog-z-index) + var(--layer-index, 0));
-}
-
-    .dialog__content {
-      background: var(--colors-gray-surface-bg);
-      border-radius: var(--radii-l3);
-      margin-block: var(--dialog-margin, var(--dialog-base-margin));
-      outline: 0;
-      padding-block: var(--spacing-4);
-      gap: var(--spacing-4);
-      box-shadow: var(--shadows-lg);
-      flex-direction: column;
-      position: relative;
-      font-size: var(--font-sizes-sm);
-      line-height: 1.25rem;
-      width: 100%;
-}
-
-    .dialog__content:is([open], [data-open], [data-state="open"], :popover-open) {
-      animation-duration: var(--durations-slowest);
-}
-
-    .dialog__content:is([closed], [data-closed], [data-state="closed"]) {
-      animation-duration: var(--durations-normal);
-}
-
-    .dialog__title {
-      font-weight: var(--font-weights-semibold);
-      font-size: var(--font-sizes-lg);
-      line-height: 1.75rem;
-}
-
-    .dialog__description {
-      color: var(--colors-fg-muted);
-      font-size: var(--font-sizes-sm);
-      line-height: 1.25rem;
-}
-
-    .dialog__closeTrigger {
-      position: absolute;
-      inset-inline-end: var(--spacing-3);
-      top: var(--spacing-3);
-}
-
-    .dialog__header {
-      gap: var(--spacing-0\.5);
-      flex: 0;
-      flex-direction: column;
-}
-
-    .dialog__header,.dialog__body {
-      padding-inline: var(--spacing-4);
-      display: flex;
-}
-
-    .dialog__body {
-      flex: 1 1 0%;
-      flex-direction: column;
-      align-items: flex-start;
-}
-
-    .dialog__footer {
-      flex: 0;
-      gap: var(--spacing-3);
-      padding-inline: var(--spacing-4);
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-}
-
     .accordion__root {
       --accordion-radius: var(--radii-l2);
       width: var(--sizes-full);
@@ -6853,6 +6674,111 @@
       justify-content: space-between;
 }
 
+    .dialog__backdrop {
+      background: var(--colors-black-a7);
+      position: fixed;
+      z-index: var(--z-index);
+      height: 100dvh;
+      left: var(--spacing-0);
+      top: var(--spacing-0);
+      width: 100dvw;
+}
+
+    .dialog__backdrop:is([open], [data-open], [data-state="open"], :popover-open) {
+      animation-name: fade-in;
+      animation-timing-function: emphasized-in;
+      animation-duration: var(--durations-normal);
+}
+
+    .dialog__backdrop:is([closed], [data-closed], [data-state="closed"]) {
+      animation-name: fade-out;
+      animation-timing-function: emphasized-out;
+      animation-duration: var(--durations-fast);
+}
+
+    .dialog__positioner {
+      justify-content: center;
+      position: fixed;
+      height: 100dvh;
+      left: var(--spacing-0);
+      overscroll-behavior-y: none;
+      top: var(--spacing-0);
+      width: 100dvw;
+}
+
+    .dialog__positioner,.dialog__content {
+      --dialog-z-index: var(--z-index-modal);
+      display: flex;
+      z-index: calc(var(--dialog-z-index) + var(--layer-index, 0));
+}
+
+    .dialog__content {
+      background: var(--colors-gray-surface-bg);
+      border-radius: var(--radii-l3);
+      margin-block: var(--dialog-margin, var(--dialog-base-margin));
+      outline: 0;
+      padding-block: var(--spacing-4);
+      gap: var(--spacing-4);
+      box-shadow: var(--shadows-lg);
+      flex-direction: column;
+      position: relative;
+      font-size: var(--font-sizes-sm);
+      line-height: 1.25rem;
+      width: 100%;
+}
+
+    .dialog__content:is([open], [data-open], [data-state="open"], :popover-open) {
+      animation-duration: var(--durations-slowest);
+}
+
+    .dialog__content:is([closed], [data-closed], [data-state="closed"]) {
+      animation-duration: var(--durations-normal);
+}
+
+    .dialog__title {
+      font-weight: var(--font-weights-semibold);
+      font-size: var(--font-sizes-lg);
+      line-height: 1.75rem;
+}
+
+    .dialog__description {
+      color: var(--colors-fg-muted);
+      font-size: var(--font-sizes-sm);
+      line-height: 1.25rem;
+}
+
+    .dialog__closeTrigger {
+      position: absolute;
+      inset-inline-end: var(--spacing-3);
+      top: var(--spacing-3);
+}
+
+    .dialog__header {
+      gap: var(--spacing-0\.5);
+      flex: 0;
+      flex-direction: column;
+}
+
+    .dialog__header,.dialog__body {
+      padding-inline: var(--spacing-4);
+      display: flex;
+}
+
+    .dialog__body {
+      flex: 1 1 0%;
+      flex-direction: column;
+      align-items: flex-start;
+}
+
+    .dialog__footer {
+      flex: 0;
+      gap: var(--spacing-3);
+      padding-inline: var(--spacing-4);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+}
+
     .drawer__backdrop {
       background: var(--colors-black-a7);
       position: fixed;
@@ -7371,6 +7297,88 @@
       gap: var(--spacing-2);
       display: inline-flex;
       isolation: isolate;
+}
+
+    .popover__arrow {
+      --arrow-size: var(--sizes-3);
+      --arrow-background: var(--popover-bg);
+}
+
+    .popover__arrowTip {
+      border-inline-start-width: 0.5px;
+      border-top-width: 0.5px;
+}
+
+    .popover__content {
+      --popover-bg: var(--colors-gray-surface-bg);
+      --popover-padding: var(--spacing-4);
+      background: var(--popover-bg);
+      border-radius: var(--radii-l3);
+      outline: 0;
+      box-shadow: var(--shadows-lg);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      font-size: var(--font-sizes-sm);
+      line-height: 1.25rem;
+      transform-origin: var(--transform-origin);
+      z-index: calc(var(--z-index-popover) + var(--layer-index, 0));
+      max-height: var(--available-height);
+      width: var(--sizes-xs);
+}
+
+    .popover__content:is([open], [data-open], [data-state="open"], :popover-open) {
+      transform-origin: var(--transform-origin);
+      animation-name: scale-in, fade-in;
+      animation-duration: var(--durations-fast);
+}
+
+    .popover__content:is([closed], [data-closed], [data-state="closed"]) {
+      transform-origin: var(--transform-origin);
+      animation-name: scale-out, fade-out;
+      animation-duration: var(--durations-faster);
+}
+
+    .popover__title {
+      color: var(--colors-fg-default);
+      font-weight: var(--font-weights-medium);
+      font-size: var(--font-sizes-md);
+      line-height: 1.5rem;
+}
+
+    .popover__description {
+      color: var(--colors-fg-muted);
+      font-size: var(--font-sizes-sm);
+      line-height: 1.25rem;
+}
+
+    .popover__closeTrigger {
+      position: absolute;
+      top: var(--spacing-1);
+      right: var(--spacing-1);
+}
+
+    .popover__header {
+      padding-inline: var(--popover-padding);
+      display: flex;
+      flex-direction: column;
+      padding-top: var(--popover-padding);
+}
+
+    .popover__body {
+      padding: var(--popover-padding);
+      flex: 1 1 0%;
+      display: flex;
+      flex-direction: column;
+}
+
+    .popover__footer {
+      gap: var(--spacing-3);
+      padding-inline: var(--popover-padding);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: var(--popover-padding);
 }
 
     .progress__root {
@@ -8908,127 +8916,6 @@
     margin-block: var(--spacing-0);
 }
 
-  .dialog__content--size_md {
-    max-width: var(--sizes-md);
-}
-
-  .dialog__positioner--scrollBehavior_outside {
-    overflow: auto;
-    pointer-events: auto;
-}
-
-  .dialog__positioner--placement_center {
-    align-items: center;
-}
-
-  .dialog__content--placement_center {
-    --dialog-base-margin: auto;
-    margin-inline: auto;
-}
-
-  .dialog__content--motionPreset_scale:is([open], [data-open], [data-state="open"], :popover-open) {
-    animation-name: scale-in, fade-in;
-}
-
-  .dialog__content--motionPreset_scale:is([closed], [data-closed], [data-state="closed"]) {
-    animation-name: scale-out, fade-out;
-}
-
-  .dialog__content--motionPreset_slide-in-bottom:is([open], [data-open], [data-state="open"], :popover-open) {
-    animation-name: slide-from-bottom, fade-in;
-}
-
-  .dialog__content--motionPreset_slide-in-bottom:is([closed], [data-closed], [data-state="closed"]) {
-    animation-name: slide-to-bottom, fade-out;
-}
-
-  .dialog__content--motionPreset_slide-in-top:is([open], [data-open], [data-state="open"], :popover-open) {
-    animation-name: slide-from-top, fade-in;
-}
-
-  .dialog__content--motionPreset_slide-in-top:is([closed], [data-closed], [data-state="closed"]) {
-    animation-name: slide-to-top, fade-out;
-}
-
-  .dialog__content--motionPreset_slide-in-left:is([open], [data-open], [data-state="open"], :popover-open) {
-    animation-name: slide-from-left, fade-in;
-}
-
-  .dialog__content--motionPreset_slide-in-left:is([closed], [data-closed], [data-state="closed"]) {
-    animation-name: slide-to-left, fade-out;
-}
-
-  .dialog__content--motionPreset_slide-in-right:is([open], [data-open], [data-state="open"], :popover-open) {
-    animation-name: slide-from-right, fade-in;
-}
-
-  .dialog__content--motionPreset_slide-in-right:is([closed], [data-closed], [data-state="closed"]) {
-    animation-name: slide-to-right, fade-out;
-}
-
-  .dialog__content--size_xs {
-    max-width: var(--sizes-xs);
-}
-
-  .dialog__content--size_sm {
-    max-width: var(--sizes-sm);
-}
-
-  .dialog__content--size_lg {
-    max-width: var(--sizes-lg);
-}
-
-  .dialog__content--size_xl {
-    max-width: var(--sizes-xl);
-}
-
-  .dialog__positioner--size_cover {
-    padding: var(--spacing-8);
-}
-
-  .dialog__content--size_cover {
-    --dialog-margin: 0;
-    width: 100%;
-    height: 100%;
-}
-
-  .dialog__content--size_full {
-    --dialog-margin: 0;
-    border-radius: 0;
-    max-width: 100dvw;
-    min-height: 100dvh;
-}
-
-  .dialog__positioner--placement_top {
-    align-items: flex-start;
-}
-
-  .dialog__content--placement_top {
-    --dialog-base-margin: var(--spacing-16);
-    margin-inline: auto;
-}
-
-  .dialog__positioner--placement_bottom {
-    align-items: flex-end;
-}
-
-  .dialog__content--placement_bottom {
-    --dialog-base-margin: var(--spacing-16);
-    margin-inline: auto;
-}
-
-  .dialog__positioner--scrollBehavior_inside {
-    overflow: hidden;
-}
-
-  .dialog__content--scrollBehavior_inside {
-    max-height: calc(100% - 7.5rem);
-}
-
-  .dialog__body--scrollBehavior_inside {
-    overflow: auto;
-}
-
   .accordion__root--size_md {
     --accordion-padding-x: var(--spacing-4);
     --accordion-padding-y: var(--spacing-2\.5);
@@ -9869,6 +9756,127 @@
   .combobox__indicatorGroup--size_xl :where(svg) {
     width: var(--sizes-5);
     height: var(--sizes-5);
+}
+
+  .dialog__content--size_md {
+    max-width: var(--sizes-md);
+}
+
+  .dialog__positioner--scrollBehavior_outside {
+    overflow: auto;
+    pointer-events: auto;
+}
+
+  .dialog__positioner--placement_center {
+    align-items: center;
+}
+
+  .dialog__content--placement_center {
+    --dialog-base-margin: auto;
+    margin-inline: auto;
+}
+
+  .dialog__content--motionPreset_scale:is([open], [data-open], [data-state="open"], :popover-open) {
+    animation-name: scale-in, fade-in;
+}
+
+  .dialog__content--motionPreset_scale:is([closed], [data-closed], [data-state="closed"]) {
+    animation-name: scale-out, fade-out;
+}
+
+  .dialog__content--motionPreset_slide-in-bottom:is([open], [data-open], [data-state="open"], :popover-open) {
+    animation-name: slide-from-bottom, fade-in;
+}
+
+  .dialog__content--motionPreset_slide-in-bottom:is([closed], [data-closed], [data-state="closed"]) {
+    animation-name: slide-to-bottom, fade-out;
+}
+
+  .dialog__content--motionPreset_slide-in-top:is([open], [data-open], [data-state="open"], :popover-open) {
+    animation-name: slide-from-top, fade-in;
+}
+
+  .dialog__content--motionPreset_slide-in-top:is([closed], [data-closed], [data-state="closed"]) {
+    animation-name: slide-to-top, fade-out;
+}
+
+  .dialog__content--motionPreset_slide-in-left:is([open], [data-open], [data-state="open"], :popover-open) {
+    animation-name: slide-from-left, fade-in;
+}
+
+  .dialog__content--motionPreset_slide-in-left:is([closed], [data-closed], [data-state="closed"]) {
+    animation-name: slide-to-left, fade-out;
+}
+
+  .dialog__content--motionPreset_slide-in-right:is([open], [data-open], [data-state="open"], :popover-open) {
+    animation-name: slide-from-right, fade-in;
+}
+
+  .dialog__content--motionPreset_slide-in-right:is([closed], [data-closed], [data-state="closed"]) {
+    animation-name: slide-to-right, fade-out;
+}
+
+  .dialog__content--size_xs {
+    max-width: var(--sizes-xs);
+}
+
+  .dialog__content--size_sm {
+    max-width: var(--sizes-sm);
+}
+
+  .dialog__content--size_lg {
+    max-width: var(--sizes-lg);
+}
+
+  .dialog__content--size_xl {
+    max-width: var(--sizes-xl);
+}
+
+  .dialog__positioner--size_cover {
+    padding: var(--spacing-8);
+}
+
+  .dialog__content--size_cover {
+    --dialog-margin: 0;
+    width: 100%;
+    height: 100%;
+}
+
+  .dialog__content--size_full {
+    --dialog-margin: 0;
+    border-radius: 0;
+    max-width: 100dvw;
+    min-height: 100dvh;
+}
+
+  .dialog__positioner--placement_top {
+    align-items: flex-start;
+}
+
+  .dialog__content--placement_top {
+    --dialog-base-margin: var(--spacing-16);
+    margin-inline: auto;
+}
+
+  .dialog__positioner--placement_bottom {
+    align-items: flex-end;
+}
+
+  .dialog__content--placement_bottom {
+    --dialog-base-margin: var(--spacing-16);
+    margin-inline: auto;
+}
+
+  .dialog__positioner--scrollBehavior_inside {
+    overflow: hidden;
+}
+
+  .dialog__content--scrollBehavior_inside {
+    max-height: calc(100% - 7.5rem);
+}
+
+  .dialog__body--scrollBehavior_inside {
+    overflow: auto;
 }
 
   .drawer__positioner--placement_end {
@@ -11320,18 +11328,18 @@
 @layer utilities{
   @layer compositions{
 
-    .textStyle_2xl {
-      font-size: var(--font-sizes-2xl);
-      line-height: 2rem;
+    .textStyle_label {
+      font-weight: var(--font-weights-medium);
 }
 
-    .textStyle_sm,.textStyle_label {
+    .textStyle_label,.textStyle_sm {
       font-size: var(--font-sizes-sm);
       line-height: 1.25rem;
 }
 
-    .textStyle_label {
-      font-weight: var(--font-weights-medium);
+    .textStyle_2xl {
+      font-size: var(--font-sizes-2xl);
+      line-height: 2rem;
 }
 }
 
@@ -12365,6 +12373,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+  .trf_rotate\(180deg\) {
+    transform: rotate(180deg);
+}
+
   .z_50 {
     z-index: 50;
 }
@@ -12559,6 +12571,10 @@
 
   .mb_3 {
     margin-bottom: var(--spacing-3);
+}
+
+  .w_min\(100\%_-_2rem\,_26rem\) {
+    width: min(100% - 2rem, 26rem);
 }
 
   .max-w_42rem {
@@ -12763,6 +12779,22 @@
     height: var(--sizes-full);
 }
 
+  .h_3 {
+    height: var(--sizes-3);
+}
+
+  .w_90\% {
+    width: 90%;
+}
+
+  .w_min\(100\%_-_2rem\,_40rem\) {
+    width: min(100% - 2rem, 40rem);
+}
+
+  .max-h_calc\(100dvh_-_2rem\) {
+    max-height: calc(100dvh - 2rem);
+}
+
   .mt_0\.375rem {
     margin-top: 0.375rem;
 }
@@ -12853,10 +12885,6 @@
 
   .h_24 {
     height: var(--sizes-24);
-}
-
-  .w_90\% {
-    width: 90%;
 }
 
   .w_75\% {
@@ -13196,11 +13224,11 @@
 }
 
   @media screen and (min-width: 40rem) {
-    .sm\:d_inline {
-      display: inline;
-}
     .sm\:grid-tc_repeat\(2\,_minmax\(0\,_1fr\)\) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+    .sm\:d_inline {
+      display: inline;
 }
     .sm\:w_24rem {
       width: 24rem;

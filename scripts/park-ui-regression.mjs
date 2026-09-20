@@ -9,8 +9,23 @@ const parkSource = fs.readFileSync(path.join(ui, 'src/park.tsx'), 'utf8');
 const source = fs.readFileSync(path.join(ui, 'panda.config.ts'), 'utf8');
 const css = fs.readFileSync(path.join(ui, 'src/styles/panda.css'), 'utf8');
 const failures = [];
+for (const retired of [
+  'apps/dashboard/src/pages/TicketListPage.tsx',
+  'apps/dashboard/src/pages/LegacyTicketsRedirect.tsx',
+  'apps/dashboard/src/components/ConversationSlaStatus.tsx',
+  'apps/dashboard/vite.config.js',
+  'packages/ui/src/primitives.tsx',
+]) {
+  if (fs.existsSync(path.join(root, retired))) failures.push(`Retired implementation returned: ${retired}`);
+}
+const dashboardRoutes = fs.readFileSync(path.join(root, 'apps/dashboard/src/App.tsx'), 'utf8');
+if (/<Route\s+path="tickets(?:\/:id)?"/.test(dashboardRoutes)) failures.push('Retired dashboard ticket route returned');
+const arkBoundary = fs.readFileSync(path.join(ui, 'src/ark.ts'), 'utf8');
+if (/export\s*\{[^}]*\b(?:Popover|Listbox|Dialog|Tabs|Splitter|Combobox)\b/.test(arkBoundary)) {
+  failures.push('Bare Ark control returned to the shared UI API');
+}
 const parkRecipeKeys = new Set(['button', 'input', 'textarea']);
-const parkSlotKeys = new Set(['avatar', 'card', 'checkbox', 'dialog', 'field', 'menu', 'pinInput', 'popover', 'scrollArea', 'select', 'splitter', 'switchRecipe', 'table', 'tabs']);
+const parkSlotKeys = new Set(['avatar', 'card', 'checkbox', 'dialog', 'field', 'fileUpload', 'menu', 'pinInput', 'popover', 'scrollArea', 'select', 'splitter', 'switchRecipe', 'table', 'tabs']);
 
 // ParkButton must stay an alias of the installed recipe, not a translating
 // compatibility wrapper for retired variant names.
@@ -51,6 +66,7 @@ const required = {
   pinInput: ['pin-input.tsx', '.pin-input__control', '.pin-input__input'],
   dialog: ['dialog.tsx', '.dialog__content', '.dialog__backdrop'],
   checkbox: ['checkbox.tsx', '.checkbox__control'],
+  fileUpload: ['file-upload.tsx', '.file-upload__root', '.file-upload__item'],
   switch: ['switch.tsx', '.switch__control'],
   tabs: ['tabs.tsx', '.tabs__trigger', '.tabs__content'],
   splitter: ['splitter.tsx', '.splitter__panel', '.splitter__resizeTrigger'],
@@ -81,10 +97,18 @@ function visit(relative) {
   if (absolute.endsWith('.tsx')) {
     if (/data-park\s*=/.test(content)) failures.push(`Pseudo-Park marker in active application source: ${relative}`);
     if (/<ParkSelect\s*(?:>|\b(?!\.))/.test(content)) failures.push(`Callable ParkSelect remains in active application source: ${relative}`);
-    if (/<select(?:\s|>)/i.test(content)) failures.push(`Native Select remains in active application source: ${relative}`);
+    for (const element of ['button', 'input', 'textarea', 'select']) {
+      if (new RegExp(`<${element}(?:\\s|>)`, 'i').test(content)) failures.push(`Native ${element} remains in active application source: ${relative}`);
+    }
     const jsx = ts.createSourceFile(relative, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const classes = new Set();
     function inspect(node) {
+      if (ts.isCallExpression(node)) {
+        const target = node.expression;
+        const nativeDialog = ts.isIdentifier(target) && ['alert', 'confirm', 'prompt'].includes(target.text)
+          || ts.isPropertyAccessExpression(target) && target.expression.getText(jsx) === 'window' && ['alert', 'confirm', 'prompt'].includes(target.name.text);
+        if (nativeDialog) failures.push(`Native browser dialog in active application source: ${relative}`);
+      }
       if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(jsx) === 'ParkButton') {
         const variant = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.text === 'variant');
         if (variant?.initializer && ts.isStringLiteral(variant.initializer) && ['ghost', 'destructive'].includes(variant.initializer.text)) {

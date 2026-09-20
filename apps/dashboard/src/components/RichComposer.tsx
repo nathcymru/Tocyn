@@ -1,15 +1,16 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
-import { ParkButton, ParkComposer, ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkComposer, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
-import { TextB, Code, CodeBlock, TextItalic, ListBullets, ListNumbers, TextH, Link as LinkIcon } from '@phosphor-icons/react';
+import { TextB, Code, CodeBlock, TextItalic, ListBullets, ListNumbers, TextH, Link as LinkIcon, LinkBreak } from '@phosphor-icons/react';
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
 import rehypeSanitize from 'rehype-sanitize';
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 
 export const COMPOSER_SLASH_COMMANDS = [
   { label: 'Greeting', markdown: 'Hello,\n\n' },
@@ -124,8 +125,18 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
   const hooks = { knowledge, savedResponses, onKnowledgeInserted, onSavedResponseInserted };
   const [autocomplete, setAutocomplete] = useState<(Autocomplete & { start: number; end: number }) | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkError, setLinkError] = useState('');
   const rootRef = useRef<HTMLElement | null>(null);
   const listboxId = useId();
+  const linkTitleId = useId();
+  const linkInputId = useId();
+  const linkErrorId = useId();
+  const linkButtonRef = useRef<HTMLButtonElement>(null);
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const linkSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  const focusEditorAfterLinkRef = useRef(false);
   const editor = useEditor({
     extensions: [StarterKit, Markdown],
     content: value,
@@ -141,7 +152,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
       setActiveIndex(0);
     },
   });
-  useEffect(() => { editor?.setEditable(!readOnly); if (readOnly || format === 'plain') setAutocomplete(null); }, [editor, readOnly, format]);
+  useEffect(() => { editor?.setEditable(!readOnly); if (readOnly || format === 'plain') { setAutocomplete(null); setLinkOpen(false); } }, [editor, readOnly, format]);
   useEffect(() => {
     if (!editor) return;
     // Keep the compatibility attribute used by existing integrations while
@@ -213,6 +224,33 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
   const receiveImages = (files: FileList | readonly File[]) => { if (readOnly) return; const received = Array.from(files); const accepted = acceptedComposerImages(received); if (accepted.length) onImageFiles(accepted); if (accepted.length !== received.length) onRejectedImageFiles(received.length - accepted.length); };
   const receiveDrop = (event: DragEvent<HTMLElement>) => { const files = event.dataTransfer.files; if (!files.length) return; event.preventDefault(); receiveImages(files); };
   const receivePaste = (event: ClipboardEvent<HTMLElement>) => { const files = event.clipboardData.files; if (!files.length) return; event.preventDefault(); receiveImages(files); };
+  const openLinkEditor = () => {
+    if (!editor || readOnly) return;
+    const { from, to } = editor.state.selection;
+    linkSelectionRef.current = { from, to };
+    focusEditorAfterLinkRef.current = false;
+    setLinkUrl(editor.getAttributes('link').href ?? '');
+    setLinkError('');
+    setLinkOpen(true);
+  };
+  const closeLinkEditor = () => { setLinkOpen(false); setLinkError(''); };
+  const applyLink = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editor || readOnly) return;
+    const href = safeLink(linkUrl.trim());
+    if (!href) { setLinkError('Enter a valid HTTP or HTTPS link.'); linkInputRef.current?.focus(); return; }
+    const selection = linkSelectionRef.current;
+    if (!selection) return;
+    focusEditorAfterLinkRef.current = true;
+    editor.chain().focus().setTextSelection(selection).setLink({ href }).run();
+    closeLinkEditor();
+  };
+  const removeLink = () => {
+    if (!editor || readOnly || !linkSelectionRef.current) return;
+    focusEditorAfterLinkRef.current = true;
+    editor.chain().focus().setTextSelection(linkSelectionRef.current).unsetLink().run();
+    closeLinkEditor();
+  };
   const editorToolbar = editor && format !== 'plain' && <div className={composerStyles.toolbar} role="toolbar" aria-label="Formatting controls">
     <ToolbarButton label="Add bold text (ctrl + b)" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><TextB weight="duotone" aria-hidden="true" /></ToolbarButton>
     <ToolbarButton label="Add italic text (ctrl + i)" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><TextItalic weight="duotone" aria-hidden="true" /></ToolbarButton>
@@ -221,7 +259,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     <ToolbarButton label="Add numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListNumbers weight="duotone" aria-hidden="true" /></ToolbarButton>
     <ToolbarButton label="Add code block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><CodeBlock weight="duotone" aria-hidden="true" /></ToolbarButton>
     <ToolbarButton label="Add inline code" active={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()}><Code weight="duotone" aria-hidden="true" /></ToolbarButton>
-    <ToolbarButton label="Add link" active={editor.isActive('link')} onClick={() => { const url = window.prompt('Link URL'); if (url && safeLink(url)) editor.chain().focus().setLink({ href: safeLink(url)! }).run(); }}><LinkIcon weight="duotone" aria-hidden="true" /></ToolbarButton>
+    <ParkButton ref={linkButtonRef} type="button" aria-label="Add link" aria-haspopup="dialog" aria-expanded={linkOpen} aria-pressed={editor.isActive('link')} disabled={readOnly} className={[composerStyles.toolbarButton, editor.isActive('link') ? composerStyles.toolbarButtonActive : ''].filter(Boolean).join(' ')} onMouseDown={event => event.preventDefault()} onClick={openLinkEditor}><LinkIcon weight="duotone" aria-hidden="true" /></ParkButton>
   </div>;
   return <section ref={rootRef} aria-label="Rich message composer" onDragOver={event => { if (!readOnly && event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={receiveDrop} onPaste={receivePaste} className={composerStyles.root}>
     {format === 'markdown-v1' && <p className={composerStyles.formatHelp}>Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Formatting controls use accessible rich text editing.</p>}
@@ -243,5 +281,30 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
         {format === 'plain' ? <div className={composerStyles.previewBody}>{value}</div> : <SafeMarkdown className={composerStyles.previewBody}>{value}</SafeMarkdown>}
       </ParkCollapsible.Content>
     </ParkCollapsible.Root>
+    {typeof document !== 'undefined' && createPortal(<ParkDialog.Root open={linkOpen} onOpenChange={({ open }) => { if (!open) closeLinkEditor(); }}
+      initialFocusEl={() => linkInputRef.current}
+      finalFocusEl={() => focusEditorAfterLinkRef.current ? editor?.view.dom ?? null : linkButtonRef.current}
+      closeOnInteractOutside={false} lazyMount unmountOnExit>
+      <ParkDialog.Backdrop />
+      <ParkDialog.Positioner>
+        <ParkDialog.Content aria-labelledby={linkTitleId} className={css({ w: 'min(100% - 2rem, 26rem)' })}>
+          <ParkDialog.Header><ParkDialog.Title id={linkTitleId}>Insert link</ParkDialog.Title></ParkDialog.Header>
+          <form onSubmit={applyLink}>
+            <ParkDialog.Body className={css({ display: 'grid', gap: '2' })}>
+              <label htmlFor={linkInputId} className={css({ textStyle: 'label' })}>Link URL</label>
+              <ParkInput ref={linkInputRef} id={linkInputId} type="text" inputMode="url" autoComplete="url" value={linkUrl}
+                onChange={event => { setLinkUrl(event.target.value); if (linkError) setLinkError(''); }}
+                aria-invalid={Boolean(linkError)} aria-describedby={linkError ? linkErrorId : undefined} />
+              {linkError && <p id={linkErrorId} role="alert" className={css({ color: 'critical', textStyle: 'sm' })}>{linkError}</p>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              {editor?.isActive('link') && <ParkButton type="button" variant="outline" onClick={removeLink}><LinkBreak weight="duotone" aria-hidden="true" />Remove link</ParkButton>}
+              <ParkButton type="button" variant="outline" onClick={closeLinkEditor}>Cancel</ParkButton>
+              <ParkButton type="submit">Apply link</ParkButton>
+            </ParkDialog.Footer>
+          </form>
+        </ParkDialog.Content>
+      </ParkDialog.Positioner>
+    </ParkDialog.Root>, document.body)}
   </section>;
 }

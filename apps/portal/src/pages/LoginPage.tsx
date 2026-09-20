@@ -21,8 +21,16 @@ export function LoginPage() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const [logoutWarning] = useState<string | null>(() => {
+    const state = location.state as { logoutWarning?: unknown } | null;
+    return typeof state?.logoutWarning === 'string' ? state.logoutWarning : null;
+  });
   const [challenge, setChallenge] = useState<{ email: string; challengeId?: string } | null>(() => location.state?.authStep === 'verify' ? location.state.challenge : null);
   const successHeading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (logoutWarning) navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [location.pathname, location.search, logoutWarning, navigate]);
 
   useEffect(() => {
     if (success && type === 'magic_link') successHeading.current?.focus();
@@ -103,6 +111,11 @@ export function LoginPage() {
 
       <ParkCard.Root>
         <ParkCard.Body className={p.authForm}>
+          {logoutWarning && (
+            <ParkAlert.Root role="alert" aria-atomic="true" status="warning" variant="surface">
+              <ParkAlert.Content><ParkAlert.Description>{logoutWarning}</ParkAlert.Description></ParkAlert.Content>
+            </ParkAlert.Root>
+          )}
           {error && (
             <ParkAlert.Root id="portal-login-error" role="alert" aria-atomic="true" status="error" variant="surface">
               <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>

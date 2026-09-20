@@ -23,7 +23,7 @@ try{
    return route.continue();
   });
   try{
-   await page.goto(origin+'/__test-login');await page.waitForURL('**/settings/agent-permissions');await page.goto(origin+'/tickets/synthetic-qa');
+   await page.goto(origin+'/__test-login');await page.waitForURL('**/settings/agent-permissions');await page.goto(origin+'/inbox/all/synthetic-qa');
    for(const [name,value] of [['Mark as SOP (internal procedure)','sop'],['Mark as answer','answer']]){
     const button=page.getByRole('button',{name,exact:true});await button.waitFor();
     assert.equal(await button.getAttribute('aria-pressed'),String(qa_type===value));assert.equal(await button.isDisabled(),qa_type==='question');
@@ -45,6 +45,6 @@ try{
    assert.equal(mutations,0);assert.equal(external,0);
   }finally{await context.close();}
  }
- const paths=['apps/dashboard/src/pages/TicketDetailPage.tsx','packages/ui/src/styles/tocyn.css','tools/ui-browser/ticket-qa-check.mjs'];
+ const paths=['apps/dashboard/src/pages/TicketDetailPage.tsx','packages/ui/src/styles/panda.css','tools/ui-browser/ticket-qa-check.mjs'];
  console.log(JSON.stringify({version:1,recordedAt:new Date().toISOString(),revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),sourceHashes:Object.fromEntries(paths.map(p=>[p,createHash('sha256').update(readFileSync(p)).digest('hex')])),node:process.version,browser:browser.version(),rows,limitations:['Synthetic intercepted article reads; no server QA mutation, public retrieval or tenant isolation proof.','Default opaque colors and final hover state only; no full theme, widget, screen-reader or visual-layout acceptance.','Legacy disabled controls retain legibility but are not keyboard focus targets.']},null,2));
 }finally{await browser.close();}

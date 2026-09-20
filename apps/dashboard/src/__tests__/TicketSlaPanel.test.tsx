@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
-import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { fetchTicketSlaBatch, parseTicketSla, type SlaTarget, type TicketSla } from '../hooks/useTicketSla';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
@@ -35,18 +34,23 @@ describe('SLA surfaces', () => {
     expect(screen.getByLabelText('SLA status')).toBeTruthy();
   });
 
-  it('shows resolution due even when first response is not configured', () => {
-    render(<ConversationSlaStatus sla={{ response: unavailable, resolution: running, handlerName: null }}/>);
-    expect(screen.getByText(/^Due /)).toBeTruthy();
+  it('shows resolution due in the active detail panel even when first response is not configured', async () => {
+    mocks.get.mockResolvedValue({ response: unavailable, resolution: running, handlerName: null });
+    show();
+    expect(await screen.findByText(/^Due /)).toBeTruthy();
     expect(screen.getByText('Not configured')).toBeTruthy();
-    expect(mocks.get).not.toHaveBeenCalled();
   });
 
-  it('keeps a completed breach and missing projection visible through text', () => {
-    const view = render(<ConversationSlaStatus sla={{ response: { ...running, state: 'breached', phase: 'completed', completedAt: '2026-09-11T11:00:00.000Z' }, resolution: unavailable, handlerName: null }}/>);
-    expect(screen.getByText(/Completed after deadline/)).toBeTruthy();
-    view.rerender(<ConversationSlaStatus sla={undefined}/>);
-    expect(screen.getByText('Service level unavailable')).toBeTruthy();
+  it('keeps a completed breach visible in the active detail panel', async () => {
+    mocks.get.mockResolvedValue({ response: { ...running, state: 'breached', phase: 'completed', completedAt: '2026-09-11T11:00:00.000Z' }, resolution: unavailable, handlerName: null });
+    show();
+    expect(await screen.findByText(/Completed after deadline/)).toBeTruthy();
+  });
+
+  it('shows an explicit unavailable state when the detail projection is missing', async () => {
+    mocks.get.mockResolvedValue(null);
+    show();
+    expect(await screen.findByRole('alert', { name: 'Service level' })).toHaveTextContent('Service level is unavailable.');
   });
 
   it('treats malformed detail data as a query failure and recovers only after an explicit retry', async () => {

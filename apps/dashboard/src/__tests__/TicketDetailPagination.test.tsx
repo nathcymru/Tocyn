@@ -14,7 +14,7 @@ const unavailableSla={response:{state:'unavailable',phase:'unavailable',complete
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 let request:(path:string,init:RequestInit)=>Promise<Response>|Response;
 function renderDetail(client:QueryClient) {
-  const router=createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage/>}],{initialEntries:['/tickets/ticket']});
+  const router=createMemoryRouter([{path:'/inbox/all/:id',element:<TicketDetailPage/>}],{initialEntries:['/inbox/all/ticket']});
   render(<QueryClientProvider client={client}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
 }
 function calls(path:string) { return vi.mocked(fetch).mock.calls.filter(([url])=>String(url).includes(path)); }

@@ -41,7 +41,7 @@ function show(remoteResolved = false) {
   }));
   useAuthStore.getState().setAuth('synthetic-session', {id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
   client = new QueryClient({defaultOptions:{queries:{retry:false}, mutations:{retry:false}}});
-  const router = createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage onResolved={onResolved}/>}],{initialEntries:['/tickets/workspace-ticket']});
+  const router = createMemoryRouter([{path:'/inbox/all/:id',element:<TicketDetailPage onResolved={onResolved}/>}],{initialEntries:['/inbox/all/workspace-ticket']});
   render(<QueryClientProvider client={client}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
   return {onResolved, writes, restore: () => {failConfirmation = false;}};
 }

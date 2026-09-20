@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { acceptedComposerImages, COMPOSER_MAX_IMAGE_BYTES, insertMarkdownAtCursor, RichComposer, SafeMarkdown, TIPTAP_MARKDOWN_CONTRACT } from '../components/RichComposer';
 import StarterKit from '@tiptap/starter-kit';
 import { MarkdownManager } from '@tiptap/markdown';
+
+afterEach(() => vi.restoreAllMocks());
 
 function editorFor(name = 'Reply message') {
   return screen.getByRole('textbox', { name: name }) as HTMLElement;
@@ -82,6 +84,64 @@ it('keeps approved HTTP links readable and isolated from the opener', () => {
   expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
 });
 
+it('uses the Park link dialog and rejects unsafe URLs without changing the draft', async () => {
+  // Ark's focus trap uses visibility checks; JSDOM has no layout rectangles.
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (this: HTMLElement) {
+    return (this.isConnected ? [new DOMRect(0, 0, 100, 40)] : []) as unknown as DOMRectList;
+  });
+  const onChange = vi.fn();
+  const prompt = vi.spyOn(window, 'prompt');
+  render(<RichComposer id="link-dialog" value="Link text" onChange={onChange} onImageFiles={() => undefined}
+    onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />);
+  const editor = editorFor();
+  editor.focus();
+  onChange.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Insert link' });
+  const input = screen.getByRole('textbox', { name: 'Link URL' });
+  await waitFor(() => expect(input).toHaveFocus());
+  fireEvent.change(input, { target: { value: 'javascript:alert(1)' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Apply link' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid HTTP or HTTPS link.');
+  expect(dialog).toBeInTheDocument();
+  expect(editor).toHaveTextContent('Link text');
+  expect(onChange).not.toHaveBeenCalled();
+  expect(prompt).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Insert link' })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Add link' })).toHaveFocus());
+  prompt.mockRestore();
+});
+
+it('applies and removes an HTTP link on the selected editor text', async () => {
+  function ControlledComposer() {
+    const [value, setValue] = useState('Link text');
+    return <RichComposer id="link-edit" value={value} onChange={setValue} onImageFiles={() => undefined}
+      onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />;
+  }
+  render(<ControlledComposer />);
+  const editor = editorFor();
+  editor.focus();
+  const range = document.createRange();
+  range.selectNodeContents(editor.querySelector('p')!);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+  fireEvent(document, new Event('selectionchange'));
+  fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+  const input = await screen.findByRole('textbox', { name: 'Link URL' });
+  fireEvent.change(input, { target: { value: 'https://example.invalid/help' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Apply link' }));
+  await waitFor(() => expect(editor.querySelector('a')).toHaveAttribute('href', 'https://example.invalid/help'));
+  await waitFor(() => expect(editor).toHaveFocus());
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+  await screen.findByRole('dialog', { name: 'Insert link' });
+  expect(screen.getByRole('textbox', { name: 'Link URL' })).toHaveValue('https://example.invalid/help');
+  fireEvent.click(screen.getByRole('button', { name: 'Remove link' }));
+  await waitFor(() => expect(editor.querySelector('a')).toBeNull());
+  expect(editor).toHaveTextContent('Link text');
+});
+
 it('autocompletes bounded slash commands and emoji with keyboard controls', () => {
   function ControlledComposer() {
     const [value, setValue] = useState('');
@@ -152,6 +212,7 @@ it('fences editor and already-open insert controls when composition becomes read
   onChange.mockClear();
   fireEvent.click(screen.getByRole('button', { name: 'Lock composer' }));
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Add link' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Add bold text (ctrl + b)' }));
   expectEditorText(editor, 'draft');
   setEditorText(editor, 'changed after lock');

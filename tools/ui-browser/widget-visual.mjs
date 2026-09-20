@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const bundle = readFileSync('apps/widget/dist/lumina-widget.js');
-const sourcePaths = ['tools/ui-browser/widget-visual.mjs', 'apps/widget/src/main.tsx', 'apps/widget/src/index.css', 'apps/widget/src/App.tsx', 'apps/widget/src/components/TicketForm.tsx', 'apps/widget/dist/lumina-widget.js'];
+const sourcePaths = ['tools/ui-browser/widget-visual.mjs', 'apps/widget/src/main.tsx', 'packages/ui/src/styles/panda.css', 'apps/widget/src/App.tsx', 'apps/widget/src/components/TicketForm.tsx', 'apps/widget/dist/lumina-widget.js'];
 const server = createServer((request, response) => {
   response.setHeader('Cache-Control', 'no-store');
   if (request.url === '/widget.js') { response.setHeader('Content-Type', 'text/javascript'); response.end(bundle); return; }

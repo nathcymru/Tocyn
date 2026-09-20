@@ -22,6 +22,7 @@ import * as OfficialSwitch from './components/ui/switch';
 import * as OfficialTable from './components/ui/table';
 import * as OfficialRadioGroup from './components/ui/radio-group';
 import * as OfficialAlert from './components/ui/alert';
+import * as OfficialFileUpload from './components/ui/file-upload';
 
 export type ParkButtonProps = OfficialButtonProps;
 export const ParkButton = OfficialButton;
@@ -74,6 +75,7 @@ export const ParkTable = OfficialTable;
 export const ParkRadioGroup = OfficialRadioGroup;
 export const ParkAlert = OfficialAlert;
 export const ParkCard = OfficialCard;
+export const ParkFileUpload = OfficialFileUpload;
 
 export interface ParkPinInputProps extends React.ComponentPropsWithoutRef<typeof OfficialPinInput.Root> {
   label?: React.ReactNode;

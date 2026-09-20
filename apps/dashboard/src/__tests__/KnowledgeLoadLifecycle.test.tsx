@@ -44,7 +44,7 @@ function show(deferContent = false) {
   }));
   useAuthStore.getState().setAuth('synthetic-session', {id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
   client = new QueryClient({defaultOptions:{queries:{retry:false}, mutations:{retry:false}}});
-  const router = createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage onResolved={onResolved}/>}],{initialEntries:['/tickets/workspace-ticket']});
+  const router = createMemoryRouter([{path:'/inbox/all/:id',element:<TicketDetailPage onResolved={onResolved}/>}],{initialEntries:['/inbox/all/workspace-ticket']});
   render(<QueryClientProvider client={client}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
   return {router,pending,contentPending};
 }
@@ -84,7 +84,7 @@ it('reopens pending knowledge without retaining a cancelled loading state', asyn
 
 it.each(['ticket','identity'])('discards a pending response after %s remount', async (boundary) => {
   const f=show();await openKnowledge();
-  await act(async()=>{if(boundary==='ticket')await f.router.navigate('/tickets/another-ticket');else useAuthStore.getState().setAuth('other-session',{id:'operator-b',tenant_id:'tenant-b',email:'other@example.invalid',full_name:'Other',role:'admin',mfa_enabled:true});});
+  await act(async()=>{if(boundary==='ticket')await f.router.navigate('/inbox/all/another-ticket');else useAuthStore.getState().setAuth('other-session',{id:'operator-b',tenant_id:'tenant-b',email:'other@example.invalid',full_name:'Other',role:'admin',mfa_enabled:true});});
   // The new keyed detail owns a separate request; expose context if restored closed.
   await screen.findByRole('combobox',{name:'Status'});
   if(screen.queryByRole('button',{name:'Show ticket context'}))fireEvent.click(screen.getByRole('button',{name:'Show ticket context'}));

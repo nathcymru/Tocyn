@@ -5,7 +5,7 @@ import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkCheckbox, ParkEmptyState, ParkInput, ParkScrollArea, ParkSkeleton, ParkTabs, ParkTextarea, ParkTicketDetail } from '@luminatick/ui/park';
+import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkCheckbox, ParkEmptyState, ParkFileUpload, ParkInput, ParkScrollArea, ParkSkeleton, ParkTabs, ParkTextarea, ParkTicketDetail } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible } from '@luminatick/ui/components';
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
@@ -430,11 +430,12 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   const handleGetAiSuggestion = async () => {
     setIsGeneratingSuggestion(true);
     setSuggestion(null);
+    setChangeError(null);
     try {
       const data = await dashboardApi.get<{ suggestion: string }>(`/knowledge/tickets/${id}/ai-suggest`);
       setSuggestion(data.suggestion);
-    } catch (err: any) {
-      alert('Failed to generate suggestion: ' + err.message);
+    } catch {
+      setChangeError('AI suggestion could not be generated. Try again.');
     } finally {
       setIsGeneratingSuggestion(false);
     }
@@ -805,7 +806,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
     role="alert" className={detailStyles.unavailable} title={error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}
     description="The conversation could not be displayed. Retry loading it or return to the list."
     action={<div><ParkButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className={css({ mt: '2' })}>Retry loading ticket</ParkButton>
-      <Link to={workspaceBackHref??'/tickets'} className={css({ ml: '2', color: 'accent.primary', textDecoration: 'underline' })}>{workspaceBackHref?'Back to conversations':'Back to Tickets'}</Link></div>}
+      <Link to={workspaceBackHref??'/inbox/all'} className={css({ ml: '2', color: 'accent.primary', textDecoration: 'underline' })}>{workspaceBackHref?'Back to conversations':'Back to Inbox'}</Link></div>}
   />;
   const reference = ticketReference(ticket, ticketPrefix);
 
@@ -832,9 +833,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           {workspace.status === 'conflict' && <>{workspace.error} <ParkButton type="button" onClick={() => workspace.restoreServerState()} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Restore server preferences</ParkButton></>}
         </p>}
         <div className={detailStyles.toolbar}>
-          <Link to={workspaceBackHref??'/tickets'} className={detailStyles.back}>
+          <Link to={workspaceBackHref??'/inbox/all'} className={detailStyles.back}>
             <ArrowLeft className={css({ w: '5', h: '5', flexShrink: 0 })} />
-            {workspaceBackHref?'Back to conversations':'Back to Tickets'}
+            {workspaceBackHref?'Back to conversations':'Back to Inbox'}
           </Link>
           <div className={detailStyles.controls}>
             <ParkButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
@@ -1270,28 +1271,38 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                     : "Public replies are visible to the customer in this conversation."}
                 </p>
                 <div className={detailStyles.composerActions}>
-                  <ParkInput
-                    type="file" aria-label="Reply attachments" disabled={isSubmitting}
-                    multiple
-                    ref={fileInputRef}
-                    className={css({ display: 'none' })}
-                    onChange={(e) => {
-                      if (submission.current) return;
-                      const selectedFiles = Array.from(e.currentTarget.files ?? []);
-                      if (selectedFiles.length) addAttachments(selectedFiles);
-                      if (fileInputRef.current) fileInputRef.current.value = '';
-                    }}
-                  />
-                  <ParkButton
-                    type="button"
-                    ref={attachButtonRef}
-                    aria-disabled={!replyCapability || isSubmitting} aria-label="Attach files"
-                    onClick={() => { if (!submission.current && replyCapability) fileInputRef.current?.click(); }}
-                    className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}
-                    title="Attach files"
+                  <ParkFileUpload.Root
+                    // The application owns the queued attachment lifecycle. Keep Ark's
+                    // picker state empty so removed files do not consume maxFiles.
+                    acceptedFiles={[]}
+                    disabled={isSubmitting || !replyCapability}
+                    maxFiles={replyCapability?.attachments.maxCount ?? 10}
+                    allowDrop={false}
+                    style={{ display: 'contents' }}
                   >
-                    <Paperclip className={css({ w: '5', h: '5', flexShrink: 0 })} />
-                  </ParkButton>
+                    <ParkFileUpload.HiddenInput
+                      ref={fileInputRef}
+                      aria-label="Reply attachments"
+                      multiple
+                      onChange={event => {
+                        if (submission.current) return;
+                        const selectedFiles = Array.from(event.currentTarget.files ?? []);
+                        if (selectedFiles.length) addAttachments(selectedFiles);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                    <ParkFileUpload.Trigger asChild>
+                      <ParkButton
+                        type="button"
+                        ref={attachButtonRef}
+                        aria-disabled={!replyCapability || isSubmitting} aria-label="Attach files"
+                        className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}
+                        title="Attach files"
+                      >
+                        <Paperclip className={css({ w: '5', h: '5', flexShrink: 0 })} />
+                      </ParkButton>
+                    </ParkFileUpload.Trigger>
+                  </ParkFileUpload.Root>
                   <ParkButton
                     type="submit"
                     variant="solid"

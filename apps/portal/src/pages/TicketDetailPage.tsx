@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkAlert, ParkButton, ParkEmptyState, ParkField, ParkInput, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkEmptyState, ParkField, ParkFileUpload, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -447,26 +447,29 @@ function TicketDetail({ id }: { id: string | undefined }) {
               )}
 
               <div className={p.chatReplyActions}>
-                <div>
-                  <ParkInput
-                    type="file"
+                <ParkFileUpload.Root
+                  maxFiles={Number.POSITIVE_INFINITY}
+                  acceptedFiles={[]}
+                  disabled={sending}
+                  preventDocumentDrop={false}
+                >
+                  <ParkFileUpload.HiddenInput
                     aria-label="Choose reply attachments"
-                    multiple
-                    className={p.chatFileInput}
                     ref={fileInputRef}
                     onChange={handleFileSelect}
                   />
-                  <ParkButton
-                    type="button"
-                    ref={attachButton}
-                    onClick={() => { if (!sending) fileInputRef.current?.click(); }}
-                    className={p.chatAttachButton}
-                    aria-disabled={sending}
-                  >
-                    <IconPaperclip className={p.chatAttachIcon} aria-hidden="true" />
-                    <span className={p.chatAttachLabel}>Attach Files</span>
-                  </ParkButton>
-                </div>
+                  <ParkFileUpload.Trigger asChild>
+                    <ParkButton
+                      type="button"
+                      ref={attachButton}
+                      className={p.chatAttachButton}
+                      aria-disabled={sending}
+                    >
+                      <IconPaperclip className={p.chatAttachIcon} aria-hidden="true" />
+                      <span className={p.chatAttachLabel}>Attach Files</span>
+                    </ParkButton>
+                  </ParkFileUpload.Trigger>
+                </ParkFileUpload.Root>
 
                 <ParkButton
                   type="submit"

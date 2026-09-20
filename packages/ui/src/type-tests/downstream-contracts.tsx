@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ActiveConversation, ContextPanel, ConversationList, WorkViewNavigator, WorkspaceShell, WorkspaceRegion } from '../index';
 import { TocynConfirmDialog, TocynDialog } from '../dialog';
-import { createListCollection } from '../ark';
+import { createListCollection } from '@ark-ui/react';
 import { ParkButton, ParkInput, ParkSelect, ParkTextarea, ParkEmptyState, type ParkButtonProps } from '../park';
-import type { WorkspaceRegionProps } from '../primitives';
+import type { WorkspaceRegionProps } from '../workspace-region';
 import type { WorkspaceShellProps, WorkViewNavigatorProps, ConversationListProps, ActiveConversationProps, ContextPanelProps } from '../workspace';
 import type { TocynDialogProps, TocynConfirmDialogProps } from '../dialog';
 

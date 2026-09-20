@@ -24,6 +24,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useOperatorPreferencesContext, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
 
 function cn(...inputs: any[]) {
@@ -355,7 +356,7 @@ function LayoutContent() {
             >
               <WifiOff className={shellStyles.smallIcon} />
               <span>Disconnected</span>
-              <ChevronDown className={cn(shellStyles.connectionChevron, showConnDetails && "rotate-180")} />
+              <ChevronDown className={cn(shellStyles.connectionChevron, showConnDetails && css({ transform: 'rotate(180deg)' }))} />
             </ParkButton></ParkPopover.Trigger>
 
             <ParkPopover.Positioner>

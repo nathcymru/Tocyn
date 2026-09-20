@@ -5,10 +5,10 @@ import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { composeEventHandlers, WorkspaceShell, WorkViewNavigator, ConversationList, ActiveConversation, ContextPanel } from '../index';
-import { Dialog, Listbox, createListCollection } from '../ark';
+import { createListCollection } from '@ark-ui/react';
 import { TocynDialog, TocynConfirmDialog } from '../dialog';
 import { ParkButton, ParkInput, ParkSelect, ParkTextarea, ParkEmptyState, type ParkButtonProps } from '../park';
-import type { WorkspaceRegionProps } from '../primitives';
+import type { WorkspaceRegionProps } from '../workspace-region';
 
 afterEach(cleanup);
 
@@ -116,39 +116,6 @@ describe('official Park control contracts', () => {
     expect(listRef.current).toBeNull();
     expect(conversationRef.current).toBeNull();
     expect(contextRef.current).toBeNull();
-  });
-});
-
-describe('Ark complex controls', () => {
-  it('opens a dialog, returns focus on escape, and selects a listbox item', async () => {
-    const user = userEvent.setup();
-    const onValueChange = vi.fn();
-    const collection = createListCollection({ items: ['Mine', 'Needs Action'] });
-    function DialogHarness() {
-      const [open, setOpen] = React.useState(false);
-      return <Dialog.Root open={open} onOpenChange={details => setOpen(details.open)}>
-        <Dialog.Trigger>Open filters</Dialog.Trigger>
-        <Dialog.Backdrop />
-        <Dialog.Positioner><Dialog.Content><Dialog.Title>Filters</Dialog.Title><Dialog.CloseTrigger>Close</Dialog.CloseTrigger></Dialog.Content></Dialog.Positioner>
-      </Dialog.Root>;
-    }
-    render(<>
-      <DialogHarness />
-      <Listbox.Root collection={collection} onValueChange={onValueChange}>
-        <Listbox.Label>Views</Listbox.Label>
-        <Listbox.Content>{collection.items.map(item => <Listbox.Item key={item} item={item}><Listbox.ItemText>{item}</Listbox.ItemText></Listbox.Item>)}</Listbox.Content>
-      </Listbox.Root>
-    </>);
-    const trigger = screen.getByRole('button', { name: 'Open filters' });
-    await user.click(trigger);
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Filters' })).toHaveAttribute('data-state', 'open'));
-    await user.keyboard('{Escape}');
-    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
-    await waitFor(() => expect(trigger).toHaveFocus());
-
-    screen.getByRole('listbox').focus();
-    await user.keyboard('{End}{Enter}');
-    expect(onValueChange).toHaveBeenCalledWith(expect.objectContaining({ value: ['Needs Action'] }));
   });
 });
 

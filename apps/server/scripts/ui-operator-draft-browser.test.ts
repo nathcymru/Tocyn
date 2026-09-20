@@ -162,7 +162,7 @@ function requestHeaders(request: IncomingMessage): Record<string, string> {
 }
 
 async function staticResponse(root: string, pathname: string, response: ServerResponse): Promise<void> {
-  const candidate = pathname === '/' || pathname === '/tickets' || pathname.startsWith('/tickets/') || pathname === '/inbox' || pathname.startsWith('/inbox/') || pathname === '/login' || pathname === '/mfa'
+  const candidate = pathname === '/' || pathname === '/inbox' || pathname.startsWith('/inbox/') || pathname === '/login' || pathname === '/mfa'
     ? 'index.html' : pathname.slice(1);
   const path = resolve(root, normalize(candidate));
   if (!path.startsWith(root + sep) && path !== root) { response.writeHead(403).end(); return; }

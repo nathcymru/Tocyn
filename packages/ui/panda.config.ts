@@ -40,6 +40,8 @@ export default {
     'html, body, #root': { width: '100%', minHeight: '100%', margin: '0', fontFamily: 'primary', color: 'text.primary', background: 'bg.canvas' },
     '#root': { minHeight: '100dvh' },
     ':root': { colorScheme: 'light' },
+    ':root[data-tocyn-font-scale="large"]': { fontSize: '112.5%' },
+    ':root[data-tocyn-font-scale="larger"]': { fontSize: '125%' },
     '[data-tocyn-theme-mode="dark"], [data-tocyn-inverse]': { colorScheme: 'dark' },
     'body': { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale' },
     '[data-tocyn-appearance]': { paddingBlock: '0.25rem' },

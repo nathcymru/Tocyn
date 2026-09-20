@@ -686,3 +686,186 @@ it('global ticket search never enters the legacy redirect or rewrites the actual
  expect(filter).toHaveValue('local-filter');expect(mounted.router.state.location.pathname).toBe('/inbox/all');
  expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT')).toBe(false);
 });
+
+it('opens the active inbox New Ticket dialog with Park anatomy and restores trigger focus on cancellation',async()=>{
+  // Zag checks geometry before choosing the initial focus target; JSDOM has none.
+  vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){
+    return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,30)]:[]) as unknown as DOMRectList;
+  });
+  showInbox();
+  const trigger=screen.getByRole('button',{name:'New Ticket'});
+  trigger.focus();
+  fireEvent.click(trigger);
+  const dialog=await screen.findByRole('dialog',{name:'Create New Ticket'});
+  expect(dialog).toHaveAttribute('data-scope','dialog');
+  expect(dialog).toHaveAttribute('data-part','content');
+  await waitFor(()=>expect(within(dialog).getByRole('textbox',{name:'Subject'})).toHaveFocus());
+  fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
+  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Create New Ticket'})).not.toBeInTheDocument());
+  await waitFor(()=>expect(trigger).toHaveFocus());
+});
+
+it('keeps a failed New Ticket draft and retries the same validated payload in the active inbox',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let posts=0;
+  let created=false;
+  const createdTicket={...tickets[0],id:'created-ticket',subject:'Operator-created follow-up'};
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url)==='/api/tickets'&&options?.method==='POST'){
+      posts++;
+      expect(JSON.parse(String(options.body))).toEqual({
+        subject:'Operator-created follow-up',customer_email:'customer@example.invalid',body:'Synthetic operator message',
+        priority:'normal',status:'open',
+      });
+      return Promise.resolve(posts===1?json({error:'Creation is temporarily unavailable'},503):json(createdTicket,201));
+    }
+    if(created&&String(url).startsWith('/api/tickets?'))return Promise.resolve(json({data:[createdTicket,...tickets],meta:{page:1,limit:20,total:21,total_pages:2}}));
+    return original(url,options);
+  });
+  showInbox();
+  fireEvent.click(screen.getByRole('button',{name:'New Ticket'}));
+  const dialog=await screen.findByRole('dialog',{name:'Create New Ticket'});
+  const subject=within(dialog).getByRole('textbox',{name:'Subject'});
+  fireEvent.change(subject,{target:{value:'Operator-created follow-up'}});
+  fireEvent.change(within(dialog).getByRole('textbox',{name:'Customer Email'}),{target:{value:'customer@example.invalid'}});
+  const message=within(dialog).getByRole('textbox',{name:'Initial Message'});
+  fireEvent.change(message,{target:{value:'Synthetic operator message'}});
+  const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
+  fireEvent.click(submit);
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Creation is temporarily unavailable');
+  expect(subject).toHaveValue('Operator-created follow-up');
+  expect(message).toHaveValue('Synthetic operator message');
+  created=true;
+  fireEvent.click(submit);
+  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Create New Ticket'})).not.toBeInTheDocument());
+  expect(posts).toBe(2);
+  expect(await screen.findByRole('option',{name:/Operator-created follow-up/})).toBeInTheDocument();
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Ticket created.');
+});
+
+it('holds the New Ticket draft, focus and dialog while creation is pending',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let finish!: (response:Response)=>void;
+  let posts=0;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url)==='/api/tickets'&&options?.method==='POST'){
+      posts++;
+      return new Promise<Response>(resolve=>{finish=resolve;});
+    }
+    return original(url,options);
+  });
+  showInbox();
+  fireEvent.click(screen.getByRole('button',{name:'New Ticket'}));
+  const dialog=await screen.findByRole('dialog',{name:'Create New Ticket'});
+  const subject=within(dialog).getByRole('textbox',{name:'Subject'});
+  fireEvent.change(subject,{target:{value:'Submitted subject'}});
+  fireEvent.change(within(dialog).getByRole('textbox',{name:'Customer Email'}),{target:{value:'customer@example.invalid'}});
+  fireEvent.change(within(dialog).getByRole('textbox',{name:'Initial Message'}),{target:{value:'Submitted message'}});
+  const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
+  submit.focus();fireEvent.click(submit);
+  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Creating…'})).toHaveAttribute('aria-disabled','true'));
+  expect(submit).toHaveFocus();
+  fireEvent.change(subject,{target:{value:'Changed while pending'}});
+  expect(subject).toHaveValue('Submitted subject');
+  expect(within(dialog).getByRole('combobox',{name:'Priority'})).toBeDisabled();
+  fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
+  fireEvent.keyDown(submit,{key:'Escape'});
+  expect(screen.getByRole('dialog',{name:'Create New Ticket'})).toBeInTheDocument();
+  fireEvent.click(submit);
+  expect(posts).toBe(1);
+  await act(async()=>finish(json({error:'Intake stopped'},503)));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Intake stopped');
+  expect(within(dialog).getByRole('button',{name:'Create Ticket'})).toHaveFocus();
+});
+
+it('distinguishes a failed inbox read from an empty view and retries the authoritative list',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let reads=0;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?'))return Promise.resolve(++reads===1
+      ?json({error:'Temporarily unavailable'},503)
+      :json({data:[tickets[0]],meta:{page:1,limit:20,total:1,total_pages:1}}));
+    return original(url,options);
+  });
+  showInbox();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load conversations.');
+  expect(screen.queryByText('No conversations in this view')).not.toBeInTheDocument();
+  const retry=screen.getByRole('button',{name:'Retry conversations'});
+  fireEvent.click(retry);
+  expect(await screen.findByRole('option',{name:/Fixture conversation 1/})).toBeInTheDocument();
+  await waitFor(()=>expect(screen.queryByText('Could not load conversations.')).not.toBeInTheDocument());
+  expect(reads).toBe(2);
+});
+
+it('retains confirmed inbox rows and a retry action after a background refresh fails',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let fail=false;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?')&&fail)return Promise.resolve(json({error:'Temporary refresh failure'},503));
+    return original(url,options);
+  });
+  showInbox();
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  const first=await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  fail=true;
+  await act(async()=>{await client.invalidateQueries({queryKey:['tickets']});});
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh conversations. The last confirmed list remains visible.');
+  expect(first).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
+  expect(screen.queryByText('No conversations in this view')).not.toBeInTheDocument();
+});
+
+it('keeps prior inbox results and pagination focus while the next page loads',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let finish!: (response:Response)=>void;
+  const queries:string[]=[];
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?')){
+      const page=new URL(String(url),'http://localhost').searchParams.get('page')??'1';
+      queries.push(page);
+      if(page==='2')return new Promise<Response>(resolve=>{finish=resolve;});
+      return Promise.resolve(json({data:[tickets[0]],meta:{page:1,limit:1,total:2,total_pages:2}}));
+    }
+    return original(url,options);
+  });
+  showInbox();
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  const first=await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  const next=screen.getByRole('button',{name:'Next conversation page'});
+  next.focus();fireEvent.click(next);
+  await waitFor(()=>expect(finish).toBeDefined());
+  expect(next).toHaveFocus();
+  expect(next).toHaveAttribute('aria-disabled','true');
+  expect(first).toBeInTheDocument();
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing');
+  fireEvent.click(next);
+  expect(queries.filter(page=>page==='2')).toHaveLength(1);
+  await act(async()=>finish(json({data:[tickets[1]],meta:{page:2,limit:1,total:2,total_pages:2}})));
+  expect(await within(list).findByRole('option',{name:/Fixture conversation 2/})).toBeInTheDocument();
+  expect(screen.getByRole('heading',{name:'Support Inbox'})).toHaveFocus();
+  expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+});
+
+it('moves focus to explicit recovery when the next inbox page fails without hiding prior results',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let finish!: (response:Response)=>void;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?')){
+      const page=new URL(String(url),'http://localhost').searchParams.get('page')??'1';
+      if(page==='2')return new Promise<Response>(resolve=>{finish=resolve;});
+      return Promise.resolve(json({data:[tickets[0]],meta:{page:1,limit:1,total:2,total_pages:2}}));
+    }
+    return original(url,options);
+  });
+  showInbox();
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  const first=await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  const next=screen.getByRole('button',{name:'Next conversation page'});
+  next.focus();fireEvent.click(next);
+  await waitFor(()=>expect(finish).toBeDefined());
+  await act(async()=>finish(json({error:'Page unavailable'},503)));
+  const retry=await screen.findByRole('button',{name:'Retry conversations'});
+  expect(screen.getByRole('alert')).toHaveTextContent('last confirmed list remains visible');
+  expect(first).toBeInTheDocument();
+  expect(retry).toHaveFocus();
+});
