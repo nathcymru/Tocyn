@@ -951,7 +951,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved,onClassificationSaved }:
           </ParkCollapsible.Content>
         </ParkCollapsible.Root>
 
-        <div className={css({ display: 'flex', minW: 0, minH: '42rem', flex: '1 1 auto', flexShrink: 0, flexDirection: 'column', overflow: 'hidden', bg: 'bg.surface' })}>
+        <div data-part="conversation-surface" className={css({ display: 'flex', minW: 0, minH: 0, flex: '1 1 auto', flexDirection: 'column', overflow: 'hidden', bg: 'bg.surface' })}>
           <div className={detailStyles.header}>
             <div className={detailStyles.heading}>
               <div className={detailStyles.titleStack}>
