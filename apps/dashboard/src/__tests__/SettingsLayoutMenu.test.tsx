@@ -14,11 +14,17 @@ function Destination() {
 }
 
 function renderSettings(path = '/settings/general') {
-  return render(<MemoryRouter initialEntries={[path]}><Routes>
-    <Route path="/settings" element={<SettingsLayout />}>
-      <Route path="*" element={<Destination />} />
-    </Route>
-  </Routes></MemoryRouter>);
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <main data-testid="settings-scroll-root" style={{ overflow: 'auto', maxHeight: '12rem' }}>
+        <Routes>
+          <Route path="/settings" element={<SettingsLayout />}>
+            <Route path="*" element={<Destination />} />
+          </Route>
+        </Routes>
+      </main>
+    </MemoryRouter>,
+  );
 }
 
 beforeEach(() => {
@@ -52,6 +58,26 @@ it('uses Park Menu anatomy for settings sections and navigates to Account', asyn
   await userEvent.click(account);
   expect(screen.getByText('Current route: /settings/account')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Settings sections, current: Account' })).toBeInTheDocument();
+});
+
+it('portals the parent Park menu outside the scrolling settings pane and restores keyboard focus', async () => {
+  useAuthStore.getState().setAuth('synthetic-session', { id: 'admin', tenant_id: 'synthetic-tenant', email: 'admin@example.invalid', full_name: 'Admin', role: 'admin', mfa_enabled: true });
+  renderSettings();
+  const trigger = screen.getByRole('button', { name: 'Settings sections, current: General' });
+  const user = userEvent.setup();
+  trigger.focus();
+  await user.keyboard('{Enter}');
+  const menu = await screen.findByRole('menu');
+  expect(menu).toHaveAttribute('aria-label', 'Settings sections');
+  const positioner = menu.closest('[data-scope="menu"][data-part="positioner"]');
+  expect(positioner).toBeInTheDocument();
+  expect(positioner).toHaveStyle({ position: 'fixed' });
+  expect(screen.getByTestId('settings-scroll-root')).not.toContainElement(positioner as HTMLElement);
+  expect(document.body).toContainElement(positioner as HTMLElement);
+  expect(within(menu).getByRole('menuitem', { name: 'Account' })).toBeInTheDocument();
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(menu).not.toBeInTheDocument());
+  expect(trigger).toHaveFocus();
 });
 
 it('opens the nested Park Channels menu with Right, returns with Left, and restores the trigger with Escape', async () => {

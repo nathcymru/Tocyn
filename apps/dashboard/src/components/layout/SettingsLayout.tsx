@@ -79,50 +79,52 @@ export function SettingsLayout() {
     <div className={styles.inner}>
       <header className={styles.header}>
         <p className={styles.title}>Settings</p>
-        <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
+        <ParkMenu.Root positioning={{ placement: 'bottom-end', strategy: 'fixed', overflowPadding: 8 }}>
           <ParkMenu.Trigger asChild>
             <ParkButton type="button" variant="outline" className={styles.trigger} aria-label={`Settings sections, current: ${current}`}>
               <span>{current}</span><IconChevronDown aria-hidden="true" className={styles.triggerIcon} />
             </ParkButton>
           </ParkMenu.Trigger>
-          <ParkMenu.Positioner>
-            <ParkMenu.Content aria-label="Settings sections" className={styles.menu}>
-              <ParkMenu.ItemGroup>
-                <ParkMenu.ItemGroupLabel>Settings</ParkMenu.ItemGroupLabel>
-                {sections.map(item => <ParkMenu.Item key={item.href} value={item.href} asChild>
-                  <NavLink to={item.href} className={styles.item}>
-                    <item.icon aria-hidden="true" className={styles.itemIcon} />{item.name}
-                  </NavLink>
-                </ParkMenu.Item>)}
-                {user?.role === 'admin' && <ParkMenu.Item value="/settings/agent-permissions" asChild>
-                  <NavLink to="/settings/agent-permissions" className={styles.item}>
-                    <IconShieldHalved aria-hidden="true" className={styles.itemIcon} />Agent Permissions
-                  </NavLink>
-                </ParkMenu.Item>}
-              </ParkMenu.ItemGroup>
-              {channels.length > 0 && <>
-                <ParkMenu.Separator />
-                {/* A narrow viewport cannot fit another 15rem menu beside this 15rem parent. */}
-                <ParkMenu.Root positioning={{ strategy: 'fixed', overlap: true, overflowPadding: 8 }}>
-                  <ParkMenu.TriggerItem className={styles.item} data-current={channels.some(item => item.href === pathname) ? 'true' : undefined}>
-                    <IconEnvelope aria-hidden="true" className={styles.itemIcon} />Channels
-                    <ParkMenu.Indicator aria-hidden="true" className={styles.triggerIcon} />
-                  </ParkMenu.TriggerItem>
-                  <Portal>
-                    <ParkMenu.Positioner>
-                      <ParkMenu.Content aria-label="Channels" className={styles.menu}>
-                        {channels.map(item => <ParkMenu.Item key={item.href} value={item.href} asChild>
-                          <NavLink to={item.href} className={styles.item}>
-                            <item.icon aria-hidden="true" className={styles.itemIcon} />{item.name}
-                          </NavLink>
-                        </ParkMenu.Item>)}
-                      </ParkMenu.Content>
+          <Portal>
+            <ParkMenu.Positioner>
+              <ParkMenu.Content aria-label="Settings sections" className={styles.menu}>
+                <ParkMenu.ItemGroup>
+                  <ParkMenu.ItemGroupLabel>Settings</ParkMenu.ItemGroupLabel>
+                  {sections.map(item => <ParkMenu.Item key={item.href} value={item.href} asChild>
+                    <NavLink to={item.href} className={styles.item}>
+                      <item.icon aria-hidden="true" className={styles.itemIcon} />{item.name}
+                    </NavLink>
+                  </ParkMenu.Item>)}
+                  {user?.role === 'admin' && <ParkMenu.Item value="/settings/agent-permissions" asChild>
+                    <NavLink to="/settings/agent-permissions" className={styles.item}>
+                      <IconShieldHalved aria-hidden="true" className={styles.itemIcon} />Agent Permissions
+                    </NavLink>
+                  </ParkMenu.Item>}
+                </ParkMenu.ItemGroup>
+                {channels.length > 0 && <>
+                  <ParkMenu.Separator />
+                  {/* A narrow viewport cannot fit another 15rem menu beside this 15rem parent. */}
+                  <ParkMenu.Root positioning={{ strategy: 'fixed', overlap: true, overflowPadding: 8 }}>
+                    <ParkMenu.TriggerItem className={styles.item} data-current={channels.some(item => item.href === pathname) ? 'true' : undefined}>
+                      <IconEnvelope aria-hidden="true" className={styles.itemIcon} />Channels
+                      <ParkMenu.Indicator aria-hidden="true" className={styles.triggerIcon} />
+                    </ParkMenu.TriggerItem>
+                    <Portal>
+                      <ParkMenu.Positioner>
+                        <ParkMenu.Content aria-label="Channels" className={styles.menu}>
+                          {channels.map(item => <ParkMenu.Item key={item.href} value={item.href} asChild>
+                            <NavLink to={item.href} className={styles.item}>
+                              <item.icon aria-hidden="true" className={styles.itemIcon} />{item.name}
+                            </NavLink>
+                          </ParkMenu.Item>)}
+                        </ParkMenu.Content>
                     </ParkMenu.Positioner>
                   </Portal>
                 </ParkMenu.Root>
               </>}
             </ParkMenu.Content>
-          </ParkMenu.Positioner>
+            </ParkMenu.Positioner>
+          </Portal>
         </ParkMenu.Root>
       </header>
       {permissionsError && <ParkEmptyState
