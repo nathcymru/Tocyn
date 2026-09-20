@@ -85,6 +85,16 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();vi.restoreAllMocks();});
 
+it('gives the desktop splitter a 24px hit area and one Park keyboard focus ring',()=>{
+  showInbox();
+  const separator=screen.getByRole('separator',{name:'Resize conversation panes'});
+  expect(separator).toHaveClass('splitter__resizeTrigger','min-w_6','w_6','bg_transparent','focusVisible:focus-v-ring_outside');
+  expect(separator.className).toContain('before:w_0.5');
+  expect(separator.className).toContain('before:bg_gray.outline.border');
+  separator.focus();
+  expect(separator).toHaveFocus();
+});
+
 it('keeps the 20-result list node, scroll position and roving focus while conversations change',async()=>{
   showInbox();
   const list=screen.getByRole('listbox',{name:'Conversation list'});

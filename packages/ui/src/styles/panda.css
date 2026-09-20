@@ -11533,6 +11533,10 @@
     padding: var(--spacing-6);
 }
 
+  .bg_transparent {
+    background: var(--colors-transparent);
+}
+
   .p_4 {
     padding: var(--spacing-4);
 }
@@ -12307,6 +12311,10 @@
     flex-direction: column;
 }
 
+  .pos_relative {
+    position: relative;
+}
+
   .z_30 {
     z-index: 30;
 }
@@ -12349,10 +12357,6 @@
 
   .jc_center {
     justify-content: center;
-}
-
-  .pos_relative {
-    position: relative;
 }
 
   .focus-v-ring_outside {
@@ -12866,6 +12870,14 @@
     height: var(--sizes-12);
 }
 
+  .min-w_6 {
+    min-width: var(--sizes-6);
+}
+
+  .w_6 {
+    width: var(--sizes-6);
+}
+
   .min-h_full {
     min-height: var(--sizes-full);
 }
@@ -13210,10 +13222,6 @@
     min-height: var(--sizes-11);
 }
 
-  .w_6 {
-    width: var(--sizes-6);
-}
-
   .h_6 {
     height: var(--sizes-6);
 }
@@ -13242,8 +13250,16 @@
     top: var(--spacing-0);
 }
 
+  .before\:bg_gray\.outline\.border::before {
+    background: var(--colors-gray-outline-border);
+}
+
   .\[\&_h1\]\:m_0 h1,.\[\&_p\]\:m_0 p,.\[\&_dd\]\:m_0 dd {
     margin: var(--spacing-0);
+}
+
+  .before\:bdr_full::before {
+    border-radius: var(--radii-full);
 }
 
   .\[\&_\>_button\]\:py_2 > button {
@@ -13252,6 +13268,22 @@
 
   .\[\&_\>_\*\:not\(\:first-child\)\:not\(\:last-child\)\]\:bdr_0 > *:not(:first-child):not(:last-child) {
     border-radius: 0;
+}
+
+  .before\:content_\"\"::before {
+    content: "";
+}
+
+  .before\:pos_absolute::before {
+    position: absolute;
+}
+
+  .before\:trf_translateX\(-50\%\)::before {
+    transform: translateX(-50%);
+}
+
+  .before\:pointer-events_none::before {
+    pointer-events: none;
 }
 
   .\[\&_h1\]\:fs_1\.75rem h1 {
@@ -13318,6 +13350,22 @@
     border-top-right-radius: 0;
 }
 
+  .before\:top_0::before {
+    top: var(--spacing-0);
+}
+
+  .before\:bottom_0::before {
+    bottom: var(--spacing-0);
+}
+
+  .before\:left_50\%::before {
+    left: 50%;
+}
+
+  .before\:w_0\.5::before {
+    width: var(--sizes-0\.5);
+}
+
   .\[\&_svg\]\:max-w_100\% svg {
     max-width: 100%;
 }
@@ -13360,6 +13408,17 @@
 
   .focusVisible\:ring_2px_solid:is(:focus-visible, [data-focus-visible]) {
     outline: 2px solid;
+}
+
+  .focusVisible\:focus-v-ring_outside:is(:focus-visible, [data-focus-visible]) {
+    --focus-ring-color: var(--focus-ring-color-prop, var(--global-color-focus-ring, #005FCC));
+}
+
+  .focusVisible\:focus-v-ring_outside:is(:focus-visible, [data-focus-visible]):is(:focus-visible, [data-focus-visible]) {
+    outline-width: var(--focus-ring-width, 2px);
+    outline-offset: var(--focus-ring-offset, 2px);
+    outline-style: var(--focus-ring-style, solid);
+    outline-color: var(--focus-ring-color);
 }
 
   .focusVisible\:ring-c_border\.focus:is(:focus-visible, [data-focus-visible]) {
