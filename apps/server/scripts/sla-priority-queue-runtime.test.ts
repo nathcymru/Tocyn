@@ -133,6 +133,65 @@ test('priority views sort the complete authorised clock snapshot before paginati
  }finally{await f.mf.dispose();}
 });
 
+test('the 24-hour drift boundary joins the stricter queue tier before pagination',async()=>{
+ const f=await fixture();try{
+  const at=(elapsedMs:number)=>new Date(f.now-elapsedMs).toISOString();
+  const hour=3_600_000;
+  const rows:[string,'charlie'|'delta',1|2,number][]=[
+   ['just-above','delta',1,24*hour-1000],
+   ['exact','delta',1,24*hour],
+   ['just-below','delta',1,24*hour+1000],
+   ['fresh-charlie','charlie',2,0],
+  ];
+  for(const [id,contract,criticality,elapsed] of rows){
+   await f.ticket(id,3_600_000,'normal','a',at(elapsed));
+   await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+    priority_regulatory_officer_on_site=0,priority_vip_blocked=0,priority_hard_deadline=0,
+    priority_score=1,contract_sla_tier=?,criticality_tier=? WHERE tenant_id='a' AND id=?`)
+    .bind(contract,criticality,id).run();
+  }
+  const first=await f.read({}, {sort:'priority_criticality',limit:2});
+  assert.deepEqual(first.data.map(item=>item.ticket.id),['just-below','fresh-charlie']);
+  assert.ok(first.next);
+  const second=await f.read({}, {sort:'priority_criticality',limit:2,cursor:first.next!});
+  assert.deepEqual(second.data.map(item=>item.ticket.id),['exact','just-above']);
+  assert.equal(second.data[0].priorityClock?.timeRemainingHours,24);
+  assert.ok((second.data[1].priorityClock?.timeRemainingHours??0)>24);
+  const commitment=await f.read({}, {sort:'priority_commitment'});
+  assert.deepEqual(commitment.data.map(item=>item.ticket.id),
+   ['fresh-charlie','just-below','exact','just-above']);
+ }finally{await f.mf.dispose();}
+});
+
+test('reopened work inherits active time debt in queue rank and overdue count',async()=>{
+ const f=await fixture();try{
+  const at=(hoursAgo:number)=>new Date(f.now-hoursAgo*3_600_000).toISOString();
+  for(const [id,age] of [['reopened',4],['fresh',0.5]] as const){
+   await f.ticket(id,3_600_000,'normal','a',at(age));
+   await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+    priority_regulatory_officer_on_site=0,priority_vip_blocked=0,priority_hard_deadline=0,
+    priority_score=1,contract_sla_tier='alpha',criticality_tier=4 WHERE tenant_id='a' AND id=?`).bind(id).run();
+  }
+  await f.db.prepare(`UPDATE ticket_support_state SET definition_id='legacy-pending',waiting_reason='awaiting customer',
+   changed_at=?,revision=revision+1 WHERE tenant_id='a' AND ticket_id='reopened'`).bind(at(2.5)).run();
+  const waiting=await f.read({}, {sort:'priority_focus'});
+  assert.deepEqual(waiting.data.map(item=>item.ticket.id),['fresh','reopened']);
+  assert.equal(waiting.triageOverdueCount,0);
+  assert.equal(waiting.data[1].priorityClock?.paused,true);
+  assert.equal(waiting.data[1].priorityClock?.timeRemainingHours,-0.5);
+  await f.db.prepare(`UPDATE ticket_support_state SET definition_id='legacy-open',waiting_reason=NULL,
+   changed_at=?,revision=revision+1 WHERE tenant_id='a' AND ticket_id='reopened'`).bind(at(0.25)).run();
+  const resumed=await f.read({}, {sort:'priority_focus',limit:1});
+  assert.deepEqual(resumed.data.map(item=>item.ticket.id),['reopened']);
+  assert.equal(resumed.triageOverdueCount,1);
+  assert.equal(resumed.data[0].priorityClock?.paused,false);
+  assert.equal(resumed.data[0].priorityClock?.timeRemainingHours,-0.75);
+  assert.ok(resumed.next);
+  const next=await f.read({}, {sort:'priority_focus',limit:1,cursor:resumed.next!});
+  assert.deepEqual(next.data.map(item=>item.ticket.id),['fresh']);
+ }finally{await f.mf.dispose();}
+});
+
 test('ordinary list clock projections are bounded to the selected page and current staff visibility',async()=>{
  const f=await fixture();try{
   await f.ticket('visible',3_600_000,'normal','a',new Date(f.now-1_800_000).toISOString());
