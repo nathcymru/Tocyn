@@ -23,7 +23,7 @@ function page(number: number, snapshot = asOf, next: string | null = number === 
     meta: { page: number, limit: 1, total: 2, total_pages: 2 },
     sla: { [id]: unavailableSla },
     priorityClocks: { [id]: { remainingHours: number === 1 ? -0.25 : 0.5, paused: false, asOf: snapshot } },
-    triageOverdueCount: 2, asOf: snapshot, next };
+    triageOverdueCount: 2, asOf: snapshot, nextPriorityChangeAt: null, next };
 }
 
 let client: QueryClient;
@@ -173,6 +173,7 @@ describe('priority matrix snapshot hook', () => {
   });
 
   it('rejects missing, partial and malformed clock maps without caching an invented value', () => {
+    expect(() => parsePriorityMatrixPage({ ...page(1), nextPriorityChangeAt: undefined }, 1)).toThrow('Malformed priority queue response');
     expect(() => parsePriorityMatrixPage({ ...page(1), priorityClocks: {} }, 1)).toThrow('Malformed priority queue row');
     expect(() => parsePriorityMatrixPage({ ...page(1), priorityClocks: { 'ticket-1': { remainingHours: NaN, paused: false, asOf } } }, 1))
       .toThrow('Malformed priority clock projection');
